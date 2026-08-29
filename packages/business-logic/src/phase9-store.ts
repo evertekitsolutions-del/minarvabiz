@@ -165,3 +165,20 @@ export function canUseFeature(feature: keyof typeof PLAN_FEATURES.trial): boolea
   const features = licenseState.features ?? PLAN_FEATURES.trial;
   return Boolean(features[feature]);
 }
+
+
+export function hydratePhase9(data: {
+  branches?: Branch[];
+  activeBranchId?: string;
+}) {
+  if (data.branches) {
+    branches.length = 0;
+    branches.push(...data.branches);
+    if (data.activeBranchId && branches.some((b) => b.id === data.activeBranchId)) {
+      activeBranchId = data.activeBranchId as typeof activeBranchId;
+    } else if (branches[0]) {
+      activeBranchId = branches[0].id;
+    }
+  }
+}
+

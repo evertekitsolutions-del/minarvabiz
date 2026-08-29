@@ -343,3 +343,34 @@ export function getCustomerCrmProfile(customerId: UUID): CustomerCrmProfile | nu
     })),
   };
 }
+
+
+export function hydratePhase6(data: {
+  staff?: StaffMember[];
+  assignments?: StaffAssignment[];
+  incentiveRules?: IncentiveRuleRecord[];
+  payouts?: StaffIncentivePayout[];
+  notifications?: AppNotification[];
+}) {
+  if (data.staff) {
+    staff.length = 0;
+    staff.push(...data.staff);
+  }
+  if (data.assignments) {
+    assignments.length = 0;
+    assignments.push(...data.assignments);
+  }
+  if (data.incentiveRules) {
+    incentiveRules.length = 0;
+    incentiveRules.push(...data.incentiveRules);
+  }
+  if (data.payouts) {
+    payouts.length = 0;
+    payouts.push(...data.payouts);
+  }
+  if (data.notifications) {
+    notifications.length = 0;
+    notifications.push(...data.notifications);
+  }
+}
+

@@ -342,3 +342,34 @@ export function createPurchase(input: {
 function r2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
+
+
+export function hydratePhase5(data: {
+  suppliers?: Supplier[];
+  laundryOrders?: LaundryOrder[];
+  expenses?: Expense[];
+  purchases?: Purchase[];
+  expenseCategories?: ExpenseCategory[];
+}) {
+  if (data.suppliers) {
+    suppliers.length = 0;
+    suppliers.push(...data.suppliers);
+  }
+  if (data.laundryOrders) {
+    laundryOrders.length = 0;
+    laundryOrders.push(...data.laundryOrders);
+  }
+  if (data.expenses) {
+    expenses.length = 0;
+    expenses.push(...data.expenses);
+  }
+  if (data.purchases) {
+    purchases.length = 0;
+    purchases.push(...data.purchases);
+  }
+  if (data.expenseCategories) {
+    expenseCategories.length = 0;
+    expenseCategories.push(...data.expenseCategories);
+  }
+}
+

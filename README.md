@@ -17,7 +17,7 @@ Built for real boutique, tailoring, and laundry shops.
 
 ---
 
-## Modules (Phases 1–13)
+## Modules (Phases 1–14)
 
 | Area | Features |
 |------|----------|
@@ -34,6 +34,7 @@ Built for real boutique, tailoring, and laundry shops.
 | **Persistence** | Repository pattern, SQLite/Postgres DDL, local auth, license-admin issuer |
 | **Desktop pack** | File-JSON durable store, Electron IPC DB, electron-builder config |
 | **Persistence bridge** | Domain snapshot export/import, AuthGate, Supabase skeleton |
+| **Full hydrate** | All domain stores hydrate + auto localStorage bootstrap |
 
 ---
 

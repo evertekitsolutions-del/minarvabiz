@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AppShell, AuthGate, type NavItemId } from "@minarvabiz/ui";
+import { bootstrapFromLocalStorage } from "@minarvabiz/business-logic";
 
 const pathToNav: Record<string, NavItemId> = {
   "/dashboard": "dashboard",
@@ -23,6 +24,9 @@ const pathToNav: Record<string, NavItemId> = {
 export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  React.useEffect(() => {
+    bootstrapFromLocalStorage();
+  }, []);
   const activeNav = pathToNav[pathname] ?? "dashboard";
 
   return (

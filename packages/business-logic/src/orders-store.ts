@@ -231,3 +231,17 @@ function round2(n: number) {
     fields: { shoulder: 14, chest: 36, waist: 30, hip: 38, sleeve: 22, length: 42 },
   });
 })();
+
+export function hydrateOrders(data: {
+  orders?: ServiceOrder[];
+  measurements?: MeasurementProfile[];
+}) {
+  if (data.orders) {
+    orders.length = 0;
+    orders.push(...data.orders);
+  }
+  if (data.measurements) {
+    measurements.length = 0;
+    measurements.push(...data.measurements);
+  }
+}

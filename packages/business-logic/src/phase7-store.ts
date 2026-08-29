@@ -368,3 +368,19 @@ export function outstandingPaymentsReport() {
 export function listSalesForReturn(): Sale[] {
   return mainStore.listSales().filter((s) => s.status === "completed" || s.status === "partial");
 }
+
+
+export function hydratePhase7(data: {
+  returns?: SaleReturn[];
+  auditLogs?: AuditLogEntry[];
+}) {
+  if (data.returns) {
+    returns.length = 0;
+    returns.push(...data.returns);
+  }
+  if (data.auditLogs) {
+    auditLogs.length = 0;
+    auditLogs.push(...data.auditLogs);
+  }
+}
+
