@@ -12,6 +12,7 @@ import {
 const pathToNav: Record<string, NavItemId> = {
   "/dashboard": "dashboard",
   "/sales": "sales",
+  "/payments": "sales",
   "/services": "services",
   "/laundry": "laundry",
   "/expenses": "expenses",

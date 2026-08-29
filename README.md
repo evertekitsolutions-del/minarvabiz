@@ -17,7 +17,7 @@ Built for real boutique, tailoring, and laundry shops.
 
 ---
 
-## Modules (Phases 1–16)
+## Modules (Phases 1–17)
 
 | Area | Features |
 |------|----------|
@@ -37,6 +37,7 @@ Built for real boutique, tailoring, and laundry shops.
 | **Full hydrate** | All domain stores hydrate + auto localStorage bootstrap |
 | **Ops polish** | Auto-save on mutations, receipt print, logout, optional auth |
 | **Live ops** | Live dashboard metrics, shop profile, order receipts |
+| **Collections** | Customer payments, day-end close, message templates |
 
 ---
 

@@ -1,11 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { ReportsPanel } from "@minarvabiz/ui";
-import { phase7Store, toCsv } from "@minarvabiz/business-logic";
+import { ReportsPanel, DayEndClosePanel } from "@minarvabiz/ui";
+import {
+  phase7Store,
+  toCsv,
+  closeBusinessDay,
+  listDayEndCloses,
+} from "@minarvabiz/business-logic";
 
 export default function ReportsPage() {
   const [tick, setTick] = React.useState(0);
+  const [closes, setCloses] = React.useState(() => listDayEndCloses());
   const salesRows = React.useMemo(() => phase7Store.salesReport(), [tick]);
   const dayEnd = React.useMemo(() => phase7Store.dayEndReport(), [tick]);
   const stock = React.useMemo(() => phase7Store.stockReport(), [tick]);
@@ -17,14 +23,26 @@ export default function ReportsPage() {
       csv = toCsv(
         ["Period", "Products", "Services", "Laundry", "Revenue", "Expenses", "Net"],
         salesRows.map((r) => [
-          r.label, String(r.productSales), String(r.serviceRevenue), String(r.laundryRevenue),
-          String(r.totalRevenue), String(r.expenses), String(r.netProfit),
+          r.label,
+          String(r.productSales),
+          String(r.serviceRevenue),
+          String(r.laundryRevenue),
+          String(r.totalRevenue),
+          String(r.expenses),
+          String(r.netProfit),
         ])
       );
     } else if (kind === "stock") {
       csv = toCsv(
         ["Name", "SKU", "Stock", "Min", "Value", "Low"],
-        stock.map((r) => [r.name, r.sku || "", String(r.stock), String(r.min), String(r.value), r.low ? "yes" : "no"])
+        stock.map((r) => [
+          r.name,
+          r.sku || "",
+          String(r.stock),
+          String(r.min),
+          String(r.value),
+          r.low ? "yes" : "no",
+        ])
       );
     } else if (kind === "outstanding") {
       csv = toCsv(
@@ -47,13 +65,52 @@ export default function ReportsPage() {
   }
 
   return (
-    <ReportsPanel
-      salesRows={salesRows}
-      dayEnd={dayEnd}
-      stock={stock}
-      outstanding={outstanding}
-      onRefresh={() => setTick((t) => t + 1)}
-      onExportCsv={exportCsv}
-    />
+    <div className="space-y-8">
+      <ReportsPanel
+        salesRows={salesRows}
+        dayEnd={dayEnd}
+        stock={stock}
+        outstanding={outstanding}
+        onRefresh={() => setTick((t) => t + 1)}
+        onExportCsv={exportCsv}
+      />
+      <DayEndClosePanel
+        closes={closes.map((c) => ({
+          id: c.id,
+          businessDate: c.businessDate,
+          closedAt: c.closedAt,
+          report: {
+            totalSales: c.report.totalSales,
+            netProfit: c.report.netProfit,
+            cashReceived: c.report.cashReceived,
+            outstandingAmount: c.report.outstandingAmount,
+          },
+          metricsNote: c.metricsNote,
+        }))}
+        onCloseDay={() => {
+          const result = closeBusinessDay();
+          if (result.error || !result.record) {
+            return { ok: false, error: result.error || "Failed" };
+          }
+          setCloses(listDayEndCloses());
+          setTick((t) => t + 1);
+          return {
+            ok: true,
+            record: {
+              id: result.record.id,
+              businessDate: result.record.businessDate,
+              closedAt: result.record.closedAt,
+              report: {
+                totalSales: result.record.report.totalSales,
+                netProfit: result.record.report.netProfit,
+                cashReceived: result.record.report.cashReceived,
+                outstandingAmount: result.record.report.outstandingAmount,
+              },
+              metricsNote: result.record.metricsNote,
+            },
+          };
+        }}
+      />
+    </div>
   );
 }

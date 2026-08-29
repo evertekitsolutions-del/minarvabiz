@@ -308,3 +308,43 @@ export function hydrateCore(data: {
     payments.push(...data.payments);
   }
 }
+
+
+export function recordCustomerPayment(input: {
+  customerId: UUID;
+  amount: number;
+  method: PaymentMethod;
+  reference?: string | null;
+  notes?: string | null;
+}): { payment: Payment | null; customer: Customer | null; errors: string[] } {
+  const errors: string[] = [];
+  if (input.amount <= 0) errors.push("Amount must be positive");
+  const customer = getCustomer(input.customerId);
+  if (!customer) errors.push("Customer not found");
+  if (errors.length || !customer) return { payment: null, customer: null, errors };
+
+  const applied = round2(Math.min(input.amount, customer.outstandingBalance || input.amount));
+  customer.outstandingBalance = round2(Math.max(0, customer.outstandingBalance - applied));
+  customer.totalSpending = round2(customer.totalSpending + applied);
+  customer.updatedAt = nowISO();
+
+  const payment: Payment = {
+    id: generateId(),
+    amount: applied,
+    method: input.method,
+    referenceType: "other",
+    referenceId: customer.id,
+    customerId: customer.id,
+    notes: input.notes ?? input.reference ?? null,
+    paidAt: nowISO(),
+    createdAt: nowISO(),
+    version: 1,
+  };
+  payments.push(payment);
+  touchPersistence();
+  return { payment, customer, errors: [] };
+}
+
+export function listOutstandingCustomers(): Customer[] {
+  return listCustomers().filter((c) => c.outstandingBalance > 0);
+}

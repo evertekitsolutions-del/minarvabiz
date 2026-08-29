@@ -52,3 +52,5 @@ export * from "./components/licensing/LicensePanel";
 export * from "./components/licensing/BranchPanel";
 export * from "./components/auth/AuthGate";
 export * from "./components/sync/PersistencePanel";
+export * from "./components/payments/PaymentsPanel";
+export * from "./components/reports/DayEndClose";

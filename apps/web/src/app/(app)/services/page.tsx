@@ -5,7 +5,7 @@ import {
   OrderList, OrderForm, emptyOrderForm, OrderDetail, Modal,
   type OrderFormValues,
 } from "@minarvabiz/ui";
-import { store, ordersStore, printOrderReceipt } from "@minarvabiz/business-logic";
+import { store, ordersStore, printOrderReceipt, phase6Store, templateFromOrderReady } from "@minarvabiz/business-logic";
 import type {
   ServiceOrder, Customer, MeasurementProfile, ServiceType, OrderStatus,
 } from "@minarvabiz/types";
@@ -93,6 +93,15 @@ export default function ServicesOrdersPage() {
     const res = ordersStore.updateOrderStatus(selected.id, status);
     if (res.order) {
       setSelected(res.order);
+      if (status === "ready_to_deliver") {
+        const msg = templateFromOrderReady(res.order);
+        phase6Store.pushNotification({
+          kind: "order_ready",
+          title: msg.title,
+          body: msg.body,
+          href: "/services",
+        });
+      }
       refresh();
     }
   }
