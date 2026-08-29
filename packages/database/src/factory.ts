@@ -4,6 +4,7 @@
 
 import type { UnitOfWork } from "./repository";
 import { createMemoryUnitOfWork } from "./adapters/memory";
+import { createSupabaseUnitOfWork, supabaseConfigFromEnv } from "./adapters/supabase";
 import {
   createFileJsonUnitOfWork,
   createLocalStorageIO,
@@ -37,6 +38,8 @@ export async function createDatabase(options: CreateDbOptions = {}): Promise<Uni
     return { ...uow, edition: edition === "hybrid" ? "hybrid" : "offline" };
   }
 
-  // online — memory bridge; swap for Postgres adapter in deploy
+  // online — Supabase when configured, else memory bridge
+  const cfg = supabaseConfigFromEnv();
+  if (cfg) return createSupabaseUnitOfWork(cfg);
   return { ...createMemoryUnitOfWork(), edition: "online" };
 }

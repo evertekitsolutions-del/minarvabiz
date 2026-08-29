@@ -15,3 +15,4 @@ export * as phase7Store from "./phase7-store";
 export * as syncBridge from "./sync-bridge";
 export * as phase9Store from "./phase9-store";
 export * from "./feature-gates";
+export * from "./persistence";

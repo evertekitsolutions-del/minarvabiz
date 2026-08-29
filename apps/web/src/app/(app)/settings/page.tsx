@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { SyncPanel, Button } from "@minarvabiz/ui";
-import { syncBridge } from "@minarvabiz/business-logic";
+import { SyncPanel, PersistencePanel, Button } from "@minarvabiz/ui";
+import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson } from "@minarvabiz/business-logic";
 
 export default function SettingsPage() {
   const [snap, setSnap] = React.useState(() => syncBridge.getSyncSnapshot());
@@ -45,6 +45,21 @@ export default function SettingsPage() {
           Enqueue offline write
         </Button>
       </div>
+
+      <PersistencePanel
+        onExport={() => exportDomainSnapshotJson()}
+        onImport={(json) => importDomainSnapshotJson(json)}
+        onSaveLocal={() => {
+          if (typeof localStorage !== "undefined") {
+            localStorage.setItem("minarvabiz-domain", exportDomainSnapshotJson());
+          }
+        }}
+        onLoadLocal={() => {
+          if (typeof localStorage === "undefined") return;
+          const raw = localStorage.getItem("minarvabiz-domain");
+          if (raw) importDomainSnapshotJson(raw);
+        }}
+      />
 
       <SyncPanel
         online={snap.online}

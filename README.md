@@ -17,7 +17,7 @@ Built for real boutique, tailoring, and laundry shops.
 
 ---
 
-## Modules (Phases 1–12)
+## Modules (Phases 1–13)
 
 | Area | Features |
 |------|----------|
@@ -33,6 +33,7 @@ Built for real boutique, tailoring, and laundry shops.
 | **Production** | Feature gates, Electron security shell, env hardening, docs |
 | **Persistence** | Repository pattern, SQLite/Postgres DDL, local auth, license-admin issuer |
 | **Desktop pack** | File-JSON durable store, Electron IPC DB, electron-builder config |
+| **Persistence bridge** | Domain snapshot export/import, AuthGate, Supabase skeleton |
 
 ---
 
@@ -113,6 +114,7 @@ Multi-branch and API access are Enterprise features.
 - [Licensing](docs/LICENSING.md)
 - [Production readiness](docs/PRODUCTION.md)
 - [Desktop packaging](docs/DESKTOP.md)
+- [Persistence](docs/PERSISTENCE.md)
 
 ---
 

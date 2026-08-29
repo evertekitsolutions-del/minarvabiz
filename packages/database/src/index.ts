@@ -7,3 +7,4 @@ export * from "./sql/postgres-ddl";
 export * from "./auth";
 export * from "./factory";
 export * from "./drizzle/tables";
+export * from "./adapters/supabase";

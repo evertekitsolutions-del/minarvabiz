@@ -273,3 +273,34 @@ export function listPayments(): Payment[] {
 function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
+
+
+/** Replace core commerce collections from a snapshot (persistence bootstrap). */
+export function hydrateCore(data: {
+  customers?: Customer[];
+  products?: Product[];
+  categories?: Category[];
+  sales?: Sale[];
+  payments?: Payment[];
+}) {
+  if (data.categories) {
+    categories.length = 0;
+    categories.push(...data.categories);
+  }
+  if (data.customers) {
+    customers.length = 0;
+    customers.push(...data.customers);
+  }
+  if (data.products) {
+    products.length = 0;
+    products.push(...data.products);
+  }
+  if (data.sales) {
+    sales.length = 0;
+    sales.push(...data.sales);
+  }
+  if (data.payments) {
+    payments.length = 0;
+    payments.push(...data.payments);
+  }
+}

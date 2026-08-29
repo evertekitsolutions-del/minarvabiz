@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { AppShell, type NavItemId } from "@minarvabiz/ui";
+import { AppShell, AuthGate, type NavItemId } from "@minarvabiz/ui";
 
 const pathToNav: Record<string, NavItemId> = {
   "/dashboard": "dashboard",
@@ -26,6 +26,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const activeNav = pathToNav[pathname] ?? "dashboard";
 
   return (
+    <AuthGate requireAuth={false}>
     <AppShell
       activeNav={activeNav}
       onNavigate={(href) => router.push(href)}
@@ -42,5 +43,6 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
     >
       {children}
     </AppShell>
+    </AuthGate>
   );
 }
