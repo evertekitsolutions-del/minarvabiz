@@ -490,3 +490,86 @@ export interface CustomerCrmProfile {
   recentOrders: Array<{ id: UUID; orderNumber: string; status: string; price: number; date: string }>;
   recentSales: Array<{ id: UUID; invoiceNumber: string; total: number; date: string }>;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 7 — Returns, Audit, Backup, Reports
+// ---------------------------------------------------------------------------
+
+export type ReturnReason =
+  | "defective"
+  | "wrong_item"
+  | "customer_changed_mind"
+  | "size_issue"
+  | "other";
+
+export interface SaleReturnItem {
+  id: UUID;
+  returnId: UUID;
+  saleItemId: UUID;
+  productId: UUID;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  refundAmount: number;
+  restock: boolean;
+}
+
+export interface SaleReturn {
+  id: UUID;
+  returnNumber: string;
+  saleId: UUID;
+  invoiceNumber: string;
+  customerId?: UUID | null;
+  customerName?: string | null;
+  reason: ReturnReason;
+  notes?: string | null;
+  totalRefund: number;
+  refundMethod: PaymentMethod;
+  status: "completed" | "pending" | "cancelled";
+  items: SaleReturnItem[];
+  createdAt: ISODateString;
+  createdBy?: UUID | null;
+  branchId?: UUID | null;
+  deviceId?: UUID | null;
+  version: number;
+}
+
+export interface AuditLogEntry {
+  id: UUID;
+  userId?: UUID | null;
+  userName?: string | null;
+  action: string;
+  tableName?: string | null;
+  recordId?: UUID | null;
+  oldValue?: string | null;
+  newValue?: string | null;
+  ipAddress?: string | null;
+  createdAt: ISODateString;
+}
+
+export interface BackupMeta {
+  id: UUID;
+  filename: string;
+  createdAt: ISODateString;
+  sizeBytes: number;
+  kind: "manual" | "automatic";
+  verified: boolean;
+  location: "local" | "download";
+}
+
+export interface ReportFilters {
+  from?: ISODateString;
+  to?: ISODateString;
+  categoryId?: UUID | null;
+  staffId?: UUID | null;
+}
+
+export interface SalesReportRow {
+  label: string;
+  productSales: number;
+  serviceRevenue: number;
+  laundryRevenue: number;
+  totalRevenue: number;
+  expenses: number;
+  netProfit: number;
+}

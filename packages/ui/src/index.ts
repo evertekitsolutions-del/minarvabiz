@@ -42,3 +42,8 @@ export * from "./components/staff/StaffList";
 export * from "./components/staff/StaffDetail";
 export * from "./components/notifications/NotificationCenter";
 export * from "./components/crm/CustomerProfile";
+
+export * from "./components/reports/ReportsPanel";
+export * from "./components/returns/ReturnsPanel";
+export * from "./components/audit/AuditLogList";
+export * from "./components/backup/BackupPanel";
