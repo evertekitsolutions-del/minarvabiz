@@ -180,3 +180,104 @@ export interface CartLine {
   taxRate: number;
   stockQuantity: number;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Services, Orders, Measurements, Wedding, Bulk, T-shirt
+// ---------------------------------------------------------------------------
+
+export type ServiceType =
+  | "ladies_tailoring"
+  | "gents_tailoring"
+  | "ladies_alteration"
+  | "gents_alteration"
+  | "wedding_dress"
+  | "wholesale"
+  | "uniform"
+  | "tshirt_printing";
+
+export interface MeasurementFields {
+  shoulder?: number | null;
+  chest?: number | null;
+  waist?: number | null;
+  hip?: number | null;
+  sleeve?: number | null;
+  armhole?: number | null;
+  length?: number | null;
+  neck?: number | null;
+  pantLength?: number | null;
+  topLength?: number | null;
+  bottomLength?: number | null;
+  custom?: Record<string, number | string>;
+}
+
+export interface MeasurementProfile {
+  id: UUID;
+  customerId: UUID;
+  label: string;
+  fields: MeasurementFields;
+  notes?: string | null;
+  recordedAt: ISODateString;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+}
+
+export interface OrderExpense {
+  id: UUID;
+  orderId: UUID;
+  description: string;
+  amount: number;
+  purchaseId?: UUID | null;
+  createdAt: ISODateString;
+}
+
+export interface TshirtDetails {
+  tshirtType?: string | null;
+  size?: string | null;
+  color?: string | null;
+  quantity: number;
+  printingType?: string | null;
+  designDescription?: string | null;
+  printingCost: number;
+  customerPrice: number;
+}
+
+export interface ServiceOrder {
+  id: UUID;
+  orderNumber: string;
+  customerId: UUID;
+  customerName?: string | null;
+  orderDate: ISODateString;
+  deliveryDate?: ISODateString | null;
+  serviceType: ServiceType;
+  status: OrderStatus;
+  assignedStaffId?: UUID | null;
+  assignedTailorId?: UUID | null;
+  measurements?: MeasurementFields | null;
+  measurementProfileId?: UUID | null;
+  notes?: string | null;
+  materialDetails?: string | null;
+  customerSuppliedMaterial: boolean;
+  shopSuppliedMaterial: boolean;
+  price: number;
+  discount: number;
+  advance: number;
+  balance: number;
+  /** Wedding / custom cost tracking */
+  externalMaterialCost: number;
+  orderExpensesTotal: number;
+  /** Bulk */
+  quantity: number;
+  unitPrice: number;
+  bulkDiscount: number;
+  /** T-shirt */
+  tshirt?: TshirtDetails | null;
+  expenses: OrderExpense[];
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+  branchId?: UUID | null;
+  deviceId?: UUID | null;
+  createdBy?: UUID | null;
+  version: number;
+}
