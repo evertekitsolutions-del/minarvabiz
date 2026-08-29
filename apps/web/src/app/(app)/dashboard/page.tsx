@@ -1,9 +1,5 @@
-"use client";
-
-import * as React from "react";
-import { AppShell, Dashboard, type QuickAction, type NavItemId } from "@minarvabiz/ui";
-import { fetchDashboardData } from "./lib/dashboard-data";
-import type { DashboardData } from "@minarvabiz/ui";
+import { Dashboard, type QuickAction } from "@minarvabiz/ui";
+import { fetchDashboardData } from "@/lib/dashboard-data";
 
 const quickActionIcons = {
   sale: (
@@ -37,6 +33,7 @@ const quickActionIcons = {
   customer: (
     <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
   ),
   reports: (
@@ -51,13 +48,8 @@ const quickActionIcons = {
   ),
 };
 
-export function App() {
-  const [activeNav, setActiveNav] = React.useState<NavItemId>("dashboard");
-  const [data, setData] = React.useState<DashboardData | null>(null);
-
-  React.useEffect(() => {
-    fetchDashboardData().then(setData);
-  }, []);
+export default async function DashboardPage() {
+  const data = await fetchDashboardData();
 
   const actions: QuickAction[] = [
     { id: "sale", label: "New Sale", description: "Create Invoice", icon: quickActionIcons.sale, tone: "blue" },
@@ -70,29 +62,5 @@ export function App() {
     { id: "sms", label: "SMS / WhatsApp", description: "Send Message", icon: quickActionIcons.sms, tone: "teal" },
   ];
 
-  return (
-    <AppShell
-      activeNav={activeNav}
-      onNavigate={(_href, id) => setActiveNav(id)}
-      sidebar={{
-        user: { name: "Admin", role: "Super Admin" },
-        logoSrc: "/logo.png",
-      }}
-      header={{
-        title: "Dashboard",
-        subtitle: "Welcome back, Admin!",
-        notificationCount: 6,
-        messageCount: 3,
-      }}
-    >
-      {activeNav === "dashboard" && data && (
-        <Dashboard data={data} quickActions={actions} />
-      )}
-      {activeNav !== "dashboard" && (
-        <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-slate-400">
-          {activeNav.replace(/_/g, " ")} module — coming in later phases
-        </div>
-      )}
-    </AppShell>
-  );
+  return <Dashboard data={data} quickActions={actions} />;
 }
