@@ -4,3 +4,4 @@ export * from "./validate";
 export * from "./fingerprint";
 export * from "./limits";
 export * from "./activation";
+export * from "./issuer";

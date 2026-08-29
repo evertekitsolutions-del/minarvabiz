@@ -18,7 +18,8 @@
     "@supabase/supabase-js": "^2.47.10",
     "next": "^15.1.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "@minarvabiz/database": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

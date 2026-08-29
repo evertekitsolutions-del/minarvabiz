@@ -1,17 +1,29 @@
-# MINARVA BIZ — Database Design
+# Database
 
-## Principles
-- UUID primary keys for Online ↔ Offline compatibility
-- Soft deletes via deleted_at
-- Optimistic concurrency via version
-- Device tracking via device_id
-- Branch-ready (branch_id optional)
+## Editions
 
-## Phase 1 Foundation Tables
-users, roles, permissions, role_permissions, user_roles, branches,
-licenses, license_activations, devices,
-settings, audit_logs, sync_queue
+| Edition | Engine | DDL source |
+|---------|--------|------------|
+| Online | PostgreSQL (Supabase) | `packages/database/src/sql/postgres-ddl.ts` |
+| Offline | SQLite | `packages/database/src/sql/sqlite-ddl.ts` |
+| Hybrid | SQLite primary + Postgres cloud | Both + outbox |
 
-## Planned (later phases)
-customers, products, inventory, sales, orders, measurements,
-expenses, purchases, suppliers, staff, laundry, invoices, returns, notifications
+## Repository pattern
+
+```ts
+import { createMemoryUnitOfWork } from "@minarvabiz/database";
+
+const db = createMemoryUnitOfWork();
+await db.customers.list();
+```
+
+Replace with Drizzle-backed adapters at deploy time without changing domain code.
+
+## Auth
+
+Local auth (`packages/database/src/auth.ts`): PBKDF2 password hashes, session tokens.
+Online can additionally use Supabase Auth while desktop keeps local auth.
+
+## Soft delete & version
+
+Tables include `deleted_at` and `version` for hybrid conflict resolution.

@@ -17,7 +17,7 @@ Built for real boutique, tailoring, and laundry shops.
 
 ---
 
-## Modules (Phases 1–10)
+## Modules (Phases 1–11)
 
 | Area | Features |
 |------|----------|
@@ -31,6 +31,7 @@ Built for real boutique, tailoring, and laundry shops.
 | **Sync** | Offline outbox, conflict strategies, device sessions |
 | **License** | Ed25519 activation, plan limits, grace, multi-branch foundation |
 | **Production** | Feature gates, Electron security shell, env hardening, docs |
+| **Persistence** | Repository pattern, SQLite/Postgres DDL, local auth, license-admin issuer |
 
 ---
 

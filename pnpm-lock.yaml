@@ -103,6 +103,9 @@ importers:
       '@minarvabiz/business-logic':
         specifier: workspace:*
         version: link:../../packages/business-logic
+      '@minarvabiz/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@minarvabiz/licensing':
         specifier: workspace:*
         version: link:../../packages/licensing
@@ -193,6 +196,9 @@ importers:
       '@minarvabiz/types':
         specifier: workspace:*
         version: link:../types
+      '@minarvabiz/utils':
+        specifier: workspace:*
+        version: link:../utils
     devDependencies:
       typescript:
         specifier: ^5.7.2
