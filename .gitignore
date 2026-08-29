@@ -19,7 +19,9 @@ apps/desktop/dist-electron
 *.db-journal
 *.sqlite
 *.sqlite3
-data/
+**/app-data/
+# local runtime data dirs only — not source
+apps/**/data/
 logs
 *.log
 .idea
