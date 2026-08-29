@@ -23,6 +23,7 @@ const pathToNav: Record<string, NavItemId> = {
   "/reports": "reports",
   "/notifications": "sms",
   "/settings": "settings",
+  "/users": "settings",
   "/onboarding": "dashboard",
   "/help": "settings",
   "/system": "settings",

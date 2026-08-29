@@ -17,7 +17,7 @@ Built for real boutique, tailoring, and laundry shops.
 
 ---
 
-## Modules (Phases 1–51)
+## Modules (Phases 1–51 + completion pass)
 
 | Area | Features |
 |------|----------|

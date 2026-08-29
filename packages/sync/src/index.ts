@@ -41,3 +41,4 @@ export * from "./constants";
 export * from "./outbox";
 export * from "./conflict";
 export * from "./engine";
+export * from "./supabase-adapter";

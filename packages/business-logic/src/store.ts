@@ -14,6 +14,7 @@ import {
 import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
 import { remoteUpsertCustomer, remoteUpsertProduct, remoteCreateSale } from "./remote-write";
+import { auditAction } from "./audit-actions";
 
 const categories: Category[] = [
   { id: "cat-1", name: "Ornaments", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
@@ -271,6 +272,7 @@ export function createSale(input: {
   }
 
   void remoteCreateSale(sale);
+  auditAction("sale.create", "sales", sale.id, null, { total: sale.total, invoice: sale.invoiceNumber });
   return { sale, payment, errors: [] };
 }
 

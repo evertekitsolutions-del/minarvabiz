@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { PosBilling, SalesList, Button } from "@minarvabiz/ui";
-import { store, printSaleReceipt } from "@minarvabiz/business-logic";
+import { store, printSaleInvoice } from "@minarvabiz/business-logic";
 import type { Product, Customer, Sale, CartLine, PaymentMethod } from "@minarvabiz/types";
 
 export default function SalesPage() {
@@ -38,7 +38,7 @@ export default function SalesPage() {
     }
     refresh();
     try {
-      printSaleReceipt(result.sale, { shopName: "Minarva Biz" });
+      printSaleInvoice(result.sale, "a4");
     } catch {
       /* print blocked */
     }
