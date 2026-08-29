@@ -5,3 +5,4 @@ export * from "./settings";
 export * from "./sales";
 export * from "./orders";
 export * from "./phase5";
+export * from "./phase6";

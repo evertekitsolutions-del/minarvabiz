@@ -9,3 +9,4 @@ export * from "./expenses";
 export * as store from "./store";
 export * as ordersStore from "./orders-store";
 export * as phase5Store from "./phase5-store";
+export * as phase6Store from "./phase6-store";

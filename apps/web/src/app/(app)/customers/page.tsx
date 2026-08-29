@@ -1,13 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { CustomerList, Modal, Button, FormField, inputClass } from "@minarvabiz/ui";
-import { store } from "@minarvabiz/business-logic";
-import type { Customer } from "@minarvabiz/types";
+import { CustomerList, CustomerProfile, Modal, Button, FormField, inputClass } from "@minarvabiz/ui";
+import { store, phase6Store } from "@minarvabiz/business-logic";
+import type { Customer, CustomerCrmProfile } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
 export default function CustomersPage() {
   const [list, setList] = React.useState<Customer[]>([]);
+  const [profile, setProfile] = React.useState<CustomerCrmProfile | null>(null);
   const [open, setOpen] = React.useState(false);
   const [form, setForm] = React.useState({ name: "", phone: "", email: "", address: "", notes: "" });
   const [error, setError] = React.useState<string | null>(null);
@@ -43,7 +44,13 @@ export default function CustomersPage() {
         customers={list}
         onAdd={() => setOpen(true)}
         onSearch={(q) => refresh(q)}
+        onSelect={(c) => setProfile(phase6Store.getCustomerCrmProfile(c.id))}
       />
+      {profile && (
+        <div className="mt-6">
+          <CustomerProfile profile={profile} onClose={() => setProfile(null)} />
+        </div>
+      )}
       <Modal
         open={open}
         title="Add Customer"

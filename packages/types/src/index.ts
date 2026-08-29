@@ -398,3 +398,95 @@ export interface Purchase {
   deviceId?: UUID | null;
   version: number;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 6 — Staff, Assignments, Incentives, CRM, Notifications
+// ---------------------------------------------------------------------------
+
+export type StaffStatus = "active" | "inactive" | "on_leave";
+
+export interface StaffMember {
+  id: UUID;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  role: RoleName | "tailor" | "staff";
+  salary: number;
+  joiningDate?: ISODateString | null;
+  status: StaffStatus;
+  notes?: string | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+  branchId?: UUID | null;
+}
+
+export interface StaffAssignment {
+  id: UUID;
+  staffId: UUID;
+  staffName?: string | null;
+  orderId: UUID;
+  orderNumber?: string | null;
+  serviceType?: string | null;
+  assignedAt: ISODateString;
+  completedAt?: ISODateString | null;
+  status: "assigned" | "in_progress" | "completed" | "cancelled";
+  notes?: string | null;
+}
+
+export interface IncentiveRuleRecord {
+  id: UUID;
+  name: string;
+  serviceType?: string | null; // null = all
+  type: "fixed" | "percentage";
+  value: number;
+  isActive: boolean;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+}
+
+export interface StaffIncentivePayout {
+  id: UUID;
+  staffId: UUID;
+  staffName?: string | null;
+  orderId: UUID;
+  orderNumber?: string | null;
+  ruleId?: UUID | null;
+  amount: number;
+  calculatedAt: ISODateString;
+  paid: boolean;
+  paidAt?: ISODateString | null;
+}
+
+export type NotificationKind =
+  | "low_stock"
+  | "order_ready"
+  | "pending_delivery"
+  | "payment_due"
+  | "license_expiry"
+  | "sync_error"
+  | "backup_reminder"
+  | "order_received"
+  | "promotional"
+  | "system";
+
+export interface AppNotification {
+  id: UUID;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  href?: string | null;
+  read: boolean;
+  createdAt: ISODateString;
+  meta?: Record<string, unknown>;
+}
+
+/** CRM view model — customer with history aggregates */
+export interface CustomerCrmProfile {
+  customer: Customer;
+  measurementCount: number;
+  orderCount: number;
+  saleCount: number;
+  recentOrders: Array<{ id: UUID; orderNumber: string; status: string; price: number; date: string }>;
+  recentSales: Array<{ id: UUID; invoiceNumber: string; total: number; date: string }>;
+}
