@@ -5,8 +5,13 @@
 
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import * as path from "path";
+import * as fs from "fs";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
+
+function dataFilePath() {
+  return path.join(app.getPath("userData"), "minarvabiz-db.json");
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -27,7 +32,6 @@ function createWindow() {
 
   win.once("ready-to-show", () => win.show());
 
-  // Open external links in OS browser
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
@@ -51,7 +55,6 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-// Minimal secure IPC surface
 ipcMain.handle("app:getVersion", () => app.getVersion());
 ipcMain.handle("app:getPath", (_e, name: string) => {
   const allowed = ["userData", "documents", "desktop", "temp"] as const;
@@ -59,4 +62,21 @@ ipcMain.handle("app:getPath", (_e, name: string) => {
     return app.getPath(name as (typeof allowed)[number]);
   }
   return null;
+});
+
+ipcMain.handle("db:read", () => {
+  const file = dataFilePath();
+  try {
+    if (fs.existsSync(file)) return fs.readFileSync(file, "utf8");
+  } catch {
+    /* ignore */
+  }
+  return null;
+});
+
+ipcMain.handle("db:write", (_e, content: string) => {
+  const file = dataFilePath();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, content, "utf8");
+  return true;
 });

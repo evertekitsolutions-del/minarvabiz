@@ -17,7 +17,7 @@ Built for real boutique, tailoring, and laundry shops.
 
 ---
 
-## Modules (Phases 1–11)
+## Modules (Phases 1–12)
 
 | Area | Features |
 |------|----------|
@@ -32,6 +32,7 @@ Built for real boutique, tailoring, and laundry shops.
 | **License** | Ed25519 activation, plan limits, grace, multi-branch foundation |
 | **Production** | Feature gates, Electron security shell, env hardening, docs |
 | **Persistence** | Repository pattern, SQLite/Postgres DDL, local auth, license-admin issuer |
+| **Desktop pack** | File-JSON durable store, Electron IPC DB, electron-builder config |
 
 ---
 
@@ -111,6 +112,7 @@ Multi-branch and API access are Enterprise features.
 - [Database](docs/DATABASE.md)
 - [Licensing](docs/LICENSING.md)
 - [Production readiness](docs/PRODUCTION.md)
+- [Desktop packaging](docs/DESKTOP.md)
 
 ---
 

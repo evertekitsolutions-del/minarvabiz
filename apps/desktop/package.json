@@ -2,13 +2,20 @@
   "name": "@minarvabiz/desktop",
   "version": "0.1.0",
   "private": true,
+  "description": "Minarva Biz Offline / Hybrid Windows application",
+  "author": "Evertek IT Solutions",
   "main": "electron/main.ts",
   "scripts": {
-    "dev": "echo 'Desktop shell ready — install electron locally to run: pnpm add -D electron vite @vitejs/plugin-react'",
-    "typecheck": "tsc --noEmit"
+    "dev": "echo 'Install electron + vite first: pnpm add -D electron vite @vitejs/plugin-react electron-builder'",
+    "typecheck": "tsc --noEmit",
+    "build:renderer": "echo 'Run vite build after installing vite'",
+    "build:electron": "echo 'Compile electron/main.ts with tsc or esbuild when packaging'",
+    "package": "echo 'See build/README.md — electron-builder --config electron-builder.yml'",
+    "package:win": "echo 'electron-builder --win --config electron-builder.yml'"
   },
   "dependencies": {
     "@minarvabiz/business-logic": "workspace:*",
+    "@minarvabiz/database": "workspace:*",
     "@minarvabiz/licensing": "workspace:*",
     "@minarvabiz/types": "workspace:*",
     "@minarvabiz/ui": "workspace:*",

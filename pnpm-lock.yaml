@@ -23,6 +23,9 @@ importers:
       '@minarvabiz/business-logic':
         specifier: workspace:*
         version: link:../../packages/business-logic
+      '@minarvabiz/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       '@minarvabiz/licensing':
         specifier: workspace:*
         version: link:../../packages/licensing

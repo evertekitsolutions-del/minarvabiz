@@ -1,0 +1,32 @@
+appId: com.evertek.minarvabiz
+productName: Minarva Biz
+copyright: Copyright © Evertek IT Solutions
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - electron/dist/**/*
+  - package.json
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: MinarvaBiz-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Minarva Biz
+linux:
+  target:
+    - AppImage
+  category: Office
+mac:
+  target:
+    - dmg
+  category: public.app-category.business
+extraMetadata:
+  main: electron/dist/main.js
