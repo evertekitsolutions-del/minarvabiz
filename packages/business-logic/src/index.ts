@@ -17,3 +17,5 @@ export * as phase9Store from "./phase9-store";
 export * from "./feature-gates";
 export * from "./persistence";
 export * from "./session";
+export * from "./autosave";
+export * from "./receipt";

@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@minarvabiz/ui";
 import { ensureDefaultAdmin, login } from "@minarvabiz/database";
+import { setSession } from "@minarvabiz/business-logic";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,15 +27,12 @@ export default function LoginPage() {
         setError(result.error || "Login failed");
         return;
       }
-      if (typeof window !== "undefined") {
-        sessionStorage.setItem("minarva_session", result.session.token);
-        sessionStorage.setItem("minarva_user", JSON.stringify({
-          id: result.user!.id,
-          email: result.user!.email,
-          fullName: result.user!.fullName,
-          role: result.user!.role,
-        }));
-      }
+      setSession(result.session.token, {
+        id: result.user!.id,
+        email: result.user!.email,
+        fullName: result.user!.fullName,
+        role: result.user!.role,
+      });
       router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

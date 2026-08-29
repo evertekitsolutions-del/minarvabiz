@@ -12,6 +12,7 @@ import {
   calculateCartTotals, cartLineToSaleItem, allocatePayment, validateCart, nextInvoiceNumber,
 } from "./sales";
 import { applyStockMovement, isLowStock } from "./inventory";
+import { touchPersistence } from "./autosave";
 
 const categories: Category[] = [
   { id: "cat-1", name: "Ornaments", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
@@ -107,6 +108,7 @@ export function createCustomer(input: {
     updatedAt: nowISO(),
   };
   customers.push(c);
+  touchPersistence();
   return c;
 }
 
@@ -150,6 +152,7 @@ export function createProduct(input: Omit<Product, "id" | "createdAt" | "updated
     updatedAt: nowISO(),
   };
   products.push(p);
+  touchPersistence();
   return p;
 }
 
@@ -246,6 +249,7 @@ export function createSale(input: {
   }
 
   sales.push(sale);
+  touchPersistence();
 
   let payment: Payment | null = null;
   if (allocation.paidAmount > 0) {

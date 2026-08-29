@@ -3,7 +3,11 @@
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { AppShell, AuthGate, type NavItemId } from "@minarvabiz/ui";
-import { bootstrapFromLocalStorage } from "@minarvabiz/business-logic";
+import {
+  bootstrapFromLocalStorage,
+  clearSession,
+  getSessionUser,
+} from "@minarvabiz/business-logic";
 
 const pathToNav: Record<string, NavItemId> = {
   "/dashboard": "dashboard",
@@ -24,13 +28,16 @@ const pathToNav: Record<string, NavItemId> = {
 export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const [userName, setUserName] = React.useState<string | undefined>();
   React.useEffect(() => {
     bootstrapFromLocalStorage();
+    const u = getSessionUser();
+    if (u) setUserName(u.fullName || u.email);
   }, []);
   const activeNav = pathToNav[pathname] ?? "dashboard";
 
   return (
-    <AuthGate requireAuth={false}>
+    <AuthGate requireAuth={process.env.NEXT_PUBLIC_REQUIRE_AUTH === "true"}>
     <AppShell
       activeNav={activeNav}
       onNavigate={(href) => router.push(href)}
@@ -40,9 +47,15 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
       }}
       header={{
         title: pathname === "/dashboard" ? "Dashboard" : pathname.slice(1).replace(/^\w/, (c) => c.toUpperCase()),
-        subtitle: "Welcome back, Admin!",
+        subtitle: userName ? `Welcome back, ${userName}!` : "Welcome back!",
         notificationCount: 6,
         messageCount: 3,
+        userName,
+        onLogout: () => {
+          clearSession();
+          router.push("/login");
+        },
+        onNotificationsClick: () => router.push("/notifications"),
       }}
     >
       {children}

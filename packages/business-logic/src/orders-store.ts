@@ -12,6 +12,7 @@ import {
   calculateOrderPricing, nextOrderNumber, validateOrderInput, canTransition,
 } from "./orders";
 import * as mainStore from "./store";
+import { touchPersistence } from "./autosave";
 
 const measurements: MeasurementProfile[] = [];
 const orders: ServiceOrder[] = [];
@@ -160,6 +161,7 @@ export function createOrder(input: {
   customer.updatedAt = nowISO();
 
   orders.push(order);
+  touchPersistence();
   return { order, errors: [] };
 }
 

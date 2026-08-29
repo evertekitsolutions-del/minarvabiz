@@ -13,6 +13,8 @@ export interface HeaderProps {
   onSearch?: (query: string) => void;
   onNotificationsClick?: () => void;
   onMessagesClick?: () => void;
+  onLogout?: () => void;
+  userName?: string;
   className?: string;
 }
 
@@ -26,6 +28,8 @@ export function Header({
   onSearch,
   onNotificationsClick,
   onMessagesClick,
+  onLogout,
+  userName,
   className,
 }: HeaderProps) {
   const [query, setQuery] = React.useState("");
@@ -139,6 +143,16 @@ export function Header({
           </svg>
           <span className="whitespace-nowrap">{today}</span>
         </div>
+        {onLogout ? (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="hidden rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 sm:inline-flex"
+            title={userName ? `Signed in as ${userName}` : "Sign out"}
+          >
+            Logout
+          </button>
+        ) : null}
       </div>
     </header>
   );

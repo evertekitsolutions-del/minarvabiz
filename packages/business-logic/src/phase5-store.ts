@@ -12,6 +12,7 @@ import { calculateLaundryProfit } from "./laundry";
 import { purchaseBalance, nextDocNumber } from "./expenses";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
+import { touchPersistence } from "./autosave";
 
 const suppliers: Supplier[] = [
   {
@@ -88,6 +89,7 @@ export function createSupplier(input: {
     updatedAt: nowISO(),
   };
   suppliers.push(s);
+  touchPersistence();
   return s;
 }
 
@@ -186,6 +188,7 @@ export function createLaundryOrder(input: {
   }
 
   laundryOrders.push(order);
+  touchPersistence();
   return { order, errors: [] };
 }
 
@@ -263,6 +266,7 @@ export function createExpense(input: {
     version: 1,
   };
   expenses.push(expense);
+  touchPersistence();
   return { expense, errors: [] };
 }
 
@@ -336,6 +340,7 @@ export function createPurchase(input: {
   }
 
   purchases.push(purchase);
+  touchPersistence();
   return { purchase, errors: [] };
 }
 
