@@ -1,0 +1,24 @@
+{
+  "name": "@minarvabiz/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron/main.ts",
+  "scripts": {
+    "dev": "echo 'Desktop shell ready — install electron locally to run: pnpm add -D electron vite @vitejs/plugin-react'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@minarvabiz/business-logic": "workspace:*",
+    "@minarvabiz/licensing": "workspace:*",
+    "@minarvabiz/types": "workspace:*",
+    "@minarvabiz/ui": "workspace:*",
+    "@minarvabiz/utils": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "typescript": "^5.7.2"
+  }
+}

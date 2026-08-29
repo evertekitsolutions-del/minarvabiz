@@ -1,0 +1,26 @@
+{
+  "name": "minarvabiz",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MINARVA BIZ — Commercial Boutique Billing & Management Software (Online / Offline / Hybrid)",
+  "author": "Evertek IT Solutions",
+  "license": "UNLICENSED",
+  "packageManager": "pnpm@9.15.0",
+  "engines": { "node": ">=20.0.0", "pnpm": ">=9.0.0" },
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@minarvabiz/web",
+    "dev:desktop": "turbo run dev --filter=@minarvabiz/desktop",
+    "dev:license-admin": "turbo run dev --filter=@minarvabiz/license-admin",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}
