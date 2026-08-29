@@ -1,15 +1,33 @@
-# MINARVA BIZ — Licensing Architecture
+# Licensing
 
-## Plans
-Trial · Basic · Professional · Business · Enterprise
+## Model
 
-## Token
-Ed25519 signed payload: license_id, customer_id, edition, plan, features, expiry, activation_limit, device_bindings
+- **Ed25519** signed license tokens
+- Payload: plan, edition, features, expiry, activation limit, device bindings
+- Client verifies with **public** key only
+- Private key lives only on `license-admin` / secure issuer
 
-## Offline
-Local signature validation + configurable grace period after last online check.
-Warnings at 30/15/7/3/1 days before expiry.
-Customer can always export data.
+## Lifecycle
 
-## Admin
-Separate apps/license-admin for create, activate, revoke, transfer, history.
+`unlicensed` → `trial` → `active` → `grace` → `expired` / `invalid`
+
+Grace days are plan-specific (see `PLAN_LIMITS` in `@minarvabiz/licensing`).
+
+## Device binding
+
+Desktop collects hardware fingerprint (CPU, disk, MAC, Windows product id where available).
+Tokens may list allowed fingerprint hashes.
+
+## Feature & limit enforcement
+
+```ts
+import { requireFeature, assertLimit } from "@minarvabiz/business-logic";
+
+requireFeature("staff");
+assertLimit("customers");
+```
+
+## UI
+
+- `/license` — activate token, trial, demo plans, usage vs limits, branches
+- `/settings` — hybrid sync controls + link to license

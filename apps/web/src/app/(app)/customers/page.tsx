@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { CustomerList, CustomerProfile, Modal, Button, FormField, inputClass } from "@minarvabiz/ui";
-import { store, phase6Store } from "@minarvabiz/business-logic";
+import { store, phase6Store, assertLimit } from "@minarvabiz/business-logic";
 import type { Customer, CustomerCrmProfile } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
@@ -20,6 +20,11 @@ export default function CustomersPage() {
   React.useEffect(() => { refresh(); }, [refresh]);
 
   function handleCreate() {
+    const limit = assertLimit("customers");
+    if (!limit.allowed) {
+      setError(limit.reason ?? "Customer limit reached");
+      return;
+    }
     const parsed = customerSchema.safeParse({
       name: form.name,
       phone: form.phone || null,
