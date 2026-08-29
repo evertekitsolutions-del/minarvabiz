@@ -47,3 +47,4 @@ export * from "./components/reports/ReportsPanel";
 export * from "./components/returns/ReturnsPanel";
 export * from "./components/audit/AuditLogList";
 export * from "./components/backup/BackupPanel";
+export * from "./components/sync/SyncPanel";

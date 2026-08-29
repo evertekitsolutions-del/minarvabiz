@@ -1,0 +1,64 @@
+"use client";
+
+import * as React from "react";
+import { SyncPanel, Button } from "@minarvabiz/ui";
+import { syncBridge } from "@minarvabiz/business-logic";
+
+export default function SettingsPage() {
+  const [snap, setSnap] = React.useState(() => syncBridge.getSyncSnapshot());
+  const [syncing, setSyncing] = React.useState(false);
+
+  function refresh() {
+    setSnap(syncBridge.getSyncSnapshot());
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      await syncBridge.runSync();
+    } finally {
+      setSyncing(false);
+      refresh();
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold text-slate-900">Settings</h1>
+        <p className="text-sm text-slate-500">License, environment, and hybrid sync</p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          onClick={() => {
+            syncBridge.enqueueDemoWrite();
+            refresh();
+          }}
+        >
+          Enqueue offline write
+        </Button>
+      </div>
+
+      <SyncPanel
+        online={snap.online}
+        outboxStats={snap.outboxStats}
+        sessions={snap.sessions}
+        conflicts={snap.conflicts}
+        devices={snap.devices}
+        lastSyncAt={snap.lastSyncAt}
+        syncing={syncing}
+        onSync={handleSync}
+        onToggleOnline={() => {
+          syncBridge.setSyncOnline(!snap.online);
+          refresh();
+        }}
+        onResolveConflict={(id, choice) => {
+          syncBridge.resolveSyncConflict(id, choice);
+          refresh();
+        }}
+      />
+    </div>
+  );
+}

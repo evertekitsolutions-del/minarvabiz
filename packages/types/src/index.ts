@@ -573,3 +573,60 @@ export interface SalesReportRow {
   expenses: number;
   netProfit: number;
 }
+
+
+// ---------------------------------------------------------------------------
+// Phase 8 — Sync, conflict, offline queue
+// ---------------------------------------------------------------------------
+
+export type ConflictStrategy = "last_write_wins" | "manual" | "server_wins" | "client_wins";
+
+export interface ConflictRecord {
+  id: UUID;
+  tableName: string;
+  recordId: UUID;
+  localVersion: number;
+  remoteVersion: number;
+  localPayload: Record<string, unknown>;
+  remotePayload: Record<string, unknown>;
+  strategy: ConflictStrategy;
+  resolution?: "local" | "remote" | "merged" | null;
+  resolvedAt?: ISODateString | null;
+  createdAt: ISODateString;
+}
+
+export interface SyncSession {
+  id: UUID;
+  deviceId: UUID;
+  startedAt: ISODateString;
+  finishedAt?: ISODateString | null;
+  pushed: number;
+  pulled: number;
+  conflicts: number;
+  errors: number;
+  status: "running" | "completed" | "failed";
+  lastError?: string | null;
+}
+
+export interface DeviceRegistration {
+  id: UUID;
+  deviceName: string;
+  platform: "web" | "windows" | "android" | "ios";
+  lastSyncAt?: ISODateString | null;
+  isOnline: boolean;
+  createdAt: ISODateString;
+}
+
+export interface OutboxEvent {
+  id: UUID;
+  aggregateType: string;
+  aggregateId: UUID;
+  eventType: string;
+  payload: Record<string, unknown>;
+  occurredAt: ISODateString;
+  deviceId: UUID;
+  sequence: number;
+  status: SyncStatus;
+  attempts: number;
+  lastError?: string | null;
+}

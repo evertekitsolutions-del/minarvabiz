@@ -12,3 +12,4 @@ export * as ordersStore from "./orders-store";
 export * as phase5Store from "./phase5-store";
 export * as phase6Store from "./phase6-store";
 export * as phase7Store from "./phase7-store";
+export * as syncBridge from "./sync-bridge";

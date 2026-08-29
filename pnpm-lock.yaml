@@ -171,6 +171,9 @@ importers:
       '@minarvabiz/billing':
         specifier: workspace:*
         version: link:../billing
+      '@minarvabiz/sync':
+        specifier: workspace:*
+        version: link:../sync
       '@minarvabiz/types':
         specifier: workspace:*
         version: link:../types
