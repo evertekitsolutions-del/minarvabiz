@@ -15,7 +15,8 @@
     "@minarvabiz/types": "workspace:*",
     "@minarvabiz/utils": "workspace:*",
     "@minarvabiz/billing": "workspace:*",
-    "@minarvabiz/sync": "workspace:*"
+    "@minarvabiz/sync": "workspace:*",
+    "@minarvabiz/licensing": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.2"

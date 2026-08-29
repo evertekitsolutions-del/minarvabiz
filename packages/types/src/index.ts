@@ -630,3 +630,32 @@ export interface OutboxEvent {
   attempts: number;
   lastError?: string | null;
 }
+
+
+// ---------------------------------------------------------------------------
+// Phase 9 — Branches, license runtime
+// ---------------------------------------------------------------------------
+
+export interface Branch {
+  id: UUID;
+  name: string;
+  code?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  isHeadquarters: boolean;
+  isActive: boolean;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+}
+
+export interface LicenseRuntimeSnapshot {
+  status: string;
+  plan: LicensePlan | null;
+  edition: Edition | null;
+  daysRemaining: number | null;
+  graceDaysRemaining: number | null;
+  reason?: string | null;
+  features: LicenseFeatures | null;
+  activeBranchId?: UUID | null;
+}
