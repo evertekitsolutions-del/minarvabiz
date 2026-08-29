@@ -54,3 +54,5 @@ export * from "./components/auth/AuthGate";
 export * from "./components/sync/PersistencePanel";
 export * from "./components/payments/PaymentsPanel";
 export * from "./components/reports/DayEndClose";
+export * from "./components/Toast";
+export * from "./components/ErrorBoundary";

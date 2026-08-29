@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { AppShell, AuthGate, type NavItemId } from "@minarvabiz/ui";
+import { AppShell, AuthGate, ToastProvider, ErrorBoundary, type NavItemId } from "@minarvabiz/ui";
 import {
   bootstrapFromLocalStorage,
   clearSession,
@@ -21,6 +21,12 @@ const pathToNav: Record<string, NavItemId> = {
   "/reports": "reports",
   "/notifications": "sms",
   "/settings": "settings",
+  "/onboarding": "dashboard",
+  "/help": "settings",
+  "/system": "settings",
+  "/delivery": "services",
+  "/stock-take": "sales",
+  "/tools": "settings",
   "/license": "settings",
   "/backup": "backup",
   "/suppliers": "expenses",
@@ -39,6 +45,8 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthGate requireAuth={process.env.NEXT_PUBLIC_REQUIRE_AUTH === "true"}>
+    <ToastProvider>
+    <ErrorBoundary>
     <AppShell
       activeNav={activeNav}
       onNavigate={(href) => router.push(href)}
@@ -61,6 +69,8 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
     >
       {children}
     </AppShell>
+    </ErrorBoundary>
+    </ToastProvider>
     </AuthGate>
   );
 }

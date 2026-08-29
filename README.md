@@ -17,7 +17,7 @@ Built for real boutique, tailoring, and laundry shops.
 
 ---
 
-## Modules (Phases 1–17)
+## Modules (Phases 1–50)
 
 | Area | Features |
 |------|----------|
@@ -38,6 +38,7 @@ Built for real boutique, tailoring, and laundry shops.
 | **Ops polish** | Auto-save on mutations, receipt print, logout, optional auth |
 | **Live ops** | Live dashboard metrics, shop profile, order receipts |
 | **Collections** | Customer payments, day-end close, message templates |
+| **18–50** | Tax, labels, stock take, delivery, loyalty, CSV, CI, release |
 
 ---
 
@@ -119,6 +120,8 @@ Multi-branch and API access are Enterprise features.
 - [Production readiness](docs/PRODUCTION.md)
 - [Desktop packaging](docs/DESKTOP.md)
 - [Persistence](docs/PERSISTENCE.md)
+- [Phases 18–50](docs/PHASES_18_50.md)
+- [Release](docs/RELEASE.md)
 
 ---
 
