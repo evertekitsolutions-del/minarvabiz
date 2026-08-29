@@ -17,7 +17,7 @@ Built for real boutique, tailoring, and laundry shops.
 
 ---
 
-## Modules (Phases 1–50)
+## Modules (Phases 1–51)
 
 | Area | Features |
 |------|----------|
@@ -39,6 +39,7 @@ Built for real boutique, tailoring, and laundry shops.
 | **Live ops** | Live dashboard metrics, shop profile, order receipts |
 | **Collections** | Customer payments, day-end close, message templates |
 | **18–50** | Tax, labels, stock take, delivery, loyalty, CSV, CI, release |
+| **51** | Real Supabase PostgREST, migrations+RLS, dual-write, profit tests |
 
 ---
 
@@ -122,6 +123,7 @@ Multi-branch and API access are Enterprise features.
 - [Persistence](docs/PERSISTENCE.md)
 - [Phases 18–50](docs/PHASES_18_50.md)
 - [Release](docs/RELEASE.md)
+- [Supabase setup](docs/SUPABASE.md)
 
 ---
 

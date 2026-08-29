@@ -13,6 +13,7 @@ import {
 } from "./sales";
 import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
+import { remoteUpsertCustomer, remoteUpsertProduct, remoteCreateSale } from "./remote-write";
 
 const categories: Category[] = [
   { id: "cat-1", name: "Ornaments", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
@@ -109,6 +110,7 @@ export function createCustomer(input: {
   };
   customers.push(c);
   touchPersistence();
+  void remoteUpsertCustomer(c);
   return c;
 }
 
@@ -153,6 +155,7 @@ export function createProduct(input: Omit<Product, "id" | "createdAt" | "updated
   };
   products.push(p);
   touchPersistence();
+  void remoteUpsertProduct(p);
   return p;
 }
 
@@ -267,6 +270,7 @@ export function createSale(input: {
     payments.push(payment);
   }
 
+  void remoteCreateSale(sale);
   return { sale, payment, errors: [] };
 }
 

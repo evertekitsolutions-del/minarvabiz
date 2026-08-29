@@ -5,9 +5,11 @@ import { useRouter, usePathname } from "next/navigation";
 import { AppShell, AuthGate, ToastProvider, ErrorBoundary, type NavItemId } from "@minarvabiz/ui";
 import {
   bootstrapFromLocalStorage,
+  // remote hydrate is separate
   clearSession,
   getSessionUser,
 } from "@minarvabiz/business-logic";
+import { hydrateStoresFromSupabase } from "@/lib/data-source";
 
 const pathToNav: Record<string, NavItemId> = {
   "/dashboard": "dashboard",
@@ -38,6 +40,9 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const [userName, setUserName] = React.useState<string | undefined>();
   React.useEffect(() => {
     bootstrapFromLocalStorage();
+    void hydrateStoresFromSupabase().then((r) => {
+      if (r.ok) console.info("[minarvabiz]", r.message, r.counts);
+    });
     const u = getSessionUser();
     if (u) setUserName(u.fullName || u.email);
   }, []);

@@ -1,10 +1,6 @@
-/**
- * Edition-aware database factory.
- */
-
 import type { UnitOfWork } from "./repository";
 import { createMemoryUnitOfWork } from "./adapters/memory";
-import { createSupabaseUnitOfWork, supabaseConfigFromEnv } from "./adapters/supabase";
+import { createSupabaseUnitOfWork, supabaseConfigFromEnv, isSupabaseConfigured } from "./adapters/supabase";
 import {
   createFileJsonUnitOfWork,
   createLocalStorageIO,
@@ -15,31 +11,31 @@ export type EditionMode = "online" | "offline" | "hybrid" | "memory";
 
 export interface CreateDbOptions {
   edition?: EditionMode;
-  /** Custom file IO for Electron main/preload path */
   fileIO?: FileIO;
+  accessToken?: string | null;
 }
 
-/**
- * Create unit of work for the current edition.
- * - memory: tests / current web demo stores
- * - offline/hybrid without native sqlite: file-json or localStorage
- * - online: use memory bridge until Postgres drizzle adapter is deployed
- */
 export async function createDatabase(options: CreateDbOptions = {}): Promise<UnitOfWork> {
-  const edition = options.edition ?? "memory";
+  const edition = options.edition ?? (isSupabaseConfigured() ? "online" : "memory");
 
   if (edition === "memory") {
     return createMemoryUnitOfWork();
   }
 
-  if (edition === "offline" || edition === "hybrid") {
+  if (edition === "offline") {
     const io = options.fileIO ?? createLocalStorageIO();
     const uow = await createFileJsonUnitOfWork(io);
-    return { ...uow, edition: edition === "hybrid" ? "hybrid" : "offline" };
+    return { ...uow, edition: "offline" };
   }
 
-  // online — Supabase when configured, else memory bridge
-  const cfg = supabaseConfigFromEnv();
-  if (cfg) return createSupabaseUnitOfWork(cfg);
-  return { ...createMemoryUnitOfWork(), edition: "online" };
+  if (edition === "online" || edition === "hybrid") {
+    const cfg = supabaseConfigFromEnv();
+    if (cfg && options.accessToken) cfg.accessToken = options.accessToken;
+    const uow = await createSupabaseUnitOfWork(cfg);
+    return { ...uow, edition: edition === "hybrid" ? "hybrid" : "online" };
+  }
+
+  return createMemoryUnitOfWork();
 }
+
+export { isSupabaseConfigured };

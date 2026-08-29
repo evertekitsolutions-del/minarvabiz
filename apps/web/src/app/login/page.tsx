@@ -3,8 +3,9 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@minarvabiz/ui";
-import { ensureDefaultAdmin, login } from "@minarvabiz/database";
+import { ensureDefaultAdmin, login, isSupabaseConfigured } from "@minarvabiz/database";
 import { setSession } from "@minarvabiz/business-logic";
+import { supabaseLogin } from "@/lib/data-source";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,6 +23,21 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
+      if (isSupabaseConfigured()) {
+        const remote = await supabaseLogin(email, password);
+        if (remote.ok) {
+          setSession(remote.token, {
+            id: remote.user.id,
+            email: remote.user.email || email,
+            fullName: remote.user.email || email,
+            role: "admin",
+          });
+          router.push("/dashboard");
+          return;
+        }
+        setError(remote.error || "Supabase login failed");
+        return;
+      }
       const result = await login(email, password);
       if (result.error || !result.session) {
         setError(result.error || "Login failed");

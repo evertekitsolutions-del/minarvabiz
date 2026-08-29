@@ -13,6 +13,7 @@ import {
 } from "./orders";
 import * as mainStore from "./store";
 import { touchPersistence } from "./autosave";
+import { remoteCreateOrder } from "./remote-write";
 
 const measurements: MeasurementProfile[] = [];
 const orders: ServiceOrder[] = [];
@@ -162,6 +163,7 @@ export function createOrder(input: {
 
   orders.push(order);
   touchPersistence();
+  void remoteCreateOrder(order);
   return { order, errors: [] };
 }
 
