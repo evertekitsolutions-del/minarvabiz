@@ -12,6 +12,9 @@ const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 function dataFilePath() {
   return path.join(app.getPath("userData"), "minarvabiz-db.json");
 }
+function sqlitePath() {
+  return path.join(app.getPath("userData"), "minarvabiz.db");
+}
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -78,5 +81,15 @@ ipcMain.handle("db:write", (_e, content: string) => {
   const file = dataFilePath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, content, "utf8");
+  return true;
+});
+
+ipcMain.handle("db:sqlitePath", () => sqlitePath());
+
+ipcMain.handle("db:backupSqlite", (_e, destPath: string) => {
+  const src = sqlitePath();
+  if (!fs.existsSync(src)) return false;
+  fs.mkdirSync(path.dirname(destPath), { recursive: true });
+  fs.copyFileSync(src, destPath);
   return true;
 });

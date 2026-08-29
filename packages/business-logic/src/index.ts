@@ -38,3 +38,4 @@ export * from "./remote-write";
 export * from "./invoice";
 export * from "./users";
 export * from "./audit-actions";
+export * from "./permissions";

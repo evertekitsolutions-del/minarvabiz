@@ -13,6 +13,7 @@ export interface CreateDbOptions {
   edition?: EditionMode;
   fileIO?: FileIO;
   accessToken?: string | null;
+  sqlitePath?: string;
 }
 
 export async function createDatabase(options: CreateDbOptions = {}): Promise<UnitOfWork> {
@@ -23,6 +24,17 @@ export async function createDatabase(options: CreateDbOptions = {}): Promise<Uni
   }
 
   if (edition === "offline") {
+    const dbPath =
+      options.sqlitePath ||
+      (typeof process !== "undefined" ? process.env.MINARVA_SQLITE_PATH : "") ||
+      "";
+    if (dbPath && typeof window === "undefined") {
+      const { openSqliteDatabase, createSqliteUnitOfWork, nodeFileIO } = await import(
+        "./adapters/sqlite"
+      );
+      const sqlite = await openSqliteDatabase(dbPath, nodeFileIO());
+      return createSqliteUnitOfWork(sqlite);
+    }
     const io = options.fileIO ?? createLocalStorageIO();
     const uow = await createFileJsonUnitOfWork(io);
     return { ...uow, edition: "offline" };

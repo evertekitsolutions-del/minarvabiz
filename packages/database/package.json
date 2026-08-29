@@ -13,9 +13,11 @@
   },
   "dependencies": {
     "@minarvabiz/types": "workspace:*",
-    "@minarvabiz/utils": "workspace:*"
+    "@minarvabiz/utils": "workspace:*",
+    "sql.js": "^1.12.0"
   },
   "devDependencies": {
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "@types/node": "^22.10.2"
   }
 }

@@ -15,6 +15,7 @@ import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
 import { remoteUpsertCustomer, remoteUpsertProduct, remoteCreateSale } from "./remote-write";
 import { auditAction } from "./audit-actions";
+import { assertPermission } from "./permissions";
 
 const categories: Category[] = [
   { id: "cat-1", name: "Ornaments", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
@@ -198,6 +199,7 @@ export function createSale(input: {
   allowNegativeStock?: boolean;
   createdBy?: UUID | null;
 }): { sale: Sale; payment: Payment | null; errors: string[] } {
+  assertPermission("sales.create");
   const errors = validateCart(input.lines, { allowNegativeStock: input.allowNegativeStock });
   if (errors.length) return { sale: null as unknown as Sale, payment: null, errors };
 

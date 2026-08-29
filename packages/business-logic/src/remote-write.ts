@@ -11,6 +11,10 @@ export interface RemoteWriter {
   createSale?: (s: Sale) => Promise<void>;
   createOrder?: (o: ServiceOrder) => Promise<void>;
   updateOrder?: (id: string, patch: Partial<ServiceOrder>) => Promise<void>;
+  createPayment?: (payload: Record<string, unknown>) => Promise<void>;
+  createExpense?: (payload: Record<string, unknown>) => Promise<void>;
+  createSupplier?: (payload: Record<string, unknown>) => Promise<void>;
+  createLaundry?: (payload: Record<string, unknown>) => Promise<void>;
 }
 
 let writer: RemoteWriter | null = null;
