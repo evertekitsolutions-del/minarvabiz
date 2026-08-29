@@ -10,6 +10,7 @@ import {
   getSessionUser,
 } from "@minarvabiz/business-logic";
 import { hydrateStoresFromSupabase } from "@/lib/data-source";
+import { SetupBanner } from "@/components/SetupBanner";
 
 const pathToNav: Record<string, NavItemId> = {
   "/dashboard": "dashboard",
@@ -73,6 +74,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
         onNotificationsClick: () => router.push("/notifications"),
       }}
     >
+      <SetupBanner />
       {children}
     </AppShell>
     </ErrorBoundary>

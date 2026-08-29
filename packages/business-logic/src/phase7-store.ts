@@ -1,3 +1,4 @@
+import { assertPermission } from "./permissions";
 /**
  * Phase 7: Returns/refunds, audit logs, backup snapshots, report queries.
  */
@@ -74,6 +75,7 @@ export function createReturn(input: {
     restock: boolean;
   }>;
 }): { ret: SaleReturn | null; errors: string[] } {
+  assertPermission("returns.manage");
   const sale = mainStore.getSale(input.saleId);
   if (!sale) return { ret: null, errors: ["Sale not found"] };
   if (input.items.length === 0) return { ret: null, errors: ["Select at least one item"] };
@@ -195,6 +197,7 @@ export function createBackup(kind: "manual" | "automatic" = "manual"): BackupMet
     audit: listAuditLogs(500),
   };
   const json = JSON.stringify(snapshot);
+  assertPermission("backup.manage");
   const id = generateId();
   const filename = `minarvabiz-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   backupPayloads[id] = json;

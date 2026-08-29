@@ -48,6 +48,11 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Primary transactional DB path for renderer/bootstrap
+  process.env.MINARVA_SQLITE_PATH = sqlitePath();
+  process.env.MINARVA_MODE = process.env.MINARVA_MODE || "production";
+  // Ensure directory exists; DB file created on first openSqliteDatabase
+  fs.mkdirSync(app.getPath("userData"), { recursive: true });
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

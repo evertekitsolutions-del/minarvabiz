@@ -1,3 +1,5 @@
+import { assertPermission } from "./permissions";
+import { enqueueOutbox } from "./outbox-bridge";
 /**
  * Phase 5 store: suppliers, laundry, expenses, purchases.
  * Order-specific purchases/expenses link into ordersStore profit.
@@ -74,6 +76,7 @@ export function createSupplier(input: {
   notes?: string | null;
   openingBalance?: number;
 }): Supplier {
+  assertPermission("purchases.manage");
   const s: Supplier = {
     id: generateId(),
     name: input.name,
@@ -90,6 +93,7 @@ export function createSupplier(input: {
   };
   suppliers.push(s);
   touchPersistence();
+  enqueueOutbox("suppliers", s.id, "insert", s);
   return s;
 }
 
@@ -150,6 +154,7 @@ export function createLaundryOrder(input: {
   const orderNumber = nextDocNumber(lastLaundryNo, "LDY");
   lastLaundryNo = orderNumber;
 
+  assertPermission("orders.manage");
   const order: LaundryOrder = {
     id: generateId(),
     orderNumber,
@@ -189,6 +194,7 @@ export function createLaundryOrder(input: {
 
   laundryOrders.push(order);
   touchPersistence();
+  enqueueOutbox("laundry_orders", order.id, "insert", order);
   return { order, errors: [] };
 }
 
@@ -250,6 +256,7 @@ export function createExpense(input: {
     ordersStore.addOrderExpense(input.orderId, input.description || "Expense", input.amount);
   }
 
+  assertPermission("expenses.manage");
   const expense: Expense = {
     id: generateId(),
     date: input.date || nowISO(),
@@ -267,6 +274,7 @@ export function createExpense(input: {
   };
   expenses.push(expense);
   touchPersistence();
+  enqueueOutbox("expenses", expense.id, "insert", expense);
   return { expense, errors: [] };
 }
 
@@ -314,6 +322,7 @@ export function createPurchase(input: {
   const purchaseNumber = nextDocNumber(lastPurchaseNo, "PUR");
   lastPurchaseNo = purchaseNumber;
 
+  assertPermission("purchases.manage");
   const purchase: Purchase = {
     id: generateId(),
     purchaseNumber,
@@ -341,6 +350,7 @@ export function createPurchase(input: {
 
   purchases.push(purchase);
   touchPersistence();
+  enqueueOutbox("purchases", purchase.id, "insert", purchase);
   return { purchase, errors: [] };
 }
 

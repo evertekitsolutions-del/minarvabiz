@@ -1,3 +1,4 @@
+import { allowDemoSeed } from "./runtime-mode";
 /**
  * In-memory domain store for Phase 3.
  * Implements the same interface that Supabase/SQLite repositories will later.
@@ -71,6 +72,15 @@ export function createCategory(input: { name: string; description?: string | nul
 }
 
 // ---- Customers ----
+function applyProductionEmptyState() {
+  if (allowDemoSeed()) return;
+  customers.length = 0;
+  products.length = 0;
+  sales.length = 0;
+  payments.length = 0;
+}
+applyProductionEmptyState();
+
 export function listCustomers(query?: string): Customer[] {
   let list = customers.filter((c) => !c.deletedAt);
   if (query?.trim()) {
@@ -97,6 +107,7 @@ export function createCustomer(input: {
   address?: string | null;
   notes?: string | null;
 }): Customer {
+  assertPermission("customers.manage");
   const c: Customer = {
     id: generateId(),
     name: input.name,
@@ -117,6 +128,7 @@ export function createCustomer(input: {
 }
 
 export function updateCustomer(id: UUID, patch: Partial<Customer>): Customer | null {
+  assertPermission("customers.manage");
   const c = getCustomer(id);
   if (!c) return null;
   Object.assign(c, patch, { updatedAt: nowISO() });
@@ -149,6 +161,7 @@ export function getProductByBarcode(barcode: string): Product | undefined {
 }
 
 export function createProduct(input: Omit<Product, "id" | "createdAt" | "updatedAt" | "deletedAt" | "version">): Product {
+  assertPermission("products.manage");
   const p: Product = {
     ...input,
     id: generateId(),
@@ -162,6 +175,7 @@ export function createProduct(input: Omit<Product, "id" | "createdAt" | "updated
 }
 
 export function updateProduct(id: UUID, patch: Partial<Product>): Product | null {
+  assertPermission("products.manage");
   const p = getProduct(id);
   if (!p) return null;
   Object.assign(p, patch, { updatedAt: nowISO() });
@@ -174,6 +188,7 @@ export function adjustStock(
   quantity: number,
   _notes?: string | null
 ): Product | null {
+  assertPermission("inventory.adjust");
   const p = getProduct(productId);
   if (!p) return null;
   p.stockQuantity = applyStockMovement(p.stockQuantity, type, quantity);
@@ -325,6 +340,7 @@ export function recordCustomerPayment(input: {
   reference?: string | null;
   notes?: string | null;
 }): { payment: Payment | null; customer: Customer | null; errors: string[] } {
+  assertPermission("payments.collect");
   const errors: string[] = [];
   if (input.amount <= 0) errors.push("Amount must be positive");
   const customer = getCustomer(input.customerId);

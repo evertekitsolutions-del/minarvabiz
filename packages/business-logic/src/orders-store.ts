@@ -1,3 +1,4 @@
+import { assertPermission } from "./permissions";
 /**
  * Service orders + measurements store (Phase 4).
  * Shares customer lookup with main store.
@@ -92,6 +93,7 @@ export function createOrder(input: {
   tshirt?: TshirtDetails | null;
   createdBy?: UUID | null;
 }): { order: ServiceOrder | null; errors: string[] } {
+  assertPermission("orders.manage");
   const errors = validateOrderInput({
     customerId: input.customerId,
     serviceType: input.serviceType,
@@ -171,6 +173,7 @@ export function updateOrderStatus(
   id: UUID,
   status: OrderStatus
 ): { order: ServiceOrder | null; error?: string } {
+  assertPermission("orders.manage");
   const order = getOrder(id);
   if (!order) return { order: null, error: "Order not found" };
   if (!canTransition(order.status, status)) {
@@ -187,6 +190,7 @@ export function addOrderExpense(
   description: string,
   amount: number
 ): { order: ServiceOrder | null; error?: string } {
+  assertPermission("orders.manage");
   const order = getOrder(orderId);
   if (!order) return { order: null, error: "Order not found" };
   const exp: OrderExpense = {

@@ -4,6 +4,7 @@
  */
 
 import type { Customer, Product, Sale, ServiceOrder } from "@minarvabiz/types";
+import { enqueueOutbox } from "./outbox-bridge";
 
 export interface RemoteWriter {
   upsertCustomer?: (c: Customer) => Promise<void>;
@@ -28,6 +29,7 @@ export function getRemoteWriter(): RemoteWriter | null {
 }
 
 export async function remoteUpsertCustomer(c: Customer) {
+  enqueueOutbox("customers", c.id, "insert", c);
   try {
     await writer?.upsertCustomer?.(c);
   } catch (e) {
@@ -36,6 +38,7 @@ export async function remoteUpsertCustomer(c: Customer) {
 }
 
 export async function remoteUpsertProduct(p: Product) {
+  enqueueOutbox("products", p.id, "insert", p);
   try {
     await writer?.upsertProduct?.(p);
   } catch (e) {
@@ -44,6 +47,7 @@ export async function remoteUpsertProduct(p: Product) {
 }
 
 export async function remoteCreateSale(s: Sale) {
+  enqueueOutbox("sales", s.id, "insert", s);
   try {
     await writer?.createSale?.(s);
   } catch (e) {
@@ -52,6 +56,7 @@ export async function remoteCreateSale(s: Sale) {
 }
 
 export async function remoteCreateOrder(o: ServiceOrder) {
+  enqueueOutbox("orders", o.id, "insert", o);
   try {
     await writer?.createOrder?.(o);
   } catch (e) {

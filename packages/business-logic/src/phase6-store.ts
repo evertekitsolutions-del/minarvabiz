@@ -1,3 +1,5 @@
+import { assertPermission } from "./permissions";
+import { enqueueOutbox } from "./outbox-bridge";
 /**
  * Phase 6: Staff, assignments, incentives, notifications, CRM helpers.
  */
@@ -79,6 +81,7 @@ export function createStaff(input: {
   joiningDate?: string | null;
   notes?: string | null;
 }): StaffMember {
+  assertPermission("staff.manage");
   const m: StaffMember = {
     id: generateId(),
     name: input.name,
@@ -93,6 +96,7 @@ export function createStaff(input: {
     updatedAt: nowISO(),
   };
   staff.push(m);
+  enqueueOutbox("staff_members", m.id, "insert", m);
   return m;
 }
 

@@ -44,6 +44,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
+      sql.js:
+        specifier: ^1.12.0
+        version: 1.14.2
     devDependencies:
       '@types/react':
         specifier: ^19.0.2
