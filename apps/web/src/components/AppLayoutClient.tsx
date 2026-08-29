@@ -16,6 +16,7 @@ const pathToNav: Record<string, NavItemId> = {
   "/notifications": "sms",
   "/settings": "settings",
   "/backup": "backup",
+  "/suppliers": "expenses",
 };
 
 export function AppLayoutClient({ children }: { children: React.ReactNode }) {

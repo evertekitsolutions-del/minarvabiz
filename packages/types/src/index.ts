@@ -281,3 +281,120 @@ export interface ServiceOrder {
   createdBy?: UUID | null;
   version: number;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5 — Laundry, Ironing, Suppliers, Expenses, Purchases
+// ---------------------------------------------------------------------------
+
+export type ExpenseCategoryName =
+  | "Salary"
+  | "Electricity"
+  | "Rent"
+  | "Normal Water"
+  | "Drinking Water"
+  | "Shop Supplies"
+  | "Transportation"
+  | "Maintenance"
+  | "Other"
+  | string;
+
+export interface Supplier {
+  id: UUID;
+  name: string;
+  company?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  category?: string | null; // laundry, materials, general
+  openingBalance: number;
+  outstandingBalance: number;
+  notes?: string | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+  branchId?: UUID | null;
+}
+
+export interface LaundryOrder {
+  id: UUID;
+  orderNumber: string;
+  customerId: UUID;
+  customerName?: string | null;
+  garment?: string | null;
+  quantity: number;
+  /** outsourced vs in-house ironing */
+  mode: "outsourced" | "in_house_ironing";
+  supplierId?: UUID | null;
+  supplierName?: string | null;
+  supplierRate: number;
+  customerRate: number;
+  profit: number;
+  totalCustomerCharge: number;
+  totalSupplierCost: number;
+  status: "pending" | "sent" | "received" | "delivered" | "cancelled";
+  orderReference?: string | null;
+  notes?: string | null;
+  paidAmount: number;
+  balanceAmount: number;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+  branchId?: UUID | null;
+  deviceId?: UUID | null;
+  version: number;
+}
+
+export interface ExpenseCategory {
+  id: UUID;
+  name: string;
+  isSystem: boolean;
+  createdAt: ISODateString;
+}
+
+export interface Expense {
+  id: UUID;
+  date: ISODateString;
+  categoryId: UUID;
+  categoryName?: string | null;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  description?: string | null;
+  receiptUrl?: string | null;
+  staffId?: UUID | null;
+  reference?: string | null;
+  /** Link to order if order-specific */
+  orderId?: UUID | null;
+  orderNumber?: string | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+  createdBy?: UUID | null;
+  branchId?: UUID | null;
+  deviceId?: UUID | null;
+  version: number;
+}
+
+export interface Purchase {
+  id: UUID;
+  purchaseNumber: string;
+  date: ISODateString;
+  supplierId?: UUID | null;
+  supplierName?: string | null;
+  description: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  paidAmount: number;
+  balanceAmount: number;
+  /** general shop stock vs order-specific */
+  kind: "general" | "order_specific";
+  orderId?: UUID | null;
+  orderNumber?: string | null;
+  notes?: string | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+  createdBy?: UUID | null;
+  branchId?: UUID | null;
+  deviceId?: UUID | null;
+  version: number;
+}

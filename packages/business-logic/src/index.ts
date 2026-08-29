@@ -5,5 +5,7 @@ export * from "./dashboard";
 export * from "./sales";
 export * from "./inventory";
 export * from "./orders";
+export * from "./expenses";
 export * as store from "./store";
 export * as ordersStore from "./orders-store";
+export * as phase5Store from "./phase5-store";
