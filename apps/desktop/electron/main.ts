@@ -98,3 +98,27 @@ ipcMain.handle("db:backupSqlite", (_e, destPath: string) => {
   fs.copyFileSync(src, destPath);
   return true;
 });
+
+ipcMain.handle("db:getSqlitePath", () => sqlitePath());
+
+ipcMain.handle("db:readBinary", () => {
+  const file = sqlitePath();
+  try {
+    if (fs.existsSync(file)) {
+      return fs.readFileSync(file); // Buffer → Uint8Array over IPC
+    }
+  } catch {
+    /* */
+  }
+  return null;
+});
+
+ipcMain.handle("db:writeBinary", (_e, data: Uint8Array | Buffer | number[]) => {
+  const file = sqlitePath();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const buf = Buffer.from(data);
+  fs.writeFileSync(file, buf);
+  return true;
+});
+
+ipcMain.handle("db:exists", () => fs.existsSync(sqlitePath()));

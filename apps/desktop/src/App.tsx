@@ -13,8 +13,11 @@ import type {
   ServiceOrder, MeasurementProfile, ServiceType, OrderStatus,
 } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
+import { bootstrapDesktopSqlite, isDesktopSqliteReady, getDesktopSqliteError } from "./lib/sqlite-bootstrap";
 
 export function App() {
+  const [dbReady, setDbReady] = React.useState(false);
+  const [dbError, setDbError] = React.useState<string | null>(null);
   const [activeNav, setActiveNav] = React.useState<NavItemId>("dashboard");
   const [dash, setDash] = React.useState<DashboardData | null>(null);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
@@ -48,9 +51,42 @@ export function App() {
   }, [lowStockOnly, orderQuery, orderStatus, orderType]);
 
   React.useEffect(() => {
-    fetchDashboardData().then(setDash);
-    refreshAll();
+    let cancelled = false;
+    (async () => {
+      const result = await bootstrapDesktopSqlite();
+      if (cancelled) return;
+      if (!result.ok) {
+        setDbError(result.error || "SQLite failed to initialize");
+        setDbReady(false);
+        return;
+      }
+      setDbReady(true);
+      fetchDashboardData().then(setDash);
+      refreshAll();
+    })();
+    return () => { cancelled = true; };
   }, [refreshAll]);
+
+  if (dbError) {
+    return (
+      <div style={{ padding: 32, fontFamily: "system-ui", maxWidth: 560 }}>
+        <h1 style={{ color: "#b91c1c" }}>Database required</h1>
+        <p>Minarva Biz Offline cannot start without SQLite.</p>
+        <pre style={{ background: "#fef2f2", padding: 12, borderRadius: 8 }}>{dbError}</pre>
+        <p style={{ fontSize: 13, color: "#64748b" }}>
+          Path: userData/minarvabiz.db · MINARVA_MODE=production · localStorage is not used for business data.
+        </p>
+      </div>
+    );
+  }
+
+  if (!dbReady) {
+    return (
+      <div style={{ padding: 48, fontFamily: "system-ui", textAlign: "center" }}>
+        <p>Initializing SQLite database…</p>
+      </div>
+    );
+  }
 
   const actions: QuickAction[] = [
     { id: "sale", label: "New Sale", description: "Create Invoice", icon: <span>🛒</span>, tone: "blue",
