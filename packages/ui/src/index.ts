@@ -1,7 +1,3 @@
-/**
- * MINARVA BIZ — Shared UI package
- */
-
 export * from "./lib/cn";
 export * from "./lib/nav";
 
@@ -22,3 +18,12 @@ export * from "./components/dashboard/QuickActions";
 export * from "./components/dashboard/Dashboard";
 
 export * from "./components/charts/SalesOverviewChart";
+
+export * from "./components/data/DataTable";
+export * from "./components/forms/FormField";
+export * from "./components/forms/Modal";
+export * from "./components/customers/CustomerList";
+export * from "./components/customers/format";
+export * from "./components/products/ProductList";
+export * from "./components/sales/PosBilling";
+export * from "./components/sales/SalesList";

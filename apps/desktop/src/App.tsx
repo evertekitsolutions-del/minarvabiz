@@ -1,98 +1,142 @@
 "use client";
 
 import * as React from "react";
-import { AppShell, Dashboard, type QuickAction, type NavItemId } from "@minarvabiz/ui";
+import {
+  AppShell, Dashboard, CustomerList, ProductList, PosBilling, SalesList,
+  Modal, Button, FormField, inputClass,
+  type QuickAction, type NavItemId, type DashboardData,
+} from "@minarvabiz/ui";
+import { store } from "@minarvabiz/business-logic";
+import type { Customer, Product, Category, Sale, CartLine, PaymentMethod } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
-import type { DashboardData } from "@minarvabiz/ui";
-
-const quickActionIcons = {
-  sale: (
-    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="8" cy="21" r="1" /><circle cx="19" cy="21" r="1" />
-      <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57L22 7H6" />
-    </svg>
-  ),
-  order: (
-    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-      <path d="M3 6h18M16 10a4 4 0 0 1-8 0" />
-    </svg>
-  ),
-  laundry: (
-    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="12" cy="12" r="4" />
-    </svg>
-  ),
-  expense: (
-    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
-    </svg>
-  ),
-  purchase: (
-    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="8" cy="21" r="1" /><circle cx="19" cy="21" r="1" />
-      <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57L22 7H6" />
-    </svg>
-  ),
-  customer: (
-    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-    </svg>
-  ),
-  reports: (
-    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M3 3v18h18" /><path d="M18 17V9M13 17V5M8 17v-3" />
-    </svg>
-  ),
-  sms: (
-    <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
-    </svg>
-  ),
-};
 
 export function App() {
   const [activeNav, setActiveNav] = React.useState<NavItemId>("dashboard");
-  const [data, setData] = React.useState<DashboardData | null>(null);
+  const [dash, setDash] = React.useState<DashboardData | null>(null);
+  const [customers, setCustomers] = React.useState<Customer[]>([]);
+  const [products, setProducts] = React.useState<Product[]>([]);
+  const [categories, setCategories] = React.useState<Category[]>([]);
+  const [sales, setSales] = React.useState<Sale[]>([]);
+  const [salesTab, setSalesTab] = React.useState<"pos" | "history">("pos");
+  const [custOpen, setCustOpen] = React.useState(false);
+  const [custForm, setCustForm] = React.useState({ name: "", phone: "", email: "" });
+  const [lowStockOnly, setLowStockOnly] = React.useState(false);
+
+  const refreshAll = React.useCallback(() => {
+    setCustomers(store.listCustomers());
+    setProducts(store.listProducts({ lowStockOnly }));
+    setCategories(store.listCategories());
+    setSales(store.listSales());
+  }, [lowStockOnly]);
 
   React.useEffect(() => {
-    fetchDashboardData().then(setData);
-  }, []);
+    fetchDashboardData().then(setDash);
+    refreshAll();
+  }, [refreshAll]);
 
   const actions: QuickAction[] = [
-    { id: "sale", label: "New Sale", description: "Create Invoice", icon: quickActionIcons.sale, tone: "blue" },
-    { id: "order", label: "New Order", description: "Add Tailoring Order", icon: quickActionIcons.order, tone: "pink" },
-    { id: "laundry", label: "Laundry In", description: "Add Laundry Item", icon: quickActionIcons.laundry, tone: "cyan" },
-    { id: "expense", label: "Expense", description: "Add Expense", icon: quickActionIcons.expense, tone: "green" },
-    { id: "purchase", label: "Purchase", description: "Add Purchase", icon: quickActionIcons.purchase, tone: "violet" },
-    { id: "customer", label: "Customer", description: "Add New Customer", icon: quickActionIcons.customer, tone: "indigo" },
-    { id: "reports", label: "Reports", description: "View Reports", icon: quickActionIcons.reports, tone: "emerald" },
-    { id: "sms", label: "SMS / WhatsApp", description: "Send Message", icon: quickActionIcons.sms, tone: "teal" },
+    {
+      id: "sale", label: "New Sale", description: "Create Invoice", icon: <span>🛒</span>, tone: "blue",
+      onClick: () => { setActiveNav("sales"); setSalesTab("pos"); },
+    },
+    {
+      id: "customer", label: "Customer", description: "Add New", icon: <span>👤</span>, tone: "indigo",
+      onClick: () => { setActiveNav("customers"); setCustOpen(true); },
+    },
   ];
+
+  function handleSale(payload: {
+    customerId: string | null; lines: CartLine[]; paidAmount: number; paymentMethod: PaymentMethod;
+  }) {
+    const result = store.createSale(payload);
+    if (result.errors.length) return { success: false, errors: result.errors };
+    refreshAll();
+    return { success: true, invoiceNumber: result.sale.invoiceNumber };
+  }
+
+  const titleMap: Partial<Record<NavItemId, string>> = {
+    dashboard: "Dashboard",
+    customers: "Customers",
+    sales: "Sales & Billing",
+  };
 
   return (
     <AppShell
       activeNav={activeNav}
-      onNavigate={(_href, id) => setActiveNav(id)}
-      sidebar={{
-        user: { name: "Admin", role: "Super Admin" },
-        logoSrc: "/logo.png",
-      }}
+      onNavigate={(_h, id) => setActiveNav(id)}
+      sidebar={{ user: { name: "Admin", role: "Super Admin" }, logoSrc: "/logo.png" }}
       header={{
-        title: "Dashboard",
+        title: titleMap[activeNav] ?? activeNav,
         subtitle: "Welcome back, Admin!",
         notificationCount: 6,
         messageCount: 3,
       }}
     >
-      {activeNav === "dashboard" && data && (
-        <Dashboard data={data} quickActions={actions} />
+      {activeNav === "dashboard" && dash && <Dashboard data={dash} quickActions={actions} />}
+
+      {activeNav === "customers" && (
+        <>
+          <CustomerList
+            customers={customers}
+            onAdd={() => setCustOpen(true)}
+            onSearch={(q) => setCustomers(store.listCustomers(q))}
+          />
+          <Modal
+            open={custOpen}
+            title="Add Customer"
+            onClose={() => setCustOpen(false)}
+            footer={
+              <>
+                <Button variant="outline" onClick={() => setCustOpen(false)}>Cancel</Button>
+                <Button onClick={() => { store.createCustomer(custForm); setCustOpen(false); refreshAll(); }}>Save</Button>
+              </>
+            }
+          >
+            <div className="space-y-3">
+              <FormField label="Name">
+                <input className={inputClass} value={custForm.name} onChange={(e) => setCustForm({ ...custForm, name: e.target.value })} />
+              </FormField>
+              <FormField label="Phone">
+                <input className={inputClass} value={custForm.phone} onChange={(e) => setCustForm({ ...custForm, phone: e.target.value })} />
+              </FormField>
+              <FormField label="Email">
+                <input className={inputClass} value={custForm.email} onChange={(e) => setCustForm({ ...custForm, email: e.target.value })} />
+              </FormField>
+            </div>
+          </Modal>
+        </>
       )}
-      {activeNav !== "dashboard" && (
-        <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white text-slate-400">
-          {activeNav.replace(/_/g, " ")} module — coming in later phases
+
+      {activeNav === "sales" && (
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <Button variant={salesTab === "pos" ? "primary" : "outline"} onClick={() => setSalesTab("pos")}>New Sale</Button>
+            <Button variant={salesTab === "history" ? "primary" : "outline"} onClick={() => setSalesTab("history")}>History</Button>
+          </div>
+          {salesTab === "pos" && (
+            <PosBilling
+              products={products}
+              customers={customers}
+              onCompleteSale={handleSale}
+              onFindByBarcode={(c) => store.getProductByBarcode(c)}
+            />
+          )}
+          {salesTab === "history" && <SalesList sales={sales} />}
         </div>
       )}
+
+      {/* Map inventory-like nav to product list for desktop */}
+      {(activeNav as string) !== "dashboard" &&
+        activeNav !== "customers" &&
+        activeNav !== "sales" && (
+          <ProductList
+            products={products}
+            categories={categories}
+            lowStockOnly={lowStockOnly}
+            onToggleLowStock={() => setLowStockOnly((v) => !v)}
+            onSearch={(q) => setProducts(store.listProducts({ query: q, lowStockOnly }))}
+          />
+        )}
     </AppShell>
   );
 }

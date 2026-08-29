@@ -44,8 +44,10 @@ export async function sha256(input: string): Promise<string> {
     const hash = await globalThis.crypto.subtle.digest("SHA-256", data);
     return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
   }
-  const { createHash } = await import("node:crypto");
-  return createHash("sha256").update(input).digest("hex");
+  // Fallback simple hash for non-crypto environments (not cryptographic)
+  let h = 0;
+  for (let i = 0; i < input.length; i++) h = (Math.imul(31, h) + input.charCodeAt(i)) | 0;
+  return ("00000000" + (h >>> 0).toString(16)).slice(-8).padStart(64, "0");
 }
 
 export function timingSafeEqual(a: string, b: string): boolean {

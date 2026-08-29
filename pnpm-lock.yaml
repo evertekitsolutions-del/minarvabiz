@@ -168,6 +168,9 @@ importers:
 
   packages/business-logic:
     dependencies:
+      '@minarvabiz/billing':
+        specifier: workspace:*
+        version: link:../billing
       '@minarvabiz/types':
         specifier: workspace:*
         version: link:../types
@@ -232,9 +235,15 @@ importers:
 
   packages/ui:
     dependencies:
+      '@minarvabiz/business-logic':
+        specifier: workspace:*
+        version: link:../business-logic
       '@minarvabiz/types':
         specifier: workspace:*
         version: link:../types
+      '@minarvabiz/utils':
+        specifier: workspace:*
+        version: link:../utils
       clsx:
         specifier: ^2.1.1
         version: 2.1.1

@@ -48,6 +48,7 @@ export interface Product {
   notes?: string | null; isActive: boolean;
   createdAt: ISODateString; updatedAt: ISODateString; deletedAt?: ISODateString | null;
   branchId?: UUID | null;
+  version?: number;
 }
 
 export interface SyncQueueItem {
@@ -70,4 +71,112 @@ export interface AppConfig {
 
 export interface DeviceFingerprint {
   hash: string; platform: string; osVersion?: string; collectedAt: ISODateString;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Sales, Inventory, Customers, Payments
+// ---------------------------------------------------------------------------
+
+export type ProductCategoryName =
+  | "Ornaments"
+  | "Materials"
+  | "Readymade Garments"
+  | "Ladies Inners"
+  | "Ladies Bags"
+  | "Ladies Own Products"
+  | string;
+
+export interface Category {
+  id: UUID;
+  name: string;
+  description?: string | null;
+  parentId?: UUID | null;
+  isActive: boolean;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+  branchId?: UUID | null;
+}
+
+export interface InventoryTransaction {
+  id: UUID;
+  productId: UUID;
+  type: "stock_in" | "stock_out" | "adjustment" | "transfer" | "sale" | "return" | "purchase";
+  quantity: number;
+  unitCost?: number | null;
+  referenceType?: string | null;
+  referenceId?: UUID | null;
+  notes?: string | null;
+  createdAt: ISODateString;
+  createdBy?: UUID | null;
+  branchId?: UUID | null;
+  deviceId?: UUID | null;
+  version: number;
+}
+
+export interface SaleItem {
+  id: UUID;
+  saleId: UUID;
+  productId: UUID;
+  productName: string;
+  sku?: string | null;
+  quantity: number;
+  unitPrice: number;
+  costPrice: number;
+  discountPercent: number;
+  taxRate: number;
+  lineTotal: number;
+}
+
+export interface Sale {
+  id: UUID;
+  invoiceNumber: string;
+  customerId?: UUID | null;
+  customerName?: string | null;
+  saleDate: ISODateString;
+  subtotal: number;
+  discountAmount: number;
+  taxAmount: number;
+  total: number;
+  paidAmount: number;
+  balanceAmount: number;
+  status: "draft" | "completed" | "partial" | "cancelled" | "returned";
+  notes?: string | null;
+  items: SaleItem[];
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+  branchId?: UUID | null;
+  deviceId?: UUID | null;
+  createdBy?: UUID | null;
+  version: number;
+}
+
+export interface Payment {
+  id: UUID;
+  amount: number;
+  method: PaymentMethod;
+  referenceType: "sale" | "order" | "expense" | "supplier" | "refund" | "other";
+  referenceId: UUID;
+  customerId?: UUID | null;
+  notes?: string | null;
+  paidAt: ISODateString;
+  createdAt: ISODateString;
+  createdBy?: UUID | null;
+  branchId?: UUID | null;
+  deviceId?: UUID | null;
+  version: number;
+}
+
+export interface CartLine {
+  productId: UUID;
+  productName: string;
+  sku?: string | null;
+  barcode?: string | null;
+  quantity: number;
+  unitPrice: number;
+  costPrice: number;
+  discountPercent: number;
+  taxRate: number;
+  stockQuantity: number;
 }
