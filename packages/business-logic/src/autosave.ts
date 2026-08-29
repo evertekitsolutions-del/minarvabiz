@@ -1,12 +1,16 @@
 /**
  * Call after any domain mutation to persist snapshot (browser only).
+ * Uses dynamic import to avoid circular dependency with store/persistence.
  */
-import { scheduleAutoSave } from "./persistence";
 
 export function touchPersistence() {
+  if (typeof window === "undefined") return;
   try {
-    scheduleAutoSave(600);
+    // Dynamic import breaks store → autosave → persistence → store cycle
+    void import("./persistence").then((m) => {
+      m.scheduleAutoSave(600);
+    });
   } catch {
-    /* ignore in SSR / non-browser */
+    /* ignore */
   }
 }
