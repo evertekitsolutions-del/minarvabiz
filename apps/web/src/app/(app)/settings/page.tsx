@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { SyncPanel, PersistencePanel, Button } from "@minarvabiz/ui";
-import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage } from "@minarvabiz/business-logic";
+import { SyncPanel, PersistencePanel, Button, FormField, inputClass } from "@minarvabiz/ui";
+import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage, getShopProfile, updateShopProfile } from "@minarvabiz/business-logic";
 
 export default function SettingsPage() {
   const [snap, setSnap] = React.useState(() => syncBridge.getSyncSnapshot());
   const [syncing, setSyncing] = React.useState(false);
+  const [shop, setShop] = React.useState(() => getShopProfile());
+  const [shopMsg, setShopMsg] = React.useState<string | null>(null);
 
   function refresh() {
     setSnap(syncBridge.getSyncSnapshot());
@@ -44,6 +46,44 @@ export default function SettingsPage() {
         >
           Enqueue offline write
         </Button>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-slate-800">Shop profile (receipts)</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <FormField label="Shop name">
+            <input className={inputClass} value={shop.shopName}
+              onChange={(e) => setShop({ ...shop, shopName: e.target.value })} />
+          </FormField>
+          <FormField label="Phone">
+            <input className={inputClass} value={shop.phone}
+              onChange={(e) => setShop({ ...shop, phone: e.target.value })} />
+          </FormField>
+          <FormField label="Address" className="sm:col-span-2">
+            <input className={inputClass} value={shop.address}
+              onChange={(e) => setShop({ ...shop, address: e.target.value })} />
+          </FormField>
+          <FormField label="Email">
+            <input className={inputClass} value={shop.email}
+              onChange={(e) => setShop({ ...shop, email: e.target.value })} />
+          </FormField>
+          <FormField label="GSTIN">
+            <input className={inputClass} value={shop.gstin}
+              onChange={(e) => setShop({ ...shop, gstin: e.target.value })} />
+          </FormField>
+          <FormField label="Receipt footer" className="sm:col-span-2">
+            <input className={inputClass} value={shop.receiptFooter}
+              onChange={(e) => setShop({ ...shop, receiptFooter: e.target.value })} />
+          </FormField>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => {
+            const next = updateShopProfile(shop);
+            setShop(next);
+            setShopMsg("Shop profile saved");
+          }}>Save shop profile</Button>
+          {shopMsg && <span className="text-sm text-emerald-600">{shopMsg}</span>}
+        </div>
       </div>
 
       <PersistencePanel

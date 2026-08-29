@@ -19,3 +19,5 @@ export * from "./persistence";
 export * from "./session";
 export * from "./autosave";
 export * from "./receipt";
+export * from "./shop-profile";
+export * from "./live-dashboard";

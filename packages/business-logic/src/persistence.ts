@@ -14,6 +14,8 @@ import * as phase5Store from "./phase5-store";
 import * as phase6Store from "./phase6-store";
 import * as phase7Store from "./phase7-store";
 import * as phase9Store from "./phase9-store";
+import * as shopProfile from "./shop-profile";
+import type { ShopProfile } from "./shop-profile";
 
 export const SNAPSHOT_VERSION = 2;
 
@@ -41,6 +43,7 @@ export interface DomainSnapshot {
   audit: AuditLogEntry[];
   branches: Branch[];
   activeBranchId?: string | null;
+  shopProfile?: ShopProfile | null;
 }
 
 export function exportDomainSnapshot(): DomainSnapshot {
@@ -68,6 +71,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     audit: phase7Store.listAuditLogs(500),
     branches: phase9Store.listBranches(),
     activeBranchId: phase9Store.getActiveBranch()?.id ?? null,
+    shopProfile: shopProfile.getShopProfile(),
   };
 }
 
@@ -129,6 +133,9 @@ export function importDomainSnapshot(snap: DomainSnapshot): {
         branches: snap.branches,
         activeBranchId: snap.activeBranchId ?? undefined,
       });
+    }
+    if (snap.shopProfile) {
+      shopProfile.hydrateShopProfile(snap.shopProfile);
     }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

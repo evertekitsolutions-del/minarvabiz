@@ -17,7 +17,7 @@ Built for real boutique, tailoring, and laundry shops.
 
 ---
 
-## Modules (Phases 1–15)
+## Modules (Phases 1–16)
 
 | Area | Features |
 |------|----------|
@@ -36,6 +36,7 @@ Built for real boutique, tailoring, and laundry shops.
 | **Persistence bridge** | Domain snapshot export/import, AuthGate, Supabase skeleton |
 | **Full hydrate** | All domain stores hydrate + auto localStorage bootstrap |
 | **Ops polish** | Auto-save on mutations, receipt print, logout, optional auth |
+| **Live ops** | Live dashboard metrics, shop profile, order receipts |
 
 ---
 

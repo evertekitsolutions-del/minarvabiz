@@ -5,7 +5,7 @@ import {
   OrderList, OrderForm, emptyOrderForm, OrderDetail, Modal,
   type OrderFormValues,
 } from "@minarvabiz/ui";
-import { store, ordersStore } from "@minarvabiz/business-logic";
+import { store, ordersStore, printOrderReceipt } from "@minarvabiz/business-logic";
 import type {
   ServiceOrder, Customer, MeasurementProfile, ServiceType, OrderStatus,
 } from "@minarvabiz/types";
@@ -85,6 +85,7 @@ export default function ServicesOrdersPage() {
     setError(null);
     refresh();
     setSelected(result.order);
+    try { printOrderReceipt(result.order); } catch { /* blocked */ }
   }
 
   function handleStatus(status: OrderStatus) {
