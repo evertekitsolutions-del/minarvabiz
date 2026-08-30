@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   dbRead: () => ipcRenderer.invoke("db:read") as Promise<string | null>,
   dbWrite: (content: string) => ipcRenderer.invoke("db:write", content) as Promise<boolean>,
   getSqlitePath: () => ipcRenderer.invoke("db:getSqlitePath") as Promise<string>,
+  getDeviceId: () => ipcRenderer.invoke("app:getDeviceId") as Promise<string>,
   readSqliteBinary: () => ipcRenderer.invoke("db:readBinary") as Promise<Uint8Array | null>,
   writeSqliteBinary: (data: Uint8Array) =>
     ipcRenderer.invoke("db:writeBinary", data) as Promise<boolean>,
@@ -26,6 +27,7 @@ export type MinarvaDesktopApi = {
   dbRead: () => Promise<string | null>;
   dbWrite: (content: string) => Promise<boolean>;
   getSqlitePath: () => Promise<string>;
+  getDeviceId?: () => Promise<string>;
   readSqliteBinary: () => Promise<Uint8Array | null>;
   writeSqliteBinary: (data: Uint8Array) => Promise<boolean>;
   sqliteExists: () => Promise<boolean>;

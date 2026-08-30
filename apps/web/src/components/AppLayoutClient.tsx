@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { AppShell, AuthGate, ToastProvider, ErrorBoundary, type NavItemId } from "@minarvabiz/ui";
 import {
   bootstrapFromLocalStorage,
+  setCurrentRole,
   // remote hydrate is separate
   clearSession,
   getSessionUser,
@@ -46,7 +47,10 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
       if (r.ok) console.info("[minarvabiz]", r.message, r.counts);
     });
     const u = getSessionUser();
-    if (u) setUserName(u.fullName || u.email);
+    if (u) {
+      setUserName(u.fullName || u.email);
+      setCurrentRole(u.role as Parameters<typeof setCurrentRole>[0]);
+    }
   }, []);
   const activeNav = pathToNav[pathname] ?? "dashboard";
 

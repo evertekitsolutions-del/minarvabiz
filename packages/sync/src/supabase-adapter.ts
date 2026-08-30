@@ -66,7 +66,12 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
       return { accepted, rejected };
     },
     async pull(since: string, _deviceId: UUID) {
-      const tables = ["customers", "products", "sales", "orders"];
+      const tables = [
+        "branches", "customers", "categories", "products", "inventory_transactions",
+        "sales", "sale_items", "payments", "measurement_profiles", "orders",
+        "order_expenses", "laundry_orders", "expenses", "purchases", "suppliers",
+        "staff_members", "sale_returns", "audit_logs",
+      ];
       const records: Array<{ tableName: string; record: VersionedRecord }> = [];
       for (const table of tables) {
         const q = `select=*&updated_at=gt.${encodeURIComponent(since)}&order=updated_at.asc`;

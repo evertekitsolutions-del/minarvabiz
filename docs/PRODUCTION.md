@@ -50,3 +50,12 @@ pnpm --filter @minarvabiz/web build
 - [ ] Test offline grace path on a clean Windows machine
 - [ ] Run backup + restore drill
 - [ ] Confirm plan limits with a trial license
+
+## Production security gates
+
+- Do not ship with demo mode enabled.
+- Do not ship predictable/default credentials.
+- Apply Supabase migrations 001, 002, and 003 before enabling online/hybrid mode.
+- Every cloud business record must have a non-null `org_id`; legacy records must be explicitly backfilled before strict tenant RLS is enabled.
+- Organization membership is provisioned by trusted admin/server tooling; end users cannot self-join an organization.
+- The license private key and Supabase service-role key must remain outside Git and client bundles.

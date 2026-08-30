@@ -6,12 +6,29 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import * as path from "path";
 import * as fs from "fs";
+import { randomUUID } from "crypto";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 
 function dataFilePath() {
   return path.join(app.getPath("userData"), "minarvabiz-db.json");
 }
+function deviceIdPath() {
+  return path.join(app.getPath("userData"), "device-id");
+}
+
+function getDeviceId() {
+  const file = deviceIdPath();
+  try {
+    if (fs.existsSync(file)) return fs.readFileSync(file, "utf8").trim();
+    const id = randomUUID();
+    fs.writeFileSync(file, id, "utf8");
+    return id;
+  } catch {
+    return `desktop-${process.platform}-${app.getVersion()}`;
+  }
+}
+
 function sqlitePath() {
   return path.join(app.getPath("userData"), "minarvabiz.db");
 }
@@ -100,6 +117,7 @@ ipcMain.handle("db:backupSqlite", (_e, destPath: string) => {
 });
 
 ipcMain.handle("db:getSqlitePath", () => sqlitePath());
+ipcMain.handle("app:getDeviceId", () => getDeviceId());
 
 ipcMain.handle("db:readBinary", () => {
   const file = sqlitePath();

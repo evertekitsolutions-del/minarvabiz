@@ -47,22 +47,25 @@ const ROLE_PERMS: Record<RoleName, Permission[]> = {
   staff: ["orders.manage", "reports.view"],
 };
 
-let currentRole: RoleName = "admin";
+let currentRole: RoleName | null = null;
 
-export function setCurrentRole(role: RoleName) {
+export function setCurrentRole(role: RoleName | null) {
   currentRole = role;
 }
 
-export function getCurrentRole(): RoleName {
+export function getCurrentRole(): RoleName | null {
   return currentRole;
 }
 
-export function can(permission: Permission, role: RoleName = currentRole): boolean {
-  return ROLE_PERMS[role]?.includes(permission) ?? false;
+export function can(permission: Permission, role?: RoleName | null): boolean {
+  const effective = role !== undefined && role !== null ? role : currentRole;
+  if (!effective) return false;
+  return ROLE_PERMS[effective]?.includes(permission) ?? false;
 }
 
-export function assertPermission(permission: Permission, role: RoleName = currentRole): void {
-  if (!can(permission, role)) {
-    throw new Error(`Permission denied: ${permission} (role: ${role})`);
+export function assertPermission(permission: Permission, role?: RoleName | null): void {
+  const effectiveRole = role ?? currentRole;
+  if (!effectiveRole || !can(permission, effectiveRole)) {
+    throw new Error(`Permission denied: ${permission} (role: ${effectiveRole ?? "unauthenticated"})`);
   }
 }

@@ -2,6 +2,8 @@
  * Client session helpers — shared by web and desktop shells.
  */
 
+import { setCurrentRole } from "./permissions";
+
 export interface SessionUser {
   id: string;
   email: string;
@@ -32,12 +34,15 @@ export function setSession(token: string, user: SessionUser) {
   if (typeof sessionStorage === "undefined") return;
   sessionStorage.setItem(SESSION_KEY, token);
   sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+  setCurrentRole(user.role as Parameters<typeof setCurrentRole>[0]);
 }
 
 export function clearSession() {
   if (typeof sessionStorage === "undefined") return;
   sessionStorage.removeItem(SESSION_KEY);
   sessionStorage.removeItem(USER_KEY);
+  // Force a fresh role resolution after logout; unauthenticated state has no permissions.
+  setCurrentRole(null);
 }
 
 export function isAuthenticated(): boolean {

@@ -10,7 +10,7 @@ import {
   configFromEnv,
   type UnitOfWork,
 } from "@minarvabiz/database";
-import { store, ordersStore, registerRemoteWriter } from "@minarvabiz/business-logic";
+import { store, ordersStore, registerRemoteWriter, getRuntimeMode } from "@minarvabiz/business-logic";
 
 let uowPromise: Promise<UnitOfWork> | null = null;
 let mode: "supabase" | "memory" = "memory";
@@ -24,9 +24,11 @@ export async function getUnitOfWork(): Promise<UnitOfWork> {
     if (isSupabaseConfigured()) {
       mode = "supabase";
       uowPromise = createDatabase({ edition: "online" });
-    } else {
+    } else if (getRuntimeMode() === "demo" || getRuntimeMode() === "development") {
       mode = "memory";
       uowPromise = createDatabase({ edition: "memory" });
+    } else {
+      throw new Error("Online production requires Supabase configuration; use the Windows desktop app for offline mode.");
     }
   }
   return uowPromise;
@@ -39,7 +41,7 @@ export async function hydrateStoresFromSupabase(): Promise<{
   counts?: Record<string, number>;
 }> {
   if (!isSupabaseConfigured()) {
-    return { ok: false, message: "Supabase not configured — using local demo stores" };
+    return { ok: false, message: "Supabase is not configured for online production." };
   }
   const check = await verifySupabaseConnection();
   if (!check.ok) return { ok: false, message: check.message };

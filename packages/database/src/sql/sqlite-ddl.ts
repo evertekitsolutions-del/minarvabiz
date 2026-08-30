@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS customers (
   updated_at TEXT NOT NULL,
   deleted_at TEXT,
   branch_id TEXT,
+  org_id TEXT,
   version INTEGER NOT NULL DEFAULT 1,
   device_id TEXT
 );
@@ -54,7 +55,8 @@ CREATE TABLE IF NOT EXISTS categories (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   deleted_at TEXT,
-  branch_id TEXT
+  branch_id TEXT,
+  org_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS products (
@@ -80,6 +82,7 @@ CREATE TABLE IF NOT EXISTS products (
   updated_at TEXT NOT NULL,
   deleted_at TEXT,
   branch_id TEXT,
+  org_id TEXT,
   version INTEGER NOT NULL DEFAULT 1,
   device_id TEXT
 );
@@ -171,6 +174,7 @@ CREATE TABLE IF NOT EXISTS measurement_profiles (
   fields_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
+  org_id TEXT,
   FOREIGN KEY (customer_id) REFERENCES customers(id)
 );
 
@@ -213,6 +217,7 @@ CREATE TABLE IF NOT EXISTS order_expenses (
   description TEXT NOT NULL,
   amount REAL NOT NULL,
   created_at TEXT NOT NULL,
+  org_id TEXT,
   FOREIGN KEY (order_id) REFERENCES orders(id)
 );
 
@@ -286,7 +291,8 @@ CREATE TABLE IF NOT EXISTS suppliers (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   deleted_at TEXT,
-  branch_id TEXT
+  branch_id TEXT,
+  org_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS staff_members (
@@ -300,7 +306,8 @@ CREATE TABLE IF NOT EXISTS staff_members (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   deleted_at TEXT,
-  branch_id TEXT
+  branch_id TEXT,
+  org_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS outbox_events (
@@ -339,8 +346,9 @@ CREATE TABLE IF NOT EXISTS sale_returns (
   refund_amount REAL NOT NULL DEFAULT 0,
   status TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  payload_json TEXT
+  payload_json TEXT,
+  org_id TEXT
 );
 `;
 
-export const SQLITE_SCHEMA_VERSION = 3;
+export const SQLITE_SCHEMA_VERSION = 4;

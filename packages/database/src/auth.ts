@@ -29,8 +29,31 @@ export interface AuthSession {
   createdAt: string;
 }
 
+const USERS_KEY = "minarva_offline_auth_users_v1";
 const users: AuthUser[] = [];
 const sessions: AuthSession[] = [];
+
+function loadUsers(): void {
+  if (typeof localStorage === "undefined" || users.length) return;
+  try {
+    const raw = localStorage.getItem(USERS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) users.push(...parsed as AuthUser[]);
+  } catch {
+    // Corrupt auth metadata is treated as no users; business data is unaffected.
+  }
+}
+
+function persistUsers(): void {
+  if (typeof localStorage === "undefined") return;
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+export function hasLocalUsers(): boolean {
+  loadUsers();
+  return users.length > 0;
+}
 
 async function pbkdf2Hash(password: string, salt: string): Promise<string> {
   const enc = new TextEncoder();
@@ -71,6 +94,7 @@ export async function registerUser(input: {
   password: string;
   role?: RoleName;
 }): Promise<{ user: AuthUser | null; error?: string }> {
+  loadUsers();
   if (users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) {
     return { user: null, error: "Email already registered" };
   }
@@ -90,6 +114,7 @@ export async function registerUser(input: {
     updatedAt: nowISO(),
   };
   users.push(user);
+  persistUsers();
   return { user };
 }
 
@@ -98,6 +123,7 @@ export async function login(
   password: string,
   expiresInDays = 7
 ): Promise<{ session: AuthSession | null; user: AuthUser | null; error?: string }> {
+  loadUsers();
   const user = users.find((u) => u.email === email.toLowerCase() && u.isActive);
   if (!user) return { session: null, user: null, error: "Invalid credentials" };
   const ok = await verifyPassword(password, user.passwordHash);
@@ -118,6 +144,7 @@ export async function login(
 }
 
 export function validateSession(token: string): AuthUser | null {
+  loadUsers();
   const session = sessions.find((s) => s.token === token);
   if (!session) return null;
   if (new Date(session.expiresAt).getTime() < Date.now()) return null;
@@ -130,18 +157,26 @@ export function logout(token: string): void {
 }
 
 export function listUsers(): Omit<AuthUser, "passwordHash">[] {
+  loadUsers();
   return users.map(({ passwordHash: _, ...rest }) => rest);
 }
 
-/** Bootstrap default admin for offline first-run */
-export async function ensureDefaultAdmin(): Promise<AuthUser> {
-  const existing = users.find((u) => u.email === "admin@minarvabiz.local");
-  if (existing) return existing;
-  const result = await registerUser({
-    email: "admin@minarvabiz.local",
-    fullName: "Administrator",
-    password: "ChangeMeNow1!",
-    role: "admin",
-  });
-  return result.user!;
+/**
+ * Backwards-compatible helper. Production must never create a predictable
+ * administrator account. The first administrator is created explicitly by
+ * the setup screen.
+ */
+export async function ensureDefaultAdmin(): Promise<AuthUser | null> {
+  loadUsers();
+  return users.find((u) => u.role === "admin" && u.isActive) ?? null;
+}
+
+export async function createInitialAdmin(input: {
+  email: string;
+  fullName: string;
+  password: string;
+}): Promise<{ user: AuthUser | null; error?: string }> {
+  loadUsers();
+  if (users.length > 0) return { user: null, error: "Initial setup has already been completed" };
+  return registerUser({ ...input, role: "admin" });
 }

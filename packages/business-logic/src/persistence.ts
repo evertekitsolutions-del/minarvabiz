@@ -15,6 +15,7 @@ import * as phase6Store from "./phase6-store";
 import * as phase7Store from "./phase7-store";
 import * as phase9Store from "./phase9-store";
 import * as shopProfile from "./shop-profile";
+import { exportOutbox, hydrateOutbox, type LocalOutboxEvent } from "./outbox-bridge";
 import type { ShopProfile } from "./shop-profile";
 
 export const SNAPSHOT_VERSION = 2;
@@ -44,6 +45,7 @@ export interface DomainSnapshot {
   branches: Branch[];
   activeBranchId?: string | null;
   shopProfile?: ShopProfile | null;
+  outbox?: LocalOutboxEvent[];
 }
 
 export function exportDomainSnapshot(): DomainSnapshot {
@@ -72,6 +74,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     branches: phase9Store.listBranches(),
     activeBranchId: phase9Store.getActiveBranch()?.id ?? null,
     shopProfile: shopProfile.getShopProfile(),
+    outbox: exportOutbox(),
   };
 }
 
@@ -99,6 +102,7 @@ export function importDomainSnapshot(snap: DomainSnapshot): {
     return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
   }
   try {
+    if (snap.outbox) hydrateOutbox(snap.outbox);
     store.hydrateCore({
       customers: snap.customers,
       products: snap.products,

@@ -63,7 +63,8 @@ function loadSnap(db: SqliteDatabase): unknown | null {
 export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: string }> {
   try {
     setRuntimeMode("production");
-    setOutboxDeviceId("desktop-win");
+    const deviceId = await api.getDeviceId?.();
+    setOutboxDeviceId(deviceId || "desktop-win");
 
     const api = typeof window !== "undefined" ? window.minarvaDesktop : undefined;
     if (!api?.getSqlitePath || !api.readSqliteBinary || !api.writeSqliteBinary) {

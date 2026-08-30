@@ -1,3 +1,4 @@
+import { assertPermission } from "./permissions";
 /** App users registry (mirrors local auth users for UI) */
 import type { RoleName, UUID } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
@@ -13,16 +14,7 @@ export interface AppUser {
   createdAt: string;
 }
 
-const users: AppUser[] = [
-  {
-    id: "user-admin",
-    email: "admin@minarvabiz.local",
-    fullName: "Administrator",
-    role: "admin",
-    isActive: true,
-    createdAt: nowISO(),
-  },
-];
+const users: AppUser[] = [];
 
 export function listAppUsers(): AppUser[] {
   return [...users];
@@ -33,6 +25,7 @@ export function createAppUser(input: {
   fullName: string;
   role: RoleName;
 }): AppUser {
+  assertPermission("users.manage");
   const u: AppUser = {
     id: generateId(),
     email: input.email.toLowerCase(),

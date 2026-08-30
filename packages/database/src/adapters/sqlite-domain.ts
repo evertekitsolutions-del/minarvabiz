@@ -31,6 +31,7 @@ export interface DomainSnapshotLike {
   branches: unknown[];
   activeBranchId?: string | null;
   shopProfile?: unknown;
+  outbox?: unknown[];
 }
 
 const SNAPSHOT_KEY = "domain_snapshot_v2";
