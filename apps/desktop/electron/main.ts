@@ -52,7 +52,7 @@ function createWindow() {
 
   win.once("ready-to-show", () => win.show());
 
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
     shell.openExternal(url);
     return { action: "deny" };
   });
@@ -81,7 +81,7 @@ app.on("window-all-closed", () => {
 });
 
 ipcMain.handle("app:getVersion", () => app.getVersion());
-ipcMain.handle("app:getPath", (_e, name: string) => {
+ipcMain.handle("app:getPath", (_e: unknown, name: string) => {
   const allowed = ["userData", "documents", "desktop", "temp"] as const;
   if ((allowed as readonly string[]).includes(name)) {
     return app.getPath(name as (typeof allowed)[number]);
@@ -99,7 +99,7 @@ ipcMain.handle("db:read", () => {
   return null;
 });
 
-ipcMain.handle("db:write", (_e, content: string) => {
+ipcMain.handle("db:write", (_e: unknown, content: string) => {
   const file = dataFilePath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, content, "utf8");
@@ -108,7 +108,7 @@ ipcMain.handle("db:write", (_e, content: string) => {
 
 ipcMain.handle("db:sqlitePath", () => sqlitePath());
 
-ipcMain.handle("db:backupSqlite", (_e, destPath: string) => {
+ipcMain.handle("db:backupSqlite", (_e: unknown, destPath: string) => {
   const src = sqlitePath();
   if (!fs.existsSync(src)) return false;
   fs.mkdirSync(path.dirname(destPath), { recursive: true });
@@ -131,7 +131,7 @@ ipcMain.handle("db:readBinary", () => {
   return null;
 });
 
-ipcMain.handle("db:writeBinary", (_e, data: Uint8Array | Buffer | number[]) => {
+ipcMain.handle("db:writeBinary", (_e: unknown, data: Uint8Array | Buffer | number[]) => {
   const file = sqlitePath();
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const buf = Buffer.from(data);

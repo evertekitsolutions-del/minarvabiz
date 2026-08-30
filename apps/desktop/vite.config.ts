@@ -1,11 +1,6 @@
 import { defineConfig } from "vite";
 import path from "path";
 
-/**
- * Vite config for the desktop renderer.
- * Install: pnpm add -D vite @vitejs/plugin-react electron electron-builder
- * then: pnpm --filter @minarvabiz/desktop dev
- */
 export default defineConfig({
   root: ".",
   base: "./",
@@ -17,7 +12,8 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: false,
+    chunkSizeWarningLimit: 2000,
   },
   server: {
     port: 5173,

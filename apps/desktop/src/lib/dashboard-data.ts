@@ -9,7 +9,7 @@ import {
 } from "@minarvabiz/business-logic";
 import { formatMoney } from "@minarvabiz/utils";
 
-export function fetchDesktopDashboardData() {
+export async function fetchDashboardData() {
   const metrics = collectLiveDashboardMetrics();
   const shaped = shapeDashboardStats(metrics);
   const recentOrders = ordersStore.listOrders().slice(0, 6).map((o) => ({

@@ -1,3 +1,4 @@
+electronVersion: 33.2.1
 appId: com.evertek.minarvabiz
 productName: Minarva Biz
 copyright: Copyright © Evertek IT Solutions
@@ -8,6 +9,10 @@ files:
   - dist/**/*
   - electron/dist/**/*
   - package.json
+  - node_modules/sql.js/**/*
+asar: true
+asarUnpack:
+  - "**/sql.js/**"
 win:
   target:
     - target: nsis
@@ -21,13 +26,13 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: Minarva Biz
   deleteAppDataOnUninstall: false
+  uninstallDisplayName: Minarva Biz
 linux:
   target:
     - AppImage
   category: Office
-mac:
-  target:
-    - dmg
-  category: public.app-category.business
 extraMetadata:
   main: electron/dist/main.js
+
+npmRebuild: false
+buildDependenciesFromSource: false

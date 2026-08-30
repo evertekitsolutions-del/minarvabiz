@@ -4,13 +4,15 @@
   "private": true,
   "description": "Minarva Biz Offline / Hybrid Windows application",
   "author": "Evertek IT Solutions",
-  "main": "dist-electron/main.js",
+  "main": "electron/dist/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
-    "typecheck": "tsc --noEmit",
-    "package:win": "electron-builder --win --x64 --config electron-builder.yml",
-    "package": "pnpm run build && pnpm run package:win"
+    "build:renderer": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build": "pnpm run build:renderer && pnpm run build:electron",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "package:win": "pnpm run build && electron-builder --win --x64 --config electron-builder.yml",
+    "package": "pnpm run package:win"
   },
   "dependencies": {
     "@minarvabiz/business-logic": "workspace:*",
@@ -24,8 +26,13 @@
     "sql.js": "^1.12.0"
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
-    "typescript": "^5.7.2"
+    "app-builder-bin": "^4.2.0",
+    "electron": "33.2.1",
+    "electron-builder": "24.13.3",
+    "typescript": "^5.7.2",
+    "vite": "6.0.3"
   }
 }
