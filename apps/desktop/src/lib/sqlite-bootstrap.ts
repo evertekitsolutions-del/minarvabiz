@@ -8,6 +8,9 @@ import {
   setOutboxDeviceId,
   exportDomainSnapshotFull,
   importDomainSnapshot,
+  shouldRunAutoBackup,
+  recordBackupSuccess,
+  recordBackupFailure,
 } from "@minarvabiz/business-logic";
 
 type SqliteDatabase = {
@@ -105,6 +108,18 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
 
     ready = true;
     initError = null;
+    // Automatic daily backup of SQLite file (desktop)
+    try {
+      if (shouldRunAutoBackup() && api.backupSqlite) {
+        const dest = `${dbPath}.bak-${Date.now()}`;
+        void api.backupSqlite(dest).then((ok: boolean) => {
+          if (ok) recordBackupSuccess(dest, "auto");
+          else recordBackupFailure("Auto backup returned false");
+        });
+      }
+    } catch (e) {
+      recordBackupFailure(e instanceof Error ? e.message : String(e));
+    }
 
     // Register global persist hook for touchPersistence
     (window as unknown as { __minarvaDesktopPersist?: () => void }).__minarvaDesktopPersist =

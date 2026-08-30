@@ -42,7 +42,10 @@ export interface Customer {
 export interface Product {
   id: UUID; name: string; sku?: string | null; barcode?: string | null;
   categoryId?: UUID | null; brand?: string | null; size?: string | null;
-  color?: string | null; unit: string; costPrice: number; sellingPrice: number;
+  color?: string | null; fabric?: string | null;
+  parentProductId?: UUID | null;
+  hasVariants?: boolean;
+  unit: string; costPrice: number; sellingPrice: number;
   discount?: number | null; taxRate?: number | null; stockQuantity: number;
   minimumStock: number; supplierId?: UUID | null; imageUrl?: string | null;
   notes?: string | null; isActive: boolean;

@@ -163,6 +163,9 @@ export function getProductByBarcode(barcode: string): Product | undefined {
 export function createProduct(input: Omit<Product, "id" | "createdAt" | "updatedAt" | "deletedAt" | "version">): Product {
   assertPermission("products.manage");
   const p: Product = {
+    parentProductId: (input as Product).parentProductId ?? null,
+    hasVariants: (input as Product).hasVariants ?? false,
+    fabric: (input as Product).fabric ?? null,
     ...input,
     id: generateId(),
     createdAt: nowISO(),

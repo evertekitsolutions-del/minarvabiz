@@ -40,7 +40,10 @@ CREATE TABLE IF NOT EXISTS customers (
   branch_id TEXT,
   org_id TEXT,
   version INTEGER NOT NULL DEFAULT 1,
-  device_id TEXT
+  device_id TEXT,
+  parent_product_id TEXT,
+  has_variants INTEGER DEFAULT 0,
+  fabric TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
 CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);
@@ -351,4 +354,4 @@ CREATE TABLE IF NOT EXISTS sale_returns (
 );
 `;
 
-export const SQLITE_SCHEMA_VERSION = 4;
+export const SQLITE_SCHEMA_VERSION = 5;

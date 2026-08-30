@@ -50,3 +50,5 @@ export * from "./global-search";
 export * from "./opening-balances";
 export * from "./measurement-templates";
 export * from "./supplier-ledger";
+export * from "./variants";
+export * from "./auto-backup";

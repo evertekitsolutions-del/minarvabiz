@@ -1,15 +1,17 @@
 /**
- * Message templates for SMS / WhatsApp / in-app (provider-agnostic).
+ * Message templates for WhatsApp / SMS (manual send only)
  */
-
 import type { ServiceOrder, Customer } from "@minarvabiz/types";
 import { formatMoney } from "@minarvabiz/utils";
 import { getShopProfile } from "./shop-profile";
 import { SERVICE_TYPE_LABELS } from "./orders";
 
 export type TemplateId =
-  | "order_ready"
   | "order_received"
+  | "order_processing"
+  | "trial_ready"
+  | "order_ready"
+  | "delivery_reminder"
   | "payment_due"
   | "payment_received"
   | "low_stock_internal";
@@ -20,15 +22,30 @@ export function renderTemplate(
 ): { title: string; body: string } {
   const shop = getShopProfile().shopName || "Minarva Biz";
   switch (id) {
-    case "order_ready":
-      return {
-        title: "Order ready",
-        body: `Dear ${data.customerName || "Customer"}, your order ${data.orderNumber} is ready for delivery at ${shop}. Balance: ${data.balance || "—"}.`,
-      };
     case "order_received":
       return {
         title: "Order received",
         body: `Dear ${data.customerName || "Customer"}, we received your ${data.serviceType || "order"} (${data.orderNumber}). Expected delivery: ${data.deliveryDate || "TBD"}. — ${shop}`,
+      };
+    case "order_processing":
+      return {
+        title: "Order processing",
+        body: `Dear ${data.customerName || "Customer"}, your order ${data.orderNumber} is now being processed at ${shop}.`,
+      };
+    case "trial_ready":
+      return {
+        title: "Trial ready",
+        body: `Dear ${data.customerName || "Customer"}, your trial for order ${data.orderNumber} is ready. Please visit ${shop}.`,
+      };
+    case "order_ready":
+      return {
+        title: "Ready for pickup",
+        body: `Dear ${data.customerName || "Customer"}, your order ${data.orderNumber} is ready for pickup/delivery at ${shop}. Balance: ${data.balance || "—"}.`,
+      };
+    case "delivery_reminder":
+      return {
+        title: "Delivery reminder",
+        body: `Dear ${data.customerName || "Customer"}, reminder: order ${data.orderNumber} delivery/pickup on ${data.deliveryDate || "scheduled date"}. — ${shop}`,
       };
     case "payment_due":
       return {
@@ -50,35 +67,42 @@ export function renderTemplate(
   }
 }
 
-export function templateFromOrderReady(order: ServiceOrder) {
-  return renderTemplate("order_ready", {
-    customerName: order.customerName || "",
+export function templateForOrder(
+  id: TemplateId,
+  order: ServiceOrder,
+  customer?: Customer | null
+): { title: string; body: string } {
+  return renderTemplate(id, {
+    customerName: customer?.name || order.customerName || "",
     orderNumber: order.orderNumber,
+    serviceType: SERVICE_TYPE_LABELS[order.serviceType] || order.serviceType,
+    deliveryDate: order.deliveryDate || "",
     balance: formatMoney(order.balance),
   });
 }
 
-export function templateFromOrderReceived(order: ServiceOrder) {
-  return renderTemplate("order_received", {
-    customerName: order.customerName || "",
-    orderNumber: order.orderNumber,
-    serviceType: SERVICE_TYPE_LABELS[order.serviceType] ?? order.serviceType,
-    deliveryDate: order.deliveryDate
-      ? new Date(order.deliveryDate).toLocaleDateString("en-IN")
-      : "",
-  });
-}
+export const TEMPLATE_OPTIONS: { id: TemplateId; label: string }[] = [
+  { id: "order_received", label: "Order received" },
+  { id: "order_processing", label: "Processing" },
+  { id: "trial_ready", label: "Trial ready" },
+  { id: "order_ready", label: "Ready for pickup" },
+  { id: "delivery_reminder", label: "Delivery reminder" },
+  { id: "payment_due", label: "Payment reminder" },
+];
 
-export function templatePaymentDue(customer: Customer) {
-  return renderTemplate("payment_due", {
-    customerName: customer.name,
-    amount: formatMoney(customer.outstandingBalance),
-  });
-}
 
-export function templatePaymentReceived(customer: Customer, amount: number) {
-  return renderTemplate("payment_received", {
-    customerName: customer.name,
-    amount: formatMoney(amount),
-  });
+export function templatePaymentDue(customer: Customer | string, amount?: string) {
+  const name = typeof customer === "string" ? customer : customer.name;
+  const amt =
+    amount ??
+    (typeof customer === "object" ? formatMoney(customer.outstandingBalance || 0) : "");
+  return renderTemplate("payment_due", { customerName: name, amount: amt });
+}
+export function templatePaymentReceived(customer: Customer | string, amount: number | string) {
+  const name = typeof customer === "string" ? customer : customer.name;
+  const amt = typeof amount === "number" ? formatMoney(amount) : amount;
+  return renderTemplate("payment_received", { customerName: name, amount: amt });
+}
+export function templateFromOrderReady(order: ServiceOrder, customer?: Customer | null) {
+  return templateForOrder("order_ready", order, customer);
 }
