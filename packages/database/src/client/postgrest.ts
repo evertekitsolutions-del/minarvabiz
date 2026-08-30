@@ -27,7 +27,9 @@ function authBase(cfg: SupabaseConfig) {
 }
 
 function headers(cfg: SupabaseConfig, prefer?: string): Record<string, string> {
-  const key = cfg.serviceRoleKey || cfg.anonKey;
+  // Never use service-role key in browser/client bundles.
+  const isBrowser = typeof window !== "undefined";
+  const key = isBrowser ? cfg.anonKey : (cfg.serviceRoleKey || cfg.anonKey);
   const h: Record<string, string> = {
     apikey: cfg.anonKey,
     Authorization: `Bearer ${cfg.accessToken || key}`,

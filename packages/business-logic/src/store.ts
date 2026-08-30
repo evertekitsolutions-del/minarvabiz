@@ -16,33 +16,38 @@ import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
 import { remoteUpsertCustomer, remoteUpsertProduct, remoteCreateSale } from "./remote-write";
 import { auditAction } from "./audit-actions";
+import { enqueueOutbox } from "./outbox-bridge";
 import { assertPermission } from "./permissions";
 
-const categories: Category[] = [
-  { id: "cat-1", name: "Ornaments", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "cat-2", name: "Materials", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "cat-3", name: "Readymade Garments", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "cat-4", name: "Ladies Inners", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "cat-5", name: "Ladies Bags", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "cat-6", name: "Ladies Own Products", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-];
+const categories: Category[] = [];
+const customers: Customer[] = [];
+const products: Product[] = [];
 
-const customers: Customer[] = [
-  { id: "cust-1", name: "Neha Sharma", phone: "9876543210", whatsapp: "9876543210", email: "neha@example.com", outstandingBalance: 2500, totalSpending: 45000, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "cust-2", name: "Anjali Menon", phone: "9876501234", outstandingBalance: 0, totalSpending: 82000, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "cust-3", name: "Priya R.", phone: "9123456780", outstandingBalance: 1200, totalSpending: 15600, createdAt: nowISO(), updatedAt: nowISO() },
-];
-
-const products: Product[] = [
-  { id: "prod-1", name: "Silk Thread Gold", sku: "THR-001", barcode: "8901001001", categoryId: "cat-2", unit: "box", costPrice: 80, sellingPrice: 120, stockQuantity: 45, minimumStock: 10, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "prod-2", name: "Cotton Thread (White)", sku: "THR-002", barcode: "8901001002", categoryId: "cat-2", unit: "pcs", costPrice: 15, sellingPrice: 25, stockQuantity: 5, minimumStock: 20, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "prod-3", name: "Black Lining Fabric", sku: "FAB-001", barcode: "8901002001", categoryId: "cat-2", unit: "m", costPrice: 90, sellingPrice: 150, stockQuantity: 3, minimumStock: 10, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "prod-4", name: "Designer Kurti Set", sku: "GAR-101", barcode: "8901003001", categoryId: "cat-3", size: "M", color: "Blue", unit: "pcs", costPrice: 450, sellingPrice: 899, stockQuantity: 18, minimumStock: 5, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "prod-5", name: "Pearl Necklace Set", sku: "ORN-01", barcode: "8901004001", categoryId: "cat-1", unit: "set", costPrice: 320, sellingPrice: 750, stockQuantity: 12, minimumStock: 3, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "prod-6", name: "Zipper (Hidden)", sku: "ZIP-01", barcode: "8901005001", categoryId: "cat-2", unit: "pcs", costPrice: 8, sellingPrice: 15, stockQuantity: 8, minimumStock: 25, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "prod-7", name: "Buttons (Mix)", sku: "BTN-01", barcode: "8901006001", categoryId: "cat-2", unit: "pack", costPrice: 20, sellingPrice: 40, stockQuantity: 6, minimumStock: 15, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-  { id: "prod-8", name: "Ladies Handbag Classic", sku: "BAG-01", barcode: "8901007001", categoryId: "cat-5", color: "Brown", unit: "pcs", costPrice: 280, sellingPrice: 599, stockQuantity: 9, minimumStock: 3, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
-];
+if (allowDemoSeed()) {
+  categories.push(
+    { id: "cat-1", name: "Ornaments", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "cat-2", name: "Materials", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "cat-3", name: "Readymade Garments", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "cat-4", name: "Ladies Inners", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "cat-5", name: "Ladies Bags", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "cat-6", name: "Ladies Own Products", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+  );
+  customers.push(
+    { id: "cust-1", name: "Neha Sharma", phone: "9876543210", whatsapp: "9876543210", email: "neha@example.com", outstandingBalance: 2500, totalSpending: 45000, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "cust-2", name: "Anjali Menon", phone: "9876501234", outstandingBalance: 0, totalSpending: 82000, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "cust-3", name: "Priya R.", phone: "9123456780", outstandingBalance: 1200, totalSpending: 15600, createdAt: nowISO(), updatedAt: nowISO() },
+  );
+  products.push(
+    { id: "prod-1", name: "Silk Thread Gold", sku: "THR-001", barcode: "8901001001", categoryId: "cat-2", unit: "box", costPrice: 80, sellingPrice: 120, stockQuantity: 45, minimumStock: 10, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "prod-2", name: "Cotton Thread (White)", sku: "THR-002", barcode: "8901001002", categoryId: "cat-2", unit: "pcs", costPrice: 15, sellingPrice: 25, stockQuantity: 5, minimumStock: 20, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "prod-3", name: "Black Lining Fabric", sku: "FAB-001", barcode: "8901002001", categoryId: "cat-2", unit: "m", costPrice: 90, sellingPrice: 150, stockQuantity: 3, minimumStock: 10, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "prod-4", name: "Designer Kurti Set", sku: "GAR-101", barcode: "8901003001", categoryId: "cat-3", size: "M", color: "Blue", unit: "pcs", costPrice: 450, sellingPrice: 899, stockQuantity: 18, minimumStock: 5, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "prod-5", name: "Pearl Necklace Set", sku: "ORN-01", barcode: "8901004001", categoryId: "cat-1", unit: "set", costPrice: 320, sellingPrice: 750, stockQuantity: 12, minimumStock: 3, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "prod-6", name: "Zipper (Hidden)", sku: "ZIP-01", barcode: "8901005001", categoryId: "cat-2", unit: "pcs", costPrice: 8, sellingPrice: 15, stockQuantity: 8, minimumStock: 25, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "prod-7", name: "Buttons (Mix)", sku: "BTN-01", barcode: "8901006001", categoryId: "cat-2", unit: "pack", costPrice: 20, sellingPrice: 40, stockQuantity: 6, minimumStock: 15, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+    { id: "prod-8", name: "Ladies Handbag Classic", sku: "BAG-01", barcode: "8901007001", categoryId: "cat-5", color: "Brown", unit: "pcs", costPrice: 280, sellingPrice: 599, stockQuantity: 9, minimumStock: 3, isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
+  );
+}
 
 const sales: Sale[] = [];
 const payments: Payment[] = [];
@@ -59,6 +64,7 @@ export function listCategories(): Category[] {
 }
 
 export function createCategory(input: { name: string; description?: string | null }): Category {
+  assertPermission("products.manage");
   const cat: Category = {
     id: generateId(),
     name: input.name,
@@ -219,6 +225,15 @@ export function createSale(input: {
 }): { sale: Sale; payment: Payment | null; errors: string[] } {
   assertPermission("sales.create");
   const errors = validateCart(input.lines, { allowNegativeStock: input.allowNegativeStock });
+  if (!input.allowNegativeStock) {
+    for (const line of input.lines) {
+      const live = getProduct(line.productId);
+      if (!live) errors.push(`Product not found: ${line.productName}`);
+      else if (line.quantity > live.stockQuantity) {
+        errors.push(`${live.name}: insufficient stock (available ${live.stockQuantity})`);
+      }
+    }
+  }
   if (errors.length) return { sale: null as unknown as Sale, payment: null, errors };
 
   const totals = calculateCartTotals(input.lines);
@@ -292,6 +307,8 @@ export function createSale(input: {
   }
 
   void remoteCreateSale(sale);
+  enqueueOutbox("sales", sale.id, "insert", sale);
+  if (payment) enqueueOutbox("payments", payment.id, "insert", payment);
   auditAction("sale.create", "sales", sale.id, null, { total: sale.total, invoice: sale.invoiceNumber });
   return { sale, payment, errors: [] };
 }

@@ -202,6 +202,7 @@ export function updateLaundryStatus(
   id: UUID,
   status: LaundryOrder["status"]
 ): LaundryOrder | null {
+  assertPermission("orders.manage");
   const o = laundryOrders.find((x) => x.id === id && !x.deletedAt);
   if (!o) return null;
   o.status = status;
