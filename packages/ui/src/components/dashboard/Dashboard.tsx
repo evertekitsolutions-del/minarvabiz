@@ -85,7 +85,7 @@ export function Dashboard({
   const { stats } = data;
 
   return (
-    <div className={cn("space-y-6", className)}>
+    <div className={cn("space-y-5", className)}>
       {/* Primary KPI row — matches reference */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard

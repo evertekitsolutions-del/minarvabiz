@@ -11,6 +11,7 @@ export interface HeaderProps {
   messageCount?: number;
   onMenuClick?: () => void;
   onSearch?: (query: string) => void;
+  showSearch?: boolean;
   onNotificationsClick?: () => void;
   onMessagesClick?: () => void;
   onLogout?: () => void;
@@ -26,6 +27,7 @@ export function Header({
   messageCount = 0,
   onMenuClick,
   onSearch,
+  showSearch = true,
   onNotificationsClick,
   onMessagesClick,
   onLogout,
@@ -65,8 +67,8 @@ export function Header({
         </div>
       </div>
 
-      {/* Global search */}
-      <div className="hidden max-w-md flex-1 md:block">
+      {/* Global search — hidden on the reference dashboard, available on other pages. */}
+      {showSearch && <div className="hidden max-w-md flex-1 md:block">
         <div className="relative">
           <svg
             className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
@@ -89,7 +91,7 @@ export function Header({
             className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-800 placeholder:text-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
         </div>
-      </div>
+      </div>}
 
       <div className="flex items-center gap-1 sm:gap-2">
         <button
@@ -142,6 +144,9 @@ export function Header({
             <path d="M16 2v4M8 2v4M3 10h18" />
           </svg>
           <span className="whitespace-nowrap">{today}</span>
+          <svg className="h-3.5 w-3.5 text-slate-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.51a.75.75 0 0 1-1.08 0l-4.25-4.51a.75.75 0 0 1 .02-1.06Z" clipRule="evenodd" />
+          </svg>
         </div>
         {onLogout ? (
           <button

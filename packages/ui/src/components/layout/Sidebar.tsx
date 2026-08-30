@@ -130,30 +130,35 @@ export function Sidebar({
   collapsed = false,
   onNavigate,
   user = { name: "Admin", role: "Super Admin" },
-  logoSrc = "/logo.png",
+  logoSrc = "/logo-mark.png",
   className,
 }: SidebarProps) {
+  const brandLogo = logoSrc || "/logo-mark.png";
   return (
     <aside
       className={cn(
-        "flex h-full flex-col bg-[#0B1220] text-slate-300 transition-all duration-200",
-        collapsed ? "w-[72px]" : "w-[260px]",
+        "flex h-full flex-col bg-gradient-to-b from-[#071633] via-[#0A1733] to-[#06132C] text-slate-300 transition-all duration-200",
+        collapsed ? "w-[72px]" : "w-[240px]",
         className
       )}
     >
-      {/* Brand */}
-      <div className={cn("flex items-center gap-3 border-b border-white/5 px-4 py-5", collapsed && "justify-center px-2")}>
-        <img
-          src={logoSrc}
-          alt="Minarva Biz"
-          className="h-10 w-10 rounded-xl object-cover shadow-lg"
-        />
-        {!collapsed && (
-          <div className="min-w-0">
-            <div className="truncate text-base font-bold text-white">
-              Minarva<span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent"> Biz</span>
+      {/* Brand — deliberately mirrors the approved reference dashboard. */}
+      <div className={cn("border-b border-white/5 px-4 py-5", collapsed && "px-2")}>
+        {!collapsed ? (
+          <div className="flex flex-col items-center text-center">
+            <img
+              src={brandLogo}
+              alt="Minarva Biz"
+              className="h-[82px] w-[82px] object-contain drop-shadow-[0_8px_18px_rgba(37,99,235,0.25)]"
+            />
+            <div className="mt-2 text-[22px] font-bold tracking-tight text-white">
+              Minarva<span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-fuchsia-400 bg-clip-text text-transparent"> Biz</span>
             </div>
-            <div className="truncate text-[11px] text-slate-400">Boutique Billing & Management</div>
+            <div className="mt-0.5 text-[10px] font-medium tracking-wide text-slate-400">Boutique Billing & Management</div>
+          </div>
+        ) : (
+          <div className="flex justify-center">
+            <img src={brandLogo} alt="Minarva Biz" className="h-11 w-11 object-contain" />
           </div>
         )}
       </div>

@@ -151,8 +151,9 @@ export function App() {
     <AppShell
       activeNav={activeNav}
       onNavigate={(_h, id) => { setActiveNav(id); setSelectedOrder(null); }}
-      sidebar={{ user: { name: "Admin", role: "Super Admin" }, logoSrc: "/logo.png" }}
+      sidebar={{ user: { name: "Admin", role: "Super Admin" }, logoSrc: "/logo-mark.png" }}
       header={{
+        showSearch: activeNav !== "dashboard",
         title: activeNav === "services" ? "Services & Orders" : activeNav,
         subtitle: "Welcome back, Admin!",
         notificationCount: 6,

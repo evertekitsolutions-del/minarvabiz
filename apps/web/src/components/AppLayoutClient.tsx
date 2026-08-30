@@ -90,9 +90,10 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
             onNavigate={(href) => router.push(href)}
             sidebar={{
               user: { name: "Admin", role: "Super Admin" },
-              logoSrc: "/logo.png",
+              logoSrc: "/logo-mark.png",
             }}
             header={{
+              showSearch: pathname !== "/dashboard",
               onSearch: (q: string) => {
                 if (!q.trim()) {
                   setSearchResults([]);
