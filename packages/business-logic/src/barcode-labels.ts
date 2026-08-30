@@ -1,40 +1,53 @@
-/** Barcode label text layout for thermal / sticker printers */
+/**
+ * Barcode label HTML for thermal label printers (browser print)
+ */
 import type { Product } from "@minarvabiz/types";
-import { formatMoney } from "@minarvabiz/utils";
 import { getShopProfile } from "./shop-profile";
+import { formatMoney } from "@minarvabiz/utils";
 
-export function buildProductLabelText(product: Product): string {
-  const shop = getShopProfile().shopName;
-  return [
-    shop,
-    product.name,
-    product.sku ? `SKU: ${product.sku}` : "",
-    product.barcode ? `*${product.barcode}*` : "",
-    formatMoney(product.sellingPrice),
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-export function printProductLabels(products: Product[]): void {
-  if (typeof window === "undefined") return;
-  const body = products
+export function buildBarcodeLabelHtml(product: Product, opts?: { copies?: number }): string {
+  const shop = getShopProfile();
+  const copies = Math.max(1, opts?.copies ?? 1);
+  const blocks = Array.from({ length: copies })
     .map(
-      (p) =>
-        `<div class="label"><pre>${buildProductLabelText(p)
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")}</pre></div>`
+      () => `
+  <div class="label">
+    <div class="shop">${escape(shop.shopName || "Minarva Biz")}</div>
+    <div class="name">${escape(product.name)}</div>
+    <div class="meta">${escape([product.size, product.color, product.brand].filter(Boolean).join(" · "))}</div>
+    <div class="sku">SKU: ${escape(product.sku || "—")}</div>
+    <div class="barcode">${product.barcode ? `*${escape(product.barcode)}*` : ""}</div>
+    <div class="code">${escape(product.barcode || "")}</div>
+    <div class="price">${formatMoney(product.sellingPrice)}</div>
+  </div>`
     )
     .join("");
-  const html = `<!DOCTYPE html><html><head><title>Labels</title>
+  return `<!DOCTYPE html><html><head><title>Labels</title>
 <style>
-  body { font-family: monospace; }
-  .label { width: 50mm; height: 30mm; border: 1px dashed #ccc; padding: 4px; margin: 4px; display: inline-block; page-break-inside: avoid; }
-  pre { margin: 0; font-size: 11px; white-space: pre-wrap; }
-  @media print { .label { border: none; } }
-</style></head><body>${body}<script>window.onload=function(){window.print();}</script></body></html>`;
-  const w = window.open("", "_blank", "width=600,height=400");
+  body{font-family:system-ui,monospace;margin:0}
+  .label{width:50mm;min-height:30mm;padding:4mm;border:1px dashed #ccc;page-break-after:always}
+  .shop{font-size:10px;color:#64748b}
+  .name{font-size:12px;font-weight:700}
+  .meta,.sku{font-size:10px}
+  .barcode{font-family:monospace;font-size:16px;letter-spacing:2px;margin:4px 0}
+  .price{font-size:14px;font-weight:700}
+  @media print{.label{border:none}}
+</style></head><body>${blocks}
+<script>window.onload=function(){window.print()}</script></body></html>`;
+}
+
+export function printBarcodeLabels(product: Product, copies = 1) {
+  if (typeof window === "undefined") return;
+  const w = window.open("", "_blank", "width=400,height=600");
   if (!w) return;
-  w.document.write(html);
+  w.document.write(buildBarcodeLabelHtml(product, { copies }));
   w.document.close();
+}
+
+function escape(s: string) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+export function printProductLabels(products: Product[], copies = 1) {
+  for (const p of products) printBarcodeLabels(p, copies);
 }

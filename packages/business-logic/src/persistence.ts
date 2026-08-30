@@ -15,6 +15,9 @@ import * as phase6Store from "./phase6-store";
 import * as phase7Store from "./phase7-store";
 import * as phase9Store from "./phase9-store";
 import * as shopProfile from "./shop-profile";
+import * as quotationsMod from "./quotations";
+import * as cashReg from "./cash-register";
+import * as purchaseReturnsMod from "./purchase-returns";
 import { exportOutbox, hydrateOutbox, type LocalOutboxEvent } from "./outbox-bridge";
 import type { ShopProfile } from "./shop-profile";
 
@@ -46,6 +49,9 @@ export interface DomainSnapshot {
   activeBranchId?: string | null;
   shopProfile?: ShopProfile | null;
   outbox?: LocalOutboxEvent[];
+  quotations?: ReturnType<typeof quotationsMod.exportQuotationsState>["quotations"];
+  cashSessions?: ReturnType<typeof cashReg.exportCashRegisterState>["sessions"];
+  purchaseReturns?: ReturnType<typeof purchaseReturnsMod.exportPurchaseReturnsState>["returns"];
 }
 
 export function exportDomainSnapshot(): DomainSnapshot {
@@ -75,6 +81,9 @@ export function exportDomainSnapshot(): DomainSnapshot {
     activeBranchId: phase9Store.getActiveBranch()?.id ?? null,
     shopProfile: shopProfile.getShopProfile(),
     outbox: exportOutbox(),
+    quotations: quotationsMod.exportQuotationsState().quotations,
+    cashSessions: cashReg.exportCashRegisterState().sessions,
+    purchaseReturns: purchaseReturnsMod.exportPurchaseReturnsState().returns,
   };
 }
 
@@ -103,6 +112,9 @@ export function importDomainSnapshot(snap: DomainSnapshot): {
   }
   try {
     if (snap.outbox) hydrateOutbox(snap.outbox);
+  if (snap.quotations) quotationsMod.hydrateQuotations({ quotations: snap.quotations });
+  if (snap.cashSessions) cashReg.hydrateCashRegister({ sessions: snap.cashSessions });
+  if (snap.purchaseReturns) purchaseReturnsMod.hydratePurchaseReturns({ returns: snap.purchaseReturns });
     store.hydrateCore({
       customers: snap.customers,
       products: snap.products,

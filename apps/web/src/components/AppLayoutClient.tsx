@@ -16,6 +16,8 @@ import { SetupBanner } from "@/components/SetupBanner";
 const pathToNav: Record<string, NavItemId> = {
   "/dashboard": "dashboard",
   "/sales": "sales",
+  "/quotations": "sales",
+  "/cash-register": "reports",
   "/payments": "sales",
   "/services": "services",
   "/laundry": "laundry",

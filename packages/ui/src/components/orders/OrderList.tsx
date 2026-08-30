@@ -7,7 +7,7 @@ import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS } from "@minarvabiz/business-logic";
 
-const statusStyle: Record<OrderStatus, string> = {
+const statusStyle: Record<string, string> = {
   pending: "bg-amber-50 text-amber-700 ring-amber-200",
   processing: "bg-blue-50 text-blue-700 ring-blue-200",
   ready_to_deliver: "bg-emerald-50 text-emerald-700 ring-emerald-200",

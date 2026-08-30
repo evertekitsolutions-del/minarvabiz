@@ -8,8 +8,8 @@ export type LicensePlan = "trial" | "basic" | "professional" | "business" | "ent
 export type LicenseStatus = "trial" | "active" | "expired" | "suspended" | "revoked" | "deactivated";
 export type SyncStatus = "pending" | "synced" | "conflict" | "error";
 export type RoleName = "super_admin" | "admin" | "manager" | "cashier" | "tailor" | "staff";
-export type OrderStatus = "pending" | "processing" | "ready_to_deliver" | "delivered" | "cancelled";
-export type PaymentMethod = "cash" | "card" | "bank" | "upi" | "other";
+export type OrderStatus = "pending" | "received" | "cutting" | "stitching" | "alteration" | "qc" | "processing" | "ready_to_deliver" | "delivered" | "cancelled";
+export type PaymentMethod = "cash" | "card" | "bank" | "upi" | "online" | "other";
 
 export interface LicenseFeatures {
   sales: boolean; customers: boolean; inventory: boolean; tailoring: boolean;
@@ -658,4 +658,73 @@ export interface LicenseRuntimeSnapshot {
   reason?: string | null;
   features: LicenseFeatures | null;
   activeBranchId?: UUID | null;
+}
+
+export type QuotationStatus = "draft" | "sent" | "accepted" | "rejected" | "expired" | "converted";
+
+export interface QuotationLine {
+  id: UUID;
+  kind: "product" | "service" | "material" | "labour";
+  productId?: UUID | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface Quotation {
+  id: UUID;
+  quotationNumber: string;
+  customerId: UUID;
+  customerName?: string | null;
+  status: QuotationStatus;
+  lines: QuotationLine[];
+  materialCharges: number;
+  labourCharges: number;
+  subtotal: number;
+  discount: number;
+  tax: number;
+  total: number;
+  advance: number;
+  balance: number;
+  validUntil?: ISODateString | null;
+  notes?: string | null;
+  convertedSaleId?: UUID | null;
+  convertedOrderId?: UUID | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+  version: number;
+  orgId?: UUID | null;
+}
+
+export interface LedgerEntry {
+  id: UUID;
+  partyType: "customer" | "supplier";
+  partyId: UUID;
+  entryType: "sale" | "payment" | "refund" | "advance" | "purchase" | "purchase_return" | "opening" | "adjustment";
+  referenceType?: string | null;
+  referenceId?: UUID | null;
+  debit: number;
+  credit: number;
+  balanceAfter: number;
+  notes?: string | null;
+  createdAt: ISODateString;
+}
+
+export interface CashRegisterSession {
+  id: UUID;
+  businessDate: string;
+  openingCash: number;
+  cashSales: number;
+  cashReceived: number;
+  cashExpenses: number;
+  cashRefunds: number;
+  expectedClosing: number;
+  actualClosing?: number | null;
+  difference?: number | null;
+  openedAt: ISODateString;
+  closedAt?: ISODateString | null;
+  closedBy?: string | null;
+  status: "open" | "closed";
 }

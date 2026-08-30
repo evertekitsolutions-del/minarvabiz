@@ -17,8 +17,13 @@ export const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
   tshirt_printing: "T-shirt Printing",
 };
 
-export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+export const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
+  received: "Received",
+  cutting: "Cutting",
+  stitching: "Stitching",
+  alteration: "Alteration",
+  qc: "Quality Check",
   processing: "Processing",
   ready_to_deliver: "Ready to Deliver",
   delivered: "Delivered",
@@ -27,17 +32,36 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 
 export const ORDER_STATUS_FLOW: OrderStatus[] = [
   "pending",
+  "received",
+  "cutting",
+  "stitching",
+  "alteration",
+  "qc",
   "processing",
   "ready_to_deliver",
   "delivered",
 ];
 
-export function canTransition(from: OrderStatus, to: OrderStatus): boolean {
+const TRANSITIONS: Record<string, string[]> = {
+  pending: ["received", "processing", "cancelled"],
+  received: ["cutting", "processing", "cancelled"],
+  cutting: ["stitching", "processing", "cancelled"],
+  stitching: ["alteration", "qc", "processing", "cancelled"],
+  alteration: ["qc", "processing", "cancelled"],
+  qc: ["ready_to_deliver", "processing", "cancelled"],
+  processing: ["ready_to_deliver", "cutting", "stitching", "qc", "cancelled"],
+  ready_to_deliver: ["delivered", "processing"],
+  delivered: [],
+  cancelled: [],
+};
+
+export function canTransition(from: OrderStatus | string, to: OrderStatus | string): boolean {
   if (to === "cancelled") return from !== "delivered" && from !== "cancelled";
-  if (from === "cancelled" || from === "delivered") return false;
-  const fi = ORDER_STATUS_FLOW.indexOf(from);
-  const ti = ORDER_STATUS_FLOW.indexOf(to);
-  return ti >= fi;
+  if ((TRANSITIONS[from] || []).includes(to)) return true;
+  const fi = ORDER_STATUS_FLOW.indexOf(from as OrderStatus);
+  const ti = ORDER_STATUS_FLOW.indexOf(to as OrderStatus);
+  if (fi >= 0 && ti >= 0) return ti >= fi && from !== "delivered" && from !== "cancelled";
+  return false;
 }
 
 export interface OrderPricingInput {
@@ -156,3 +180,4 @@ export function validateOrderInput(input: {
   }
   return errors;
 }
+
