@@ -35,17 +35,5 @@
     "electron-builder": "24.13.3",
     "typescript": "~5.7.2",
     "vite": "6.0.3"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "esbuild",
-      "app-builder-bin",
-      "electron-winstaller",
-      "7zip-bin",
-      "@parcel/watcher",
-      "sharp",
-      "node-gyp"
-    ]
   }
 }
