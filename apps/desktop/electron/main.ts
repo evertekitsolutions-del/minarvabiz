@@ -60,7 +60,9 @@ function createWindow() {
   if (isDev) {
     win.loadURL(process.env.VITE_DEV_SERVER_URL || "http://localhost:5173");
   } else {
-    win.loadFile(path.join(__dirname, "../dist/index.html"));
+    // Packaged: app.getAppPath() works with asar (dist/ next to electron/)
+    const indexHtml = path.join(app.getAppPath(), "dist", "index.html");
+    win.loadFile(indexHtml);
   }
 }
 

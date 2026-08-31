@@ -1,59 +1,100 @@
-# Minarva Biz - Windows installer build script
-# Run: powershell -ExecutionPolicy Bypass -File .\build-windows.ps1
+# Minarva Biz - Windows installer build
+# Usage: powershell -ExecutionPolicy Bypass -File .\build-windows.ps1
 
 $ErrorActionPreference = "Stop"
-Set-Location -Path $PSScriptRoot
+$Root = $PSScriptRoot
+Set-Location -LiteralPath $Root
 
-Write-Host "=== Minarva Biz Windows Build ===" -ForegroundColor Cyan
-Write-Host ("Working folder: " + $PWD)
+function Step($msg) {
+  Write-Host ""
+  Write-Host (">>> " + $msg) -ForegroundColor Cyan
+}
 
-Write-Host "Activating pnpm 9.15.0 via Corepack..." -ForegroundColor Yellow
+function Fail($msg) {
+  Write-Host ""
+  Write-Host ("ERROR: " + $msg) -ForegroundColor Red
+  exit 1
+}
+
+Write-Host "========================================" -ForegroundColor Green
+Write-Host "  Minarva Biz - Windows Build" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Green
+Write-Host ("Folder: " + $Root)
+
+# Check Node
+Step "Checking Node.js"
 try {
-  corepack enable 2>$null
+  $nodeVer = node -v
+  Write-Host ("Node: " + $nodeVer)
+} catch {
+  Fail "Node.js not found. Install from https://nodejs.org (LTS) and reopen PowerShell."
+}
+
+# Prefer pnpm 9.15 (avoids pnpm 10 ignored build scripts)
+Step "Setting up pnpm 9.15"
+$env:npm_config_registry = "https://registry.npmjs.org/"
+try {
+  corepack enable | Out-Null
   corepack prepare pnpm@9.15.0 --activate
 } catch {
-  Write-Host "Corepack not available - using global pnpm" -ForegroundColor Yellow
+  Write-Host "Corepack skip - will use existing pnpm"
+}
+try {
+  $pnpmVer = pnpm -v
+  Write-Host ("pnpm: " + $pnpmVer)
+} catch {
+  Write-Host "Installing pnpm 9 globally..."
+  npm install -g pnpm@9.15.0 --registry=https://registry.npmjs.org/
+  $pnpmVer = pnpm -v
+  Write-Host ("pnpm: " + $pnpmVer)
 }
 
-$pnpmVersion = pnpm --version
-Write-Host ("pnpm version: " + $pnpmVersion)
+# Clean partial installs that cause weird errors
+Step "Cleaning old node_modules (if any)"
+if (Test-Path "node_modules") { Remove-Item -Recurse -Force "node_modules" -ErrorAction SilentlyContinue }
+if (Test-Path "apps\desktop\node_modules") { Remove-Item -Recurse -Force "apps\desktop\node_modules" -ErrorAction SilentlyContinue }
 
-Write-Host "Installing dependencies..." -ForegroundColor Yellow
+# Root install
+Step "pnpm install (this may take a few minutes)"
 pnpm install --registry=https://registry.npmjs.org/
-if ($LASTEXITCODE -ne 0) {
-  throw "pnpm install failed"
-}
+if ($LASTEXITCODE -ne 0) { Fail "pnpm install failed" }
 
-Write-Host "Installing Electron desktop tools..." -ForegroundColor Yellow
-Set-Location -Path "apps\desktop"
-pnpm add -D electron@33.2.1 vite@6.0.3 electron-builder@24.13.3 typescript @types/node --registry=https://registry.npmjs.org/
-if ($LASTEXITCODE -ne 0) {
-  throw "electron install failed"
-}
+# Desktop tools
+Step "Installing Electron + Vite + electron-builder"
+Set-Location -LiteralPath (Join-Path $Root "apps\desktop")
+pnpm add -D electron@33.2.1 vite@6.0.3 electron-builder@24.13.3 @vitejs/plugin-react@4.3.4 typescript@5.7.2 @types/node --registry=https://registry.npmjs.org/
+if ($LASTEXITCODE -ne 0) { Fail "Failed to install Electron tooling" }
 
-Write-Host "Rebuilding electron/esbuild binaries if needed..." -ForegroundColor Yellow
+# Ensure native postinstall ran
+Step "Ensuring electron and esbuild binaries"
 pnpm rebuild electron esbuild 2>$null
 if (Test-Path "node_modules\electron\install.js") {
-  pnpm exec node node_modules\electron\install.js 2>$null
+  node "node_modules\electron\install.js"
 }
-if (Test-Path "node_modules\esbuild\install.js") {
-  pnpm exec node node_modules\esbuild\install.js 2>$null
+$esbuildInstall = Get-ChildItem -Path "node_modules" -Recurse -Filter "install.js" -ErrorAction SilentlyContinue |
+  Where-Object { $_.FullName -match "esbuild" } |
+  Select-Object -First 1
+if ($esbuildInstall) {
+  node $esbuildInstall.FullName
 }
 
-Write-Host "Building Windows installer (please wait)..." -ForegroundColor Yellow
+# Build renderer + main + NSIS installer
+Step "Building installer (5-15 minutes on first run)"
 pnpm run package:win
-if ($LASTEXITCODE -ne 0) {
-  throw "package:win failed"
-}
+if ($LASTEXITCODE -ne 0) { Fail "package:win failed - scroll up for the real error" }
 
-$setup = Join-Path $PWD "release\MinarvaBiz-Setup-1.0.0.exe"
+$setup = Join-Path (Get-Location) "release\MinarvaBiz-Setup-1.0.0.exe"
+Write-Host ""
 if (Test-Path $setup) {
-  Write-Host ""
-  Write-Host "SUCCESS! Installer created:" -ForegroundColor Green
-  Write-Host $setup -ForegroundColor Green
+  $size = [math]::Round((Get-Item $setup).Length / 1MB, 1)
+  Write-Host "========================================" -ForegroundColor Green
+  Write-Host "  SUCCESS" -ForegroundColor Green
+  Write-Host "========================================" -ForegroundColor Green
+  Write-Host ("Installer: " + $setup)
+  Write-Host ("Size: " + $size + " MB")
 } else {
-  Write-Host "Build finished but Setup.exe not found in release folder. Check errors above." -ForegroundColor Red
-  if (Test-Path "release") {
-    Get-ChildItem "release"
-  }
+  Write-Host "Build command finished but Setup.exe was not found." -ForegroundColor Red
+  Write-Host "Contents of release folder:"
+  if (Test-Path "release") { Get-ChildItem "release" -Recurse | Select-Object FullName, Length }
+  Fail "MinarvaBiz-Setup-1.0.0.exe missing"
 }

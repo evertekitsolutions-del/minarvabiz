@@ -1,16 +1,14 @@
 import { defineConfig } from "vite";
 import path from "path";
+import react from "@vitejs/plugin-react";
 
 const root = path.resolve(__dirname, "../..");
 
-/**
- * Desktop renderer Vite config.
- * Explicit aliases for pnpm workspace packages so Rollup can resolve
- * @minarvabiz/* imports from nested packages (e.g. business-logic → utils).
- */
 export default defineConfig({
   root: ".",
   base: "./",
+  publicDir: "public",
+  plugins: [react()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
@@ -29,9 +27,7 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    fs: {
-      allow: [root],
-    },
+    fs: { allow: [root] },
   },
   optimizeDeps: {
     include: ["react", "react-dom", "sql.js"],
@@ -41,8 +37,6 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: false,
     chunkSizeWarningLimit: 3000,
-    commonjsOptions: {
-      include: [/node_modules/],
-    },
+    commonjsOptions: { include: [/node_modules/] },
   },
 });

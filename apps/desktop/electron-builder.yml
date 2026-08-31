@@ -1,7 +1,7 @@
 electronVersion: 33.2.1
 appId: com.evertek.minarvabiz
 productName: Minarva Biz
-copyright: Copyright © Evertek IT Solutions
+copyright: Copyright Evertek IT Solutions
 directories:
   output: release
   buildResources: build
@@ -27,12 +27,7 @@ nsis:
   shortcutName: Minarva Biz
   deleteAppDataOnUninstall: false
   uninstallDisplayName: Minarva Biz
-linux:
-  target:
-    - AppImage
-  category: Office
 extraMetadata:
   main: electron/dist/main.js
-
 npmRebuild: false
 buildDependenciesFromSource: false
