@@ -1,46 +1,33 @@
-# Windows commercial build — MinarvaBiz-Setup.exe
+# Windows build — MinarvaBiz-Setup.exe
 
 ## Requirements
 - Windows 10/11 x64
-- Node.js 20+ (LTS)
-- pnpm 9+ (`npm install -g pnpm@9`)
-- ≥4 GB free RAM
-- Stable internet to **https://registry.npmjs.org** (not a private mirror)
+- Node.js 20+ from https://nodejs.org
+- pnpm 9: open PowerShell and run `npm install -g pnpm@9`
+- Stable internet
 
-## Registry note
-This project ships an `.npmrc` that forces:
-
-```
-registry=https://registry.npmjs.org/
-```
-
-If your machine has a global `.npmrc` pointing at an internal IP (e.g. `http://35.x.x.x/npm/`), either:
-
-1. Use this repo’s `.npmrc` (preferred), or  
-2. Temporarily: `npm config delete registry` then install again.
-
-## Commands (from repo root)
+## Exact commands (copy/paste)
 
 ```powershell
-git clone https://github.com/evertekitsolutions-del/minarvabiz.git
-cd minarvabiz
+cd $env:USERPROFILE\Desktop
+Remove-Item -Recurse -Force MinarvaBiz-Build -ErrorAction SilentlyContinue
+git clone https://github.com/evertekitsolutions-del/minarvabiz.git MinarvaBiz-Build
+cd MinarvaBiz-Build
 
-# Install all workspace packages (root)
 pnpm install
 
-# Desktop tooling (if not already in lockfile)
 cd apps\desktop
 pnpm add -D electron@33.2.1 vite@6.0.3 electron-builder@24.13.3 typescript @types/node
-
-# Build renderer + Electron main + NSIS installer
 pnpm run package:win
 ```
 
-Installer output:
+Installer path:
 
 `apps\desktop\release\MinarvaBiz-Setup-1.0.0.exe`
 
-## Data location
+## Data location after install
 `%APPDATA%\Minarva Biz\minarvabiz.db`
 
-Uninstall does **not** remove AppData (`deleteAppDataOnUninstall: false`).
+## Note
+This project uses the **public** npm registry only (`https://registry.npmjs.org`).  
+The lockfile no longer contains any private mirror URLs.
