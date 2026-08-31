@@ -2,9 +2,8 @@
 
 ## Requirements
 - Windows 10/11 x64
-- Node.js 20+ from https://nodejs.org
-- pnpm 9: open PowerShell and run `npm install -g pnpm@9`
-- Stable internet
+- Node.js 20+ (https://nodejs.org)
+- pnpm 9 or 10: `npm install -g pnpm@9`
 
 ## Exact commands (copy/paste)
 
@@ -21,13 +20,11 @@ pnpm add -D electron@33.2.1 vite@6.0.3 electron-builder@24.13.3 typescript @type
 pnpm run package:win
 ```
 
-Installer path:
+Installer:
 
 `apps\desktop\release\MinarvaBiz-Setup-1.0.0.exe`
 
-## Data location after install
-`%APPDATA%\Minarva Biz\minarvabiz.db`
-
-## Note
-This project uses the **public** npm registry only (`https://registry.npmjs.org`).  
-The lockfile no longer contains any private mirror URLs.
+## Notes
+- Packages install from `https://registry.npmjs.org` only.
+- Electron and esbuild install scripts are **approved** in root `package.json` → `pnpm.onlyBuiltDependencies`.
+- Database path after install: `%APPDATA%\Minarva Biz\minarvabiz.db`
