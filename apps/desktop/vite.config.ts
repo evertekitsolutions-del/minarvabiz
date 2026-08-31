@@ -31,7 +31,7 @@ export default defineConfig({
     fs: { allow: [root] },
   },
   optimizeDeps: {
-    include: ["react", "react-dom", "sql.js"],
+    include: ["react", "react-dom", "sql.js", "sql.js/dist/sql-asm.js"],
   },
   assetsInclude: ["**/*.wasm"],
   build: {

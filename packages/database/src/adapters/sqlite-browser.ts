@@ -1,6 +1,6 @@
 /**
- * Browser / Electron-renderer SQLite via sql.js (WASM).
- * File bytes are provided by caller IO (Electron IPC in desktop app).
+ * Electron-renderer SQLite via sql.js ASM.js build.
+ * No separate .wasm fetch — works offline under file:// and asar.
  */
 
 import { SQLITE_DDL, SQLITE_SCHEMA_VERSION } from "../sql/sqlite-ddl";
@@ -24,21 +24,17 @@ type SqlJsDb = {
   close: () => void;
 };
 
-let SQL: { Database: new (data?: ArrayLike<number>) => SqlJsDb } | null = null;
+type SqlJsStatic = { Database: new (data?: ArrayLike<number>) => SqlJsDb };
 
-async function loadSqlJs() {
+let SQL: SqlJsStatic | null = null;
+
+async function loadSqlJs(): Promise<SqlJsStatic> {
   if (SQL) return SQL;
-  const mod = await import("sql.js");
-  const initSqlJs = (mod as { default?: unknown }).default ?? mod;
-  SQL = await (initSqlJs as (cfg?: { locateFile?: (f: string) => string }) => Promise<typeof SQL>)({
-    locateFile: (file: string) => {
-      // Packaged with Vite base "./" — wasm copied to dist root / public
-      if (typeof window !== "undefined") {
-        return `./${file}`;
-      }
-      return file;
-    },
-  });
+  // ASM.js build is self-contained — no locateFile / wasm network or file fetch
+  // @ts-expect-error sql.js dist path has no types
+  const mod = await import("sql.js/dist/sql-asm.js");
+  const initSqlJs = (mod as { default?: (c?: object) => Promise<SqlJsStatic> }).default ?? mod;
+  SQL = await (initSqlJs as (c?: object) => Promise<SqlJsStatic>)({});
   return SQL!;
 }
 
@@ -65,10 +61,19 @@ export async function openSqliteDatabase(
   io: BrowserSqliteFileIO
 ): Promise<SqliteDatabase> {
   const sqlJs = await loadSqlJs();
-  io.mkdirp("");
+  try {
+    io.mkdirp("");
+  } catch {
+    /* */
+  }
   const existing = io.readFile(dbPath);
-  const db = existing && existing.length > 0 ? new sqlJs.Database(existing) : new sqlJs.Database();
-  db.run("PRAGMA foreign_keys = ON;");
+  const db =
+    existing && existing.length > 0 ? new sqlJs.Database(existing) : new sqlJs.Database();
+  try {
+    db.run("PRAGMA foreign_keys = ON;");
+  } catch {
+    /* */
+  }
   for (const s of SQLITE_DDL.split(";").map((x) => x.trim()).filter(Boolean)) {
     try {
       db.run(s);
@@ -82,7 +87,7 @@ export async function openSqliteDatabase(
       String(SQLITE_SCHEMA_VERSION),
     ]);
   } catch {
-    /* meta table may already exist */
+    /* */
   }
 
   const save = () => {
@@ -93,8 +98,16 @@ export async function openSqliteDatabase(
     path: dbPath,
     save,
     close() {
-      save();
-      db.close();
+      try {
+        save();
+      } catch {
+        /* */
+      }
+      try {
+        db.close();
+      } catch {
+        /* */
+      }
     },
     exec(sql, params = []) {
       db.run(sql, params);

@@ -53,6 +53,17 @@ export function App() {
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Preload may attach a tick after first paint
+      for (let i = 0; i < 50 && !window.minarvaDesktop; i++) {
+        await new Promise((r) => setTimeout(r, 20));
+      }
+      if (!window.minarvaDesktop) {
+        if (!cancelled) {
+          setDbError("Electron bridge missing (window.minarvaDesktop). Reinstall Minarva Biz desktop.");
+          setDbReady(false);
+        }
+        return;
+      }
       const result = await bootstrapDesktopSqlite();
       if (cancelled) return;
       if (!result.ok) {
