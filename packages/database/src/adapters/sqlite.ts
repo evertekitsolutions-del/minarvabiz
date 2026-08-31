@@ -97,7 +97,16 @@ export async function openSqliteDatabase(
   io: SqliteFileIO = nodeFileIO()
 ): Promise<SqliteDatabase> {
   const sqlJs = await loadSqlJs();
-  io.mkdirp(require("path").dirname(dbPath));
+  // Pure dirname — works in Node and avoids renderer require("path") crashes
+  const dir = (() => {
+    const i = Math.max(dbPath.lastIndexOf("/"), dbPath.lastIndexOf("\\"));
+    return i >= 0 ? dbPath.slice(0, i) : ".";
+  })();
+  try {
+    io.mkdirp(dir);
+  } catch {
+    /* renderer IO may no-op */
+  }
   const existing = io.readFile(dbPath);
   const db = existing ? new sqlJs.Database(existing) : new sqlJs.Database();
   db.run("PRAGMA foreign_keys = ON;");

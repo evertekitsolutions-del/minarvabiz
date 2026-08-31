@@ -21,6 +21,7 @@ export default defineConfig({
       "@minarvabiz/sync": path.resolve(root, "packages/sync/src/index.ts"),
       "@minarvabiz/ui": path.resolve(root, "packages/ui/src/index.ts"),
       "@minarvabiz/validation": path.resolve(root, "packages/validation/src/index.ts"),
+      "@minarvabiz/database/sqlite-browser": path.resolve(root, "packages/database/src/adapters/sqlite-browser.ts"),
     },
     dedupe: ["react", "react-dom"],
   },
@@ -32,6 +33,7 @@ export default defineConfig({
   optimizeDeps: {
     include: ["react", "react-dom", "sql.js"],
   },
+  assetsInclude: ["**/*.wasm"],
   build: {
     outDir: "dist",
     emptyOutDir: true,

@@ -6,7 +6,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./adapters/sqlite": "./src/adapters/sqlite.ts"
+    "./adapters/sqlite": "./src/adapters/sqlite.ts",
+    "./sqlite-browser": "./src/adapters/sqlite-browser.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

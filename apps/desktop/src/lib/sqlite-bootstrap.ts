@@ -1,6 +1,6 @@
 /**
  * Mandatory SQLite bootstrap for Electron offline production.
- * Flow: UI → business-logic stores → SQLite file → outbox → Supabase
+ * Flow: UI -> business-logic stores -> SQLite file (via IPC) -> outbox
  */
 
 import {
@@ -35,9 +35,11 @@ export function getDesktopSqliteError() {
 const SNAPSHOT_KEY = "domain_snapshot_v2";
 
 function ensureKv(db: SqliteDatabase) {
-  db.exec(`CREATE TABLE IF NOT EXISTS domain_kv (
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS domain_kv (
     key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL
-  );`);
+  );`
+  );
 }
 
 function saveSnap(db: SqliteDatabase, snap: unknown) {
@@ -66,9 +68,8 @@ function loadSnap(db: SqliteDatabase): unknown | null {
 export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: string }> {
   try {
     setRuntimeMode("production");
-    const deviceId = await api.getDeviceId?.();
-    setOutboxDeviceId(deviceId || "desktop-win");
 
+    // MUST declare api before any use (avoids TDZ: Cannot access before initialization)
     const api = typeof window !== "undefined" ? window.minarvaDesktop : undefined;
     if (!api?.getSqlitePath || !api.readSqliteBinary || !api.writeSqliteBinary) {
       throw new Error(
@@ -76,26 +77,31 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
       );
     }
 
+    const deviceId = (await api.getDeviceId?.()) || "desktop-win";
+    setOutboxDeviceId(deviceId);
+
     const dbPath = await api.getSqlitePath();
     const existing = await api.readSqliteBinary();
-    const bytes =
+    const bytes: Uint8Array | null =
       existing == null
         ? null
         : existing instanceof Uint8Array
           ? existing
           : new Uint8Array(existing as ArrayBuffer);
 
-    const { openSqliteDatabase } = await import("../../../../packages/database/src/adapters/sqlite");
+    const { openSqliteDatabase } = await import("../../../../packages/database/src/adapters/sqlite-browser");
 
     let cached: Uint8Array | null = bytes;
     const io = {
-      readFile: () => (cached ? Buffer.from(cached) : null),
+      readFile: (_p: string): Uint8Array | null => cached,
       writeFile: (_p: string, data: Uint8Array) => {
         cached = data;
         void api.writeSqliteBinary(data);
       },
-      exists: () => true,
-      mkdirp: () => {},
+      exists: (_p: string) => cached != null && cached.length > 0,
+      mkdirp: (_dir: string) => {
+        /* main process creates dirs on writeBinary */
+      },
     };
 
     const db = await openSqliteDatabase(dbPath, io);
@@ -108,7 +114,7 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
 
     ready = true;
     initError = null;
-    // Automatic daily backup of SQLite file (desktop)
+
     try {
       if (shouldRunAutoBackup() && api.backupSqlite) {
         const dest = `${dbPath}.bak-${Date.now()}`;
@@ -121,7 +127,6 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
       recordBackupFailure(e instanceof Error ? e.message : String(e));
     }
 
-    // Register global persist hook for touchPersistence
     (window as unknown as { __minarvaDesktopPersist?: () => void }).__minarvaDesktopPersist =
       persistDomainToSqlite;
 
