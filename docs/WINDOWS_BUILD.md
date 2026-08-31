@@ -1,30 +1,25 @@
-# Windows build — MinarvaBiz-Setup.exe
+# Windows installer build
 
-## Requirements
-- Windows 10/11 x64
-- Node.js 20+ (https://nodejs.org)
-- pnpm 9 or 10: `npm install -g pnpm@9`
+## Easiest method (recommended)
 
-## Exact commands (copy/paste)
+1. Download/clone the repository to your Desktop.
+2. Double-click **`BUILD-WINDOWS.cmd`**
+3. Wait until you see **SUCCESS**
+4. Installer path:
+
+`apps\desktop\release\MinarvaBiz-Setup-1.0.0.exe`
+
+## Or PowerShell (one block)
 
 ```powershell
 cd $env:USERPROFILE\Desktop
 Remove-Item -Recurse -Force MinarvaBiz-Build -ErrorAction SilentlyContinue
 git clone https://github.com/evertekitsolutions-del/minarvabiz.git MinarvaBiz-Build
 cd MinarvaBiz-Build
-
-pnpm install
-
-cd apps\desktop
-pnpm add -D electron@33.2.1 vite@6.0.3 electron-builder@24.13.3 typescript @types/node
-pnpm run package:win
+powershell -ExecutionPolicy Bypass -File .\build-windows.ps1
 ```
 
-Installer:
-
-`apps\desktop\release\MinarvaBiz-Setup-1.0.0.exe`
-
 ## Notes
-- Packages install from `https://registry.npmjs.org` only.
-- Electron and esbuild install scripts are **approved** in root `package.json` → `pnpm.onlyBuiltDependencies`.
-- Database path after install: `%APPDATA%\Minarva Biz\minarvabiz.db`
+- Uses public npm only (`registry.npmjs.org`)
+- Forces **pnpm 9.15** via Corepack when available (avoids “Ignored build scripts”)
+- Approves electron/esbuild install scripts in `package.json`

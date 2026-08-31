@@ -40,7 +40,8 @@
       "electron-winstaller",
       "7zip-bin",
       "@parcel/watcher",
-      "sharp"
+      "sharp",
+      "node-gyp"
     ]
   }
 }
