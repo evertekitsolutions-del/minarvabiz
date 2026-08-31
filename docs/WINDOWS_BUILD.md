@@ -1,45 +1,46 @@
 # Windows commercial build — MinarvaBiz-Setup.exe
 
 ## Requirements
-- **Windows 10/11 x64** (recommended) or Linux with Wine + ≥4 GB RAM
-- Node.js 20+
-- pnpm 9+
-- ≥4 GB free RAM (Electron download + NSIS packaging)
+- Windows 10/11 x64
+- Node.js 20+ (LTS)
+- pnpm 9+ (`npm install -g pnpm@9`)
+- ≥4 GB free RAM
+- Stable internet to **https://registry.npmjs.org** (not a private mirror)
 
-## Build commands (from repo root)
+## Registry note
+This project ships an `.npmrc` that forces:
 
-```bash
+```
+registry=https://registry.npmjs.org/
+```
+
+If your machine has a global `.npmrc` pointing at an internal IP (e.g. `http://35.x.x.x/npm/`), either:
+
+1. Use this repo’s `.npmrc` (preferred), or  
+2. Temporarily: `npm config delete registry` then install again.
+
+## Commands (from repo root)
+
+```powershell
 git clone https://github.com/evertekitsolutions-del/minarvabiz.git
 cd minarvabiz
+
+# Install all workspace packages (root)
 pnpm install
 
-cd apps/desktop
-pnpm add -D electron vite @vitejs/plugin-react electron-builder typescript @types/node
+# Desktop tooling (if not already in lockfile)
+cd apps\desktop
+pnpm add -D electron@33.2.1 vite@6.0.3 electron-builder@24.13.3 typescript @types/node
 
-# Full Windows installer
+# Build renderer + Electron main + NSIS installer
 pnpm run package:win
 ```
 
-Equivalent:
+Installer output:
 
-```bash
-pnpm run build:renderer
-pnpm run build:electron
-pnpm exec electron-builder --win --x64 --config electron-builder.yml
-```
+`apps\desktop\release\MinarvaBiz-Setup-1.0.0.exe`
 
-## Output
-`apps/desktop/release/MinarvaBiz-Setup-1.0.0.exe`
-
-## Post-install data path
+## Data location
 `%APPDATA%\Minarva Biz\minarvabiz.db`
 
 Uninstall does **not** remove AppData (`deleteAppDataOnUninstall: false`).
-
-## Validation checklist
-1. Install → launch → first-run admin setup → login  
-2. Customer → product → sale → payment → stock check  
-3. Order + measurement + order expense → profit  
-4. Print A4 / thermal layout  
-5. Backup → quit → reopen → data present  
-6. Uninstall → confirm `%APPDATA%\Minarva Biz\minarvabiz.db` still exists  
