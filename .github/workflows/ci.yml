@@ -1,5 +1,8 @@
 name: CI
 
+# Production verification: web + Electron renderer/main + Windows installer.
+# The lockfile is committed and CI always installs with frozen-lockfile.
+
 on:
   push:
     branches: [main]
