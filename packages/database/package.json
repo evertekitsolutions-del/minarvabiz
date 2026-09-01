@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./adapters/sqlite": "./src/adapters/sqlite.ts",
+    "./adapters/sqlite-files": "./src/adapters/sqlite-files.ts",
     "./sqlite-browser": "./src/adapters/sqlite-browser.ts"
   },
   "scripts": {
