@@ -1,9 +1,4 @@
 import { allowDemoSeed } from "./runtime-mode";
-/**
- * In-memory domain store for Phase 3.
- * Implements the same interface that Supabase/SQLite repositories will later.
- * Data survives for the process lifetime; Offline will persist via SQLite in Phase 7+.
- */
 
 import type {
   Customer, Product, Category, Sale, SaleItem, Payment, CartLine, UUID, PaymentMethod,
@@ -56,9 +51,9 @@ let lastInvoice: string | null = null;
 function touchProduct(p: Product) {
   p.updatedAt = nowISO();
   p.version = (p.version ?? 1) + 1;
+  touchPersistence();
 }
 
-// ---- Categories ----
 export function listCategories(): Category[] {
   return categories.filter((c) => !c.deletedAt);
 }
@@ -66,18 +61,14 @@ export function listCategories(): Category[] {
 export function createCategory(input: { name: string; description?: string | null }): Category {
   assertPermission("products.manage");
   const cat: Category = {
-    id: generateId(),
-    name: input.name,
-    description: input.description ?? null,
-    isActive: true,
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
+    id: generateId(), name: input.name, description: input.description ?? null,
+    isActive: true, createdAt: nowISO(), updatedAt: nowISO(),
   };
   categories.push(cat);
+  touchPersistence();
   return cat;
 }
 
-// ---- Customers ----
 function applyProductionEmptyState() {
   if (allowDemoSeed()) return;
   customers.length = 0;
@@ -91,12 +82,7 @@ export function listCustomers(query?: string): Customer[] {
   let list = customers.filter((c) => !c.deletedAt);
   if (query?.trim()) {
     const q = query.toLowerCase();
-    list = list.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.phone?.includes(q) ||
-        c.email?.toLowerCase().includes(q)
-    );
+    list = list.filter((c) => c.name.toLowerCase().includes(q) || c.phone?.includes(q) || c.email?.toLowerCase().includes(q));
   }
   return list.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -106,26 +92,14 @@ export function getCustomer(id: UUID): Customer | undefined {
 }
 
 export function createCustomer(input: {
-  name: string;
-  phone?: string | null;
-  whatsapp?: string | null;
-  email?: string | null;
-  address?: string | null;
-  notes?: string | null;
+  name: string; phone?: string | null; whatsapp?: string | null; email?: string | null;
+  address?: string | null; notes?: string | null;
 }): Customer {
   assertPermission("customers.manage");
   const c: Customer = {
-    id: generateId(),
-    name: input.name,
-    phone: input.phone ?? null,
-    whatsapp: input.whatsapp ?? null,
-    email: input.email || null,
-    address: input.address ?? null,
-    notes: input.notes ?? null,
-    outstandingBalance: 0,
-    totalSpending: 0,
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
+    id: generateId(), name: input.name, phone: input.phone ?? null, whatsapp: input.whatsapp ?? null,
+    email: input.email || null, address: input.address ?? null, notes: input.notes ?? null,
+    outstandingBalance: 0, totalSpending: 0, createdAt: nowISO(), updatedAt: nowISO(),
   };
   customers.push(c);
   touchPersistence();
@@ -138,22 +112,18 @@ export function updateCustomer(id: UUID, patch: Partial<Customer>): Customer | n
   const c = getCustomer(id);
   if (!c) return null;
   Object.assign(c, patch, { updatedAt: nowISO() });
+  touchPersistence();
+  void remoteUpsertCustomer(c);
   return c;
 }
 
-// ---- Products ----
 export function listProducts(opts?: { query?: string; categoryId?: string; lowStockOnly?: boolean }): Product[] {
   let list = products.filter((p) => !p.deletedAt);
   if (opts?.categoryId) list = list.filter((p) => p.categoryId === opts.categoryId);
   if (opts?.lowStockOnly) list = list.filter((p) => isLowStock(p.stockQuantity, p.minimumStock));
   if (opts?.query?.trim()) {
     const q = opts.query.toLowerCase();
-    list = list.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.sku?.toLowerCase().includes(q) ||
-        p.barcode?.includes(q)
-    );
+    list = list.filter((p) => p.name.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q) || p.barcode?.includes(q));
   }
   return list.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -172,10 +142,7 @@ export function createProduct(input: Omit<Product, "id" | "createdAt" | "updated
     parentProductId: (input as Product).parentProductId ?? null,
     hasVariants: (input as Product).hasVariants ?? false,
     fabric: (input as Product).fabric ?? null,
-    ...input,
-    id: generateId(),
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
+    ...input, id: generateId(), createdAt: nowISO(), updatedAt: nowISO(),
   };
   products.push(p);
   touchPersistence();
@@ -188,15 +155,12 @@ export function updateProduct(id: UUID, patch: Partial<Product>): Product | null
   const p = getProduct(id);
   if (!p) return null;
   Object.assign(p, patch, { updatedAt: nowISO() });
+  touchPersistence();
+  void remoteUpsertProduct(p);
   return p;
 }
 
-export function adjustStock(
-  productId: UUID,
-  type: "stock_in" | "stock_out" | "adjustment",
-  quantity: number,
-  _notes?: string | null
-): Product | null {
+export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "adjustment", quantity: number, _notes?: string | null): Product | null {
   assertPermission("inventory.adjust");
   const p = getProduct(productId);
   if (!p) return null;
@@ -205,7 +169,6 @@ export function adjustStock(
   return p;
 }
 
-// ---- Sales ----
 export function listSales(): Sale[] {
   return [...sales].filter((s) => !s.deletedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -215,13 +178,8 @@ export function getSale(id: UUID): Sale | undefined {
 }
 
 export function createSale(input: {
-  customerId?: UUID | null;
-  lines: CartLine[];
-  paidAmount: number;
-  paymentMethod: PaymentMethod;
-  notes?: string | null;
-  allowNegativeStock?: boolean;
-  createdBy?: UUID | null;
+  customerId?: UUID | null; lines: CartLine[]; paidAmount: number; paymentMethod: PaymentMethod;
+  notes?: string | null; allowNegativeStock?: boolean; createdBy?: UUID | null;
 }): { sale: Sale; payment: Payment | null; errors: string[] } {
   assertPermission("sales.create");
   const errors = validateCart(input.lines, { allowNegativeStock: input.allowNegativeStock });
@@ -229,9 +187,7 @@ export function createSale(input: {
     for (const line of input.lines) {
       const live = getProduct(line.productId);
       if (!live) errors.push(`Product not found: ${line.productName}`);
-      else if (line.quantity > live.stockQuantity) {
-        errors.push(`${live.name}: insufficient stock (available ${live.stockQuantity})`);
-      }
+      else if (line.quantity > live.stockQuantity) errors.push(`${live.name}: insufficient stock (available ${live.stockQuantity})`);
     }
   }
   if (errors.length) return { sale: null as unknown as Sale, payment: null, errors };
@@ -240,36 +196,17 @@ export function createSale(input: {
   const allocation = allocatePayment(totals.grandTotal, input.paidAmount);
   const invoiceNumber = nextInvoiceNumber(lastInvoice);
   lastInvoice = invoiceNumber;
-
   const saleId = generateId();
-  const items: SaleItem[] = input.lines.map((line) =>
-    cartLineToSaleItem(line, saleId, generateId())
-  );
-
+  const items: SaleItem[] = input.lines.map((line) => cartLineToSaleItem(line, saleId, generateId()));
   const customer = input.customerId ? getCustomer(input.customerId) : undefined;
-
   const sale: Sale = {
-    id: saleId,
-    invoiceNumber,
-    customerId: input.customerId ?? null,
-    customerName: customer?.name ?? null,
-    saleDate: nowISO(),
-    subtotal: totals.itemsSubtotal,
-    discountAmount: totals.itemsDiscount,
-    taxAmount: totals.itemsTax,
-    total: allocation.total,
-    paidAmount: allocation.paidAmount,
-    balanceAmount: allocation.balanceAmount,
-    status: allocation.status === "draft" ? "draft" : allocation.status,
-    notes: input.notes ?? null,
-    items,
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
-    createdBy: input.createdBy ?? null,
-    version: 1,
+    id: saleId, invoiceNumber, customerId: input.customerId ?? null, customerName: customer?.name ?? null,
+    saleDate: nowISO(), subtotal: totals.itemsSubtotal, discountAmount: totals.itemsDiscount, taxAmount: totals.itemsTax,
+    total: allocation.total, paidAmount: allocation.paidAmount, balanceAmount: allocation.balanceAmount,
+    status: allocation.status === "draft" ? "draft" : allocation.status, notes: input.notes ?? null, items,
+    createdAt: nowISO(), updatedAt: nowISO(), createdBy: input.createdBy ?? null, version: 1,
   };
 
-  // Deduct stock
   for (const line of input.lines) {
     const p = getProduct(line.productId);
     if (p) {
@@ -278,12 +215,9 @@ export function createSale(input: {
     }
   }
 
-  // Update customer totals
   if (customer) {
     customer.totalSpending = round2(customer.totalSpending + allocation.paidAmount);
-    if (allocation.balanceAmount > 0) {
-      customer.outstandingBalance = round2(customer.outstandingBalance + allocation.balanceAmount);
-    }
+    if (allocation.balanceAmount > 0) customer.outstandingBalance = round2(customer.outstandingBalance + allocation.balanceAmount);
     customer.updatedAt = nowISO();
   }
 
@@ -293,17 +227,12 @@ export function createSale(input: {
   let payment: Payment | null = null;
   if (allocation.paidAmount > 0) {
     payment = {
-      id: generateId(),
-      amount: allocation.paidAmount,
-      method: input.paymentMethod,
-      referenceType: "sale",
-      referenceId: saleId,
-      customerId: input.customerId ?? null,
-      paidAt: nowISO(),
-      createdAt: nowISO(),
-      version: 1,
+      id: generateId(), amount: allocation.paidAmount, method: input.paymentMethod,
+      referenceType: "sale", referenceId: saleId, customerId: input.customerId ?? null,
+      paidAt: nowISO(), createdAt: nowISO(), version: 1,
     };
     payments.push(payment);
+    touchPersistence();
   }
 
   void remoteCreateSale(sale);
@@ -321,44 +250,18 @@ function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-
-/** Replace core commerce collections from a snapshot (persistence bootstrap). */
 export function hydrateCore(data: {
-  customers?: Customer[];
-  products?: Product[];
-  categories?: Category[];
-  sales?: Sale[];
-  payments?: Payment[];
+  customers?: Customer[]; products?: Product[]; categories?: Category[]; sales?: Sale[]; payments?: Payment[];
 }) {
-  if (data.categories) {
-    categories.length = 0;
-    categories.push(...data.categories);
-  }
-  if (data.customers) {
-    customers.length = 0;
-    customers.push(...data.customers);
-  }
-  if (data.products) {
-    products.length = 0;
-    products.push(...data.products);
-  }
-  if (data.sales) {
-    sales.length = 0;
-    sales.push(...data.sales);
-  }
-  if (data.payments) {
-    payments.length = 0;
-    payments.push(...data.payments);
-  }
+  if (data.categories) { categories.length = 0; categories.push(...data.categories); }
+  if (data.customers) { customers.length = 0; customers.push(...data.customers); }
+  if (data.products) { products.length = 0; products.push(...data.products); }
+  if (data.sales) { sales.length = 0; sales.push(...data.sales); }
+  if (data.payments) { payments.length = 0; payments.push(...data.payments); }
 }
 
-
 export function recordCustomerPayment(input: {
-  customerId: UUID;
-  amount: number;
-  method: PaymentMethod;
-  reference?: string | null;
-  notes?: string | null;
+  customerId: UUID; amount: number; method: PaymentMethod; reference?: string | null; notes?: string | null;
 }): { payment: Payment | null; customer: Customer | null; errors: string[] } {
   assertPermission("payments.collect");
   const errors: string[] = [];
@@ -373,16 +276,8 @@ export function recordCustomerPayment(input: {
   customer.updatedAt = nowISO();
 
   const payment: Payment = {
-    id: generateId(),
-    amount: applied,
-    method: input.method,
-    referenceType: "other",
-    referenceId: customer.id,
-    customerId: customer.id,
-    notes: input.notes ?? input.reference ?? null,
-    paidAt: nowISO(),
-    createdAt: nowISO(),
-    version: 1,
+    id: generateId(), amount: applied, method: input.method, referenceType: "other", referenceId: customer.id,
+    customerId: customer.id, notes: input.notes ?? input.reference ?? null, paidAt: nowISO(), createdAt: nowISO(), version: 1,
   };
   payments.push(payment);
   touchPersistence();
