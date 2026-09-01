@@ -36,6 +36,16 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @minarvabiz/desktop typecheck
       - run: pnpm --filter @minarvabiz/desktop build:renderer
+      - name: Inspect generated renderer CSS
+        shell: bash
+        run: |
+          css=$(find apps/desktop/dist -type f -name '*.css' | head -n 1)
+          test -n "$css"
+          echo "CSS bundle: $css"
+          for token in '.bg-blue-500' '.bg-emerald-500' '.bg-violet-500' '.text-white'; do
+            grep -q "$token" "$css" || { echo "Missing expected CSS token: $token"; exit 1; }
+          done
+          echo "Expected Tailwind color utilities are present in the production CSS bundle."
       - run: pnpm --filter @minarvabiz/desktop build:electron
 
   windows-package:
