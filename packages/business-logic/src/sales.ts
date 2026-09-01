@@ -33,11 +33,7 @@ export function calculateCartTotals(lines: CartLine[]): CartTotals {
   };
 }
 
-export function cartLineToSaleItem(
-  line: CartLine,
-  saleId: string,
-  itemId: string
-): SaleItem {
+export function cartLineToSaleItem(line: CartLine, saleId: string, itemId: string): SaleItem {
   const calc = calculateLineItem({
     quantity: line.quantity,
     unitPrice: line.unitPrice,
@@ -87,10 +83,7 @@ export function saleCostOfGoods(items: Array<{ quantity: number; costPrice: numb
   return roundMoney(items.reduce((s, i) => s + i.quantity * i.costPrice, 0));
 }
 
-export function saleGrossProfit(
-  total: number,
-  items: Array<{ quantity: number; costPrice: number }>
-): number {
+export function saleGrossProfit(total: number, items: Array<{ quantity: number; costPrice: number }>): number {
   return subtractMoney(total, saleCostOfGoods(items));
 }
 
@@ -98,10 +91,7 @@ export function saleGrossProfit(
  * Validate cart before completing sale.
  * Returns list of error messages (empty = valid).
  */
-export function validateCart(
-  lines: CartLine[],
-  options?: { allowNegativeStock?: boolean }
-): string[] {
+export function validateCart(lines: CartLine[], options?: { allowNegativeStock?: boolean }): string[] {
   const errors: string[] = [];
   if (lines.length === 0) errors.push("Cart is empty");
   for (const line of lines) {
@@ -114,15 +104,18 @@ export function validateCart(
   return errors;
 }
 
+/**
+ * Generate a daily invoice number. Sequence is reset for a new calendar day,
+ * and a persisted previous invoice can safely be used after an app restart.
+ */
 export function nextInvoiceNumber(lastNumber: string | null, prefix = "INV"): string {
-  const year = new Date().getFullYear().toString().slice(-2);
-  const month = String(new Date().getMonth() + 1).padStart(2, "0");
-  const day = String(new Date().getDate()).padStart(2, "0");
+  const now = new Date();
+  const dateKey = `${now.getFullYear().toString().slice(-2)}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const currentPrefix = `${prefix}-${dateKey}-`;
   let seq = 1;
-  if (lastNumber) {
-    const parts = lastNumber.split("-");
-    const last = parseInt(parts[parts.length - 1] ?? "0", 10);
-    if (!Number.isNaN(last)) seq = last + 1;
+  if (lastNumber?.startsWith(currentPrefix)) {
+    const last = parseInt(lastNumber.slice(currentPrefix.length), 10);
+    if (Number.isFinite(last) && last >= 0) seq = last + 1;
   }
-  return `${prefix}-${year}${month}${day}-${String(seq).padStart(4, "0")}`;
+  return `${currentPrefix}${String(seq).padStart(4, "0")}`;
 }
