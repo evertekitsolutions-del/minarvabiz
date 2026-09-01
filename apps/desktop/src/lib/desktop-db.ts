@@ -3,15 +3,14 @@
  * All business operations go through this UoW in production desktop mode.
  */
 
+import type { UnitOfWork } from "@minarvabiz/database";
 import {
   openSqliteDatabase,
   createSqliteUnitOfWork,
-  backupSqliteFile,
-  restoreSqliteFile,
   nodeFileIO,
-  type UnitOfWork,
   type SqliteDatabase,
-} from "@minarvabiz/database";
+} from "@minarvabiz/database/adapters/sqlite";
+import { backupSqliteFile, restoreSqliteFile } from "@minarvabiz/database/adapters/sqlite-files";
 
 let sqlite: SqliteDatabase | null = null;
 let uow: UnitOfWork | null = null;
@@ -34,7 +33,7 @@ export function getSqlitePath(): string | null {
 export function backupDesktopDb(destPath: string): boolean {
   if (!sqlite) return false;
   sqlite.save();
-  return backupSqliteFile(sqlite.path, destPath, nodeFileIO());
+  return backupSqliteFile(sqlite.path, destPath);
 }
 
 export function restoreDesktopDb(backupPath: string, dbPath: string): boolean {
@@ -43,7 +42,7 @@ export function restoreDesktopDb(backupPath: string, dbPath: string): boolean {
     sqlite = null;
     uow = null;
   }
-  return restoreSqliteFile(backupPath, dbPath, nodeFileIO());
+  return restoreSqliteFile(backupPath, dbPath);
 }
 
 export async function reopenAfterRestore(dbPath: string): Promise<UnitOfWork> {
