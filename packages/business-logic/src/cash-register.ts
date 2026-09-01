@@ -59,13 +59,24 @@ export function refreshCashSession(businessDate?: string): CashRegisterSession |
   if (!s) return null;
   const day = s.businessDate;
   const sales = mainStore.listSales().filter((x) => x.saleDate.slice(0, 10) === day);
-  let cashSales = 0;
-  let cashReceived = 0;
-  for (const sale of sales) {
-    // approximate: paid amount on cash method payments linked to sale
-    cashSales = round2(cashSales + sale.total);
-    cashReceived = round2(cashReceived + sale.paidAmount);
-  }
+  const payments = mainStore.listPayments().filter((p) => p.paidAt.slice(0, 10) === day);
+  const cashPayments = payments.filter((p) => p.method === "cash");
+
+  // Cash received must be based on actual cash payment records, not the
+  // sale's total/paidAmount, because card/UPI payments do not enter the drawer.
+  const cashReceived = round2(cashPayments.reduce((sum, p) => sum + p.amount, 0));
+
+  // cashSales is the value of sales whose recorded sale payment was cash.
+  // This remains informational; expectedClosing is driven by cashReceived.
+  const cashSaleIds = new Set(
+    cashPayments
+      .filter((p) => p.referenceType === "sale" && !!p.referenceId)
+      .map((p) => p.referenceId as string)
+  );
+  const cashSales = round2(
+    sales.filter((sale) => cashSaleIds.has(sale.id)).reduce((sum, sale) => sum + sale.total, 0)
+  );
+
   const expenses = phase5.listExpenses().filter((e) => e.date === day);
   const cashExpenses = round2(
     expenses.filter((e) => (e.paymentMethod || "cash") === "cash").reduce((a, e) => a + e.amount, 0)
