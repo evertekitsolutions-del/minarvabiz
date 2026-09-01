@@ -3,7 +3,6 @@ export * from "./repository";
 export * from "./adapters/memory";
 export * from "./adapters/file-json";
 export * from "./adapters/supabase";
-export * from "./adapters/sqlite-browser";
 export * from "./sql/sqlite-ddl";
 export * from "./sql/postgres-ddl";
 export * from "./auth";
