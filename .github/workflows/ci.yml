@@ -7,13 +7,11 @@ on:
     branches: [main]
 
 jobs:
-  typecheck-build:
+  web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -21,3 +19,36 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
       - run: pnpm --filter @minarvabiz/web build
+
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter @minarvabiz/desktop typecheck
+      - run: pnpm --filter @minarvabiz/desktop build:renderer
+      - run: pnpm --filter @minarvabiz/desktop build:electron
+
+  windows-package:
+    runs-on: windows-latest
+    needs: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter @minarvabiz/desktop run package:win
+      - name: Verify installer exists
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
+          if (-not $installer) { throw "Windows installer was not produced." }
+          Write-Host "Installer: $($installer.FullName)"
