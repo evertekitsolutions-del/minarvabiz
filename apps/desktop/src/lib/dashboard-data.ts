@@ -8,16 +8,29 @@ import {
   ordersStore,
 } from "@minarvabiz/business-logic";
 import { formatMoney } from "@minarvabiz/utils";
+import type { DashboardData } from "@minarvabiz/ui";
+import type { RecentOrderRow } from "@minarvabiz/ui";
 
-export async function fetchDashboardData() {
+const toStatusBadge = (status: string): RecentOrderRow["status"] => {
+  switch (status) {
+    case "ready_to_deliver": return "ready";
+    case "pending": return "pending";
+    case "processing": return "processing";
+    case "delivered": return "delivered";
+    case "cancelled": return "cancelled";
+    default: return "pending";
+  }
+};
+
+export async function fetchDashboardData(): Promise<DashboardData> {
   const metrics = collectLiveDashboardMetrics();
   const shaped = shapeDashboardStats(metrics);
-  const recentOrders = ordersStore.listOrders().slice(0, 6).map((o) => ({
+  const recentOrders: RecentOrderRow[] = ordersStore.listOrders().slice(0, 6).map((o) => ({
     id: o.id,
     orderNo: o.orderNumber,
     customer: o.customerName || "—",
     type: String(o.serviceType),
-    status: o.status === "ready_to_deliver" ? "ready" : o.status,
+    status: toStatusBadge(String(o.status)),
     dueDate: o.deliveryDate || "—",
   }));
   const lowStock = store
@@ -28,10 +41,7 @@ export async function fetchDashboardData() {
 
   return {
     stats: shaped.stats,
-    salesSeries: store.listSales().slice(0, 7).reverse().map((s, i) => ({
-      label: `D${i + 1}`,
-      value: s.total,
-    })),
+    salesSeries: store.listSales().slice(0, 7).reverse().map((s, i) => ({ label: `D${i + 1}`, value: s.total })),
     businessSummary: shaped.businessSummary,
     netProfit: shaped.netProfit,
     orderStatus: shaped.orderStatus,
