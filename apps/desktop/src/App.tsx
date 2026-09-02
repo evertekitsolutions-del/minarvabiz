@@ -1,7 +1,7 @@
 import * as React from "react";
 import {
   AppShell, Dashboard, CustomerList, ProductList, PosBilling, SalesList,
-  OrderList, OrderForm, emptyOrderForm, OrderDetail, LaundryList,
+  OrderList, OrderForm, emptyOrderForm, OrderDetail, LaundryList, LaundryForm,
   ExpenseList, PurchaseList, StaffList, NotificationCenter, ReportsPanel,
   BackupPanel, Modal, Button, FormField, inputClass,
   type QuickAction, type NavItemId, type DashboardData, type OrderFormValues,
@@ -38,6 +38,8 @@ export function App() {
   const [custForm, setCustForm] = React.useState({ name: "", phone: "", email: "" });
   const [lowStockOnly, setLowStockOnly] = React.useState(false);
   const [moduleTick, setModuleTick] = React.useState(0);
+  const [laundryMode, setLaundryMode] = React.useState<"outsourced" | "in_house_ironing" | null>(null);
+  const [laundryError, setLaundryError] = React.useState<string | null>(null);
 
   const refreshAll = React.useCallback(() => {
     setCustomers(store.listCustomers());
@@ -61,11 +63,13 @@ export function App() {
       const result = await bootstrapDesktopSqlite();
       if (cancelled) return;
       if (!result.ok) { setDbError(result.error || "SQLite failed to initialize"); return; }
-      setDbReady(true); fetchDashboardData().then(setDash); refreshAll();
+      setDbReady(true);
+      fetchDashboardData().then(setDash);
     })();
     return () => { cancelled = true; };
-  }, [refreshAll]);
+  }, []);
 
+  React.useEffect(() => { if (dbReady) refreshAll(); }, [dbReady, refreshAll]);
   React.useEffect(() => { if (dbReady) fetchDashboardData().then(setDash); }, [dbReady, moduleTick]);
 
   if (dbError) return <div style={{ padding: 32, fontFamily: "system-ui", maxWidth: 560 }}><h1>Database required</h1><p>Minarva Biz Offline cannot start without SQLite.</p><pre>{dbError}</pre></div>;
@@ -87,6 +91,13 @@ export function App() {
     setCreateOpen(false); setForm(emptyOrderForm()); setFormError(null); persistAndRefresh(); setSelectedOrder(result.order);
   }
 
+  function handleCreateLaundry(data: { customerId: string; garment: string; quantity: number; supplierId: string | null; supplierRate: number; customerRate: number; paidAmount: number; notes: string }) {
+    if (!laundryMode) return;
+    const result = phase5Store.createLaundryOrder({ ...data, mode: laundryMode, paymentMethod: "cash" });
+    if (result.errors.length || !result.order) { setLaundryError(result.errors.join("; ") || "Failed to create laundry ticket"); return; }
+    setLaundryMode(null); setLaundryError(null); persistAndRefresh();
+  }
+
   const navTo = (id: NavItemId) => { setActiveNav(id); setSelectedOrder(null); };
   const laundry = phase5Store.listLaundryOrders();
   const expenses = phase5Store.listExpenses();
@@ -98,13 +109,14 @@ export function App() {
   const reportStock = phase7Store.stockReport();
   const reportOutstanding = phase7Store.outstandingPaymentsReport();
   const backups = phase7Store.listBackups();
+  const suppliers = phase5Store.listSuppliers();
 
   return <AppShell activeNav={activeNav} onNavigate={(_href, id) => navTo(id)} sidebar={{ user: { name: "Admin", role: "Super Admin" }, logoSrc: "logo-mark.png" }} header={{ showSearch: activeNav !== "dashboard", title: activeNav === "services" ? "Services & Orders" : activeNav, subtitle: "Welcome back, Admin!", notificationCount: phase6Store.unreadNotificationCount(), messageCount: 3 }}>
     {activeNav === "dashboard" && dash && <Dashboard data={dash} quickActions={actions} />}
     {activeNav === "customers" && <><CustomerList customers={customers} onAdd={() => setCustOpen(true)} onSearch={(q) => setCustomers(store.listCustomers(q))} /><Modal open={custOpen} title="Add Customer" onClose={() => setCustOpen(false)} footer={<><Button variant="outline" onClick={() => setCustOpen(false)}>Cancel</Button><Button onClick={() => { const r = store.createCustomer(custForm); if (r) { setCustOpen(false); setCustForm({ name: "", phone: "", email: "" }); persistAndRefresh(); } }}>Save</Button></>}><div className="space-y-3"><FormField label="Name"><input className={inputClass} value={custForm.name} onChange={(e) => setCustForm({ ...custForm, name: e.target.value })} /></FormField><FormField label="Phone"><input className={inputClass} value={custForm.phone} onChange={(e) => setCustForm({ ...custForm, phone: e.target.value })} /></FormField></div></Modal></>}
     {activeNav === "sales" && <div className="space-y-4"><div className="flex gap-2"><Button variant={salesTab === "pos" ? "primary" : "outline"} onClick={() => setSalesTab("pos")}>New Sale</Button><Button variant={salesTab === "history" ? "primary" : "outline"} onClick={() => setSalesTab("history")}>History</Button></div>{salesTab === "pos" && <PosBilling products={products} customers={customers} onCompleteSale={handleSale} onFindByBarcode={(c) => store.getProductByBarcode(c)} />}{salesTab === "history" && <SalesList sales={sales} />}</div>}
     {activeNav === "services" && <><>{!selectedOrder && <OrderList orders={orders} onAdd={() => { setForm(emptyOrderForm()); setCreateOpen(true); }} onSearch={setOrderQuery} onFilterStatus={setOrderStatus} onFilterType={setOrderType} onSelect={setSelectedOrder} />}</><>{selectedOrder && <OrderDetail order={selectedOrder} onStatusChange={(s) => { const res = ordersStore.updateOrderStatus(selectedOrder.id, s); if (res.order) { setSelectedOrder(res.order); persistAndRefresh(); } }} onAddExpense={(d, a) => { const res = ordersStore.addOrderExpense(selectedOrder.id, d, a); if (res.order) { setSelectedOrder(res.order); persistAndRefresh(); } }} onClose={() => setSelectedOrder(null)} />}</><Modal open={createOpen} title="New Service Order" onClose={() => setCreateOpen(false)} className="max-w-2xl"><OrderForm customers={customers} profiles={profiles} value={form} onChange={setForm} onLoadProfiles={(id) => setProfiles(id ? ordersStore.listMeasurementProfiles(id) : [])} onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} error={formError} /></Modal></>}
-    {activeNav === "laundry" && <LaundryList key={moduleTick} orders={laundry} onAddOutsourced={() => navTo("laundry")} onAddIroning={() => navTo("laundry")} />}
+    {activeNav === "laundry" && <><LaundryList key={moduleTick} orders={laundry} onAddOutsourced={() => { setLaundryError(null); setLaundryMode("outsourced"); }} onAddIroning={() => { setLaundryError(null); setLaundryMode("in_house_ironing"); }} /><Modal open={laundryMode !== null} title={laundryMode === "outsourced" ? "Outsourced Laundry" : "In-house Ironing"} onClose={() => setLaundryMode(null)} className="max-w-2xl"><LaundryForm mode={laundryMode || "in_house_ironing"} customers={customers} suppliers={suppliers} onSubmit={handleCreateLaundry} onCancel={() => setLaundryMode(null)} error={laundryError} /></Modal></>}
     {activeNav === "expenses" && <div className="space-y-6"><ExpenseList expenses={expenses} onAdd={() => navTo("expenses")} /><PurchaseList purchases={purchases} onAdd={() => navTo("expenses")} /></div>}
     {activeNav === "staff" && <StaffList staff={staff} onAdd={() => navTo("staff")} />}
     {activeNav === "reports" && <ReportsPanel key={moduleTick} salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} onRefresh={persistAndRefresh} />}
