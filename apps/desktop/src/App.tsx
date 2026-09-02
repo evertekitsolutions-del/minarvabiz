@@ -6,13 +6,13 @@ import {
   BackupPanel, Modal, Button, FormField, inputClass,
   type QuickAction, type NavItemId, type DashboardData, type OrderFormValues,
 } from "@minarvabiz/ui";
-import { store, ordersStore } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, exportDomainSnapshot, scheduleAutoSave } from "@minarvabiz/business-logic";
 import type {
   Customer, Product, Category, Sale, CartLine, PaymentMethod,
   ServiceOrder, MeasurementProfile, ServiceType, OrderStatus,
 } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
-import { bootstrapDesktopSqlite } from "./lib/sqlite-bootstrap";
+import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
 
 function ModuleCard({ title, description }: { title: string; description: string }) {
   return (
@@ -45,6 +45,7 @@ export function App() {
   const [custOpen, setCustOpen] = React.useState(false);
   const [custForm, setCustForm] = React.useState({ name: "", phone: "", email: "" });
   const [lowStockOnly, setLowStockOnly] = React.useState(false);
+  const [moduleTick, setModuleTick] = React.useState(0);
 
   const refreshAll = React.useCallback(() => {
     setCustomers(store.listCustomers());
@@ -56,7 +57,13 @@ export function App() {
       status: orderStatus ?? undefined,
       serviceType: orderType ?? undefined,
     }));
+    setModuleTick((v) => v + 1);
   }, [lowStockOnly, orderQuery, orderStatus, orderType]);
+
+  const persistAndRefresh = React.useCallback(() => {
+    refreshAll();
+    try { persistDomainToSqlite(); } catch { scheduleAutoSave(250); }
+  }, [refreshAll]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -81,6 +88,11 @@ export function App() {
     return () => { cancelled = true; };
   }, [refreshAll]);
 
+  React.useEffect(() => {
+    if (!dbReady) return;
+    fetchDashboardData().then(setDash);
+  }, [dbReady, moduleTick]);
+
   if (dbError) return <div style={{ padding: 32, fontFamily: "system-ui", maxWidth: 560 }}><h1>Database required</h1><p>Minarva Biz Offline cannot start without SQLite.</p><pre>{dbError}</pre></div>;
   if (!dbReady) return <div style={{ padding: 48, fontFamily: "system-ui", textAlign: "center" }}><p>Initializing SQLite database…</p></div>;
 
@@ -92,7 +104,7 @@ export function App() {
   function handleSale(payload: { customerId: string | null; lines: CartLine[]; paidAmount: number; paymentMethod: PaymentMethod }) {
     const result = store.createSale(payload);
     if (result.errors.length) return { success: false, errors: result.errors };
-    refreshAll();
+    persistAndRefresh();
     return { success: true, invoiceNumber: result.sale.invoiceNumber };
   }
 
@@ -117,36 +129,47 @@ export function App() {
       tshirt: form.serviceType === "tshirt_printing" ? form.tshirt : null,
     });
     if (result.errors.length || !result.order) { setFormError(result.errors.join("; ") || "Failed"); return; }
-    setCreateOpen(false); setForm(emptyOrderForm()); setFormError(null); refreshAll(); setSelectedOrder(result.order);
+    setCreateOpen(false); setForm(emptyOrderForm()); setFormError(null); persistAndRefresh(); setSelectedOrder(result.order);
   }
 
   const navTo = (id: NavItemId) => { setActiveNav(id); setSelectedOrder(null); };
+
+  const laundry = phase5Store.listLaundryOrders();
+  const expenses = phase5Store.listExpenses();
+  const purchases = phase5Store.listPurchases();
+  const staff = phase6Store.listStaff();
+  const notifications = phase6Store.listNotifications();
+  const reportSales = phase7Store.salesReport();
+  const reportDayEnd = phase7Store.dayEndReport();
+  const reportStock = phase7Store.stockReport();
+  const reportOutstanding = phase7Store.outstandingPaymentsReport();
+  const backups = phase7Store.listBackups();
 
   return <AppShell
     activeNav={activeNav}
     onNavigate={(_href, id) => navTo(id)}
     sidebar={{ user: { name: "Admin", role: "Super Admin" }, logoSrc: "logo-mark.png" }}
-    header={{ showSearch: activeNav !== "dashboard", title: activeNav === "services" ? "Services & Orders" : activeNav, subtitle: "Welcome back, Admin!", notificationCount: 6, messageCount: 3 }}
+    header={{ showSearch: activeNav !== "dashboard", title: activeNav === "services" ? "Services & Orders" : activeNav, subtitle: "Welcome back, Admin!", notificationCount: phase6Store.unreadNotificationCount(), messageCount: 3 }}
   >
     {activeNav === "dashboard" && dash && <Dashboard data={dash} quickActions={actions} />}
 
     {activeNav === "customers" && <>
       <CustomerList customers={customers} onAdd={() => setCustOpen(true)} onSearch={(q) => setCustomers(store.listCustomers(q))} />
-      <Modal open={custOpen} title="Add Customer" onClose={() => setCustOpen(false)} footer={<><Button variant="outline" onClick={() => setCustOpen(false)}>Cancel</Button><Button onClick={() => { store.createCustomer(custForm); setCustOpen(false); refreshAll(); }}>Save</Button></>}>
+      <Modal open={custOpen} title="Add Customer" onClose={() => setCustOpen(false)} footer={<><Button variant="outline" onClick={() => setCustOpen(false)}>Cancel</Button><Button onClick={() => { const r = store.createCustomer(custForm); if (r) { setCustOpen(false); setCustForm({ name: "", phone: "", email: "" }); persistAndRefresh(); } }}>Save</Button></>}>
         <div className="space-y-3"><FormField label="Name"><input className={inputClass} value={custForm.name} onChange={(e) => setCustForm({ ...custForm, name: e.target.value })} /></FormField><FormField label="Phone"><input className={inputClass} value={custForm.phone} onChange={(e) => setCustForm({ ...custForm, phone: e.target.value })} /></FormField></div>
       </Modal>
     </>}
 
     {activeNav === "sales" && <div className="space-y-4"><div className="flex gap-2"><Button variant={salesTab === "pos" ? "primary" : "outline"} onClick={() => setSalesTab("pos")}>New Sale</Button><Button variant={salesTab === "history" ? "primary" : "outline"} onClick={() => setSalesTab("history")}>History</Button></div>{salesTab === "pos" && <PosBilling products={products} customers={customers} onCompleteSale={handleSale} onFindByBarcode={(c) => store.getProductByBarcode(c)} />}{salesTab === "history" && <SalesList sales={sales} />}</div>}
 
-    {activeNav === "services" && <><>{!selectedOrder && <OrderList orders={orders} onAdd={() => { setForm(emptyOrderForm()); setCreateOpen(true); }} onSearch={setOrderQuery} onFilterStatus={setOrderStatus} onFilterType={setOrderType} onSelect={setSelectedOrder} />}</><>{selectedOrder && <OrderDetail order={selectedOrder} onStatusChange={(s) => { const res = ordersStore.updateOrderStatus(selectedOrder.id, s); if (res.order) { setSelectedOrder(res.order); refreshAll(); } }} onAddExpense={(d, a) => { const res = ordersStore.addOrderExpense(selectedOrder.id, d, a); if (res.order) { setSelectedOrder(res.order); refreshAll(); } }} onClose={() => setSelectedOrder(null)} />}</><Modal open={createOpen} title="New Service Order" onClose={() => setCreateOpen(false)} className="max-w-2xl"><OrderForm customers={customers} profiles={profiles} value={form} onChange={setForm} onLoadProfiles={(id) => setProfiles(id ? ordersStore.listMeasurementProfiles(id) : [])} onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} error={formError} /></Modal></>}
+    {activeNav === "services" && <><>{!selectedOrder && <OrderList orders={orders} onAdd={() => { setForm(emptyOrderForm()); setCreateOpen(true); }} onSearch={setOrderQuery} onFilterStatus={setOrderStatus} onFilterType={setOrderType} onSelect={setSelectedOrder} />}</><>{selectedOrder && <OrderDetail order={selectedOrder} onStatusChange={(s) => { const res = ordersStore.updateOrderStatus(selectedOrder.id, s); if (res.order) { setSelectedOrder(res.order); persistAndRefresh(); } }} onAddExpense={(d, a) => { const res = ordersStore.addOrderExpense(selectedOrder.id, d, a); if (res.order) { setSelectedOrder(res.order); persistAndRefresh(); } }} onClose={() => setSelectedOrder(null)} />}</><Modal open={createOpen} title="New Service Order" onClose={() => setCreateOpen(false)} className="max-w-2xl"><OrderForm customers={customers} profiles={profiles} value={form} onChange={setForm} onLoadProfiles={(id) => setProfiles(id ? ordersStore.listMeasurementProfiles(id) : [])} onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} error={formError} /></Modal></>}
 
-    {activeNav === "laundry" && <LaundryList orders={[]} onAddOutsourced={() => {}} onAddIroning={() => {}} />}
-    {activeNav === "expenses" && <div className="space-y-6"><ExpenseList expenses={[]} onAdd={() => {}} /><PurchaseList purchases={[]} onAdd={() => {}} /></div>}
-    {activeNav === "staff" && <StaffList staff={[]} onAdd={() => {}} />}
-    {activeNav === "reports" && <ReportsPanel salesRows={[]} dayEnd={{ totalSales: 0, totalExpenses: 0, costOfGoods: 0, serviceRevenue: 0, serviceExpenses: 0, grossProfit: 0, netProfit: 0, cashReceived: 0, cardPayments: 0, otherPayments: 0, outstandingAmount: 0 }} stock={[]} outstanding={[]} />}
-    {activeNav === "sms" && <NotificationCenter notifications={[]} />}
-    {activeNav === "backup" && <BackupPanel backups={[]} onCreate={() => {}} onVerify={() => false} onDownload={() => {}} onInspect={() => ({ ok: true, summary: {} })} />}
+    {activeNav === "laundry" && <LaundryList key={moduleTick} orders={laundry} onAddOutsourced={() => navTo("laundry")} onAddIroning={() => navTo("laundry")} />}
+    {activeNav === "expenses" && <div className="space-y-6"><ExpenseList expenses={expenses} onAdd={() => navTo("expenses")} /><PurchaseList purchases={purchases} onAdd={() => navTo("expenses")} /></div>}
+    {activeNav === "staff" && <StaffList staff={staff} onAdd={() => navTo("staff")} />}
+    {activeNav === "reports" && <ReportsPanel key={moduleTick} salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} onRefresh={persistAndRefresh} />}
+    {activeNav === "sms" && <NotificationCenter key={moduleTick} notifications={notifications} />}
+    {activeNav === "backup" && <BackupPanel key={moduleTick} backups={backups} onCreate={() => { phase7Store.createBackup("manual"); persistAndRefresh(); }} onVerify={(id) => phase7Store.verifyBackup(id)} onDownload={(id) => { const payload = phase7Store.getBackupPayload(id); if (!payload) return; const blob = new Blob([payload], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = backups.find((b) => b.id === id)?.filename || "minarvabiz-backup.json"; a.click(); URL.revokeObjectURL(a.href); }} onInspect={(id) => phase7Store.inspectBackup(id)} />}
     {activeNav === "settings" && <ModuleCard title="Settings" description="Shop profile, tax, invoice, payment, notification and application settings will be managed here." />}
 
     {activeNav !== "dashboard" && activeNav !== "customers" && activeNav !== "sales" && activeNav !== "services" && activeNav !== "laundry" && activeNav !== "expenses" && activeNav !== "staff" && activeNav !== "reports" && activeNav !== "sms" && activeNav !== "backup" && activeNav !== "settings" && <ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={() => setLowStockOnly((v) => !v)} onSearch={(q) => setProducts(store.listProducts({ query: q, lowStockOnly }))} />}
