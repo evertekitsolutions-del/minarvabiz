@@ -14,14 +14,17 @@ export function purchaseBalance(amount: number, paidAmount: number) {
 }
 
 export function nextDocNumber(last: string | null, prefix: string): string {
-  const y = new Date().getFullYear().toString().slice(-2);
-  const m = String(new Date().getMonth() + 1).padStart(2, "0");
-  const d = String(new Date().getDate()).padStart(2, "0");
+  const now = new Date();
+  const y = now.getFullYear().toString().slice(-2);
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const dateKey = `${y}${m}${d}`;
   let seq = 1;
   if (last) {
     const parts = last.split("-");
+    const lastDate = parts.length >= 3 ? parts[1] : "";
     const n = parseInt(parts[parts.length - 1] ?? "0", 10);
-    if (!Number.isNaN(n)) seq = n + 1;
+    if (lastDate === dateKey && !Number.isNaN(n)) seq = n + 1;
   }
-  return `${prefix}-${y}${m}${d}-${String(seq).padStart(3, "0")}`;
+  return `${prefix}-${dateKey}-${String(seq).padStart(3, "0")}`;
 }
