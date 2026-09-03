@@ -272,7 +272,6 @@ export function recordCustomerPayment(input: {
 
   const applied = round2(Math.min(input.amount, customer.outstandingBalance || input.amount));
   customer.outstandingBalance = round2(Math.max(0, customer.outstandingBalance - applied));
-  customer.totalSpending = round2(customer.totalSpending + applied);
   customer.updatedAt = nowISO();
 
   const payment: Payment = {
@@ -281,6 +280,9 @@ export function recordCustomerPayment(input: {
   };
   payments.push(payment);
   touchPersistence();
+  enqueueOutbox("payments", payment.id, "insert", payment);
+  enqueueOutbox("customers", customer.id, "update", customer);
+  auditAction("customer.payment", "customers", customer.id, null, { amount: applied, method: input.method });
   return { payment, customer, errors: [] };
 }
 
