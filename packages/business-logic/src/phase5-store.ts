@@ -128,6 +128,7 @@ export function createLaundryOrder(input: {
   paidAmount?: number;
   paymentMethod?: PaymentMethod;
 }): { order: LaundryOrder | null; errors: string[] } {
+  assertPermission("orders.manage");
   const errors: string[] = [];
   if (!input.customerId) errors.push("Customer is required");
   if (input.quantity <= 0) errors.push("Quantity must be positive");
@@ -154,7 +155,6 @@ export function createLaundryOrder(input: {
   const orderNumber = nextDocNumber(lastLaundryNo, "LDY");
   lastLaundryNo = orderNumber;
 
-  assertPermission("orders.manage");
   const order: LaundryOrder = {
     id: generateId(),
     orderNumber,
@@ -208,6 +208,8 @@ export function updateLaundryStatus(
   o.status = status;
   o.updatedAt = nowISO();
   o.version += 1;
+  touchPersistence();
+  enqueueOutbox("laundry_orders", o.id, "update", o);
   return o;
 }
 
@@ -217,6 +219,7 @@ export function listExpenseCategories(): ExpenseCategory[] {
 }
 
 export function createExpenseCategory(name: string): ExpenseCategory {
+  assertPermission("expenses.manage");
   const c: ExpenseCategory = {
     id: generateId(),
     name,
@@ -224,6 +227,8 @@ export function createExpenseCategory(name: string): ExpenseCategory {
     createdAt: nowISO(),
   };
   expenseCategories.push(c);
+  touchPersistence();
+  enqueueOutbox("expense_categories", c.id, "insert", c);
   return c;
 }
 
@@ -242,6 +247,7 @@ export function createExpense(input: {
   reference?: string | null;
   orderId?: UUID | null;
 }): { expense: Expense | null; errors: string[] } {
+  assertPermission("expenses.manage");
   const errors: string[] = [];
   if (input.amount <= 0) errors.push("Amount must be positive");
   const cat = expenseCategories.find((c) => c.id === input.categoryId);
@@ -253,16 +259,14 @@ export function createExpense(input: {
     const order = ordersStore.getOrder(input.orderId);
     if (!order) return { expense: null, errors: ["Order not found"] };
     orderNumber = order.orderNumber;
-    // Link into order profit
     ordersStore.addOrderExpense(input.orderId, input.description || "Expense", input.amount);
   }
 
-  assertPermission("expenses.manage");
   const expense: Expense = {
     id: generateId(),
     date: input.date || nowISO(),
     categoryId: input.categoryId,
-    categoryName: cat!.name,
+    categoryName: cat.name,
     amount: r2(input.amount),
     paymentMethod: input.paymentMethod,
     description: input.description ?? null,
@@ -297,6 +301,7 @@ export function createPurchase(input: {
   orderId?: UUID | null;
   notes?: string | null;
 }): { purchase: Purchase | null; errors: string[] } {
+  assertPermission("purchases.manage");
   const errors: string[] = [];
   if (!input.description.trim()) errors.push("Description required");
   if (input.amount <= 0) errors.push("Amount must be positive");
@@ -313,17 +318,12 @@ export function createPurchase(input: {
     const order = ordersStore.getOrder(input.orderId);
     if (!order) return { purchase: null, errors: ["Order not found"] };
     orderNumber = order.orderNumber;
-    ordersStore.addOrderExpense(
-      input.orderId,
-      input.description || "Order purchase",
-      bal.amount
-    );
+    ordersStore.addOrderExpense(input.orderId, input.description || "Order purchase", bal.amount);
   }
 
   const purchaseNumber = nextDocNumber(lastPurchaseNo, "PUR");
   lastPurchaseNo = purchaseNumber;
 
-  assertPermission("purchases.manage");
   const purchase: Purchase = {
     id: generateId(),
     purchaseNumber,
@@ -359,7 +359,6 @@ function r2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-
 export function hydratePhase5(data: {
   suppliers?: Supplier[];
   laundryOrders?: LaundryOrder[];
@@ -388,4 +387,3 @@ export function hydratePhase5(data: {
     expenseCategories.push(...data.expenseCategories);
   }
 }
-
