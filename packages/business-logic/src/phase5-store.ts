@@ -266,7 +266,7 @@ export function createExpense(input: {
     id: generateId(),
     date: input.date || nowISO(),
     categoryId: input.categoryId,
-    categoryName: cat.name,
+    categoryName: cat!.name,
     amount: r2(input.amount),
     paymentMethod: input.paymentMethod,
     description: input.description ?? null,
