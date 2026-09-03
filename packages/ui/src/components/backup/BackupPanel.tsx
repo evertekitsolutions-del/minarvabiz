@@ -14,9 +14,9 @@ export function BackupPanel({
 }: {
   backups: BackupMeta[];
   onCreate: () => void;
-  onVerify: (id: string) => boolean;
+  onVerify: (id: string) => boolean | void;
   onDownload: (id: string) => void;
-  onInspect: (id: string) => { ok: boolean; summary?: Record<string, number>; error?: string };
+  onInspect: (id: string) => { ok: boolean; summary?: Record<string, number>; error?: string } | void;
 }) {
   const [message, setMessage] = React.useState<string | null>(null);
 
@@ -51,11 +51,11 @@ export function BackupPanel({
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" onClick={() => {
                   const ok = onVerify(b.id);
-                  setMessage(ok ? "Backup verified OK" : "Verification failed");
+                  setMessage(ok === undefined ? "Backup verification completed" : ok ? "Backup verified OK" : "Verification failed");
                 }}>Verify</Button>
                 <Button size="sm" variant="outline" onClick={() => {
                   const r = onInspect(b.id);
-                  setMessage(r.ok
+                  setMessage(r === undefined ? "Backup inspection completed" : r.ok
                     ? `Contains: ${Object.entries(r.summary || {}).map(([k, v]) => `${k}=${v}`).join(", ")}`
                     : r.error || "Invalid");
                 }}>Inspect</Button>
