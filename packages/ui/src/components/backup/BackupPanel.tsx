@@ -5,8 +5,21 @@ import type { BackupMeta } from "@minarvabiz/types";
 import { Button } from "../Button";
 import { Card, CardContent } from "../Card";
 
+type NativeBackup = BackupMeta;
+type NativeDesktopApi = {
+  listBackups?: () => Promise<NativeBackup[]>;
+  createManualBackup?: () => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
+  restoreBackup?: () => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
+  relaunch?: () => Promise<boolean>;
+};
+
+function desktopApi(): NativeDesktopApi | null {
+  if (typeof window === "undefined") return null;
+  return (window as Window & { minarvaDesktop?: NativeDesktopApi }).minarvaDesktop ?? null;
+}
+
 export function BackupPanel({
-  backups,
+  backups: fallbackBackups,
   onCreate,
   onVerify,
   onDownload,
@@ -20,14 +33,61 @@ export function BackupPanel({
   onInspect: (id: string) => { ok: boolean; summary?: Record<string, number>; error?: string } | void;
   onRestore: () => void | Promise<void>;
 }) {
+  const [nativeBackups, setNativeBackups] = React.useState<NativeBackup[] | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const native = desktopApi();
+
+  const refreshNative = React.useCallback(async () => {
+    if (!native?.listBackups) return;
+    setNativeBackups(await native.listBackups());
+  }, [native]);
+
+  React.useEffect(() => { void refreshNative(); }, [refreshNative]);
+
+  const backups = nativeBackups ?? fallbackBackups;
 
   const run = async (action: () => void | Promise<void>, success: string) => {
     setBusy(true);
-    try { await action(); setMessage(success); }
+    try { await action(); setMessage(success); await refreshNative(); }
     catch (e) { setMessage(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
+  };
+
+  const create = async () => {
+    if (native?.createManualBackup) {
+      const r = await native.createManualBackup();
+      if (r.cancelled) return;
+      if (!r.ok) throw new Error(r.error || "Backup failed");
+      await refreshNative();
+      return;
+    }
+    await onCreate();
+  };
+
+  const restore = async () => {
+    if (native?.restoreBackup) {
+      const r = await native.restoreBackup();
+      if (r.cancelled) return;
+      if (!r.ok) throw new Error(r.error || "Restore failed");
+      setMessage("Restore successful. Restarting Minarva Biz…");
+      await native.relaunch?.();
+      return;
+    }
+    await onRestore();
+  };
+
+  const download = async (id: string) => {
+    // Native SQLite backups are already real .db files. Opening Save dialog again
+    // creates a portable copy; the old JSON callback remains the web/fallback path.
+    if (native?.createManualBackup) {
+      const r = await native.createManualBackup();
+      if (r.cancelled) return;
+      setMessage(r.ok ? "Backup saved" : r.error || "Backup export failed");
+      await refreshNative();
+      return;
+    }
+    onDownload(id);
   };
 
   return (
@@ -38,8 +98,8 @@ export function BackupPanel({
           <p className="text-sm text-slate-500">Full local SQLite backups with a safety backup before restore</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" disabled={busy} onClick={() => run(onRestore, "Restore completed — restarting Minarva Biz")}>Restore backup</Button>
-          <Button disabled={busy} onClick={() => run(onCreate, "Backup created")}>Create backup</Button>
+          <Button variant="outline" disabled={busy} onClick={() => void run(restore, "Restore completed")}>Restore backup</Button>
+          <Button disabled={busy} onClick={() => void run(create, "Backup created")}>Create backup</Button>
         </div>
       </div>
 
@@ -69,7 +129,7 @@ export function BackupPanel({
                     ? `Contains: ${Object.entries(r.summary || {}).map(([k, v]) => `${k}=${v}`).join(", ")}`
                     : r.error || "Invalid");
                 }}>Inspect</Button>
-                <Button size="sm" onClick={() => onDownload(b.id)}>Download</Button>
+                <Button size="sm" onClick={() => void download(b.id)}>Download</Button>
               </div>
             </CardContent>
           </Card>
