@@ -16,16 +16,16 @@ export interface PlanLimits {
 /** Commercial plan ceilings — -1 means unlimited */
 export const PLAN_LIMITS: Record<LicensePlan, PlanLimits> = {
   trial: {
-    maxUsers: 1,
+    maxUsers: 10,
     maxDevices: 1,
-    maxBranches: 1,
-    maxProducts: 100,
-    maxCustomers: 100,
-    maxOrdersPerMonth: 200,
-    trialDays: 14,
-    graceDays: 3,
-    cloudSync: false,
-    multiBranch: false,
+    maxBranches: 3,
+    maxProducts: -1,
+    maxCustomers: -1,
+    maxOrdersPerMonth: -1,
+    trialDays: 30,
+    graceDays: 0,
+    cloudSync: true,
+    multiBranch: true,
   },
   basic: {
     maxUsers: 1,
