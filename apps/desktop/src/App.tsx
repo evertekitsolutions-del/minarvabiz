@@ -4,7 +4,9 @@ import {
   OrderList, OrderForm, emptyOrderForm, OrderDetail, LaundryList, LaundryForm,
   ExpenseList, PurchaseList, StaffList, NotificationCenter, ReportsPanel,
   BackupPanel, SettingsPanel, Modal, Button, FormField, inputClass, selectClass,
+  TrialGate,
   type QuickAction, type NavItemId, type DashboardData, type OrderFormValues,
+  type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
 import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings } from "@minarvabiz/business-logic";
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
@@ -18,6 +20,7 @@ function ModuleCard({ title, description }: { title: string; description: string
 export function App() {
   const [dbReady, setDbReady] = React.useState(false);
   const [dbError, setDbError] = React.useState<string | null>(null);
+  const [trialState, setTrialState] = React.useState<TrialState | null>(null);
   const [activeNav, setActiveNav] = React.useState<NavItemId>("dashboard");
   const [dash, setDash] = React.useState<DashboardData | null>(null);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
@@ -70,6 +73,9 @@ export function App() {
       const result = await bootstrapDesktopSqlite();
       if (cancelled) return;
       if (!result.ok) { setDbError(result.error || "SQLite failed to initialize"); return; }
+      const state = await window.minarvaDesktop.getTrialState();
+      if (cancelled) return;
+      setTrialState(state);
       setDbReady(true);
       fetchDashboardData().then(setDash);
     })();
@@ -79,8 +85,54 @@ export function App() {
   React.useEffect(() => { if (dbReady) refreshAll(); }, [dbReady, refreshAll]);
   React.useEffect(() => { if (dbReady) fetchDashboardData().then(setDash); }, [dbReady, moduleTick]);
 
+  React.useEffect(() => {
+    if (!trialState?.activated || trialState.synced || !trialState.registration) return;
+    const apiUrl = import.meta.env.VITE_LICENSE_API_URL as string | undefined;
+    if (!apiUrl || !window.minarvaDesktop) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const deviceId = await window.minarvaDesktop!.getDeviceId!();
+        const response = await fetch(`${apiUrl.replace(/\/$/, "")}/api/trial/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...trialState.registration, deviceId }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!cancelled && response.ok && payload.ok) {
+          await window.minarvaDesktop!.markTrialSynced();
+          setTrialState(await window.minarvaDesktop!.getTrialState());
+        }
+      } catch { /* offline: retry on a later launch/connect */ }
+    })();
+    return () => { cancelled = true; };
+  }, [trialState]);
+
+  async function activateTrial(registration: TrialRegistration): Promise<{ ok: boolean; error?: string }> {
+    if (!window.minarvaDesktop) return { ok: false, error: "Desktop security bridge is unavailable." };
+    const apiUrl = import.meta.env.VITE_LICENSE_API_URL as string | undefined;
+    if (apiUrl) {
+      try {
+        const deviceId = await window.minarvaDesktop.getDeviceId!();
+        const response = await fetch(`${apiUrl.replace(/\/$/, "")}/api/trial/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...registration, deviceId }) });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.ok) return { ok: false, error: payload.error || "Trial registration was not accepted." };
+        const local = await window.minarvaDesktop.activateTrial(registration);
+        if (!local.ok) return local;
+        if (payload.ok && window.minarvaDesktop.markTrialSynced) await window.minarvaDesktop.markTrialSynced();
+        setTrialState(await window.minarvaDesktop.getTrialState());
+        return { ok: true };
+      } catch { /* allow an offline first activation below */ }
+    }
+    const local = await window.minarvaDesktop.activateTrial(registration);
+    if (!local.ok) return local;
+    setTrialState(await window.minarvaDesktop.getTrialState());
+    return { ok: true };
+  }
+
   if (dbError) return <div style={{ padding: 32, fontFamily: "system-ui", maxWidth: 560 }}><h1>Database required</h1><p>Minarva Biz Offline cannot start without SQLite.</p><pre>{dbError}</pre></div>;
-  if (!dbReady) return <div style={{ padding: 48, fontFamily: "system-ui", textAlign: "center" }}><p>Initializing SQLite database…</p></div>;
+  if (!dbReady || !trialState) return <div style={{ padding: 48, fontFamily: "system-ui", textAlign: "center" }}><p>Initializing Minarva Biz…</p></div>;
+  if (trialState.status !== "active") return <TrialGate state={trialState} onActivate={activateTrial} />;
 
   const actions: QuickAction[] = [
     { id: "sale", label: "New Sale", description: "Create Invoice", icon: <span>🛒</span>, tone: "blue", onClick: () => { setActiveNav("sales"); setSalesTab("pos"); } },
