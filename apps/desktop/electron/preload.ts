@@ -14,11 +14,27 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   getSqlitePath: () => ipcRenderer.invoke("db:getSqlitePath") as Promise<string>,
   getDeviceId: () => ipcRenderer.invoke("app:getDeviceId") as Promise<string>,
   readSqliteBinary: () => ipcRenderer.invoke("db:readBinary") as Promise<Uint8Array | null>,
-  writeSqliteBinary: (data: Uint8Array) =>
-    ipcRenderer.invoke("db:writeBinary", data) as Promise<boolean>,
+  writeSqliteBinary: (data: Uint8Array) => ipcRenderer.invoke("db:writeBinary", data) as Promise<boolean>,
   sqliteExists: () => ipcRenderer.invoke("db:exists") as Promise<boolean>,
   backupSqlite: (dest: string) => ipcRenderer.invoke("db:backupSqlite", dest) as Promise<boolean>,
+  listBackups: () => ipcRenderer.invoke("backup:list") as Promise<NativeBackupMeta[]>,
+  createManualBackup: () => ipcRenderer.invoke("backup:createManual") as Promise<NativeBackupResult>,
+  createAutomaticBackup: () => ipcRenderer.invoke("backup:createAutomatic") as Promise<NativeBackupResult>,
+  restoreBackup: () => ipcRenderer.invoke("backup:restoreFromFile") as Promise<NativeRestoreResult>,
+  relaunch: () => ipcRenderer.invoke("app:relaunch") as Promise<boolean>,
 });
+
+export type NativeBackupMeta = {
+  id: string;
+  filename: string;
+  createdAt: string;
+  sizeBytes: number;
+  kind: "manual" | "automatic";
+  verified: boolean;
+  location: "local";
+};
+export type NativeBackupResult = { ok: boolean; path?: string; filename?: string; sizeBytes?: number; error?: string; cancelled?: boolean };
+export type NativeRestoreResult = { ok: boolean; source?: string; preRestoreBackup?: string | null; error?: string; cancelled?: boolean };
 
 export type MinarvaDesktopApi = {
   getVersion: () => Promise<string>;
@@ -32,6 +48,11 @@ export type MinarvaDesktopApi = {
   writeSqliteBinary: (data: Uint8Array) => Promise<boolean>;
   sqliteExists: () => Promise<boolean>;
   backupSqlite: (dest: string) => Promise<boolean>;
+  listBackups: () => Promise<NativeBackupMeta[]>;
+  createManualBackup: () => Promise<NativeBackupResult>;
+  createAutomaticBackup: () => Promise<NativeBackupResult>;
+  restoreBackup: () => Promise<NativeRestoreResult>;
+  relaunch: () => Promise<boolean>;
 };
 
 declare global {
