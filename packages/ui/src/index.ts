@@ -45,6 +45,7 @@ export * from "./components/backup/BackupPanel";
 export * from "./components/sync/SyncPanel";
 export * from "./components/licensing/LicensePanel";
 export * from "./components/licensing/BranchPanel";
+export * from "./components/licensing/TrialGate";
 export * from "./components/auth/AuthGate";
 export * from "./components/sync/PersistencePanel";
 export * from "./components/payments/PaymentsPanel";
