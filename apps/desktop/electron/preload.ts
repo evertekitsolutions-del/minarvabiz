@@ -5,6 +5,22 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 
+export type TrialRegistration = {
+  email: string;
+  phone: string;
+  organizationName: string;
+  address: string;
+};
+export type TrialState = {
+  activated: boolean;
+  status: "unactivated" | "active" | "expired" | "invalid_clock";
+  daysRemaining: number;
+  trialStartedAt: string | null;
+  trialExpiresAt: string | null;
+  registration: TrialRegistration | null;
+  synced: boolean;
+};
+
 contextBridge.exposeInMainWorld("minarvaDesktop", {
   getVersion: () => ipcRenderer.invoke("app:getVersion"),
   getPath: (name: string) => ipcRenderer.invoke("app:getPath", name),
@@ -13,6 +29,9 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   dbWrite: (content: string) => ipcRenderer.invoke("db:write", content) as Promise<boolean>,
   getSqlitePath: () => ipcRenderer.invoke("db:getSqlitePath") as Promise<string>,
   getDeviceId: () => ipcRenderer.invoke("app:getDeviceId") as Promise<string>,
+  getTrialState: () => ipcRenderer.invoke("trial:getState") as Promise<TrialState>,
+  activateTrial: (registration: TrialRegistration) => ipcRenderer.invoke("trial:activate", registration) as Promise<{ ok: boolean; error?: string; state?: TrialState }>,
+  markTrialSynced: () => ipcRenderer.invoke("trial:markSynced") as Promise<boolean>,
   readSqliteBinary: () => ipcRenderer.invoke("db:readBinary") as Promise<Uint8Array | null>,
   writeSqliteBinary: (data: Uint8Array) => ipcRenderer.invoke("db:writeBinary", data) as Promise<boolean>,
   sqliteExists: () => ipcRenderer.invoke("db:exists") as Promise<boolean>,
@@ -45,6 +64,9 @@ export type MinarvaDesktopApi = {
   dbWrite: (content: string) => Promise<boolean>;
   getSqlitePath: () => Promise<string>;
   getDeviceId?: () => Promise<string>;
+  getTrialState: () => Promise<TrialState>;
+  activateTrial: (registration: TrialRegistration) => Promise<{ ok: boolean; error?: string; state?: TrialState }>;
+  markTrialSynced: () => Promise<boolean>;
   readSqliteBinary: () => Promise<Uint8Array | null>;
   writeSqliteBinary: (data: Uint8Array) => Promise<boolean>;
   sqliteExists: () => Promise<boolean>;
