@@ -9,6 +9,7 @@ type NativeBackup = BackupMeta;
 type NativeDesktopApi = {
   listBackups?: () => Promise<NativeBackup[]>;
   createManualBackup?: () => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
+  exportBackup?: (id: string) => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
   restoreBackup?: () => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
   relaunch?: () => Promise<boolean>;
 };
@@ -44,7 +45,6 @@ export function BackupPanel({
   }, [native]);
 
   React.useEffect(() => { void refreshNative(); }, [refreshNative]);
-
   const backups = nativeBackups ?? fallbackBackups;
 
   const run = async (action: () => void | Promise<void>, success: string) => {
@@ -79,11 +79,10 @@ export function BackupPanel({
   };
 
   const download = async (id: string) => {
-    if (native?.createManualBackup) {
-      const r = await native.createManualBackup();
+    if (native?.exportBackup) {
+      const r = await native.exportBackup(id);
       if (r.cancelled) return;
       setMessage(r.ok ? "Backup saved" : r.error || "Backup export failed");
-      await refreshNative();
       return;
     }
     onDownload(id);
@@ -103,31 +102,18 @@ export function BackupPanel({
       </div>
 
       {message && <p className="text-sm text-emerald-600">{message}</p>}
-
       <div className="space-y-2">
-        {backups.length === 0 && (
-          <p className="rounded-xl border border-dashed border-slate-200 bg-white py-12 text-center text-slate-400">No backups yet</p>
-        )}
+        {backups.length === 0 && <p className="rounded-xl border border-dashed border-slate-200 bg-white py-12 text-center text-slate-400">No backups yet</p>}
         {backups.map((b) => (
           <Card key={b.id}>
             <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="font-medium text-slate-900">{b.filename}</div>
-                <div className="text-xs text-slate-500">
-                  {new Date(b.createdAt).toLocaleString("en-IN")} · {(b.sizeBytes / 1024).toFixed(1)} KB · {b.kind} · {b.verified ? "verified" : "unverified"}
-                </div>
+                <div className="text-xs text-slate-500">{new Date(b.createdAt).toLocaleString("en-IN")} · {(b.sizeBytes / 1024).toFixed(1)} KB · {b.kind} · {b.verified ? "verified" : "unverified"}</div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={() => {
-                  const ok = onVerify(b.id);
-                  setMessage(ok === undefined ? "Backup verification completed" : ok ? "Backup verified OK" : "Verification failed");
-                }}>Verify</Button>
-                <Button size="sm" variant="outline" onClick={() => {
-                  const r = onInspect(b.id);
-                  setMessage(r === undefined ? "Backup inspection completed" : r.ok
-                    ? `Contains: ${Object.entries(r.summary || {}).map(([k, v]) => `${k}=${v}`).join(", ")}`
-                    : r.error || "Invalid");
-                }}>Inspect</Button>
+                <Button size="sm" variant="outline" onClick={() => { const ok = onVerify(b.id); setMessage(ok === undefined ? "Backup verification completed" : ok ? "Backup verified OK" : "Verification failed"); }}>Verify</Button>
+                <Button size="sm" variant="outline" onClick={() => { const r = onInspect(b.id); setMessage(r === undefined ? "Backup inspection completed" : r.ok ? `Contains: ${Object.entries(r.summary || {}).map(([k, v]) => `${k}=${v}`).join(", ")}` : r.error || "Invalid"); }}>Inspect</Button>
                 <Button size="sm" onClick={() => void download(b.id)}>Download</Button>
               </div>
             </CardContent>
