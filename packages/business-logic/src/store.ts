@@ -288,6 +288,41 @@ export function recordCustomerPayment(input: {
   return { payment, customer, errors: [] };
 }
 
+export function recordRefundPayment(input: {
+  returnId: UUID;
+  saleId: UUID;
+  customerId?: UUID | null;
+  amount: number;
+  method: PaymentMethod;
+  notes?: string | null;
+}): Payment | null {
+  assertPermission("returns.manage");
+  const amount = round2(input.amount);
+  if (amount <= 0) return null;
+  const payment: Payment = {
+    id: generateId(),
+    amount,
+    method: input.method,
+    referenceType: "refund",
+    referenceId: input.returnId,
+    customerId: input.customerId ?? null,
+    notes: input.notes ?? `Refund for sale ${input.saleId}`,
+    paidAt: nowISO(),
+    createdAt: nowISO(),
+    version: 1,
+  };
+  payments.push(payment);
+  touchPersistence();
+  enqueueOutbox("payments", payment.id, "insert", payment);
+  auditAction("refund.payment", "payments", payment.id, null, {
+    returnId: input.returnId,
+    saleId: input.saleId,
+    amount,
+    method: input.method,
+  });
+  return payment;
+}
+
 export function listOutstandingCustomers(): Customer[] {
   return listCustomers().filter((c) => c.outstandingBalance > 0);
 }
