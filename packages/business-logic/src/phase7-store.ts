@@ -96,9 +96,7 @@ export function createReturn(input: {
       errors.push(`Item ${item.productName} not on sale`);
       continue;
     }
-    if (item.productId !== orig.productId) {
-      errors.push(`${item.productName}: product mismatch`);
-    }
+    if (item.productId !== orig.productId) errors.push(`${item.productName}: product mismatch`);
     if (item.quantity <= 0) {
       errors.push(`${item.productName}: invalid quantity`);
       continue;
@@ -132,15 +130,13 @@ export function createReturn(input: {
   });
 
   const totalRefund = Math.round(returnItems.reduce((s, i) => s + i.refundAmount, 0) * 100) / 100;
-  const priorRefund = returns
-    .filter((r) => r.saleId === sale.id && r.status === "completed")
-    .reduce((sum, r) => sum + r.totalRefund, 0);
-  const remainingPaid = Math.max(0, Math.round((sale.paidAmount - priorRefund) * 100) / 100);
-  const cashRefund = Math.min(totalRefund, remainingPaid);
-  const priorCredit = Math.max(0, priorRefund - sale.paidAmount);
+  // sale.paidAmount and sale.balanceAmount represent the remaining paid and
+  // receivable portions after earlier returns, so allocation must use the
+  // current values rather than subtracting prior returns again.
+  const cashRefund = Math.min(totalRefund, Math.max(0, sale.paidAmount));
   const receivableReduction = Math.min(
     Math.max(0, totalRefund - cashRefund),
-    Math.max(0, sale.balanceAmount - priorCredit)
+    Math.max(0, sale.balanceAmount)
   );
 
   // Restock returned inventory.
