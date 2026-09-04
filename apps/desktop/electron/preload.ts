@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   backupSqlite: (dest: string) => ipcRenderer.invoke("db:backupSqlite", dest) as Promise<boolean>,
   listBackups: () => ipcRenderer.invoke("backup:list") as Promise<NativeBackupMeta[]>,
   createManualBackup: () => ipcRenderer.invoke("backup:createManual") as Promise<NativeBackupResult>,
+  exportBackup: (id: string) => ipcRenderer.invoke("backup:export", id) as Promise<NativeBackupResult>,
   createAutomaticBackup: () => ipcRenderer.invoke("backup:createAutomatic") as Promise<NativeBackupResult>,
   restoreBackup: () => ipcRenderer.invoke("backup:restoreFromFile") as Promise<NativeRestoreResult>,
   relaunch: () => ipcRenderer.invoke("app:relaunch") as Promise<boolean>,
@@ -50,13 +51,12 @@ export type MinarvaDesktopApi = {
   backupSqlite: (dest: string) => Promise<boolean>;
   listBackups: () => Promise<NativeBackupMeta[]>;
   createManualBackup: () => Promise<NativeBackupResult>;
+  exportBackup: (id: string) => Promise<NativeBackupResult>;
   createAutomaticBackup: () => Promise<NativeBackupResult>;
   restoreBackup: () => Promise<NativeRestoreResult>;
   relaunch: () => Promise<boolean>;
 };
 
 declare global {
-  interface Window {
-    minarvaDesktop?: MinarvaDesktopApi;
-  }
+  interface Window { minarvaDesktop?: MinarvaDesktopApi; }
 }
