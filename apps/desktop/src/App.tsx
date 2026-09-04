@@ -3,10 +3,10 @@ import {
   AppShell, Dashboard, CustomerList, ProductList, PosBilling, SalesList,
   OrderList, OrderForm, emptyOrderForm, OrderDetail, LaundryList, LaundryForm,
   ExpenseList, PurchaseList, StaffList, NotificationCenter, ReportsPanel,
-  BackupPanel, Modal, Button, FormField, inputClass, selectClass,
+  BackupPanel, SettingsPanel, Modal, Button, FormField, inputClass, selectClass,
   type QuickAction, type NavItemId, type DashboardData, type OrderFormValues,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings } from "@minarvabiz/business-logic";
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
@@ -123,6 +123,11 @@ export function App() {
     setStaffOpen(false); setModuleError(null); setStaffForm({ name: "", phone: "", email: "", role: "staff", salary: "", joiningDate: "", notes: "" }); persistAndRefresh();
   }
 
+  function saveSettings() {
+    persistAndRefresh();
+    setModuleTick((v) => v + 1);
+  }
+
   const navTo = (id: NavItemId) => { setActiveNav(id); setSelectedOrder(null); };
   const laundry = phase5Store.listLaundryOrders();
   const expenses = phase5Store.listExpenses();
@@ -136,6 +141,9 @@ export function App() {
   const backups = phase7Store.listBackups();
   const suppliers = phase5Store.listSuppliers();
   const expenseCategories = phase5Store.listExpenseCategories();
+  const profile = getShopProfile();
+  const tax = getTaxConfig();
+  const backupSettings = getAutoBackupSettings();
 
   return <AppShell activeNav={activeNav} onNavigate={(_href, id) => navTo(id)} sidebar={{ user: { name: "Admin", role: "Super Admin" }, logoSrc: "logo-mark.png" }} header={{ showSearch: activeNav !== "dashboard", title: activeNav === "services" ? "Services & Orders" : activeNav, subtitle: "Welcome back, Admin!", notificationCount: phase6Store.unreadNotificationCount(), messageCount: 3 }}>
     {activeNav === "dashboard" && dash && <Dashboard data={dash} quickActions={actions} />}
@@ -148,7 +156,7 @@ export function App() {
     {activeNav === "reports" && <ReportsPanel key={moduleTick} salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} onRefresh={persistAndRefresh} />}
     {activeNav === "sms" && <NotificationCenter key={moduleTick} notifications={notifications} onMarkRead={(id) => { phase6Store.markNotificationRead(id); setModuleTick((v) => v + 1); }} onMarkAllRead={() => { phase6Store.markAllNotificationsRead(); setModuleTick((v) => v + 1); }} />}
     {activeNav === "backup" && <BackupPanel key={moduleTick} backups={backups} onCreate={() => { phase7Store.createBackup("manual"); persistAndRefresh(); }} onVerify={(id) => { phase7Store.verifyBackup(id); setModuleTick((v) => v + 1); }} onDownload={(id) => { const payload = phase7Store.getBackupPayload(id); if (!payload) return; const blob = new Blob([payload], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = backups.find((b) => b.id === id)?.filename || "minarvabiz-backup.json"; a.click(); URL.revokeObjectURL(a.href); }} onInspect={(id) => { phase7Store.inspectBackup(id); setModuleTick((v) => v + 1); }} />}
-    {activeNav === "settings" && <ModuleCard title="Settings" description="Shop profile, tax, invoice, payment, notification and application settings will be managed here." />}
+    {activeNav === "settings" && <SettingsPanel profile={profile} tax={{ enableGst: tax.enableGst, defaultRatePercent: tax.defaultRatePercent }} backup={{ enabled: backupSettings.enabled, intervalHours: backupSettings.intervalHours, retentionCount: backupSettings.retentionCount }} onSaveProfile={(patch) => { updateShopProfile(patch); saveSettings(); }} onSaveTax={(patch) => { updateTaxConfig(patch); saveSettings(); }} onSaveBackup={(patch) => { setAutoBackupSettings(patch); saveSettings(); }} />}
     {activeNav !== "dashboard" && activeNav !== "customers" && activeNav !== "sales" && activeNav !== "services" && activeNav !== "laundry" && activeNav !== "expenses" && activeNav !== "staff" && activeNav !== "reports" && activeNav !== "sms" && activeNav !== "backup" && activeNav !== "settings" && <ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={() => setLowStockOnly((v) => !v)} onSearch={(q) => setProducts(store.listProducts({ query: q, lowStockOnly }))} />}
   </AppShell>;
 }
