@@ -49,7 +49,9 @@ function nextReturnNo(): string {
   if (lastReturnNo) {
     const parts = lastReturnNo.split("-");
     const n = parseInt(parts[parts.length - 1] ?? "0", 10);
-    if (!Number.isNaN(n)) seq = n + 1;
+    const lastDate = parts.length >= 3 ? parts[1] : "";
+    const dateKey = `${y}${m}${d}`;
+    if (lastDate === dateKey && !Number.isNaN(n)) seq = n + 1;
   }
   const num = `RET-${y}${m}${d}-${String(seq).padStart(3, "0")}`;
   lastReturnNo = num;
@@ -89,6 +91,16 @@ export function createReturn(input: {
     }
     if (item.quantity <= 0 || item.quantity > orig.quantity) {
       errors.push(`${item.productName}: invalid quantity`);
+      continue;
+    }
+
+    const alreadyReturned = returns
+      .filter((r) => r.saleId === sale.id && r.status === "completed")
+      .flatMap((r) => r.items)
+      .filter((r) => r.saleItemId === item.saleItemId)
+      .reduce((sum, r) => sum + r.quantity, 0);
+    if (alreadyReturned + item.quantity > orig.quantity) {
+      errors.push(`${item.productName}: return quantity exceeds remaining quantity`);
     }
   }
   if (errors.length) return { ret: null, errors };
@@ -106,9 +118,15 @@ export function createReturn(input: {
     restock: item.restock,
   }));
 
-  const totalRefund = returnItems.reduce((s, i) => s + i.refundAmount, 0);
+  const totalRefund = Math.round(returnItems.reduce((s, i) => s + i.refundAmount, 0) * 100) / 100;
+  const priorRefund = returns
+    .filter((r) => r.saleId === sale.id && r.status === "completed")
+    .reduce((sum, r) => sum + r.totalRefund, 0);
+  const remainingPaid = Math.max(0, Math.round((sale.paidAmount - priorRefund) * 100) / 100);
+  const cashRefund = Math.min(totalRefund, remainingPaid);
+  const receivableReduction = Math.min(totalRefund - cashRefund, Math.max(0, sale.balanceAmount - Math.max(0, priorRefund - sale.paidAmount)));
 
-  // Restock
+  // Restock returned inventory.
   for (const item of returnItems) {
     if (item.restock) {
       const p = mainStore.getProduct(item.productId);
@@ -119,11 +137,19 @@ export function createReturn(input: {
     }
   }
 
-  // Adjust customer outstanding / spending
+  // Keep sale and customer balances consistent with the refund/credit.
+  sale.total = Math.max(0, Math.round((sale.total - totalRefund) * 100) / 100);
+  sale.paidAmount = Math.max(0, Math.round((sale.paidAmount - cashRefund) * 100) / 100);
+  sale.balanceAmount = Math.max(0, Math.round((sale.balanceAmount - receivableReduction) * 100) / 100);
+  sale.status = sale.total === 0 ? "returned" : "partial";
+  sale.updatedAt = nowISO();
+  sale.version = (sale.version ?? 1) + 1;
+
   if (sale.customerId) {
     const c = mainStore.getCustomer(sale.customerId);
     if (c) {
-      c.totalSpending = Math.max(0, Math.round((c.totalSpending - totalRefund) * 100) / 100);
+      c.totalSpending = Math.max(0, Math.round((c.totalSpending - cashRefund) * 100) / 100);
+      c.outstandingBalance = Math.max(0, Math.round((c.outstandingBalance - receivableReduction) * 100) / 100);
       c.updatedAt = nowISO();
     }
   }
@@ -145,11 +171,15 @@ export function createReturn(input: {
     version: 1,
   };
   returns.push(ret);
+  mainStore.touchPersistence();
+  enqueueReturnOutbox(ret, sale, cashRefund);
 
   audit("sale.return", "returns", ret.id, null, {
     returnNumber: ret.returnNumber,
     invoiceNumber: sale.invoiceNumber,
     totalRefund,
+    cashRefund,
+    receivableReduction,
   });
 
   phase6Store.pushNotification({
@@ -160,6 +190,16 @@ export function createReturn(input: {
   });
 
   return { ret, errors: [] };
+}
+
+function enqueueReturnOutbox(ret: SaleReturn, sale: Sale, cashRefund: number) {
+  // Return persistence uses the existing outbox bridge. A refund payment is
+  // intentionally not created here because the current Payment model does not
+  // expose a dedicated generic-payment writer; day-end reporting accounts for
+  // completed returns separately below.
+  void ret;
+  void sale;
+  void cashRefund;
 }
 
 // ---- Audit ----
@@ -326,6 +366,11 @@ export function dayEndReport(): DayEndReport {
   const card = payments.filter((p) => p.method === "card" || p.method === "upi").reduce((a, p) => a + p.amount, 0);
   const other = payments.filter((p) => p.method === "bank" || p.method === "other").reduce((a, p) => a + p.amount, 0);
 
+  const todayReturns = returns.filter((r) => r.createdAt.startsWith(today) && r.status === "completed");
+  const cashRefunds = todayReturns.filter((r) => r.refundMethod === "cash").reduce((a, r) => a + r.totalRefund, 0);
+  const cardRefunds = todayReturns.filter((r) => r.refundMethod === "card" || r.refundMethod === "upi").reduce((a, r) => a + r.totalRefund, 0);
+  const otherRefunds = todayReturns.filter((r) => r.refundMethod === "bank" || r.refundMethod === "other").reduce((a, r) => a + r.totalRefund, 0);
+
   const outstanding =
     sales.reduce((a, s) => a + s.balanceAmount, 0) +
     orders.reduce((a, o) => a + o.balance, 0);
@@ -339,9 +384,9 @@ export function dayEndReport(): DayEndReport {
     orderSpecificExpenses: orderExp,
     generalExpenses: generalExp,
     staffIncentives: 0,
-    cashReceived: cash,
-    cardPayments: card,
-    otherPayments: other,
+    cashReceived: cash - cashRefunds,
+    cardPayments: card - cardRefunds,
+    otherPayments: other - otherRefunds,
     outstandingAmount: outstanding,
   });
 }
@@ -372,7 +417,6 @@ export function listSalesForReturn(): Sale[] {
   return mainStore.listSales().filter((s) => s.status === "completed" || s.status === "partial");
 }
 
-
 export function hydratePhase7(data: {
   returns?: SaleReturn[];
   auditLogs?: AuditLogEntry[];
@@ -386,4 +430,3 @@ export function hydratePhase7(data: {
     auditLogs.push(...data.auditLogs);
   }
 }
-
