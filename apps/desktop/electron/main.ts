@@ -3,7 +3,7 @@
  * Security: contextIsolation, no nodeIntegration, sandboxed preload.
  */
 
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell, safeStorage } from "electron";
 import * as path from "path";
 import * as fs from "fs";
 import { randomUUID } from "crypto";
@@ -11,9 +11,13 @@ import { randomUUID } from "crypto";
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 function dataFilePath() { return path.join(app.getPath("userData"), "minarvabiz-db.json"); }
 function deviceIdPath() { return path.join(app.getPath("userData"), "device-id"); }
+function trialStatePath() { return path.join(app.getPath("userData"), "trial-state.bin"); }
 function sqlitePath() { return path.join(app.getPath("userData"), "minarvabiz.db"); }
 function backupDir() { return path.join(app.getPath("userData"), "backups"); }
 function timestamp() { return new Date().toISOString().replace(/[:.]/g, "-"); }
+
+type TrialRegistration = { email: string; phone: string; organizationName: string; address: string };
+type StoredTrial = TrialRegistration & { activationId: string; deviceId: string; activatedAt: string; trialExpiresAt: string; lastSeenAt: string; synced: boolean };
 
 function getDeviceId() {
   const file = deviceIdPath();
@@ -21,6 +25,31 @@ function getDeviceId() {
     if (fs.existsSync(file)) return fs.readFileSync(file, "utf8").trim();
     const id = randomUUID(); fs.writeFileSync(file, id, "utf8"); return id;
   } catch { return `desktop-${process.platform}-${app.getVersion()}`; }
+}
+function readTrial(): StoredTrial | null {
+  try {
+    if (!fs.existsSync(trialStatePath()) || !safeStorage.isEncryptionAvailable()) return null;
+    const encrypted = fs.readFileSync(trialStatePath());
+    return JSON.parse(safeStorage.decryptString(encrypted)) as StoredTrial;
+  } catch { return null; }
+}
+function writeTrial(value: StoredTrial) {
+  if (!safeStorage.isEncryptionAvailable()) throw new Error("OS secure storage is unavailable");
+  const encrypted = safeStorage.encryptString(JSON.stringify(value));
+  const temp = `${trialStatePath()}.tmp-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(temp, encrypted); fs.renameSync(temp, trialStatePath());
+}
+function trialSnapshot() {
+  const trial = readTrial();
+  if (!trial) return { activated: false, status: "unactivated", daysRemaining: 0, trialStartedAt: null, trialExpiresAt: null, registration: null, synced: false };
+  const now = Date.now();
+  const expires = new Date(trial.trialExpiresAt).getTime();
+  const lastSeen = new Date(trial.lastSeenAt).getTime();
+  if (now + 5 * 60 * 1000 < lastSeen) return { activated: true, status: "invalid_clock", daysRemaining: 0, trialStartedAt: trial.activatedAt, trialExpiresAt: trial.trialExpiresAt, registration: { email: trial.email, phone: trial.phone, organizationName: trial.organizationName, address: trial.address }, synced: trial.synced };
+  const daysRemaining = Math.max(0, Math.ceil((expires - now) / 86400000));
+  const status = daysRemaining > 0 ? "active" : "expired";
+  try { writeTrial({ ...trial, lastSeenAt: new Date().toISOString() }); } catch { /* state remains readable even if refresh fails */ }
+  return { activated: true, status, daysRemaining, trialStartedAt: trial.activatedAt, trialExpiresAt: trial.trialExpiresAt, registration: { email: trial.email, phone: trial.phone, organizationName: trial.organizationName, address: trial.address }, synced: trial.synced };
 }
 function createWindow() {
   const win = new BrowserWindow({ width: 1280, height: 800, minWidth: 1024, minHeight: 640, title: "Minarva Biz", show: false,
@@ -86,6 +115,20 @@ ipcMain.handle("db:writeBinary", (_e: unknown, data: Uint8Array | Buffer | numbe
   if (!isValidSqliteFile(temp)) { fs.unlinkSync(temp); return false; } fs.renameSync(temp, file); return true;
 });
 ipcMain.handle("db:exists", () => fs.existsSync(sqlitePath()));
+
+ipcMain.handle("trial:getState", () => trialSnapshot());
+ipcMain.handle("trial:activate", (_e: unknown, registration: TrialRegistration) => {
+  const email = String(registration?.email || "").trim().toLowerCase();
+  const phone = String(registration?.phone || "").trim();
+  const organizationName = String(registration?.organizationName || "").trim();
+  const address = String(registration?.address || "").trim();
+  if (!email || !email.includes("@") || !phone || !organizationName || !address) return { ok: false, error: "Email, phone number, organization name, and address are required." };
+  const existing = readTrial(); if (existing) return { ok: false, error: "This installation has already activated its trial." };
+  const started = new Date(); const expires = new Date(started.getTime() + 30 * 86400000);
+  const value: StoredTrial = { email, phone, organizationName, address, activationId: randomUUID(), deviceId: getDeviceId(), activatedAt: started.toISOString(), trialExpiresAt: expires.toISOString(), lastSeenAt: started.toISOString(), synced: false };
+  try { writeTrial(value); return { ok: true, state: trialSnapshot() }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+});
+ipcMain.handle("trial:markSynced", () => { const trial = readTrial(); if (!trial) return false; try { writeTrial({ ...trial, synced: true }); return true; } catch { return false; } });
 
 ipcMain.handle("backup:list", () => {
   fs.mkdirSync(backupDir(), { recursive: true });
