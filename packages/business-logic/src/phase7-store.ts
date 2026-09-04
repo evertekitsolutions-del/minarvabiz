@@ -14,6 +14,7 @@ import * as mainStore from "./store";
 import * as phase5Store from "./phase5-store";
 import * as ordersStore from "./orders-store";
 import * as phase6Store from "./phase6-store";
+import { enqueueOutbox } from "./outbox-bridge";
 
 const returns: SaleReturn[] = [];
 const auditLogs: AuditLogEntry[] = [];
@@ -42,18 +43,19 @@ function audit(
 }
 
 function nextReturnNo(): string {
-  const y = new Date().getFullYear().toString().slice(-2);
-  const m = String(new Date().getMonth() + 1).padStart(2, "0");
-  const d = String(new Date().getDate()).padStart(2, "0");
+  const now = new Date();
+  const y = now.getFullYear().toString().slice(-2);
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const dateKey = `${y}${m}${d}`;
   let seq = 1;
   if (lastReturnNo) {
     const parts = lastReturnNo.split("-");
-    const n = parseInt(parts[parts.length - 1] ?? "0", 10);
     const lastDate = parts.length >= 3 ? parts[1] : "";
-    const dateKey = `${y}${m}${d}`;
+    const n = parseInt(parts[parts.length - 1] ?? "0", 10);
     if (lastDate === dateKey && !Number.isNaN(n)) seq = n + 1;
   }
-  const num = `RET-${y}${m}${d}-${String(seq).padStart(3, "0")}`;
+  const num = `RET-${dateKey}-${String(seq).padStart(3, "0")}`;
   lastReturnNo = num;
   return num;
 }
@@ -83,40 +85,51 @@ export function createReturn(input: {
   if (input.items.length === 0) return { ret: null, errors: ["Select at least one item"] };
 
   const errors: string[] = [];
+  const requestedByItem = new Map<UUID, number>();
+  for (const item of input.items) {
+    requestedByItem.set(item.saleItemId, (requestedByItem.get(item.saleItemId) ?? 0) + item.quantity);
+  }
+
   for (const item of input.items) {
     const orig = sale.items.find((i) => i.id === item.saleItemId);
     if (!orig) {
       errors.push(`Item ${item.productName} not on sale`);
       continue;
     }
-    if (item.quantity <= 0 || item.quantity > orig.quantity) {
+    if (item.productId !== orig.productId) {
+      errors.push(`${item.productName}: product mismatch`);
+    }
+    if (item.quantity <= 0) {
       errors.push(`${item.productName}: invalid quantity`);
       continue;
     }
-
     const alreadyReturned = returns
       .filter((r) => r.saleId === sale.id && r.status === "completed")
       .flatMap((r) => r.items)
       .filter((r) => r.saleItemId === item.saleItemId)
       .reduce((sum, r) => sum + r.quantity, 0);
-    if (alreadyReturned + item.quantity > orig.quantity) {
+    const requested = requestedByItem.get(item.saleItemId) ?? item.quantity;
+    if (alreadyReturned + requested > orig.quantity) {
       errors.push(`${item.productName}: return quantity exceeds remaining quantity`);
     }
   }
   if (errors.length) return { ret: null, errors };
 
   const returnId = generateId();
-  const returnItems: SaleReturnItem[] = input.items.map((item) => ({
-    id: generateId(),
-    returnId,
-    saleItemId: item.saleItemId,
-    productId: item.productId,
-    productName: item.productName,
-    quantity: item.quantity,
-    unitPrice: item.unitPrice,
-    refundAmount: Math.round(item.quantity * item.unitPrice * 100) / 100,
-    restock: item.restock,
-  }));
+  const returnItems: SaleReturnItem[] = input.items.map((item) => {
+    const orig = sale.items.find((i) => i.id === item.saleItemId)!;
+    return {
+      id: generateId(),
+      returnId,
+      saleItemId: item.saleItemId,
+      productId: orig.productId,
+      productName: orig.productName,
+      quantity: item.quantity,
+      unitPrice: orig.unitPrice,
+      refundAmount: Math.round(item.quantity * orig.unitPrice * 100) / 100,
+      restock: item.restock,
+    };
+  });
 
   const totalRefund = Math.round(returnItems.reduce((s, i) => s + i.refundAmount, 0) * 100) / 100;
   const priorRefund = returns
@@ -124,7 +137,11 @@ export function createReturn(input: {
     .reduce((sum, r) => sum + r.totalRefund, 0);
   const remainingPaid = Math.max(0, Math.round((sale.paidAmount - priorRefund) * 100) / 100);
   const cashRefund = Math.min(totalRefund, remainingPaid);
-  const receivableReduction = Math.min(totalRefund - cashRefund, Math.max(0, sale.balanceAmount - Math.max(0, priorRefund - sale.paidAmount)));
+  const priorCredit = Math.max(0, priorRefund - sale.paidAmount);
+  const receivableReduction = Math.min(
+    Math.max(0, totalRefund - cashRefund),
+    Math.max(0, sale.balanceAmount - priorCredit)
+  );
 
   // Restock returned inventory.
   for (const item of returnItems) {
@@ -133,11 +150,13 @@ export function createReturn(input: {
       if (p) {
         p.stockQuantity = applyStockMovement(p.stockQuantity, "return", item.quantity);
         p.updatedAt = nowISO();
+        enqueueOutbox("products", p.id, "update", p);
       }
     }
   }
 
   // Keep sale and customer balances consistent with the refund/credit.
+  const oldSale = { ...sale };
   sale.total = Math.max(0, Math.round((sale.total - totalRefund) * 100) / 100);
   sale.paidAmount = Math.max(0, Math.round((sale.paidAmount - cashRefund) * 100) / 100);
   sale.balanceAmount = Math.max(0, Math.round((sale.balanceAmount - receivableReduction) * 100) / 100);
@@ -145,12 +164,14 @@ export function createReturn(input: {
   sale.updatedAt = nowISO();
   sale.version = (sale.version ?? 1) + 1;
 
+  let updatedCustomer: ReturnType<typeof mainStore.getCustomer> = undefined;
   if (sale.customerId) {
     const c = mainStore.getCustomer(sale.customerId);
     if (c) {
       c.totalSpending = Math.max(0, Math.round((c.totalSpending - cashRefund) * 100) / 100);
       c.outstandingBalance = Math.max(0, Math.round((c.outstandingBalance - receivableReduction) * 100) / 100);
       c.updatedAt = nowISO();
+      updatedCustomer = c;
     }
   }
 
@@ -171,10 +192,12 @@ export function createReturn(input: {
     version: 1,
   };
   returns.push(ret);
-  mainStore.touchPersistence();
-  enqueueReturnOutbox(ret, sale, cashRefund);
 
-  audit("sale.return", "returns", ret.id, null, {
+  enqueueOutbox("returns", ret.id, "insert", ret);
+  enqueueOutbox("sales", sale.id, "update", sale);
+  if (updatedCustomer) enqueueOutbox("customers", updatedCustomer.id, "update", updatedCustomer);
+
+  audit("sale.return", "returns", ret.id, oldSale, {
     returnNumber: ret.returnNumber,
     invoiceNumber: sale.invoiceNumber,
     totalRefund,
@@ -190,16 +213,6 @@ export function createReturn(input: {
   });
 
   return { ret, errors: [] };
-}
-
-function enqueueReturnOutbox(ret: SaleReturn, sale: Sale, cashRefund: number) {
-  // Return persistence uses the existing outbox bridge. A refund payment is
-  // intentionally not created here because the current Payment model does not
-  // expose a dedicated generic-payment writer; day-end reporting accounts for
-  // completed returns separately below.
-  void ret;
-  void sale;
-  void cashRefund;
 }
 
 // ---- Audit ----
@@ -251,7 +264,6 @@ export function createBackup(kind: "manual" | "automatic" = "manual"): BackupMet
     location: "local",
   };
   backups.unshift(meta);
-  // Never auto-delete the only backup
   audit("backup.created", "backups", id, null, { filename, sizeBytes: meta.sizeBytes });
   return meta;
 }
