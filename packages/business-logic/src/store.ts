@@ -268,9 +268,11 @@ export function recordCustomerPayment(input: {
   if (input.amount <= 0) errors.push("Amount must be positive");
   const customer = getCustomer(input.customerId);
   if (!customer) errors.push("Customer not found");
+  if (customer && customer.outstandingBalance <= 0) errors.push("Customer has no outstanding balance");
   if (errors.length || !customer) return { payment: null, customer: null, errors };
 
-  const applied = round2(Math.min(input.amount, customer.outstandingBalance || input.amount));
+  const applied = round2(Math.min(input.amount, customer.outstandingBalance));
+  if (applied <= 0) return { payment: null, customer: null, errors: ["No outstanding balance to collect"] };
   customer.outstandingBalance = round2(Math.max(0, customer.outstandingBalance - applied));
   customer.updatedAt = nowISO();
 
