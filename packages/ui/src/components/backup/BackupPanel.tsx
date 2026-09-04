@@ -31,7 +31,7 @@ export function BackupPanel({
   onVerify: (id: string) => boolean | void;
   onDownload: (id: string) => void;
   onInspect: (id: string) => { ok: boolean; summary?: Record<string, number>; error?: string } | void;
-  onRestore: () => void | Promise<void>;
+  onRestore?: () => void | Promise<void>;
 }) {
   const [nativeBackups, setNativeBackups] = React.useState<NativeBackup[] | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
@@ -74,12 +74,11 @@ export function BackupPanel({
       await native.relaunch?.();
       return;
     }
-    await onRestore();
+    if (onRestore) await onRestore();
+    else throw new Error("Restore is available in the desktop edition only");
   };
 
   const download = async (id: string) => {
-    // Native SQLite backups are already real .db files. Opening Save dialog again
-    // creates a portable copy; the old JSON callback remains the web/fallback path.
     if (native?.createManualBackup) {
       const r = await native.createManualBackup();
       if (r.cancelled) return;
