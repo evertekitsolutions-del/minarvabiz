@@ -378,11 +378,10 @@ export function dayEndReport(): DayEndReport {
   const card = payments.filter((p) => p.method === "card" || p.method === "upi").reduce((a, p) => a + p.amount, 0);
   const other = payments.filter((p) => p.method === "bank" || p.method === "other").reduce((a, p) => a + p.amount, 0);
 
-  const todayReturns = returns.filter((r) => r.createdAt.startsWith(today) && r.status === "completed");
-  const cashRefunds = todayReturns.filter((r) => r.refundMethod === "cash").reduce((a, r) => a + r.totalRefund, 0);
-  const cardRefunds = todayReturns.filter((r) => r.refundMethod === "card" || r.refundMethod === "upi").reduce((a, r) => a + r.totalRefund, 0);
-  const otherRefunds = todayReturns.filter((r) => r.refundMethod === "bank" || r.refundMethod === "other").reduce((a, r) => a + r.totalRefund, 0);
-
+  // Refunds currently live in the return ledger rather than the Payment ledger.
+  // Do not subtract the full return amount here because an unpaid return reduces
+  // receivables rather than cash. A dedicated refund-payment writer should be
+  // added when the generic Payment ledger is extended for refund transactions.
   const outstanding =
     sales.reduce((a, s) => a + s.balanceAmount, 0) +
     orders.reduce((a, o) => a + o.balance, 0);
@@ -396,9 +395,9 @@ export function dayEndReport(): DayEndReport {
     orderSpecificExpenses: orderExp,
     generalExpenses: generalExp,
     staffIncentives: 0,
-    cashReceived: cash - cashRefunds,
-    cardPayments: card - cardRefunds,
-    otherPayments: other - otherRefunds,
+    cashReceived: cash,
+    cardPayments: card,
+    otherPayments: other,
     outstandingAmount: outstanding,
   });
 }
