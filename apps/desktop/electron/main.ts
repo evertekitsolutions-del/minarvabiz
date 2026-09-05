@@ -8,6 +8,7 @@ import * as path from "path";
 import * as fs from "fs";
 import { createHash, randomUUID } from "crypto";
 import { execFileSync } from "child_process";
+import { registerDesktopLicenseIpc } from "./license";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 function dataFilePath() { return path.join(app.getPath("userData"), "minarvabiz-db.json"); }
@@ -91,7 +92,9 @@ function pruneAutomaticBackups(retention = 14) { fs.mkdirSync(backupDir(), { rec
 
 app.whenReady().then(() => {
   process.env.MINARVA_SQLITE_PATH = sqlitePath(); process.env.MINARVA_MODE = process.env.MINARVA_MODE || "production";
-  fs.mkdirSync(app.getPath("userData"), { recursive: true }); createWindow();
+  fs.mkdirSync(app.getPath("userData"), { recursive: true });
+  registerDesktopLicenseIpc(getDeviceId);
+  createWindow();
   setTimeout(() => { try { const dir = backupDir(); fs.mkdirSync(dir, { recursive: true }); const latest = fs.readdirSync(dir).filter((f) => f.startsWith("minarvabiz-automatic-") && f.endsWith(".db")).map((f) => fs.statSync(path.join(dir, f)).mtimeMs).sort((a, b) => b - a)[0]; if (!latest || Date.now() - latest >= 24 * 3600 * 1000) { createLocalBackup("automatic"); pruneAutomaticBackups(); } } catch { /* backup must never prevent app startup */ } }, 3000);
   app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });
