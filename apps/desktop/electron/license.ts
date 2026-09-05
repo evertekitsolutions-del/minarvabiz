@@ -1,4 +1,4 @@
-import { app, ipcMain, safeStorage, WebContents } from "electron";
+import { app, ipcMain, safeStorage } from "electron";
 import * as fs from "fs";
 import * as path from "path";
 import { createPublicKey, verify } from "crypto";
