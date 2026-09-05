@@ -8,9 +8,10 @@
   "scripts": {
     "dev": "vite",
     "build:renderer": "vite build",
-    "build:electron": "tsc -p tsconfig.electron.json",
+    "prepare:license": "node scripts/write-license-config.mjs",
+    "build:electron": "pnpm run prepare:license && tsc -p tsconfig.electron.json",
     "build": "pnpm run build:renderer && pnpm run build:electron",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "pnpm run prepare:license && tsc --noEmit -p tsconfig.json",
     "package:win": "pnpm run build && electron-builder --win --x64 --config electron-builder.yml",
     "package": "pnpm run package:win"
   },
@@ -31,7 +32,7 @@
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
     "app-builder-bin": "^4.2.0",
-    "autoprefixer": "^10.4.20",
+    "autoprefixer": "10.4.20",
     "electron": "33.2.1",
     "electron-builder": "24.13.3",
     "postcss": "^8.4.49",
