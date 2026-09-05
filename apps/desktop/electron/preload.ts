@@ -21,6 +21,18 @@ export type TrialState = {
   synced: boolean;
 };
 
+export type DesktopLicenseState = {
+  status: "unlicensed" | "active" | "grace" | "expired" | "invalid";
+  plan: "trial" | "basic" | "professional" | "business" | "enterprise" | null;
+  edition: "online" | "offline" | "hybrid" | null;
+  features: Record<string, boolean> | null;
+  daysRemaining: number | null;
+  graceDaysRemaining: number | null;
+  reason?: string;
+  licenseId?: string;
+  activationId?: string;
+};
+
 contextBridge.exposeInMainWorld("minarvaDesktop", {
   getVersion: () => ipcRenderer.invoke("app:getVersion"),
   getPath: (name: string) => ipcRenderer.invoke("app:getPath", name),
@@ -33,6 +45,9 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   getTrialState: () => ipcRenderer.invoke("trial:getState") as Promise<TrialState>,
   activateTrial: (registration: TrialRegistration) => ipcRenderer.invoke("trial:activate", registration) as Promise<{ ok: boolean; error?: string; state?: TrialState }>,
   markTrialSynced: () => ipcRenderer.invoke("trial:markSynced") as Promise<boolean>,
+  getLicenseState: () => ipcRenderer.invoke("license:getState") as Promise<DesktopLicenseState>,
+  activateLicenseToken: (token: string) => ipcRenderer.invoke("license:activateToken", token) as Promise<DesktopLicenseState>,
+  deactivateLicense: () => ipcRenderer.invoke("license:deactivate") as Promise<boolean>,
   readSqliteBinary: () => ipcRenderer.invoke("db:readBinary") as Promise<Uint8Array | null>,
   writeSqliteBinary: (data: Uint8Array) => ipcRenderer.invoke("db:writeBinary", data) as Promise<boolean>,
   sqliteExists: () => ipcRenderer.invoke("db:exists") as Promise<boolean>,
@@ -69,6 +84,9 @@ export type MinarvaDesktopApi = {
   getTrialState: () => Promise<TrialState>;
   activateTrial: (registration: TrialRegistration) => Promise<{ ok: boolean; error?: string; state?: TrialState }>;
   markTrialSynced: () => Promise<boolean>;
+  getLicenseState: () => Promise<DesktopLicenseState>;
+  activateLicenseToken: (token: string) => Promise<DesktopLicenseState>;
+  deactivateLicense: () => Promise<boolean>;
   readSqliteBinary: () => Promise<Uint8Array | null>;
   writeSqliteBinary: (data: Uint8Array) => Promise<boolean>;
   sqliteExists: () => Promise<boolean>;
