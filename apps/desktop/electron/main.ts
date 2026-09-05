@@ -6,7 +6,8 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, safeStorage } from "electron";
 import * as path from "path";
 import * as fs from "fs";
-import { createHash, execFileSync, randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
+import { execFileSync } from "child_process";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 function dataFilePath() { return path.join(app.getPath("userData"), "minarvabiz-db.json"); }
