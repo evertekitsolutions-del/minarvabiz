@@ -6,9 +6,16 @@ export const runtime = "nodejs";
 const DESTINATION = "minarvatechnologies@gmail.com";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[0-9+() .-]{6,50}$/;
+const DEVICE_RE = /^[A-Fa-f0-9]{64}$/;
 
 function clean(value: unknown, max = 500): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
+}
+
+function normalizePhone(value: string): string {
+  const trimmed = value.trim();
+  const plus = trimmed.startsWith("+") ? "+" : "";
+  return plus + trimmed.replace(/\D/g, "");
 }
 
 function htmlEscape(value: string): string {
@@ -19,16 +26,16 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const email = clean(body?.email, 254).toLowerCase();
-    const phone = clean(body?.phone, 50);
+    const phone = normalizePhone(clean(body?.phone, 50));
     const organizationName = clean(body?.organizationName, 200);
     const address = clean(body?.address, 500);
-    const deviceId = clean(body?.deviceId, 200);
+    const deviceId = clean(body?.deviceId, 64).toLowerCase();
 
     if (!EMAIL_RE.test(email)) return NextResponse.json({ ok: false, error: "A valid email address is required." }, { status: 400 });
-    if (!PHONE_RE.test(phone)) return NextResponse.json({ ok: false, error: "A valid phone number is required." }, { status: 400 });
+    if (!PHONE_RE.test(phone) || phone.replace(/\D/g, "").length < 6) return NextResponse.json({ ok: false, error: "A valid phone number is required." }, { status: 400 });
     if (!organizationName) return NextResponse.json({ ok: false, error: "Organization name is required." }, { status: 400 });
     if (!address) return NextResponse.json({ ok: false, error: "Address is required." }, { status: 400 });
-    if (!deviceId || !/^[A-Za-z0-9-]{16,200}$/.test(deviceId)) return NextResponse.json({ ok: false, error: "Device registration is required." }, { status: 400 });
+    if (!DEVICE_RE.test(deviceId)) return NextResponse.json({ ok: false, error: "Device registration is required." }, { status: 400 });
 
     const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
     const secretKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -58,7 +65,10 @@ export async function POST(request: Request) {
     const expires = new Date(started.getTime() + 30 * 24 * 60 * 60 * 1000);
     const row = { id: registrationId, email, phone, organization_name: organizationName, address, device_id: deviceId, status: "active", trial_started_at: started.toISOString(), trial_expires_at: expires.toISOString() };
     const { error: insertError } = await supabase.from("trial_registrations").insert(row);
-    if (insertError) return NextResponse.json({ ok: false, error: "Could not register the trial." }, { status: 500 });
+    if (insertError) {
+      if (insertError.code === "23505") return NextResponse.json({ ok: false, code: "TRIAL_ALREADY_REGISTERED", error: "A Minarva Biz trial is already registered for this email, phone number, or device." }, { status: 409 });
+      return NextResponse.json({ ok: false, error: "Could not register the trial." }, { status: 500 });
+    }
 
     const text = [
       "New Minarva Biz 30-day trial registration", "", `Registration ID: ${registrationId}`, `Email: ${email}`, `Phone: ${phone}`,
