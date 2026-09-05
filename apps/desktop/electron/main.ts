@@ -6,7 +6,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, safeStorage } from "electron";
 import * as path from "path";
 import * as fs from "fs";
-import { randomUUID } from "crypto";
+import { createHash, execFileSync, randomUUID } from "crypto";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 function dataFilePath() { return path.join(app.getPath("userData"), "minarvabiz-db.json"); }
@@ -26,6 +26,22 @@ function getDeviceId() {
     const id = randomUUID(); fs.writeFileSync(file, id, "utf8"); return id;
   } catch { return `desktop-${process.platform}-${app.getVersion()}`; }
 }
+
+function getWindowsMachineGuid(): string | null {
+  if (process.platform !== "win32") return null;
+  try {
+    const output = execFileSync("reg", ["query", "HKLM\\SOFTWARE\\Microsoft\\Cryptography", "/v", "MachineGuid"], { encoding: "utf8", windowsHide: true });
+    const match = output.match(/MachineGuid\s+REG_SZ\s+([^\r\n]+)/i);
+    return match?.[1]?.trim() || null;
+  } catch { return null; }
+}
+
+function getTrialDeviceId(): string {
+  const machineGuid = getWindowsMachineGuid();
+  const basis = machineGuid ? `windows-machine-guid:${machineGuid.toLowerCase()}` : `installation-device-id:${getDeviceId()}`;
+  return createHash("sha256").update(`minarvabiz-trial-v1:${basis}`, "utf8").digest("hex");
+}
+
 function readTrial(): StoredTrial | null {
   try {
     if (!fs.existsSync(trialStatePath()) || !safeStorage.isEncryptionAvailable()) return null;
@@ -42,15 +58,18 @@ function writeTrial(value: StoredTrial) {
 function trialSnapshot() {
   const trial = readTrial();
   if (!trial) return { activated: false, status: "unactivated", daysRemaining: 0, trialStartedAt: null, trialExpiresAt: null, registration: null, synced: false };
+  const currentDeviceId = getTrialDeviceId();
+  const registration = { email: trial.email, phone: trial.phone, organizationName: trial.organizationName, address: trial.address };
+  if (trial.deviceId !== currentDeviceId) return { activated: true, status: "invalid_device", daysRemaining: 0, trialStartedAt: trial.activatedAt, trialExpiresAt: trial.trialExpiresAt, registration, synced: trial.synced };
   const now = Date.now();
   const expires = new Date(trial.trialExpiresAt).getTime();
   const lastSeen = new Date(trial.lastSeenAt).getTime();
-  if (!Number.isFinite(expires) || !Number.isFinite(lastSeen)) return { activated: true, status: "invalid_clock", daysRemaining: 0, trialStartedAt: trial.activatedAt, trialExpiresAt: trial.trialExpiresAt, registration: { email: trial.email, phone: trial.phone, organizationName: trial.organizationName, address: trial.address }, synced: trial.synced };
-  if (now + 5 * 60 * 1000 < lastSeen) return { activated: true, status: "invalid_clock", daysRemaining: 0, trialStartedAt: trial.activatedAt, trialExpiresAt: trial.trialExpiresAt, registration: { email: trial.email, phone: trial.phone, organizationName: trial.organizationName, address: trial.address }, synced: trial.synced };
+  if (!Number.isFinite(expires) || !Number.isFinite(lastSeen)) return { activated: true, status: "invalid_clock", daysRemaining: 0, trialStartedAt: trial.activatedAt, trialExpiresAt: trial.trialExpiresAt, registration, synced: trial.synced };
+  if (now + 5 * 60 * 1000 < lastSeen) return { activated: true, status: "invalid_clock", daysRemaining: 0, trialStartedAt: trial.activatedAt, trialExpiresAt: trial.trialExpiresAt, registration, synced: trial.synced };
   const daysRemaining = Math.max(0, Math.ceil((expires - now) / 86400000));
   const status = daysRemaining > 0 ? "active" : "expired";
   try { writeTrial({ ...trial, lastSeenAt: new Date().toISOString() }); } catch { /* state remains readable even if refresh fails */ }
-  return { activated: true, status, daysRemaining, trialStartedAt: trial.activatedAt, trialExpiresAt: trial.trialExpiresAt, registration: { email: trial.email, phone: trial.phone, organizationName: trial.organizationName, address: trial.address }, synced: trial.synced };
+  return { activated: true, status, daysRemaining, trialStartedAt: trial.activatedAt, trialExpiresAt: trial.trialExpiresAt, registration, synced: trial.synced };
 }
 function createWindow() {
   const win = new BrowserWindow({ width: 1280, height: 800, minWidth: 1024, minHeight: 640, title: "Minarva Biz", show: false,
@@ -84,6 +103,7 @@ ipcMain.handle("db:sqlitePath", () => sqlitePath());
 ipcMain.handle("db:backupSqlite", (_e: unknown, destPath: string) => { const src = sqlitePath(); if (!fs.existsSync(src)) return false; copySqlite(src, destPath); return true; });
 ipcMain.handle("db:getSqlitePath", () => sqlitePath());
 ipcMain.handle("app:getDeviceId", () => getDeviceId());
+ipcMain.handle("app:getTrialDeviceId", () => getTrialDeviceId());
 ipcMain.handle("db:readBinary", () => { try { return fs.existsSync(sqlitePath()) ? fs.readFileSync(sqlitePath()) : null; } catch { return null; } });
 ipcMain.handle("db:writeBinary", (_e: unknown, data: Uint8Array | Buffer | number[]) => { const file = sqlitePath(), temp = `${file}.restore-${process.pid}-${Date.now()}`; fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(temp, Buffer.from(data)); if (!isValidSqliteFile(temp)) { fs.unlinkSync(temp); return false; } fs.renameSync(temp, file); return true; });
 ipcMain.handle("db:exists", () => fs.existsSync(sqlitePath()));
@@ -94,7 +114,7 @@ ipcMain.handle("trial:activate", (_e: unknown, registration: TrialRegistration) 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^[0-9+() .-]{6,50}$/.test(phone) || !organizationName || !address) return { ok: false, error: "Email, phone number, organization name, and address are required." };
   const existing = readTrial(); if (existing) return { ok: false, error: "This installation has already activated its trial." };
   const started = new Date(); const expires = new Date(started.getTime() + 30 * 86400000);
-  const value: StoredTrial = { email, phone, organizationName, address, activationId: randomUUID(), deviceId: getDeviceId(), activatedAt: started.toISOString(), trialExpiresAt: expires.toISOString(), lastSeenAt: started.toISOString(), synced: false };
+  const value: StoredTrial = { email, phone, organizationName, address, activationId: randomUUID(), deviceId: getTrialDeviceId(), activatedAt: started.toISOString(), trialExpiresAt: expires.toISOString(), lastSeenAt: started.toISOString(), synced: false };
   try { writeTrial(value); return { ok: true, state: trialSnapshot() }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 });
 ipcMain.handle("trial:markSynced", () => { const trial = readTrial(); if (!trial) return false; try { writeTrial({ ...trial, synced: true }); return true; } catch { return false; } });
