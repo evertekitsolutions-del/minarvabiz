@@ -2,6 +2,7 @@ import { app, ipcMain, safeStorage } from "electron";
 import * as fs from "fs";
 import * as path from "path";
 import { createPublicKey, verify } from "crypto";
+import { BUNDLED_LICENSE_PUBLIC_KEY_HEX } from "./license-config";
 
 type LicensePlan = "trial" | "basic" | "professional" | "business" | "enterprise";
 type LicenseEdition = "online" | "offline" | "hybrid";
@@ -14,7 +15,7 @@ const LICENSE_FILE = "commercial-license.bin";
 const GRACE_DAYS: Record<LicensePlan, number> = { trial: 0, basic: 7, professional: 7, business: 14, enterprise: 30 };
 const DENIED_STATUSES = new Set(["suspended", "revoked", "expired", "deactivated", "device_not_activated"]);
 function filePath() { return path.join(app.getPath("userData"), LICENSE_FILE); }
-function publicKeyHex() { return String(process.env.MINARVA_LICENSE_PUBLIC_KEY_HEX || process.env.LICENSE_PUBLIC_KEY || "").replace(/^0x/, "").replace(/\s/g, "").toLowerCase(); }
+function publicKeyHex() { const runtime = String(process.env.MINARVA_LICENSE_PUBLIC_KEY_HEX || process.env.LICENSE_PUBLIC_KEY || "").replace(/^0x/, "").replace(/\s/g, "").toLowerCase(); return runtime || BUNDLED_LICENSE_PUBLIC_KEY_HEX; }
 function apiBaseUrl() { return String(process.env.VITE_LICENSE_API_URL || process.env.MINARVA_LICENSE_API_URL || "").trim().replace(/\/$/, ""); }
 function hexToBytes(hex: string) { const out = Buffer.alloc(hex.length / 2); for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16); return out; }
 function fromBase64Url(value: string) { return Buffer.from(value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4), "base64"); }
