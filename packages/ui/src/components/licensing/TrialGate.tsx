@@ -9,7 +9,7 @@ export type TrialRegistration = {
 
 export type TrialState = {
   activated: boolean;
-  status: "unactivated" | "active" | "expired" | "invalid_clock";
+  status: "unactivated" | "active" | "expired" | "invalid_clock" | "invalid_device";
   daysRemaining: number;
   trialStartedAt: string | null;
   trialExpiresAt: string | null;
@@ -37,6 +37,10 @@ export function TrialGate({ state, onActivate }: Props) {
 
   if (state?.status === "invalid_clock") {
     return <div className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-2xl rounded-2xl border border-rose-200 bg-white p-8 shadow-sm"><div className="text-sm font-semibold text-rose-700">SYSTEM TIME CHECK FAILED</div><h1 className="mt-2 text-3xl font-bold text-slate-900">Please correct the Windows date and time</h1><p className="mt-2 text-slate-600">Minarva Biz detected that the system clock was moved backwards. Correct the Windows date/time and restart the application.</p></div></div>;
+  }
+
+  if (state?.status === "invalid_device") {
+    return <div className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-2xl rounded-2xl border border-rose-200 bg-white p-8 shadow-sm"><div className="text-sm font-semibold text-rose-700">TRIAL DEVICE CHECK FAILED</div><h1 className="mt-2 text-3xl font-bold text-slate-900">This trial is locked to another Windows system</h1><p className="mt-2 text-slate-600">The saved trial registration does not match this computer. A 30-day trial can only be used on the machine where it was first activated.</p><p className="mt-4 text-sm text-slate-500">Contact Minarva Technologies if the computer was replaced or the Windows installation was repaired.</p></div></div>;
   }
 
   async function submit(e: React.FormEvent) {
