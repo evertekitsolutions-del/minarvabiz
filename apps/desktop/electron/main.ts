@@ -19,14 +19,6 @@ function timestamp() { return new Date().toISOString().replace(/[:.]/g, "-"); }
 type TrialRegistration = { email: string; phone: string; organizationName: string; address: string };
 type StoredTrial = TrialRegistration & { activationId: string; deviceId: string; activatedAt: string; trialExpiresAt: string; lastSeenAt: string; synced: boolean };
 
-function getDeviceId() {
-  const file = deviceIdPath();
-  try {
-    if (fs.existsSync(file)) return fs.readFileSync(file, "utf8").trim();
-    const id = randomUUID(); fs.writeFileSync(file, id, "utf8"); return id;
-  } catch { return `desktop-${process.platform}-${app.getVersion()}`; }
-}
-
 function getWindowsMachineGuid(): string | null {
   if (process.platform !== "win32") return null;
   try {
@@ -34,6 +26,16 @@ function getWindowsMachineGuid(): string | null {
     const match = output.match(/MachineGuid\s+REG_SZ\s+([^\r\n]+)/i);
     return match?.[1]?.trim() || null;
   } catch { return null; }
+}
+
+function getDeviceId() {
+  const machineGuid = getWindowsMachineGuid();
+  if (machineGuid) return createHash("sha256").update(`minarvabiz-device-v1:windows-machine-guid:${machineGuid.toLowerCase()}`, "utf8").digest("hex");
+  const file = deviceIdPath();
+  try {
+    if (fs.existsSync(file)) return fs.readFileSync(file, "utf8").trim();
+    const id = randomUUID(); fs.writeFileSync(file, id, "utf8"); return id;
+  } catch { return `desktop-${process.platform}-${app.getVersion()}`; }
 }
 
 function getTrialDeviceId(): string {
