@@ -9,142 +9,25 @@ type LicenseFeatures = Record<string, boolean>;
 type LicensePayload = { licenseId: string; customerId: string; product: "minarvabiz"; edition: LicenseEdition; plan: LicensePlan; features: LicenseFeatures; issuedAt: string; expiresAt: string | null; activationLimit: number; deviceBindings: string[] };
 type ActivationCertificate = { type: "minarvabiz-activation-v1"; licenseId: string; activationId: string; deviceId: string; issuedAt: string; expiresAt: string | null };
 type StoredCommercialLicense = { token: string; activationId: string; deviceId: string; activationCertificate: string | null; activatedAt: string; lastOnlineValidation: string | null; lastServerStatus: "active" | "suspended" | "revoked" | "expired" | "deactivated" | "device_not_activated" | null };
-
 export type DesktopLicenseState = { status: "unlicensed" | "active" | "grace" | "expired" | "invalid"; plan: LicensePlan | null; edition: LicenseEdition | null; features: LicenseFeatures | null; daysRemaining: number | null; graceDaysRemaining: number | null; reason?: string; licenseId?: string; activationId?: string };
-
 const LICENSE_FILE = "commercial-license.bin";
 const GRACE_DAYS: Record<LicensePlan, number> = { trial: 0, basic: 7, professional: 7, business: 14, enterprise: 30 };
 const DENIED_STATUSES = new Set(["suspended", "revoked", "expired", "deactivated", "device_not_activated"]);
-
 function filePath() { return path.join(app.getPath("userData"), LICENSE_FILE); }
 function publicKeyHex() { return String(process.env.MINARVA_LICENSE_PUBLIC_KEY_HEX || process.env.LICENSE_PUBLIC_KEY || "").replace(/^0x/, "").replace(/\s/g, "").toLowerCase(); }
 function apiBaseUrl() { return String(process.env.VITE_LICENSE_API_URL || process.env.MINARVA_LICENSE_API_URL || "").trim().replace(/\/$/, ""); }
 function hexToBytes(hex: string) { const out = Buffer.alloc(hex.length / 2); for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16); return out; }
 function fromBase64Url(value: string) { return Buffer.from(value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4), "base64"); }
-function verifySignatureToken(token: string, keyHex: string): { body: string; payload: unknown } | null {
-  try {
-    const [body, signature] = token.split(".");
-    if (!body || !signature || !/^[0-9a-f]{64}$/.test(keyHex)) return null;
-    const publicKey = createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), hexToBytes(keyHex)]), format: "der", type: "spki" });
-    if (!verify(null, Buffer.from(body, "utf8"), publicKey, fromBase64Url(signature))) return null;
-    return { body, payload: JSON.parse(fromBase64Url(body).toString("utf8")) as unknown };
-  } catch { return null; }
-}
-function verifyToken(token: string, keyHex: string): LicensePayload | null {
-  const verified = verifySignatureToken(token, keyHex);
-  if (!verified) return null;
-  const payload = verified.payload as LicensePayload;
-  if (payload.product !== "minarvabiz" || !payload.licenseId || !payload.customerId || !Array.isArray(payload.deviceBindings) || !payload.features) return null;
-  return payload;
-}
-function verifyActivationCertificate(token: string, keyHex: string): ActivationCertificate | null {
-  const verified = verifySignatureToken(token, keyHex);
-  if (!verified) return null;
-  const payload = verified.payload as ActivationCertificate;
-  if (payload.type !== "minarvabiz-activation-v1" || !payload.licenseId || !payload.activationId || !/^[a-f0-9]{64}$/.test(payload.deviceId) || !payload.issuedAt) return null;
-  return payload;
-}
+function verifySignatureToken(token: string, keyHex: string): { body: string; payload: unknown } | null { try { const [body, signature] = token.split("."); if (!body || !signature || !/^[0-9a-f]{64}$/.test(keyHex)) return null; const publicKey = createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), hexToBytes(keyHex)]), format: "der", type: "spki" }); if (!verify(null, Buffer.from(body, "utf8"), publicKey, fromBase64Url(signature))) return null; return { body, payload: JSON.parse(fromBase64Url(body).toString("utf8")) as unknown }; } catch { return null; } }
+function verifyToken(token: string, keyHex: string): LicensePayload | null { const verified = verifySignatureToken(token, keyHex); if (!verified) return null; const payload = verified.payload as LicensePayload; if (payload.product !== "minarvabiz" || !payload.licenseId || !payload.customerId || !Array.isArray(payload.deviceBindings) || !payload.features) return null; return payload; }
+function verifyActivationCertificate(token: string, keyHex: string): ActivationCertificate | null { const verified = verifySignatureToken(token, keyHex); if (!verified) return null; const payload = verified.payload as ActivationCertificate; if (payload.type !== "minarvabiz-activation-v1" || !payload.licenseId || !payload.activationId || !/^[a-f0-9]{64}$/.test(payload.deviceId) || !payload.issuedAt) return null; return payload; }
 function readStored(): StoredCommercialLicense | null { try { if (!safeStorage.isEncryptionAvailable() || !fs.existsSync(filePath())) return null; return JSON.parse(safeStorage.decryptString(fs.readFileSync(filePath()))) as StoredCommercialLicense; } catch { return null; } }
 function writeStored(value: StoredCommercialLicense) { if (!safeStorage.isEncryptionAvailable()) throw new Error("OS secure storage is unavailable"); fs.mkdirSync(app.getPath("userData"), { recursive: true }); const temp = `${filePath()}.tmp-${process.pid}-${Date.now()}`; fs.writeFileSync(temp, safeStorage.encryptString(JSON.stringify(value))); fs.renameSync(temp, filePath()); }
 function clearStored() { try { if (fs.existsSync(filePath())) fs.unlinkSync(filePath()); } catch {} }
 function daysBetween(ms: number) { return Math.max(0, Math.ceil(ms / 86400000)); }
-function localState(stored: StoredCommercialLicense, deviceId: string): DesktopLicenseState {
-  const key = publicKeyHex();
-  if (!/^[0-9a-f]{64}$/.test(key)) return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Commercial license verification key is not configured" };
-  if (stored.deviceId !== deviceId) return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "This license is bound to another device", activationId: stored.activationId };
-  const payload = verifyToken(stored.token, key);
-  if (!payload) return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Invalid signature or malformed license token", activationId: stored.activationId };
-
-  if (stored.activationCertificate) {
-    const cert = verifyActivationCertificate(stored.activationCertificate, key);
-    if (!cert || cert.licenseId !== payload.licenseId || cert.activationId !== stored.activationId || cert.deviceId !== deviceId) return { status: "invalid", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Invalid device activation certificate", licenseId: payload.licenseId, activationId: stored.activationId };
-    if (cert.expiresAt && new Date(cert.expiresAt).getTime() <= Date.now()) return { status: "expired", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: 0, graceDaysRemaining: 0, reason: "Device activation certificate expired", licenseId: payload.licenseId, activationId: stored.activationId };
-  } else if (payload.deviceBindings.length > 0 && !payload.deviceBindings.includes(deviceId)) {
-    return { status: "invalid", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Device not activated for this license", licenseId: payload.licenseId, activationId: stored.activationId };
-  }
-
-  if (stored.lastServerStatus && DENIED_STATUSES.has(stored.lastServerStatus)) {
-    return { status: "expired", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: 0, graceDaysRemaining: 0, reason: `License server status: ${stored.lastServerStatus}`, licenseId: payload.licenseId, activationId: stored.activationId };
-  }
-
-  const now = Date.now();
-  const expires = payload.expiresAt ? new Date(payload.expiresAt).getTime() : null;
-  if (expires !== null && (!Number.isFinite(expires) || expires <= now)) {
-    const graceDays = GRACE_DAYS[payload.plan] ?? 0;
-    const lastOnline = stored.lastOnlineValidation ? new Date(stored.lastOnlineValidation).getTime() : NaN;
-    const graceUntil = Number.isFinite(lastOnline) ? lastOnline + graceDays * 86400000 : 0;
-    if (graceDays > 0 && now <= graceUntil) return { status: "grace", plan: payload.plan, edition: payload.edition, features: payload.features, daysRemaining: 0, graceDaysRemaining: daysBetween(graceUntil - now), reason: "License expired — offline grace period active", licenseId: payload.licenseId, activationId: stored.activationId };
-    return { status: "expired", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: 0, graceDaysRemaining: 0, reason: "License expired and grace period ended", licenseId: payload.licenseId, activationId: stored.activationId };
-  }
-  return { status: "active", plan: payload.plan, edition: payload.edition, features: payload.features, daysRemaining: expires === null ? null : daysBetween(expires - now), graceDaysRemaining: null, licenseId: payload.licenseId, activationId: stored.activationId };
-}
-
-async function callLicenseApi(endpoint: "activate" | "validate" | "deactivate", licenseToken: string, deviceId: string): Promise<{ ok: boolean; data: any }> {
-  const base = apiBaseUrl();
-  if (!base) return { ok: false, data: { code: "SERVICE_NOT_CONFIGURED" } };
-  try {
-    const response = await fetch(`${base}/${endpoint}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ licenseToken, deviceId }), signal: AbortSignal.timeout(8000) });
-    const data = await response.json().catch(() => ({ code: "INVALID_SERVER_RESPONSE" }));
-    return { ok: response.ok && data?.ok === true, data };
-  } catch { return { ok: false, data: { code: "OFFLINE" } }; }
-}
-
-export async function getDesktopLicenseState(deviceId: string): Promise<DesktopLicenseState> {
-  const stored = readStored();
-  if (!stored) return { status: "unlicensed", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "No commercial license activated" };
-  const local = localState(stored, deviceId);
-  if (local.status === "invalid" || !apiBaseUrl()) return local;
-
-  const result = await callLicenseApi("validate", stored.token, deviceId);
-  if (result.ok) {
-    const cert = typeof result.data.activationCertificate === "string" ? result.data.activationCertificate : stored.activationCertificate;
-    const updated: StoredCommercialLicense = { ...stored, activationId: String(result.data.activationId || stored.activationId), activationCertificate: cert, lastOnlineValidation: String(result.data.validatedAt || new Date().toISOString()), lastServerStatus: "active" };
-    try { writeStored(updated); } catch {}
-    return localState(updated, deviceId);
-  }
-  const code = String(result.data?.code || "OFFLINE").toLowerCase();
-  if (DENIED_STATUSES.has(code)) {
-    const denied: StoredCommercialLicense = { ...stored, lastServerStatus: code as StoredCommercialLicense["lastServerStatus"] };
-    try { writeStored(denied); } catch {}
-    return { status: "expired", plan: local.plan, edition: local.edition, features: null, daysRemaining: 0, graceDaysRemaining: 0, reason: `License server rejected activation: ${code}`, licenseId: local.licenseId, activationId: stored.activationId };
-  }
-  return local;
-}
-
-export async function activateDesktopLicense(token: string, deviceId: string): Promise<DesktopLicenseState> {
-  const clean = String(token || "").trim(); const key = publicKeyHex();
-  if (!clean) return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "License token is required" };
-  if (!/^[0-9a-f]{64}$/.test(key)) return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Commercial license verification key is not configured" };
-  const payload = verifyToken(clean, key);
-  if (!payload) return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Invalid signature or malformed license token" };
-
-  const result = await callLicenseApi("activate", clean, deviceId);
-  if (!result.ok) {
-    const code = String(result.data?.code || "OFFLINE");
-    return { status: "invalid", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: null, graceDaysRemaining: null, reason: `Online activation failed: ${code}` };
-  }
-  const activationId = String(result.data.activationId || "");
-  const activationCertificate = String(result.data.activationCertificate || "");
-  const cert = verifyActivationCertificate(activationCertificate, key);
-  if (!activationId || !cert || cert.licenseId !== payload.licenseId || cert.activationId !== activationId || cert.deviceId !== deviceId) return { status: "invalid", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Server returned an invalid activation certificate" };
-  try {
-    writeStored({ token: clean, activationId, deviceId, activationCertificate, activatedAt: new Date().toISOString(), lastOnlineValidation: String(result.data.validatedAt || new Date().toISOString()), lastServerStatus: "active" });
-  } catch (e) {
-    return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: e instanceof Error ? e.message : String(e) };
-  }
-  return localState(readStored()!, deviceId);
-}
-
-export async function deactivateDesktopLicense(deviceId: string) {
-  const stored = readStored();
-  if (!stored) return true;
-  if (apiBaseUrl()) await callLicenseApi("deactivate", stored.token, deviceId);
-  clearStored();
-  return true;
-}
-
-export function registerDesktopLicenseIpc(getDeviceId: () => string) {
-  ipcMain.handle("license:getState", () => getDesktopLicenseState(getDeviceId()));
-  ipcMain.handle("license:activateToken", (_event, token: string) => activateDesktopLicense(token, getDeviceId()));
-  ipcMain.handle("license:deactivate", () => deactivateDesktopLicense(getDeviceId()));
-}
+function localState(stored: StoredCommercialLicense, deviceId: string): DesktopLicenseState { const key = publicKeyHex(); if (!/^[0-9a-f]{64}$/.test(key)) return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Commercial license verification key is not configured" }; if (stored.deviceId !== deviceId) return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "This license is bound to another device", activationId: stored.activationId }; const payload = verifyToken(stored.token, key); if (!payload) return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Invalid signature or malformed license token", activationId: stored.activationId }; if (stored.activationCertificate) { const cert = verifyActivationCertificate(stored.activationCertificate, key); if (!cert || cert.licenseId !== payload.licenseId || cert.activationId !== stored.activationId || cert.deviceId !== deviceId) return { status: "invalid", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Invalid device activation certificate", licenseId: payload.licenseId, activationId: stored.activationId }; if (cert.expiresAt && new Date(cert.expiresAt).getTime() <= Date.now()) return { status: "expired", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: 0, graceDaysRemaining: 0, reason: "Device activation certificate expired", licenseId: payload.licenseId, activationId: stored.activationId }; } else if (payload.deviceBindings.length > 0 && !payload.deviceBindings.includes(deviceId)) return { status: "invalid", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Device not activated for this license", licenseId: payload.licenseId, activationId: stored.activationId }; if (stored.lastServerStatus && DENIED_STATUSES.has(stored.lastServerStatus)) return { status: "expired", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: 0, graceDaysRemaining: 0, reason: `License server status: ${stored.lastServerStatus}`, licenseId: payload.licenseId, activationId: stored.activationId }; const now = Date.now(); const expires = payload.expiresAt ? new Date(payload.expiresAt).getTime() : null; if (expires !== null && (!Number.isFinite(expires) || expires <= now)) { const graceDays = GRACE_DAYS[payload.plan] ?? 0; const lastOnline = stored.lastOnlineValidation ? new Date(stored.lastOnlineValidation).getTime() : NaN; const graceUntil = Number.isFinite(lastOnline) ? lastOnline + graceDays * 86400000 : 0; if (graceDays > 0 && now <= graceUntil) return { status: "grace", plan: payload.plan, edition: payload.edition, features: payload.features, daysRemaining: 0, graceDaysRemaining: daysBetween(graceUntil - now), reason: "License expired — offline grace period active", licenseId: payload.licenseId, activationId: stored.activationId }; return { status: "expired", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: 0, graceDaysRemaining: 0, reason: "License expired and grace period ended", licenseId: payload.licenseId, activationId: stored.activationId }; } return { status: "active", plan: payload.plan, edition: payload.edition, features: payload.features, daysRemaining: expires === null ? null : daysBetween(expires - now), graceDaysRemaining: null, licenseId: payload.licenseId, activationId: stored.activationId }; }
+async function callLicenseApi(endpoint: "activate" | "validate" | "deactivate", licenseToken: string, deviceId: string): Promise<{ ok: boolean; data: any }> { const base = apiBaseUrl(); if (!base) return { ok: false, data: { code: "SERVICE_NOT_CONFIGURED" } }; try { const response = await fetch(`${base}/${endpoint}`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ licenseToken, deviceId }), signal: AbortSignal.timeout(8000) }); const data = await response.json().catch(() => ({ code: "INVALID_SERVER_RESPONSE" })); return { ok: response.ok && data?.ok === true, data }; } catch { return { ok: false, data: { code: "OFFLINE" } }; } }
+export async function getDesktopLicenseState(deviceId: string): Promise<DesktopLicenseState> { const stored = readStored(); if (!stored) return { status: "unlicensed", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "No commercial license activated" }; const local = localState(stored, deviceId); if (local.status === "invalid" || !apiBaseUrl()) return local; const result = await callLicenseApi("validate", stored.token, deviceId); if (result.ok) { const cert = typeof result.data.activationCertificate === "string" ? result.data.activationCertificate : stored.activationCertificate; const updated = { ...stored, activationId: String(result.data.activationId || stored.activationId), activationCertificate: cert, lastOnlineValidation: String(result.data.validatedAt || new Date().toISOString()), lastServerStatus: "active" as const }; try { writeStored(updated); } catch {} return localState(updated, deviceId); } const code = String(result.data?.code || "OFFLINE").toLowerCase(); if (DENIED_STATUSES.has(code)) { const denied = { ...stored, lastServerStatus: code as StoredCommercialLicense["lastServerStatus"] }; try { writeStored(denied); } catch {} return { status: "expired", plan: local.plan, edition: local.edition, features: null, daysRemaining: 0, graceDaysRemaining: 0, reason: `License server rejected activation: ${code}`, licenseId: local.licenseId, activationId: stored.activationId }; } return local; }
+export async function activateDesktopLicense(token: string, deviceId: string): Promise<DesktopLicenseState> { const clean = String(token || "").trim(); const key = publicKeyHex(); if (!clean) return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "License token is required" }; if (!/^[0-9a-f]{64}$/.test(key)) return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Commercial license verification key is not configured" }; const payload = verifyToken(clean, key); if (!payload) return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Invalid signature or malformed license token" }; const result = await callLicenseApi("activate", clean, deviceId); if (!result.ok) return { status: "invalid", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: null, graceDaysRemaining: null, reason: `Online activation failed: ${String(result.data?.code || "OFFLINE")}` }; const activationId = String(result.data.activationId || ""); const activationCertificate = String(result.data.activationCertificate || ""); const cert = verifyActivationCertificate(activationCertificate, key); if (!activationId || !cert || cert.licenseId !== payload.licenseId || cert.activationId !== activationId || cert.deviceId !== deviceId) return { status: "invalid", plan: payload.plan, edition: payload.edition, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "Server returned an invalid activation certificate" }; try { writeStored({ token: clean, activationId, deviceId, activationCertificate, activatedAt: new Date().toISOString(), lastOnlineValidation: String(result.data.validatedAt || new Date().toISOString()), lastServerStatus: "active" }); } catch (e) { return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: e instanceof Error ? e.message : String(e) }; } return localState(readStored()!, deviceId); }
+export async function deactivateDesktopLicense(deviceId: string) { const stored = readStored(); if (!stored) return true; if (apiBaseUrl()) { const result = await callLicenseApi("deactivate", stored.token, deviceId); if (!result.ok) return false; } clearStored(); return true; }
+export function registerDesktopLicenseIpc(getDeviceId: () => string) { ipcMain.handle("license:getState", () => getDesktopLicenseState(getDeviceId())); ipcMain.handle("license:activateToken", (_event, token: string) => activateDesktopLicense(token, getDeviceId())); ipcMain.handle("license:deactivate", () => deactivateDesktopLicense(getDeviceId())); }
