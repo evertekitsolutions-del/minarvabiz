@@ -31,19 +31,18 @@ function getWindowsMachineGuid(): string | null {
 
 function getDeviceId() {
   const machineGuid = getWindowsMachineGuid();
-  if (machineGuid) return createHash("sha256").update(`minarvabiz-device-v1:windows-machine-guid:${machineGuid.toLowerCase()}`, "utf8").digest("hex");
+  if (machineGuid) return createHash("sha256").update(`minarvabiz-trial-v1:windows-machine-guid:${machineGuid.toLowerCase()}`, "utf8").digest("hex");
   const file = deviceIdPath();
   try {
-    if (fs.existsSync(file)) return fs.readFileSync(file, "utf8").trim();
-    const id = randomUUID(); fs.writeFileSync(file, id, "utf8"); return id;
-  } catch { return `desktop-${process.platform}-${app.getVersion()}`; }
+    if (fs.existsSync(file)) {
+      const installationId = fs.readFileSync(file, "utf8").trim();
+      if (installationId) return createHash("sha256").update(`minarvabiz-trial-v1:installation-device-id:${installationId}`, "utf8").digest("hex");
+    }
+    const id = randomUUID(); fs.writeFileSync(file, id, "utf8"); return createHash("sha256").update(`minarvabiz-trial-v1:installation-device-id:${id}`, "utf8").digest("hex");
+  } catch { return createHash("sha256").update(`minarvabiz-trial-v1:fallback:${process.platform}:${app.getVersion()}`, "utf8").digest("hex"); }
 }
 
-function getTrialDeviceId(): string {
-  const machineGuid = getWindowsMachineGuid();
-  const basis = machineGuid ? `windows-machine-guid:${machineGuid.toLowerCase()}` : `installation-device-id:${getDeviceId()}`;
-  return createHash("sha256").update(`minarvabiz-trial-v1:${basis}`, "utf8").digest("hex");
-}
+function getTrialDeviceId(): string { return getDeviceId(); }
 
 function readTrial(): StoredTrial | null {
   try {
