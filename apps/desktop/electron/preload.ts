@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   markTrialSynced: () => ipcRenderer.invoke("trial:markSynced") as Promise<boolean>,
   getLicenseState: () => ipcRenderer.invoke("license:getState") as Promise<DesktopLicenseState>,
   activateLicenseToken: (token: string) => ipcRenderer.invoke("license:activateToken", token) as Promise<DesktopLicenseState>,
+  activateLicensePackage: (content: string) => ipcRenderer.invoke("license:activatePackage", content) as Promise<DesktopLicenseState>,
   deactivateLicense: () => ipcRenderer.invoke("license:deactivate") as Promise<boolean>,
   readSqliteBinary: () => ipcRenderer.invoke("db:readBinary") as Promise<Uint8Array | null>,
   writeSqliteBinary: (data: Uint8Array) => ipcRenderer.invoke("db:writeBinary", data) as Promise<boolean>,
@@ -86,6 +87,7 @@ export type MinarvaDesktopApi = {
   markTrialSynced: () => Promise<boolean>;
   getLicenseState: () => Promise<DesktopLicenseState>;
   activateLicenseToken: (token: string) => Promise<DesktopLicenseState>;
+  activateLicensePackage: (content: string) => Promise<DesktopLicenseState>;
   deactivateLicense: () => Promise<boolean>;
   readSqliteBinary: () => Promise<Uint8Array | null>;
   writeSqliteBinary: (data: Uint8Array) => Promise<boolean>;
