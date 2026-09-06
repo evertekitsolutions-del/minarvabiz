@@ -132,12 +132,12 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
       recordBackupFailure(e instanceof Error ? e.message : String(e));
     }
 
-    (window as unknown as { __minarvaDesktopPersist?: () => void; __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopPersist =
+    (window as unknown as { __minarvaDesktopPersist?: () => Promise<boolean>; __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopPersist =
       persistDomainToSqlite;
     (window as unknown as { __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopFlush =
       flushDesktopSqlitePersistence;
 
-    persistDomainToSqlite();
+    await persistDomainToSqlite();
     return { ok: true };
   } catch (e) {
     ready = false;
@@ -147,13 +147,14 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
   }
 }
 
-export function persistDomainToSqlite() {
+export async function persistDomainToSqlite(): Promise<boolean> {
   if (!sqlite) {
     throw new Error("Cannot persist business data: SQLite not initialized");
   }
   const snap = exportDomainSnapshotFull();
   saveSnap(sqlite, snap);
   sqlite.save();
+  return pendingWrite;
 }
 
 export async function flushDesktopSqlitePersistence(): Promise<boolean> {
