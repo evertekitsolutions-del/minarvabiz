@@ -24,6 +24,7 @@ type SqliteDatabase = {
 let sqlite: SqliteDatabase | null = null;
 let ready = false;
 let initError: string | null = null;
+let pendingWrite: Promise<boolean> = Promise.resolve(true);
 
 export function isDesktopSqliteReady() {
   return ready;
@@ -96,7 +97,11 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
       readFile: (_p: string): Uint8Array | null => cached,
       writeFile: (_p: string, data: Uint8Array) => {
         cached = data;
-        void api.writeSqliteBinary(data);
+        const write = api.writeSqliteBinary(data);
+        pendingWrite = pendingWrite
+          .catch(() => false)
+          .then(() => write)
+          .catch(() => false);
       },
       exists: (_p: string) => cached != null && cached.length > 0,
       mkdirp: (_dir: string) => {
@@ -127,8 +132,10 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
       recordBackupFailure(e instanceof Error ? e.message : String(e));
     }
 
-    (window as unknown as { __minarvaDesktopPersist?: () => void }).__minarvaDesktopPersist =
+    (window as unknown as { __minarvaDesktopPersist?: () => void; __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopPersist =
       persistDomainToSqlite;
+    (window as unknown as { __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopFlush =
+      flushDesktopSqlitePersistence;
 
     persistDomainToSqlite();
     return { ok: true };
@@ -147,4 +154,13 @@ export function persistDomainToSqlite() {
   const snap = exportDomainSnapshotFull();
   saveSnap(sqlite, snap);
   sqlite.save();
+}
+
+export async function flushDesktopSqlitePersistence(): Promise<boolean> {
+  try {
+    await pendingWrite;
+    return true;
+  } catch {
+    return false;
+  }
 }
