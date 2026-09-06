@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const value = String(process.env.MINARVA_LICENSE_PUBLIC_KEY_HEX || process.env.LICENSE_PUBLIC_KEY || "")
   .replace(/^0x/i, "")
@@ -10,7 +11,8 @@ if (value && !/^[0-9a-f]{64}$/.test(value)) {
   throw new Error("MINARVA_LICENSE_PUBLIC_KEY_HEX must be exactly 64 hexadecimal characters when provided.");
 }
 
-const output = path.resolve("apps/desktop/electron/license-config.ts");
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const output = path.resolve(scriptDir, "../electron/license-config.ts");
 fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(
   output,
