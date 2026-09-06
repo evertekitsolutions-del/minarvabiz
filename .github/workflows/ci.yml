@@ -39,13 +39,24 @@ jobs:
       - name: Inspect generated renderer CSS
         shell: bash
         run: |
+          test -f apps/desktop/dist/index.html
           css=$(find apps/desktop/dist -type f -name '*.css' | head -n 1)
           test -n "$css"
           echo "CSS bundle: $css"
           for token in '.bg-blue-500' '.bg-emerald-500' '.bg-violet-500' '.text-white'; do
             grep -q "$token" "$css" || { echo "Missing expected CSS token: $token"; exit 1; }
           done
-          echo "Expected Tailwind color utilities are present in the production CSS bundle."
+          if grep -Eq '(src|href)="/' apps/desktop/dist/index.html; then
+            echo "Production renderer contains an absolute asset URL that can break under file://."
+            cat apps/desktop/dist/index.html
+            exit 1
+          fi
+          grep -Eq 'href="\./assets/[^" ]+\.css"' apps/desktop/dist/index.html || {
+            echo "Production renderer index.html does not reference its bundled stylesheet.";
+            cat apps/desktop/dist/index.html;
+            exit 1;
+          }
+          echo "Renderer index.html references a relative bundled stylesheet and Tailwind color utilities are present."
       - run: pnpm --filter @minarvabiz/desktop build:electron
 
   windows-package:
