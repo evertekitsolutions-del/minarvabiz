@@ -50,6 +50,7 @@ export function collectLiveDashboardMetrics(): RawDashboardMetrics {
   const laundryYest = laundry.filter((l) => dayKey(l.createdAt) === yesterday);
   const laundryRevenueToday = laundryToday.reduce((a, l) => a + l.totalCustomerCharge, 0);
   const laundryRevenueYesterday = laundryYest.reduce((a, l) => a + l.totalCustomerCharge, 0);
+  const laundrySupplierCostToday = laundryToday.reduce((a, l) => a + l.totalSupplierCost, 0);
 
   const expenses = phase5Store.listExpenses();
   const expensesTodayList = expenses.filter((e) => dayKey(e.date) === today);
@@ -73,6 +74,7 @@ export function collectLiveDashboardMetrics(): RawDashboardMetrics {
     productSalesToday,
     serviceRevenueToday,
     laundryRevenueToday,
+    laundrySupplierCostToday,
     expensesToday,
     productSalesYesterday,
     serviceRevenueYesterday,
