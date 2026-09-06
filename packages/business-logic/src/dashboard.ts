@@ -11,11 +11,12 @@ export interface RawDashboardMetrics {
   productSalesToday: number;
   serviceRevenueToday: number;
   laundryRevenueToday: number;
+  laundrySupplierCostToday?: number;
   expensesToday: number;
   productSalesYesterday: number;
   serviceRevenueYesterday: number;
   laundryRevenueYesterday: number;
-  /** COGS + order material + order expenses for profit calc */
+  /** Product COGS + order material + laundry supplier cost for profit calc. */
   costOfGoodsToday: number;
   orderMaterialCostsToday: number;
   orderSpecificExpensesToday: number;
@@ -64,11 +65,11 @@ export function shapeDashboardStats(
   const totalServicesToday = raw.serviceRevenueToday;
   const laundryToday = raw.laundryRevenueToday;
 
-  // Proper categorized profit (not naive sales - expenses)
+  // Net operating profit: all revenue less attributable COGS/costs and expenses.
   const totalRevenue =
     raw.productSalesToday + raw.serviceRevenueToday + raw.laundryRevenueToday;
   const totalCogs =
-    raw.costOfGoodsToday + raw.orderMaterialCostsToday;
+    raw.costOfGoodsToday + raw.orderMaterialCostsToday + (raw.laundrySupplierCostToday ?? 0);
   const grossProfit = roundMoney(totalRevenue - totalCogs);
   const operating =
     raw.orderSpecificExpensesToday +
@@ -120,26 +121,10 @@ export function shapeDashboardStats(
       outstandingPayments: { value: money(raw.outstandingPayments) },
     },
     businessSummary: [
-      {
-        id: "sales",
-        label: "Total Sales",
-        value: money(totalSalesToday),
-      },
-      {
-        id: "services",
-        label: "Total Services",
-        value: money(totalServicesToday),
-      },
-      {
-        id: "laundry",
-        label: "Laundry & Ironing",
-        value: money(laundryToday),
-      },
-      {
-        id: "expenses",
-        label: "Total Expenses",
-        value: money(raw.expensesToday),
-      },
+      { id: "sales", label: "Total Sales", value: money(totalSalesToday) },
+      { id: "services", label: "Total Services", value: money(totalServicesToday) },
+      { id: "laundry", label: "Laundry & Ironing", value: money(laundryToday) },
+      { id: "expenses", label: "Total Expenses", value: money(raw.expensesToday) },
     ],
     netProfit: { label: "Net Profit", value: money(netProfit) },
     orderStatus: [
