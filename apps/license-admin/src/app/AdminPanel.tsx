@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@minarvabiz/ui";
-import { createCommercialLicense, loginAdmin, logoutAdmin, setLicenseStatus } from "./actions";
+import { createCommercialLicense, createOfflineActivationPackage, loginAdmin, logoutAdmin, setLicenseStatus } from "./actions";
 import type { LicensePlan, Edition } from "@minarvabiz/types";
 
 const PLANS: LicensePlan[] = ["trial", "basic", "professional", "business", "enterprise"];
@@ -18,6 +18,8 @@ export default function AdminPanel({ authenticated, initialLicenses }: { authent
   const [edition, setEdition] = React.useState<Edition>("hybrid");
   const [expiresAt, setExpiresAt] = React.useState("");
   const [activationLimit, setActivationLimit] = React.useState("");
+  const [offlineLicenseId, setOfflineLicenseId] = React.useState("");
+  const [offlineDeviceId, setOfflineDeviceId] = React.useState("");
   const [lastToken, setLastToken] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -32,6 +34,17 @@ export default function AdminPanel({ authenticated, initialLicenses }: { authent
   }
   async function status(licenseId: string, value: "active" | "suspended" | "revoked" | "deactivated") {
     setBusy(true); setMessage(null); const result = await setLicenseStatus(licenseId, value); setBusy(false); if (!result.ok) { setMessage(result.error || "Status update failed"); return; } router.refresh();
+  }
+  async function createOfflinePackage() {
+    if (!offlineLicenseId.trim() || !offlineDeviceId.trim()) { setMessage("Enter the license ID and target Windows device ID."); return; }
+    setBusy(true); setMessage(null);
+    const result = await createOfflineActivationPackage({ licenseId: offlineLicenseId.trim(), deviceId: offlineDeviceId.trim() });
+    setBusy(false);
+    if (!result.ok) { setMessage(result.error || "Offline activation package creation failed"); return; }
+    const blob = new Blob([result.content || ""], { type: "application/json" });
+    const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = result.filename || "MinarvaBiz.lic"; anchor.click(); URL.revokeObjectURL(url);
+    setMessage(`Offline activation package created for activation ${result.activationId}. Copy the .lic file to the target Windows PC.`);
+    router.refresh();
   }
 
   if (!authenticated) return (
@@ -59,6 +72,11 @@ export default function AdminPanel({ authenticated, initialLicenses }: { authent
           </CardContent></Card>
           <Card><CardHeader><CardTitle className="text-base">Registry summary</CardTitle></CardHeader><CardContent className="text-sm text-slate-600"><div>Total licenses: <b>{initialLicenses.length}</b></div><div className="mt-2">Active: <b>{initialLicenses.filter((x) => x.status === "active").length}</b></div><div>Suspended: <b>{initialLicenses.filter((x) => x.status === "suspended").length}</b></div><div>Revoked: <b>{initialLicenses.filter((x) => x.status === "revoked").length}</b></div><p className="mt-4 text-xs text-slate-400">Private signing material and Supabase secret keys remain server-side.</p></CardContent></Card>
         </div>
+        <Card><CardHeader><CardTitle className="text-base">Offline activation package</CardTitle></CardHeader><CardContent className="space-y-3">
+          <p className="text-sm text-slate-500">Use this when the customer's Windows PC cannot reach the license server. Enter that PC's 64-character device ID; the server creates a signed .lic package bound to that device.</p>
+          <div className="grid gap-3 md:grid-cols-2"><input className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-mono" placeholder="License ID" value={offlineLicenseId} onChange={(e) => setOfflineLicenseId(e.target.value)} /><input className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-mono" placeholder="Target device ID (64 hex chars)" value={offlineDeviceId} onChange={(e) => setOfflineDeviceId(e.target.value)} /></div>
+          <Button disabled={busy} onClick={() => void createOfflinePackage()}>{busy ? "Creating…" : "Create & download .lic"}</Button>
+        </CardContent></Card>
         <Card><CardHeader><CardTitle className="text-base">License registry</CardTitle></CardHeader><CardContent className="space-y-2">
           {initialLicenses.length === 0 && <p className="text-sm text-slate-400">No commercial licenses issued yet.</p>}
           {initialLicenses.map((item) => { const customer = item.metadata?.customerName || "Unnamed customer"; return <div key={item.license_id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-100 bg-white px-3 py-3"><div><div className="font-medium text-slate-900">{customer}</div><div className="text-xs text-slate-500">{item.license_id} · {item.plan} · {item.edition} · {item.status}</div><div className="text-xs text-slate-400">Activations: {item.activations?.filter((a: any) => a.status === "active").length || 0}/{item.activation_limit} · Expires: {item.expires_at ? new Date(item.expires_at).toLocaleString() : "Never"}</div></div><div className="flex gap-2"><Button size="sm" variant="outline" disabled={busy} onClick={() => void status(item.license_id, "suspended")}>Suspend</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => void status(item.license_id, "revoked")}>Revoke</Button><Button size="sm" disabled={busy} onClick={() => void status(item.license_id, "active")}>Activate</Button></div></div>; })}
