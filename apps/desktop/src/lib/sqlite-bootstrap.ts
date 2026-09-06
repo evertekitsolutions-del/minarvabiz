@@ -157,10 +157,5 @@ export function persistDomainToSqlite() {
 }
 
 export async function flushDesktopSqlitePersistence(): Promise<boolean> {
-  try {
-    await pendingWrite;
-    return true;
-  } catch {
-    return false;
-  }
+  return pendingWrite;
 }
