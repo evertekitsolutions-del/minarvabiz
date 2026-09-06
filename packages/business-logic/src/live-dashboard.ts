@@ -6,6 +6,7 @@ import type { RawDashboardMetrics } from "./dashboard";
 import * as store from "./store";
 import * as ordersStore from "./orders-store";
 import * as phase5Store from "./phase5-store";
+import * as phase6Store from "./phase6-store";
 import { isLowStock } from "./inventory";
 
 function dayKey(iso: string): string {
@@ -59,6 +60,11 @@ export function collectLiveDashboardMetrics(): RawDashboardMetrics {
     .reduce((a, e) => a + e.amount, 0);
   const expensesToday = expensesTodayList.reduce((a, e) => a + e.amount, 0);
 
+  const staffIncentivesToday = phase6Store
+    .listIncentivePayouts()
+    .filter((p) => dayKey(p.calculatedAt) === today)
+    .reduce((a, p) => a + p.amount, 0);
+
   const pendingOrders = orders.filter((o) => o.status === "pending").length;
   const processingOrders = orders.filter((o) => o.status === "processing").length;
   const readyOrders = orders.filter((o) => o.status === "ready_to_deliver").length;
@@ -83,7 +89,7 @@ export function collectLiveDashboardMetrics(): RawDashboardMetrics {
     orderMaterialCostsToday,
     orderSpecificExpensesToday,
     generalExpensesToday,
-    staffIncentivesToday: 0,
+    staffIncentivesToday,
     pendingOrders,
     processingOrders,
     readyOrders,
