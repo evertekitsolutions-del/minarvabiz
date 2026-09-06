@@ -37,8 +37,6 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   getVersion: () => ipcRenderer.invoke("app:getVersion"),
   getPath: (name: string) => ipcRenderer.invoke("app:getPath", name),
   platform: process.platform,
-  dbRead: () => ipcRenderer.invoke("db:read") as Promise<string | null>,
-  dbWrite: (content: string) => ipcRenderer.invoke("db:write", content) as Promise<boolean>,
   getSqlitePath: () => ipcRenderer.invoke("db:getSqlitePath") as Promise<string>,
   getDeviceId: () => ipcRenderer.invoke("app:getDeviceId") as Promise<string>,
   getTrialDeviceId: () => ipcRenderer.invoke("app:getTrialDeviceId") as Promise<string>,
@@ -77,8 +75,6 @@ export type MinarvaDesktopApi = {
   getVersion: () => Promise<string>;
   getPath: (name: string) => Promise<string | null>;
   platform: NodeJS.Platform;
-  dbRead: () => Promise<string | null>;
-  dbWrite: (content: string) => Promise<boolean>;
   getSqlitePath: () => Promise<string>;
   getDeviceId?: () => Promise<string>;
   getTrialDeviceId?: () => Promise<string>;
