@@ -70,7 +70,6 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
   try {
     setRuntimeMode("production");
 
-    // MUST declare api before any use (avoids TDZ: Cannot access before initialization)
     const api = typeof window !== "undefined" ? window.minarvaDesktop : undefined;
     if (!api?.getSqlitePath || !api.readSqliteBinary || !api.writeSqliteBinary) {
       throw new Error(
@@ -97,10 +96,11 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
       readFile: (_p: string): Uint8Array | null => cached,
       writeFile: (_p: string, data: Uint8Array) => {
         cached = data;
-        const write = api.writeSqliteBinary(data);
+        // Queue the IPC invocation itself, not merely the returned Promise.
+        // This guarantees FIFO native writes when multiple domain saves happen quickly.
         pendingWrite = pendingWrite
           .catch(() => false)
-          .then(() => write)
+          .then(() => api.writeSqliteBinary(data))
           .catch(() => false);
       },
       exists: (_p: string) => cached != null && cached.length > 0,
