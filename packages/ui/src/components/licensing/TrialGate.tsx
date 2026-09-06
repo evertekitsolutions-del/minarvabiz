@@ -24,6 +24,7 @@ type Props = {
 
 type LicenseBridge = {
   activateLicenseToken: (token: string) => Promise<{ status: string; reason?: string }>;
+  activateLicensePackage?: (content: string) => Promise<{ status: string; reason?: string }>;
 };
 
 function licenseBridge(): LicenseBridge | null {
@@ -57,8 +58,20 @@ export function TrialGate({ state, onActivate }: Props) {
 
   async function importLicenseFile(file: File | undefined) {
     if (!file) return;
-    try { await activateCommercialToken(await file.text()); }
-    catch { setLicenseError("Could not read the selected license file."); }
+    const bridge = licenseBridge();
+    if (!bridge?.activateLicensePackage) { setLicenseError("Offline activation is not available in this desktop build."); return; }
+    setLicenseError(null);
+    setLicenseBusy(true);
+    try {
+      if (!file.name.toLowerCase().endsWith(".lic")) { setLicenseError("Please select a Minarva Biz .lic activation file."); return; }
+      const result = await bridge.activateLicensePackage(await file.text());
+      if (result.status === "active" || result.status === "grace") {
+        window.location.reload();
+        return;
+      }
+      setLicenseError(result.reason || "The offline activation file is not valid for this Windows device.");
+    } catch { setLicenseError("Could not verify the selected offline activation file."); }
+    finally { setLicenseBusy(false); }
   }
 
   if (state?.status === "active") {
@@ -66,7 +79,7 @@ export function TrialGate({ state, onActivate }: Props) {
   }
 
   if (state?.status === "expired") {
-    return <div className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-2xl space-y-5 rounded-2xl border border-amber-200 bg-white p-8 shadow-sm"><div><div className="text-sm font-semibold text-amber-700">LICENSE REQUIRED</div><h1 className="mt-2 text-3xl font-bold text-slate-900">Your Minarva Biz trial has ended</h1><p className="mt-2 text-slate-600">Activate a commercial license to continue using Minarva Biz.</p></div><div className="rounded-xl border border-slate-200 p-5"><h2 className="font-semibold text-slate-900">Activate commercial license</h2><p className="mt-1 text-sm text-slate-500">Paste the signed license token supplied by Minarva Technologies, or import an offline activation file.</p><textarea rows={5} className="mt-4 w-full rounded-lg border border-slate-300 p-3 font-mono text-xs" placeholder="Paste license token here…" value={licenseToken} onChange={(e) => setLicenseToken(e.target.value)} /><div className="mt-3 flex flex-col gap-3 sm:flex-row"><button disabled={licenseBusy} onClick={() => activateCommercialToken(licenseToken)} className="h-11 rounded-lg bg-blue-600 px-5 font-semibold text-white disabled:opacity-60">{licenseBusy ? "Verifying…" : "Activate License"}</button><label className="flex h-11 cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-5 text-sm font-semibold text-slate-700"><input type="file" accept=".lic,.txt,application/json,text/plain" className="hidden" onChange={(e) => importLicenseFile(e.target.files?.[0])} />Import Activation File</label></div>{licenseError && <div className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{licenseError}</div>}</div><p className="text-xs leading-5 text-slate-500">The license is verified locally using Minarva Biz's embedded public signing key and locked to this Windows device. The private signing key is never stored in the desktop application.</p></div></div>;
+    return <div className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-2xl space-y-5 rounded-2xl border border-amber-200 bg-white p-8 shadow-sm"><div><div className="text-sm font-semibold text-amber-700">LICENSE REQUIRED</div><h1 className="mt-2 text-3xl font-bold text-slate-900">Your Minarva Biz trial has ended</h1><p className="mt-2 text-slate-600">Activate a commercial license to continue using Minarva Biz.</p></div><div className="rounded-xl border border-slate-200 p-5"><h2 className="font-semibold text-slate-900">Activate commercial license</h2><p className="mt-1 text-sm text-slate-500">Paste the signed license token supplied by Minarva Technologies, or import an offline activation file.</p><textarea rows={5} className="mt-4 w-full rounded-lg border border-slate-300 p-3 font-mono text-xs" placeholder="Paste license token here…" value={licenseToken} onChange={(e) => setLicenseToken(e.target.value)} /><div className="mt-3 flex flex-col gap-3 sm:flex-row"><button disabled={licenseBusy} onClick={() => activateCommercialToken(licenseToken)} className="h-11 rounded-lg bg-blue-600 px-5 font-semibold text-white disabled:opacity-60">{licenseBusy ? "Verifying…" : "Activate License"}</button><label className="flex h-11 cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-5 text-sm font-semibold text-slate-700"><input type="file" accept=".lic" className="hidden" disabled={licenseBusy} onChange={(e) => { void importLicenseFile(e.target.files?.[0]); e.currentTarget.value = ""; }} />Import .lic Activation File</label></div>{licenseError && <div className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{licenseError}</div>}</div><p className="text-xs leading-5 text-slate-500">The license is verified locally using Minarva Biz's embedded public signing key and locked to this Windows device. The private signing key is never stored in the desktop application.</p></div></div>;
   }
 
   if (state?.status === "invalid_clock") {
