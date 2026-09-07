@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           if grep -RInE --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' --include='*.cjs' \
-            'minarvabiz-db\.json|db:(read|write)' apps/desktop; then
+            'minarvabiz-db\.json|db:(read|write)([^A-Za-z0-9_]|$)' apps/desktop; then
             echo "Legacy JSON database persistence must not be reintroduced into desktop source."
             exit 1
           fi
