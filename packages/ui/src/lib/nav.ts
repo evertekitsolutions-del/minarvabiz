@@ -5,9 +5,11 @@
 export type NavItemId =
   | "dashboard"
   | "sales"
+  | "products"
   | "services"
   | "laundry"
   | "expenses"
+  | "purchases"
   | "customers"
   | "staff"
   | "reports"
