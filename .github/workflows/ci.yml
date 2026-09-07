@@ -28,6 +28,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Guard against legacy JSON persistence
+        shell: bash
+        run: |
+          if grep -RInE --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' --include='*.cjs' \
+            'minarvabiz-db\.json|db:(read|write)' apps/desktop; then
+            echo "Legacy JSON database persistence must not be reintroduced into desktop source."
+            exit 1
+          fi
+          echo "Legacy JSON database persistence is absent from desktop source."
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
