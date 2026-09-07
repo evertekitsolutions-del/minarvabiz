@@ -14,6 +14,7 @@ export type NavItemId =
   | "staff"
   | "reports"
   | "sms"
+  | "notifications"
   | "settings"
   | "backup";
 
@@ -21,7 +22,7 @@ export interface NavItem {
   id: NavItemId;
   label: string;
   href: string;
-  icon: string; // lucide-style name used by Sidebar
+  icon: string;
 }
 
 export const MAIN_NAV: NavItem[] = [
