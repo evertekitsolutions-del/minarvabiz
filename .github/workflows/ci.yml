@@ -43,6 +43,10 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Static production quality smoke
+        run: node scripts/quality-smoke.mjs
+      - run: pnpm --filter @minarvabiz/business-logic typecheck
+      - run: pnpm --filter @minarvabiz/ui typecheck
       - run: pnpm --filter @minarvabiz/desktop typecheck
       - run: pnpm --filter @minarvabiz/desktop build:renderer
       - name: Inspect generated renderer CSS
