@@ -6,7 +6,6 @@ import { execFileSync } from "child_process";
 import { registerDesktopLicenseIpc, getDesktopLicenseState } from "./license";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
-function dataFilePath() { return path.join(app.getPath("userData"), "minarvabiz-db.json"); }
 function deviceIdPath() { return path.join(app.getPath("userData"), "device-id"); }
 function trialStatePath() { return path.join(app.getPath("userData"), "trial-state.bin"); }
 function sqlitePath() { return path.join(app.getPath("userData"), "minarvabiz.db"); }
@@ -35,8 +34,6 @@ app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(
 
 ipcMain.handle("app:getVersion", (event) => { requireTrustedRenderer(event); return app.getVersion(); });
 ipcMain.handle("app:getPath", (event, name: string) => { requireTrustedRenderer(event); const allowed = ["userData", "documents", "desktop", "temp"] as const; if ((allowed as readonly string[]).includes(name)) return app.getPath(name as (typeof allowed)[number]); return null; });
-ipcMain.handle("db:read", (event) => { requireTrustedRenderer(event); try { const f = dataFilePath(); return fs.existsSync(f) ? fs.readFileSync(f, "utf8") : null; } catch { return null; } });
-ipcMain.handle("db:write", (event, content: string) => { requireTrustedRenderer(event); const f = dataFilePath(); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, content, "utf8"); return true; });
 ipcMain.handle("db:sqlitePath", (event) => { requireTrustedRenderer(event); return sqlitePath(); });
 ipcMain.handle("db:backupSqlite", (event, destPath: string) => { requireTrustedRenderer(event); const src = sqlitePath(); if (!fs.existsSync(src)) return false; const resolved = path.resolve(destPath); const allowedRoots = [path.resolve(app.getPath("userData")), path.resolve(app.getPath("documents")), path.resolve(app.getPath("desktop"))]; if (!allowedRoots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`))) throw new Error("Backup destination is outside an allowed user folder"); copySqlite(src, resolved); return true; });
 ipcMain.handle("db:getSqlitePath", (event) => { requireTrustedRenderer(event); return sqlitePath(); });
