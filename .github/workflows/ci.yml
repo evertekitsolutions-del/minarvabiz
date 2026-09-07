@@ -107,11 +107,18 @@ jobs:
           if (-not $exe -or -not (Test-Path $exe)) { throw "Installed Minarva Biz executable was not found." }
           $proc = Start-Process -FilePath $exe -PassThru
           try {
-            Start-Sleep -Seconds 10
+            Start-Sleep -Seconds 15
             if ($proc.HasExited) { throw "Minarva Biz exited during runtime smoke test (exit code $($proc.ExitCode))." }
-            $db = Join-Path $env:APPDATA "Minarva Biz\minarvabiz.db"
-            if (-not (Test-Path $db)) { throw "SQLite database was not created at expected AppData path: $db" }
-            Write-Host "Runtime smoke PASS: process alive and SQLite database exists at $db"
+            $dbRoots = @($env:APPDATA, $env:LOCALAPPDATA, $env:PROGRAMDATA) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+            $db = $null
+            foreach ($root in $dbRoots) {
+              $candidate = Get-ChildItem -Path $root -Filter "minarvabiz.db" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($candidate) { $db = $candidate; break }
+            }
+            if (-not $db) { throw "SQLite database was not created anywhere under the standard Windows application-data roots." }
+            $bytes = [System.IO.File]::ReadAllBytes($db.FullName)
+            if ($bytes.Length -lt 16 -or [System.Text.Encoding]::ASCII.GetString($bytes, 0, 16) -ne "SQLite format 3`0") { throw "Located minarvabiz.db is not a valid SQLite database: $($db.FullName)" }
+            Write-Host "Runtime smoke PASS: process alive and valid SQLite database found at $($db.FullName)"
           } finally {
             if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
           }
@@ -119,29 +126,25 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $candidates = @(
-            (Join-Path $env:APPDATA "Minarva Biz\runtime-smoke.log"),
-            (Join-Path $env:LOCALAPPDATA "Minarva Biz\runtime-smoke.log"),
-            (Join-Path $env:RUNNER_TEMP "MinarvaBiz-UAT\runtime-smoke.log")
-          )
-          $found = $false
-          foreach ($file in $candidates) {
-            if (Test-Path $file) {
-              Write-Host "Runtime diagnostics: $file"
-              Get-Content $file
-              $found = $true
-            }
+          $roots = @($env:APPDATA, $env:LOCALAPPDATA, $env:RUNNER_TEMP) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+          $logs = @()
+          foreach ($root in $roots) {
+            $logs += Get-ChildItem -Path $root -Filter "runtime-smoke.log" -Recurse -File -ErrorAction SilentlyContinue
           }
-          if (-not $found) { Write-Host "No runtime-smoke.log found in expected locations." }
+          if ($logs.Count -eq 0) { Write-Host "No runtime-smoke.log found in expected Windows data roots." }
+          foreach ($file in ($logs | Sort-Object FullName -Unique)) {
+            Write-Host "Runtime diagnostics: $($file.FullName)"
+            Get-Content -LiteralPath $file.FullName
+          }
       - name: Upload Windows runtime diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: minarvabiz-windows-runtime-diagnostics
           path: |
-            ${{ env.APPDATA }}\Minarva Biz\runtime-smoke.log
-            ${{ env.LOCALAPPDATA }}\Minarva Biz\runtime-smoke.log
-            ${{ env.RUNNER_TEMP }}\MinarvaBiz-UAT\runtime-smoke.log
+            ${{ env.APPDATA }}\**\runtime-smoke.log
+            ${{ env.LOCALAPPDATA }}\**\runtime-smoke.log
+            ${{ env.RUNNER_TEMP }}\**\runtime-smoke.log
           if-no-files-found: ignore
           retention-days: 7
       - name: Upload Windows installer
