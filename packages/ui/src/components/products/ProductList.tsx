@@ -15,6 +15,8 @@ export function ProductList({
   onSelect,
   lowStockOnly,
   onToggleLowStock,
+  onLowStockChange,
+  onRefresh,
 }: {
   products: Product[];
   categories: Category[];
@@ -24,6 +26,8 @@ export function ProductList({
   onSelect?: (p: Product) => void;
   lowStockOnly?: boolean;
   onToggleLowStock?: () => void;
+  onLowStockChange?: (value: boolean) => void;
+  onRefresh?: () => void;
 }) {
   const [q, setQ] = React.useState("");
   const catMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
@@ -81,6 +85,12 @@ export function ProductList({
     },
   ];
 
+  const toggleLowStock = () => {
+    if (onLowStockChange) onLowStockChange(!lowStockOnly);
+    else onToggleLowStock?.();
+    onRefresh?.();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -109,7 +119,7 @@ export function ProductList({
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          <Button variant={lowStockOnly ? "primary" : "outline"} onClick={onToggleLowStock}>
+          <Button variant={lowStockOnly ? "primary" : "outline"} onClick={toggleLowStock}>
             Low stock
           </Button>
           <Button onClick={onAdd}>+ Add Product</Button>
