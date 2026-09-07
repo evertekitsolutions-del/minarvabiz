@@ -90,6 +90,29 @@ jobs:
           $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
           if (-not $installer) { throw "Windows installer was not produced." }
           Write-Host "Installer: $($installer.FullName)"
+      - name: Windows installed-runtime smoke
+        shell: pwsh
+        run: |
+          $installRoot = Join-Path $env:RUNNER_TEMP "MinarvaBiz-UAT"
+          if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot }
+          New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
+          $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
+          Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -Wait
+          $exe = Join-Path $installRoot "Minarva Biz.exe"
+          if (-not (Test-Path $exe)) {
+            $exe = Get-ChildItem -Path $installRoot -Filter *.exe -Recurse -ErrorAction Stop | Where-Object { $_.Name -notlike "*Setup*.exe" } | Select-Object -First 1 | ForEach-Object FullName
+          }
+          if (-not $exe -or -not (Test-Path $exe)) { throw "Installed Minarva Biz executable was not found." }
+          $proc = Start-Process -FilePath $exe -PassThru
+          try {
+            Start-Sleep -Seconds 10
+            if ($proc.HasExited) { throw "Minarva Biz exited during runtime smoke test (exit code $($proc.ExitCode))." }
+            $db = Join-Path $env:APPDATA "Minarva Biz\minarvabiz.db"
+            if (-not (Test-Path $db)) { throw "SQLite database was not created at expected AppData path: $db" }
+            Write-Host "Runtime smoke PASS: process alive and SQLite database exists at $db"
+          } finally {
+            if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+          }
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
