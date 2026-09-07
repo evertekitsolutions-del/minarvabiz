@@ -11,7 +11,7 @@
     "prepare:license": "node scripts/write-license-config.mjs",
     "build:electron": "pnpm run prepare:license && tsc -p tsconfig.electron.json",
     "build": "pnpm run build:renderer && pnpm run build:electron",
-    "typecheck": "pnpm run prepare:license && tsc --noEmit -p tsconfig.electron.json",
+    "typecheck": "pnpm run prepare:license && tsc --noEmit -p tsconfig.json",
     "package:win": "pnpm run build && electron-builder --win --x64 --config electron-builder.yml",
     "package": "pnpm run package:win"
   },
