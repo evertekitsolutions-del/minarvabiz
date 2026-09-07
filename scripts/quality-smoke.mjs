@@ -1,0 +1,70 @@
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
+
+const root = process.cwd();
+
+function read(rel) {
+  return fs.readFileSync(path.join(root, rel), "utf8");
+}
+
+function exists(rel) {
+  return fs.existsSync(path.join(root, rel));
+}
+
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(`QUALITY CHECK FAILED: ${message}`);
+  }
+}
+
+const desktopFiles = [
+  "apps/desktop/electron/main.ts",
+  "apps/desktop/electron/preload.ts",
+  "apps/desktop/src/App.tsx",
+  "apps/desktop/src/lib/sqlite-bootstrap.ts",
+];
+
+for (const file of desktopFiles) assert(exists(file), `Missing critical desktop file: ${file}`);
+
+const desktopSource = desktopFiles.map(read).join("\n");
+const workflow = read(".github/workflows/ci.yml");
+const vite = read("apps/desktop/vite.config.ts");
+const tailwind = read("apps/desktop/tailwind.config.js");
+const desktopPackage = JSON.parse(read("apps/desktop/package.json"));
+const businessLogicPackage = JSON.parse(read("packages/business-logic/package.json"));
+const uiPackage = JSON.parse(read("packages/ui/package.json"));
+const persistence = read("packages/business-logic/src/persistence.ts");
+const sqliteBootstrap = read("apps/desktop/src/lib/sqlite-bootstrap.ts");
+const nav = read("packages/ui/src/lib/nav.ts");
+
+assert(!/minarvabiz-db\.json/.test(desktopSource), "Legacy JSON database file reference exists in desktop source");
+assert(!/ipcMain\.handle\(\s*[\"']db:(read|write)[\"']/.test(desktopSource), "Legacy db:read/db:write IPC handler returned to desktop source");
+assert(/ipcMain\.handle\(\s*[\"']db:readBinary[\"']/.test(desktopSource), "SQLite binary read IPC handler is missing");
+assert(/ipcMain\.handle\(\s*[\"']db:writeBinary[\"']/.test(desktopSource), "SQLite binary write IPC handler is missing");
+assert(/writeSqliteBinary:\s*\(/.test(read("apps/desktop/electron/preload.ts")), "Preload does not expose SQLite write bridge");
+assert(/persistDomainToSqlite\(\): Promise<boolean>/.test(sqliteBootstrap), "SQLite domain persistence is not awaitable");
+assert(/await persistDomainToSqlite\(\)/.test(sqliteBootstrap), "Initial SQLite persistence is not awaited");
+assert(/return pendingWrite;/.test(sqliteBootstrap), "SQLite persistence does not return native write result");
+assert(/base:\s*[\"']\.\/[\"']/.test(vite), "Vite production base path is not relative for Electron file://");
+assert(/packages\/ui\/src/.test(tailwind), "Tailwind content scan does not include shared UI package");
+assert(/build:renderer/.test(desktopPackage.scripts?.build ?? ""), "Desktop build script is missing renderer build");
+assert(/electron-builder --win/.test(desktopPackage.scripts?.["package:win"] ?? ""), "Windows packaging script is missing");
+assert(uiPackage.scripts?.typecheck === "tsc --noEmit", "Shared UI package must retain explicit typecheck script");
+assert(businessLogicPackage.scripts?.typecheck === "tsc --noEmit", "Business-logic package must retain explicit typecheck script");
+assert(/SNAPSHOT_VERSION\s*=\s*3/.test(persistence), "Domain snapshot version is missing or changed unexpectedly");
+assert(/branches:\s*Branch\[\]/.test(persistence) && /activeBranchId/.test(persistence), "Branch state is missing from domain snapshots");
+assert(/quotations\?/.test(persistence) && /cashSessions\?/.test(persistence) && /purchaseReturns\?/.test(persistence), "Extended business snapshot state is missing");
+assert(/dashboard/.test(nav) && /sales/.test(nav) && /laundry/.test(nav) && /reports/.test(nav), "Core navigation modules are missing");
+assert(workflow.includes("Guard against legacy JSON persistence"), "CI legacy JSON guard is missing");
+assert(workflow.includes("Inspect generated renderer CSS"), "CI renderer CSS verification is missing");
+assert(workflow.includes("package:win"), "CI Windows packaging verification is missing");
+
+// localStorage is permitted only as a web fallback. Desktop must use the native bridge.
+const desktopAppSource = read("apps/desktop/src/App.tsx");
+assert(!/localStorage\./.test(desktopAppSource), "Desktop App directly uses localStorage as persistence");
+assert(/persistDomainToSqlite/.test(desktopAppSource), "Desktop App is not wired to SQLite persistence");
+assert(/__minarvaDesktopPersist/.test(sqliteBootstrap), "Desktop native persistence bridge is missing");
+
+console.log("Minarva Biz quality smoke: PASS");
+console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, Electron packaging, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
