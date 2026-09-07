@@ -75,6 +75,8 @@ jobs:
   windows-package:
     runs-on: windows-latest
     needs: desktop
+    env:
+      MINARVA_RUNTIME_SMOKE: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -113,7 +115,37 @@ jobs:
           } finally {
             if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
           }
+      - name: Capture Windows runtime diagnostics
+        if: always()
+        shell: pwsh
+        run: |
+          $candidates = @(
+            (Join-Path $env:APPDATA "Minarva Biz\runtime-smoke.log"),
+            (Join-Path $env:LOCALAPPDATA "Minarva Biz\runtime-smoke.log"),
+            (Join-Path $env:RUNNER_TEMP "MinarvaBiz-UAT\runtime-smoke.log")
+          )
+          $found = $false
+          foreach ($file in $candidates) {
+            if (Test-Path $file) {
+              Write-Host "Runtime diagnostics: $file"
+              Get-Content $file
+              $found = $true
+            }
+          }
+          if (-not $found) { Write-Host "No runtime-smoke.log found in expected locations." }
+      - name: Upload Windows runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: minarvabiz-windows-runtime-diagnostics
+          path: |
+            ${{ env.APPDATA }}\Minarva Biz\runtime-smoke.log
+            ${{ env.LOCALAPPDATA }}\Minarva Biz\runtime-smoke.log
+            ${{ env.RUNNER_TEMP }}\MinarvaBiz-UAT\runtime-smoke.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload Windows installer
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: minarvabiz-windows-installer
