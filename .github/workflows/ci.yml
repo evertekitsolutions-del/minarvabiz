@@ -136,18 +136,6 @@ jobs:
             Write-Host "Runtime diagnostics: $($file.FullName)"
             Get-Content -LiteralPath $file.FullName
           }
-      - name: Upload Windows runtime diagnostics
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: minarvabiz-windows-runtime-diagnostics
-          path: |
-            ${{ env.APPDATA }}\**\runtime-smoke.log
-            ${{ env.LOCALAPPDATA }}\**\runtime-smoke.log
-            ${{ env.RUNNER_TEMP }}\**\runtime-smoke.log
-          if-no-files-found: ignore
-          retention-days: 7
       - name: Upload Windows installer
         if: success()
         uses: actions/upload-artifact@v4
