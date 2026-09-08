@@ -29,6 +29,7 @@ for (const file of desktopFiles) assert(exists(file), `Missing critical desktop 
 
 const desktopSource = desktopFiles.map(read).join("\n");
 const workflow = read(".github/workflows/ci.yml");
+const releaseWorkflow = read(".github/workflows/release-windows.yml");
 const vite = read("apps/desktop/vite.config.ts");
 const tailwind = read("apps/desktop/tailwind.config.js");
 const desktopPackage = JSON.parse(read("apps/desktop/package.json"));
@@ -67,6 +68,14 @@ assert(workflow.includes("actions/setup-node@v7"), "CI should use the Node 24-co
 assert(workflow.includes("pnpm/action-setup@v6"), "CI should use the current pnpm setup action");
 assert(workflow.includes("actions/upload-artifact@v6"), "CI should use the Node 24-compatible artifact action");
 assert((workflow.match(/node-version:\s*24/g) || []).length >= 3, "CI build jobs must use Node 24");
+assert(releaseWorkflow.includes("actions/checkout@v7"), "Windows release workflow should use checkout@v7");
+assert(releaseWorkflow.includes("actions/setup-node@v7"), "Windows release workflow should use setup-node@v7");
+assert(releaseWorkflow.includes("pnpm/action-setup@v6"), "Windows release workflow should use pnpm/action-setup@v6");
+assert(releaseWorkflow.includes("actions/upload-artifact@v6"), "Windows release workflow should use upload-artifact@v6");
+assert((releaseWorkflow.match(/node-version:\s*24/g) || []).length >= 1, "Windows release workflow must use Node 24");
+assert(releaseWorkflow.includes("MINARVA_RUNTIME_SMOKE"), "Windows release runtime smoke is missing");
+assert(releaseWorkflow.includes("Verify bundled production public key"), "Windows release public-key verification is missing");
+assert(releaseWorkflow.includes("MINARVA_LICENSE_PUBLIC_KEY_HEX"), "Windows release licensing configuration validation is missing");
 assert(/productName:\s*Minarva Biz/.test(builder), "Windows package must identify the product as Minarva Biz");
 assert(/const productionPublicKey = \"[0-9a-f]{64}\"/.test(licenseConfigWriter), "Desktop license build must contain a valid production public key");
 assert(!/(BEGIN (?:OPENSSH |RSA |EC |DSA )?PRIVATE KEY)/i.test(desktopSource), "Private signing key material must never be present in desktop source");
@@ -79,4 +88,4 @@ assert(/persistDomainToSqlite/.test(desktopAppSource), "Desktop App is not wired
 assert(/__minarvaDesktopPersist/.test(sqliteBootstrap), "Desktop native persistence bridge is missing");
 
 console.log("Minarva Biz quality smoke: PASS");
-console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, Electron packaging, Node 24 CI hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
+console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
