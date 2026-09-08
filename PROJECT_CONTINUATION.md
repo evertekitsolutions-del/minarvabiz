@@ -43,34 +43,36 @@ Minarva Biz is being developed as a production-grade, offline-first Windows busi
 ## Feature baseline already present
 Dashboard, Customers, Products/Inventory, POS/Sales, Service Orders, Measurements, Order profit, Laundry & Ironing, Expenses, Purchases, Staff, CRM/notifications, Returns/Refunds, Reports, Day-end CSV, Product variants, Quotations, Cash register, A4/thermal printing, Global search, Users/roles/first-run admin, Backup/Restore, Settings, licensing/trial foundations.
 
-## Last verified CI baseline
-- Run #157: `34018988733`
-- Result: success
-- Included successful Web/Desktop/Renderer/Electron/Windows packaging and `.exe` artifact verification.
-- This run predates some later commits, so it must not be treated as proof for later HEADs.
+## Higher-end feature work already added
+- Business Intelligence dashboard insights
+- Exception-first business intelligence panel
+- Business Intelligence component export/integration
+- Dashboard capability work is now the active product-improvement stream; do not roll these changes back.
 
-## Latest known work immediately before this checkpoint
-- CI legacy JSON guard was fixed so SQLite `db:readBinary` / `db:writeBinary` are allowed.
-- Latest intended commit: `4ee672bceb951f573c85709f71a22453d98d0cc1`
-- Message: `ci: fix legacy JSON guard to allow SQLite IPC`
-- Fresh workflow verification was still pending at the time this checkpoint was created.
+## Last completed step
+- Fixed the CI legacy-JSON guard so it allows legitimate SQLite IPC names such as `db:readBinary` and `db:writeBinary`.
+- Commit: `4ee672bceb951f573c85709f71a22453d98d0cc1`.
+- CI run #166 then exposed stale App.tsx UI prop/type mismatches; the repository was subsequently corrected and later dashboard BI work was added.
+- Mandatory continuation checkpoint was added in commit `0365d7f82bd09daf5fdb58bb2b331f32b4efa32d`.
 
-## Current workstream
-**Priority:** establish a reliable continuation loop, then resume the higher-end/world-class feature roadmap from the exact repository state.
+## Current HEAD / current verification
+- Current main HEAD: `0365d7f82bd09daf5fdb58bb2b331f32b4efa32d`
+- Commit: `docs: add mandatory continuation checkpoint`
+- Checkpoint file: `PROJECT_CONTINUATION.md`.
+- Current CI run #210: `34261685522` for this HEAD.
+- Verified in run #210: Web ✅; Desktop legacy-JSON guard ✅; static production quality smoke ✅; business-logic typecheck ✅; UI typecheck ✅; desktop typecheck ✅; renderer build ✅; generated CSS inspection ✅; Electron build ✅.
+- Windows package job is the remaining verification at this checkpoint; it is building the Windows installer and will run installed-runtime smoke/diagnostics before artifact upload.
 
-## Next step
-1. Verify current `main` HEAD and the workflow run/artifact for the guard-fix commit.
-2. If CI is green, continue with the next unfinished world-class product capability already represented in repository roadmap/issues/commits; inspect repository state before selecting it.
-3. After each concrete change, update this checkpoint.
+## Current product direction
+The repository has moved beyond foundation hardening into higher-end dashboard/business-intelligence capabilities. Continue that product roadmap from the repository state; do not restart old foundation tasks.
 
-## Release/runtime gate still requiring physical Windows validation
-- Install fresh Windows `.exe`
-- Launch without DB/SQLite/asset errors
-- Verify dashboard/sidebar visual integrity
-- Create customer/product/sale
-- Restart and confirm persistence in `%APPDATA%\\Minarva Biz\\minarvabiz.db`
-- Verify offline license activation/validation
-- Verify backup/restore
+## Single next step
+After CI run #210 completes, inspect the Windows installed-runtime smoke and diagnostics. Then continue from the latest Business Intelligence dashboard implementation with the next unfinished high-end capability already supported by the repository architecture.
+
+## Release/runtime gate
+- Fresh Windows `.exe` must be built from a current green HEAD.
+- Windows installed-runtime smoke/diagnostics should be reviewed before release claims.
+- Physical acceptance still includes install/launch, database persistence after restart, dashboard/sidebar visual integrity, offline licensing, and backup/restore.
 
 ## Important constraints
 - Do not remove existing features/modules to make room for new ones.
