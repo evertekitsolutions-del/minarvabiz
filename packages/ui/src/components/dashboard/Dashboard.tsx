@@ -9,6 +9,7 @@ import { CategoryBreakdown } from "./CategoryBreakdown";
 import { RecentOrders, type RecentOrderRow } from "./RecentOrders";
 import { LowStockAlert, type LowStockItem } from "./LowStockAlert";
 import { QuickActions, type QuickAction } from "./QuickActions";
+import { BusinessInsights } from "./BusinessInsights";
 import { SalesOverviewChart, type SalesPoint } from "../charts/SalesOverviewChart";
 import type { OrderStatusItem } from "./OrderStatusSummary";
 import type { CategoryItem } from "./CategoryBreakdown";
@@ -166,6 +167,9 @@ export function Dashboard({
           )}
         </div>
       )}
+
+      {/* Intelligent exception-first layer */}
+      <BusinessInsights data={data} />
 
       {/* Charts + summaries */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
