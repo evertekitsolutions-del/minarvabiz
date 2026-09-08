@@ -50,25 +50,26 @@ Dashboard, Customers, Products/Inventory, POS/Sales, Service Orders, Measurement
 - Exception-first business intelligence panel
 - Business Intelligence component export/integration
 - Actionable Business Intelligence insight controls that can route users directly to relevant modules
+- Global command palette with Ctrl/Cmd+K keyboard access, searchable module/action list, keyboard navigation and quick commands
 - Dashboard capability work remains the active product-improvement stream; do not roll these changes back.
 
 ## Last completed step
-- Verified CI run #210 (`34261685522`) on commit `0365d7f82bd09daf5fdb58bb2b331f32b4efa32d` end-to-end, including Windows installer generation and installed-runtime smoke/diagnostics.
-- Windows runtime smoke confirmed the installed Minarva Biz process stayed alive and created a valid SQLite database at `C:\Users\runneradmin\AppData\Roaming\@minarvabiz\desktop\minarvabiz.db`.
-- Installer artifact was successfully uploaded (artifact ID `10070259365`).
-- After that verified checkpoint, actionable BI UI was implemented in commits `72cf0b4db0e94347f13c1bfa99c94179d7f0d3ce` and `22456b1a2d5dee9f4eab4bb687edc565cc775962`; these new commits are not yet CI-verified.
+- Verified CI run #215 (`34263828731`) on commit `6a6ec4f6ec82b58eb01b9432d6791d4943d576ab` end-to-end, including Web, Desktop, Windows installer packaging, installed-runtime smoke and runtime diagnostics.
+- Windows installer artifact was successfully uploaded as artifact ID `10071077385`.
+- Implemented the next P0 command-center capability after actionable BI: global command palette in commits `6fb0561ce81b7a76c6617ab4fe6a72b1ec2792d1`, `371522c211c38c1e6bf6d4bc00ad878e9dc7b7b7`, and `319dfcd713d8d6e5bd44e3bff86aa1034335b16c`.
+- The palette is integrated at the shared `AppShell` level, so the Windows and web shells inherit it without removing existing module functionality. Source-level integration has been inspected; fresh CI for the new commits is pending.
 
 ## Current HEAD / current verification
-- Current main HEAD: `22456b1a2d5dee9f4eab4bb687edc565cc775962`
-- Latest changes: Dashboard BI insights now expose actions; desktop wires those actions to relevant modules.
-- The last fully verified CI remains run #210 for the previous HEAD `0365d7f...`.
-- The latest HEAD still requires fresh CI verification before it can be treated as a release candidate.
+- Current main HEAD: `319dfcd713d8d6e5bd44e3bff86aa1034335b16c`
+- Latest completed product change: global command palette for module/action navigation.
+- Last fully verified CI is run #215 for commit `6a6ec4f...`.
+- The current HEAD contains the new command palette but does not yet have a surfaced CI run; do not treat it as release-candidate verified until the fresh CI completes.
 
 ## Current product direction
-The repository has moved beyond foundation hardening into higher-end dashboard/business-intelligence capabilities. Continue that product roadmap from the repository state; do not restart old foundation tasks.
+The repository has moved beyond foundation hardening into higher-end dashboard/business-intelligence and command-center capabilities. Continue that product roadmap from the repository state; do not restart old foundation tasks.
 
 ## Single next step
-Run/inspect the fresh CI for current HEAD `22456b1a2d5dee9f4eab4bb687edc565cc775962`; if green, verify the new actionable BI behavior is included in the Windows installer/runtime path, then continue with the next unfinished high-end dashboard capability.
+Inspect the fresh CI for current HEAD `319dfcd713d8d6e5bd44e3bff86aa1034335b16c`; if green, verify the command palette is included in the Windows installer/runtime path, then continue with the next unfinished high-end capability from the roadmap.
 
 ## Release/runtime gate
 - Fresh Windows `.exe` must be built from a current green HEAD.
