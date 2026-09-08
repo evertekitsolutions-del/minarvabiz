@@ -32,6 +32,8 @@ const workflow = read(".github/workflows/ci.yml");
 const vite = read("apps/desktop/vite.config.ts");
 const tailwind = read("apps/desktop/tailwind.config.js");
 const desktopPackage = JSON.parse(read("apps/desktop/package.json"));
+const builder = read("apps/desktop/electron-builder.yml");
+const licenseConfigWriter = read("apps/desktop/scripts/write-license-config.mjs");
 const businessLogicPackage = JSON.parse(read("packages/business-logic/package.json"));
 const uiPackage = JSON.parse(read("packages/ui/package.json"));
 const persistence = read("packages/business-logic/src/persistence.ts");
@@ -55,10 +57,20 @@ assert(businessLogicPackage.scripts?.typecheck === "tsc --noEmit", "Business-log
 assert(/SNAPSHOT_VERSION\s*=\s*3/.test(persistence), "Domain snapshot version is missing or changed unexpectedly");
 assert(/branches:\s*Branch\[\]/.test(persistence) && /activeBranchId/.test(persistence), "Branch state is missing from domain snapshots");
 assert(/quotations\?/.test(persistence) && /cashSessions\?/.test(persistence) && /purchaseReturns\?/.test(persistence), "Extended business snapshot state is missing");
-assert(/dashboard/.test(nav) && /sales/.test(nav) && /laundry/.test(nav) && /reports/.test(nav), "Core navigation modules are missing");
+assert(/dashboard/.test(nav) && /sales/.test(nav) && /products/.test(nav) && /laundry/.test(nav) && /reports/.test(nav) && /backup/.test(nav), "Core navigation modules are missing");
 assert(workflow.includes("Guard against legacy JSON persistence"), "CI legacy JSON guard is missing");
 assert(workflow.includes("Inspect generated renderer CSS"), "CI renderer CSS verification is missing");
 assert(workflow.includes("package:win"), "CI Windows packaging verification is missing");
+assert(workflow.includes("MINARVA_RUNTIME_SMOKE"), "CI Windows runtime smoke is missing");
+assert(workflow.includes("actions/checkout@v7"), "CI should use the Node 24-compatible checkout action");
+assert(workflow.includes("actions/setup-node@v7"), "CI should use the Node 24-compatible setup-node action");
+assert(workflow.includes("pnpm/action-setup@v6"), "CI should use the current pnpm setup action");
+assert(workflow.includes("actions/upload-artifact@v6"), "CI should use the Node 24-compatible artifact action");
+assert((workflow.match(/node-version:\s*24/g) || []).length >= 3, "CI build jobs must use Node 24");
+assert(/productName:\s*Minarva Biz/.test(builder), "Windows package must identify the product as Minarva Biz");
+assert(/const productionPublicKey = \"[0-9a-f]{64}\"/.test(licenseConfigWriter), "Desktop license build must contain a valid production public key");
+assert(!/(BEGIN (?:OPENSSH |RSA |EC |DSA )?PRIVATE KEY)/i.test(desktopSource), "Private signing key material must never be present in desktop source");
+assert(!/(MINARVA|LICENSE)_LICENSE_PRIVATE_KEY|LICENSE_PRIVATE_KEY/i.test(desktopSource), "Private license key environment/config names must not be present in desktop source");
 
 // localStorage is permitted only as a web fallback. Desktop must use the native bridge.
 const desktopAppSource = read("apps/desktop/src/App.tsx");
@@ -67,4 +79,4 @@ assert(/persistDomainToSqlite/.test(desktopAppSource), "Desktop App is not wired
 assert(/__minarvaDesktopPersist/.test(sqliteBootstrap), "Desktop native persistence bridge is missing");
 
 console.log("Minarva Biz quality smoke: PASS");
-console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, Electron packaging, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
+console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, Electron packaging, Node 24 CI hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
