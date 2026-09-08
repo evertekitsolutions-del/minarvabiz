@@ -40,6 +40,24 @@ function NavIcon({ name, className }: { name: string; className?: string }) {
           <path d="M16 10a4 4 0 0 1-8 0" />
         </svg>
       );
+    case "package":
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" />
+          <path d="m4 7.5 8 4.5 8-4.5" />
+          <path d="M12 12v9" />
+        </svg>
+      );
+    case "truck":
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 6h11v10H3z" />
+          <path d="M14 10h4l3 3v3h-7z" />
+          <circle cx="7" cy="18" r="2" />
+          <circle cx="18" cy="18" r="2" />
+          <path d="M9 18h7" />
+        </svg>
+      );
     case "scissors":
       return (
         <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -104,6 +122,13 @@ function NavIcon({ name, className }: { name: string; className?: string }) {
           <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
         </svg>
       );
+    case "bell":
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+      );
     case "settings":
       return (
         <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -146,11 +171,7 @@ export function Sidebar({
       <div className={cn("border-b border-white/5 px-4 py-5", collapsed && "px-2")}>
         {!collapsed ? (
           <div className="flex flex-col items-center text-center">
-            <img
-              src={brandLogo}
-              alt="Minarva Biz"
-              className="h-[82px] w-[82px] object-contain drop-shadow-[0_8px_18px_rgba(37,99,235,0.25)]"
-            />
+            <img src={brandLogo} alt="Minarva Biz" className="h-[82px] w-[82px] object-contain drop-shadow-[0_8px_18px_rgba(37,99,235,0.25)]" />
             <div className="mt-2 text-[22px] font-bold tracking-tight text-white">
               Minarva<span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-fuchsia-400 bg-clip-text text-transparent"> Biz</span>
             </div>
@@ -163,7 +184,6 @@ export function Sidebar({
         )}
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {MAIN_NAV.map((item) => {
           const active = item.id === activeId;
@@ -188,7 +208,6 @@ export function Sidebar({
         })}
       </nav>
 
-      {/* User */}
       <div className={cn("border-t border-white/5 p-4", collapsed && "flex justify-center p-3")}>
         <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-semibold text-white">
