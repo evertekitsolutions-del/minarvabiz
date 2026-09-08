@@ -186,6 +186,18 @@ export function App() {
   }
 
   const navTo = (id: NavItemId) => { setActiveNav(id); setSelectedOrder(null); };
+  const handleInsightAction = React.useCallback((action: string) => {
+    const targets: Record<string, NavItemId> = {
+      "Review low stock": "sales",
+      "Open outstanding payments": "reports",
+      "Review pending orders": "services",
+      "Open ready orders": "services",
+      "Open reports": "reports",
+      "Review expenses": "expenses",
+    };
+    const target = targets[action];
+    if (target) navTo(target);
+  }, []);
   const laundry = phase5Store.listLaundryOrders();
   const expenses = phase5Store.listExpenses();
   const purchases = phase5Store.listPurchases();
@@ -204,7 +216,7 @@ export function App() {
   const view = activeNav as string;
 
   return <AppShell activeNav={activeNav} onNavigate={(_href, id) => navTo(id)} sidebar={{ user: { name: "Admin", role: "Super Admin" }, logoSrc: "logo-mark.png" }} header={{ showSearch: view !== "dashboard", title: view === "services" ? "Services & Orders" : view, subtitle: "Welcome back, Admin!", notificationCount: phase6Store.unreadNotificationCount(), messageCount: 3 }}>
-    {view === "dashboard" && dash && <Dashboard data={dash} quickActions={actions} />}
+    {view === "dashboard" && dash && <Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction} />}
     {view === "customers" && <><CustomerList customers={customers} onAdd={() => setCustOpen(true)} onSearch={(q) => setCustomers(store.listCustomers(q))} /><Modal open={custOpen} title="Add Customer" onClose={() => setCustOpen(false)} footer={<><Button variant="outline" onClick={() => setCustOpen(false)}>Cancel</Button><Button onClick={() => { const r = store.createCustomer(custForm); if (r) { setCustOpen(false); setCustForm({ name: "", phone: "", email: "" }); void persistAndRefresh(); } }}>Save</Button></>}><div className="space-y-4"><FormField label="Name"><input className={inputClass} value={custForm.name} onChange={(e) => setCustForm({ ...custForm, name: e.target.value })} /></FormField><FormField label="Phone"><input className={inputClass} value={custForm.phone} onChange={(e) => setCustForm({ ...custForm, phone: e.target.value })} /></FormField><FormField label="Email"><input className={inputClass} value={custForm.email} onChange={(e) => setCustForm({ ...custForm, email: e.target.value })} /></FormField></div></Modal></>}
     {view === "products" && <ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={() => setLowStockOnly((v) => !v)} />}
     {view === "sales" && <div className="space-y-4"><div className="flex gap-2"><Button variant={salesTab === "pos" ? "primary" : "outline"} onClick={() => setSalesTab("pos")}>POS Billing</Button><Button variant={salesTab === "history" ? "primary" : "outline"} onClick={() => setSalesTab("history")}>Sales History</Button></div>{salesTab === "pos" ? <PosBilling products={products} customers={customers} onCompleteSale={handleSale} /> : <SalesList sales={sales} />}</div>}
