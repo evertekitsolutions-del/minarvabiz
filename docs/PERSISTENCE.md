@@ -2,29 +2,20 @@
 
 ## Snapshot format
 
-Versioned JSON (`SNAPSHOT_VERSION = 1`) containing customers, products, categories,
-sales, payments, orders, laundry, expenses, purchases, suppliers, staff, returns,
-audit, branches.
-
-## APIs
-
-```ts
-import {
-  exportDomainSnapshotJson,
-  importDomainSnapshotJson,
-} from "@minarvabiz/business-logic";
-```
-
-## UI
-
-Settings → Domain persistence panel: export download, import file, localStorage save/load.
+The desktop domain snapshot is versioned and stored inside the native SQLite database in the `domain_kv` table. The current snapshot version is `3` and covers the core commerce, services, operations, staff, governance, branch, quotation, cash-session, and purchase-return state.
 
 ## Desktop
 
-Electron IPC writes `userData/minarvabiz-db.json` (file-JSON adapter).  
-Domain snapshot can additionally be exported from Settings for backup/migration.
+The Offline Windows edition uses native SQLite at:
 
-## Online
+`app.getPath('userData')/minarvabiz.db`
 
-`createDatabase({ edition: "online" })` uses Supabase config from env when present;
-falls back to memory bridge until table mappers are implemented.
+Renderer persistence goes through the Electron preload bridge and is serialized so rapid saves are written in FIFO order. Domain persistence is awaited and reports the native write result. The desktop app does not use `localStorage` as its primary persistence layer.
+
+## Backup / restore
+
+The desktop edition supports manual and automatic SQLite backups, integrity verification, export, restore with a pre-restore safety backup, and application relaunch after restore.
+
+## Online / Hybrid
+
+Online uses Supabase PostgreSQL. Hybrid keeps SQLite as the desktop primary store and uses the outbox/conflict-resolution architecture for cloud synchronization.
