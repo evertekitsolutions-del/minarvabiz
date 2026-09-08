@@ -44,6 +44,7 @@ export interface DashboardProps {
   quickActions?: QuickAction[];
   onViewAllOrders?: () => void;
   onViewAllStock?: () => void;
+  onInsightAction?: (action: string) => void;
   className?: string;
 }
 
@@ -81,6 +82,7 @@ export function Dashboard({
   quickActions = [],
   onViewAllOrders,
   onViewAllStock,
+  onInsightAction,
   className,
 }: DashboardProps) {
   const { stats } = data;
@@ -89,112 +91,39 @@ export function Dashboard({
     <div className={cn("space-y-5", className)}>
       {/* Primary KPI row — matches reference */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Total Sales"
-          value={stats.totalSales.value}
-          changeLabel={stats.totalSales.change}
-          changePositive={stats.totalSales.positive}
-          tone="blue"
-          icon={defaultIcons.cart}
-          sparkline={stats.totalSales.spark}
-        />
-        <StatCard
-          title="Total Services"
-          value={stats.totalServices.value}
-          changeLabel={stats.totalServices.change}
-          changePositive={stats.totalServices.positive}
-          tone="green"
-          icon={defaultIcons.bag}
-          sparkline={stats.totalServices.spark}
-        />
-        <StatCard
-          title="Laundry Sales"
-          value={stats.laundrySales.value}
-          changeLabel={stats.laundrySales.change}
-          changePositive={stats.laundrySales.positive}
-          tone="orange"
-          icon={defaultIcons.laundry}
-          sparkline={stats.laundrySales.spark}
-        />
-        <StatCard
-          title="Total Profit"
-          value={stats.totalProfit.value}
-          changeLabel={stats.totalProfit.change}
-          changePositive={stats.totalProfit.positive}
-          tone="purple"
-          icon={defaultIcons.rupee}
-          sparkline={stats.totalProfit.spark}
-        />
+        <StatCard title="Total Sales" value={stats.totalSales.value} changeLabel={stats.totalSales.change} changePositive={stats.totalSales.positive} tone="blue" icon={defaultIcons.cart} sparkline={stats.totalSales.spark} />
+        <StatCard title="Total Services" value={stats.totalServices.value} changeLabel={stats.totalServices.change} changePositive={stats.totalServices.positive} tone="green" icon={defaultIcons.bag} sparkline={stats.totalServices.spark} />
+        <StatCard title="Laundry Sales" value={stats.laundrySales.value} changeLabel={stats.laundrySales.change} changePositive={stats.laundrySales.positive} tone="orange" icon={defaultIcons.laundry} sparkline={stats.laundrySales.spark} />
+        <StatCard title="Total Profit" value={stats.totalProfit.value} changeLabel={stats.totalProfit.change} changePositive={stats.totalProfit.positive} tone="purple" icon={defaultIcons.rupee} sparkline={stats.totalProfit.spark} />
       </div>
 
       {/* Secondary metrics row (requirements) */}
-      {(stats.todayExpenses ||
-        stats.pendingOrders ||
-        stats.readyOrders ||
-        stats.totalCustomers ||
-        stats.lowStockCount ||
-        stats.outstandingPayments) && (
+      {(stats.todayExpenses || stats.pendingOrders || stats.readyOrders || stats.totalCustomers || stats.lowStockCount || stats.outstandingPayments) && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {stats.todayExpenses && (
-            <StatCard
-              title="Today's Expenses"
-              value={stats.todayExpenses.value}
-              changeLabel={stats.todayExpenses.change}
-              changePositive={stats.todayExpenses.positive}
-              tone="rose"
-              className="!p-3"
-            />
-          )}
-          {stats.pendingOrders && (
-            <StatCard title="Pending Orders" value={stats.pendingOrders.value} tone="orange" className="!p-3" />
-          )}
-          {stats.readyOrders && (
-            <StatCard title="Ready Orders" value={stats.readyOrders.value} tone="green" className="!p-3" />
-          )}
-          {stats.totalCustomers && (
-            <StatCard title="Total Customers" value={stats.totalCustomers.value} tone="blue" className="!p-3" />
-          )}
-          {stats.lowStockCount && (
-            <StatCard title="Low Stock Items" value={stats.lowStockCount.value} tone="rose" className="!p-3" />
-          )}
-          {stats.outstandingPayments && (
-            <StatCard
-              title="Outstanding Payments"
-              value={stats.outstandingPayments.value}
-              tone="slate"
-              className="!p-3"
-            />
-          )}
+          {stats.todayExpenses && <StatCard title="Today's Expenses" value={stats.todayExpenses.value} changeLabel={stats.todayExpenses.change} changePositive={stats.todayExpenses.positive} tone="rose" className="!p-3" />}
+          {stats.pendingOrders && <StatCard title="Pending Orders" value={stats.pendingOrders.value} tone="orange" className="!p-3" />}
+          {stats.readyOrders && <StatCard title="Ready Orders" value={stats.readyOrders.value} tone="green" className="!p-3" />}
+          {stats.totalCustomers && <StatCard title="Total Customers" value={stats.totalCustomers.value} tone="blue" className="!p-3" />}
+          {stats.lowStockCount && <StatCard title="Low Stock Items" value={stats.lowStockCount.value} tone="rose" className="!p-3" />}
+          {stats.outstandingPayments && <StatCard title="Outstanding Payments" value={stats.outstandingPayments.value} tone="slate" className="!p-3" />}
         </div>
       )}
 
       {/* Intelligent exception-first layer */}
-      <BusinessInsights data={data} />
+      <BusinessInsights data={data} onAction={onInsightAction} />
 
       {/* Charts + summaries */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <div className="xl:col-span-6">
-          <SalesOverviewChart data={data.salesSeries} />
-        </div>
-        <div className="xl:col-span-3">
-          <BusinessSummary items={data.businessSummary} netProfit={data.netProfit} />
-        </div>
-        <div className="xl:col-span-3">
-          <OrderStatusSummary items={data.orderStatus} />
-        </div>
+        <div className="xl:col-span-6"><SalesOverviewChart data={data.salesSeries} /></div>
+        <div className="xl:col-span-3"><BusinessSummary items={data.businessSummary} netProfit={data.netProfit} /></div>
+        <div className="xl:col-span-3"><OrderStatusSummary items={data.orderStatus} /></div>
       </div>
 
       {/* Categories + orders + low stock */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="lg:col-span-4">
-          <CategoryBreakdown items={data.categories} />
-        </div>
-        <div className="lg:col-span-5">
-          <RecentOrders rows={data.recentOrders} onViewAll={onViewAllOrders} />
-        </div>
-        <div className="lg:col-span-3">
-          <LowStockAlert items={data.lowStock} onViewAll={onViewAllStock} />
-        </div>
+        <div className="lg:col-span-4"><CategoryBreakdown items={data.categories} /></div>
+        <div className="lg:col-span-5"><RecentOrders rows={data.recentOrders} onViewAll={onViewAllOrders} /></div>
+        <div className="lg:col-span-3"><LowStockAlert items={data.lowStock} onViewAll={onViewAllStock} /></div>
       </div>
 
       {/* Quick actions */}
