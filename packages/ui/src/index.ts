@@ -8,6 +8,8 @@ export * from "./components/layout/Sidebar";
 export * from "./components/layout/Header";
 export * from "./components/layout/AppShell";
 
+export * from "./components/command/CommandPalette";
+
 export * from "./components/dashboard/StatCard";
 export * from "./components/dashboard/BusinessSummary";
 export * from "./components/dashboard/OrderStatusSummary";
