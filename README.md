@@ -32,9 +32,9 @@ Built for real boutique, tailoring, and laundry shops.
 | **License** | Ed25519 activation, plan limits, grace, multi-branch foundation |
 | **Production** | Feature gates, Electron security shell, env hardening, docs |
 | **Persistence** | Repository pattern, SQLite/Postgres DDL, local auth, license-admin issuer |
-| **Desktop pack** | File-JSON durable store, Electron IPC DB, electron-builder config |
+| **Desktop pack** | SQLite durable store, Electron IPC DB, electron-builder config |
 | **Persistence bridge** | Domain snapshot export/import, AuthGate, Supabase skeleton |
-| **Full hydrate** | All domain stores hydrate + auto localStorage bootstrap |
+| **Full hydrate** | All domain stores hydrate with controlled local bootstrap |
 | **Ops polish** | Auto-save on mutations, receipt print, logout, optional auth |
 | **Live ops** | Live dashboard metrics, shop profile, order receipts |
 | **Collections** | Customer payments, day-end close, message templates |
