@@ -96,7 +96,13 @@ const dotClass: Record<BusinessInsight["tone"], string> = {
   info: "bg-blue-500",
 };
 
-export function BusinessInsights({ data }: { data: DashboardData }) {
+export function BusinessInsights({
+  data,
+  onAction,
+}: {
+  data: DashboardData;
+  onAction?: (action: string) => void;
+}) {
   const insights = React.useMemo(() => buildInsights(data), [data]);
 
   return (
@@ -112,10 +118,19 @@ export function BusinessInsights({ data }: { data: DashboardData }) {
           <div key={`${item.title}-${item.detail}`} className={`rounded-xl border p-3 ${toneClass[item.tone]}`}>
             <div className="flex items-start gap-3">
               <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${dotClass[item.tone]}`} />
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold text-slate-900">{item.title}</div>
                 <p className="mt-1 text-xs leading-5 text-slate-600">{item.detail}</p>
-                {item.action && <div className="mt-2 text-xs font-semibold text-slate-700">{item.action} →</div>}
+                {item.action && onAction && (
+                  <button
+                    type="button"
+                    onClick={() => onAction(item.action!)}
+                    className="mt-2 inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold text-slate-700 transition hover:bg-white/70 hover:text-slate-950"
+                  >
+                    {item.action} →
+                  </button>
+                )}
+                {item.action && !onAction && <div className="mt-2 text-xs font-semibold text-slate-700">{item.action} →</div>}
               </div>
             </div>
           </div>
