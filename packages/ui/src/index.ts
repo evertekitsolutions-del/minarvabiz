@@ -15,6 +15,7 @@ export * from "./components/dashboard/CategoryBreakdown";
 export * from "./components/dashboard/RecentOrders";
 export * from "./components/dashboard/LowStockAlert";
 export * from "./components/dashboard/QuickActions";
+export * from "./components/dashboard/BusinessInsights";
 export * from "./components/dashboard/Dashboard";
 
 export * from "./components/charts/SalesOverviewChart";
