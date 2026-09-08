@@ -4,6 +4,7 @@ import * as React from "react";
 import { cn } from "../../lib/cn";
 import { Sidebar, type SidebarProps } from "./Sidebar";
 import { Header, type HeaderProps } from "./Header";
+import { CommandPalette } from "../command/CommandPalette";
 import type { NavItemId } from "../../lib/nav";
 
 export interface AppShellProps {
@@ -71,6 +72,7 @@ export function AppShell({
         />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
       </div>
+      <CommandPalette activeNav={activeNav} onNavigate={onNavigate} />
     </div>
   );
 }
