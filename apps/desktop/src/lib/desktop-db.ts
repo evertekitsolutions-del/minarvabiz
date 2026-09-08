@@ -9,8 +9,8 @@ import {
   createSqliteUnitOfWork,
   nodeFileIO,
   type SqliteDatabase,
-} from "@minarvabiz/database/adapters/sqlite";
-import { backupSqliteFile, restoreSqliteFile } from "@minarvabiz/database/adapters/sqlite-files";
+} from "../../../../packages/database/src/adapters/sqlite";
+import { backupSqliteFile, restoreSqliteFile } from "../../../../packages/database/src/adapters/sqlite-files";
 
 let sqlite: SqliteDatabase | null = null;
 let uow: UnitOfWork | null = null;
