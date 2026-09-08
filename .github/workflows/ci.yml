@@ -138,6 +138,7 @@ jobs:
           }
       - name: Upload Windows runtime diagnostics
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: minarvabiz-windows-runtime-diagnostics
