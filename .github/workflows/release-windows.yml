@@ -17,11 +17,11 @@ jobs:
       MINARVA_LICENSE_PUBLIC_KEY_HEX: ${{ secrets.MINARVA_LICENSE_PUBLIC_KEY_HEX }}
       VITE_LICENSE_API_URL: ${{ vars.VITE_LICENSE_API_URL }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - name: Validate production licensing configuration
@@ -102,7 +102,7 @@ jobs:
           Write-Host "Bundled production public key verified."
 
       - name: Upload release installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: minarvabiz-windows-installer
           path: apps/desktop/release/*.exe
