@@ -5,18 +5,15 @@
 - `contextIsolation: true`
 - `nodeIntegration: false`
 - Sandboxed preload
-- IPC only for version, paths, and durable DB read/write
+- IPC only for version, paths, and durable SQLite DB read/write
 
 ## Data file
 
-`app.getPath('userData')/minarvabiz-db.json` via file-JSON adapter.
+The Offline Windows edition uses native SQLite at:
 
-For production native SQLite:
+`app.getPath('userData')/minarvabiz.db`
 
-```bash
-pnpm add better-sqlite3 drizzle-orm
-# implement packages/database/src/adapters/sqlite.ts using SQLITE_DDL
-```
+The renderer accesses the database through the narrow Electron preload bridge (`readSqliteBinary` / `writeSqliteBinary`). No legacy JSON database is used as the desktop persistence store.
 
 ## Package Windows installer
 
@@ -25,10 +22,10 @@ On a machine with ≥4GB RAM:
 ```bash
 pnpm install
 cd apps/desktop
-pnpm add -D electron vite @vitejs/plugin-react electron-builder concurrently wait-on
-# add icons under build/
 pnpm exec electron-builder --win --config electron-builder.yml
 ```
+
+The repository CI builds the installer on `windows-latest`, verifies that an `.exe` is produced, installs it silently, launches the installed application, and checks that a valid SQLite database is created under the standard Windows application-data roots.
 
 Output: `apps/desktop/release/MinarvaBiz-Setup-*.exe`
 
