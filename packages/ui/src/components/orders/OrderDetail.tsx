@@ -1,21 +1,30 @@
 "use client";
 
 import * as React from "react";
-import type { ServiceOrder, OrderStatus } from "@minarvabiz/types";
+import type { MeasurementProfile, ServiceOrder, OrderStatus } from "@minarvabiz/types";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
 import {
   SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_FLOW,
+  measurementRevisionHistory,
 } from "@minarvabiz/business-logic";
+
+function measurementLabel(key: string): string {
+  return key
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/^./, (value) => value.toUpperCase());
+}
 
 export function OrderDetail({
   order,
+  measurementProfiles = [],
   onStatusChange,
   onAddExpense,
   onClose,
 }: {
   order: ServiceOrder;
+  measurementProfiles?: MeasurementProfile[];
   onStatusChange?: (status: OrderStatus) => void;
   onAddExpense?: (description: string, amount: number) => void;
   onClose?: () => void;
@@ -29,6 +38,12 @@ export function OrderDetail({
     totalCost: order.externalMaterialCost + order.orderExpensesTotal,
     grossProfit: order.price - order.externalMaterialCost - order.orderExpensesTotal,
   };
+  const selectedProfile = order.measurementProfileId
+    ? measurementProfiles.find((profile) => profile.id === order.measurementProfileId) ?? null
+    : null;
+  const measurementHistory = selectedProfile
+    ? measurementRevisionHistory(measurementProfiles, selectedProfile)
+    : [];
 
   return (
     <div className="space-y-4">
@@ -42,7 +57,6 @@ export function OrderDetail({
         {onClose && <Button variant="outline" onClick={onClose}>Close</Button>}
       </div>
 
-      {/* Status tracker */}
       <div className="flex flex-wrap gap-2">
         {ORDER_STATUS_FLOW.map((s) => {
           const active = order.status === s;
@@ -103,15 +117,50 @@ export function OrderDetail({
         </Card>
       </div>
 
+      {measurementHistory.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="text-sm font-semibold text-slate-800">Measurement history</CardTitle>
+              <span className="text-xs text-slate-400">{selectedProfile?.label} · {measurementHistory.length} revision{measurementHistory.length === 1 ? "" : "s"}</span>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {measurementHistory.map((profile, index) => (
+              <div key={profile.id} className={`rounded-xl border p-3 ${index === 0 ? "border-indigo-200 bg-indigo-50/40" : "border-slate-200 bg-slate-50/50"}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-slate-800">
+                    Revision {profile.version ?? measurementHistory.length - index}
+                    {index === 0 && <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">USED BY THIS ORDER</span>}
+                  </div>
+                  <span className="text-xs text-slate-500">{new Date(profile.recordedAt).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {Object.entries(profile.fields).map(([key, value]) =>
+                    value != null && (
+                      <div key={key} className="rounded-lg bg-white px-2 py-1.5 ring-1 ring-slate-100">
+                        <div className="text-[10px] uppercase text-slate-400">{measurementLabel(key)}</div>
+                        <div className="text-sm font-medium text-slate-800">{String(value)}</div>
+                      </div>
+                    )
+                  )}
+                </div>
+                {profile.notes && <p className="mt-2 text-xs text-slate-500">{profile.notes}</p>}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {order.measurements && Object.keys(order.measurements).length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-sm font-semibold text-slate-800">Measurements</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm font-semibold text-slate-800">Measurements used on order</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-2 text-sm sm:grid-cols-4">
               {Object.entries(order.measurements).map(([k, v]) =>
                 v != null && typeof v !== "object" ? (
                   <div key={k} className="rounded-lg bg-slate-50 px-2 py-1.5">
-                    <div className="text-[10px] uppercase text-slate-400">{k}</div>
+                    <div className="text-[10px] uppercase text-slate-400">{measurementLabel(k)}</div>
                     <div className="font-medium">{String(v)}</div>
                   </div>
                 ) : null
