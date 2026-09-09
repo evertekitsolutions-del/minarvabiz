@@ -12,7 +12,7 @@ import { generateId, nowISO } from "@minarvabiz/utils";
 import {
   calculateOrderPricing, nextOrderNumber, validateOrderInput, canTransition,
 } from "./orders";
-import { createMeasurementRevision } from "./measurement-revisions";
+import { createMeasurementRevision, latestMeasurementRevision, measurementRevisionHistory } from "./measurement-revisions";
 import * as mainStore from "./store";
 import { touchPersistence } from "./autosave";
 import { remoteCreateOrder } from "./remote-write";
@@ -52,14 +52,10 @@ export function getMeasurementProfile(id: UUID): MeasurementProfile | undefined 
 }
 
 export function latestMeasurementProfile(customerId: UUID, label = "Default"): MeasurementProfile | null {
-  const matching = measurements.filter(
-    (profile) => profile.customerId === customerId && !profile.deletedAt && profile.label === label
+  return latestMeasurementRevision(
+    measurements.filter((profile) => profile.customerId === customerId),
+    label
   );
-  if (matching.length === 0) return null;
-  return [...matching].sort((a, b) => {
-    const versionDelta = (b.version ?? 1) - (a.version ?? 1);
-    return versionDelta || b.recordedAt.localeCompare(a.recordedAt);
-  })[0] ?? null;
 }
 
 export function listMeasurementHistory(
@@ -69,22 +65,9 @@ export function listMeasurementHistory(
   const profiles = listMeasurementProfiles(customerId);
   const latest = label
     ? latestMeasurementProfile(customerId, label)
-    : [...profiles].sort((a, b) => {
-        const versionDelta = (b.version ?? 1) - (a.version ?? 1);
-        return versionDelta || b.recordedAt.localeCompare(a.recordedAt);
-      })[0] ?? null;
+    : latestMeasurementRevision(profiles, profiles[0]?.label ?? "Default");
   if (!latest) return [];
-
-  const byId = new Map(profiles.map((profile) => [profile.id, profile]));
-  const history: MeasurementProfile[] = [];
-  const seen = new Set<UUID>();
-  let current: MeasurementProfile | undefined = latest;
-  while (current && !seen.has(current.id)) {
-    history.push(current);
-    seen.add(current.id);
-    current = current.previousProfileId ? byId.get(current.previousProfileId) : undefined;
-  }
-  return history;
+  return measurementRevisionHistory(profiles, latest);
 }
 
 export function listOrders(opts?: {
@@ -274,11 +257,13 @@ function round2(n: number) {
   const custs = mainStore.listCustomers();
   if (custs.length === 0) return;
   const c = custs[0];
-  saveMeasurementProfile({
-    customerId: c.id,
-    label: "Standard",
-    fields: { shoulder: 14, chest: 36, waist: 30, hip: 38, sleeve: 22, length: 42 },
-  });
+  if (!latestMeasurementProfile(c.id, "Standard")) {
+    saveMeasurementProfile({
+      customerId: c.id,
+      label: "Standard",
+      fields: { shoulder: 14, chest: 36, waist: 30, hip: 38, sleeve: 22, length: 42 },
+    });
+  }
 })();
 
 export function hydrateOrders(data: {
