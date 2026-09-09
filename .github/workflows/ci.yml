@@ -100,11 +100,27 @@ jobs:
           New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
           $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
           Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -Wait
-          $exe = Join-Path $installRoot "Minarva Biz.exe"
-          if (-not (Test-Path $exe)) {
-            $exe = Get-ChildItem -Path $installRoot -Filter *.exe -Recurse -ErrorAction Stop | Where-Object { $_.Name -notlike "*Setup*.exe" } | Select-Object -First 1 | ForEach-Object FullName
+          $exeCandidates = @(
+            (Join-Path $installRoot "Minarva Biz.exe"),
+            (Join-Path $env:LOCALAPPDATA "Programs\Minarva Biz\Minarva Biz.exe"),
+            (Join-Path $env:LOCALAPPDATA "Minarva Biz\Minarva Biz.exe"),
+            (Join-Path $env:APPDATA "Minarva Biz\Minarva Biz.exe")
+          ) | Where-Object { $_ -and (Test-Path $_) }
+          $exe = $exeCandidates | Select-Object -First 1
+          if (-not $exe -and (Test-Path $installRoot)) {
+            $exe = Get-ChildItem -Path $installRoot -Filter *.exe -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -notlike "*Setup*.exe" } |
+              Select-Object -First 1 | ForEach-Object FullName
           }
-          if (-not $exe -or -not (Test-Path $exe)) { throw "Installed Minarva Biz executable was not found." }
+          if (-not $exe -or -not (Test-Path $exe)) {
+            Write-Host "Install root contents:"
+            if (Test-Path $installRoot) { Get-ChildItem -Path $installRoot -Recurse -Force | Select-Object FullName, Length }
+            Write-Host "Common LocalAppData program paths:"
+            $programsRoot = Join-Path $env:LOCALAPPDATA "Programs"
+            if (Test-Path $programsRoot) { Get-ChildItem -Path $programsRoot -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*Minarva*" } | Select-Object FullName, Length }
+            throw "Installed Minarva Biz executable was not found."
+          }
+          Write-Host "Installed executable: $exe"
           $proc = Start-Process -FilePath $exe -PassThru
           try {
             Start-Sleep -Seconds 15
