@@ -5,6 +5,7 @@ import { cn } from "../../lib/cn";
 import { Sidebar, type SidebarProps } from "./Sidebar";
 import { Header, type HeaderProps } from "./Header";
 import { CommandPalette } from "../command/CommandPalette";
+import { GlobalSearchPalette } from "../search/GlobalSearchPalette";
 import type { NavItemId } from "../../lib/nav";
 
 export interface AppShellProps {
@@ -26,6 +27,23 @@ export function AppShell({
 }: AppShellProps) {
   const [collapsed, setCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const hasExternalSearch = typeof header?.onSearch === "function";
+  const showLocalSearch = !hasExternalSearch;
+
+  React.useEffect(() => {
+    if (!showLocalSearch || !searchQuery) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSearchQuery("");
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [searchQuery, showLocalSearch]);
+
+  const handleNavigate = React.useCallback((href: string, id: NavItemId) => {
+    setSearchQuery("");
+    onNavigate?.(href, id);
+  }, [onNavigate]);
 
   return (
     <div className={cn("flex h-screen w-full overflow-hidden bg-slate-50", className)}>
@@ -34,7 +52,7 @@ export function AppShell({
         <Sidebar
           activeId={activeNav}
           collapsed={collapsed}
-          onNavigate={onNavigate}
+          onNavigate={handleNavigate}
           {...sidebar}
         />
       </div>
@@ -50,7 +68,7 @@ export function AppShell({
             <Sidebar
               activeId={activeNav}
               onNavigate={(href, id) => {
-                onNavigate?.(href, id);
+                handleNavigate(href, id);
                 setMobileOpen(false);
               }}
               {...sidebar}
@@ -69,10 +87,21 @@ export function AppShell({
             }
           }}
           {...header}
+          onSearch={(query) => {
+            header?.onSearch?.(query);
+            if (showLocalSearch) setSearchQuery(query);
+          }}
         />
+        {showLocalSearch && searchQuery && (
+          <GlobalSearchPalette
+            query={searchQuery}
+            onClose={() => setSearchQuery("")}
+            onNavigate={handleNavigate}
+          />
+        )}
         <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
       </div>
-      <CommandPalette activeNav={activeNav} onNavigate={onNavigate} />
+      <CommandPalette activeNav={activeNav} onNavigate={handleNavigate} />
     </div>
   );
 }
