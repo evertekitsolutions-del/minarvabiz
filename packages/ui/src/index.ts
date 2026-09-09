@@ -33,6 +33,7 @@ export * from "./components/sales/SalesList";
 export * from "./components/orders/OrderList";
 export * from "./components/orders/OrderForm";
 export * from "./components/orders/OrderDetail";
+export * from "./components/orders/ProductionBoard";
 export * from "./components/measurements/MeasurementForm";
 export * from "./components/laundry/LaundryList";
 export * from "./components/laundry/LaundryForm";
