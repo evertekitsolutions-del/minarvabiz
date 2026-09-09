@@ -54,3 +54,5 @@ export * from "./measurement-revisions";
 export * from "./supplier-ledger";
 export * from "./variants";
 export * from "./auto-backup";
+export * from "./quality-control-types";
+export * from "./quality-control";
