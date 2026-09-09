@@ -9,6 +9,7 @@ export * from "./components/layout/Header";
 export * from "./components/layout/AppShell";
 
 export * from "./components/command/CommandPalette";
+export * from "./components/search/GlobalSearchPalette";
 
 export * from "./components/dashboard/StatCard";
 export * from "./components/dashboard/BusinessSummary";
