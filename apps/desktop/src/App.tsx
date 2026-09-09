@@ -8,7 +8,7 @@ import {
   type QuickAction, type NavItemId, type DashboardData, type OrderFormValues,
   type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, recordOrderQualityCheck } from "@minarvabiz/business-logic";
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
@@ -58,8 +58,9 @@ export function App() {
     setCategories(store.listCategories());
     setSales(store.listSales());
     setOrders(ordersStore.listOrders({ query: orderQuery || undefined, status: orderStatus ?? undefined, serviceType: orderType ?? undefined }));
+    setProfiles(selectedOrder ? ordersStore.listMeasurementProfiles(selectedOrder.customerId) : []);
     setModuleTick((v) => v + 1);
-  }, [lowStockOnly, orderQuery, orderStatus, orderType]);
+  }, [lowStockOnly, orderQuery, orderStatus, orderType, selectedOrder]);
 
   const persistAndRefresh = React.useCallback(async () => {
     refreshAll();
@@ -163,6 +164,15 @@ export function App() {
     void persistAndRefresh();
   }
 
+  function handleQualityCheck(input: { passed: boolean; notes: string; issues: string[] }) {
+    if (!selectedOrder) return;
+    const result = recordOrderQualityCheck({ orderId: selectedOrder.id, ...input });
+    if (result.error || !result.order) { setModuleError(result.error || "Unable to record quality check"); return; }
+    setModuleError(null);
+    setSelectedOrder(result.order);
+    void persistAndRefresh();
+  }
+
   function handleAssignStaff(orderId: string, staffId: string) {
     const result = phase6Store.assignStaffToOrder({ orderId, staffId });
     if (result.errors.length || !result.assignment) { setModuleError(result.errors.join("; ") || "Unable to assign staff"); return; }
@@ -238,7 +248,7 @@ export function App() {
     {view === "customers" && <><CustomerList customers={customers} onAdd={() => setCustOpen(true)} onSearch={(q) => setCustomers(store.listCustomers(q))} /><Modal open={custOpen} title="Add Customer" onClose={() => setCustOpen(false)} footer={<><Button variant="outline" onClick={() => setCustOpen(false)}>Cancel</Button><Button onClick={() => { const r = store.createCustomer(custForm); if (r) { setCustOpen(false); setCustForm({ name: "", phone: "", email: "" }); void persistAndRefresh(); } }}>Save</Button></>}><div className="space-y-4"><FormField label="Name"><input className={inputClass} value={custForm.name} onChange={(e) => setCustForm({ ...custForm, name: e.target.value })} /></FormField><FormField label="Phone"><input className={inputClass} value={custForm.phone} onChange={(e) => setCustForm({ ...custForm, phone: e.target.value })} /></FormField><FormField label="Email"><input className={inputClass} value={custForm.email} onChange={(e) => setCustForm({ ...custForm, email: e.target.value })} /></FormField></div></Modal></>}
     {view === "products" && <ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={() => setLowStockOnly((v) => !v)} />}
     {view === "sales" && <div className="space-y-4"><div className="flex gap-2"><Button variant={salesTab === "pos" ? "primary" : "outline"} onClick={() => setSalesTab("pos")}>POS Billing</Button><Button variant={salesTab === "history" ? "primary" : "outline"} onClick={() => setSalesTab("history")}>Sales History</Button></div>{salesTab === "pos" ? <PosBilling products={products} customers={customers} onCompleteSale={handleSale} /> : <SalesList sales={sales} />}</div>}
-    {view === "services" && <div className="space-y-4"><div className="flex flex-wrap items-center gap-2"><Button variant={orderView === "table" ? "primary" : "outline"} onClick={() => setOrderView("table")}>Orders Table</Button><Button variant={orderView === "production" ? "primary" : "outline"} onClick={() => setOrderView("production")}>Production Board</Button></div>{orderView === "production" ? <ProductionBoard orders={orders} staff={staff} assignments={assignments} onSelect={setSelectedOrder} onStatusChange={handleOrderStatusChange} onAssignStaff={handleAssignStaff} /> : <OrderList orders={orders} onSearch={setOrderQuery} onFilterStatus={setOrderStatus} onFilterType={setOrderType} onAdd={() => { setForm(emptyOrderForm()); setCreateOpen(true); }} onSelect={setSelectedOrder} />}{selectedOrder && <OrderDetail order={selectedOrder} />}<Modal open={createOpen} title="New Service Order" onClose={() => setCreateOpen(false)}><OrderForm value={form} customers={customers} profiles={profiles} onChange={setForm} onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} error={formError} /></Modal></div>}
+    {view === "services" && <div className="space-y-4"><div className="flex flex-wrap items-center gap-2"><Button variant={orderView === "table" ? "primary" : "outline"} onClick={() => setOrderView("table")}>Orders Table</Button><Button variant={orderView === "production" ? "primary" : "outline"} onClick={() => setOrderView("production")}>Production Board</Button></div>{orderView === "production" ? <ProductionBoard orders={orders} staff={staff} assignments={assignments} onSelect={setSelectedOrder} onStatusChange={handleOrderStatusChange} onAssignStaff={handleAssignStaff} /> : <OrderList orders={orders} onSearch={setOrderQuery} onFilterStatus={setOrderStatus} onFilterType={setOrderType} onAdd={() => { setForm(emptyOrderForm()); setCreateOpen(true); }} onSelect={(order) => { setSelectedOrder(order); setProfiles(ordersStore.listMeasurementProfiles(order.customerId)); }} />}{selectedOrder && <OrderDetail order={selectedOrder} measurementProfiles={profiles} onStatusChange={handleOrderStatusChange.bind(null, selectedOrder.id)} onQualityCheck={handleQualityCheck} />}<Modal open={createOpen} title="New Service Order" onClose={() => setCreateOpen(false)}><OrderForm value={form} customers={customers} profiles={profiles} onChange={setForm} onLoadProfiles={(customerId) => setProfiles(ordersStore.listMeasurementProfiles(customerId))} onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} error={formError} /></Modal></div>}
     {view === "laundry" && <LaundryList orders={laundry} onAddIroning={() => setLaundryMode("in_house_ironing")} onAddOutsourced={() => setLaundryMode("outsourced")} />}
     {view === "expenses" && <ExpenseList expenses={expenses} onAdd={() => setExpenseOpen(true)} />}
     {view === "purchases" && <PurchaseList purchases={purchases} onAdd={() => setPurchaseOpen(true)} />}
