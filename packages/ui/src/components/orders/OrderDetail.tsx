@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
 import {
   SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_FLOW,
-  measurementRevisionHistory,
+  measurementRevisionHistory, ordersStore,
 } from "@minarvabiz/business-logic";
 
 function measurementLabel(key: string): string {
@@ -18,7 +18,7 @@ function measurementLabel(key: string): string {
 
 export function OrderDetail({
   order,
-  measurementProfiles = [],
+  measurementProfiles,
   onStatusChange,
   onAddExpense,
   onClose,
@@ -38,11 +38,12 @@ export function OrderDetail({
     totalCost: order.externalMaterialCost + order.orderExpensesTotal,
     grossProfit: order.price - order.externalMaterialCost - order.orderExpensesTotal,
   };
+  const profiles = measurementProfiles ?? ordersStore.listMeasurementProfiles(order.customerId);
   const selectedProfile = order.measurementProfileId
-    ? measurementProfiles.find((profile) => profile.id === order.measurementProfileId) ?? null
+    ? profiles.find((profile) => profile.id === order.measurementProfileId) ?? null
     : null;
   const measurementHistory = selectedProfile
-    ? measurementRevisionHistory(measurementProfiles, selectedProfile)
+    ? measurementRevisionHistory(profiles, selectedProfile)
     : [];
 
   return (
