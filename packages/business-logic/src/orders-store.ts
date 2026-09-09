@@ -12,6 +12,7 @@ import { generateId, nowISO } from "@minarvabiz/utils";
 import {
   calculateOrderPricing, nextOrderNumber, validateOrderInput, canTransition,
 } from "./orders";
+import { createMeasurementRevision } from "./measurement-revisions";
 import * as mainStore from "./store";
 import { touchPersistence } from "./autosave";
 import { remoteCreateOrder } from "./remote-write";
@@ -32,18 +33,58 @@ export function saveMeasurementProfile(input: {
   fields: MeasurementFields;
   notes?: string | null;
 }): MeasurementProfile {
-  const profile: MeasurementProfile = {
-    id: generateId(),
+  assertPermission("orders.manage");
+  const previous = latestMeasurementProfile(input.customerId, input.label);
+  const profile = createMeasurementRevision({
     customerId: input.customerId,
-    label: input.label || "Default",
+    label: input.label,
     fields: input.fields,
-    notes: input.notes ?? null,
-    recordedAt: nowISO(),
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
-  };
+    notes: input.notes,
+    previous,
+  });
   measurements.push(profile);
+  touchPersistence();
   return profile;
+}
+
+export function getMeasurementProfile(id: UUID): MeasurementProfile | undefined {
+  return measurements.find((m) => m.id === id && !m.deletedAt);
+}
+
+export function latestMeasurementProfile(customerId: UUID, label = "Default"): MeasurementProfile | null {
+  const matching = measurements.filter(
+    (profile) => profile.customerId === customerId && !profile.deletedAt && profile.label === label
+  );
+  if (matching.length === 0) return null;
+  return [...matching].sort((a, b) => {
+    const versionDelta = (b.version ?? 1) - (a.version ?? 1);
+    return versionDelta || b.recordedAt.localeCompare(a.recordedAt);
+  })[0] ?? null;
+}
+
+export function listMeasurementHistory(
+  customerId: UUID,
+  label?: string
+): MeasurementProfile[] {
+  const profiles = listMeasurementProfiles(customerId);
+  const latest = label
+    ? latestMeasurementProfile(customerId, label)
+    : [...profiles].sort((a, b) => {
+        const versionDelta = (b.version ?? 1) - (a.version ?? 1);
+        return versionDelta || b.recordedAt.localeCompare(a.recordedAt);
+      })[0] ?? null;
+  if (!latest) return [];
+
+  const byId = new Map(profiles.map((profile) => [profile.id, profile]));
+  const history: MeasurementProfile[] = [];
+  const seen = new Set<UUID>();
+  let current: MeasurementProfile | undefined = latest;
+  while (current && !seen.has(current.id)) {
+    history.push(current);
+    seen.add(current.id);
+    current = current.previousProfileId ? byId.get(current.previousProfileId) : undefined;
+  }
+  return history;
 }
 
 export function listOrders(opts?: {
@@ -154,7 +195,6 @@ export function createOrder(input: {
     version: 1,
   };
 
-  // Advance payment affects customer outstanding if balance remains
   if (pricing.balance > 0) {
     customer.outstandingBalance = round2(customer.outstandingBalance + pricing.balance);
   }
@@ -182,6 +222,7 @@ export function updateOrderStatus(
   order.status = status;
   order.updatedAt = nowISO();
   order.version += 1;
+  touchPersistence();
   return { order };
 }
 
@@ -204,6 +245,7 @@ export function addOrderExpense(
   order.orderExpensesTotal = round2(order.orderExpensesTotal + exp.amount);
   order.updatedAt = nowISO();
   order.version += 1;
+  touchPersistence();
   return { order };
 }
 
@@ -228,7 +270,6 @@ function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-// Seed a few demo orders
 (function seed() {
   const custs = mainStore.listCustomers();
   if (custs.length === 0) return;
