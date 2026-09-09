@@ -131,7 +131,7 @@ export function OrderDetail({
               <div key={profile.id} className={`rounded-xl border p-3 ${index === 0 ? "border-indigo-200 bg-indigo-50/40" : "border-slate-200 bg-slate-50/50"}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-sm font-semibold text-slate-800">
-                    Revision {profile.version ?? measurementHistory.length - index}
+                    Revision {measurementHistory.length - index}
                     {index === 0 && <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">USED BY THIS ORDER</span>}
                   </div>
                   <span className="text-xs text-slate-500">{new Date(profile.recordedAt).toLocaleString("en-IN")}</span>
