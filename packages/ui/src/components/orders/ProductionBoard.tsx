@@ -46,6 +46,12 @@ function sortOrders(list: ServiceOrder[]): ServiceOrder[] {
   });
 }
 
+function workloadTone(activeJobs: number): string {
+  if (activeJobs >= 6) return "bg-rose-50 text-rose-700 ring-rose-200";
+  if (activeJobs >= 3) return "bg-amber-50 text-amber-800 ring-amber-200";
+  return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+}
+
 export interface ProductionBoardProps {
   orders: ServiceOrder[];
   staff?: StaffMember[];
@@ -78,6 +84,31 @@ export function ProductionBoard({ orders, staff = [], assignments = [], onSelect
     [orders]
   );
 
+  const workloadByStaff = React.useMemo(() => {
+    const map = new Map<string, { active: number; overdue: number; today: number }>();
+    for (const member of activeStaff) map.set(member.id, { active: 0, overdue: 0, today: 0 });
+    for (const order of activeOrders) {
+      const assignment = latestAssignmentByOrder.get(order.id);
+      const staffId = assignment?.staffId ?? order.assignedStaffId ?? order.assignedTailorId ?? null;
+      if (!staffId) continue;
+      const load = map.get(staffId);
+      if (!load) continue;
+      load.active += 1;
+      const risk = deliveryRisk(order);
+      if (risk === "overdue") load.overdue += 1;
+      if (risk === "today") load.today += 1;
+    }
+    return map;
+  }, [activeOrders, activeStaff, latestAssignmentByOrder]);
+
+  const unassignedCount = React.useMemo(
+    () => activeOrders.filter((order) => {
+      const assignment = latestAssignmentByOrder.get(order.id);
+      return !(assignment?.staffId ?? order.assignedStaffId ?? order.assignedTailorId);
+    }).length,
+    [activeOrders, latestAssignmentByOrder]
+  );
+
   const handleDrop = (status: OrderStatus) => {
     if (!draggingId) return;
     const order = activeOrders.find((item) => item.id === draggingId);
@@ -99,6 +130,22 @@ export function ProductionBoard({ orders, staff = [], assignments = [], onSelect
           <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-800">Due today</span>
           <span className="rounded-full bg-orange-50 px-2.5 py-1 font-medium text-orange-700">Due in 2 days</span>
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Team workload</span>
+          {activeStaff.map((member) => {
+            const load = workloadByStaff.get(member.id) ?? { active: 0, overdue: 0, today: 0 };
+            return (
+              <span key={member.id} className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${workloadTone(load.active)}`} title={`${member.name}: ${load.active} active, ${load.overdue} overdue, ${load.today} due today`}>
+                {member.name}: {load.active}{load.overdue ? ` · ${load.overdue} overdue` : ""}{load.today ? ` · ${load.today} today` : ""}
+              </span>
+            );
+          })}
+          {unassignedCount > 0 && <span className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 ring-1 ring-inset ring-rose-200">{unassignedCount} unassigned</span>}
+        </div>
+        {onAssignStaff && activeStaff.length > 0 && <p className="mt-2 text-[11px] text-slate-400">Load levels: 0–2 available · 3–5 busy · 6+ overloaded.</p>}
       </div>
 
       <div className="grid gap-3 overflow-x-auto pb-2 xl:grid-cols-4 2xl:grid-cols-8">
