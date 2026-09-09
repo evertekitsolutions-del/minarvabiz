@@ -101,9 +101,14 @@ export function createStaff(input: {
 }
 
 export function updateStaff(id: UUID, patch: Partial<StaffMember>): StaffMember | null {
+  assertPermission("staff.manage");
   const m = getStaff(id);
   if (!m) return null;
-  Object.assign(m, patch, { updatedAt: nowISO() });
+  const allowed = (({
+    name, phone, email, role, salary, joiningDate, status, notes,
+  }) => ({ name, phone, email, role, salary, joiningDate, status, notes }))(patch);
+  Object.assign(m, allowed, { updatedAt: nowISO() });
+  enqueueOutbox("staff_members", m.id, "update", m);
   return m;
 }
 
@@ -120,8 +125,10 @@ export function assignStaffToOrder(input: {
   orderId: UUID;
   notes?: string | null;
 }): { assignment: StaffAssignment | null; errors: string[] } {
+  assertPermission("orders.assign");
   const member = getStaff(input.staffId);
   if (!member) return { assignment: null, errors: ["Staff not found"] };
+  if (member.status !== "active") return { assignment: null, errors: ["Only active staff can receive new assignments"] };
   const order = ordersStore.getOrder(input.orderId);
   if (!order) return { assignment: null, errors: ["Order not found"] };
 
@@ -142,6 +149,7 @@ export function assignStaffToOrder(input: {
     notes: input.notes ?? null,
   };
   assignments.push(a);
+  enqueueOutbox("staff_assignments", a.id, "insert", a);
 
   // Reflect on order
   order.assignedTailorId = input.staffId;
@@ -159,10 +167,12 @@ export function assignStaffToOrder(input: {
 }
 
 export function completeAssignment(id: UUID): StaffAssignment | null {
+  assertPermission("orders.assign");
   const a = assignments.find((x) => x.id === id);
   if (!a || a.status === "cancelled") return null;
   a.status = "completed";
   a.completedAt = nowISO();
+  enqueueOutbox("staff_assignments", a.id, "update", a);
 
   // Auto incentive
   const order = ordersStore.getOrder(a.orderId);
@@ -175,17 +185,22 @@ export function completeAssignment(id: UUID): StaffAssignment | null {
         serviceType: rule.serviceType ?? undefined,
       });
       if (amount > 0) {
-        payouts.push({
-          id: generateId(),
-          staffId: a.staffId,
-          staffName: a.staffName,
-          orderId: a.orderId,
-          orderNumber: a.orderNumber,
-          ruleId: rule.id,
-          amount,
-          calculatedAt: nowISO(),
-          paid: false,
-        });
+        const existingPayout = payouts.find(
+          (p) => p.orderId === a.orderId && p.staffId === a.staffId && p.ruleId === rule.id
+        );
+        if (!existingPayout) {
+          payouts.push({
+            id: generateId(),
+            staffId: a.staffId,
+            staffName: a.staffName,
+            orderId: a.orderId,
+            orderNumber: a.orderNumber,
+            ruleId: rule.id,
+            amount,
+            calculatedAt: nowISO(),
+            paid: false,
+          });
+        }
       }
     }
   }
@@ -204,10 +219,12 @@ export function upsertIncentiveRule(input: {
   type: "fixed" | "percentage";
   value: number;
 }): IncentiveRuleRecord {
+  assertPermission("staff.manage");
   if (input.id) {
     const existing = incentiveRules.find((r) => r.id === input.id);
     if (existing) {
       Object.assign(existing, input, { updatedAt: nowISO() });
+      enqueueOutbox("incentive_rules", existing.id, "update", existing);
       return existing;
     }
   }
@@ -222,6 +239,7 @@ export function upsertIncentiveRule(input: {
     updatedAt: nowISO(),
   };
   incentiveRules.push(r);
+  enqueueOutbox("incentive_rules", r.id, "insert", r);
   return r;
 }
 
@@ -232,10 +250,12 @@ export function listIncentivePayouts(staffId?: UUID): StaffIncentivePayout[] {
 }
 
 export function markIncentivePaid(id: UUID): StaffIncentivePayout | null {
+  assertPermission("staff.manage");
   const p = payouts.find((x) => x.id === id);
   if (!p) return null;
   p.paid = true;
   p.paidAt = nowISO();
+  enqueueOutbox("staff_incentive_payouts", p.id, "update", p);
   return p;
 }
 
@@ -348,7 +368,6 @@ export function getCustomerCrmProfile(customerId: UUID): CustomerCrmProfile | nu
   };
 }
 
-
 export function hydratePhase6(data: {
   staff?: StaffMember[];
   assignments?: StaffAssignment[];
@@ -377,4 +396,3 @@ export function hydratePhase6(data: {
     notifications.push(...data.notifications);
   }
 }
-
