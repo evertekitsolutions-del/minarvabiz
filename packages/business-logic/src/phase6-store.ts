@@ -104,10 +104,14 @@ export function updateStaff(id: UUID, patch: Partial<StaffMember>): StaffMember 
   assertPermission("staff.manage");
   const m = getStaff(id);
   if (!m) return null;
-  const allowed = (({
-    name, phone, email, role, salary, joiningDate, status, notes,
-  }) => ({ name, phone, email, role, salary, joiningDate, status, notes }))(patch);
-  Object.assign(m, allowed, { updatedAt: nowISO() });
+  const allowedKeys = ["name", "phone", "email", "role", "salary", "joiningDate", "status", "notes"] as const;
+  for (const key of allowedKeys) {
+    if (Object.prototype.hasOwnProperty.call(patch, key)) {
+      const value = patch[key];
+      if (value !== undefined) m[key] = value as never;
+    }
+  }
+  m.updatedAt = nowISO();
   enqueueOutbox("staff_members", m.id, "update", m);
   return m;
 }
