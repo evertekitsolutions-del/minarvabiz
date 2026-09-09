@@ -52,12 +52,17 @@ export interface ProductionBoardProps {
   assignments?: StaffAssignment[];
   onSelect?: (order: ServiceOrder) => void;
   onStatusChange?: (orderId: string, status: OrderStatus) => void;
+  onAssignStaff?: (orderId: string, staffId: string) => void;
 }
 
-export function ProductionBoard({ orders, staff = [], assignments = [], onSelect, onStatusChange }: ProductionBoardProps) {
+export function ProductionBoard({ orders, staff = [], assignments = [], onSelect, onStatusChange, onAssignStaff }: ProductionBoardProps) {
   const [draggingId, setDraggingId] = React.useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = React.useState<OrderStatus | null>(null);
   const staffById = React.useMemo(() => new Map(staff.map((member) => [member.id, member])), [staff]);
+  const activeStaff = React.useMemo(
+    () => staff.filter((member) => !member.deletedAt && member.status === "active"),
+    [staff]
+  );
   const latestAssignmentByOrder = React.useMemo(() => {
     const map = new Map<string, StaffAssignment>();
     for (const assignment of assignments) {
@@ -87,7 +92,7 @@ export function ProductionBoard({ orders, staff = [], assignments = [], onSelect
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Production Board</h2>
-          <p className="text-sm text-slate-500">Move jobs through valid stages while keeping delivery risk visible.</p>
+          <p className="text-sm text-slate-500">Move jobs through valid stages while keeping delivery risk and ownership visible.</p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs text-slate-500">
           <span className="rounded-full bg-rose-50 px-2.5 py-1 font-medium text-rose-700">Overdue</span>
@@ -146,8 +151,25 @@ export function ProductionBoard({ orders, staff = [], assignments = [], onSelect
                         <span className="truncate">{SERVICE_TYPE_LABELS[order.serviceType] ?? order.serviceType}</span>
                         <span className="shrink-0 font-medium text-slate-700">{delivery}</span>
                       </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-[11px] text-slate-400">Owner</span>
+                        <select
+                          aria-label={`Assign ${order.orderNumber}`}
+                          value={staffId ?? ""}
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            const nextStaffId = event.target.value;
+                            if (nextStaffId) onAssignStaff?.(order.id, nextStaffId);
+                          }}
+                          className={`min-w-0 flex-1 h-7 rounded-md border bg-white px-1.5 text-[10px] ${staffName ? "border-slate-200 text-slate-700" : "border-rose-200 text-rose-600"}`}
+                        >
+                          <option value="">Unassigned</option>
+                          {activeStaff.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
+                        </select>
+                      </div>
                       <div className="mt-2 flex items-center justify-between gap-2">
-                        <span className={`truncate text-[11px] font-medium ${staffName ? "text-slate-700" : "text-rose-600"}`}>{staffName ? `👤 ${staffName}` : "Unassigned"}</span>
+                        <span className={`truncate text-[10px] font-medium ${staffName ? "text-slate-600" : "text-rose-600"}`}>{staffName ? `Assigned to ${staffName}` : "Needs assignment"}</span>
                         <select
                           aria-label={`Change status for ${order.orderNumber}`}
                           value={order.status}
