@@ -50,6 +50,7 @@ export * from "./purchase-returns";
 export * from "./global-search";
 export * from "./opening-balances";
 export * from "./measurement-templates";
+export * from "./measurement-revisions";
 export * from "./supplier-ledger";
 export * from "./variants";
 export * from "./auto-backup";
