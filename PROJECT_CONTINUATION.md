@@ -52,26 +52,27 @@ Dashboard, Customers, Products/Inventory, POS/Sales, Service Orders, Measurement
 - Actionable Business Intelligence insight controls that can route users directly to relevant modules
 - Global command palette with Ctrl/Cmd+K keyboard access, searchable module/action list, keyboard navigation and quick commands
 - Expanded global search ranking and coverage for customers, sales/invoices, service orders, products, quotations, payments, and staff
+- Shared Electron-capable global search results panel integrated at AppShell level while preserving the existing web search and command palette behavior
 - Dashboard capability work remains the active product-improvement stream; do not roll these changes back.
 
 ## Last completed step
-- Corrected the CI legacy-JSON guard in commit `4ee672bceb951f573c85709f71a22453d98d0cc1` so legitimate SQLite `db:readBinary` / `db:writeBinary` IPC is not treated as legacy JSON persistence.
-- Fresh CI run #220 (`34311592985`) completed successfully on commit `fe2deee9d8a6dda71a0d24f3e2e4d6f0852a419d`.
-- Run #220 verified Desktop guard, production quality smoke, business-logic typecheck, UI typecheck, desktop typecheck, renderer build, generated CSS inspection, Electron build, Web typecheck/build, Windows packaging, installed-runtime smoke, runtime diagnostics, and Windows installer upload.
+- Corrected the CI legacy-JSON guard in commit `4ee672bceb951f573c85709f71a22453d98d0cc1` so legitimate SQLite binary IPC is not treated as legacy persistence.
+- Verified fresh CI run #220 (`34311592985`) fully green on commit `fe2deee9d8a6dda71a0d24f3e2e4d6f0852a419d`, including Windows packaging, installed-runtime smoke and runtime diagnostics.
 - Windows installer artifact for run #220: ID `10088610885`, size `99,984,349` bytes, SHA-256 `69fc8c5023426764a253b88d226e918f54c81261cd5690e47e69c71557e59749`, expires `2026-09-23T04:38:56Z`.
-- Expanded global search implementation is in commit `fe2deee9d8a6dda71a0d24f3e2e4d6f0852a419d` and is included in the green Windows installer build.
+- Expanded global search implementation is in `fe2deee9d8a6dda71a0d24f3e2e4d6f0852a419d`.
+- Added shared global search results UI in commit `2c14de0ccfbe0bfaefca594682f957af4655f782`, exported it in `ccd842f6a9c18778df5aa60621fca9df239d4edf`, and integrated it into `AppShell` in `af4f70117378d4a148050ffdc9760bea42c5df20`.
+- The new `AppShell` integration does not duplicate the existing web search callback: when a shell supplies its own search handler, that external flow remains authoritative; otherwise the shared search results panel is enabled for the desktop shell.
 
 ## Current HEAD / current verification
-- Current main HEAD: `fe2deee9d8a6dda71a0d24f3e2e4d6f0852a419d`
-- Latest completed product change: expanded global search with relevance ranking across payments and staff in addition to the existing business entities.
-- Fresh CI run #220 is fully green and produced a fresh Windows installer artifact.
-- The repository also has CI-time installed-runtime smoke and diagnostics; physical user acceptance is still required before a final release claim.
+- Current main HEAD: `af4f70117378d4a148050ffdc9760bea42c5df20`
+- Latest code change: shared global search results panel for the Electron shell, preserving the existing command palette and web search behavior.
+- Fresh CI run #224 (`34312013814`) is currently in progress. At the last observation, the desktop and web jobs had passed their initial checks and the run had not yet completed; do not treat this commit as release-candidate verified until run #224 finishes.
 
 ## Current product direction
 The repository has moved beyond foundation hardening into higher-end dashboard, business-intelligence, and command-center capabilities. Continue that product roadmap from the repository state; do not restart old foundation tasks.
 
 ## Single next step
-Add the same high-quality global search experience to the Electron desktop shell (search results, keyboard-friendly navigation, and module routing) without duplicating or removing existing command-palette behavior; then run CI again and verify the new Windows installer/runtime path.
+Finish verification of CI run #224 for `af4f701...`; once green, verify the fresh Windows installer artifact and then continue with the next unfinished high-end capability.
 
 ## Release/runtime gate
 - Fresh Windows `.exe` must be built from a current green HEAD.
