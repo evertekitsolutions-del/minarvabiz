@@ -20,17 +20,22 @@ export function OrderDetail({
   order,
   measurementProfiles,
   onStatusChange,
+  onQualityCheck,
   onAddExpense,
   onClose,
 }: {
   order: ServiceOrder;
   measurementProfiles?: MeasurementProfile[];
   onStatusChange?: (status: OrderStatus) => void;
+  onQualityCheck?: (input: { passed: boolean; notes: string; issues: string[] }) => void;
   onAddExpense?: (description: string, amount: number) => void;
   onClose?: () => void;
 }) {
   const [expDesc, setExpDesc] = React.useState("");
   const [expAmt, setExpAmt] = React.useState("");
+  const [qcNotes, setQcNotes] = React.useState("");
+  const [qcIssue, setQcIssue] = React.useState("");
+  const [qcIssues, setQcIssues] = React.useState<string[]>([]);
   const profit = {
     revenue: order.price,
     materialCost: order.externalMaterialCost,
@@ -45,6 +50,21 @@ export function OrderDetail({
   const measurementHistory = selectedProfile
     ? measurementRevisionHistory(profiles, selectedProfile)
     : [];
+  const qualityCheck = order.qualityCheck ?? null;
+
+  function addQcIssue() {
+    const issue = qcIssue.trim();
+    if (!issue) return;
+    if (!qcIssues.includes(issue)) setQcIssues((items) => [...items, issue]);
+    setQcIssue("");
+  }
+
+  function submitQc(passed: boolean) {
+    onQualityCheck?.({ passed, notes: qcNotes.trim(), issues: qcIssues });
+    setQcNotes("");
+    setQcIssue("");
+    setQcIssues([]);
+  }
 
   return (
     <div className="space-y-4">
@@ -117,6 +137,44 @@ export function OrderDetail({
           </CardContent>
         </Card>
       </div>
+
+      {(order.status === "qc" || qualityCheck) && (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle className="text-sm font-semibold text-slate-800">Quality Check</CardTitle>
+              {qualityCheck && (
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${qualityCheck.status === "passed" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                  {qualityCheck.status === "passed" ? "PASSED" : "REWORK REQUIRED"}
+                </span>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {qualityCheck && (
+              <div className={`rounded-xl border p-3 ${qualityCheck.status === "passed" ? "border-emerald-200 bg-emerald-50/50" : "border-rose-200 bg-rose-50/50"}`}>
+                <div className="text-xs text-slate-500">Checked {new Date(qualityCheck.checkedAt).toLocaleString("en-IN")}</div>
+                {qualityCheck.issues.length > 0 && <div className="mt-2 text-sm"><span className="font-medium">Issues:</span> {qualityCheck.issues.join(" · ")}</div>}
+                {qualityCheck.notes && <div className="mt-1 text-sm"><span className="font-medium">Notes:</span> {qualityCheck.notes}</div>}
+              </div>
+            )}
+            {order.status === "qc" && onQualityCheck && (
+              <>
+                <div className="flex gap-2">
+                  <input className="h-9 flex-1 rounded-lg border border-slate-200 px-3 text-sm" placeholder="Add QC issue" value={qcIssue} onChange={(event) => setQcIssue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addQcIssue(); } }} />
+                  <Button variant="outline" size="sm" onClick={addQcIssue}>Add issue</Button>
+                </div>
+                {qcIssues.length > 0 && <div className="flex flex-wrap gap-2">{qcIssues.map((issue) => <button key={issue} type="button" onClick={() => setQcIssues((items) => items.filter((item) => item !== issue))} className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-200">{issue} ×</button>)}</div>}
+                <textarea className="h-20 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="QC notes" value={qcNotes} onChange={(event) => setQcNotes(event.target.value)} />
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button variant="outline" onClick={() => submitQc(false)} disabled={qcIssues.length === 0}>Send for Rework</Button>
+                  <Button onClick={() => submitQc(true)}>Pass QC & Continue</Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {measurementHistory.length > 0 && (
         <Card>
@@ -198,22 +256,15 @@ export function OrderDetail({
               </div>
             ))}
             <div className="flex gap-2 pt-2">
-              <input className="h-9 flex-1 rounded-lg border border-slate-200 px-3 text-sm" placeholder="Description"
-                value={expDesc} onChange={(e) => setExpDesc(e.target.value)} />
-              <input className="h-9 w-28 rounded-lg border border-slate-200 px-3 text-sm" type="number" placeholder="Amount"
-                value={expAmt} onChange={(e) => setExpAmt(e.target.value)} />
-              <Button size="sm" onClick={() => {
-                onAddExpense(expDesc, parseFloat(expAmt) || 0);
-                setExpDesc(""); setExpAmt("");
-              }}>Add</Button>
+              <input className="h-9 flex-1 rounded-lg border border-slate-200 px-3 text-sm" placeholder="Description" value={expDesc} onChange={(e) => setExpDesc(e.target.value)} />
+              <input className="h-9 w-28 rounded-lg border border-slate-200 px-3 text-sm" type="number" placeholder="Amount" value={expAmt} onChange={(e) => setExpAmt(e.target.value)} />
+              <Button size="sm" onClick={() => { onAddExpense(expDesc, parseFloat(expAmt) || 0); setExpDesc(""); setExpAmt(""); }}>Add</Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {order.notes && (
-        <p className="text-sm text-slate-600"><span className="font-medium">Notes:</span> {order.notes}</p>
-      )}
+      {order.notes && <p className="text-sm text-slate-600"><span className="font-medium">Notes:</span> {order.notes}</p>}
     </div>
   );
 }
