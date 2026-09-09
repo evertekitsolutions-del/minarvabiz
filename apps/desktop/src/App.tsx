@@ -100,8 +100,7 @@ export function App() {
       try {
         const deviceId = await window.minarvaDesktop!.getDeviceId!();
         const response = await fetch(`${apiUrl.replace(/\/$/, "")}/api/trial/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...trialState.registration, deviceId }),
         });
         const payload = await response.json().catch(() => ({}));
@@ -161,6 +160,15 @@ export function App() {
     if (result.error || !result.order) { setModuleError(result.error || "Unable to change order status"); return; }
     setModuleError(null);
     setSelectedOrder(result.order);
+    void persistAndRefresh();
+  }
+
+  function handleAssignStaff(orderId: string, staffId: string) {
+    const result = phase6Store.assignStaffToOrder({ orderId, staffId });
+    if (result.errors.length || !result.assignment) { setModuleError(result.errors.join("; ") || "Unable to assign staff"); return; }
+    setModuleError(null);
+    const updated = ordersStore.getOrder(orderId);
+    if (updated) setSelectedOrder(updated);
     void persistAndRefresh();
   }
 
@@ -230,7 +238,7 @@ export function App() {
     {view === "customers" && <><CustomerList customers={customers} onAdd={() => setCustOpen(true)} onSearch={(q) => setCustomers(store.listCustomers(q))} /><Modal open={custOpen} title="Add Customer" onClose={() => setCustOpen(false)} footer={<><Button variant="outline" onClick={() => setCustOpen(false)}>Cancel</Button><Button onClick={() => { const r = store.createCustomer(custForm); if (r) { setCustOpen(false); setCustForm({ name: "", phone: "", email: "" }); void persistAndRefresh(); } }}>Save</Button></>}><div className="space-y-4"><FormField label="Name"><input className={inputClass} value={custForm.name} onChange={(e) => setCustForm({ ...custForm, name: e.target.value })} /></FormField><FormField label="Phone"><input className={inputClass} value={custForm.phone} onChange={(e) => setCustForm({ ...custForm, phone: e.target.value })} /></FormField><FormField label="Email"><input className={inputClass} value={custForm.email} onChange={(e) => setCustForm({ ...custForm, email: e.target.value })} /></FormField></div></Modal></>}
     {view === "products" && <ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={() => setLowStockOnly((v) => !v)} />}
     {view === "sales" && <div className="space-y-4"><div className="flex gap-2"><Button variant={salesTab === "pos" ? "primary" : "outline"} onClick={() => setSalesTab("pos")}>POS Billing</Button><Button variant={salesTab === "history" ? "primary" : "outline"} onClick={() => setSalesTab("history")}>Sales History</Button></div>{salesTab === "pos" ? <PosBilling products={products} customers={customers} onCompleteSale={handleSale} /> : <SalesList sales={sales} />}</div>}
-    {view === "services" && <div className="space-y-4"><div className="flex flex-wrap items-center gap-2"><Button variant={orderView === "table" ? "primary" : "outline"} onClick={() => setOrderView("table")}>Orders Table</Button><Button variant={orderView === "production" ? "primary" : "outline"} onClick={() => setOrderView("production")}>Production Board</Button></div>{orderView === "production" ? <ProductionBoard orders={orders} staff={staff} assignments={assignments} onSelect={setSelectedOrder} onStatusChange={handleOrderStatusChange} /> : <OrderList orders={orders} onSearch={setOrderQuery} onFilterStatus={setOrderStatus} onFilterType={setOrderType} onAdd={() => { setForm(emptyOrderForm()); setCreateOpen(true); }} onSelect={setSelectedOrder} />}{selectedOrder && <OrderDetail order={selectedOrder} />}<Modal open={createOpen} title="New Service Order" onClose={() => setCreateOpen(false)}><OrderForm value={form} customers={customers} profiles={profiles} onChange={setForm} onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} error={formError} /></Modal></div>}
+    {view === "services" && <div className="space-y-4"><div className="flex flex-wrap items-center gap-2"><Button variant={orderView === "table" ? "primary" : "outline"} onClick={() => setOrderView("table")}>Orders Table</Button><Button variant={orderView === "production" ? "primary" : "outline"} onClick={() => setOrderView("production")}>Production Board</Button></div>{orderView === "production" ? <ProductionBoard orders={orders} staff={staff} assignments={assignments} onSelect={setSelectedOrder} onStatusChange={handleOrderStatusChange} onAssignStaff={handleAssignStaff} /> : <OrderList orders={orders} onSearch={setOrderQuery} onFilterStatus={setOrderStatus} onFilterType={setOrderType} onAdd={() => { setForm(emptyOrderForm()); setCreateOpen(true); }} onSelect={setSelectedOrder} />}{selectedOrder && <OrderDetail order={selectedOrder} />}<Modal open={createOpen} title="New Service Order" onClose={() => setCreateOpen(false)}><OrderForm value={form} customers={customers} profiles={profiles} onChange={setForm} onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} error={formError} /></Modal></div>}
     {view === "laundry" && <LaundryList orders={laundry} onAddIroning={() => setLaundryMode("in_house_ironing")} onAddOutsourced={() => setLaundryMode("outsourced")} />}
     {view === "expenses" && <ExpenseList expenses={expenses} onAdd={() => setExpenseOpen(true)} />}
     {view === "purchases" && <PurchaseList purchases={purchases} onAdd={() => setPurchaseOpen(true)} />}
