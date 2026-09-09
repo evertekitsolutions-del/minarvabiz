@@ -51,25 +51,27 @@ Dashboard, Customers, Products/Inventory, POS/Sales, Service Orders, Measurement
 - Business Intelligence component export/integration
 - Actionable Business Intelligence insight controls that can route users directly to relevant modules
 - Global command palette with Ctrl/Cmd+K keyboard access, searchable module/action list, keyboard navigation and quick commands
+- Expanded global search ranking and coverage for customers, sales/invoices, service orders, products, quotations, payments, and staff
 - Dashboard capability work remains the active product-improvement stream; do not roll these changes back.
 
 ## Last completed step
-- Verified CI run #215 (`34263828731`) on commit `6a6ec4f6ec82b58eb01b9432d6791d4943d576ab` end-to-end, including Web, Desktop, Windows installer packaging, installed-runtime smoke and runtime diagnostics.
-- Windows installer artifact was successfully uploaded as artifact ID `10071077385`.
-- Implemented the next P0 command-center capability after actionable BI: global command palette in commits `6fb0561ce81b7a76c6617ab4fe6a72b1ec2792d1`, `371522c211c38c1e6bf6d4bc00ad878e9dc7b7b7`, and `319dfcd713d8d6e5bd44e3bff86aa1034335b16c`.
-- The palette is integrated at the shared `AppShell` level, so the Windows and web shells inherit it without removing existing module functionality. Source-level integration has been inspected; fresh CI for the new commits is pending.
+- Corrected the CI legacy-JSON guard in commit `4ee672bceb951f573c85709f71a22453d98d0cc1` so legitimate SQLite `db:readBinary` / `db:writeBinary` IPC is not treated as legacy JSON persistence.
+- Fresh CI run #220 (`34311592985`) completed successfully on commit `fe2deee9d8a6dda71a0d24f3e2e4d6f0852a419d`.
+- Run #220 verified Desktop guard, production quality smoke, business-logic typecheck, UI typecheck, desktop typecheck, renderer build, generated CSS inspection, Electron build, Web typecheck/build, Windows packaging, installed-runtime smoke, runtime diagnostics, and Windows installer upload.
+- Windows installer artifact for run #220: ID `10088610885`, size `99,984,349` bytes, SHA-256 `69fc8c5023426764a253b88d226e918f54c81261cd5690e47e69c71557e59749`, expires `2026-09-23T04:38:56Z`.
+- Expanded global search implementation is in commit `fe2deee9d8a6dda71a0d24f3e2e4d6f0852a419d` and is included in the green Windows installer build.
 
 ## Current HEAD / current verification
-- Current main HEAD: `319dfcd713d8d6e5bd44e3bff86aa1034335b16c`
-- Latest completed product change: global command palette for module/action navigation.
-- Last fully verified CI is run #215 for commit `6a6ec4f...`.
-- The current HEAD contains the new command palette but does not yet have a surfaced CI run; do not treat it as release-candidate verified until the fresh CI completes.
+- Current main HEAD: `fe2deee9d8a6dda71a0d24f3e2e4d6f0852a419d`
+- Latest completed product change: expanded global search with relevance ranking across payments and staff in addition to the existing business entities.
+- Fresh CI run #220 is fully green and produced a fresh Windows installer artifact.
+- The repository also has CI-time installed-runtime smoke and diagnostics; physical user acceptance is still required before a final release claim.
 
 ## Current product direction
-The repository has moved beyond foundation hardening into higher-end dashboard/business-intelligence and command-center capabilities. Continue that product roadmap from the repository state; do not restart old foundation tasks.
+The repository has moved beyond foundation hardening into higher-end dashboard, business-intelligence, and command-center capabilities. Continue that product roadmap from the repository state; do not restart old foundation tasks.
 
 ## Single next step
-Inspect the fresh CI for current HEAD `319dfcd713d8d6e5bd44e3bff86aa1034335b16c`; if green, verify the command palette is included in the Windows installer/runtime path, then continue with the next unfinished high-end capability from the roadmap.
+Add the same high-quality global search experience to the Electron desktop shell (search results, keyboard-friendly navigation, and module routing) without duplicating or removing existing command-palette behavior; then run CI again and verify the new Windows installer/runtime path.
 
 ## Release/runtime gate
 - Fresh Windows `.exe` must be built from a current green HEAD.
