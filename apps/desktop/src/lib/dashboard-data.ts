@@ -4,8 +4,10 @@
 import {
   shapeDashboardStats,
   collectLiveDashboardMetrics,
+  getProductionControlSnapshot,
   store,
   ordersStore,
+  phase6Store,
 } from "@minarvabiz/business-logic";
 import { formatMoney } from "@minarvabiz/utils";
 import type { DashboardData } from "@minarvabiz/ui";
@@ -38,6 +40,11 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     .filter((p) => p.stockQuantity <= p.minimumStock)
     .slice(0, 5)
     .map((p) => ({ id: p.id, name: p.name, stock: p.stockQuantity, unit: p.unit }));
+  const productionControl = getProductionControlSnapshot(
+    ordersStore.listOrders(),
+    phase6Store.listStaff(),
+    phase6Store.listAssignments()
+  );
 
   return {
     stats: shaped.stats,
@@ -50,5 +57,6 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     ],
     recentOrders,
     lowStock,
+    productionControl,
   };
 }

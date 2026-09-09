@@ -15,6 +15,34 @@ import type { OrderStatusItem } from "./OrderStatusSummary";
 import type { CategoryItem } from "./CategoryBreakdown";
 import type { BusinessSummaryItem } from "./BusinessSummary";
 
+/** Shared dashboard projection of deterministic production intelligence. */
+export interface ProductionControlData {
+  totalActive: number;
+  unassigned: number;
+  overdue: number;
+  dueToday: number;
+  dueSoon: number;
+  readyToDeliver: number;
+  inProduction: number;
+  risks: Array<{
+    orderId: string;
+    orderNumber: string;
+    customerName: string;
+    status: string;
+    deliveryDate: string | null;
+    daysUntilDue: number | null;
+    assignedStaffName: string | null;
+    risk: "overdue" | "due_today" | "due_soon" | "unassigned";
+  }>;
+  staffLoad: Array<{
+    staffId: string;
+    staffName: string;
+    activeAssignments: number;
+    dueSoonAssignments: number;
+    overdueAssignments: number;
+  }>;
+}
+
 /** Dashboard data contract — wire to Supabase / SQLite repositories */
 export interface DashboardData {
   stats: {
@@ -37,6 +65,8 @@ export interface DashboardData {
   categories: CategoryItem[];
   recentOrders: RecentOrderRow[];
   lowStock: LowStockItem[];
+  /** Deterministic production-risk and workload snapshot. */
+  productionControl?: ProductionControlData;
 }
 
 export interface DashboardProps {
@@ -58,7 +88,7 @@ const defaultIcons = {
   ),
   bag: (
     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+      <path d="M6 2 3 6v14a2 2 0 0 0 2-2V6l-3-4Z" />
       <path d="M3 6h18" />
       <path d="M16 10a4 4 0 0 1-8 0" />
     </svg>
@@ -85,7 +115,7 @@ export function Dashboard({
   onInsightAction,
   className,
 }: DashboardProps) {
-  const { stats } = data;
+  const { stats, productionControl } = data;
 
   return (
     <div className={cn("space-y-5", className)}>
@@ -106,6 +136,46 @@ export function Dashboard({
           {stats.totalCustomers && <StatCard title="Total Customers" value={stats.totalCustomers.value} tone="blue" className="!p-3" />}
           {stats.lowStockCount && <StatCard title="Low Stock Items" value={stats.lowStockCount.value} tone="rose" className="!p-3" />}
           {stats.outstandingPayments && <StatCard title="Outstanding Payments" value={stats.outstandingPayments.value} tone="slate" className="!p-3" />}
+        </div>
+      )}
+
+      {/* Production control center — exception-first operational signals. */}
+      {productionControl && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Production Control Center</h2>
+              <p className="mt-1 text-xs text-slate-500">Live workload, delivery risk and tailor capacity from current service orders.</p>
+            </div>
+            <div className="text-xs font-medium text-slate-500">{productionControl.totalActive} active orders</div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+            <div className="rounded-xl bg-slate-50 p-3"><div className="text-[11px] font-medium text-slate-500">In production</div><div className="mt-1 text-xl font-bold text-slate-900">{productionControl.inProduction}</div></div>
+            <div className="rounded-xl bg-rose-50 p-3"><div className="text-[11px] font-medium text-rose-600">Overdue</div><div className="mt-1 text-xl font-bold text-rose-700">{productionControl.overdue}</div></div>
+            <div className="rounded-xl bg-amber-50 p-3"><div className="text-[11px] font-medium text-amber-700">Due today</div><div className="mt-1 text-xl font-bold text-amber-800">{productionControl.dueToday}</div></div>
+            <div className="rounded-xl bg-orange-50 p-3"><div className="text-[11px] font-medium text-orange-700">Due ≤2 days</div><div className="mt-1 text-xl font-bold text-orange-800">{productionControl.dueSoon}</div></div>
+            <div className="rounded-xl bg-blue-50 p-3"><div className="text-[11px] font-medium text-blue-600">Unassigned</div><div className="mt-1 text-xl font-bold text-blue-700">{productionControl.unassigned}</div></div>
+            <div className="rounded-xl bg-emerald-50 p-3"><div className="text-[11px] font-medium text-emerald-600">Ready</div><div className="mt-1 text-xl font-bold text-emerald-700">{productionControl.readyToDeliver}</div></div>
+            <div className="rounded-xl bg-violet-50 p-3"><div className="text-[11px] font-medium text-violet-600">Risk queue</div><div className="mt-1 text-xl font-bold text-violet-700">{productionControl.risks.length}</div></div>
+            <div className="rounded-xl bg-slate-100 p-3"><div className="text-[11px] font-medium text-slate-500">Tailor loads</div><div className="mt-1 text-xl font-bold text-slate-900">{productionControl.staffLoad.length}</div></div>
+          </div>
+          {productionControl.risks.length > 0 && (
+            <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
+              <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">Priority queue</div>
+              <div className="divide-y divide-slate-100">
+                {productionControl.risks.slice(0, 5).map((risk) => {
+                  const label = risk.risk === "overdue" ? "Overdue" : risk.risk === "due_today" ? "Due today" : risk.risk === "due_soon" ? "Due soon" : "Unassigned";
+                  const detail = risk.assignedStaffName ? `Assigned to ${risk.assignedStaffName}` : "No staff assigned";
+                  return (
+                    <div key={`${risk.orderId}-${risk.risk}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs">
+                      <div className="min-w-0"><div className="font-semibold text-slate-900">{risk.orderNumber} · {risk.customerName}</div><div className="mt-0.5 text-slate-500">{risk.status} · {detail}</div></div>
+                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
