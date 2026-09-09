@@ -76,7 +76,8 @@ export function measurementRevisionHistory(
   while (current && !seen.has(current.id)) {
     history.push(current);
     seen.add(current.id);
-    current = current.previousProfileId ? withRevisionMetadata(byId.get(current.previousProfileId) ?? undefined as never) : undefined;
+    const previous = current.previousProfileId ? byId.get(current.previousProfileId) : undefined;
+    current = previous ? withRevisionMetadata(previous) : undefined;
   }
 
   return history;
