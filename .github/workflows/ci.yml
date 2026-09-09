@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           if grep -RInE --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' --include='*.cjs' \
-            'minarvabiz-db\.json|db:(read|write)([^A-Za-z0-9_]|$)' apps/desktop; then
+            'minarvabiz-db\\.json|db:(read|write)([^A-Za-z0-9_]|$)' apps/desktop; then
             echo "Legacy JSON database persistence must not be reintroduced into desktop source."
             exit 1
           fi
@@ -64,7 +64,7 @@ jobs:
             cat apps/desktop/dist/index.html
             exit 1
           fi
-          grep -Eq 'href="\./assets/[^" ]+\.css"' apps/desktop/dist/index.html || {
+          grep -Eq 'href="\\./assets/[^" ]+\\.css"' apps/desktop/dist/index.html || {
             echo "Production renderer index.html does not reference its bundled stylesheet.";
             cat apps/desktop/dist/index.html;
             exit 1;
@@ -99,18 +99,24 @@ jobs:
           if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot }
           New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
           $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
-          Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -Wait
+          $installProc = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
+          if ($installProc.ExitCode -ne 0) { throw "Windows installer exited with code $($installProc.ExitCode)." }
+
           $exeCandidates = @(
             (Join-Path $installRoot "Minarva Biz.exe"),
-            (Join-Path $env:LOCALAPPDATA "Programs\Minarva Biz\Minarva Biz.exe"),
-            (Join-Path $env:LOCALAPPDATA "Minarva Biz\Minarva Biz.exe"),
-            (Join-Path $env:APPDATA "Minarva Biz\Minarva Biz.exe")
-          ) | Where-Object { $_ -and (Test-Path $_) }
-          $exe = $exeCandidates | Select-Object -First 1
-          if (-not $exe -and (Test-Path $installRoot)) {
-            $exe = Get-ChildItem -Path $installRoot -Filter *.exe -Recurse -ErrorAction SilentlyContinue |
-              Where-Object { $_.Name -notlike "*Setup*.exe" } |
-              Select-Object -First 1 | ForEach-Object FullName
+            (Join-Path $env:LOCALAPPDATA "Programs\\Minarva Biz\\Minarva Biz.exe"),
+            (Join-Path $env:LOCALAPPDATA "Minarva Biz\\Minarva Biz.exe"),
+            (Join-Path $env:APPDATA "Minarva Biz\\Minarva Biz.exe")
+          )
+          $exe = $null
+          for ($attempt = 1; $attempt -le 30 -and -not $exe; $attempt++) {
+            $exe = $exeCandidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+            if (-not $exe -and (Test-Path $installRoot)) {
+              $exe = Get-ChildItem -Path $installRoot -Filter *.exe -Recurse -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -notlike "*Setup*.exe" } |
+                Select-Object -First 1 | ForEach-Object FullName
+            }
+            if (-not $exe) { Start-Sleep -Seconds 1 }
           }
           if (-not $exe -or -not (Test-Path $exe)) {
             Write-Host "Install root contents:"
@@ -118,7 +124,7 @@ jobs:
             Write-Host "Common LocalAppData program paths:"
             $programsRoot = Join-Path $env:LOCALAPPDATA "Programs"
             if (Test-Path $programsRoot) { Get-ChildItem -Path $programsRoot -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*Minarva*" } | Select-Object FullName, Length }
-            throw "Installed Minarva Biz executable was not found."
+            throw "Installed Minarva Biz executable was not found after waiting for installer completion."
           }
           Write-Host "Installed executable: $exe"
           $proc = Start-Process -FilePath $exe -PassThru
