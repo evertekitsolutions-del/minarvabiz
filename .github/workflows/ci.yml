@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           if grep -RInE --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' --include='*.cjs' \
-            'minarvabiz-db\\.json|db:(read|write)([^A-Za-z0-9_]|$)' apps/desktop; then
+            'minarvabiz-db\.json|db:(read|write)([^A-Za-z0-9_]|$)' apps/desktop; then
             echo "Legacy JSON database persistence must not be reintroduced into desktop source."
             exit 1
           fi
@@ -64,10 +64,10 @@ jobs:
             cat apps/desktop/dist/index.html
             exit 1
           fi
-          grep -Eq 'href="\\./assets/[^" ]+\\.css"' apps/desktop/dist/index.html || {
-            echo "Production renderer index.html does not reference its bundled stylesheet.";
-            cat apps/desktop/dist/index.html;
-            exit 1;
+          grep -Eq 'href="\./assets/[^" ]+\.css"' apps/desktop/dist/index.html || {
+            echo "Production renderer index.html does not reference its bundled stylesheet."
+            cat apps/desktop/dist/index.html
+            exit 1
           }
           echo "Renderer index.html references a relative bundled stylesheet and Tailwind color utilities are present."
       - run: pnpm --filter @minarvabiz/desktop build:electron
@@ -104,9 +104,9 @@ jobs:
 
           $exeCandidates = @(
             (Join-Path $installRoot "Minarva Biz.exe"),
-            (Join-Path $env:LOCALAPPDATA "Programs\\Minarva Biz\\Minarva Biz.exe"),
-            (Join-Path $env:LOCALAPPDATA "Minarva Biz\\Minarva Biz.exe"),
-            (Join-Path $env:APPDATA "Minarva Biz\\Minarva Biz.exe")
+            (Join-Path $env:LOCALAPPDATA "Programs\Minarva Biz\Minarva Biz.exe"),
+            (Join-Path $env:LOCALAPPDATA "Minarva Biz\Minarva Biz.exe"),
+            (Join-Path $env:APPDATA "Minarva Biz\Minarva Biz.exe")
           )
           $exe = $null
           for ($attempt = 1; $attempt -le 30 -and -not $exe; $attempt++) {
