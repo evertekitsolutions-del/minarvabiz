@@ -13,6 +13,7 @@ import {
   calculateOrderPricing, nextOrderNumber, validateOrderInput, canTransition,
 } from "./orders";
 import { createMeasurementRevision, latestMeasurementRevision, measurementRevisionHistory } from "./measurement-revisions";
+import "./quality-control-types";
 import * as mainStore from "./store";
 import { touchPersistence } from "./autosave";
 import { remoteCreateOrder } from "./remote-write";
