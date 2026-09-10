@@ -1,4 +1,4 @@
-import { allowDemoSeed } from "./runtime-mode";
+import { isDemoMode } from "./runtime-mode";
 import { assertPermission } from "./permissions";
 /**
  * Service orders + measurements store (Phase 4).
@@ -256,7 +256,7 @@ function round2(n: number) {
 }
 
 (function seed() {
-  if (!allowDemoSeed()) return;
+  if (!isDemoMode()) return;
   const custs = mainStore.listCustomers();
   if (custs.length === 0) return;
   const c = custs[0];
