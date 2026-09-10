@@ -85,6 +85,9 @@ const sqliteHeaderCheck = /const sqliteHeader = Buffer\.from\("SQLite format 3",
 assert(sqliteHeaderCheck.test(desktopSource), "SQLite validation must compare the 15-byte magic string plus the terminating NUL byte");
 assert(!/toString\("utf8"\)\s*!==\s*"SQLite format 3\\\\u0000"/.test(desktopSource), "SQLite validation must not compare against a literal backslash-u NUL sequence");
 
+const restoreRollbackCheck = /const target = sqlitePath\(\), temp = `\$\{target\}\.restore-\$\{process\.pid\}-\$\{Date\.now\(\)\}`, rollback = `\$\{target\}\.rollback-\$\{process\.pid\}-\$\{Date\.now\(\)\}`;\s*let targetMoved = false;[\s\S]*?if \(fs\.existsSync\(target\)\) \{ fs\.renameSync\(target, rollback\); targetMoved = true; \} fs\.renameSync\(temp, target\);[\s\S]*?if \(fs\.existsSync\(target\) && targetMoved\) fs\.unlinkSync\(target\);[\s\S]*?if \(targetMoved && fs\.existsSync\(rollback\)\) \{ fs\.renameSync\(rollback, target\); \}/;
+assert(restoreRollbackCheck.test(desktopSource), "Backup restore must retain and restore the previous database when replacement fails");
+
 // localStorage is permitted only as a web fallback. Desktop must use the native bridge.
 const desktopAppSource = read("apps/desktop/src/App.tsx");
 assert(!/localStorage\./.test(desktopAppSource), "Desktop App directly uses localStorage as persistence");
@@ -92,4 +95,4 @@ assert(/persistDomainToSqlite/.test(desktopAppSource), "Desktop App is not wired
 assert(/__minarvaDesktopPersist/.test(sqliteBootstrap), "Desktop native persistence bridge is missing");
 
 console.log("Minarva Biz quality smoke: PASS");
-console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
+console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
