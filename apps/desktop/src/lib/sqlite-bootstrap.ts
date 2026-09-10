@@ -24,6 +24,8 @@ type SqliteDatabase = {
 let sqlite: SqliteDatabase | null = null;
 let ready = false;
 let initError: string | null = null;
+let integrityOk = false;
+let integrityResult: string[] = [];
 let pendingWrite: Promise<boolean> = Promise.resolve(true);
 
 export function isDesktopSqliteReady() {
@@ -31,6 +33,9 @@ export function isDesktopSqliteReady() {
 }
 export function getDesktopSqliteError() {
   return initError;
+}
+export function getDesktopSqliteIntegrity() {
+  return { ok: integrityOk, result: [...integrityResult] };
 }
 
 const SNAPSHOT_KEY = "domain_snapshot_v2";
@@ -63,6 +68,16 @@ function loadSnap(db: SqliteDatabase): unknown | null {
     return JSON.parse(String(rows[0].value));
   } catch {
     return null;
+  }
+}
+
+function checkSqliteIntegrity(db: SqliteDatabase): { ok: boolean; result: string[] } {
+  try {
+    const rows = db.query("PRAGMA quick_check");
+    const result = rows.map((row) => String(row.quick_check ?? Object.values(row)[0] ?? "")).filter(Boolean);
+    return { ok: result.length === 1 && result[0].toLowerCase() === "ok", result };
+  } catch (error) {
+    return { ok: false, result: [error instanceof Error ? error.message : String(error)] };
   }
 }
 
@@ -108,6 +123,13 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
     const db = await openSqliteDatabase(dbPath, io);
     sqlite = db;
 
+    const integrity = checkSqliteIntegrity(db);
+    integrityOk = integrity.ok;
+    integrityResult = integrity.result;
+    if (!integrity.ok) {
+      throw new Error(`SQLite integrity check failed for ${dbPath}: ${integrity.result.join(", ") || "unknown result"}`);
+    }
+
     const snap = loadSnap(db);
     if (snap) {
       importDomainSnapshot(snap as Parameters<typeof importDomainSnapshot>[0]);
@@ -140,6 +162,7 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
     return { ok: true };
   } catch (e) {
     ready = false;
+    integrityOk = false;
     initError = e instanceof Error ? e.message : String(e);
     console.error("[minarvabiz] FATAL SQLite init:", initError);
     return { ok: false, error: initError };
@@ -149,6 +172,9 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
 export async function persistDomainToSqlite(): Promise<boolean> {
   if (!sqlite) {
     throw new Error("Cannot persist business data: SQLite not initialized");
+  }
+  if (!integrityOk) {
+    throw new Error("Cannot persist business data: SQLite integrity check is not healthy");
   }
   const snap = exportDomainSnapshotFull();
   saveSnap(sqlite, snap);
