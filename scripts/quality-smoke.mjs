@@ -41,6 +41,8 @@ const persistence = read("packages/business-logic/src/persistence.ts");
 const sqliteBootstrap = read("apps/desktop/src/lib/sqlite-bootstrap.ts");
 const nav = read("packages/ui/src/lib/nav.ts");
 const licensingToken = read("packages/licensing/src/token.ts");
+const licenseActivationRoute = read("apps/web/src/app/api/license/activate/route.ts");
+const licenseActivationMigration = read("supabase/migrations/20260911_license_activation_atomicity.sql");
 
 assert(!/minarvabiz-db\.json/.test(desktopSource), "Legacy JSON database file reference exists in desktop source");
 assert(!/ipcMain\.handle\(\s*["']db:(read|write)["']/.test(desktopSource), "Legacy db:read/db:write IPC handler returned to desktop source");
@@ -103,10 +105,17 @@ const signedPayloadGuards = [
 ];
 for (const guard of signedPayloadGuards) assert(guard.test(licensingToken), `Signed license payload structural guard is missing: ${guard}`);
 
+assert(licenseActivationMigration.includes("CREATE OR REPLACE FUNCTION public.activate_license_device"), "Atomic license activation function is missing");
+assert(licenseActivationMigration.includes("FOR UPDATE"), "Atomic license activation must lock the license row");
+assert(licenseActivationMigration.includes("activation_limit <> -1"), "Atomic license activation must support Enterprise unlimited devices");
+assert(licenseActivationMigration.includes("REVOKE ALL ON FUNCTION public.activate_license_device"), "Atomic license activation RPC must not be public");
+assert(/rpc\("activate_license_device"/.test(licenseActivationRoute), "Web activation endpoint must use atomic activation RPC");
+assert(!/\.select\("id"\, \{ count: "exact"/.test(licenseActivationRoute), "Web activation endpoint must not reintroduce count-before-insert race");
+
 const desktopAppSource = read("apps/desktop/src/App.tsx");
 assert(!/localStorage\./.test(desktopAppSource), "Desktop App directly uses localStorage as persistence");
 assert(/persistDomainToSqlite/.test(desktopAppSource), "Desktop App is not wired to SQLite persistence");
 assert(/__minarvaDesktopPersist/.test(sqliteBootstrap), "Desktop native persistence bridge is missing");
 
 console.log("Minarva Biz quality smoke: PASS");
-console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, structured signed-license payload validation, Enterprise unlimited activation policy, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
+console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, structured signed-license payload validation, Enterprise unlimited activation policy, atomic license activation, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
