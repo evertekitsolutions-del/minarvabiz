@@ -30,8 +30,41 @@ jobs:
       - name: Guard against legacy JSON persistence
         shell: bash
         run: |
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -E 'minarvabiz-db\.json|ipc(Main|Renderer)\.handle\(["'"']db:(read|write)["'"']|ipcRenderer\.(invoke|send)\(["'"']db:(read|write)["'"']' .; then
-            echo "Legacy JSON persistence API detected."
+          set -e
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github 'minarvabiz-db\.json' .; then
+            echo "Legacy JSON persistence file detected."
+            exit 1
+          fi
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F 'ipcMain.handle("db:read"' .; then
+            echo "Legacy db:read IPC handler detected."
+            exit 1
+          fi
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F 'ipcMain.handle("db:write"' .; then
+            echo "Legacy db:write IPC handler detected."
+            exit 1
+          fi
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F "ipcMain.handle('db:read'" .; then
+            echo "Legacy db:read IPC handler detected."
+            exit 1
+          fi
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F "ipcMain.handle('db:write'" .; then
+            echo "Legacy db:write IPC handler detected."
+            exit 1
+          fi
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F 'ipcRenderer.invoke("db:read"' .; then
+            echo "Legacy renderer db:read IPC invocation detected."
+            exit 1
+          fi
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F 'ipcRenderer.invoke("db:write"' .; then
+            echo "Legacy renderer db:write IPC invocation detected."
+            exit 1
+          fi
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F "ipcRenderer.invoke('db:read'" .; then
+            echo "Legacy renderer db:read IPC invocation detected."
+            exit 1
+          fi
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F "ipcRenderer.invoke('db:write'" .; then
+            echo "Legacy renderer db:write IPC invocation detected."
             exit 1
           fi
       - uses: pnpm/action-setup@v6
