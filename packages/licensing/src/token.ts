@@ -30,6 +30,13 @@ export function bytesToHex(bytes: Uint8Array): string {
 
 const LICENSE_PLANS = new Set(["trial", "basic", "professional", "business", "enterprise"]);
 const LICENSE_EDITIONS = new Set(["online", "offline", "hybrid"]);
+const PLAN_MAX_DEVICES: Record<string, number> = {
+  trial: 1,
+  basic: 1,
+  professional: 2,
+  business: 5,
+  enterprise: -1,
+};
 
 function isIsoDate(value: unknown): value is string {
   return typeof value === "string" && Number.isFinite(new Date(value).getTime());
@@ -51,8 +58,16 @@ function isLicensePayload(value: unknown): value is LicensePayload {
   if (!isLicenseFeatures(payload.features)) return false;
   if (!isIsoDate(payload.issuedAt)) return false;
   if (payload.expiresAt !== null && !isIsoDate(payload.expiresAt)) return false;
-  if (typeof payload.activationLimit !== "number" || !Number.isSafeInteger(payload.activationLimit) || (payload.activationLimit !== -1 && payload.activationLimit < 1)) return false;
+  if (typeof payload.activationLimit !== "number" || !Number.isSafeInteger(payload.activationLimit)) return false;
+  if (payload.activationLimit === -1) {
+    if (payload.plan !== "enterprise") return false;
+  } else {
+    if (payload.activationLimit < 1) return false;
+    const planMaxDevices = PLAN_MAX_DEVICES[String(payload.plan)];
+    if (planMaxDevices >= 0 && payload.activationLimit > planMaxDevices) return false;
+  }
   if (!Array.isArray(payload.deviceBindings) || !payload.deviceBindings.every((binding) => typeof binding === "string" && /^[a-f0-9]{64}$/i.test(binding))) return false;
+  if (payload.activationLimit >= 0 && payload.deviceBindings.length > payload.activationLimit) return false;
   if (payload.expiresAt !== null && new Date(payload.expiresAt).getTime() < new Date(payload.issuedAt).getTime()) return false;
   return true;
 }
