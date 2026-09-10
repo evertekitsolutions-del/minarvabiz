@@ -57,22 +57,22 @@ export async function createOfflineActivationPackage(input: { licenseId: string;
   if (!found.ok) return { ok: false, error: found.error }; const license = found.data?.[0]; if (!license) return { ok: false, error: "License not found." };
   if (license.status !== "active") return { ok: false, error: `License is ${license.status}; offline activation is allowed only for active licenses.` };
   if (license.expires_at && new Date(license.expires_at).getTime() <= Date.now()) return { ok: false, error: "License has already expired." };
-  const existing = await dbFetch(`/license_activations?select=activation_id%2Cstatus%2Cactivated_at%2Cdeactivated_at&license_id=eq.${encodeURIComponent(license.id)}&device_id=eq.${encodeURIComponent(deviceId)}&limit=1`);
-  if (!existing.ok) return { ok: false, error: existing.error };
-  let activationId = String(existing.data?.[0]?.activation_id || "");
-  if (existing.data?.[0]?.status !== "active") {
-    const activeResult = await dbFetch(`/license_activations?select=activation_id&license_id=eq.${encodeURIComponent(license.id)}&status=eq.active`);
-    if (!activeResult.ok) return { ok: false, error: activeResult.error };
-    if (Array.isArray(activeResult.data) && activeResult.data.length >= Number(license.activation_limit || 1)) return { ok: false, error: "Activation limit reached. Deactivate or replace an existing device first." };
-    activationId = randomUUID();
-    const created = await dbFetch("/license_activations", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ license_id: license.id, activation_id: activationId, device_id: deviceId, status: "active", activated_at: new Date().toISOString() }) });
-    if (!created.ok) return { ok: false, error: created.error };
-    await dbFetch("/license_events", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ id: randomUUID(), license_id: license.id, activation_id: activationId, event_type: "activated", device_id: deviceId, actor: "license-admin-offline", details: { mode: "offline-package" } }) });
+
+  const activationResult = await dbFetch("/rpc/activate_license_device", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ p_license_id: license.id, p_device_id: deviceId }) });
+  if (!activationResult.ok) {
+    if (String(activationResult.error || "").includes("ACTIVATION_LIMIT_REACHED")) return { ok: false, error: "Activation limit reached. Deactivate or replace an existing device first." };
+    if (String(activationResult.error || "").includes("LICENSE_EXPIRED")) return { ok: false, error: "License has already expired." };
+    return { ok: false, error: activationResult.error || "Offline activation failed." };
   }
+  const activation = Array.isArray(activationResult.data) ? activationResult.data[0] : null;
+  const activationId = String(activation?.activation_id || "");
+  const activationRowId = String(activation?.activation_row_id || "");
+  if (!activationId || !/^[a-f0-9-]{36}$/i.test(activationRowId)) return { ok: false, error: "Offline activation response was invalid." };
+
   const issuedAt = new Date().toISOString();
   const certificate = await signActivationCertificate({ type: "minarvabiz-activation-v1", licenseId: license.license_id, activationId, deviceId, issuedAt, expiresAt: license.expires_at || null }, privateKey);
   const packageData = { format: "minarvabiz-license-v1", product: "minarvabiz", licenseToken: license.token, activationCertificate: certificate, licenseId: license.license_id, activationId, deviceId, issuedAt, expiresAt: license.expires_at || null };
-  await dbFetch("/license_events", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ id: randomUUID(), license_id: license.id, activation_id: activationId, event_type: "validated", device_id: deviceId, actor: "license-admin-offline", details: { mode: "offline-package-created" } }) });
+  await dbFetch("/license_events", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ id: randomUUID(), license_id: license.id, activation_id: activationRowId, event_type: "activated", device_id: deviceId, actor: "license-admin-offline", details: { mode: "offline-package-created" } }) });
   return { ok: true, filename: `MinarvaBiz-${license.license_id}-${deviceId.slice(0, 8)}.lic`, content: JSON.stringify(packageData, null, 2), activationId };
 }
 
