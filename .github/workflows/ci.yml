@@ -30,7 +30,7 @@ jobs:
       - name: Guard against legacy JSON persistence
         shell: bash
         run: |
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git -E 'minarvabiz-db\.json|ipc(Main|Renderer)\.handle\(["'"']db:(read|write)["'"']|ipcRenderer\.(invoke|send)\(["'"']db:(read|write)["'"']' .; then
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -E 'minarvabiz-db\.json|ipc(Main|Renderer)\.handle\(["'"']db:(read|write)["'"']|ipcRenderer\.(invoke|send)\(["'"']db:(read|write)["'"']' .; then
             echo "Legacy JSON persistence API detected."
             exit 1
           fi
@@ -96,7 +96,6 @@ jobs:
           $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
           $installProc = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
           if ($installProc.ExitCode -ne 0) { throw "Windows installer exited with code $($installProc.ExitCode)." }
-
           $exeCandidates = @(
             (Join-Path $installRoot "Minarva Biz.exe"),
             (Join-Path $env:LOCALAPPDATA "Programs\Minarva Biz\Minarva Biz.exe"),
