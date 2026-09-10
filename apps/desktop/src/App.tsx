@@ -8,7 +8,7 @@ import {
   type QuickAction, type NavItemId, type DashboardData, type OrderFormValues,
   type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, recordOrderQualityCheck, runAutomatedCustomerReminders } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders } from "@minarvabiz/business-logic";
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
@@ -97,6 +97,25 @@ export function App() {
     if (reminders.deliveryRemindersQueued || reminders.paymentRemindersQueued) {
       void persistDomainToSqlite();
     }
+    if (!window.minarvaDesktop || !shouldRunAutoBackup()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const settings = getAutoBackupSettings();
+        const result = await window.minarvaDesktop!.createAutomaticBackup();
+        if (cancelled || result.cancelled) return;
+        if (!result.ok) {
+          recordBackupFailure(result.error || "Automatic backup failed");
+          return;
+        }
+        if (result.path) recordBackupSuccess(result.path, "auto", result.sizeBytes);
+        await window.minarvaDesktop!.pruneAutomaticBackups(settings.retentionCount);
+        if (!cancelled) void persistDomainToSqlite();
+      } catch (error) {
+        if (!cancelled) recordBackupFailure(error instanceof Error ? error.message : String(error));
+      }
+    })();
+    return () => { cancelled = true; };
   }, [dbReady, moduleTick]);
 
   React.useEffect(() => {
