@@ -1,9 +1,21 @@
 "use client";
 
 import * as React from "react";
-import type { QueuedCustomerMessage, CustomerCommunicationStatus } from "@minarvabiz/business-logic";
-import { Button } from "../Button";
-import { buildWhatsAppUrl } from "@minarvabiz/business-logic";
+
+export type CustomerCommunicationStatus = "pending" | "failed" | "synced";
+
+export interface QueuedCustomerMessage {
+  messageId: string;
+  orderId: string;
+  customerId: string;
+  channel: "whatsapp" | "sms";
+  templateId: string;
+  customerName: string;
+  phone: string;
+  title: string;
+  body: string;
+  queuedAt: string;
+}
 
 export interface CustomerCommunicationRow {
   eventId: string;
@@ -11,6 +23,12 @@ export interface CustomerCommunicationRow {
   attempts: number;
   lastError: string | null;
   message: QueuedCustomerMessage;
+}
+
+function buildWhatsAppUrl(phone: string, message: string): string {
+  const digits = phone.replace(/\D/g, "");
+  const withCountry = digits.length === 10 ? `91${digits}` : digits;
+  return `https://wa.me/${withCountry}?text=${encodeURIComponent(message)}`;
 }
 
 export function CustomerCommunicationCenter({
@@ -35,7 +53,7 @@ export function CustomerCommunicationCenter({
           <h2 className="text-xl font-semibold text-slate-900">Customer Communication</h2>
           <p className="text-sm text-slate-500">Track customer updates and send WhatsApp messages manually.</p>
         </div>
-        <Button variant="outline" onClick={onRefresh}>Refresh</Button>
+        <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={onRefresh}>Refresh</button>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -53,17 +71,15 @@ export function CustomerCommunicationCenter({
 
       <div className="flex flex-wrap gap-2">
         {(["all", "pending", "failed", "synced"] as const).map((value) => (
-          <Button key={value} variant={filter === value ? "primary" : "outline"} onClick={() => setFilter(value)}>
+          <button key={value} type="button" className={`rounded-lg px-3 py-2 text-sm font-medium ${filter === value ? "bg-indigo-600 text-white" : "border border-slate-200 text-slate-700 hover:bg-slate-50"}`} onClick={() => setFilter(value)}>
             {value === "all" ? "All" : value[0].toUpperCase() + value.slice(1)}
-          </Button>
+          </button>
         ))}
       </div>
 
       <div className="space-y-2">
         {filtered.length === 0 && (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-white py-12 text-center text-slate-400">
-            No customer messages in this view.
-          </div>
+          <div className="rounded-xl border border-dashed border-slate-200 bg-white py-12 text-center text-slate-400">No customer messages in this view.</div>
         )}
         {filtered.map((row) => {
           const { message } = row;
@@ -81,7 +97,7 @@ export function CustomerCommunicationCenter({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {waUrl && <a className="inline-flex items-center rounded-lg border border-emerald-200 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50" href={waUrl} target="_blank" rel="noreferrer">Open WhatsApp</a>}
-                  {row.status === "failed" && <Button variant="outline" onClick={() => onRetry?.(row.eventId)}>Retry</Button>}
+                  {row.status === "failed" && <button type="button" className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => onRetry?.(row.eventId)}>Retry</button>}
                 </div>
               </div>
               <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{message.body}</p>
