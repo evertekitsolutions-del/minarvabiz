@@ -63,11 +63,11 @@ jobs:
         shell: bash
         run: |
           test -f apps/desktop/vite.config.ts
-          grep -Eq 'base:\s*["'"']\./["'"']' apps/desktop/vite.config.ts
-          grep -Eq 'contextIsolation:\s*true' apps/desktop/electron/main.ts
-          grep -Eq 'nodeIntegration:\s*false' apps/desktop/electron/main.ts
-          grep -Eq 'sandbox:\s*true' apps/desktop/electron/main.ts
-          grep -Eq 'webSecurity:\s*true' apps/desktop/electron/main.ts
+          grep -Fq 'base: "./"' apps/desktop/vite.config.ts
+          grep -Fq 'contextIsolation: true' apps/desktop/electron/main.ts
+          grep -Fq 'nodeIntegration: false' apps/desktop/electron/main.ts
+          grep -Fq 'sandbox: true' apps/desktop/electron/main.ts
+          grep -Fq 'webSecurity: true' apps/desktop/electron/main.ts
       - run: pnpm --filter @minarvabiz/business-logic typecheck
       - run: pnpm --filter @minarvabiz/ui typecheck
       - run: pnpm --filter @minarvabiz/desktop typecheck
