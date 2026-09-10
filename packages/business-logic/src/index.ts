@@ -25,6 +25,7 @@ export * from "./live-dashboard";
 export * from "./day-end";
 export * from "./notification-templates";
 export * from "./customer-communication";
+export * from "./customer-reminders";
 export * from "./tax-config";
 export * from "./barcode-labels";
 export * from "./whatsapp";
