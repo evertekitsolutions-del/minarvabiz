@@ -43,14 +43,14 @@ const nav = read("packages/ui/src/lib/nav.ts");
 const licensingToken = read("packages/licensing/src/token.ts");
 
 assert(!/minarvabiz-db\.json/.test(desktopSource), "Legacy JSON database file reference exists in desktop source");
-assert(!/ipcMain\.handle\(\s*[\"']db:(read|write)[\"']/.test(desktopSource), "Legacy db:read/db:write IPC handler returned to desktop source");
-assert(/ipcMain\.handle\(\s*[\"']db:readBinary[\"']/.test(desktopSource), "SQLite binary read IPC handler is missing");
-assert(/ipcMain\.handle\(\s*[\"']db:writeBinary[\"']/.test(desktopSource), "SQLite binary write IPC handler is missing");
+assert(!/ipcMain\.handle\(\s*["']db:(read|write)["']/.test(desktopSource), "Legacy db:read/db:write IPC handler returned to desktop source");
+assert(/ipcMain\.handle\(\s*["']db:readBinary["']/.test(desktopSource), "SQLite binary read IPC handler is missing");
+assert(/ipcMain\.handle\(\s*["']db:writeBinary["']/.test(desktopSource), "SQLite binary write IPC handler is missing");
 assert(/writeSqliteBinary:\s*\(/.test(read("apps/desktop/electron/preload.ts")), "Preload does not expose SQLite write bridge");
 assert(/persistDomainToSqlite\(\): Promise<boolean>/.test(sqliteBootstrap), "SQLite domain persistence is not awaitable");
 assert(/await persistDomainToSqlite\(\)/.test(sqliteBootstrap), "Initial SQLite persistence is not awaited");
 assert(/return pendingWrite;/.test(sqliteBootstrap), "SQLite persistence does not return native write result");
-assert(/base:\s*[\"']\.\/[\"']/.test(vite), "Vite production base path is not relative for Electron file://");
+assert(/base:\s*["']\.\/["']/.test(vite), "Vite production base path is not relative for Electron file://");
 assert(/packages\/ui\/src/.test(tailwind), "Tailwind content scan does not include shared UI package");
 assert(/build:renderer/.test(desktopPackage.scripts?.build ?? ""), "Desktop build script is missing renderer build");
 assert(/electron-builder --win/.test(desktopPackage.scripts?.["package:win"] ?? ""), "Windows packaging script is missing");
@@ -92,19 +92,21 @@ assert(restoreRollbackCheck.test(desktopSource), "Backup restore must retain and
 const signedPayloadGuards = [
   /const LICENSE_PLANS = new Set\(\["trial", "basic", "professional", "business", "enterprise"\]\)/,
   /const LICENSE_EDITIONS = new Set\(\["online", "offline", "hybrid"\]\)/,
+  /const PLAN_MAX_DEVICES: Record<string, number> = \{[\s\S]*enterprise: -1,/,
   /function isIsoDate\(value: unknown\)/,
   /function isLicenseFeatures\(value: unknown\)/,
   /Number\.isSafeInteger\(payload\.activationLimit\)/,
+  /if \(payload\.activationLimit === -1\) \{\s*if \(payload\.plan !== "enterprise"\) return false;/,
+  /if \(payload\.activationLimit >= 0 && payload\.deviceBindings\.length > payload\.activationLimit\) return false;/,
   /payload\.expiresAt !== null && new Date\(payload\.expiresAt\)\.getTime\(\) < new Date\(payload\.issuedAt\)\.getTime\(\)/,
   /return isLicensePayload\(payload\) \? payload : null;/,
 ];
 for (const guard of signedPayloadGuards) assert(guard.test(licensingToken), `Signed license payload structural guard is missing: ${guard}`);
 
-// localStorage is permitted only as a web fallback. Desktop must use the native bridge.
 const desktopAppSource = read("apps/desktop/src/App.tsx");
 assert(!/localStorage\./.test(desktopAppSource), "Desktop App directly uses localStorage as persistence");
 assert(/persistDomainToSqlite/.test(desktopAppSource), "Desktop App is not wired to SQLite persistence");
 assert(/__minarvaDesktopPersist/.test(sqliteBootstrap), "Desktop native persistence bridge is missing");
 
 console.log("Minarva Biz quality smoke: PASS");
-console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, structured signed-license payload validation, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
+console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, structured signed-license payload validation, Enterprise unlimited activation policy, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
