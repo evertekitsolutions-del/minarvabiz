@@ -23,6 +23,7 @@ AS $$
 DECLARE
   v_license licenses%ROWTYPE;
   v_existing license_activations%ROWTYPE;
+  v_existing_found BOOLEAN := FALSE;
   v_active_count INTEGER;
   v_now TIMESTAMPTZ := NOW();
 BEGIN
@@ -57,8 +58,9 @@ BEGIN
    WHERE license_id = v_license.id
      AND device_id = p_device_id
    FOR UPDATE;
+  v_existing_found := FOUND;
 
-  IF FOUND AND v_existing.status = 'active' THEN
+  IF v_existing_found AND v_existing.status = 'active' THEN
     UPDATE license_activations
        SET last_validated_at = v_now
      WHERE id = v_existing.id;
@@ -75,7 +77,7 @@ BEGIN
     RAISE EXCEPTION 'ACTIVATION_LIMIT_REACHED';
   END IF;
 
-  IF FOUND THEN
+  IF v_existing_found THEN
     UPDATE license_activations
        SET status = 'active', activated_at = v_now, deactivated_at = NULL, last_validated_at = v_now
      WHERE id = v_existing.id
