@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   createManualBackup: () => ipcRenderer.invoke("backup:createManual") as Promise<NativeBackupResult>,
   exportBackup: (id: string) => ipcRenderer.invoke("backup:export", id) as Promise<NativeBackupResult>,
   createAutomaticBackup: () => ipcRenderer.invoke("backup:createAutomatic") as Promise<NativeBackupResult>,
+  pruneAutomaticBackups: (retention?: number) => ipcRenderer.invoke("backup:pruneAutomatic", retention) as Promise<boolean>,
   restoreBackup: () => ipcRenderer.invoke("backup:restoreFromFile") as Promise<NativeRestoreResult>,
   relaunch: () => ipcRenderer.invoke("app:relaunch") as Promise<boolean>,
 });
@@ -93,6 +94,7 @@ export type MinarvaDesktopApi = {
   createManualBackup: () => Promise<NativeBackupResult>;
   exportBackup: (id: string) => Promise<NativeBackupResult>;
   createAutomaticBackup: () => Promise<NativeBackupResult>;
+  pruneAutomaticBackups: (retention?: number) => Promise<boolean>;
   restoreBackup: () => Promise<NativeRestoreResult>;
   relaunch: () => Promise<boolean>;
 };
