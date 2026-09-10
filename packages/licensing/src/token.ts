@@ -51,7 +51,7 @@ function isLicensePayload(value: unknown): value is LicensePayload {
   if (!isLicenseFeatures(payload.features)) return false;
   if (!isIsoDate(payload.issuedAt)) return false;
   if (payload.expiresAt !== null && !isIsoDate(payload.expiresAt)) return false;
-  if (typeof payload.activationLimit !== "number" || !Number.isSafeInteger(payload.activationLimit) || payload.activationLimit < 1) return false;
+  if (typeof payload.activationLimit !== "number" || !Number.isSafeInteger(payload.activationLimit) || (payload.activationLimit !== -1 && payload.activationLimit < 1)) return false;
   if (!Array.isArray(payload.deviceBindings) || !payload.deviceBindings.every((binding) => typeof binding === "string" && /^[a-f0-9]{64}$/i.test(binding))) return false;
   if (payload.expiresAt !== null && new Date(payload.expiresAt).getTime() < new Date(payload.issuedAt).getTime()) return false;
   return true;
