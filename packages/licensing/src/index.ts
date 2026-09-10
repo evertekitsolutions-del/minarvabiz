@@ -6,3 +6,4 @@ export * from "./limits";
 export * from "./activation";
 export * from "./activation-certificate";
 export * from "./issuer";
+export type { Edition, LicensePlan, LicenseStatus, LicenseFeatures, LicensePayload } from "@minarvabiz/types";
