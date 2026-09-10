@@ -7,9 +7,24 @@ import * as store from "./store";
 import * as ordersStore from "./orders-store";
 import { queueDeliveryReminder, queuePaymentReminder } from "./customer-communication";
 
-function dayStart(value: string | Date): number {
+function calendarDay(value: string | Date): string {
+  // Delivery dates are business calendar dates, not instants in time. When a
+  // full timestamp is supplied we use the machine's local calendar day so a
+  // late-night UTC boundary cannot shift a reminder by one day.
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const date = new Date(value);
-  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  if (!Number.isFinite(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(day: string, amount: number): string {
+  const [year, month, date] = day.split("-").map(Number);
+  const value = new Date(year, month - 1, date);
+  value.setDate(value.getDate() + amount);
+  return calendarDay(value);
 }
 
 export interface ReminderRunResult {
@@ -23,8 +38,9 @@ export interface ReminderRunResult {
  * Delivery reminders are planned for orders due today or tomorrow.
  */
 export function runAutomatedCustomerReminders(now: ISODateString | Date = new Date()): ReminderRunResult {
-  const today = dayStart(now);
-  const tomorrow = today + 24 * 60 * 60 * 1000;
+  const today = calendarDay(now);
+  if (!today) return { scannedOrders: 0, deliveryRemindersQueued: 0, paymentRemindersQueued: 0 };
+  const tomorrow = addDays(today, 1);
   let deliveryRemindersQueued = 0;
   let paymentRemindersQueued = 0;
 
@@ -34,8 +50,8 @@ export function runAutomatedCustomerReminders(now: ISODateString | Date = new Da
     if (!customer) continue;
 
     if (order.deliveryDate) {
-      const due = dayStart(order.deliveryDate);
-      if (due === today || due === tomorrow || due < today) {
+      const due = calendarDay(order.deliveryDate);
+      if (due && (due === today || due === tomorrow || due < today)) {
         if (queueDeliveryReminder(order, customer)) deliveryRemindersQueued += 1;
       }
     }
