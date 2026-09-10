@@ -41,15 +41,10 @@ function communicationEvents() {
   return exportOutbox().filter((event) => event.aggregateType === "customer_communication");
 }
 
-/** Queue a customer-facing message when an order reaches a communicable status. */
-export function queueOrderStatusMessage(
-  order: ServiceOrder,
-  customer: Customer | null | undefined
-): QueuedCustomerMessage | null {
+export function queueOrderStatusMessage(order: ServiceOrder, customer: Customer | null | undefined): QueuedCustomerMessage | null {
   if (!customer) return null;
   const templateId = STATUS_TEMPLATES[order.status];
   if (!templateId) return null;
-
   const phone = customerPhone(customer);
   if (!phone) return null;
 
@@ -73,27 +68,18 @@ export function queueOrderStatusMessage(
     body: rendered.body,
     queuedAt: nowISO(),
   };
-
   enqueueOutbox("customer_communication", order.id, "insert", message);
   return message;
 }
 
-export function listCustomerCommunicationQueue(): Array<{
-  eventId: UUID;
-  status: CustomerCommunicationStatus;
-  attempts: number;
-  lastError: string | null;
-  message: QueuedCustomerMessage;
-}> {
-  return communicationEvents()
-    .map((event) => ({
-      eventId: event.id,
-      status: event.status,
-      attempts: event.attempts,
-      lastError: event.lastError,
-      message: event.payload as QueuedCustomerMessage,
-    }))
-    .sort((a, b) => b.message.queuedAt.localeCompare(a.message.queuedAt));
+export function listCustomerCommunicationQueue() {
+  return communicationEvents().map((event) => ({
+    eventId: event.id,
+    status: event.status as CustomerCommunicationStatus,
+    attempts: event.attempts,
+    lastError: event.lastError,
+    message: event.payload as QueuedCustomerMessage,
+  })).sort((a, b) => b.message.queuedAt.localeCompare(a.message.queuedAt));
 }
 
 export function recordCustomerCommunicationFailure(eventId: UUID, error: string): boolean {
@@ -113,8 +99,17 @@ export function retryCustomerCommunication(eventId: UUID): boolean {
   return true;
 }
 
-export function communicationTemplateForStatus(
-  status: ServiceOrder["status"]
-): TemplateId | null {
+export function communicationTemplateForStatus(status: ServiceOrder["status"]): TemplateId | null {
   return STATUS_TEMPLATES[status] ?? null;
 }
+
+export function exposeCustomerCommunicationBridge() {
+  if (typeof window === "undefined") return;
+  const host = window as Window & { minarvaCustomerCommunication?: unknown };
+  host.minarvaCustomerCommunication = {
+    list: listCustomerCommunicationQueue,
+    retry: retryCustomerCommunication,
+  };
+}
+
+exposeCustomerCommunicationBridge();
