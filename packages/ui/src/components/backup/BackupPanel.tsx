@@ -9,6 +9,7 @@ type NativeBackup = BackupMeta;
 type NativeDesktopApi = {
   listBackups?: () => Promise<NativeBackup[]>;
   createManualBackup?: () => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
+  createAutomaticBackup?: () => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
   exportBackup?: (id: string) => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
   restoreBackup?: () => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
   relaunch?: () => Promise<boolean>;
@@ -53,6 +54,10 @@ export function BackupPanel({
   }, [refreshNative]);
 
   const backups = nativeBackups ?? fallbackBackups;
+  const automaticBackups = backups.filter((backup) => backup.kind === "automatic");
+  const latestAutomatic = automaticBackups[0] ?? null;
+  const latestAutomaticAgeHours = latestAutomatic ? Math.max(0, (Date.now() - new Date(latestAutomatic.createdAt).getTime()) / 3600000) : null;
+  const backupHealth = latestAutomaticAgeHours == null ? "No automatic backup yet" : latestAutomaticAgeHours <= 26 ? "Healthy" : latestAutomaticAgeHours <= 48 ? "Needs attention" : "At risk";
 
   const run = async (action: () => void | Promise<void>, success: string) => {
     setBusy(true);
@@ -76,6 +81,14 @@ export function BackupPanel({
       return;
     }
     await onCreate?.();
+  };
+
+  const createAutomatic = async () => {
+    if (!native?.createAutomaticBackup) throw new Error("Automatic backup is available in the desktop edition only");
+    const r = await native.createAutomaticBackup();
+    if (r.cancelled) return;
+    if (!r.ok) throw new Error(r.error || "Automatic backup failed");
+    await refreshNative();
   };
 
   const restore = async () => {
@@ -130,10 +143,17 @@ export function BackupPanel({
           <h2 className="text-xl font-semibold text-slate-900">Backup & Restore</h2>
           <p className="text-sm text-slate-500">Full local SQLite backups with a safety backup before restore</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" disabled={busy} onClick={() => void run(restore, "Restore completed")}>Restore backup</Button>
+          <Button variant="outline" disabled={busy || !native?.createAutomaticBackup} onClick={() => void run(createAutomatic, "Automatic backup created")}>Run automatic backup</Button>
           <Button disabled={busy} onClick={() => void run(create, "Backup created")}>Create backup</Button>
         </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card><CardContent className="p-4"><div className="text-xs font-medium uppercase tracking-wide text-slate-500">Backup health</div><div className="mt-1 text-lg font-semibold text-slate-900">{backupHealth}</div><div className="text-xs text-slate-500">{latestAutomatic ? `${latestAutomaticAgeHours!.toFixed(1)}h since latest automatic backup` : "Automatic backup will be created by the desktop runtime"}</div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="text-xs font-medium uppercase tracking-wide text-slate-500">Automatic backups</div><div className="mt-1 text-lg font-semibold text-slate-900">{automaticBackups.length}</div><div className="text-xs text-slate-500">Retention is managed by the desktop runtime</div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="text-xs font-medium uppercase tracking-wide text-slate-500">Stored backups</div><div className="mt-1 text-lg font-semibold text-slate-900">{backups.length}</div><div className="text-xs text-slate-500">{backups.filter((backup) => backup.verified).length} verified SQLite file{backups.filter((backup) => backup.verified).length === 1 ? "" : "s"}</div></CardContent></Card>
       </div>
 
       {message && <p className="text-sm text-emerald-600">{message}</p>}
