@@ -92,6 +92,15 @@ jobs:
           grep -Fq 'nodeIntegration: false' apps/desktop/electron/main.ts
           grep -Fq 'sandbox: true' apps/desktop/electron/main.ts
           grep -Fq 'webSecurity: true' apps/desktop/electron/main.ts
+      - run: node scripts/quality-smoke.mjs
+      - run: pnpm --filter @minarvabiz/database typecheck
+      - name: Run database persistence tests
+        shell: bash
+        run: |
+          set -e
+          node packages/database/src/__tests__/sqlite-persist.test.mjs
+          node packages/database/src/__tests__/sqlite-backup.test.mjs
+          node packages/database/src/__tests__/desktop-sqlite-flow.test.mjs
       - run: pnpm --filter @minarvabiz/business-logic typecheck
       - run: pnpm --filter @minarvabiz/ui typecheck
       - run: pnpm --filter @minarvabiz/desktop typecheck
