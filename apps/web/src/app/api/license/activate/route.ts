@@ -5,6 +5,7 @@ import { signActivationCertificate } from "@minarvabiz/licensing";
 
 export const runtime = "nodejs";
 const DEVICE_RE = /^[a-f0-9]{64}$/;
+const MAX_BODY_BYTES = 16 * 1024;
 function clean(v: unknown, max = 2000) { return typeof v === "string" ? v.trim().slice(0, max) : ""; }
 function db() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -28,7 +29,15 @@ async function certificate(licenseId: string, activationId: string, deviceId: st
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const declaredLength = Number(request.headers.get("content-length") || 0);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+      return NextResponse.json({ ok: false, code: "REQUEST_TOO_LARGE" }, { status: 413 });
+    }
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
+      return NextResponse.json({ ok: false, code: "REQUEST_TOO_LARGE" }, { status: 413 });
+    }
+    const body = JSON.parse(rawBody) as Record<string, unknown>;
     const token = clean(body?.licenseToken);
     const deviceId = clean(body?.deviceId, 64).toLowerCase();
     if (!token || !DEVICE_RE.test(deviceId)) return NextResponse.json({ ok: false, code: "INVALID_REQUEST" }, { status: 400 });

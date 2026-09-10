@@ -7,6 +7,7 @@ const DESTINATION = "minarvatechnologies@gmail.com";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[0-9+() .-]{6,50}$/;
 const DEVICE_RE = /^[A-Fa-f0-9]{64}$/;
+const MAX_BODY_BYTES = 16 * 1024;
 
 function clean(value: unknown, max = 500): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
@@ -24,7 +25,11 @@ function htmlEscape(value: string): string {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const declaredLength = Number(request.headers.get("content-length") || 0);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) return NextResponse.json({ ok: false, error: "Request is too large." }, { status: 413 });
+    const rawBody = await request.text();
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) return NextResponse.json({ ok: false, error: "Request is too large." }, { status: 413 });
+    const body = JSON.parse(rawBody) as Record<string, unknown>;
     const email = clean(body?.email, 254).toLowerCase();
     const phone = normalizePhone(clean(body?.phone, 50));
     const organizationName = clean(body?.organizationName, 200);
@@ -42,9 +47,7 @@ export async function POST(request: Request) {
     const resendKey = process.env.RESEND_API_KEY;
     const from = process.env.TRIAL_NOTIFICATION_FROM;
 
-    if (!supabaseUrl || !secretKey || !resendKey || !from) {
-      return NextResponse.json({ ok: false, error: "Trial service is not configured." }, { status: 503 });
-    }
+    if (!supabaseUrl || !secretKey || !resendKey || !from) return NextResponse.json({ ok: false, error: "Trial service is not configured." }, { status: 503 });
 
     const supabase = createClient(supabaseUrl, secretKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const registrationId = crypto.randomUUID();
@@ -57,9 +60,7 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (existingError) return NextResponse.json({ ok: false, error: "Could not check trial eligibility." }, { status: 500 });
-    if (existing) {
-      return NextResponse.json({ ok: false, code: "TRIAL_ALREADY_REGISTERED", error: "A Minarva Biz trial is already registered for this email, phone number, or device.", trial: existing }, { status: 409 });
-    }
+    if (existing) return NextResponse.json({ ok: false, code: "TRIAL_ALREADY_REGISTERED", error: "A Minarva Biz trial is already registered for this email, phone number, or device.", trial: existing }, { status: 409 });
 
     const started = new Date();
     const expires = new Date(started.getTime() + 30 * 24 * 60 * 60 * 1000);

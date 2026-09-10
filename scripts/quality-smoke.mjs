@@ -42,7 +42,9 @@ const sqliteBootstrap = read("apps/desktop/src/lib/sqlite-bootstrap.ts");
 const nav = read("packages/ui/src/lib/nav.ts");
 const licensingToken = read("packages/licensing/src/token.ts");
 const licenseActivationRoute = read("apps/web/src/app/api/license/activate/route.ts");
+const trialRegisterRoute = read("apps/web/src/app/api/trial/register/route.ts");
 const licenseActivationMigration = read("supabase/migrations/20260911_license_activation_atomicity.sql");
+const settingsPanel = read("packages/ui/src/components/settings/SettingsPanel.tsx");
 
 assert(!/minarvabiz-db\.json/.test(desktopSource), "Legacy JSON database file reference exists in desktop source");
 assert(!/ipcMain\.handle\(\s*["']db:(read|write)["']/.test(desktopSource), "Legacy db:read/db:write IPC handler returned to desktop source");
@@ -111,6 +113,9 @@ assert(licenseActivationMigration.includes("activation_limit <> -1"), "Atomic li
 assert(licenseActivationMigration.includes("REVOKE ALL ON FUNCTION public.activate_license_device"), "Atomic license activation RPC must not be public");
 assert(/rpc\("activate_license_device"/.test(licenseActivationRoute), "Web activation endpoint must use atomic activation RPC");
 assert(!/\.select\("id"\, \{ count: "exact"/.test(licenseActivationRoute), "Web activation endpoint must not reintroduce count-before-insert race");
+assert(/MAX_BODY_BYTES\s*=\s*16 \* 1024/.test(licenseActivationRoute) && /await request\.text\(\)/.test(licenseActivationRoute), "License activation endpoint must bound request body size before parsing JSON");
+assert(/MAX_BODY_BYTES\s*=\s*16 \* 1024/.test(trialRegisterRoute) && /await request\.text\(\)/.test(trialRegisterRoute), "Trial registration endpoint must bound request body size before parsing JSON");
+assert(/Support diagnostics/.test(settingsPanel) && /redacted: true/.test(settingsPanel) && /excluded: \["customer names"/.test(settingsPanel), "Support diagnostics must remain explicitly redacted");
 
 const desktopAppSource = read("apps/desktop/src/App.tsx");
 assert(!/localStorage\./.test(desktopAppSource), "Desktop App directly uses localStorage as persistence");
@@ -118,4 +123,4 @@ assert(/persistDomainToSqlite/.test(desktopAppSource), "Desktop App is not wired
 assert(/__minarvaDesktopPersist/.test(sqliteBootstrap), "Desktop native persistence bridge is missing");
 
 console.log("Minarva Biz quality smoke: PASS");
-console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, structured signed-license payload validation, Enterprise unlimited activation policy, atomic license activation, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
+console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, structured signed-license payload validation, Enterprise unlimited activation policy, atomic license activation, bounded API request parsing, redacted support diagnostics, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
