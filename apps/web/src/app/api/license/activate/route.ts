@@ -17,26 +17,17 @@ function privateKeyHex() { return clean(process.env.LICENSE_PRIVATE_KEY, 256).re
 async function certificate(licenseId: string, activationId: string, deviceId: string, expiresAt: string | null) {
   const key = privateKeyHex();
   if (!/^[0-9a-f]{64}$/.test(key)) throw new Error("LICENSE_PRIVATE_KEY is not configured");
-  return signActivationCertificate({
-    type: "minarvabiz-activation-v1",
-    licenseId,
-    activationId,
-    deviceId,
-    issuedAt: new Date().toISOString(),
-    expiresAt,
-  }, key);
+  return signActivationCertificate({ type: "minarvabiz-activation-v1", licenseId, activationId, deviceId, issuedAt: new Date().toISOString(), expiresAt }, key);
 }
 
 export async function POST(request: Request) {
   try {
+    const contentType = request.headers.get("content-type") || "";
+    if (!/^application\/json(?:\s*;|$)/i.test(contentType)) return NextResponse.json({ ok: false, code: "UNSUPPORTED_MEDIA_TYPE" }, { status: 415 });
     const declaredLength = Number(request.headers.get("content-length") || 0);
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
-      return NextResponse.json({ ok: false, code: "REQUEST_TOO_LARGE" }, { status: 413 });
-    }
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) return NextResponse.json({ ok: false, code: "REQUEST_TOO_LARGE" }, { status: 413 });
     const rawBody = await request.text();
-    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
-      return NextResponse.json({ ok: false, code: "REQUEST_TOO_LARGE" }, { status: 413 });
-    }
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) return NextResponse.json({ ok: false, code: "REQUEST_TOO_LARGE" }, { status: 413 });
     const body = JSON.parse(rawBody) as Record<string, unknown>;
     const token = clean(body?.licenseToken);
     const deviceId = clean(body?.deviceId, 64).toLowerCase();
@@ -55,10 +46,7 @@ export async function POST(request: Request) {
     }
 
     const now = new Date().toISOString();
-    const { data: activationRows, error: activationError } = await supabase.rpc("activate_license_device", {
-      p_license_id: license.id,
-      p_device_id: deviceId,
-    });
+    const { data: activationRows, error: activationError } = await supabase.rpc("activate_license_device", { p_license_id: license.id, p_device_id: deviceId });
     if (activationError || !Array.isArray(activationRows) || !activationRows[0]?.activation_id) {
       const code = String(activationError?.message || "");
       if (code.includes("ACTIVATION_LIMIT_REACHED")) return NextResponse.json({ ok: false, code: "ACTIVATION_LIMIT_REACHED" }, { status: 409 });
