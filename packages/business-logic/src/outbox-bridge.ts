@@ -71,6 +71,8 @@ export function markOutboxFailed(id: string, error: string) {
     e.status = "failed";
     e.attempts += 1;
     e.lastError = error;
+    // Persist failure metadata so retry diagnostics survive app restarts.
+    touchPersistence();
   }
 }
 
