@@ -1,17 +1,11 @@
 import type { UnitOfWork } from "./repository";
 import { createMemoryUnitOfWork } from "./adapters/memory";
 import { createSupabaseUnitOfWork, supabaseConfigFromEnv, isSupabaseConfigured } from "./adapters/supabase";
-import {
-  createFileJsonUnitOfWork,
-  createLocalStorageIO,
-  type FileIO,
-} from "./adapters/file-json";
 
 export type EditionMode = "online" | "offline" | "hybrid" | "memory";
 
 export interface CreateDbOptions {
   edition?: EditionMode;
-  fileIO?: FileIO;
   accessToken?: string | null;
   sqlitePath?: string;
 }
@@ -35,9 +29,9 @@ export async function createDatabase(options: CreateDbOptions = {}): Promise<Uni
       const sqlite = await openSqliteDatabase(dbPath, nodeFileIO());
       return createSqliteUnitOfWork(sqlite);
     }
-    const io = options.fileIO ?? createLocalStorageIO();
-    const uow = await createFileJsonUnitOfWork(io);
-    return { ...uow, edition: "offline" };
+    // Browser/offline callers must not silently fall back to localStorage.
+    // The desktop runtime supplies SQLite; browser callers use memory mode explicitly.
+    return createMemoryUnitOfWork();
   }
 
   if (edition === "online" || edition === "hybrid") {
