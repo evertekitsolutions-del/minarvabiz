@@ -7,6 +7,7 @@
 import type { Customer, ServiceOrder, UUID } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { enqueueOutbox, exportOutbox, markOutboxFailed } from "./outbox-bridge";
+import { touchPersistence } from "./autosave";
 import { templateForOrder, type TemplateId } from "./notification-templates";
 
 export type CustomerCommunicationChannel = "whatsapp" | "sms";
@@ -52,8 +53,6 @@ export function queueOrderStatusMessage(
   const phone = customerPhone(customer);
   if (!phone) return null;
 
-  // Prevent duplicate notifications for the same order/template. A failed
-  // message may be re-queued deliberately after the operator retries it.
   const duplicate = communicationEvents().some((event) => {
     if (event.status === "failed") return false;
     const payload = event.payload as Partial<QueuedCustomerMessage> | null;
@@ -101,6 +100,7 @@ export function recordCustomerCommunicationFailure(eventId: UUID, error: string)
   const event = communicationEvents().find((item) => item.id === eventId);
   if (!event) return false;
   markOutboxFailed(eventId, error);
+  touchPersistence();
   return true;
 }
 
@@ -109,6 +109,7 @@ export function retryCustomerCommunication(eventId: UUID): boolean {
   if (!event || event.status !== "failed") return false;
   event.status = "pending";
   event.lastError = null;
+  touchPersistence();
   return true;
 }
 
