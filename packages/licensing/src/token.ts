@@ -27,6 +27,36 @@ function hexToBytes(hex: string): Uint8Array {
 export function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+const LICENSE_PLANS = new Set(["trial", "basic", "professional", "business", "enterprise"]);
+const LICENSE_EDITIONS = new Set(["online", "offline", "hybrid"]);
+
+function isIsoDate(value: unknown): value is string {
+  return typeof value === "string" && Number.isFinite(new Date(value).getTime());
+}
+
+function isLicenseFeatures(value: unknown): value is LicensePayload["features"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return Object.values(value as Record<string, unknown>).every((flag) => typeof flag === "boolean");
+}
+
+function isLicensePayload(value: unknown): value is LicensePayload {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const payload = value as Record<string, unknown>;
+  if (typeof payload.licenseId !== "string" || !payload.licenseId) return false;
+  if (typeof payload.customerId !== "string" || !payload.customerId) return false;
+  if (payload.product !== "minarvabiz") return false;
+  if (typeof payload.edition !== "string" || !LICENSE_EDITIONS.has(payload.edition)) return false;
+  if (typeof payload.plan !== "string" || !LICENSE_PLANS.has(payload.plan)) return false;
+  if (!isLicenseFeatures(payload.features)) return false;
+  if (!isIsoDate(payload.issuedAt)) return false;
+  if (payload.expiresAt !== null && !isIsoDate(payload.expiresAt)) return false;
+  if (typeof payload.activationLimit !== "number" || !Number.isSafeInteger(payload.activationLimit) || payload.activationLimit < 1) return false;
+  if (!Array.isArray(payload.deviceBindings) || !payload.deviceBindings.every((binding) => typeof binding === "string" && /^[a-f0-9]{64}$/i.test(binding))) return false;
+  if (payload.expiresAt !== null && new Date(payload.expiresAt).getTime() < new Date(payload.issuedAt).getTime()) return false;
+  return true;
+}
+
 export async function signLicense(payload: LicensePayload, privateKeyHex: string): Promise<string> {
   const body = toBase64Url(JSON.stringify(payload));
   const signature = await ed.signAsync(new TextEncoder().encode(body), hexToBytes(privateKeyHex));
@@ -34,10 +64,13 @@ export async function signLicense(payload: LicensePayload, privateKeyHex: string
 }
 export async function verifyLicenseToken(token: string, publicKeyHex: string): Promise<LicensePayload | null> {
   try {
-    const [body, sig] = token.split(".");
+    const parts = token.split(".");
+    if (parts.length !== 2) return null;
+    const [body, sig] = parts;
     if (!body || !sig) return null;
     const valid = await ed.verifyAsync(fromBase64Url(sig), new TextEncoder().encode(body), hexToBytes(publicKeyHex));
     if (!valid) return null;
-    return JSON.parse(new TextDecoder().decode(fromBase64Url(body))) as LicensePayload;
+    const payload = JSON.parse(new TextDecoder().decode(fromBase64Url(body))) as unknown;
+    return isLicensePayload(payload) ? payload : null;
   } catch { return null; }
 }
