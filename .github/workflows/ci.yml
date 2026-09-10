@@ -96,6 +96,7 @@ jobs:
           $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
           $installProc = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
           if ($installProc.ExitCode -ne 0) { throw "Windows installer exited with code $($installProc.ExitCode)." }
+
           $exeCandidates = @(
             (Join-Path $installRoot "Minarva Biz.exe"),
             (Join-Path $env:LOCALAPPDATA "Programs\Minarva Biz\Minarva Biz.exe"),
