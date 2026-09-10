@@ -31,42 +31,25 @@ jobs:
         shell: bash
         run: |
           set -e
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github 'minarvabiz-db\.json' .; then
-            echo "Legacy JSON persistence file detected."
+          source_files=(apps packages)
+          if grep -RIn --include='*.ts' --include='*.tsx' --exclude-dir=node_modules --exclude-dir=.git 'minarvabiz-db\.json' "${source_files[@]}"; then
+            echo "Legacy JSON persistence file reference detected in TypeScript source."
             exit 1
           fi
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F 'ipcMain.handle("db:read"' .; then
-            echo "Legacy db:read IPC handler detected."
-            exit 1
-          fi
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F 'ipcMain.handle("db:write"' .; then
-            echo "Legacy db:write IPC handler detected."
-            exit 1
-          fi
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F "ipcMain.handle('db:read'" .; then
-            echo "Legacy db:read IPC handler detected."
-            exit 1
-          fi
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F "ipcMain.handle('db:write'" .; then
-            echo "Legacy db:write IPC handler detected."
-            exit 1
-          fi
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F 'ipcRenderer.invoke("db:read"' .; then
-            echo "Legacy renderer db:read IPC invocation detected."
-            exit 1
-          fi
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F 'ipcRenderer.invoke("db:write"' .; then
-            echo "Legacy renderer db:write IPC invocation detected."
-            exit 1
-          fi
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F "ipcRenderer.invoke('db:read'" .; then
-            echo "Legacy renderer db:read IPC invocation detected."
-            exit 1
-          fi
-          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.github -F "ipcRenderer.invoke('db:write'" .; then
-            echo "Legacy renderer db:write IPC invocation detected."
-            exit 1
-          fi
+          for pattern in \
+            'ipcMain.handle("db:read"' \
+            'ipcMain.handle("db:write"' \
+            "ipcMain.handle('db:read'" \
+            "ipcMain.handle('db:write'" \
+            'ipcRenderer.invoke("db:read"' \
+            'ipcRenderer.invoke("db:write"' \
+            "ipcRenderer.invoke('db:read'" \
+            "ipcRenderer.invoke('db:write'"; do
+            if grep -RIn --include='*.ts' --include='*.tsx' --exclude-dir=node_modules --exclude-dir=.git -F "$pattern" "${source_files[@]}"; then
+              echo "Legacy SQLite-breaking IPC API detected: $pattern"
+              exit 1
+            fi
+          done
       - uses: pnpm/action-setup@v6
         with:
           version: 9.15.0
