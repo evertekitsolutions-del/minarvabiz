@@ -2,6 +2,7 @@ import type { LicensePayload, LicenseFeatures } from "@minarvabiz/types";
 import { isExpired, daysUntil } from "@minarvabiz/utils";
 import { verifyLicenseToken } from "./token";
 import { hasFeature } from "./features";
+import { PLAN_LIMITS } from "./limits";
 
 export interface ValidationResult {
   valid: boolean; payload: LicensePayload | null; reason?: string;
@@ -16,7 +17,7 @@ export async function validateLicenseLocally(
   if (!payload) return { valid: false, payload: null, reason: "Invalid signature or malformed token", features: null };
   if (payload.product !== "minarvabiz") return { valid: false, payload, reason: "Wrong product", features: null };
   if (payload.expiresAt && isExpired(payload.expiresAt)) {
-    const graceDays = options?.graceDays ?? 0;
+    const graceDays = options?.graceDays ?? PLAN_LIMITS[payload.plan].graceDays;
     if (graceDays > 0 && options?.lastOnlineValidation) {
       const last = new Date(options.lastOnlineValidation).getTime();
       if (Date.now() - last > graceDays * 86400000) {
