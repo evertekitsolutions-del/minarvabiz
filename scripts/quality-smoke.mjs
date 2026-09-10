@@ -104,8 +104,8 @@ assert(/rpc\("activate_license_device"/.test(licenseActivationRoute), "Web activ
 assert(!/\.select\("id"\, \{ count: "exact"/.test(licenseActivationRoute), "Web activation endpoint must not reintroduce count-before-insert race");
 assert(/MAX_BODY_BYTES\s*=\s*16 \* 1024/.test(licenseActivationRoute) && /await request\.text\(\)/.test(licenseActivationRoute), "License activation endpoint must bound request body size before parsing JSON");
 assert(/MAX_BODY_BYTES\s*=\s*16 \* 1024/.test(trialRegisterRoute) && /await request\.text\(\)/.test(trialRegisterRoute), "Trial registration endpoint must bound request body size before parsing JSON");
-assert(/content-type/.test(licenseActivationRoute) && /UNSUPPORTED_MEDIA_TYPE/.test(licenseActivationRoute), "License activation endpoint must enforce JSON content type");
-assert(/content-type/.test(trialRegisterRoute) && /UNSUPPORTED_MEDIA_TYPE/.test(trialRegisterRoute), "Trial registration endpoint must enforce JSON content type");
+assert(/content-type/.test(licenseActivationRoute) && /status:\s*415/.test(licenseActivationRoute), "License activation endpoint must enforce JSON content type");
+assert(/content-type/.test(trialRegisterRoute) && /status:\s*415/.test(trialRegisterRoute), "Trial registration endpoint must enforce JSON content type");
 assert(/Support diagnostics/.test(settingsPanel) && /redacted: true/.test(settingsPanel) && /excluded: \["customer names"/.test(settingsPanel), "Support diagnostics must remain explicitly redacted");
 
 const desktopAppSource = read("apps/desktop/src/App.tsx");
