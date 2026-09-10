@@ -1,7 +1,6 @@
 export * from "./schema";
 export * from "./repository";
 export * from "./adapters/memory";
-export * from "./adapters/file-json";
 export * from "./adapters/supabase";
 export * from "./sql/sqlite-ddl";
 export * from "./sql/postgres-ddl";
