@@ -4,19 +4,9 @@ import process from "node:process";
 
 const root = process.cwd();
 
-function read(rel) {
-  return fs.readFileSync(path.join(root, rel), "utf8");
-}
-
-function exists(rel) {
-  return fs.existsSync(path.join(root, rel));
-}
-
-function assert(condition, message) {
-  if (!condition) {
-    throw new Error(`QUALITY CHECK FAILED: ${message}`);
-  }
-}
+function read(rel) { return fs.readFileSync(path.join(root, rel), "utf8"); }
+function exists(rel) { return fs.existsSync(path.join(root, rel)); }
+function assert(condition, message) { if (!condition) throw new Error(`QUALITY CHECK FAILED: ${message}`); }
 
 const desktopFiles = [
   "apps/desktop/electron/main.ts",
@@ -24,7 +14,6 @@ const desktopFiles = [
   "apps/desktop/src/App.tsx",
   "apps/desktop/src/lib/sqlite-bootstrap.ts",
 ];
-
 for (const file of desktopFiles) assert(exists(file), `Missing critical desktop file: ${file}`);
 
 const desktopSource = desktopFiles.map(read).join("\n");
@@ -115,6 +104,8 @@ assert(/rpc\("activate_license_device"/.test(licenseActivationRoute), "Web activ
 assert(!/\.select\("id"\, \{ count: "exact"/.test(licenseActivationRoute), "Web activation endpoint must not reintroduce count-before-insert race");
 assert(/MAX_BODY_BYTES\s*=\s*16 \* 1024/.test(licenseActivationRoute) && /await request\.text\(\)/.test(licenseActivationRoute), "License activation endpoint must bound request body size before parsing JSON");
 assert(/MAX_BODY_BYTES\s*=\s*16 \* 1024/.test(trialRegisterRoute) && /await request\.text\(\)/.test(trialRegisterRoute), "Trial registration endpoint must bound request body size before parsing JSON");
+assert(/content-type/.test(licenseActivationRoute) && /UNSUPPORTED_MEDIA_TYPE/.test(licenseActivationRoute), "License activation endpoint must enforce JSON content type");
+assert(/content-type/.test(trialRegisterRoute) && /UNSUPPORTED_MEDIA_TYPE/.test(trialRegisterRoute), "Trial registration endpoint must enforce JSON content type");
 assert(/Support diagnostics/.test(settingsPanel) && /redacted: true/.test(settingsPanel) && /excluded: \["customer names"/.test(settingsPanel), "Support diagnostics must remain explicitly redacted");
 
 const desktopAppSource = read("apps/desktop/src/App.tsx");
@@ -123,4 +114,4 @@ assert(/persistDomainToSqlite/.test(desktopAppSource), "Desktop App is not wired
 assert(/__minarvaDesktopPersist/.test(sqliteBootstrap), "Desktop native persistence bridge is missing");
 
 console.log("Minarva Biz quality smoke: PASS");
-console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, structured signed-license payload validation, Enterprise unlimited activation policy, atomic license activation, bounded API request parsing, redacted support diagnostics, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
+console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, structured signed-license payload validation, Enterprise unlimited activation policy, atomic license activation, bounded API request parsing, JSON content-type enforcement, redacted support diagnostics, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
