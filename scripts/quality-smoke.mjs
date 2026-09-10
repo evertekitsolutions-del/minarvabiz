@@ -81,6 +81,10 @@ assert(/const productionPublicKey = \"[0-9a-f]{64}\"/.test(licenseConfigWriter),
 assert(!/(BEGIN (?:OPENSSH |RSA |EC |DSA )?PRIVATE KEY)/i.test(desktopSource), "Private signing key material must never be present in desktop source");
 assert(!/(MINARVA|LICENSE)_LICENSE_PRIVATE_KEY|LICENSE_PRIVATE_KEY/i.test(desktopSource), "Private license key environment/config names must not be present in desktop source");
 
+const sqliteHeaderCheck = /const sqliteHeader = Buffer\.from\("SQLite format 3", "ascii"\);\s*if \(!header\.subarray\(0, sqliteHeader\.length\)\.equals\(sqliteHeader\) \|\| header\[sqliteHeader\.length\] !== 0\)/;
+assert(sqliteHeaderCheck.test(desktopSource), "SQLite validation must compare the 15-byte magic string plus the terminating NUL byte");
+assert(!/toString\("utf8"\)\s*!==\s*"SQLite format 3\\\\u0000"/.test(desktopSource), "SQLite validation must not compare against a literal backslash-u NUL sequence");
+
 // localStorage is permitted only as a web fallback. Desktop must use the native bridge.
 const desktopAppSource = read("apps/desktop/src/App.tsx");
 assert(!/localStorage\./.test(desktopAppSource), "Desktop App directly uses localStorage as persistence");
@@ -88,4 +92,4 @@ assert(/persistDomainToSqlite/.test(desktopAppSource), "Desktop App is not wired
 assert(/__minarvaDesktopPersist/.test(sqliteBootstrap), "Desktop native persistence bridge is missing");
 
 console.log("Minarva Biz quality smoke: PASS");
-console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
+console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
