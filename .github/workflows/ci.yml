@@ -77,8 +77,9 @@ jobs:
         run: |
           test -s apps/desktop/dist/index.html
           grep -Eq 'href="\./assets/[^" ]+\.css"' apps/desktop/dist/index.html
-          test -s apps/desktop/dist/assets/*.js
-          test -s apps/desktop/dist/assets/*.css
+          compgen -G 'apps/desktop/dist/assets/*.js' > /dev/null
+          compgen -G 'apps/desktop/dist/assets/*.css' > /dev/null
+          for file in apps/desktop/dist/assets/*.js apps/desktop/dist/assets/*.css; do test -s "$file"; done
       - run: pnpm --filter @minarvabiz/desktop build:electron
 
   windows-package:
