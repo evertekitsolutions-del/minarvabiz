@@ -1,7 +1,14 @@
 /** WhatsApp deep-link launcher (no third-party API required) */
+function normalizeWhatsAppNumber(phone: string): string {
+  const raw = String(phone || "").trim();
+  const digits = raw.replace(/\D/g, "");
+  if (raw.startsWith("+")) return digits;
+  if (raw.startsWith("00") && digits.length > 2) return digits.slice(2);
+  return digits.length === 10 ? `91${digits}` : digits;
+}
+
 export function buildWhatsAppUrl(phone: string, message: string): string {
-  const digits = phone.replace(/\D/g, "");
-  const withCountry = digits.length === 10 ? `91${digits}` : digits;
+  const withCountry = normalizeWhatsAppNumber(phone);
   return `https://wa.me/${withCountry}?text=${encodeURIComponent(message)}`;
 }
 
