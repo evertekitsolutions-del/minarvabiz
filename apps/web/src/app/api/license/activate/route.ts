@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createHash, randomUUID } from "crypto";
+import { createHash } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { signActivationCertificate } from "@minarvabiz/licensing";
 
@@ -35,7 +35,8 @@ export async function POST(request: Request) {
     const supabase = db();
     if (!supabase) return NextResponse.json({ ok: false, code: "SERVICE_NOT_CONFIGURED" }, { status: 503 });
     const hash = createHash("sha256").update(token, "utf8").digest("hex");
-    const { data: license } = await supabase.from("licenses").select("id,license_id,customer_id,product,edition,plan,status,expires_at,activation_limit,features").eq("token_sha256", hash).maybeSingle();
+    const { data: license, error: licenseError } = await supabase.from("licenses").select("id,license_id,customer_id,product,edition,plan,status,expires_at,activation_limit,features").eq("token_sha256", hash).maybeSingle();
+    if (licenseError) return NextResponse.json({ ok: false, code: "SERVICE_ERROR" }, { status: 503 });
     if (!license) return NextResponse.json({ ok: false, code: "INVALID_LICENSE" }, { status: 401 });
     if (license.product !== "minarvabiz") return NextResponse.json({ ok: false, code: "INVALID_PRODUCT" }, { status: 403 });
     if (license.status !== "active") return NextResponse.json({ ok: false, code: license.status.toUpperCase(), status: license.status }, { status: 403 });
@@ -52,14 +53,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, status: "active", licenseId: license.license_id, activationId: existing.activation_id, activationCertificate, plan: license.plan, edition: license.edition, expiresAt: license.expires_at, features: license.features, validatedAt: now });
     }
 
-    const { count } = await supabase.from("license_activations").select("id", { count: "exact", head: true }).eq("license_id", license.id).eq("status", "active");
-    if ((count || 0) >= license.activation_limit) return NextResponse.json({ ok: false, code: "ACTIVATION_LIMIT_REACHED" }, { status: 409 });
-    const activationId = randomUUID();
-    const { data: activation, error } = await supabase.from("license_activations").insert({ id: randomUUID(), license_id: license.id, activation_id: activationId, device_id: deviceId, status: "active", activated_at: now, last_validated_at: now }).select("activation_id").single();
-    if (error || !activation) return NextResponse.json({ ok: false, code: "ACTIVATION_FAILED" }, { status: 409 });
+    const { data: activationRows, error: activationError } = await supabase.rpc("activate_license_device", {
+      p_license_id: license.id,
+      p_device_id: deviceId,
+    });
+    if (activationError || !Array.isArray(activationRows) || !activationRows[0]?.activation_id) {
+      const code = String(activationError?.message || "");
+      if (code.includes("ACTIVATION_LIMIT_REACHED")) return NextResponse.json({ ok: false, code: "ACTIVATION_LIMIT_REACHED" }, { status: 409 });
+      if (code.includes("LICENSE_EXPIRED")) return NextResponse.json({ ok: false, code: "EXPIRED" }, { status: 403 });
+      if (code.includes("LICENSE_NOT_ACTIVE")) return NextResponse.json({ ok: false, code: "LICENSE_NOT_ACTIVE" }, { status: 403 });
+      if (code.includes("INVALID_DEVICE_ID")) return NextResponse.json({ ok: false, code: "INVALID_REQUEST" }, { status: 400 });
+      return NextResponse.json({ ok: false, code: "ACTIVATION_FAILED" }, { status: 409 });
+    }
 
+    const activationId = String(activationRows[0].activation_id);
     const activationCertificate = await certificate(license.license_id, activationId, deviceId, license.expires_at);
-    await supabase.from("license_events").insert({ id: randomUUID(), license_id: license.id, activation_id: activationId, event_type: "activated", device_id: deviceId, actor: "desktop", details: { activationId } });
+    await supabase.from("license_events").insert({ id: crypto.randomUUID(), license_id: license.id, event_type: "activated", device_id: deviceId, actor: "desktop", details: { activationId } });
     return NextResponse.json({ ok: true, status: "active", licenseId: license.license_id, customerId: license.customer_id, activationId, activationCertificate, plan: license.plan, edition: license.edition, expiresAt: license.expires_at, features: license.features, validatedAt: now });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Activation failed";
