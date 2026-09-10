@@ -18,6 +18,7 @@ import "./quality-control-types";
 import * as mainStore from "./store";
 import { touchPersistence } from "./autosave";
 import { remoteCreateOrder } from "./remote-write";
+import { queueOrderStatusMessage } from "./customer-communication";
 
 const measurements: MeasurementProfile[] = [];
 const orders: ServiceOrder[] = [];
@@ -208,6 +209,10 @@ export function updateOrderStatus(
   order.updatedAt = nowISO();
   order.version += 1;
   touchPersistence();
+
+  // Queue the customer update after the order mutation. The queue itself is
+  // persisted by the existing SQLite domain snapshot/outbox pipeline.
+  queueOrderStatusMessage(order, mainStore.getCustomer(order.customerId));
   return { order };
 }
 
