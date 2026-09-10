@@ -40,6 +40,7 @@ const uiPackage = JSON.parse(read("packages/ui/package.json"));
 const persistence = read("packages/business-logic/src/persistence.ts");
 const sqliteBootstrap = read("apps/desktop/src/lib/sqlite-bootstrap.ts");
 const nav = read("packages/ui/src/lib/nav.ts");
+const licensingToken = read("packages/licensing/src/token.ts");
 
 assert(!/minarvabiz-db\.json/.test(desktopSource), "Legacy JSON database file reference exists in desktop source");
 assert(!/ipcMain\.handle\(\s*[\"']db:(read|write)[\"']/.test(desktopSource), "Legacy db:read/db:write IPC handler returned to desktop source");
@@ -88,6 +89,17 @@ assert(!/toString\("utf8"\)\s*!==\s*"SQLite format 3\\\\u0000"/.test(desktopSour
 const restoreRollbackCheck = /const target = sqlitePath\(\), temp = `\$\{target\}\.restore-\$\{process\.pid\}-\$\{Date\.now\(\)\}`, rollback = `\$\{target\}\.rollback-\$\{process\.pid\}-\$\{Date\.now\(\)\}`;\s*let targetMoved = false;[\s\S]*?if \(fs\.existsSync\(target\)\) \{ fs\.renameSync\(target, rollback\); targetMoved = true; \} fs\.renameSync\(temp, target\);[\s\S]*?if \(fs\.existsSync\(target\) && targetMoved\) fs\.unlinkSync\(target\);[\s\S]*?if \(targetMoved && fs\.existsSync\(rollback\)\) \{ fs\.renameSync\(rollback, target\); \}/;
 assert(restoreRollbackCheck.test(desktopSource), "Backup restore must retain and restore the previous database when replacement fails");
 
+const signedPayloadGuards = [
+  /const LICENSE_PLANS = new Set\(\["trial", "basic", "professional", "business", "enterprise"\]\)/,
+  /const LICENSE_EDITIONS = new Set\(\["online", "offline", "hybrid"\]\)/,
+  /function isIsoDate\(value: unknown\)/,
+  /function isLicenseFeatures\(value: unknown\)/,
+  /Number\.isSafeInteger\(payload\.activationLimit\)/,
+  /payload\.expiresAt !== null && new Date\(payload\.expiresAt\)\.getTime\(\) < new Date\(payload\.issuedAt\)\.getTime\(\)/,
+  /return isLicensePayload\(payload\) \? payload : null;/,
+];
+for (const guard of signedPayloadGuards) assert(guard.test(licensingToken), `Signed license payload structural guard is missing: ${guard}`);
+
 // localStorage is permitted only as a web fallback. Desktop must use the native bridge.
 const desktopAppSource = read("apps/desktop/src/App.tsx");
 assert(!/localStorage\./.test(desktopAppSource), "Desktop App directly uses localStorage as persistence");
@@ -95,4 +107,4 @@ assert(/persistDomainToSqlite/.test(desktopAppSource), "Desktop App is not wired
 assert(/__minarvaDesktopPersist/.test(sqliteBootstrap), "Desktop native persistence bridge is missing");
 
 console.log("Minarva Biz quality smoke: PASS");
-console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
+console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, structured signed-license payload validation, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
