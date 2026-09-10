@@ -96,12 +96,8 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
       readFile: (_p: string): Uint8Array | null => cached,
       writeFile: (_p: string, data: Uint8Array) => {
         cached = data;
-        // Queue the IPC invocation itself, not merely the returned Promise.
-        // This guarantees FIFO native writes when multiple domain saves happen quickly.
-        pendingWrite = pendingWrite
-          .catch(() => false)
-          .then(() => api.writeSqliteBinary(data))
-          .catch(() => false);
+        const write = pendingWrite.catch(() => false).then(() => api.writeSqliteBinary(data));
+        pendingWrite = write.catch(() => false);
       },
       exists: (_p: string) => cached != null && cached.length > 0,
       mkdirp: (_dir: string) => {
@@ -137,7 +133,10 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
     (window as unknown as { __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopFlush =
       flushDesktopSqlitePersistence;
 
-    await persistDomainToSqlite();
+    const persisted = await persistDomainToSqlite();
+    if (!persisted) {
+      throw new Error(`SQLite native persistence failed for ${dbPath}`);
+    }
     return { ok: true };
   } catch (e) {
     ready = false;
