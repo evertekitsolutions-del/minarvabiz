@@ -10,10 +10,14 @@ function readMode(): RuntimeMode {
     (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_MINARVA_MODE) ||
     (typeof process !== "undefined" && process.env?.NODE_ENV === "production"
       ? "production"
-      : "development");
+      : undefined);
+
   if (env === "demo") return "demo";
   if (env === "production") return "production";
-  // Browser: check localStorage flag
+
+  // Browser/Electron renderer defaults to production unless demo/development is explicit.
+  // This prevents module initialization from silently seeding demo data before the app
+  // finishes its authenticated SQLite bootstrap.
   if (typeof window !== "undefined") {
     try {
       const m = window.localStorage.getItem("minarva_mode");
@@ -21,8 +25,10 @@ function readMode(): RuntimeMode {
     } catch {
       /* */
     }
+    return "production";
   }
-  return env as RuntimeMode;
+
+  return "development";
 }
 
 let mode: RuntimeMode = readMode();
@@ -50,8 +56,7 @@ export function isProductionMode(): boolean {
   return mode === "production";
 }
 
-/** Allow seed only in explicit demo mode */
+/** Allow seed only in explicit demo/development mode */
 export function allowDemoSeed(): boolean {
-  // Seed only for explicit demo or local development — never production
   return mode === "demo" || mode === "development";
 }
