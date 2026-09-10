@@ -31,10 +31,46 @@ export interface IssuedLicense {
 
 const issuedLog: IssuedLicense[] = [];
 
-export async function issueLicense(input: IssueLicenseInput): Promise<IssuedLicense> {
-  if (!input.privateKeyHex || input.privateKeyHex.replace(/0/g, "").length === 0) {
-    throw new Error("Private key required to issue licenses");
+const PLANS = new Set<LicensePlan>(["trial", "basic", "professional", "business", "enterprise"]);
+const EDITIONS = new Set<Edition>(["online", "offline", "hybrid"]);
+
+function normalizedActivationLimit(plan: LicensePlan, requested?: number): number {
+  const maximum = PLAN_LIMITS[plan].maxDevices;
+  const value = requested ?? maximum;
+  if (value === -1 && maximum === -1) return -1;
+  if (!Number.isSafeInteger(value) || value < 1) throw new Error("Activation limit must be a positive integer or -1 for unlimited plans");
+  if (maximum >= 0 && value > maximum) throw new Error(`Activation limit exceeds the ${plan} plan device limit (${maximum})`);
+  return value;
+}
+
+function validatePrivateKey(privateKeyHex: string): void {
+  if (!/^[0-9a-f]{64}$/i.test(privateKeyHex)) throw new Error("A valid 32-byte Ed25519 private key is required");
+}
+
+function validateExpiry(expiresAt: string | null | undefined, issuedAt: string): string | null {
+  if (expiresAt == null) return null;
+  const expiry = new Date(expiresAt);
+  const issued = new Date(issuedAt);
+  if (!Number.isFinite(expiry.getTime()) || expiry.getTime() < issued.getTime()) {
+    throw new Error("License expiry must be a valid date on or after issuance");
   }
+  return expiry.toISOString();
+}
+
+function validateDeviceBindings(bindings: string[] | undefined): string[] {
+  const value = bindings ?? [];
+  if (!value.every((binding) => typeof binding === "string" && /^[a-f0-9]{64}$/i.test(binding))) {
+    throw new Error("Device bindings must contain 64-character hexadecimal device fingerprints");
+  }
+  return value;
+}
+
+export async function issueLicense(input: IssueLicenseInput): Promise<IssuedLicense> {
+  validatePrivateKey(input.privateKeyHex);
+  if (!input.customerName.trim()) throw new Error("Customer name is required");
+  if (!PLANS.has(input.plan)) throw new Error("Invalid license plan");
+  if (!EDITIONS.has(input.edition)) throw new Error("Invalid license edition");
+  const issuedAt = nowISO();
   const features: LicenseFeatures = { ...PLAN_FEATURES[input.plan] };
   const payload: LicensePayload = {
     licenseId: generateId() as UUID,
@@ -43,16 +79,16 @@ export async function issueLicense(input: IssueLicenseInput): Promise<IssuedLice
     edition: input.edition,
     plan: input.plan,
     features,
-    issuedAt: nowISO(),
-    expiresAt: input.expiresAt ?? null,
-    activationLimit: input.activationLimit ?? PLAN_LIMITS[input.plan].maxDevices,
-    deviceBindings: input.deviceBindings ?? [],
+    issuedAt,
+    expiresAt: validateExpiry(input.expiresAt, issuedAt),
+    activationLimit: normalizedActivationLimit(input.plan, input.activationLimit),
+    deviceBindings: validateDeviceBindings(input.deviceBindings),
   };
   const token = await signLicense(payload, input.privateKeyHex);
   const record: IssuedLicense = {
     token,
     payload,
-    customerName: input.customerName,
+    customerName: input.customerName.trim(),
     issuedAt: nowISO(),
   };
   issuedLog.unshift(record);
