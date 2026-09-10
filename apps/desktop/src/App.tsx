@@ -8,7 +8,7 @@ import {
   type QuickAction, type NavItemId, type DashboardData, type OrderFormValues,
   type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, recordOrderQualityCheck } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, recordOrderQualityCheck, runAutomatedCustomerReminders } from "@minarvabiz/business-logic";
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
@@ -90,7 +90,14 @@ export function App() {
   }, []);
 
   React.useEffect(() => { if (dbReady) refreshAll(); }, [dbReady, refreshAll]);
-  React.useEffect(() => { if (dbReady) fetchDashboardData().then(setDash); }, [dbReady, moduleTick]);
+  React.useEffect(() => {
+    if (!dbReady) return;
+    fetchDashboardData().then(setDash);
+    const reminders = runAutomatedCustomerReminders();
+    if (reminders.deliveryRemindersQueued || reminders.paymentRemindersQueued) {
+      void persistDomainToSqlite();
+    }
+  }, [dbReady, moduleTick]);
 
   React.useEffect(() => {
     if (!trialState?.activated || trialState.synced || !trialState.registration) return;
