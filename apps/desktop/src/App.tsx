@@ -51,6 +51,7 @@ export function App() {
   const [expenseForm, setExpenseForm] = React.useState({ categoryId: "", amount: "", paymentMethod: "cash" as PaymentMethod, description: "", reference: "", orderId: "" });
   const [purchaseForm, setPurchaseForm] = React.useState({ supplierId: "", description: "", amount: "", paidAmount: "", paymentMethod: "cash" as PaymentMethod, kind: "general" as "general" | "order_specific", orderId: "", notes: "" });
   const [staffForm, setStaffForm] = React.useState({ name: "", phone: "", email: "", role: "staff" as RoleName, salary: "", joiningDate: "", notes: "" });
+  const autoBackupInFlight = React.useRef(false);
 
   const refreshAll = React.useCallback(() => {
     setCustomers(store.listCustomers());
@@ -97,7 +98,8 @@ export function App() {
     if (reminders.deliveryRemindersQueued || reminders.paymentRemindersQueued) {
       void persistDomainToSqlite();
     }
-    if (!window.minarvaDesktop || !shouldRunAutoBackup()) return;
+    if (!window.minarvaDesktop || !shouldRunAutoBackup() || autoBackupInFlight.current) return;
+    autoBackupInFlight.current = true;
     let cancelled = false;
     (async () => {
       try {
@@ -113,6 +115,8 @@ export function App() {
         if (!cancelled) void persistDomainToSqlite();
       } catch (error) {
         if (!cancelled) recordBackupFailure(error instanceof Error ? error.message : String(error));
+      } finally {
+        autoBackupInFlight.current = false;
       }
     })();
     return () => { cancelled = true; };
