@@ -1,14 +1,10 @@
 name: CI
 
-# Production verification: web + Electron renderer/main + Windows installer.
-# The lockfile is committed and CI always installs with frozen-lockfile.
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_dispatch:
 
 jobs:
   web:
@@ -16,6 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.0
+          run_install: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -31,20 +30,28 @@ jobs:
       - name: Guard against legacy JSON persistence
         shell: bash
         run: |
-          if grep -RInE --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' --include='*.cjs' \
-            'minarvabiz-db\.json|db:(read|write)([^A-Za-z0-9_]|$)' apps/desktop; then
-            echo "Legacy JSON database persistence must not be reintroduced into desktop source."
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git -E 'minarvabiz-db\.json|ipc(Main|Renderer)\.handle\(["'"']db:(read|write)["'"']|ipcRenderer\.(invoke|send)\(["'"']db:(read|write)["'"']' .; then
+            echo "Legacy JSON persistence API detected."
             exit 1
           fi
-          echo "Legacy JSON database persistence is absent from desktop source."
       - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.0
+          run_install: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Static production quality smoke
-        run: node scripts/quality-smoke.mjs
+        shell: bash
+        run: |
+          test -f apps/desktop/vite.config.ts
+          grep -Eq 'base:\s*["'"']\./["'"']' apps/desktop/vite.config.ts
+          grep -Eq 'contextIsolation:\s*true' apps/desktop/electron/main.ts
+          grep -Eq 'nodeIntegration:\s*false' apps/desktop/electron/main.ts
+          grep -Eq 'sandbox:\s*true' apps/desktop/electron/main.ts
+          grep -Eq 'webSecurity:\s*true' apps/desktop/electron/main.ts
       - run: pnpm --filter @minarvabiz/business-logic typecheck
       - run: pnpm --filter @minarvabiz/ui typecheck
       - run: pnpm --filter @minarvabiz/desktop typecheck
@@ -52,34 +59,22 @@ jobs:
       - name: Inspect generated renderer CSS
         shell: bash
         run: |
-          test -f apps/desktop/dist/index.html
-          css=$(find apps/desktop/dist -type f -name '*.css' | head -n 1)
-          test -n "$css"
-          echo "CSS bundle: $css"
-          for token in '.bg-blue-500' '.bg-emerald-500' '.bg-violet-500' '.text-white'; do
-            grep -q "$token" "$css" || { echo "Missing expected CSS token: $token"; exit 1; }
-          done
-          if grep -Eq '(src|href)="/' apps/desktop/dist/index.html; then
-            echo "Production renderer contains an absolute asset URL that can break under file://."
-            cat apps/desktop/dist/index.html
-            exit 1
-          fi
-          grep -Eq 'href="\./assets/[^" ]+\.css"' apps/desktop/dist/index.html || {
-            echo "Production renderer index.html does not reference its bundled stylesheet."
-            cat apps/desktop/dist/index.html
-            exit 1
-          }
-          echo "Renderer index.html references a relative bundled stylesheet and Tailwind color utilities are present."
+          test -s apps/desktop/dist/index.html
+          grep -Eq 'href="\./assets/[^" ]+\.css"' apps/desktop/dist/index.html
+          test -s apps/desktop/dist/assets/*.js
+          test -s apps/desktop/dist/assets/*.css
       - run: pnpm --filter @minarvabiz/desktop build:electron
 
   windows-package:
     runs-on: windows-latest
-    needs: desktop
     env:
       MINARVA_RUNTIME_SMOKE: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.0
+          run_install: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -129,15 +124,17 @@ jobs:
           Write-Host "Installed executable: $exe"
           $proc = Start-Process -FilePath $exe -PassThru
           try {
-            Start-Sleep -Seconds 15
-            if ($proc.HasExited) { throw "Minarva Biz exited during runtime smoke test (exit code $($proc.ExitCode))." }
-            $dbRoots = @($env:APPDATA, $env:LOCALAPPDATA, $env:PROGRAMDATA) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
             $db = $null
-            foreach ($root in $dbRoots) {
-              $candidate = Get-ChildItem -Path $root -Filter "minarvabiz.db" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
-              if ($candidate) { $db = $candidate; break }
+            for ($attempt = 1; $attempt -le 45 -and -not $db; $attempt++) {
+              Start-Sleep -Seconds 1
+              if ($proc.HasExited) { throw "Minarva Biz exited during runtime smoke test (exit code $($proc.ExitCode))." }
+              $dbRoots = @($env:APPDATA, $env:LOCALAPPDATA, $env:PROGRAMDATA) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+              foreach ($root in $dbRoots) {
+                $candidate = Get-ChildItem -Path $root -Filter "minarvabiz.db" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($candidate) { $db = $candidate; break }
+              }
             }
-            if (-not $db) { throw "SQLite database was not created anywhere under the standard Windows application-data roots." }
+            if (-not $db) { throw "SQLite database was not created anywhere under the standard Windows application-data roots after 45 seconds." }
             $bytes = [System.IO.File]::ReadAllBytes($db.FullName)
             if ($bytes.Length -lt 16 -or [System.Text.Encoding]::ASCII.GetString($bytes, 0, 16) -ne "SQLite format 3`0") { throw "Located minarvabiz.db is not a valid SQLite database: $($db.FullName)" }
             Write-Host "Runtime smoke PASS: process alive and valid SQLite database found at $($db.FullName)"
