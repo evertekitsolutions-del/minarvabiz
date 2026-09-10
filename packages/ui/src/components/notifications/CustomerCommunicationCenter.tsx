@@ -26,9 +26,10 @@ export interface CustomerCommunicationRow {
 }
 
 function buildWhatsAppUrl(phone: string, message: string): string {
-  const digits = phone.replace(/\D/g, "");
-  const withCountry = digits.length === 10 ? `91${digits}` : digits;
-  return `https://wa.me/${withCountry}?text=${encodeURIComponent(message)}`;
+  const raw = String(phone || "").trim();
+  const digits = raw.replace(/\D/g, "");
+  const normalized = raw.startsWith("+") ? digits : raw.startsWith("00") && digits.length > 2 ? digits.slice(2) : digits.length === 10 ? `91${digits}` : digits;
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
 }
 
 export function CustomerCommunicationCenter({
