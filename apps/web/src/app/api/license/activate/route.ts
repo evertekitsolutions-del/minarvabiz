@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { signActivationCertificate } from "@minarvabiz/licensing";
 
@@ -46,13 +46,6 @@ export async function POST(request: Request) {
     }
 
     const now = new Date().toISOString();
-    const { data: existing } = await supabase.from("license_activations").select("id,activation_id,status").eq("license_id", license.id).eq("device_id", deviceId).maybeSingle();
-    if (existing?.status === "active") {
-      const activationCertificate = await certificate(license.license_id, existing.activation_id, deviceId, license.expires_at);
-      await supabase.from("license_activations").update({ last_validated_at: now }).eq("id", existing.id);
-      return NextResponse.json({ ok: true, status: "active", licenseId: license.license_id, activationId: existing.activation_id, activationCertificate, plan: license.plan, edition: license.edition, expiresAt: license.expires_at, features: license.features, validatedAt: now });
-    }
-
     const { data: activationRows, error: activationError } = await supabase.rpc("activate_license_device", {
       p_license_id: license.id,
       p_device_id: deviceId,
@@ -68,7 +61,7 @@ export async function POST(request: Request) {
 
     const activationId = String(activationRows[0].activation_id);
     const activationCertificate = await certificate(license.license_id, activationId, deviceId, license.expires_at);
-    await supabase.from("license_events").insert({ id: crypto.randomUUID(), license_id: license.id, event_type: "activated", device_id: deviceId, actor: "desktop", details: { activationId } });
+    await supabase.from("license_events").insert({ id: randomUUID(), license_id: license.id, event_type: "activated", device_id: deviceId, actor: "desktop", details: { activationId } });
     return NextResponse.json({ ok: true, status: "active", licenseId: license.license_id, customerId: license.customer_id, activationId, activationCertificate, plan: license.plan, edition: license.edition, expiresAt: license.expires_at, features: license.features, validatedAt: now });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Activation failed";
