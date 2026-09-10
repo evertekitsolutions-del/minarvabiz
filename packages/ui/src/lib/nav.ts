@@ -36,8 +36,7 @@ export const MAIN_NAV: NavItem[] = [
   { id: "customers", label: "Customers", href: "/customers", icon: "users" },
   { id: "staff", label: "Staff Management", href: "/staff", icon: "user-cog" },
   { id: "reports", label: "Reports & Analytics", href: "/reports", icon: "bar-chart-3" },
-  { id: "sms", label: "SMS / WhatsApp", href: "/notifications", icon: "message-circle" },
-  { id: "notifications", label: "Notifications", href: "/notifications", icon: "bell" },
+  { id: "notifications", label: "Messages & Notifications", href: "/notifications", icon: "message-circle" },
   { id: "settings", label: "Settings", href: "/settings", icon: "settings" },
   { id: "backup", label: "Backup & Restore", href: "/backup", icon: "hard-drive" },
 ];
