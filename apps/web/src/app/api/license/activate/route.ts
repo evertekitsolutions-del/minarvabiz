@@ -60,8 +60,9 @@ export async function POST(request: Request) {
     }
 
     const activationId = String(activationRows[0].activation_id);
+    const activationRowId = String(activationRows[0].activation_row_id || "");
     const activationCertificate = await certificate(license.license_id, activationId, deviceId, license.expires_at);
-    await supabase.from("license_events").insert({ id: randomUUID(), license_id: license.id, event_type: "activated", device_id: deviceId, actor: "desktop", details: { activationId } });
+    await supabase.from("license_events").insert({ id: randomUUID(), license_id: license.id, activation_id: activationRowId || null, event_type: "activated", device_id: deviceId, actor: "desktop", details: { activationId } });
     return NextResponse.json({ ok: true, status: "active", licenseId: license.license_id, customerId: license.customer_id, activationId, activationCertificate, plan: license.plan, edition: license.edition, expiresAt: license.expires_at, features: license.features, validatedAt: now });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Activation failed";
