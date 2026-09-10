@@ -3,14 +3,14 @@
  *
  * Messages are generated locally and persisted through the existing durable outbox.
  * No provider/API is called here, so the desktop app remains fully offline-first.
- * A future WhatsApp/SMS provider can consume aggregateType `customer_communication`.
  */
 import type { Customer, ServiceOrder, UUID } from "@minarvabiz/types";
-import { generateId } from "@minarvabiz/utils";
-import { enqueueOutbox } from "./outbox-bridge";
+import { generateId, nowISO } from "@minarvabiz/utils";
+import { enqueueOutbox, exportOutbox, markOutboxFailed } from "./outbox-bridge";
 import { templateForOrder, type TemplateId } from "./notification-templates";
 
 export type CustomerCommunicationChannel = "whatsapp" | "sms";
+export type CustomerCommunicationStatus = "pending" | "failed" | "synced";
 
 export interface QueuedCustomerMessage {
   messageId: UUID;
@@ -36,10 +36,11 @@ function customerPhone(customer: Customer): string | null {
   return value || null;
 }
 
-/**
- * Queue a customer-facing message when an order reaches a communicable status.
- * Returns null when the status has no customer template or no contact number exists.
- */
+function communicationEvents() {
+  return exportOutbox().filter((event) => event.aggregateType === "customer_communication");
+}
+
+/** Queue a customer-facing message when an order reaches a communicable status. */
 export function queueOrderStatusMessage(
   order: ServiceOrder,
   customer: Customer | null | undefined
@@ -50,6 +51,15 @@ export function queueOrderStatusMessage(
 
   const phone = customerPhone(customer);
   if (!phone) return null;
+
+  // Prevent duplicate notifications for the same order/template. A failed
+  // message may be re-queued deliberately after the operator retries it.
+  const duplicate = communicationEvents().some((event) => {
+    if (event.status === "failed") return false;
+    const payload = event.payload as Partial<QueuedCustomerMessage> | null;
+    return payload?.orderId === order.id && payload?.templateId === templateId;
+  });
+  if (duplicate) return null;
 
   const rendered = templateForOrder(templateId, order, customer);
   const message: QueuedCustomerMessage = {
@@ -62,11 +72,44 @@ export function queueOrderStatusMessage(
     phone,
     title: rendered.title,
     body: rendered.body,
-    queuedAt: new Date().toISOString(),
+    queuedAt: nowISO(),
   };
 
   enqueueOutbox("customer_communication", order.id, "insert", message);
   return message;
+}
+
+export function listCustomerCommunicationQueue(): Array<{
+  eventId: UUID;
+  status: CustomerCommunicationStatus;
+  attempts: number;
+  lastError: string | null;
+  message: QueuedCustomerMessage;
+}> {
+  return communicationEvents()
+    .map((event) => ({
+      eventId: event.id,
+      status: event.status,
+      attempts: event.attempts,
+      lastError: event.lastError,
+      message: event.payload as QueuedCustomerMessage,
+    }))
+    .sort((a, b) => b.message.queuedAt.localeCompare(a.message.queuedAt));
+}
+
+export function recordCustomerCommunicationFailure(eventId: UUID, error: string): boolean {
+  const event = communicationEvents().find((item) => item.id === eventId);
+  if (!event) return false;
+  markOutboxFailed(eventId, error);
+  return true;
+}
+
+export function retryCustomerCommunication(eventId: UUID): boolean {
+  const event = communicationEvents().find((item) => item.id === eventId);
+  if (!event || event.status !== "failed") return false;
+  event.status = "pending";
+  event.lastError = null;
+  return true;
 }
 
 export function communicationTemplateForStatus(
