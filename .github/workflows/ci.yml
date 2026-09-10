@@ -23,6 +23,30 @@ jobs:
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
       - run: pnpm --filter @minarvabiz/web build
 
+  license-admin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.0
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter @minarvabiz/license-admin typecheck
+      - name: Verify production security configuration
+        shell: bash
+        run: |
+          set -e
+          grep -Fq 'X-Content-Type-Options' apps/license-admin/next.config.ts
+          grep -Fq 'X-Frame-Options' apps/license-admin/next.config.ts
+          grep -Fq 'Strict-Transport-Security' apps/license-admin/next.config.ts
+          grep -Fq 'Content-Security-Policy' apps/license-admin/next.config.ts
+      - run: pnpm --filter @minarvabiz/license-admin build
+
   desktop:
     runs-on: ubuntu-latest
     steps:
@@ -113,7 +137,6 @@ jobs:
           $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
           $installProc = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
           if ($installProc.ExitCode -ne 0) { throw "Windows installer exited with code $($installProc.ExitCode)." }
-
           $exeCandidates = @(
             (Join-Path $installRoot "Minarva Biz.exe"),
             (Join-Path $env:LOCALAPPDATA "Programs\Minarva Biz\Minarva Biz.exe"),
@@ -164,9 +187,7 @@ jobs:
         run: |
           $roots = @($env:APPDATA, $env:LOCALAPPDATA, $env:RUNNER_TEMP) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
           $logs = @()
-          foreach ($root in $roots) {
-            $logs += Get-ChildItem -Path $root -Filter "runtime-smoke.log" -Recurse -File -ErrorAction SilentlyContinue
-          }
+          foreach ($root in $roots) { $logs += Get-ChildItem -Path $root -Filter "runtime-smoke.log" -Recurse -File -ErrorAction SilentlyContinue }
           if ($logs.Count -eq 0) { Write-Host "No runtime-smoke.log found in expected Windows data roots." }
           foreach ($file in ($logs | Sort-Object FullName -Unique)) {
             Write-Host "Runtime diagnostics: $($file.FullName)"
