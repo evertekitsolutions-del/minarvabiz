@@ -8,7 +8,7 @@ import type { Customer, ServiceOrder, UUID } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { enqueueOutbox, exportOutbox, markOutboxFailed } from "./outbox-bridge";
 import { touchPersistence } from "./autosave";
-import { templateForOrder, type TemplateId } from "./notification-templates";
+import { renderTemplate, templateForOrder, type TemplateId } from "./notification-templates";
 
 export type CustomerCommunicationChannel = "whatsapp" | "sms";
 export type CustomerCommunicationStatus = "pending" | "failed" | "synced";
@@ -41,10 +41,12 @@ function communicationEvents() {
   return exportOutbox().filter((event) => event.aggregateType === "customer_communication");
 }
 
-export function queueOrderStatusMessage(order: ServiceOrder, customer: Customer | null | undefined): QueuedCustomerMessage | null {
-  if (!customer) return null;
-  const templateId = STATUS_TEMPLATES[order.status];
-  if (!templateId) return null;
+function queueTemplate(
+  order: ServiceOrder,
+  customer: Customer,
+  templateId: TemplateId,
+  data?: Record<string, string>
+): QueuedCustomerMessage | null {
   const phone = customerPhone(customer);
   if (!phone) return null;
 
@@ -55,7 +57,7 @@ export function queueOrderStatusMessage(order: ServiceOrder, customer: Customer 
   });
   if (duplicate) return null;
 
-  const rendered = templateForOrder(templateId, order, customer);
+  const rendered = data ? renderTemplate(templateId, data) : templateForOrder(templateId, order, customer);
   const message: QueuedCustomerMessage = {
     messageId: generateId(),
     orderId: order.id,
@@ -70,6 +72,27 @@ export function queueOrderStatusMessage(order: ServiceOrder, customer: Customer 
   };
   enqueueOutbox("customer_communication", order.id, "insert", message);
   return message;
+}
+
+export function queueOrderStatusMessage(order: ServiceOrder, customer: Customer | null | undefined): QueuedCustomerMessage | null {
+  if (!customer) return null;
+  const templateId = STATUS_TEMPLATES[order.status];
+  if (!templateId) return null;
+  return queueTemplate(order, customer, templateId);
+}
+
+export function queueDeliveryReminder(order: ServiceOrder, customer: Customer | null | undefined): QueuedCustomerMessage | null {
+  if (!customer || !order.deliveryDate) return null;
+  if (order.status === "delivered" || order.status === "cancelled" || order.status === "ready_to_deliver") return null;
+  return queueTemplate(order, customer, "delivery_reminder");
+}
+
+export function queuePaymentReminder(order: ServiceOrder, customer: Customer | null | undefined): QueuedCustomerMessage | null {
+  if (!customer || order.balance <= 0 || order.status === "cancelled") return null;
+  return queueTemplate(order, customer, "payment_due", {
+    customerName: customer.name,
+    amount: new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(order.balance),
+  });
 }
 
 export function listCustomerCommunicationQueue() {
