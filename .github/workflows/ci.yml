@@ -87,10 +87,11 @@ jobs:
         shell: bash
         run: |
           test -f apps/desktop/vite.config.ts
+          test -f apps/desktop/electron/preload.ts
           grep -Fq 'base: "./"' apps/desktop/vite.config.ts
           grep -Fq 'contextIsolation: true' apps/desktop/electron/main.ts
           grep -Fq 'nodeIntegration: false' apps/desktop/electron/main.ts
-          grep -Fq 'sandbox: true' apps/desktop/electron/main.ts
+          grep -Fq 'sandbox: false' apps/desktop/electron/main.ts
           grep -Fq 'webSecurity: true' apps/desktop/electron/main.ts
       - run: node scripts/quality-smoke.mjs
       - run: pnpm --filter @minarvabiz/database typecheck
