@@ -29,18 +29,20 @@ jobs:
         run: |
           $key = "$env:MINARVA_LICENSE_PUBLIC_KEY_HEX".Trim()
           $url = "$env:VITE_LICENSE_API_URL".Trim()
-          if ($key -notmatch '^[0-9a-fA-F]{64}$') {
-            throw "MINARVA_LICENSE_PUBLIC_KEY_HEX must be exactly 64 hexadecimal characters."
-          }
-          if (-not $url -or $url -notmatch '^https://') {
-            throw "VITE_LICENSE_API_URL must be a non-empty HTTPS URL."
-          }
+          if ($key -notmatch '^[0-9a-fA-F]{64}$') { throw "MINARVA_LICENSE_PUBLIC_KEY_HEX must be exactly 64 hexadecimal characters." }
+          if (-not $url -or $url -notmatch '^https://') { throw "VITE_LICENSE_API_URL must be a non-empty HTTPS URL." }
           Write-Host "Production license public key is configured."
           Write-Host "Production license API URL is configured: $url"
 
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Static production quality smoke
-        run: node scripts/quality-smoke.mjs
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "apps/desktop/build/icon.svg")) { throw "Branded desktop icon is missing." }
+          if (-not (Test-Path "apps/desktop/public/minarva-biz-icon.svg")) { throw "Branded renderer icon is missing." }
+          if (-not (Select-String -Path "apps/desktop/electron/main.ts" -Pattern 'Menu\.setApplicationMenu\(null\)' -Quiet)) { throw "Application menu removal is missing." }
+          if (-not (Select-String -Path "packages/ui/src/components/settings/SettingsPanel.tsx" -Pattern 'midnight|ocean|emerald|violet' -Quiet)) { throw "Theme configuration is missing." }
+          node scripts/quality-smoke.mjs
       - run: pnpm --filter @minarvabiz/business-logic typecheck
       - run: pnpm --filter @minarvabiz/ui typecheck
       - run: pnpm --filter @minarvabiz/desktop typecheck
@@ -62,26 +64,31 @@ jobs:
           if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot }
           New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
           $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
-          Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -Wait
+          $installProc = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
+          if ($installProc.ExitCode -ne 0) { throw "Windows installer exited with code $($installProc.ExitCode)." }
           $exe = Join-Path $installRoot "Minarva Biz.exe"
           if (-not (Test-Path $exe)) {
-            $exe = Get-ChildItem -Path $installRoot -Filter *.exe -Recurse -ErrorAction Stop |
-              Where-Object { $_.Name -notlike "*Setup*.exe" } |
-              Select-Object -First 1 |
-              ForEach-Object FullName
+            $exe = Get-ChildItem -Path $installRoot -Filter *.exe -Recurse -ErrorAction Stop | Where-Object { $_.Name -notlike "*Setup*.exe" } | Select-Object -First 1 | ForEach-Object FullName
           }
           if (-not $exe -or -not (Test-Path $exe)) { throw "Installed executable not found." }
           $proc = Start-Process -FilePath $exe -PassThru
           try {
-            Start-Sleep -Seconds 15
-            if ($proc.HasExited) { throw "Minarva Biz exited during production runtime smoke (exit code $($proc.ExitCode))." }
-            $db = Get-ChildItem -Path $env:APPDATA -Filter "minarvabiz.db" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $db) { throw "Production runtime smoke did not create minarvabiz.db under APPDATA." }
-            $bytes = [System.IO.File]::ReadAllBytes($db.FullName)
-            if ($bytes.Length -lt 16 -or [System.Text.Encoding]::ASCII.GetString($bytes, 0, 16) -ne "SQLite format 3`0") {
-              throw "Invalid SQLite database at $($db.FullName)"
+            $db = $null
+            for ($attempt = 1; $attempt -le 45 -and -not $db; $attempt++) {
+              Start-Sleep -Seconds 1
+              if ($proc.HasExited) { throw "Minarva Biz exited during production runtime smoke (exit code $($proc.ExitCode))." }
+              foreach ($root in @($env:APPDATA, $env:LOCALAPPDATA, $env:PROGRAMDATA) | Where-Object { $_ -and (Test-Path $_) }) {
+                $candidate = Get-ChildItem -Path $root -Filter "minarvabiz.db" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($candidate) { $db = $candidate; break }
+              }
             }
-            Write-Host "Production runtime smoke PASS: $($db.FullName)"
+            if (-not $db) { throw "Production runtime smoke did not create minarvabiz.db." }
+            $bytes = [System.IO.File]::ReadAllBytes($db.FullName)
+            if ($bytes.Length -lt 16 -or [System.Text.Encoding]::ASCII.GetString($bytes, 0, 16) -ne "SQLite format 3`0") { throw "Invalid SQLite database at $($db.FullName)" }
+            $logs = @($env:APPDATA, $env:LOCALAPPDATA, $env:RUNNER_TEMP) | Where-Object { $_ -and (Test-Path $_) } | ForEach-Object { Get-ChildItem -Path $_ -Filter "runtime-smoke.log" -Recurse -File -ErrorAction SilentlyContinue } | Sort-Object FullName -Unique
+            if (-not ($logs | Select-String -Pattern 'bridge-ready=true')) { throw "Electron preload bridge was not confirmed in production runtime." }
+            if ($logs | Select-String -Pattern 'bridge-ready=false') { throw "Electron preload bridge reported failure in production runtime." }
+            Write-Host "Production runtime smoke PASS: process alive, SQLite valid, preload bridge confirmed."
           } finally {
             if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
           }
@@ -93,12 +100,8 @@ jobs:
           if (-not (Test-Path $configPath)) { throw "Generated desktop license config is missing." }
           $config = Get-Content -Raw $configPath
           $expected = $env:MINARVA_LICENSE_PUBLIC_KEY_HEX.Trim().ToLower()
-          if ($config -notmatch [regex]::Escape($expected)) {
-            throw "Bundled production public key does not match the configured GitHub secret."
-          }
-          if ($config -match 'PRIVATE_KEY|LICENSE_PRIVATE_KEY|privateKey') {
-            throw "Potential private-key content found in bundled license configuration."
-          }
+          if ($config -notmatch [regex]::Escape($expected)) { throw "Bundled production public key does not match the configured GitHub secret." }
+          if ($config -match 'PRIVATE_KEY|LICENSE_PRIVATE_KEY|privateKey') { throw "Potential private-key content found in bundled license configuration." }
           Write-Host "Bundled production public key verified."
 
       - name: Upload release installer
