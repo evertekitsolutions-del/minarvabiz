@@ -11,6 +11,28 @@ export interface SettingsPanelProps {
   onSaveBackup: (patch: Partial<SettingsPanelProps["backup"]>) => void;
 }
 
+type ThemeId = "light" | "midnight" | "ocean" | "emerald" | "violet";
+const THEME_KEY = "minarvabiz.ui.theme";
+const THEMES: Array<{ id: ThemeId; name: string; description: string; preview: string }> = [
+  { id: "light", name: "Light", description: "Clean professional workspace", preview: "bg-white" },
+  { id: "midnight", name: "Midnight", description: "Deep dark executive look", preview: "bg-slate-900" },
+  { id: "ocean", name: "Ocean", description: "Crisp blue business theme", preview: "bg-blue-600" },
+  { id: "emerald", name: "Emerald", description: "Modern green operations theme", preview: "bg-emerald-600" },
+  { id: "violet", name: "Violet", description: "Premium creative fashion theme", preview: "bg-violet-600" },
+];
+
+function readTheme(): ThemeId {
+  if (typeof window === "undefined") return "light";
+  const stored = window.localStorage.getItem(THEME_KEY) as ThemeId | null;
+  return THEMES.some((theme) => theme.id === stored) ? (stored as ThemeId) : "light";
+}
+
+function applyTheme(theme: ThemeId) {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.theme = theme;
+  window.localStorage.setItem(THEME_KEY, theme);
+}
+
 type DesktopDiagnosticsApi = {
   getVersion: () => Promise<string>;
   platform: string;
@@ -28,11 +50,18 @@ export function SettingsPanel({ profile, tax, backup, onSaveProfile, onSaveTax, 
   const [draftProfile, setDraftProfile] = React.useState(profile);
   const [draftTax, setDraftTax] = React.useState(tax);
   const [draftBackup, setDraftBackup] = React.useState(backup);
+  const [theme, setTheme] = React.useState<ThemeId>(readTheme);
   const [diagnosticState, setDiagnosticState] = React.useState<"idle" | "working" | "done" | "error">("idle");
   const [diagnosticMessage, setDiagnosticMessage] = React.useState("");
   React.useEffect(() => setDraftProfile(profile), [profile]);
   React.useEffect(() => setDraftTax(tax), [tax]);
   React.useEffect(() => setDraftBackup(backup), [backup]);
+  React.useEffect(() => applyTheme(theme), [theme]);
+
+  function selectTheme(next: ThemeId) {
+    setTheme(next);
+    applyTheme(next);
+  }
 
   async function exportDiagnostics() {
     const api = getDiagnosticsApi();
@@ -113,7 +142,7 @@ export function SettingsPanel({ profile, tax, backup, onSaveProfile, onSaveTax, 
   }
 
   return <div className="space-y-6">
-    <div><h2 className="text-2xl font-semibold text-slate-900">Business Settings</h2><p className="mt-1 text-sm text-slate-500">Configure your business identity, invoices, tax and automatic backups.</p></div>
+    <div><h2 className="text-2xl font-semibold text-slate-900">Business Settings</h2><p className="mt-1 text-sm text-slate-500">Configure your business identity, invoices, tax, backup and application appearance.</p></div>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-lg font-semibold text-slate-900">Business profile</h3><div className="mt-4 grid gap-4 md:grid-cols-2">
       <FormField label="Business name"><input className={inputClass} value={draftProfile.shopName} onChange={e => setDraftProfile({ ...draftProfile, shopName: e.target.value })} /></FormField>
       <FormField label="Phone"><input className={inputClass} value={draftProfile.phone} onChange={e => setDraftProfile({ ...draftProfile, phone: e.target.value })} /></FormField>
@@ -132,6 +161,21 @@ export function SettingsPanel({ profile, tax, backup, onSaveProfile, onSaveTax, 
       <FormField label="Interval (hours)"><input className={inputClass} type="number" min="1" value={draftBackup.intervalHours} onChange={e => setDraftBackup({ ...draftBackup, intervalHours: Math.max(1, Number(e.target.value) || 24) })} /></FormField>
       <FormField label="Retention count"><input className={inputClass} type="number" min="5" value={draftBackup.retentionCount} onChange={e => setDraftBackup({ ...draftBackup, retentionCount: Math.max(5, Number(e.target.value) || 14) })} /></FormField>
     </div><div className="mt-5 flex justify-end"><Button onClick={() => onSaveBackup(draftBackup)}>Save backup settings</Button></div></section>
+    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div><h3 className="text-lg font-semibold text-slate-900">Appearance</h3><p className="mt-1 text-sm text-slate-500">Choose a professional workspace theme. Your choice is remembered on this computer.</p></div>
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {THEMES.map((item) => (
+          <button key={item.id} type="button" onClick={() => selectTheme(item.id)} aria-pressed={theme === item.id} className={`group rounded-2xl border p-3 text-left transition ${theme === item.id ? "border-blue-500 ring-2 ring-blue-100" : "border-slate-200 hover:border-slate-300"}`}>
+            <span className={`block h-20 rounded-xl ${item.preview} ${item.id === "light" ? "border border-slate-200" : ""}`}>
+              <span className="block p-3"><span className={`block h-2 w-16 rounded ${item.id === "light" ? "bg-slate-300" : "bg-white/70"}`}/><span className={`mt-2 block h-5 w-full rounded ${item.id === "light" ? "bg-slate-100" : "bg-white/15"}`}/></span>
+            </span>
+            <span className="mt-3 block text-sm font-semibold text-slate-900">{item.name}</span>
+            <span className="mt-1 block text-xs text-slate-500">{item.description}</span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"><div><div className="text-sm font-medium text-slate-800">Current theme</div><div className="text-xs text-slate-500">{THEMES.find((item) => item.id === theme)?.name}</div></div><Button variant="outline" onClick={() => selectTheme("light")}>Reset to Light</Button></div>
+    </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div><h3 className="text-lg font-semibold text-slate-900">Support diagnostics</h3><p className="mt-1 max-w-2xl text-sm text-slate-500">Export a redacted health report for support. Customer records, database contents, license tokens and device IDs are excluded.</p></div>
