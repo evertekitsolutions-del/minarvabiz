@@ -11,3 +11,53 @@ body {
   background: #f8fafc;
   color: #0f172a;
 }
+
+/* Theme system. Business data remains in SQLite; only presentation preference is stored locally. */
+html[data-theme="midnight"], html[data-theme="ocean"], html[data-theme="emerald"], html[data-theme="violet"] { color-scheme: light; }
+html[data-theme="midnight"] { color-scheme: dark; }
+
+html[data-theme="midnight"] body { background: #0b1220 !important; color: #e5e7eb !important; }
+html[data-theme="midnight"] .bg-white { background-color: #111827 !important; }
+html[data-theme="midnight"] .bg-slate-50 { background-color: #0f172a !important; }
+html[data-theme="midnight"] .bg-slate-100 { background-color: #1e293b !important; }
+html[data-theme="midnight"] .border-slate-100 { border-color: #1e293b !important; }
+html[data-theme="midnight"] .border-slate-200 { border-color: #334155 !important; }
+html[data-theme="midnight"] .border-slate-300 { border-color: #475569 !important; }
+html[data-theme="midnight"] .text-slate-900 { color: #f8fafc !important; }
+html[data-theme="midnight"] .text-slate-800 { color: #e2e8f0 !important; }
+html[data-theme="midnight"] .text-slate-700 { color: #cbd5e1 !important; }
+html[data-theme="midnight"] .text-slate-600, html[data-theme="midnight"] .text-slate-500 { color: #94a3b8 !important; }
+html[data-theme="midnight"] input, html[data-theme="midnight"] textarea, html[data-theme="midnight"] select { background: #0f172a !important; color: #f8fafc !important; border-color: #334155 !important; }
+html[data-theme="midnight"] .bg-blue-50 { background-color: #172554 !important; }
+html[data-theme="midnight"] .text-blue-600 { color: #60a5fa !important; }
+html[data-theme="midnight"] .bg-slate-900 { background-color: #020617 !important; }
+
+html[data-theme="ocean"] body { background: #f0f7ff !important; }
+html[data-theme="ocean"] .bg-blue-600 { background-color: #0369a1 !important; }
+html[data-theme="ocean"] .hover\:bg-blue-700:hover { background-color: #075985 !important; }
+html[data-theme="ocean"] .text-blue-600 { color: #0369a1 !important; }
+html[data-theme="ocean"] .text-blue-700 { color: #075985 !important; }
+html[data-theme="ocean"] .border-blue-200 { border-color: #bae6fd !important; }
+html[data-theme="ocean"] .bg-blue-50 { background-color: #e0f2fe !important; }
+html[data-theme="ocean"] .ring-blue-100 { --tw-ring-color: #bae6fd !important; }
+
+html[data-theme="emerald"] body { background: #f0fdf7 !important; }
+html[data-theme="emerald"] .bg-blue-600 { background-color: #059669 !important; }
+html[data-theme="emerald"] .hover\:bg-blue-700:hover { background-color: #047857 !important; }
+html[data-theme="emerald"] .text-blue-600 { color: #047857 !important; }
+html[data-theme="emerald"] .text-blue-700 { color: #065f46 !important; }
+html[data-theme="emerald"] .border-blue-200 { border-color: #a7f3d0 !important; }
+html[data-theme="emerald"] .bg-blue-50 { background-color: #d1fae5 !important; }
+html[data-theme="emerald"] .ring-blue-100 { --tw-ring-color: #a7f3d0 !important; }
+
+html[data-theme="violet"] body { background: #faf5ff !important; }
+html[data-theme="violet"] .bg-blue-600 { background-color: #7c3aed !important; }
+html[data-theme="violet"] .hover\:bg-blue-700:hover { background-color: #6d28d9 !important; }
+html[data-theme="violet"] .text-blue-600 { color: #7c3aed !important; }
+html[data-theme="violet"] .text-blue-700 { color: #6d28d9 !important; }
+html[data-theme="violet"] .border-blue-200 { border-color: #ddd6fe !important; }
+html[data-theme="violet"] .bg-blue-50 { background-color: #ede9fe !important; }
+html[data-theme="violet"] .ring-blue-100 { --tw-ring-color: #ddd6fe !important; }
+
+/* Shared professional surfaces on non-dark themes. */
+html[data-theme="ocean"] .shadow-sm, html[data-theme="emerald"] .shadow-sm, html[data-theme="violet"] .shadow-sm { box-shadow: 0 8px 30px rgba(15, 23, 42, 0.07) !important; }
