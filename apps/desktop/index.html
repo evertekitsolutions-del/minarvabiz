@@ -3,10 +3,55 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>Minarva Biz</title>
+    <style>
+      html, body { margin: 0; width: 100%; height: 100%; }
+      body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; }
+      #root { width: 100%; height: 100%; }
+      .minarva-boot { box-sizing: border-box; min-height: 100%; display: grid; place-items: center; padding: 32px; background: linear-gradient(135deg, #f8fafc, #eef4ff); }
+      .minarva-boot-card { width: min(520px, 100%); padding: 32px; border: 1px solid #dbe5f5; border-radius: 20px; background: rgba(255,255,255,.96); box-shadow: 0 18px 50px rgba(15,23,42,.10); text-align: center; }
+      .minarva-boot-brand { font-size: 30px; font-weight: 800; letter-spacing: -.03em; color: #2563eb; }
+      .minarva-boot-status { margin-top: 10px; color: #475569; }
+      .minarva-boot-error { margin-top: 18px; padding: 14px; border-radius: 12px; background: #fff1f2; color: #9f1239; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="minarva-boot">
+        <div class="minarva-boot-card">
+          <div class="minarva-boot-brand">Minarva Biz</div>
+          <div id="boot-status" class="minarva-boot-status">Starting desktop application…</div>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        function showBootError(message) {
+          var status = document.getElementById("boot-status");
+          if (!status) return;
+          status.textContent = "Minarva Biz could not start the desktop interface.";
+          var card = status.parentElement;
+          if (!card) return;
+          var existing = document.getElementById("boot-error");
+          if (!existing) {
+            existing = document.createElement("div");
+            existing.id = "boot-error";
+            existing.className = "minarva-boot-error";
+            card.appendChild(existing);
+          }
+          existing.textContent = String(message || "Unknown renderer startup error");
+        }
+        window.addEventListener("error", function (event) {
+          var target = event && event.target;
+          if (target && target.tagName === "SCRIPT") showBootError("Renderer script failed to load.\n" + (target.src || "Unknown script"));
+          else showBootError((event && event.error && event.error.stack) || (event && event.message) || "Renderer startup error");
+        }, true);
+        window.addEventListener("unhandledrejection", function (event) {
+          showBootError("Unhandled startup promise rejection.\n" + String(event && event.reason || "Unknown rejection"));
+        });
+      })();
+    </script>
     <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>
