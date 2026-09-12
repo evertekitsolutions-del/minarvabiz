@@ -92,7 +92,7 @@ function scoreDescending(value: number, values: number[]): number {
   return Math.min(5, Math.max(1, Math.ceil((rank / (sorted.length + 1)) * 5)));
 }
 
-function scoreRecency(days: number | null, values: number[]): number {
+function scoreRecency(days: number | null): number {
   if (days === null) return 1;
   if (days <= 30) return 5;
   if (days <= 60) return 4;
@@ -127,7 +127,7 @@ export function getCustomerIntelligenceSnapshot(
   const validOrders = orders.filter((order) => {
     if (order.cancelled) return false;
     if (order.status && !ACTIVE_ORDER_STATUSES.has(order.status)) return false;
-    return Boolean(order.customerId) && Number.isFinite(order.total) && Boolean(new Date(order.date).getTime());
+    return Boolean(order.customerId) && Number.isFinite(order.total) && !Number.isNaN(new Date(order.date).getTime());
   });
 
   const byCustomer = new Map<string, CustomerIntelligenceOrder[]>();
@@ -159,8 +159,8 @@ export function getCustomerIntelligenceSnapshot(
     const averageOrderValue = ordersCount ? item.totalSpend / ordersCount : 0;
     const frequencyScore = scoreDescending(ordersCount, frequencyValues);
     const monetaryScore = scoreDescending(item.totalSpend, monetaryValues);
-    const recencyScore = scoreRecency(item.daysSinceLastOrder, aggregates.map((x) => x.daysSinceLastOrder ?? 9999));
-    const loyaltyScore = Math.round((frequencyScore + monetaryScore + recencyScore) / 15 * 100);
+    const recencyScore = scoreRecency(item.daysSinceLastOrder);
+    const loyaltyScore = Math.round(((frequencyScore + monetaryScore + recencyScore) / 15) * 100);
     const estimatedAnnualValue = averageOrderValue * Math.max(1, ordersCount) * (ordersCount >= 2 ? 2 : 1);
     const base = {
       orders: ordersCount,
