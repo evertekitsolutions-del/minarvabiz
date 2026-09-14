@@ -28,6 +28,6 @@ nsis:
   deleteAppDataOnUninstall: false
   uninstallDisplayName: Minarva Biz
 extraMetadata:
-  main: electron/dist/main.js
+  main: electron/dist/bootstrap.js
 npmRebuild: false
 buildDependenciesFromSource: false
