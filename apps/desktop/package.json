@@ -1,10 +1,10 @@
 {
   "name": "@minarvabiz/desktop",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Minarva Biz Offline / Hybrid Windows application",
   "author": "Evertek IT Solutions",
-  "main": "electron/dist/main.js",
+  "main": "electron/dist/bootstrap.js",
   "scripts": {
     "dev": "vite",
     "build:renderer": "vite build",
