@@ -15,7 +15,6 @@ import type { OrderStatusItem } from "./OrderStatusSummary";
 import type { CategoryItem } from "./CategoryBreakdown";
 import type { BusinessSummaryItem } from "./BusinessSummary";
 
-/** Shared dashboard projection of deterministic production intelligence. */
 export interface ProductionControlData {
   totalActive: number;
   unassigned: number;
@@ -43,14 +42,28 @@ export interface ProductionControlData {
   }>;
 }
 
-/** Dashboard data contract — wire to Supabase / SQLite repositories */
+export interface CustomerIntelligenceData {
+  totalCustomers: number;
+  highRiskCount: number;
+  followUpCount: number;
+  estimatedAnnualValue: number;
+  topCustomers: Array<{
+    customerId: string;
+    customerName: string;
+    totalSpend: number;
+    loyaltyScore: number;
+    segment: string;
+    churnRisk: string;
+    followUp: string;
+  }>;
+}
+
 export interface DashboardData {
   stats: {
     totalSales: { value: string; change: string; positive: boolean; spark: number[] };
     totalServices: { value: string; change: string; positive: boolean; spark: number[] };
     laundrySales: { value: string; change: string; positive: boolean; spark: number[] };
     totalProfit: { value: string; change: string; positive: boolean; spark: number[] };
-    /** Extra cards from requirements */
     todayExpenses?: { value: string; change?: string; positive?: boolean };
     pendingOrders?: { value: string };
     readyOrders?: { value: string };
@@ -65,8 +78,8 @@ export interface DashboardData {
   categories: CategoryItem[];
   recentOrders: RecentOrderRow[];
   lowStock: LowStockItem[];
-  /** Deterministic production-risk and workload snapshot. */
   productionControl?: ProductionControlData;
+  customerIntelligence?: CustomerIntelligenceData;
 }
 
 export interface DashboardProps {
@@ -81,45 +94,33 @@ export interface DashboardProps {
 const defaultIcons = {
   cart: (
     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="8" cy="21" r="1" />
-      <circle cx="19" cy="21" r="1" />
-      <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57L22 7H6" />
+      <circle cx="8" cy="21" r="1" /><circle cx="19" cy="21" r="1" /><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57L22 7H6" />
     </svg>
   ),
   bag: (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M6 2 3 6v14a2 2 0 0 0 2-2V6l-3-4Z" />
-      <path d="M3 6h18" />
-      <path d="M16 10a4 4 0 0 1-8 0" />
-    </svg>
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 2 3 6v14a2 2 0 0 0 2-2V6l-3-4Z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" /></svg>
   ),
   laundry: (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 3v2" />
-    </svg>
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="12" cy="12" r="4" /><path d="M12 3v2" /></svg>
   ),
   rupee: (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M6 3h12M6 8h12M6 13l8.5 8M9 13h5a4 4 0 0 0 0-8" />
-    </svg>
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 3h12M6 8h12M6 13l8.5 8M9 13h5a4 4 0 0 0 0-8" /></svg>
   ),
 };
 
-export function Dashboard({
-  data,
-  quickActions = [],
-  onViewAllOrders,
-  onViewAllStock,
-  onInsightAction,
-  className,
-}: DashboardProps) {
-  const { stats, productionControl } = data;
+const segmentLabel: Record<string, string> = {
+  champion: "Champion", loyal: "Loyal", promising: "Promising", new: "New",
+  at_risk: "At risk", lost: "Lost", hibernating: "Hibernating",
+};
+const followUpLabel: Record<string, string> = {
+  overdue_balance: "Payment due", win_back: "Win back", loyalty: "Loyalty", vip: "VIP", welcome: "Welcome",
+};
+
+export function Dashboard({ data, quickActions = [], onViewAllOrders, onViewAllStock, onInsightAction, className }: DashboardProps) {
+  const { stats, productionControl, customerIntelligence } = data;
 
   return (
     <div className={cn("space-y-5", className)}>
-      {/* Primary KPI row — matches reference */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Total Sales" value={stats.totalSales.value} changeLabel={stats.totalSales.change} changePositive={stats.totalSales.positive} tone="blue" icon={defaultIcons.cart} sparkline={stats.totalSales.spark} />
         <StatCard title="Total Services" value={stats.totalServices.value} changeLabel={stats.totalServices.change} changePositive={stats.totalServices.positive} tone="green" icon={defaultIcons.bag} sparkline={stats.totalServices.spark} />
@@ -127,7 +128,6 @@ export function Dashboard({
         <StatCard title="Total Profit" value={stats.totalProfit.value} changeLabel={stats.totalProfit.change} changePositive={stats.totalProfit.positive} tone="purple" icon={defaultIcons.rupee} sparkline={stats.totalProfit.spark} />
       </div>
 
-      {/* Secondary metrics row (requirements) */}
       {(stats.todayExpenses || stats.pendingOrders || stats.readyOrders || stats.totalCustomers || stats.lowStockCount || stats.outstandingPayments) && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {stats.todayExpenses && <StatCard title="Today's Expenses" value={stats.todayExpenses.value} changeLabel={stats.todayExpenses.change} changePositive={stats.todayExpenses.positive} tone="rose" className="!p-3" />}
@@ -139,16 +139,29 @@ export function Dashboard({
         </div>
       )}
 
-      {/* Production control center — exception-first operational signals. */}
-      {productionControl && (
+      {customerIntelligence && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900">Production Control Center</h2>
-              <p className="mt-1 text-xs text-slate-500">Live workload, delivery risk and tailor capacity from current service orders.</p>
-            </div>
-            <div className="text-xs font-medium text-slate-500">{productionControl.totalActive} active orders</div>
+            <div><h2 className="text-sm font-semibold text-slate-900">Customer Intelligence</h2><p className="mt-1 text-xs text-slate-500">Customer value, loyalty and retention signals from recorded orders.</p></div>
+            <div className="text-xs font-medium text-slate-500">{customerIntelligence.totalCustomers} analysed</div>
           </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl bg-blue-50 p-3"><div className="text-[11px] font-medium text-blue-600">Estimated annual value</div><div className="mt-1 text-xl font-bold text-blue-800">₹{Math.round(customerIntelligence.estimatedAnnualValue).toLocaleString("en-IN")}</div></div>
+            <div className="rounded-xl bg-emerald-50 p-3"><div className="text-[11px] font-medium text-emerald-600">Healthy-risk customers</div><div className="mt-1 text-xl font-bold text-emerald-700">{Math.max(0, customerIntelligence.totalCustomers - customerIntelligence.highRiskCount)}</div></div>
+            <div className="rounded-xl bg-rose-50 p-3"><div className="text-[11px] font-medium text-rose-600">High churn risk</div><div className="mt-1 text-xl font-bold text-rose-700">{customerIntelligence.highRiskCount}</div></div>
+            <div className="rounded-xl bg-violet-50 p-3"><div className="text-[11px] font-medium text-violet-600">Follow-up opportunities</div><div className="mt-1 text-xl font-bold text-violet-700">{customerIntelligence.followUpCount}</div></div>
+          </div>
+          {customerIntelligence.topCustomers.length > 0 && (
+            <div className="mt-4 overflow-hidden rounded-xl border border-slate-200"><div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">Highest-value customer signals</div><div className="divide-y divide-slate-100">
+              {customerIntelligence.topCustomers.slice(0, 5).map((customer) => <div key={customer.customerId} className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs"><div className="min-w-0"><div className="font-semibold text-slate-900">{customer.customerName}</div><div className="mt-0.5 text-slate-500">₹{Math.round(customer.totalSpend).toLocaleString("en-IN")} spend · {segmentLabel[customer.segment] || customer.segment} · {customer.loyaltyScore}/100 loyalty</div></div><div className="flex shrink-0 items-center gap-2"><span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{customer.churnRisk} risk</span>{customer.followUp !== "none" && <span className="rounded-full bg-violet-50 px-2 py-1 font-semibold text-violet-700">{followUpLabel[customer.followUp] || customer.followUp}</span>}</div></div>)}
+            </div></div>
+          )}
+        </div>
+      )}
+
+      {productionControl && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-900">Production Control Center</h2><p className="mt-1 text-xs text-slate-500">Live workload, delivery risk and tailor capacity from current service orders.</p></div><div className="text-xs font-medium text-slate-500">{productionControl.totalActive} active orders</div></div>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
             <div className="rounded-xl bg-slate-50 p-3"><div className="text-[11px] font-medium text-slate-500">In production</div><div className="mt-1 text-xl font-bold text-slate-900">{productionControl.inProduction}</div></div>
             <div className="rounded-xl bg-rose-50 p-3"><div className="text-[11px] font-medium text-rose-600">Overdue</div><div className="mt-1 text-xl font-bold text-rose-700">{productionControl.overdue}</div></div>
@@ -159,44 +172,13 @@ export function Dashboard({
             <div className="rounded-xl bg-violet-50 p-3"><div className="text-[11px] font-medium text-violet-600">Risk queue</div><div className="mt-1 text-xl font-bold text-violet-700">{productionControl.risks.length}</div></div>
             <div className="rounded-xl bg-slate-100 p-3"><div className="text-[11px] font-medium text-slate-500">Tailor loads</div><div className="mt-1 text-xl font-bold text-slate-900">{productionControl.staffLoad.length}</div></div>
           </div>
-          {productionControl.risks.length > 0 && (
-            <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-              <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">Priority queue</div>
-              <div className="divide-y divide-slate-100">
-                {productionControl.risks.slice(0, 5).map((risk) => {
-                  const label = risk.risk === "overdue" ? "Overdue" : risk.risk === "due_today" ? "Due today" : risk.risk === "due_soon" ? "Due soon" : "Unassigned";
-                  const detail = risk.assignedStaffName ? `Assigned to ${risk.assignedStaffName}` : "No staff assigned";
-                  return (
-                    <div key={`${risk.orderId}-${risk.risk}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs">
-                      <div className="min-w-0"><div className="font-semibold text-slate-900">{risk.orderNumber} · {risk.customerName}</div><div className="mt-0.5 text-slate-500">{risk.status} · {detail}</div></div>
-                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          {productionControl.risks.length > 0 && <div className="mt-4 overflow-hidden rounded-xl border border-slate-200"><div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">Priority queue</div><div className="divide-y divide-slate-100">{productionControl.risks.slice(0, 5).map((risk) => { const label = risk.risk === "overdue" ? "Overdue" : risk.risk === "due_today" ? "Due today" : risk.risk === "due_soon" ? "Due soon" : "Unassigned"; const detail = risk.assignedStaffName ? `Assigned to ${risk.assignedStaffName}` : "No staff assigned"; return <div key={`${risk.orderId}-${risk.risk}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs"><div className="min-w-0"><div className="font-semibold text-slate-900">{risk.orderNumber} · {risk.customerName}</div><div className="mt-0.5 text-slate-500">{risk.status} · {detail}</div></div><span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{label}</span></div>; })}</div></div>}
         </div>
       )}
 
-      {/* Intelligent exception-first layer */}
       <BusinessInsights data={data} onAction={onInsightAction} />
-
-      {/* Charts + summaries */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <div className="xl:col-span-6"><SalesOverviewChart data={data.salesSeries} /></div>
-        <div className="xl:col-span-3"><BusinessSummary items={data.businessSummary} netProfit={data.netProfit} /></div>
-        <div className="xl:col-span-3"><OrderStatusSummary items={data.orderStatus} /></div>
-      </div>
-
-      {/* Categories + orders + low stock */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="lg:col-span-4"><CategoryBreakdown items={data.categories} /></div>
-        <div className="lg:col-span-5"><RecentOrders rows={data.recentOrders} onViewAll={onViewAllOrders} /></div>
-        <div className="lg:col-span-3"><LowStockAlert items={data.lowStock} onViewAll={onViewAllStock} /></div>
-      </div>
-
-      {/* Quick actions */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12"><div className="xl:col-span-6"><SalesOverviewChart data={data.salesSeries} /></div><div className="xl:col-span-3"><BusinessSummary items={data.businessSummary} netProfit={data.netProfit} /></div><div className="xl:col-span-3"><OrderStatusSummary items={data.orderStatus} /></div></div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12"><div className="lg:col-span-4"><CategoryBreakdown items={data.categories} /></div><div className="lg:col-span-5"><RecentOrders rows={data.recentOrders} onViewAll={onViewAllOrders} /></div><div className="lg:col-span-3"><LowStockAlert items={data.lowStock} onViewAll={onViewAllStock} /></div></div>
       {quickActions.length > 0 && <QuickActions actions={quickActions} />}
     </div>
   );
