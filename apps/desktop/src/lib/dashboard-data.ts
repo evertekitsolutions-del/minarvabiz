@@ -6,6 +6,8 @@ import {
   collectLiveDashboardMetrics,
   getProductionControlSnapshot,
   getCustomerIntelligenceSnapshot,
+  buildInventoryIntelligence,
+  calculateStaffProductivity,
   store,
   ordersStore,
   phase6Store,
@@ -30,6 +32,10 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   const shaped = shapeDashboardStats(metrics);
   const serviceOrders = ordersStore.listOrders();
   const sales = store.listSales();
+  const products = store.listProducts();
+  const staff = phase6Store.listStaff();
+  const assignments = phase6Store.listAssignments();
+
   const recentOrders: RecentOrderRow[] = serviceOrders.slice(0, 6).map((o) => ({
     id: o.id,
     orderNo: o.orderNumber,
@@ -38,16 +44,14 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     status: toStatusBadge(String(o.status)),
     dueDate: o.deliveryDate || "—",
   }));
-  const lowStock = store
-    .listProducts()
+
+  const lowStock = products
     .filter((p) => p.stockQuantity <= p.minimumStock)
     .slice(0, 5)
     .map((p) => ({ id: p.id, name: p.name, stock: p.stockQuantity, unit: p.unit }));
-  const productionControl = getProductionControlSnapshot(
-    serviceOrders,
-    phase6Store.listStaff(),
-    phase6Store.listAssignments()
-  );
+
+  const productionControl = getProductionControlSnapshot(serviceOrders, staff, assignments);
+
   const intelligence = getCustomerIntelligenceSnapshot(
     store.listCustomers().map((customer) => ({
       id: customer.id,
@@ -76,6 +80,53 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     ]
   );
 
+  const now = new Date();
+  const windowStart = now.getTime() - 90 * 86_400_000;
+  const sold90d = new Map<string, number>();
+  const lastSale = new Map<string, number>();
+  for (const sale of sales) {
+    const saleTime = Date.parse(sale.saleDate || sale.createdAt);
+    if (!Number.isFinite(saleTime) || saleTime < windowStart || saleTime > now.getTime()) continue;
+    for (const item of sale.items) {
+      sold90d.set(item.productId, (sold90d.get(item.productId) ?? 0) + Math.max(0, item.quantity));
+      const previous = lastSale.get(item.productId);
+      if (previous == null || saleTime > previous) lastSale.set(item.productId, saleTime);
+    }
+  }
+
+  const inventoryIntelligence = buildInventoryIntelligence(
+    products.map((product) => {
+      const last = lastSale.get(product.id);
+      return {
+        productId: product.id,
+        name: product.name,
+        sku: product.sku ?? null,
+        category: product.categoryId ?? null,
+        unit: product.unit,
+        stockQuantity: product.stockQuantity,
+        minimumStock: product.minimumStock,
+        costPrice: product.costPrice,
+        sellingPrice: product.sellingPrice,
+        unitsSold: sold90d.get(product.id) ?? 0,
+        periodDays: 90,
+        leadTimeDays: 7,
+        safetyStockDays: 7,
+        maximumStock: null,
+        daysSinceLastSale: last == null ? null : Math.max(0, (now.getTime() - last) / 86_400_000),
+      };
+    }),
+    now.toISOString()
+  );
+
+  const staffProductivity = calculateStaffProductivity(
+    staff,
+    assignments.map((assignment) => ({
+      ...assignment,
+      dueDate: ordersStore.getOrder(assignment.orderId)?.deliveryDate ?? null,
+    })),
+    now
+  );
+
   return {
     stats: shaped.stats,
     salesSeries: sales.slice(0, 7).reverse().map((s, i) => ({ label: `D${i + 1}`, value: s.total })),
@@ -102,6 +153,37 @@ export async function fetchDashboardData(): Promise<DashboardData> {
         churnRisk: customer.churnRisk,
         followUp: customer.followUp,
       })),
+    },
+    inventoryIntelligence: {
+      totalProducts: inventoryIntelligence.summary.totalProducts,
+      totalStockUnits: inventoryIntelligence.summary.totalStockUnits,
+      totalStockValue: inventoryIntelligence.summary.totalStockValue,
+      reorderProducts: inventoryIntelligence.summary.reorderProducts,
+      outOfStockProducts: inventoryIntelligence.summary.outOfStockProducts,
+      deadStockProducts: inventoryIntelligence.summary.deadStockProducts,
+      overstockedProducts: inventoryIntelligence.summary.overstockedProducts,
+      estimatedReorderValue: inventoryIntelligence.summary.estimatedReorderValue,
+      priorityItems: inventoryIntelligence.items
+        .filter((item) => item.health === "out_of_stock" || item.health === "critical" || item.health === "reorder" || item.deadStock || item.slowMoving)
+        .slice(0, 6)
+        .map((item) => ({
+          productId: item.productId,
+          name: item.name,
+          stock: item.stockQuantity,
+          unit: products.find((p) => p.id === item.productId)?.unit ?? "",
+          health: item.health,
+          recommendedOrderQty: item.recommendedOrderQty,
+          abcClass: item.abcClass,
+          daysOfCover: item.daysOfCover,
+        })),
+    },
+    staffProductivity: {
+      totalActiveAssignments: staffProductivity.totalActiveAssignments,
+      totalCompletedAssignments: staffProductivity.totalCompletedAssignments,
+      overloadedStaff: staffProductivity.overloadedStaff,
+      averageCompletionRate: staffProductivity.averageCompletionRate,
+      averageOnTimeRate: staffProductivity.averageOnTimeRate,
+      staff: staffProductivity.staff.slice(0, 8),
     },
   };
 }
