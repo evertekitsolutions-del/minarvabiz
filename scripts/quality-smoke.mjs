@@ -27,6 +27,7 @@ const licenseConfigWriter = read("apps/desktop/scripts/write-license-config.mjs"
 const businessLogicPackage = JSON.parse(read("packages/business-logic/package.json"));
 const uiPackage = JSON.parse(read("packages/ui/package.json"));
 const persistence = read("packages/business-logic/src/persistence.ts");
+const phase10Store = read("packages/business-logic/src/phase10-operations-store.ts");
 const sqliteBootstrap = read("apps/desktop/src/lib/sqlite-bootstrap.ts");
 const nav = read("packages/ui/src/lib/nav.ts");
 const licensingToken = read("packages/licensing/src/token.ts");
@@ -49,9 +50,14 @@ assert(/build:renderer/.test(desktopPackage.scripts?.build ?? ""), "Desktop buil
 assert(/electron-builder --win/.test(desktopPackage.scripts?.["package:win"] ?? ""), "Windows packaging script is missing");
 assert(uiPackage.scripts?.typecheck === "tsc --noEmit", "Shared UI package must retain explicit typecheck script");
 assert(businessLogicPackage.scripts?.typecheck === "tsc --noEmit", "Business-logic package must retain explicit typecheck script");
-assert(/SNAPSHOT_VERSION\s*=\s*3/.test(persistence), "Domain snapshot version is missing or changed unexpectedly");
+assert(/SNAPSHOT_VERSION\s*=\s*4/.test(persistence), "Domain snapshot version must include persisted phase-10 operations");
+assert(/phase10\?:/.test(persistence) && /phase10Store\.exportPhase10State/.test(persistence) && /phase10Store\.hydratePhase10/.test(persistence), "Phase-10 production/material state is missing from domain snapshots");
 assert(/branches:\s*Branch\[\]/.test(persistence) && /activeBranchId/.test(persistence), "Branch state is missing from domain snapshots");
 assert(/quotations\?/.test(persistence) && /cashSessions\?/.test(persistence) && /purchaseReturns\?/.test(persistence), "Extended business snapshot state is missing");
+assert(/ensureProductionWorkflow/.test(phase10Store) && /advanceProductionWorkflow/.test(phase10Store), "Production workflow persistence store is missing lifecycle operations");
+assert(/createMaterialRoll/.test(phase10Store) && /reserveMaterialRoll/.test(phase10Store) && /consumeMaterialFromRoll/.test(phase10Store), "Material roll persistence store is missing inventory lifecycle operations");
+assert(/enqueueOutbox\("production_workflows"/.test(phase10Store) && /enqueueOutbox\("material_rolls"/.test(phase10Store), "Phase-10 mutations must enter the sync outbox");
+assert(/touchPersistence\(\)/.test(phase10Store), "Phase-10 mutations must trigger SQLite persistence");
 assert(/dashboard/.test(nav) && /sales/.test(nav) && /products/.test(nav) && /laundry/.test(nav) && /reports/.test(nav) && /backup/.test(nav), "Core navigation modules are missing");
 assert(workflow.includes("Guard against legacy JSON persistence"), "CI legacy JSON guard is missing");
 assert(workflow.includes("Inspect generated renderer CSS"), "CI renderer CSS verification is missing");
@@ -91,7 +97,7 @@ const signedPayloadGuards = [
   /Number\.isSafeInteger\(payload\.activationLimit\)/,
   /if \(payload\.activationLimit === -1\) \{\s*if \(payload\.plan !== "enterprise"\) return false;/,
   /if \(payload\.activationLimit >= 0 && payload\.deviceBindings\.length > payload\.activationLimit\) return false;/,
-  /payload\.expiresAt !== null && new Date\(payload\.expiresAt\)\.getTime\(\) < new Date\(payload\.issuedAt\)\.getTime\(\)/,
+  /payload\.expiresAt !== null && new Date\(payload\.expiresAt\)\.getTime\(\) < new Date\(payload\.issuedAt\)\.getTime\)/,
   /return isLicensePayload\(payload\) \? payload : null;/,
 ];
 for (const guard of signedPayloadGuards) assert(guard.test(licensingToken), `Signed license payload structural guard is missing: ${guard}`);
@@ -114,4 +120,4 @@ assert(/persistDomainToSqlite/.test(desktopAppSource), "Desktop App is not wired
 assert(/__minarvaDesktopPersist/.test(sqliteBootstrap), "Desktop native persistence bridge is missing");
 
 console.log("Minarva Biz quality smoke: PASS");
-console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, structured signed-license payload validation, Enterprise unlimited activation policy, atomic license activation, bounded API request parsing, JSON content-type enforcement, redacted support diagnostics, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, and domain snapshot coverage.`);
+console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, structured signed-license payload validation, Enterprise unlimited activation policy, atomic license activation, bounded API request parsing, JSON content-type enforcement, redacted support diagnostics, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, domain snapshot coverage, and persisted production/material operations.`);
