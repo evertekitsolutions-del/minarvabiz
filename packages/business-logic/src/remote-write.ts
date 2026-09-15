@@ -3,7 +3,16 @@
  * Set via registerRemoteWriter from the web app when online.
  */
 
-import type { Customer, Product, Sale, ServiceOrder, Payment } from "@minarvabiz/types";
+import type {
+  Customer,
+  Product,
+  Sale,
+  ServiceOrder,
+  Payment,
+  Expense,
+  Supplier,
+  LaundryOrder,
+} from "@minarvabiz/types";
 import { enqueueOutbox } from "./outbox-bridge";
 
 export interface RemoteWriter {
@@ -13,9 +22,9 @@ export interface RemoteWriter {
   createOrder?: (o: ServiceOrder) => Promise<void>;
   updateOrder?: (id: string, patch: Partial<ServiceOrder>) => Promise<void>;
   createPayment?: (p: Payment) => Promise<void>;
-  createExpense?: (payload: Record<string, unknown>) => Promise<void>;
-  createSupplier?: (payload: Record<string, unknown>) => Promise<void>;
-  createLaundry?: (payload: Record<string, unknown>) => Promise<void>;
+  createExpense?: (e: Expense) => Promise<void>;
+  createSupplier?: (s: Supplier) => Promise<void>;
+  createLaundry?: (o: LaundryOrder) => Promise<void>;
 }
 
 let writer: RemoteWriter | null = null;
@@ -58,23 +67,20 @@ export async function remoteCreatePayment(p: Payment) {
   catch (e) { console.warn("[minarvabiz] remote payment write failed", e); }
 }
 
-export async function remoteCreateExpense(payload: Record<string, unknown>) {
-  const id = String(payload.id ?? "");
-  if (id) enqueueOutbox("expenses", id, "insert", payload);
-  try { await writer?.createExpense?.(payload); }
-  catch (e) { console.warn("[minarvabiz] remote expense write failed", e); }
+export async function remoteCreateExpense(e: Expense) {
+  enqueueOutbox("expenses", e.id, "insert", e);
+  try { await writer?.createExpense?.(e); }
+  catch (err) { console.warn("[minarvabiz] remote expense write failed", err); }
 }
 
-export async function remoteCreateSupplier(payload: Record<string, unknown>) {
-  const id = String(payload.id ?? "");
-  if (id) enqueueOutbox("suppliers", id, "insert", payload);
-  try { await writer?.createSupplier?.(payload); }
+export async function remoteCreateSupplier(s: Supplier) {
+  enqueueOutbox("suppliers", s.id, "insert", s);
+  try { await writer?.createSupplier?.(s); }
   catch (e) { console.warn("[minarvabiz] remote supplier write failed", e); }
 }
 
-export async function remoteCreateLaundry(payload: Record<string, unknown>) {
-  const id = String(payload.id ?? "");
-  if (id) enqueueOutbox("laundry_orders", id, "insert", payload);
-  try { await writer?.createLaundry?.(payload); }
+export async function remoteCreateLaundry(o: LaundryOrder) {
+  enqueueOutbox("laundry_orders", o.id, "insert", o);
+  try { await writer?.createLaundry?.(o); }
   catch (e) { console.warn("[minarvabiz] remote laundry write failed", e); }
 }
