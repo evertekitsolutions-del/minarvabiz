@@ -12,6 +12,7 @@ import type {
   Expense,
   Supplier,
   LaundryOrder,
+  Purchase,
 } from "@minarvabiz/types";
 import { enqueueOutbox } from "./outbox-bridge";
 
@@ -25,6 +26,7 @@ export interface RemoteWriter {
   createExpense?: (e: Expense) => Promise<void>;
   createSupplier?: (s: Supplier) => Promise<void>;
   createLaundry?: (o: LaundryOrder) => Promise<void>;
+  createPurchase?: (p: Purchase) => Promise<void>;
 }
 
 let writer: RemoteWriter | null = null;
@@ -83,4 +85,10 @@ export async function remoteCreateLaundry(o: LaundryOrder) {
   enqueueOutbox("laundry_orders", o.id, "insert", o);
   try { await writer?.createLaundry?.(o); }
   catch (e) { console.warn("[minarvabiz] remote laundry write failed", e); }
+}
+
+export async function remoteCreatePurchase(p: Purchase) {
+  enqueueOutbox("purchases", p.id, "insert", p);
+  try { await writer?.createPurchase?.(p); }
+  catch (e) { console.warn("[minarvabiz] remote purchase write failed", e); }
 }
