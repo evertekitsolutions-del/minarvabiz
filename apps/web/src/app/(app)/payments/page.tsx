@@ -2,13 +2,7 @@
 
 import * as React from "react";
 import { PaymentsPanel } from "@minarvabiz/ui";
-import {
-  store,
-  phase6Store,
-  templatePaymentDue,
-  templatePaymentReceived,
-  getRemoteWriter,
-} from "@minarvabiz/business-logic";
+import { store, phase6Store, templatePaymentDue, templatePaymentReceived, getRemoteWriter } from "@minarvabiz/business-logic";
 import type { Customer, Payment } from "@minarvabiz/types";
 
 export default function PaymentsPage() {
@@ -26,7 +20,7 @@ export default function PaymentsPage() {
     <PaymentsPanel
       outstanding={outstanding}
       payments={payments}
-      onCollect={async (data) => {
+      onCollect={(data) => {
         const result = store.recordCustomerPayment({
           customerId: data.customerId,
           amount: data.amount,
@@ -37,8 +31,8 @@ export default function PaymentsPage() {
           return { ok: false, error: result.errors.join("; ") || "Failed" };
         }
         const writer = getRemoteWriter();
-        if (writer?.createPayment) await writer.createPayment(result.payment);
-        if (result.customer && writer?.upsertCustomer) await writer.upsertCustomer(result.customer);
+        if (writer?.createPayment) void writer.createPayment(result.payment).catch((e) => console.warn("[minarvabiz] payment remote write failed", e));
+        if (result.customer && writer?.upsertCustomer) void writer.upsertCustomer(result.customer).catch((e) => console.warn("[minarvabiz] customer remote update failed", e));
         if (result.customer) {
           const msg = templatePaymentReceived(result.customer, result.payment.amount);
           phase6Store.pushNotification({ kind: "system", title: msg.title, body: msg.body, href: "/payments" });
