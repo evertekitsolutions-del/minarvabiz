@@ -58,6 +58,48 @@ export interface CustomerIntelligenceData {
   }>;
 }
 
+export interface InventoryIntelligenceData {
+  totalProducts: number;
+  totalStockUnits: number;
+  totalStockValue: number;
+  reorderProducts: number;
+  outOfStockProducts: number;
+  deadStockProducts: number;
+  overstockedProducts: number;
+  estimatedReorderValue: number;
+  priorityItems: Array<{
+    productId: string;
+    name: string;
+    stock: number;
+    unit: string;
+    health: string;
+    recommendedOrderQty: number;
+    abcClass: string;
+    daysOfCover: number | null;
+  }>;
+}
+
+export interface StaffProductivityData {
+  totalActiveAssignments: number;
+  totalCompletedAssignments: number;
+  overloadedStaff: number;
+  averageCompletionRate: number;
+  averageOnTimeRate: number;
+  staff: Array<{
+    staffId: string;
+    staffName: string;
+    activeAssignments: number;
+    completedAssignments: number;
+    overdueAssignments: number;
+    dueSoonAssignments: number;
+    completionRate: number;
+    onTimeRate: number;
+    averageCompletionDays: number | null;
+    workloadScore: number;
+    capacityStatus: string;
+  }>;
+}
+
 export interface DashboardData {
   stats: {
     totalSales: { value: string; change: string; positive: boolean; spark: number[] };
@@ -80,6 +122,8 @@ export interface DashboardData {
   lowStock: LowStockItem[];
   productionControl?: ProductionControlData;
   customerIntelligence?: CustomerIntelligenceData;
+  inventoryIntelligence?: InventoryIntelligenceData;
+  staffProductivity?: StaffProductivityData;
 }
 
 export interface DashboardProps {
@@ -115,9 +159,16 @@ const segmentLabel: Record<string, string> = {
 const followUpLabel: Record<string, string> = {
   overdue_balance: "Payment due", win_back: "Win back", loyalty: "Loyalty", vip: "VIP", welcome: "Welcome",
 };
+const inventoryHealthLabel: Record<string, string> = {
+  out_of_stock: "Out of stock", critical: "Critical", reorder: "Reorder", healthy: "Healthy", overstocked: "Overstocked", dead_stock: "Dead stock",
+};
+
+function money(value: number): string {
+  return `₹${Math.round(value).toLocaleString("en-IN")}`;
+}
 
 export function Dashboard({ data, quickActions = [], onViewAllOrders, onViewAllStock, onInsightAction, className }: DashboardProps) {
-  const { stats, productionControl, customerIntelligence } = data;
+  const { stats, productionControl, customerIntelligence, inventoryIntelligence, staffProductivity } = data;
 
   return (
     <div className={cn("space-y-5", className)}>
@@ -140,27 +191,50 @@ export function Dashboard({ data, quickActions = [], onViewAllOrders, onViewAllS
       )}
 
       {customerIntelligence && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div><h2 className="text-sm font-semibold text-slate-900">Customer Intelligence</h2><p className="mt-1 text-xs text-slate-500">Customer value, loyalty and retention signals from recorded orders.</p></div>
-            <div className="text-xs font-medium text-slate-500">{customerIntelligence.totalCustomers} analysed</div>
-          </div>
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-900">Customer Intelligence</h2><p className="mt-1 text-xs text-slate-500">Value, loyalty and retention signals from recorded orders.</p></div><div className="text-xs font-medium text-slate-500">{customerIntelligence.totalCustomers} analysed</div></div>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-xl bg-blue-50 p-3"><div className="text-[11px] font-medium text-blue-600">Estimated annual value</div><div className="mt-1 text-xl font-bold text-blue-800">₹{Math.round(customerIntelligence.estimatedAnnualValue).toLocaleString("en-IN")}</div></div>
-            <div className="rounded-xl bg-emerald-50 p-3"><div className="text-[11px] font-medium text-emerald-600">Healthy-risk customers</div><div className="mt-1 text-xl font-bold text-emerald-700">{Math.max(0, customerIntelligence.totalCustomers - customerIntelligence.highRiskCount)}</div></div>
+            <div className="rounded-xl bg-blue-50 p-3"><div className="text-[11px] font-medium text-blue-600">Estimated annual value</div><div className="mt-1 text-xl font-bold text-blue-800">{money(customerIntelligence.estimatedAnnualValue)}</div></div>
+            <div className="rounded-xl bg-emerald-50 p-3"><div className="text-[11px] font-medium text-emerald-600">Healthy customers</div><div className="mt-1 text-xl font-bold text-emerald-700">{Math.max(0, customerIntelligence.totalCustomers - customerIntelligence.highRiskCount)}</div></div>
             <div className="rounded-xl bg-rose-50 p-3"><div className="text-[11px] font-medium text-rose-600">High churn risk</div><div className="mt-1 text-xl font-bold text-rose-700">{customerIntelligence.highRiskCount}</div></div>
             <div className="rounded-xl bg-violet-50 p-3"><div className="text-[11px] font-medium text-violet-600">Follow-up opportunities</div><div className="mt-1 text-xl font-bold text-violet-700">{customerIntelligence.followUpCount}</div></div>
           </div>
-          {customerIntelligence.topCustomers.length > 0 && (
-            <div className="mt-4 overflow-hidden rounded-xl border border-slate-200"><div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">Highest-value customer signals</div><div className="divide-y divide-slate-100">
-              {customerIntelligence.topCustomers.slice(0, 5).map((customer) => <div key={customer.customerId} className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs"><div className="min-w-0"><div className="font-semibold text-slate-900">{customer.customerName}</div><div className="mt-0.5 text-slate-500">₹{Math.round(customer.totalSpend).toLocaleString("en-IN")} spend · {segmentLabel[customer.segment] || customer.segment} · {customer.loyaltyScore}/100 loyalty</div></div><div className="flex shrink-0 items-center gap-2"><span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{customer.churnRisk} risk</span>{customer.followUp !== "none" && <span className="rounded-full bg-violet-50 px-2 py-1 font-semibold text-violet-700">{followUpLabel[customer.followUp] || customer.followUp}</span>}</div></div>)}
-            </div></div>
-          )}
-        </div>
+          {customerIntelligence.topCustomers.length > 0 && <div className="mt-4 overflow-hidden rounded-xl border border-slate-200"><div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">Highest-value customer signals</div><div className="divide-y divide-slate-100">{customerIntelligence.topCustomers.slice(0, 5).map((customer) => <div key={customer.customerId} className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs"><div className="min-w-0"><div className="font-semibold text-slate-900">{customer.customerName}</div><div className="mt-0.5 text-slate-500">{money(customer.totalSpend)} spend · {segmentLabel[customer.segment] || customer.segment} · {customer.loyaltyScore}/100 loyalty</div></div><div className="flex shrink-0 items-center gap-2"><span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{customer.churnRisk} risk</span>{customer.followUp !== "none" && <span className="rounded-full bg-violet-50 px-2 py-1 font-semibold text-violet-700">{followUpLabel[customer.followUp] || customer.followUp}</span>}</div></div>)}</div></div>}
+        </section>
+      )}
+
+      {inventoryIntelligence && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-900">Inventory Intelligence</h2><p className="mt-1 text-xs text-slate-500">Velocity, stock cover and reorder planning from the last 90 days.</p></div><div className="text-xs font-medium text-slate-500">{inventoryIntelligence.totalProducts} products</div></div>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+            <div className="rounded-xl bg-slate-50 p-3"><div className="text-[11px] font-medium text-slate-500">Stock units</div><div className="mt-1 text-xl font-bold text-slate-900">{Math.round(inventoryIntelligence.totalStockUnits * 100) / 100}</div></div>
+            <div className="rounded-xl bg-blue-50 p-3"><div className="text-[11px] font-medium text-blue-600">Stock value</div><div className="mt-1 text-xl font-bold text-blue-800">{money(inventoryIntelligence.totalStockValue)}</div></div>
+            <div className="rounded-xl bg-amber-50 p-3"><div className="text-[11px] font-medium text-amber-700">Reorder</div><div className="mt-1 text-xl font-bold text-amber-800">{inventoryIntelligence.reorderProducts}</div></div>
+            <div className="rounded-xl bg-rose-50 p-3"><div className="text-[11px] font-medium text-rose-600">Out of stock</div><div className="mt-1 text-xl font-bold text-rose-700">{inventoryIntelligence.outOfStockProducts}</div></div>
+            <div className="rounded-xl bg-violet-50 p-3"><div className="text-[11px] font-medium text-violet-600">Dead stock</div><div className="mt-1 text-xl font-bold text-violet-700">{inventoryIntelligence.deadStockProducts}</div></div>
+            <div className="rounded-xl bg-orange-50 p-3"><div className="text-[11px] font-medium text-orange-600">Overstocked</div><div className="mt-1 text-xl font-bold text-orange-700">{inventoryIntelligence.overstockedProducts}</div></div>
+            <div className="rounded-xl bg-emerald-50 p-3"><div className="text-[11px] font-medium text-emerald-600">Suggested order</div><div className="mt-1 text-xl font-bold text-emerald-700">{money(inventoryIntelligence.estimatedReorderValue)}</div></div>
+          </div>
+          {inventoryIntelligence.priorityItems.length > 0 && <div className="mt-4 overflow-hidden rounded-xl border border-slate-200"><div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">Priority inventory actions</div><div className="divide-y divide-slate-100">{inventoryIntelligence.priorityItems.map((item) => <div key={item.productId} className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs"><div className="min-w-0"><div className="font-semibold text-slate-900">{item.name} <span className="font-normal text-slate-400">ABC {item.abcClass}</span></div><div className="mt-0.5 text-slate-500">{item.stock} {item.unit} · {item.daysOfCover == null ? "No sales in window" : `${Math.round(item.daysOfCover)} days cover`} · order +{item.recommendedOrderQty}</div></div><span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{inventoryHealthLabel[item.health] || item.health}</span></div>)}</div></div>}
+        </section>
+      )}
+
+      {staffProductivity && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-900">Staff Productivity & Capacity</h2><p className="mt-1 text-xs text-slate-500">Workload, completion velocity and on-time delivery signals from assignments.</p></div><div className="text-xs font-medium text-slate-500">{staffProductivity.staff.length} active staff</div></div>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <div className="rounded-xl bg-slate-50 p-3"><div className="text-[11px] font-medium text-slate-500">Active jobs</div><div className="mt-1 text-xl font-bold text-slate-900">{staffProductivity.totalActiveAssignments}</div></div>
+            <div className="rounded-xl bg-emerald-50 p-3"><div className="text-[11px] font-medium text-emerald-600">Completed</div><div className="mt-1 text-xl font-bold text-emerald-700">{staffProductivity.totalCompletedAssignments}</div></div>
+            <div className="rounded-xl bg-orange-50 p-3"><div className="text-[11px] font-medium text-orange-600">Avg completion</div><div className="mt-1 text-xl font-bold text-orange-700">{Math.round(staffProductivity.averageCompletionRate)}%</div></div>
+            <div className="rounded-xl bg-blue-50 p-3"><div className="text-[11px] font-medium text-blue-600">Avg on-time</div><div className="mt-1 text-xl font-bold text-blue-700">{Math.round(staffProductivity.averageOnTimeRate)}%</div></div>
+            <div className="rounded-xl bg-rose-50 p-3"><div className="text-[11px] font-medium text-rose-600">Overloaded staff</div><div className="mt-1 text-xl font-bold text-rose-700">{staffProductivity.overloadedStaff}</div></div>
+          </div>
+          {staffProductivity.staff.length > 0 && <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200"><div className="min-w-[760px]"><div className="grid grid-cols-[1.5fr_repeat(5,minmax(80px,1fr))] gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-600"><div>Staff</div><div>Active</div><div>Done</div><div>On-time</div><div>Load</div><div>Status</div></div><div className="divide-y divide-slate-100">{staffProductivity.staff.map((member) => <div key={member.staffId} className="grid grid-cols-[1.5fr_repeat(5,minmax(80px,1fr))] gap-2 px-3 py-2.5 text-xs"><div className="font-semibold text-slate-900">{member.staffName}<div className="font-normal text-slate-500">{member.overdueAssignments ? `${member.overdueAssignments} overdue` : member.dueSoonAssignments ? `${member.dueSoonAssignments} due soon` : "On track"}</div></div><div>{member.activeAssignments}</div><div>{member.completedAssignments}</div><div>{Math.round(member.onTimeRate)}%</div><div>{Math.round(member.workloadScore)}</div><div><span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{member.capacityStatus}</span></div></div>)}</div></div></div>}
+        </section>
       )}
 
       {productionControl && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-slate-900">Production Control Center</h2><p className="mt-1 text-xs text-slate-500">Live workload, delivery risk and tailor capacity from current service orders.</p></div><div className="text-xs font-medium text-slate-500">{productionControl.totalActive} active orders</div></div>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
             <div className="rounded-xl bg-slate-50 p-3"><div className="text-[11px] font-medium text-slate-500">In production</div><div className="mt-1 text-xl font-bold text-slate-900">{productionControl.inProduction}</div></div>
@@ -173,7 +247,7 @@ export function Dashboard({ data, quickActions = [], onViewAllOrders, onViewAllS
             <div className="rounded-xl bg-slate-100 p-3"><div className="text-[11px] font-medium text-slate-500">Tailor loads</div><div className="mt-1 text-xl font-bold text-slate-900">{productionControl.staffLoad.length}</div></div>
           </div>
           {productionControl.risks.length > 0 && <div className="mt-4 overflow-hidden rounded-xl border border-slate-200"><div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">Priority queue</div><div className="divide-y divide-slate-100">{productionControl.risks.slice(0, 5).map((risk) => { const label = risk.risk === "overdue" ? "Overdue" : risk.risk === "due_today" ? "Due today" : risk.risk === "due_soon" ? "Due soon" : "Unassigned"; const detail = risk.assignedStaffName ? `Assigned to ${risk.assignedStaffName}` : "No staff assigned"; return <div key={`${risk.orderId}-${risk.risk}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs"><div className="min-w-0"><div className="font-semibold text-slate-900">{risk.orderNumber} · {risk.customerName}</div><div className="mt-0.5 text-slate-500">{risk.status} · {detail}</div></div><span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">{label}</span></div>; })}</div></div>}
-        </div>
+        </section>
       )}
 
       <BusinessInsights data={data} onAction={onInsightAction} />
