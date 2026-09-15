@@ -1,6 +1,6 @@
 import { assertPermission } from "./permissions";
 import { enqueueOutbox } from "./outbox-bridge";
-import { remoteCreateExpense, remoteCreateSupplier, remoteCreateLaundry } from "./remote-write";
+import { remoteCreateExpense, remoteCreateSupplier, remoteCreateLaundry, remoteCreatePurchase } from "./remote-write";
 /**
  * Phase 5 store: suppliers, laundry, expenses, purchases.
  * Order-specific purchases/expenses link into ordersStore profit.
@@ -277,7 +277,7 @@ export function createPurchase(input: {
   }
   purchases.push(purchase);
   touchPersistence();
-  enqueueOutbox("purchases", purchase.id, "insert", purchase);
+  void remoteCreatePurchase(purchase);
   return { purchase, errors: [] };
 }
 
