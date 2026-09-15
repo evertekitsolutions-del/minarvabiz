@@ -4,7 +4,7 @@ import * as React from "react";
 import {
   ExpenseList, PurchaseList, Modal, Button, FormField, inputClass, selectClass,
 } from "@minarvabiz/ui";
-import { phase5Store, ordersStore, getRemoteWriter } from "@minarvabiz/business-logic";
+import { phase5Store, ordersStore } from "@minarvabiz/business-logic";
 import type { Expense, Purchase, ExpenseCategory, ServiceOrder, PaymentMethod } from "@minarvabiz/types";
 
 export default function ExpensesPage() {
@@ -29,7 +29,7 @@ export default function ExpensesPage() {
 
   React.useEffect(() => { refresh(); }, [refresh]);
 
-  async function saveExpense() {
+  function saveExpense() {
     const result = phase5Store.createExpense({
       categoryId: expForm.categoryId,
       amount: parseFloat(expForm.amount) || 0,
@@ -38,10 +38,6 @@ export default function ExpensesPage() {
       orderId: expForm.orderId || null,
     });
     if (result.errors.length) { setError(result.errors.join("; ")); return; }
-    if (result.expense) {
-      try { await getRemoteWriter()?.createExpense?.(result.expense); }
-      catch (e) { setError(e instanceof Error ? e.message : "Remote expense save failed"); return; }
-    }
     setExpOpen(false); setError(null); refresh();
   }
 
