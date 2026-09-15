@@ -1,6 +1,5 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { App } from "./App";
 import "./index.css";
 
 const allowedThemes = new Set(["light", "midnight", "ocean", "emerald", "violet"]);
@@ -16,6 +15,23 @@ function applySavedTheme() {
   }
 }
 
+function showBootstrapError(error: unknown) {
+  console.error("[minarvabiz] renderer-bootstrap-fatal", error);
+  const message = error instanceof Error ? (error.stack || error.message) : String(error);
+  document.documentElement.dataset.minarvaRendererError = "true";
+  document.documentElement.dataset.minarvaRendererReady = "false";
+  const status = document.getElementById("boot-status");
+  if (status) status.textContent = "Minarva Biz could not start the desktop interface.";
+  const root = document.getElementById("root");
+  if (!root) return;
+  const existing = document.getElementById("boot-error");
+  const errorBox = existing || document.createElement("pre");
+  errorBox.id = "boot-error";
+  errorBox.className = "minarva-boot-error";
+  errorBox.textContent = message;
+  if (!existing) root.appendChild(errorBox);
+}
+
 class RendererErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: Error | null }
@@ -29,6 +45,7 @@ class RendererErrorBoundary extends React.Component<
   componentDidCatch(error: Error) {
     console.error("[minarvabiz] renderer-fatal", error);
     document.documentElement.dataset.minarvaRendererError = "true";
+    document.documentElement.dataset.minarvaRendererReady = "false";
   }
 
   render() {
@@ -49,20 +66,26 @@ class RendererErrorBoundary extends React.Component<
 }
 
 function RendererReadyMarker({ children }: { children: React.ReactNode }) {
-  // Mark readiness during render, before application startup effects (including SQLite)
-  // can block the renderer event loop. The CI runtime can therefore distinguish a
-  // real React mount from a merely loaded HTML document.
+  // Set readiness during render, after App has successfully evaluated. This lets
+  // the Electron runtime distinguish a real application mount from loaded HTML.
   document.documentElement.dataset.minarvaRendererReady = "true";
   document.documentElement.dataset.minarvaRendererError = "false";
   return <>{children}</>;
 }
 
-function boot() {
+async function boot() {
   applySavedTheme();
   const rootElement = document.getElementById("root");
   if (!rootElement) throw new Error("Minarva Biz renderer root element is missing.");
 
-  ReactDOM.createRoot(rootElement).render(
+  const root = ReactDOM.createRoot(rootElement);
+
+  // App is intentionally loaded after the root exists. A failure while evaluating
+  // App.tsx or any of its dependencies must become a visible startup error rather
+  // than escaping as a static-import failure before the renderer's error handling.
+  const { App } = await import("./App");
+
+  root.render(
     <React.StrictMode>
       <RendererErrorBoundary>
         <RendererReadyMarker>
@@ -73,21 +96,4 @@ function boot() {
   );
 }
 
-try {
-  boot();
-} catch (error) {
-  console.error("[minarvabiz] renderer-bootstrap-fatal", error);
-  const message = error instanceof Error ? (error.stack || error.message) : String(error);
-  document.documentElement.dataset.minarvaRendererError = "true";
-  const status = document.getElementById("boot-status");
-  if (status) status.textContent = "Minarva Biz could not start the desktop interface.";
-  const root = document.getElementById("root");
-  if (root) {
-    const existing = document.getElementById("boot-error");
-    const errorBox = existing || document.createElement("pre");
-    errorBox.id = "boot-error";
-    errorBox.className = "minarva-boot-error";
-    errorBox.textContent = message;
-    if (!existing) root.appendChild(errorBox);
-  }
-}
+void boot().catch(showBootstrapError);
