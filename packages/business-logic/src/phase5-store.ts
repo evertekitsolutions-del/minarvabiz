@@ -1,5 +1,6 @@
 import { assertPermission } from "./permissions";
 import { enqueueOutbox } from "./outbox-bridge";
+import { remoteCreateExpense, remoteCreateSupplier, remoteCreateLaundry } from "./remote-write";
 /**
  * Phase 5 store: suppliers, laundry, expenses, purchases.
  * Order-specific purchases/expenses link into ordersStore profit.
@@ -93,7 +94,7 @@ export function createSupplier(input: {
   };
   suppliers.push(s);
   touchPersistence();
-  enqueueOutbox("suppliers", s.id, "insert", s);
+  void remoteCreateSupplier(s);
   return s;
 }
 
@@ -133,60 +134,33 @@ export function createLaundryOrder(input: {
   if (!input.customerId) errors.push("Customer is required");
   if (input.quantity <= 0) errors.push("Quantity must be positive");
   if (input.customerRate < 0) errors.push("Customer rate cannot be negative");
-  if (input.mode === "outsourced" && !input.supplierId) {
-    errors.push("Supplier is required for outsourced laundry");
-  }
+  if (input.mode === "outsourced" && !input.supplierId) errors.push("Supplier is required for outsourced laundry");
   if (errors.length) return { order: null, errors };
 
   const customer = mainStore.getCustomer(input.customerId);
   if (!customer) return { order: null, errors: ["Customer not found"] };
-
   const supplierRate = input.mode === "in_house_ironing" ? 0 : input.supplierRate;
-  const calc = calculateLaundryProfit({
-    customerRate: input.customerRate,
-    supplierRate,
-    quantity: input.quantity,
-  });
-
+  const calc = calculateLaundryProfit({ customerRate: input.customerRate, supplierRate, quantity: input.quantity });
   const supplier = input.supplierId ? getSupplier(input.supplierId) : undefined;
   const paid = Math.min(input.paidAmount ?? 0, calc.totalCustomerCharge);
   const balance = Math.max(0, calc.totalCustomerCharge - paid);
-
   const orderNumber = nextDocNumber(lastLaundryNo, "LDY");
   lastLaundryNo = orderNumber;
 
   const order: LaundryOrder = {
-    id: generateId(),
-    orderNumber,
-    customerId: input.customerId,
-    customerName: customer.name,
-    garment: input.garment ?? null,
-    quantity: input.quantity,
-    mode: input.mode,
-    supplierId: input.supplierId ?? null,
-    supplierName: supplier?.name ?? null,
-    supplierRate,
-    customerRate: input.customerRate,
-    profit: calc.totalProfit,
-    totalCustomerCharge: calc.totalCustomerCharge,
-    totalSupplierCost: calc.totalSupplierCost,
+    id: generateId(), orderNumber, customerId: input.customerId, customerName: customer.name,
+    garment: input.garment ?? null, quantity: input.quantity, mode: input.mode,
+    supplierId: input.supplierId ?? null, supplierName: supplier?.name ?? null,
+    supplierRate, customerRate: input.customerRate, profit: calc.totalProfit,
+    totalCustomerCharge: calc.totalCustomerCharge, totalSupplierCost: calc.totalSupplierCost,
     status: input.mode === "in_house_ironing" ? "delivered" : "pending",
-    notes: input.notes ?? null,
-    paidAmount: paid,
-    balanceAmount: balance,
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
-    version: 1,
+    notes: input.notes ?? null, paidAmount: paid, balanceAmount: balance,
+    createdAt: nowISO(), updatedAt: nowISO(), version: 1,
   };
 
-  if (balance > 0) {
-    customer.outstandingBalance = r2(customer.outstandingBalance + balance);
-  }
-  if (paid > 0) {
-    customer.totalSpending = r2(customer.totalSpending + paid);
-  }
+  if (balance > 0) customer.outstandingBalance = r2(customer.outstandingBalance + balance);
+  if (paid > 0) customer.totalSpending = r2(customer.totalSpending + paid);
   customer.updatedAt = nowISO();
-
   if (supplier && calc.totalSupplierCost > 0) {
     supplier.outstandingBalance = r2(supplier.outstandingBalance + calc.totalSupplierCost);
     supplier.updatedAt = nowISO();
@@ -194,14 +168,11 @@ export function createLaundryOrder(input: {
 
   laundryOrders.push(order);
   touchPersistence();
-  enqueueOutbox("laundry_orders", order.id, "insert", order);
+  void remoteCreateLaundry(order);
   return { order, errors: [] };
 }
 
-export function updateLaundryStatus(
-  id: UUID,
-  status: LaundryOrder["status"]
-): LaundryOrder | null {
+export function updateLaundryStatus(id: UUID, status: LaundryOrder["status"]): LaundryOrder | null {
   assertPermission("orders.manage");
   const o = laundryOrders.find((x) => x.id === id && !x.deletedAt);
   if (!o) return null;
@@ -214,18 +185,11 @@ export function updateLaundryStatus(
 }
 
 // ---- Expense categories & expenses ----
-export function listExpenseCategories(): ExpenseCategory[] {
-  return [...expenseCategories];
-}
+export function listExpenseCategories(): ExpenseCategory[] { return [...expenseCategories]; }
 
 export function createExpenseCategory(name: string): ExpenseCategory {
   assertPermission("expenses.manage");
-  const c: ExpenseCategory = {
-    id: generateId(),
-    name,
-    isSystem: false,
-    createdAt: nowISO(),
-  };
+  const c: ExpenseCategory = { id: generateId(), name, isSystem: false, createdAt: nowISO() };
   expenseCategories.push(c);
   touchPersistence();
   enqueueOutbox("expense_categories", c.id, "insert", c);
@@ -239,13 +203,8 @@ export function listExpenses(opts?: { orderId?: UUID }): Expense[] {
 }
 
 export function createExpense(input: {
-  date?: string;
-  categoryId: UUID;
-  amount: number;
-  paymentMethod: PaymentMethod;
-  description?: string | null;
-  reference?: string | null;
-  orderId?: UUID | null;
+  date?: string; categoryId: UUID; amount: number; paymentMethod: PaymentMethod;
+  description?: string | null; reference?: string | null; orderId?: UUID | null;
 }): { expense: Expense | null; errors: string[] } {
   assertPermission("expenses.manage");
   const errors: string[] = [];
@@ -263,23 +222,14 @@ export function createExpense(input: {
   }
 
   const expense: Expense = {
-    id: generateId(),
-    date: input.date || nowISO(),
-    categoryId: input.categoryId,
-    categoryName: cat!.name,
-    amount: r2(input.amount),
-    paymentMethod: input.paymentMethod,
-    description: input.description ?? null,
-    reference: input.reference ?? null,
-    orderId: input.orderId ?? null,
-    orderNumber,
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
-    version: 1,
+    id: generateId(), date: input.date || nowISO(), categoryId: input.categoryId, categoryName: cat!.name,
+    amount: r2(input.amount), paymentMethod: input.paymentMethod, description: input.description ?? null,
+    reference: input.reference ?? null, orderId: input.orderId ?? null, orderNumber,
+    createdAt: nowISO(), updatedAt: nowISO(), version: 1,
   };
   expenses.push(expense);
   touchPersistence();
-  enqueueOutbox("expenses", expense.id, "insert", expense);
+  void remoteCreateExpense(expense);
   return { expense, errors: [] };
 }
 
@@ -291,29 +241,20 @@ export function listPurchases(opts?: { kind?: "general" | "order_specific" }): P
 }
 
 export function createPurchase(input: {
-  date?: string;
-  supplierId?: UUID | null;
-  description: string;
-  amount: number;
-  paymentMethod: PaymentMethod;
-  paidAmount?: number;
-  kind: "general" | "order_specific";
-  orderId?: UUID | null;
-  notes?: string | null;
+  date?: string; supplierId?: UUID | null; description: string; amount: number;
+  paymentMethod: PaymentMethod; paidAmount?: number; kind: "general" | "order_specific";
+  orderId?: UUID | null; notes?: string | null;
 }): { purchase: Purchase | null; errors: string[] } {
   assertPermission("purchases.manage");
   const errors: string[] = [];
   if (!input.description.trim()) errors.push("Description required");
   if (input.amount <= 0) errors.push("Amount must be positive");
-  if (input.kind === "order_specific" && !input.orderId) {
-    errors.push("Order is required for order-specific purchase");
-  }
+  if (input.kind === "order_specific" && !input.orderId) errors.push("Order is required for order-specific purchase");
   if (errors.length) return { purchase: null, errors };
 
   const bal = purchaseBalance(input.amount, input.paidAmount ?? 0);
   const supplier = input.supplierId ? getSupplier(input.supplierId) : undefined;
   let orderNumber: string | null = null;
-
   if (input.orderId) {
     const order = ordersStore.getOrder(input.orderId);
     if (!order) return { purchase: null, errors: ["Order not found"] };
@@ -323,67 +264,32 @@ export function createPurchase(input: {
 
   const purchaseNumber = nextDocNumber(lastPurchaseNo, "PUR");
   lastPurchaseNo = purchaseNumber;
-
   const purchase: Purchase = {
-    id: generateId(),
-    purchaseNumber,
-    date: input.date || nowISO(),
-    supplierId: input.supplierId ?? null,
-    supplierName: supplier?.name ?? null,
-    description: input.description,
-    amount: bal.amount,
-    paymentMethod: input.paymentMethod,
-    paidAmount: bal.paidAmount,
-    balanceAmount: bal.balanceAmount,
-    kind: input.kind,
-    orderId: input.orderId ?? null,
-    orderNumber,
-    notes: input.notes ?? null,
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
-    version: 1,
+    id: generateId(), purchaseNumber, date: input.date || nowISO(), supplierId: input.supplierId ?? null,
+    supplierName: supplier?.name ?? null, description: input.description, amount: bal.amount,
+    paymentMethod: input.paymentMethod, paidAmount: bal.paidAmount, balanceAmount: bal.balanceAmount,
+    kind: input.kind, orderId: input.orderId ?? null, orderNumber, notes: input.notes ?? null,
+    createdAt: nowISO(), updatedAt: nowISO(), version: 1,
   };
-
   if (supplier && bal.balanceAmount > 0) {
     supplier.outstandingBalance = r2(supplier.outstandingBalance + bal.balanceAmount);
     supplier.updatedAt = nowISO();
   }
-
   purchases.push(purchase);
   touchPersistence();
   enqueueOutbox("purchases", purchase.id, "insert", purchase);
   return { purchase, errors: [] };
 }
 
-function r2(n: number) {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
+function r2(n: number) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 
 export function hydratePhase5(data: {
-  suppliers?: Supplier[];
-  laundryOrders?: LaundryOrder[];
-  expenses?: Expense[];
-  purchases?: Purchase[];
-  expenseCategories?: ExpenseCategory[];
+  suppliers?: Supplier[]; laundryOrders?: LaundryOrder[]; expenses?: Expense[];
+  purchases?: Purchase[]; expenseCategories?: ExpenseCategory[];
 }) {
-  if (data.suppliers) {
-    suppliers.length = 0;
-    suppliers.push(...data.suppliers);
-  }
-  if (data.laundryOrders) {
-    laundryOrders.length = 0;
-    laundryOrders.push(...data.laundryOrders);
-  }
-  if (data.expenses) {
-    expenses.length = 0;
-    expenses.push(...data.expenses);
-  }
-  if (data.purchases) {
-    purchases.length = 0;
-    purchases.push(...data.purchases);
-  }
-  if (data.expenseCategories) {
-    expenseCategories.length = 0;
-    expenseCategories.push(...data.expenseCategories);
-  }
+  if (data.suppliers) { suppliers.length = 0; suppliers.push(...data.suppliers); }
+  if (data.laundryOrders) { laundryOrders.length = 0; laundryOrders.push(...data.laundryOrders); }
+  if (data.expenses) { expenses.length = 0; expenses.push(...data.expenses); }
+  if (data.purchases) { purchases.length = 0; purchases.push(...data.purchases); }
+  if (data.expenseCategories) { expenseCategories.length = 0; expenseCategories.push(...data.expenseCategories); }
 }
