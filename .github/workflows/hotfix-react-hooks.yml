@@ -18,13 +18,26 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
+          import re
           p = Path('apps/desktop/src/App.tsx')
           s = p.read_text()
-          old = '''  const handleInsightAction = React.useCallback((action: string) => {\n    const targets: Record<string, NavItemId> = {\n      "Review low stock": "sales",\n      "Open outstanding payments": "reports",\n      "Review pending orders": "services",\n      "Open ready orders": "services",\n      "Open reports": "reports",\n      "Review expenses": "expenses",\n    };\n    const target = targets[action];\n    if (target) navTo(target);\n  }, []);'''
-          new = '''  const handleInsightAction = (action: string) => {\n    const targets: Record<string, NavItemId> = {\n      "Review low stock": "sales",\n      "Open outstanding payments": "reports",\n      "Review pending orders": "services",\n      "Open ready orders": "services",\n      "Open reports": "reports",\n      "Review expenses": "expenses",\n    };\n    const target = targets[action];\n    if (target) navTo(target);\n  };'''
-          if old not in s:
+          pattern = r'(?m)^\s*const handleInsightAction = React\.useCallback\(\(action: string\) => \{.*?^\s*\}, \[\]\);\s*$'
+          replacement = '''  const handleInsightAction = (action: string) => {
+    const targets: Record<string, NavItemId> = {
+      "Review low stock": "sales",
+      "Open outstanding payments": "reports",
+      "Review pending orders": "services",
+      "Open ready orders": "services",
+      "Open reports": "reports",
+      "Review expenses": "expenses",
+    };
+    const target = targets[action];
+    if (target) navTo(target);
+  };'''
+          s2, count = re.subn(pattern, replacement, s, count=1, flags=re.S)
+          if count != 1:
               raise SystemExit('Expected conditional useCallback was not found; refusing to modify source.')
-          p.write_text(s.replace(old, new, 1))
+          p.write_text(s2)
           PY
           git diff --check
       - name: Commit source fix and remove one-time workflow
