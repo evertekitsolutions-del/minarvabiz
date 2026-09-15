@@ -42,7 +42,7 @@ Dashboard, Customers, Products/Inventory, POS/Sales, Service Orders, Measurement
 - Explainable Next-Best-Action engine as a safe deterministic layer beneath future AI assistant features
 
 ## Current UI integration
-Desktop dashboard data calculates and returns Customer Intelligence, Inventory Intelligence and Staff Productivity signals. Dashboard UI surfaces production, customer, inventory and staff intelligence while preserving existing KPI, charts, order, stock and business-insight areas. Business Insights consumes the Next-Best-Action engine to show explainable operational priorities. Web dashboard data now also calculates and returns production-control and staff-productivity signals.
+Desktop dashboard data calculates and returns Customer Intelligence, Inventory Intelligence and Staff Productivity signals. Dashboard UI surfaces production, customer, inventory and staff intelligence while preserving existing KPI, charts, order, stock and business-insight areas. Business Insights consumes the Next-Best-Action engine to show explainable operational priorities. Web dashboard data also calculates and returns production-control and staff-productivity signals.
 
 ## Production persistence hardening completed
 - `25a2653ae95bdbe54fd40addeb5be1e33610a2df8` — persist Phase 6 staff, assignments, incentives and notification mutations through the existing autosave/SQLite path; incentive payouts are also enqueued for sync.
@@ -51,23 +51,28 @@ Desktop dashboard data calculates and returns Customer Intelligence, Inventory I
 - Duplicate experimental `advanced-ops-store.ts` was intentionally removed after repository inspection showed the existing `phase10-operations-store.ts` already provides persisted production-workflow and material-roll/consumption state.
 
 ## Web/Vercel hardening completed
-- `b633e983dde3f8d455d4a703d34fe84ab433a134` — root `vercel.json` now explicitly targets the Next.js web build and `apps/web/.next` output.
-- `8b00b63bfb6e532b66e3861330630b41a0a4d633` — added `apps/web/vercel.json` so the same repository also deploys correctly when the Vercel project uses `apps/web` as its Root Directory.
-- `1899b08ff5c1249885a54cddb10dffa4ad13a447` — wired web customer/product create/update mutations to the Supabase repository writer, preserving the repository's create contract for new customers.
+- `b633e983dde3f8d455d4a703d34fe84ab433a134` — root `vercel.json` explicitly targets the Next.js web build and `apps/web/.next` output.
+- `8b00b63bfb6e532b66e3861330630b41a0a4d633` — added `apps/web/vercel.json` for deployments using `apps/web` as Root Directory.
+- `1899b08ff5c1249885a54cddb10dffa4ad13a447` — wired web customer/product create/update mutations to the Supabase repository writer.
 - `138f8829a22a1904e604dd31b3a6b528a9fe68c6` / `bf7b29877d9e08814cf3a1c2e77adc2f194d31ca` / `4ea0b13702097532607f3753fe7428b97b1ad9ac` — added remote writer contracts and Supabase mappings for payments, expenses, suppliers and laundry.
 - `85b0da5bdbe11b7850986754360615705388a0b7` — Phase 5 expense/supplier/laundry creation now calls the registered remote writer while preserving local persistence/outbox behavior.
-- `0e8241a1f3bfab4ad0f1e65c01763a18c4072e3c` — Web customer-payment collection explicitly persists the resulting payment and updated customer remotely.
-- `15f7ea1b925b7d716ef8b60174f1c1fa08f04cb0` — Web expense creation explicitly persists the created expense remotely.
+- `0e8241a1f3bfab4ad0f1e65c01763a18c4072e3c` — web customer-payment collection explicitly persists the resulting payment and updated customer remotely.
+- `15f7ea1b925b7d716ef8b60174f1c1fa08f04cb0` — web expense creation explicitly persists the created expense remotely.
 
 ## Current verification status
-- Current main HEAD: `15f7ea1b925b7d716ef8b60174f1c1fa08f04cb0`.
-- The GitHub Actions run previously associated with the earlier UI commit was still pending at the last checkpoint; the latest commits need a fresh CI verification.
-- A direct GitHub combined-status check on the earlier checkpoint HEAD exposed a `Vercel` failure context tied to the desktop Vercel project; the connected Vercel account currently exposes no team, so deployment logs could not be inspected from the connected Vercel tool.
-- Existing historical CI evidence remains: Run #398 for `d46f98f9be1bd5348eba4ab312a41e5d33516590` fully succeeded, including Windows package creation, installed-runtime smoke and bridge/SQLite diagnostics.
-- No fresh Windows `.exe` release claim is made from this session.
+- Current main HEAD: `06325f88816dad718d6adcf5b9f07f7e79437b5c`.
+- CI run #440 / run ID `34992314748` completed successfully on this exact HEAD.
+- `desktop`: success — legacy persistence guard, quality smoke, database typecheck/persistence tests, business-logic typecheck, operations completion contract tests, UI/desktop typechecks, renderer build/CSS inspection and Electron build all passed.
+- `web`: success — TypeScript check and production build passed.
+- `license-admin`: success — typecheck, production security configuration verification and production build passed.
+- `windows-package`: success — Windows installer built, installer existence verified, installed-runtime smoke passed, runtime diagnostics captured, and installer artifact uploaded.
+- Windows installer artifact: `minarvabiz-windows-installer`, SHA-256 `1fb0a0654688b6748482167c359f752bca4e7bed0c260ea6bff91712affa201a`.
+- Automated UAT gates now covered by CI: Windows install/launch, process-alive runtime check, SQLite database creation/valid header, preload bridge readiness, plus desktop persistence/backup/operations contract coverage.
+- Physical human UAT is intentionally not represented as complete by CI: customer-machine acceptance still requires actual operator validation of visual workflows, restart persistence, offline licensing/activation, backup/restore, printing and representative sales/service/production scenarios.
+- Connected Vercel account exposes no team context, so deployment dashboard/log verification is not independently available from the connected Vercel integration.
 
 ## Release/runtime gate
-A fresh Windows `.exe` may only be called release-ready after a current-HEAD CI run passes desktop/web/license-admin plus Windows packaging, installed-runtime smoke and bridge/SQLite diagnostics. Physical acceptance still includes install/launch, restart persistence, visual integrity, offline licensing and backup/restore.
+The current Windows installer CI gate is complete. Build/test/runtime automation is green on the current `main` HEAD. Release confidence still distinguishes automated CI from physical customer-machine UAT; the latter cannot be honestly marked complete without exercising the installed product on a real operator machine.
 
 ## Important constraints
 - Do not remove existing features/modules to make room for new ones.
@@ -77,7 +82,7 @@ A fresh Windows `.exe` may only be called release-ready after a current-HEAD CI 
 - Do not claim the full No.1/world-class roadmap is complete merely because an engine exists; complete UI, persistence, permissions, offline behavior, web behavior and tests before marking a capability complete.
 
 ## Last completed step
-Web online financial/laundry persistence was hardened: remote writer support was added for payments, expenses, suppliers and laundry; Phase 5 creation paths call the remote writer; payment collection and expense creation in the Web UI explicitly persist their resulting records remotely. Changes were committed through `15f7ea1b925b7d716ef8b60174f1c1fa08f04cb0`.
+Final Windows installer CI verification completed successfully on current `main`: packaging, installer installation, installed-runtime smoke, SQLite validation, preload bridge validation and artifact upload all passed. Automated UAT gates are green through CI.
 
 ## Single next step
-Run current-HEAD CI verification; if any job fails, fix that blocker first. If CI is green, complete Supabase online persistence for purchases and the remaining Phase 10 production/material user-facing workflows, then add focused contract tests for each new remote mutation path.
+Perform physical operator UAT on the produced Windows installer against the acceptance checklist; report only real-world findings, if any, and fix regressions on `main` before release.
