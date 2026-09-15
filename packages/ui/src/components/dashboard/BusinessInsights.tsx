@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import type { DashboardData } from "./Dashboard";
+import { generateNextBestActions } from "@minarvabiz/business-logic";
 
 export interface BusinessInsight {
   title: string;
@@ -12,11 +13,40 @@ export interface BusinessInsight {
 }
 
 function buildInsights(data: DashboardData): BusinessInsight[] {
-  const { stats } = data;
+  const { stats, productionControl, customerIntelligence, inventoryIntelligence, staffProductivity } = data;
   const insights: BusinessInsight[] = [];
   const toNumber = (value?: string) => Number((value ?? "").replace(/[^0-9.-]/g, "")) || 0;
 
-  if (stats.lowStockCount && toNumber(stats.lowStockCount.value) > 0) {
+  const nextBestActions = generateNextBestActions({
+    overdueOrders: productionControl?.overdue,
+    unassignedOrders: productionControl?.unassigned,
+    dueTodayOrders: productionControl?.dueToday,
+    outOfStockProducts: inventoryIntelligence?.outOfStockProducts,
+    reorderProducts: inventoryIntelligence?.reorderProducts,
+    deadStockProducts: inventoryIntelligence?.deadStockProducts,
+    highRiskCustomers: customerIntelligence?.highRiskCount,
+    followUpCustomers: customerIntelligence?.followUpCount,
+    outstandingAmount: toNumber(stats.outstandingPayments?.value),
+    overdueAssignments: productionControl?.staffLoad.reduce((sum, staff) => sum + staff.overdueAssignments, 0),
+    overloadedStaff: staffProductivity?.overloadedStaff,
+  });
+
+  const toneForPriority = (priority: string): BusinessInsight["tone"] => {
+    if (priority === "urgent") return "critical";
+    if (priority === "high") return "warning";
+    return "info";
+  };
+
+  for (const action of nextBestActions.slice(0, 4)) {
+    insights.push({
+      title: action.title,
+      detail: action.reason,
+      action: action.title,
+      tone: toneForPriority(action.priority),
+    });
+  }
+
+  if (stats.lowStockCount && toNumber(stats.lowStockCount.value) > 0 && !inventoryIntelligence) {
     const count = toNumber(stats.lowStockCount.value);
     insights.push({
       title: "Inventory needs attention",
@@ -26,7 +56,7 @@ function buildInsights(data: DashboardData): BusinessInsight[] {
     });
   }
 
-  if (stats.outstandingPayments && toNumber(stats.outstandingPayments.value) > 0) {
+  if (stats.outstandingPayments && toNumber(stats.outstandingPayments.value) > 0 && !nextBestActions.some((item) => item.kind === "payments")) {
     insights.push({
       title: "Collections opportunity",
       detail: `${stats.outstandingPayments.value} is currently outstanding from customers.`,
@@ -35,7 +65,7 @@ function buildInsights(data: DashboardData): BusinessInsight[] {
     });
   }
 
-  if (stats.pendingOrders && toNumber(stats.pendingOrders.value) > 0) {
+  if (stats.pendingOrders && toNumber(stats.pendingOrders.value) > 0 && !productionControl) {
     const pending = toNumber(stats.pendingOrders.value);
     insights.push({
       title: "Order workload",
@@ -79,7 +109,9 @@ function buildInsights(data: DashboardData): BusinessInsight[] {
     });
   }
 
-  return insights.slice(0, 5);
+  const unique = new Map<string, BusinessInsight>();
+  for (const insight of insights) unique.set(`${insight.title}-${insight.detail}`, insight);
+  return [...unique.values()].slice(0, 5);
 }
 
 const toneClass: Record<BusinessInsight["tone"], string> = {
@@ -112,6 +144,7 @@ export function BusinessInsights({
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900 text-white">✦</span>
           Minarva Business Intelligence
         </CardTitle>
+        <p className="text-xs text-slate-500">Explainable priorities generated from recorded business data. Financial arithmetic remains deterministic.</p>
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {insights.map((item) => (
