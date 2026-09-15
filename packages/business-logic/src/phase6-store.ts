@@ -119,7 +119,10 @@ export function unreadNotificationCount(): number { return notifications.filter(
 
 export type NotificationChannel = "in_app" | "sms" | "whatsapp" | "email";
 export interface NotificationPayload { channel: NotificationChannel; to: string; template: string; data: Record<string, string>; }
-export async function sendNotification(_payload: NotificationPayload): Promise<{ ok: boolean; provider?: string; error?: string }> { return { ok: true, provider: "noop" }; }
+export async function sendNotification(payload: NotificationPayload): Promise<{ ok: boolean; provider?: string; error?: string }> {
+  if (payload.channel === "in_app") return { ok: true, provider: "in_app" };
+  return { ok: false, provider: "unconfigured", error: `No ${payload.channel} provider is configured.` };
+}
 
 export function getCustomerCrmProfile(customerId: UUID): CustomerCrmProfile | null {
   const customer = mainStore.getCustomer(customerId); if (!customer) return null;
