@@ -85,19 +85,14 @@ export async function hydrateStoresFromSupabase(): Promise<{ ok: boolean; messag
         });
         if (res.error) throw new Error(res.error.message);
       },
-      createExpense: async (payload) => {
-        const expense = payload as {
-          id: string; categoryId?: string | null; description?: string | null; amount: number;
-          date: string; paymentMethod?: string | null; orderId?: string | null; reference?: string | null;
-          createdAt: string; updatedAt: string; branchId?: string | null; deviceId?: string | null; version?: number;
-        };
+      createExpense: async (expense) => {
         const res = await pgInsert<Record<string, unknown>>(cfg, "expenses", {
           id: expense.id,
-          category_id: expense.categoryId ?? null,
+          category_id: expense.categoryId,
           description: expense.description ?? "",
           amount: expense.amount,
           date: String(expense.date).slice(0, 10),
-          payment_method: expense.paymentMethod ?? null,
+          payment_method: expense.paymentMethod,
           order_id: expense.orderId ?? null,
           notes: expense.reference ?? null,
           created_at: expense.createdAt,
@@ -108,12 +103,7 @@ export async function hydrateStoresFromSupabase(): Promise<{ ok: boolean; messag
         });
         if (res.error) throw new Error(res.error.message);
       },
-      createSupplier: async (payload) => {
-        const supplier = payload as {
-          id: string; name: string; company?: string | null; phone?: string | null; category?: string | null;
-          openingBalance?: number; outstandingBalance?: number; notes?: string | null; createdAt: string;
-          updatedAt: string; branchId?: string | null;
-        };
+      createSupplier: async (supplier) => {
         const res = await pgInsert<Record<string, unknown>>(cfg, "suppliers", {
           id: supplier.id,
           name: supplier.name,
@@ -129,13 +119,7 @@ export async function hydrateStoresFromSupabase(): Promise<{ ok: boolean; messag
         });
         if (res.error) throw new Error(res.error.message);
       },
-      createLaundry: async (payload) => {
-        const laundry = payload as {
-          id: string; customerId: string; supplierId?: string | null; garment?: string | null; quantity: number;
-          customerRate: number; supplierRate: number; totalCustomerCharge: number; totalSupplierCost: number;
-          status: string; notes?: string | null; createdAt: string; updatedAt: string; branchId?: string | null;
-          deviceId?: string | null; version?: number;
-        };
+      createLaundry: async (laundry) => {
         const res = await pgInsert<Record<string, unknown>>(cfg, "laundry_orders", {
           id: laundry.id,
           customer_id: laundry.customerId,
@@ -153,6 +137,26 @@ export async function hydrateStoresFromSupabase(): Promise<{ ok: boolean; messag
           branch_id: laundry.branchId ?? null,
           device_id: laundry.deviceId ?? null,
           version: laundry.version || 1,
+        });
+        if (res.error) throw new Error(res.error.message);
+      },
+      createPurchase: async (purchase) => {
+        const res = await pgInsert<Record<string, unknown>>(cfg, "purchases", {
+          id: purchase.id,
+          supplier_id: purchase.supplierId ?? null,
+          doc_number: purchase.purchaseNumber,
+          kind: purchase.kind,
+          order_id: purchase.orderId ?? null,
+          total: purchase.amount,
+          paid: purchase.paidAmount,
+          balance: purchase.balanceAmount,
+          date: String(purchase.date).slice(0, 10),
+          notes: purchase.notes ?? purchase.description ?? null,
+          created_at: purchase.createdAt,
+          updated_at: purchase.updatedAt,
+          branch_id: purchase.branchId ?? null,
+          device_id: purchase.deviceId ?? null,
+          version: purchase.version || 1,
         });
         if (res.error) throw new Error(res.error.message);
       },
