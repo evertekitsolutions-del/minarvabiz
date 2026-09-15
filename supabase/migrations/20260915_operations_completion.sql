@@ -2,6 +2,7 @@
 -- Idempotent so it is safe to apply after the core schema.
 
 CREATE TABLE IF NOT EXISTS public.production_workflows (
+  id UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
   order_id UUID PRIMARY KEY REFERENCES public.orders(id) ON DELETE CASCADE,
   stage TEXT NOT NULL,
   started_at TIMESTAMPTZ NOT NULL,
@@ -18,7 +19,8 @@ CREATE TABLE IF NOT EXISTS public.production_stage_events (
   to_stage TEXT NOT NULL,
   changed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   changed_by UUID,
-  notes TEXT
+  notes TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS public.material_rolls (
@@ -41,7 +43,8 @@ CREATE TABLE IF NOT EXISTS public.material_consumptions (
   planned_meters NUMERIC(14,3) NOT NULL DEFAULT 0,
   actual_meters NUMERIC(14,3) NOT NULL DEFAULT 0,
   unit_cost NUMERIC(14,2) NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_production_workflows_stage ON public.production_workflows(stage);
