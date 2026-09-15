@@ -131,3 +131,5 @@ Multi-branch and API access are Enterprise features.
 
 Proprietary — Evertek IT Solutions. All rights reserved.  
 Not open source. Commercial distribution under signed license only.
+
+<!-- React renderer hotfix trigger -->
