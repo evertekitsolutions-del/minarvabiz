@@ -13,25 +13,64 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
-      - name: Fix callbacks that were below conditional returns
+          fetch-depth: 1
+      - name: Normalize desktop callbacks and eliminate conditional hooks
         shell: bash
         run: |
           set -euo pipefail
-          git checkout d33566691b0120c1df82e02ac183c537a0fbd3fa -- apps/desktop/src/App.tsx
-          perl -0pi -e 's/const refreshAll = React\.useCallback\(\(\) => \{/const refreshAll = () => {/' apps/desktop/src/App.tsx
-          perl -0pi -e 's/\n  \}, \[lowStockOnly, orderQuery, orderStatus, orderType, selectedOrder\]\);/\n  };/s' apps/desktop/src/App.tsx
-          perl -0pi -e 's/const persistAndRefresh = React\.useCallback\(async \(\) => \{/const persistAndRefresh = async () => {/' apps/desktop/src/App.tsx
-          perl -0pi -e 's/\n  \}, \[refreshAll\]\);/\n  };/s' apps/desktop/src/App.tsx
-          grep -Fq 'const refreshAll = () =>' apps/desktop/src/App.tsx
-          grep -Fq 'const persistAndRefresh = async () =>' apps/desktop/src/App.tsx
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('apps/desktop/src/App.tsx')
+          s = p.read_text()
+
+          s = s.replace(
+              'const refreshAll = () => {',
+              'const refreshAll = React.useCallback(() => {'
+          )
+          s = s.replace(
+              '    setModuleTick((v) => v + 1);\n  };\n\n  const persistAndRefresh = async () => {',
+              '    setModuleTick((v) => v + 1);\n  }, [lowStockOnly, orderQuery, orderStatus, orderType, selectedOrder]);\n\n  const persistAndRefresh = React.useCallback(async () => {'
+          )
+          s = s.replace(
+              '    }\n  };\n\n  React.useEffect(() => {\n    let cancelled = false;',
+              '    }\n  }, [refreshAll]);\n\n  React.useEffect(() => {\n    let cancelled = false;',
+              1
+          )
+
+          s = s.replace(
+              'const handleInsightAction = React.useCallback((action: string) => {',
+              'const handleInsightAction = (action: string) => {'
+          )
+          s = s.replace(
+              '    if (target) navTo(target);\n  }, []);',
+              '    if (target) navTo(target);\n  };'
+          )
+
+          p.write_text(s)
+          PY
+          grep -Fq 'const refreshAll = React.useCallback(() => {' apps/desktop/src/App.tsx
+          grep -Fq '  }, [lowStockOnly, orderQuery, orderStatus, orderType, selectedOrder]);' apps/desktop/src/App.tsx
+          grep -Fq 'const persistAndRefresh = React.useCallback(async () => {' apps/desktop/src/App.tsx
+          grep -Fq '  }, [refreshAll]);' apps/desktop/src/App.tsx
+          grep -Fq 'const handleInsightAction = (action: string) =>' apps/desktop/src/App.tsx
+          if grep -nF 'const handleInsightAction = React.useCallback' apps/desktop/src/App.tsx; then exit 1; fi
           git diff --check
+      - name: Verify desktop source before commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@9.15.0 --activate
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm --filter @minarvabiz/desktop typecheck
       - name: Commit source fix and remove one-time workflow
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/desktop/src/App.tsx .github/workflows/hotfix-react-hooks.yml
-          git commit -m "fix: move desktop callbacks out of hook path"
+          git rm .github/workflows/hotfix-react-hooks.yml
+          git add apps/desktop/src/App.tsx
+          git diff --cached --check
+          git commit -m "fix: stabilize desktop React hook execution"
           git push
