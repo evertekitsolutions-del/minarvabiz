@@ -51,8 +51,8 @@ Desktop dashboard data calculates and returns Customer Intelligence, Inventory I
 - Duplicate experimental `advanced-ops-store.ts` was intentionally removed after repository inspection showed the existing `phase10-operations-store.ts` already provides persisted production-workflow and material-roll/consumption state.
 
 ## Current HEAD / verification
-- Current main HEAD: `e9f4f9c...` (checkpoint update commit generated after the Phase 7 hardening commit).
-- CI Run `34977109653` / #407 is associated with Phase 7 hardening commit `093751d379728acd4d0aee657f8319931c0e4d38`. At last observation it was still in progress; desktop was still installing dependencies, web was building, license-admin was typechecking, and Windows packaging was setting up pnpm.
+- Current main HEAD: `b2b201adb0fe482cbe1cd1c30add6c9e553f64f8` (checkpoint documentation correction after Phase 7 hardening).
+- CI Run `34977109653` / #407 is associated with the Phase 7 hardening commit `093751d379728acd4d0aee657f8319931c0e4d38`. At last observation it was still in progress; desktop was still installing dependencies, web was building, license-admin was typechecking, and Windows packaging was setting up pnpm.
 - CI Run #398 for `d46f98f9be1bd5348eba4ab312a41e5d33516590` was fully successful, including Windows package creation, installed-runtime smoke and bridge/SQLite diagnostics.
 
 ## Release/runtime gate
@@ -68,6 +68,7 @@ A fresh Windows `.exe` may only be called release-ready after a current-HEAD CI 
 ## Last completed step
 - Phase 7 return/refund, audit and backup mutation paths now trigger the established persistence path in commit `093751d379728acd4d0aee657f8319931c0e4d38`.
 - The duplicate experimental advanced operations store was removed because `phase10-operations-store.ts` already owns production/material persistence and is already included in the domain snapshot.
+- Checkpoint corrected to exact current main HEAD `b2b201adb0fe482cbe1cd1c30add6c9e553f64f8`.
 - Current CI #407 is still running; no release claim is made until it finishes.
 
 ## Single next step
