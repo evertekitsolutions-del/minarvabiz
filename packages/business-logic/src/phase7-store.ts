@@ -15,6 +15,7 @@ import * as phase5Store from "./phase5-store";
 import * as ordersStore from "./orders-store";
 import * as phase6Store from "./phase6-store";
 import { enqueueOutbox } from "./outbox-bridge";
+import { touchPersistence } from "./autosave";
 
 const returns: SaleReturn[] = [];
 const auditLogs: AuditLogEntry[] = [];
@@ -84,9 +85,6 @@ export function createReturn(input: {
     return { ret: null, errors: ["Refund exceeds the remaining paid and receivable amount on this sale"] };
   }
 
-  // A paid sale portion becomes an actual money-out transaction. Any remainder
-  // is a reduction of the customer's receivable and therefore does not affect
-  // today's cash/card/bank inflow.
   const paidRefund = Math.min(totalRefund, Math.max(0, sale.paidAmount));
   const receivableReduction = Math.min(Math.max(0, totalRefund - paidRefund), Math.max(0, sale.balanceAmount));
 
@@ -139,12 +137,14 @@ export function createReturn(input: {
 
   phase6Store.pushNotification({ kind: "system", title: "Return processed",
     body: `${ret.returnNumber} refund ${totalRefund} for ${sale.invoiceNumber}`, href: "/returns" });
+  touchPersistence();
   return { ret, errors: [] };
 }
 
 export function listAuditLogs(limit = 100): AuditLogEntry[] { return auditLogs.slice(0, limit); }
 export function recordAudit(action: string, tableName?: string, recordId?: string, oldValue?: unknown, newValue?: unknown) {
   audit(action, tableName, recordId, oldValue, newValue);
+  touchPersistence();
 }
 
 export function createBackup(kind: "manual" | "automatic" = "manual"): BackupMeta {
@@ -160,6 +160,7 @@ export function createBackup(kind: "manual" | "automatic" = "manual"): BackupMet
   const meta: BackupMeta = { id, filename, createdAt: nowISO(), sizeBytes: new TextEncoder().encode(json).length, kind, verified: true, location: "local" };
   backups.unshift(meta);
   audit("backup.created", "backups", id, null, { filename, sizeBytes: meta.sizeBytes });
+  touchPersistence();
   return meta;
 }
 
@@ -169,7 +170,7 @@ export function verifyBackup(id: UUID): boolean {
   const payload = backupPayloads[id];
   if (!payload) return false;
   try { const data = JSON.parse(payload); const ok = data && typeof data === "object" && data.version === 1;
-    const meta = backups.find((b) => b.id === id); if (meta) meta.verified = ok; return ok; } catch { return false; }
+    const meta = backups.find((b) => b.id === id); if (meta) meta.verified = ok; if (meta) touchPersistence(); return ok; } catch { return false; }
 }
 
 export function inspectBackup(id: UUID): { ok: boolean; summary?: Record<string, number>; error?: string } {
