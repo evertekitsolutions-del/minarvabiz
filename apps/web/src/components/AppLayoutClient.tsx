@@ -22,10 +22,11 @@ const pathToNav: Record<string, NavItemId> = {
   "/services/production": "services",
   "/laundry": "laundry",
   "/expenses": "expenses",
+  "/purchases": "purchases",
   "/customers": "customers",
   "/staff": "staff",
   "/reports": "reports",
-  "/notifications": "sms",
+  "/notifications": "notifications",
   "/settings": "settings",
   "/users": "settings",
   "/onboarding": "dashboard",
@@ -89,7 +90,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
             activeNav={activeNav}
             onNavigate={(href) => router.push(href)}
             sidebar={{
-              user: { name: "Admin", role: "Super Admin" },
+              user: { name: userName || "Admin", role: "Super Admin" },
               logoSrc: "/logo-mark.png",
             }}
             header={{
@@ -108,8 +109,8 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
                   ? "Dashboard"
                   : pathname.slice(1).replace(/^\w/, (c) => c.toUpperCase()),
               subtitle: userName ? `Welcome back, ${userName}!` : "Welcome back!",
-              notificationCount: 6,
-              messageCount: 3,
+              notificationCount: 0,
+              messageCount: 0,
               userName,
               onLogout: () => {
                 clearSession();
