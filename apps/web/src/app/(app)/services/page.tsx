@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   OrderList, OrderForm, emptyOrderForm, OrderDetail, Modal,
   type OrderFormValues,
@@ -71,7 +72,6 @@ export default function ServicesOrdersPage() {
       return;
     }
 
-    // Save measurement profile for reuse
     if (form.customerId && form.measurements && Object.keys(form.measurements).length > 0) {
       ordersStore.saveMeasurementProfile({
         customerId: form.customerId,
@@ -117,6 +117,15 @@ export default function ServicesOrdersPage() {
 
   return (
     <>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900">Service Orders</h1>
+          <p className="text-sm text-slate-500">Tailoring, alterations, wedding, bulk and printing orders.</p>
+        </div>
+        <Link href="/services/production" className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+          Production & Materials
+        </Link>
+      </div>
       {!selected && (
         <OrderList
           orders={orders}
