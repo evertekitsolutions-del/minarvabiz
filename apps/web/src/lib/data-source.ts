@@ -85,7 +85,12 @@ export async function hydrateStoresFromSupabase(): Promise<{ ok: boolean; messag
         });
         if (res.error) throw new Error(res.error.message);
       },
-      createExpense: async (expense) => {
+      createExpense: async (payload) => {
+        const expense = payload as {
+          id: string; categoryId?: string | null; description?: string | null; amount: number;
+          date: string; paymentMethod?: string | null; orderId?: string | null; reference?: string | null;
+          createdAt: string; updatedAt: string; branchId?: string | null; deviceId?: string | null; version?: number;
+        };
         const res = await pgInsert<Record<string, unknown>>(cfg, "expenses", {
           id: expense.id,
           category_id: expense.categoryId ?? null,
@@ -103,7 +108,12 @@ export async function hydrateStoresFromSupabase(): Promise<{ ok: boolean; messag
         });
         if (res.error) throw new Error(res.error.message);
       },
-      createSupplier: async (supplier) => {
+      createSupplier: async (payload) => {
+        const supplier = payload as {
+          id: string; name: string; company?: string | null; phone?: string | null; category?: string | null;
+          openingBalance?: number; outstandingBalance?: number; notes?: string | null; createdAt: string;
+          updatedAt: string; branchId?: string | null;
+        };
         const res = await pgInsert<Record<string, unknown>>(cfg, "suppliers", {
           id: supplier.id,
           name: supplier.name,
@@ -119,10 +129,16 @@ export async function hydrateStoresFromSupabase(): Promise<{ ok: boolean; messag
         });
         if (res.error) throw new Error(res.error.message);
       },
-      createLaundry: async (laundry) => {
+      createLaundry: async (payload) => {
+        const laundry = payload as {
+          id: string; customerId: string; supplierId?: string | null; garment?: string | null; quantity: number;
+          customerRate: number; supplierRate: number; totalCustomerCharge: number; totalSupplierCost: number;
+          status: string; notes?: string | null; createdAt: string; updatedAt: string; branchId?: string | null;
+          deviceId?: string | null; version?: number;
+        };
         const res = await pgInsert<Record<string, unknown>>(cfg, "laundry_orders", {
           id: laundry.id,
-          customer_id: laundry.customerId ?? null,
+          customer_id: laundry.customerId,
           supplier_id: laundry.supplierId ?? null,
           garment: laundry.garment ?? "Laundry",
           quantity: laundry.quantity ?? 1,
