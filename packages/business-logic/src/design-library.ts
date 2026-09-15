@@ -36,11 +36,12 @@ export function createDesignRevision(
   createdAt: string,
   createdBy?: string | null,
 ): DesignRevision {
+  const { updatedAt: _updatedAt, version: _version, ...base } = design;
   return {
     id: revisionId,
     designId: design.id,
     version: design.version,
-    snapshot: { ...design, version: design.version, updatedAt: undefined as never },
+    snapshot: { ...base, version: design.version },
     createdAt,
     createdBy: createdBy ?? null,
   };
