@@ -42,7 +42,7 @@ Dashboard, Customers, Products/Inventory, POS/Sales, Service Orders, Measurement
 - Explainable Next-Best-Action engine as a safe deterministic layer beneath future AI assistant features
 
 ## Current UI integration
-Desktop dashboard data calculates and returns Customer Intelligence, Inventory Intelligence and Staff Productivity signals. Dashboard UI surfaces production, customer, inventory and staff intelligence while preserving existing KPI, charts, order, stock and business-insight areas. Business Insights consumes the Next-Best-Action engine to show explainable operational priorities.
+Desktop dashboard data calculates and returns Customer Intelligence, Inventory Intelligence and Staff Productivity signals. Dashboard UI surfaces production, customer, inventory and staff intelligence while preserving existing KPI, charts, order, stock and business-insight areas. Business Insights consumes the Next-Best-Action engine to show explainable operational priorities. Web dashboard data now also calculates and returns production-control and staff-productivity signals.
 
 ## Production persistence hardening completed
 - `25a2653ae95bdbe54fd40addeb5be1e33610a2df8` — persist Phase 6 staff, assignments, incentives and notification mutations through the existing autosave/SQLite path; incentive payouts are also enqueued for sync.
@@ -50,10 +50,17 @@ Desktop dashboard data calculates and returns Customer Intelligence, Inventory I
 - `093751d379728acd4d0aee657f8319931c0e4d38` — persist Phase 7 return/refund, audit, backup metadata and backup verification mutations through the existing autosave/SQLite path.
 - Duplicate experimental `advanced-ops-store.ts` was intentionally removed after repository inspection showed the existing `phase10-operations-store.ts` already provides persisted production-workflow and material-roll/consumption state.
 
+## Web/Vercel hardening completed
+- `b633e983dde3f8d455d4a703d34fe84ab433a134` — root `vercel.json` now explicitly targets the Next.js web build and `apps/web/.next` output.
+- `8b00b63bfb6e532b66e3861330630b41a0a4d633` — added `apps/web/vercel.json` so the same repository also deploys correctly when the Vercel project uses `apps/web` as its Root Directory.
+- Vercel reported **success** for the latest web-dashboard commit `f5a950c543416e0232571f85e4936dd08cbcde84`; the earlier production deployment failure shown in the user's screenshot is therefore no longer the active deployment state for the latest commit.
+
 ## Current HEAD / verification
-- Current main HEAD: `b2b201adb0fe482cbe1cd1c30add6c9e553f64f8` (checkpoint documentation correction after Phase 7 hardening).
-- CI Run `34977109653` / #407 is associated with the Phase 7 hardening commit `093751d379728acd4d0aee657f8319931c0e4d38`. At last observation it was still in progress; desktop was still installing dependencies, web was building, license-admin was typechecking, and Windows packaging was setting up pnpm.
-- CI Run #398 for `d46f98f9be1bd5348eba4ab312a41e5d33516590` was fully successful, including Windows package creation, installed-runtime smoke and bridge/SQLite diagnostics.
+- Current main HEAD: `f5a950c543416e0232571f85e4936dd08cbcde84`.
+- CI Run `34979838923` / #412 is associated with the current HEAD and is still in progress at the latest observation.
+- In that run, the desktop, web, and other parallel jobs had started; full Windows package + installed-runtime smoke verification is still required before making a fresh Windows release claim.
+- Vercel status for current HEAD is **success**.
+- Earlier CI Run #398 for `d46f98f9be1bd5348eba4ab312a41e5d33516590` was fully successful, including Windows package creation, installed-runtime smoke and bridge/SQLite diagnostics.
 
 ## Release/runtime gate
 A fresh Windows `.exe` may only be called release-ready after a current-HEAD CI run passes desktop/web/license-admin plus Windows packaging, installed-runtime smoke and bridge/SQLite diagnostics. Physical acceptance still includes install/launch, restart persistence, visual integrity, offline licensing and backup/restore.
@@ -66,10 +73,9 @@ A fresh Windows `.exe` may only be called release-ready after a current-HEAD CI 
 - Do not claim the full No.1/world-class roadmap is complete merely because an engine exists; complete UI, persistence, permissions, offline behavior, web behavior and tests before marking a capability complete.
 
 ## Last completed step
-- Phase 7 return/refund, audit and backup mutation paths now trigger the established persistence path in commit `093751d379728acd4d0aee657f8319931c0e4d38`.
-- The duplicate experimental advanced operations store was removed because `phase10-operations-store.ts` already owns production/material persistence and is already included in the domain snapshot.
-- Checkpoint corrected to exact current main HEAD `b2b201adb0fe482cbe1cd1c30add6c9e553f64f8`.
-- Current CI #407 is still running; no release claim is made until it finishes.
+- Fixed the repository's Vercel deployment configuration for both repository-root and `apps/web` project-root layouts in commits `b633e983dde3f8d455d4a703d34fe84ab433a134` and `8b00b63bfb6e532b66e3861330630b41a0a4d633`.
+- Extended the web dashboard data path to surface production-control and staff-productivity intelligence in commit `f5a950c543416e0232571f85e4936dd08cbcde84`.
+- Vercel reports success for current HEAD; CI #412 is still running.
 
 ## Single next step
-Finish CI verification for the Phase 7 hardening commit `093751d379728acd4d0aee657f8319931c0e4d38`. If green, inspect the actual user-facing wiring of the existing Phase 10 production/material operations and close the next integration gap (without creating duplicate stores); if any job fails, fix that blocker first and re-verify.
+Finish CI verification for HEAD `f5a950c543416e0232571f85e4936dd08cbcde84`; if green, move the existing Phase 10 production/material operations into their strongest user-facing workflows and add targeted contract tests for persistence and permissions; if any job fails, fix that blocker first and re-verify.
