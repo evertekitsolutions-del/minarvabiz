@@ -48,12 +48,13 @@ class RendererErrorBoundary extends React.Component<
   }
 }
 
-function RendererReadyMarker() {
-  React.useEffect(() => {
-    document.documentElement.dataset.minarvaRendererReady = "true";
-    document.documentElement.dataset.minarvaRendererError = "false";
-  }, []);
-  return null;
+function RendererReadyMarker({ children }: { children: React.ReactNode }) {
+  // Mark readiness during render, before application startup effects (including SQLite)
+  // can block the renderer event loop. The CI runtime can therefore distinguish a
+  // real React mount from a merely loaded HTML document.
+  document.documentElement.dataset.minarvaRendererReady = "true";
+  document.documentElement.dataset.minarvaRendererError = "false";
+  return <>{children}</>;
 }
 
 function boot() {
@@ -64,8 +65,9 @@ function boot() {
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
       <RendererErrorBoundary>
-        <App />
-        <RendererReadyMarker />
+        <RendererReadyMarker>
+          <App />
+        </RendererReadyMarker>
       </RendererErrorBoundary>
     </React.StrictMode>
   );
