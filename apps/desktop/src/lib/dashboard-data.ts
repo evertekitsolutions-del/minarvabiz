@@ -166,16 +166,19 @@ export async function fetchDashboardData(): Promise<DashboardData> {
       priorityItems: inventoryIntelligence.items
         .filter((item) => item.health === "out_of_stock" || item.health === "critical" || item.health === "reorder" || item.deadStock || item.slowMoving)
         .slice(0, 6)
-        .map((item) => ({
-          productId: item.productId,
-          name: item.name,
-          stock: item.stockQuantity,
-          unit: products.find((p) => p.id === item.productId)?.unit ?? "",
-          health: item.health,
-          recommendedOrderQty: item.recommendedOrderQty,
-          abcClass: item.abcClass,
-          daysOfCover: item.daysOfCover,
-        })),
+        .map((item) => {
+          const product = products.find((p) => p.id === item.productId);
+          return {
+            productId: item.productId,
+            name: item.name,
+            stock: product?.stockQuantity ?? 0,
+            unit: product?.unit ?? "",
+            health: item.health,
+            recommendedOrderQty: item.recommendedOrderQty,
+            abcClass: item.abcClass,
+            daysOfCover: item.daysOfCover,
+          };
+        }),
     },
     staffProductivity: {
       totalActiveAssignments: staffProductivity.totalActiveAssignments,
