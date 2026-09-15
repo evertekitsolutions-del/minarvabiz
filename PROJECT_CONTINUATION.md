@@ -42,16 +42,18 @@ Dashboard, Customers, Products/Inventory, POS/Sales, Service Orders, Measurement
 - Explainable Next-Best-Action engine as a safe deterministic layer beneath future AI assistant features
 
 ## Current UI integration
-Desktop dashboard data now calculates and returns Customer Intelligence, Inventory Intelligence and Staff Productivity signals. Dashboard UI surfaces production, customer, inventory and staff intelligence while preserving existing KPI, charts, order, stock and business-insight areas. Business Insights now consumes the Next-Best-Action engine to show explainable operational priorities.
+Desktop dashboard data calculates and returns Customer Intelligence, Inventory Intelligence and Staff Productivity signals. Dashboard UI surfaces production, customer, inventory and staff intelligence while preserving existing KPI, charts, order, stock and business-insight areas. Business Insights consumes the Next-Best-Action engine to show explainable operational priorities.
 
 ## Production persistence hardening completed
 - `25a2653ae95bdbe54fd40addeb5be1e33610a2df8` — persist Phase 6 staff, assignments, incentives and notification mutations through the existing autosave/SQLite path; incentive payouts are also enqueued for sync.
 - `592abd41d2bca58de4d7bd11a5e2413f006d1eb8` — persist branch creation and active-branch changes; branch creation also enters the sync outbox.
+- `093751d379728acd4d0aee657f8319931c0e4d38` — persist Phase 7 return/refund, audit, backup metadata and backup verification mutations through the existing autosave/SQLite path.
+- Duplicate experimental `advanced-ops-store.ts` was intentionally removed after repository inspection showed the existing `phase10-operations-store.ts` already provides persisted production-workflow and material-roll/consumption state.
 
 ## Current HEAD / verification
-- Current main HEAD: `592abd41d2bca58de4d7bd11a5e2413f006d1eb8`.
-- CI Run `34951538055` / #397 is associated with the current HEAD. At last observation it was still in progress; desktop was already successful, while web/license-admin/Windows packaging were still running.
-- Previous CI Run #395 for `4fad78a43bdc517daa592c63aff534f626b4c6d8` was fully successful, including Windows installed-runtime smoke and bridge/SQLite verification.
+- Current main HEAD: `e9f4f9c...` (checkpoint update commit generated after the Phase 7 hardening commit).
+- CI Run `34977109653` / #407 is associated with Phase 7 hardening commit `093751d379728acd4d0aee657f8319931c0e4d38`. At last observation it was still in progress; desktop was still installing dependencies, web was building, license-admin was typechecking, and Windows packaging was setting up pnpm.
+- CI Run #398 for `d46f98f9be1bd5348eba4ab312a41e5d33516590` was fully successful, including Windows package creation, installed-runtime smoke and bridge/SQLite diagnostics.
 
 ## Release/runtime gate
 A fresh Windows `.exe` may only be called release-ready after a current-HEAD CI run passes desktop/web/license-admin plus Windows packaging, installed-runtime smoke and bridge/SQLite diagnostics. Physical acceptance still includes install/launch, restart persistence, visual integrity, offline licensing and backup/restore.
@@ -64,8 +66,9 @@ A fresh Windows `.exe` may only be called release-ready after a current-HEAD CI 
 - Do not claim the full No.1/world-class roadmap is complete merely because an engine exists; complete UI, persistence, permissions, offline behavior, web behavior and tests before marking a capability complete.
 
 ## Last completed step
-- Hardened Phase 6 and Phase 9 persistence in commits `25a2653ae95bdbe54fd40addeb5be1e33610a2df8` and `592abd41d2bca58de4d7bd11a5e2413f006d1eb8`.
-- Current-head CI was triggered and is still running; no release claim is made until it finishes.
+- Phase 7 return/refund, audit and backup mutation paths now trigger the established persistence path in commit `093751d379728acd4d0aee657f8319931c0e4d38`.
+- The duplicate experimental advanced operations store was removed because `phase10-operations-store.ts` already owns production/material persistence and is already included in the domain snapshot.
+- Current CI #407 is still running; no release claim is made until it finishes.
 
 ## Single next step
-Finish CI verification for HEAD `592abd41d2bca58de4d7bd11a5e2413f006d1eb8`. If green, continue with the next concrete persistence/integration gap among the advanced modules (starting with actual business-intelligence/production/material workflow wiring); if any job fails, fix that blocker first and re-verify.
+Finish CI verification for the Phase 7 hardening commit `093751d379728acd4d0aee657f8319931c0e4d38`. If green, inspect the actual user-facing wiring of the existing Phase 10 production/material operations and close the next integration gap (without creating duplicate stores); if any job fails, fix that blocker first and re-verify.
