@@ -31,7 +31,6 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
               ...(payload as object),
               id: ev.aggregateId,
             });
-            // If conflict, try update
             if (r.error) {
               const u = await client.update(
                 table,
@@ -71,6 +70,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         "sales", "sale_items", "payments", "measurement_profiles", "orders",
         "order_expenses", "laundry_orders", "expenses", "purchases", "suppliers",
         "staff_members", "sale_returns", "audit_logs",
+        "production_workflows", "production_stage_events", "material_rolls", "material_consumptions",
       ];
       const records: Array<{ tableName: string; record: VersionedRecord }> = [];
       for (const table of tables) {
