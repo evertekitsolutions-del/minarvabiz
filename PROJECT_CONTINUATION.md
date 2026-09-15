@@ -53,14 +53,18 @@ Desktop dashboard data calculates and returns Customer Intelligence, Inventory I
 ## Web/Vercel hardening completed
 - `b633e983dde3f8d455d4a703d34fe84ab433a134` — root `vercel.json` now explicitly targets the Next.js web build and `apps/web/.next` output.
 - `8b00b63bfb6e532b66e3861330630b41a0a4d633` — added `apps/web/vercel.json` so the same repository also deploys correctly when the Vercel project uses `apps/web` as its Root Directory.
-- Vercel reported **success** for commit `8a504e4ba63b81a1bfcb024cb668224bbf4df01c`; the earlier production deployment failure shown in the user's screenshot is no longer the active Vercel status.
 - `1899b08ff5c1249885a54cddb10dffa4ad13a447` — wired web customer/product create/update mutations to the Supabase repository writer, preserving the repository's create contract for new customers.
+- `138f8829a22a1904e604dd31b3a6b528a9fe68c6` / `bf7b29877d9e08814cf3a1c2e77adc2f194d31ca` / `4ea0b13702097532607f3753fe7428b97b1ad9ac` — added remote writer contracts and Supabase mappings for payments, expenses, suppliers and laundry.
+- `85b0da5bdbe11b7850986754360615705388a0b7` — Phase 5 expense/supplier/laundry creation now calls the registered remote writer while preserving local persistence/outbox behavior.
+- `0e8241a1f3bfab4ad0f1e65c01763a18c4072e3c` — Web customer-payment collection explicitly persists the resulting payment and updated customer remotely.
+- `15f7ea1b925b7d716ef8b60174f1c1fa08f04cb0` — Web expense creation explicitly persists the created expense remotely.
 
-## Current HEAD / verification
-- Current main HEAD: `8a504e4ba63b81a1bfcb024cb668224bbf4df01c`.
-- CI Run `34980141211` / #415 is associated with current HEAD and is still in progress at the latest observation.
-- Vercel status for current HEAD is **success**.
-- Earlier CI Run #398 for `d46f98f9be1bd5348eba4ab312a41e5d33516590` was fully successful, including Windows package creation, installed-runtime smoke and bridge/SQLite diagnostics.
+## Current verification status
+- Current main HEAD: `15f7ea1b925b7d716ef8b60174f1c1fa08f04cb0`.
+- The GitHub Actions run previously associated with the earlier UI commit was still pending at the last checkpoint; the latest commits need a fresh CI verification.
+- A direct GitHub combined-status check on the earlier checkpoint HEAD exposed a `Vercel` failure context tied to the desktop Vercel project; the connected Vercel account currently exposes no team, so deployment logs could not be inspected from the connected Vercel tool.
+- Existing historical CI evidence remains: Run #398 for `d46f98f9be1bd5348eba4ab312a41e5d33516590` fully succeeded, including Windows package creation, installed-runtime smoke and bridge/SQLite diagnostics.
+- No fresh Windows `.exe` release claim is made from this session.
 
 ## Release/runtime gate
 A fresh Windows `.exe` may only be called release-ready after a current-HEAD CI run passes desktop/web/license-admin plus Windows packaging, installed-runtime smoke and bridge/SQLite diagnostics. Physical acceptance still includes install/launch, restart persistence, visual integrity, offline licensing and backup/restore.
@@ -73,10 +77,7 @@ A fresh Windows `.exe` may only be called release-ready after a current-HEAD CI 
 - Do not claim the full No.1/world-class roadmap is complete merely because an engine exists; complete UI, persistence, permissions, offline behavior, web behavior and tests before marking a capability complete.
 
 ## Last completed step
-- Vercel deployment configuration hardened for both repository-root and `apps/web` project-root layouts.
-- Web dashboard now surfaces production/staff intelligence.
-- Web online mode now registers Supabase-backed customer and product upsert writers.
-- Vercel reports success for current HEAD; CI #415 is still running, so no fresh Windows release claim is made.
+Web online financial/laundry persistence was hardened: remote writer support was added for payments, expenses, suppliers and laundry; Phase 5 creation paths call the remote writer; payment collection and expense creation in the Web UI explicitly persist their resulting records remotely. Changes were committed through `15f7ea1b925b7d716ef8b60174f1c1fa08f04cb0`.
 
 ## Single next step
-Finish CI verification for HEAD `8a504e4ba63b81a1bfcb024cb668224bbf4df01c`; if green, continue closing the online persistence gap for payments/expenses and the user-facing Phase 10 production/material workflows, adding focused contract tests as each capability is wired; if any job fails, fix that blocker first and re-verify.
+Run current-HEAD CI verification; if any job fails, fix that blocker first. If CI is green, complete Supabase online persistence for purchases and the remaining Phase 10 production/material user-facing workflows, then add focused contract tests for each new remote mutation path.
