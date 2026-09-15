@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION public.current_org_id()
 RETURNS UUID
 LANGUAGE sql
 STABLE
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = public
 AS $$
   SELECT org_id
