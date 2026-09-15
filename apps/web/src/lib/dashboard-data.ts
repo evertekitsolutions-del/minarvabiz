@@ -7,8 +7,11 @@ import {
   collectLiveDashboardMetrics,
   getCustomerIntelligenceSnapshot,
   buildInventoryIntelligence,
+  getProductionControlSnapshot,
+  calculateStaffProductivity,
   store,
   ordersStore,
+  phase6Store,
 } from "@minarvabiz/business-logic";
 import type { DashboardData } from "@minarvabiz/ui";
 import { formatMoney } from "@minarvabiz/utils";
@@ -20,6 +23,8 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   const products = store.listProducts();
   const sales = store.listSales();
   const serviceOrders = ordersStore.listOrders();
+  const staff = phase6Store.listStaff();
+  const assignments = phase6Store.listAssignments();
 
   const lowStock = products
     .filter((p) => p.stockQuantity <= p.minimumStock)
@@ -112,6 +117,9 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     now.toISOString()
   );
 
+  const productionControl = getProductionControlSnapshot(serviceOrders, staff, assignments, now);
+  const staffProductivity = calculateStaffProductivity(staff, assignments, now);
+
   return {
     stats: shaped.stats,
     salesSeries,
@@ -121,6 +129,8 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     categories,
     recentOrders: recentOrders.length > 0 ? recentOrders : [{ id: "0", orderNo: "—", customer: "No orders yet", type: "—", status: "pending", dueDate: "—" }],
     lowStock,
+    productionControl,
+    staffProductivity,
     customerIntelligence: {
       totalCustomers: intelligence.customers.length,
       highRiskCount: intelligence.highRiskCount,
