@@ -1,4 +1,5 @@
 export * from "./production-intelligence";
+export * from "./production-workflow";
 export * from "./customer-intelligence";
 export * from "./inventory-intelligence";
 export * from "./staff-productivity";
