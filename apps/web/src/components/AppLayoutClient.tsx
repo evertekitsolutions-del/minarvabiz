@@ -8,6 +8,7 @@ import {
   setCurrentRole,
   clearSession,
   getSessionUser,
+  phase6Store,
 } from "@minarvabiz/business-logic";
 import { hydrateStoresFromSupabase } from "@/lib/data-source";
 import { SetupBanner } from "@/components/SetupBanner";
@@ -46,17 +47,25 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const [searchResults, setSearchResults] = React.useState<Array<{kind:string;id:string;title:string;subtitle:string;href:string}>>([]);
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [userName, setUserName] = React.useState<string | undefined>();
+  const [unreadNotifications, setUnreadNotifications] = React.useState(0);
+
+  const refreshNotificationCount = React.useCallback(() => {
+    setUnreadNotifications(phase6Store.unreadNotificationCount());
+  }, []);
+
   React.useEffect(() => {
     bootstrapFromLocalStorage();
     void hydrateStoresFromSupabase().then((r) => {
       if (r.ok) console.info("[minarvabiz]", r.message, r.counts);
+      refreshNotificationCount();
     });
     const u = getSessionUser();
     if (u) {
       setUserName(u.fullName || u.email);
       setCurrentRole(u.role as Parameters<typeof setCurrentRole>[0]);
     }
-  }, []);
+    refreshNotificationCount();
+  }, [refreshNotificationCount]);
   const activeNav = pathToNav[pathname] ?? "dashboard";
 
   return (
@@ -109,14 +118,17 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
                   ? "Dashboard"
                   : pathname.slice(1).replace(/^\w/, (c) => c.toUpperCase()),
               subtitle: userName ? `Welcome back, ${userName}!` : "Welcome back!",
-              notificationCount: 0,
+              notificationCount: unreadNotifications,
               messageCount: 0,
               userName,
               onLogout: () => {
                 clearSession();
                 router.push("/login");
               },
-              onNotificationsClick: () => router.push("/notifications"),
+              onNotificationsClick: () => {
+                router.push("/notifications");
+                refreshNotificationCount();
+              },
             }}
           >
             <SetupBanner />
