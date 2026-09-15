@@ -111,6 +111,8 @@ jobs:
           node packages/database/src/__tests__/sqlite-backup.test.mjs
           node packages/database/src/__tests__/desktop-sqlite-flow.test.mjs
       - run: pnpm --filter @minarvabiz/business-logic typecheck
+      - name: Run operations completion contract tests
+        run: node packages/business-logic/src/__tests__/operations-completion-contract.test.mjs
       - run: pnpm --filter @minarvabiz/ui typecheck
       - run: pnpm --filter @minarvabiz/desktop typecheck
       - run: pnpm --filter @minarvabiz/desktop build:renderer
