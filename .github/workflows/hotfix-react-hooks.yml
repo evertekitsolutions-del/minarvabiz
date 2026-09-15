@@ -1,0 +1,39 @@
+name: One-time React hooks hotfix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  hotfix:
+    if: ${{ !contains(github.event.head_commit.message, 'fix: remove conditional React hook') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Remove hook from conditional render path
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('apps/desktop/src/App.tsx')
+          s = p.read_text()
+          old = '''  const handleInsightAction = React.useCallback((action: string) => {\n    const targets: Record<string, NavItemId> = {\n      "Review low stock": "sales",\n      "Open outstanding payments": "reports",\n      "Review pending orders": "services",\n      "Open ready orders": "services",\n      "Open reports": "reports",\n      "Review expenses": "expenses",\n    };\n    const target = targets[action];\n    if (target) navTo(target);\n  }, []);'''
+          new = '''  const handleInsightAction = (action: string) => {\n    const targets: Record<string, NavItemId> = {\n      "Review low stock": "sales",\n      "Open outstanding payments": "reports",\n      "Review pending orders": "services",\n      "Open ready orders": "services",\n      "Open reports": "reports",\n      "Review expenses": "expenses",\n    };\n    const target = targets[action];\n    if (target) navTo(target);\n  };'''
+          if old not in s:
+              raise SystemExit('Expected conditional useCallback was not found; refusing to modify source.')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          git diff --check
+      - name: Commit source fix and remove one-time workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/desktop/src/App.tsx .github/workflows/hotfix-react-hooks.yml
+          git commit -m "fix: remove conditional React hook"
+          git push
