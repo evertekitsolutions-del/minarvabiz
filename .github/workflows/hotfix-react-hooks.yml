@@ -12,15 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Apply exact React hook fix from clean parent
+      - name: Apply React hook fix from pre-hotfix source
         shell: bash
         run: |
           set -euo pipefail
-          git checkout HEAD^ -- apps/desktop/src/App.tsx
+          git checkout HEAD~2 -- apps/desktop/src/App.tsx
           perl -0pi -e 's/(const handleInsightAction = )React\.useCallback\(((?:action: string) => \{.*?)(\n  \}, \[\]\);)/$1$2\n  };/s' apps/desktop/src/App.tsx
           grep -Fq 'const handleInsightAction = (action: string) =>' apps/desktop/src/App.tsx
           git diff --check
-          git diff -- apps/desktop/src/App.tsx
       - name: Commit source fix and remove one-time workflow
         shell: bash
         run: |
