@@ -97,7 +97,7 @@ const signedPayloadGuards = [
   /Number\.isSafeInteger\(payload\.activationLimit\)/,
   /if \(payload\.activationLimit === -1\) \{\s*if \(payload\.plan !== "enterprise"\) return false;/,
   /if \(payload\.activationLimit >= 0 && payload\.deviceBindings\.length > payload\.activationLimit\) return false;/,
-  /payload\.expiresAt !== null && new Date\(payload\.expiresAt\)\.getTime\(\) < new Date\(payload\.issuedAt\)\.getTime\)/,
+  /payload\.expiresAt\s*!==\s*null\s*&&\s*new Date\(payload\.expiresAt\)\.getTime\(\)\s*<\s*new Date\(payload\.issuedAt\)\.getTime\(\)/,
   /return isLicensePayload\(payload\) \? payload : null;/,
 ];
 for (const guard of signedPayloadGuards) assert(guard.test(licensingToken), `Signed license payload structural guard is missing: ${guard}`);
