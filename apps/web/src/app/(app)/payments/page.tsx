@@ -7,6 +7,7 @@ import {
   phase6Store,
   templatePaymentDue,
   templatePaymentReceived,
+  getRemoteWriter,
 } from "@minarvabiz/business-logic";
 import type { Customer, Payment } from "@minarvabiz/types";
 
@@ -19,15 +20,13 @@ export default function PaymentsPage() {
     setPayments(store.listPayments());
   }, []);
 
-  React.useEffect(() => {
-    refresh();
-  }, [refresh]);
+  React.useEffect(() => { refresh(); }, [refresh]);
 
   return (
     <PaymentsPanel
       outstanding={outstanding}
       payments={payments}
-      onCollect={(data) => {
+      onCollect={async (data) => {
         const result = store.recordCustomerPayment({
           customerId: data.customerId,
           amount: data.amount,
@@ -37,26 +36,19 @@ export default function PaymentsPage() {
         if (result.errors.length || !result.payment) {
           return { ok: false, error: result.errors.join("; ") || "Failed" };
         }
+        const writer = getRemoteWriter();
+        if (writer?.createPayment) await writer.createPayment(result.payment);
+        if (result.customer && writer?.upsertCustomer) await writer.upsertCustomer(result.customer);
         if (result.customer) {
           const msg = templatePaymentReceived(result.customer, result.payment.amount);
-          phase6Store.pushNotification({
-            kind: "system",
-            title: msg.title,
-            body: msg.body,
-            href: "/payments",
-          });
+          phase6Store.pushNotification({ kind: "system", title: msg.title, body: msg.body, href: "/payments" });
         }
         refresh();
         return { ok: true };
       }}
       onRemind={(customer) => {
         const msg = templatePaymentDue(customer);
-        phase6Store.pushNotification({
-          kind: "payment_due",
-          title: msg.title,
-          body: msg.body,
-          href: "/payments",
-        });
+        phase6Store.pushNotification({ kind: "payment_due", title: msg.title, body: msg.body, href: "/payments" });
         refresh();
       }}
     />
