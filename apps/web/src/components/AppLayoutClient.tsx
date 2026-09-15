@@ -6,7 +6,6 @@ import { AppShell, AuthGate, ToastProvider, ErrorBoundary, type NavItemId } from
 import {
   bootstrapFromLocalStorage, globalSearch,
   setCurrentRole,
-  // remote hydrate is separate
   clearSession,
   getSessionUser,
 } from "@minarvabiz/business-logic";
@@ -20,6 +19,7 @@ const pathToNav: Record<string, NavItemId> = {
   "/cash-register": "reports",
   "/payments": "sales",
   "/services": "services",
+  "/services/production": "services",
   "/laundry": "laundry",
   "/expenses": "expenses",
   "/customers": "customers",
