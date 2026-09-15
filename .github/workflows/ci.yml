@@ -194,7 +194,9 @@ jobs:
             $logs = @($env:APPDATA, $env:LOCALAPPDATA, $env:RUNNER_TEMP) | Where-Object { $_ -and (Test-Path $_) } | ForEach-Object { Get-ChildItem -Path $_ -Filter "runtime-smoke.log" -Recurse -File -ErrorAction SilentlyContinue } | Sort-Object FullName -Unique
             if (-not ($logs | Select-String -Pattern 'bridge-ready=true')) { throw "Electron preload bridge was not confirmed in the installed runtime log." }
             if ($logs | Select-String -Pattern 'bridge-ready=false') { throw "Electron preload bridge reported failure in the installed runtime log." }
-            Write-Host "Runtime smoke PASS: process alive, valid SQLite database found, and preload bridge confirmed."
+            if ($logs | Select-String -Pattern 'renderer-fatal|renderer-bootstrap-fatal|renderer-state error=true|renderer-ui-ready=false') { throw "Renderer startup failed or did not become ready. See captured runtime diagnostics." }
+            if (-not ($logs | Select-String -Pattern 'renderer-state ready=true')) { throw "Renderer React mount was not confirmed in the installed runtime log." }
+            Write-Host "Runtime smoke PASS: process alive, valid SQLite database found, preload bridge confirmed, and React renderer mounted."
           } finally {
             if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
           }
