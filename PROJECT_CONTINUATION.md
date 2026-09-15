@@ -53,12 +53,12 @@ Desktop dashboard data calculates and returns Customer Intelligence, Inventory I
 ## Web/Vercel hardening completed
 - `b633e983dde3f8d455d4a703d34fe84ab433a134` — root `vercel.json` now explicitly targets the Next.js web build and `apps/web/.next` output.
 - `8b00b63bfb6e532b66e3861330630b41a0a4d633` — added `apps/web/vercel.json` so the same repository also deploys correctly when the Vercel project uses `apps/web` as its Root Directory.
-- Vercel reported **success** for the latest web-dashboard commit `f5a950c543416e0232571f85e4936dd08cbcde84`; the earlier production deployment failure shown in the user's screenshot is therefore no longer the active deployment state for the latest commit.
+- Vercel reported **success** for commit `8a504e4ba63b81a1bfcb024cb668224bbf4df01c`; the earlier production deployment failure shown in the user's screenshot is no longer the active Vercel status.
+- `1899b08ff5c1249885a54cddb10dffa4ad13a447` — wired web customer/product create/update mutations to the Supabase repository writer, preserving the repository's create contract for new customers.
 
 ## Current HEAD / verification
-- Current main HEAD: `f5a950c543416e0232571f85e4936dd08cbcde84`.
-- CI Run `34979838923` / #412 is associated with the current HEAD and is still in progress at the latest observation.
-- In that run, the desktop, web, and other parallel jobs had started; full Windows package + installed-runtime smoke verification is still required before making a fresh Windows release claim.
+- Current main HEAD: `8a504e4ba63b81a1bfcb024cb668224bbf4df01c`.
+- CI Run `34980141211` / #415 is associated with current HEAD and is still in progress at the latest observation.
 - Vercel status for current HEAD is **success**.
 - Earlier CI Run #398 for `d46f98f9be1bd5348eba4ab312a41e5d33516590` was fully successful, including Windows package creation, installed-runtime smoke and bridge/SQLite diagnostics.
 
@@ -73,9 +73,10 @@ A fresh Windows `.exe` may only be called release-ready after a current-HEAD CI 
 - Do not claim the full No.1/world-class roadmap is complete merely because an engine exists; complete UI, persistence, permissions, offline behavior, web behavior and tests before marking a capability complete.
 
 ## Last completed step
-- Fixed the repository's Vercel deployment configuration for both repository-root and `apps/web` project-root layouts in commits `b633e983dde3f8d455d4a703d34fe84ab433a134` and `8b00b63bfb6e532b66e3861330630b41a0a4d633`.
-- Extended the web dashboard data path to surface production-control and staff-productivity intelligence in commit `f5a950c543416e0232571f85e4936dd08cbcde84`.
-- Vercel reports success for current HEAD; CI #412 is still running.
+- Vercel deployment configuration hardened for both repository-root and `apps/web` project-root layouts.
+- Web dashboard now surfaces production/staff intelligence.
+- Web online mode now registers Supabase-backed customer and product upsert writers.
+- Vercel reports success for current HEAD; CI #415 is still running, so no fresh Windows release claim is made.
 
 ## Single next step
-Finish CI verification for HEAD `f5a950c543416e0232571f85e4936dd08cbcde84`; if green, move the existing Phase 10 production/material operations into their strongest user-facing workflows and add targeted contract tests for persistence and permissions; if any job fails, fix that blocker first and re-verify.
+Finish CI verification for HEAD `8a504e4ba63b81a1bfcb024cb668224bbf4df01c`; if green, continue closing the online persistence gap for payments/expenses and the user-facing Phase 10 production/material workflows, adding focused contract tests as each capability is wired; if any job fails, fix that blocker first and re-verify.
