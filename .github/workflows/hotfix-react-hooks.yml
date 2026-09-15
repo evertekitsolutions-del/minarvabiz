@@ -12,33 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Remove hook from conditional render path
+      - name: Remove conditional React hook
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          import re
-          p = Path('apps/desktop/src/App.tsx')
-          s = p.read_text()
-          pattern = r'(?m)^\s*const handleInsightAction = React\.useCallback\(\(action: string\) => \{.*?^\s*\}, \[\]\);\s*$'
-          replacement = '''  const handleInsightAction = (action: string) => {
-    const targets: Record<string, NavItemId> = {
-      "Review low stock": "sales",
-      "Open outstanding payments": "reports",
-      "Review pending orders": "services",
-      "Open ready orders": "services",
-      "Open reports": "reports",
-      "Review expenses": "expenses",
-    };
-    const target = targets[action];
-    if (target) navTo(target);
-  };'''
-          s2, count = re.subn(pattern, replacement, s, count=1, flags=re.S)
-          if count != 1:
-              raise SystemExit('Expected conditional useCallback was not found; refusing to modify source.')
-          p.write_text(s2)
-          PY
+          file="apps/desktop/src/App.tsx"
+          sed -i 's/const handleInsightAction = React\.useCallback((action: string) => {/const handleInsightAction = (action: string) => {/' "$file"
+          sed -i 's/^  }, \[\]);$/  };/g' "$file"
+          grep -Fq 'const handleInsightAction = (action: string) =>' "$file"
           git diff --check
       - name: Commit source fix and remove one-time workflow
         shell: bash
