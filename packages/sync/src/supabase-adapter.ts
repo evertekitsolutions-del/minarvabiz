@@ -11,6 +11,82 @@ export interface PgClient {
   update: (table: string, match: string, patch: Record<string, unknown>) => Promise<{ error: string | null }>;
 }
 
+function remoteRow(table: string, aggregateId: UUID, payload: Record<string, unknown>): Record<string, unknown> {
+  switch (table) {
+    case "purchases":
+      return {
+        id: aggregateId,
+        supplier_id: payload.supplierId ?? null,
+        doc_number: payload.purchaseNumber ?? null,
+        kind: payload.kind ?? "general",
+        order_id: payload.orderId ?? null,
+        total: payload.amount ?? 0,
+        paid: payload.paidAmount ?? 0,
+        balance: payload.balanceAmount ?? 0,
+        date: String(payload.date ?? new Date().toISOString()).slice(0, 10),
+        notes: payload.notes ?? payload.description ?? null,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        updated_at: payload.updatedAt ?? new Date().toISOString(),
+        deleted_at: payload.deletedAt ?? null,
+        branch_id: payload.branchId ?? null,
+        device_id: payload.deviceId ?? null,
+        version: payload.version ?? 1,
+      };
+    case "production_workflows":
+      return {
+        id: aggregateId,
+        order_id: payload.orderId ?? aggregateId,
+        stage: payload.stage,
+        started_at: payload.startedAt,
+        updated_at: payload.updatedAt,
+        completed_at: payload.completedAt ?? null,
+        rework_count: payload.reworkCount ?? 0,
+        events_json: payload.events ?? [],
+      };
+    case "production_stage_events":
+      return {
+        id: aggregateId,
+        order_id: payload.orderId,
+        from_stage: payload.from ?? null,
+        to_stage: payload.to,
+        changed_at: payload.changedAt,
+        changed_by: payload.changedBy ?? null,
+        notes: payload.notes ?? null,
+        updated_at: payload.changedAt ?? new Date().toISOString(),
+      };
+    case "material_rolls":
+      return {
+        id: aggregateId,
+        material_id: payload.materialId,
+        batch_id: payload.batchId ?? null,
+        shade_code: payload.shadeCode ?? null,
+        width_meters: payload.widthMeters ?? null,
+        quantity_meters: payload.quantityMeters ?? 0,
+        reserved_meters: payload.reservedMeters ?? 0,
+        cost_per_meter: payload.costPerMeter ?? 0,
+        received_at: payload.receivedAt ?? new Date().toISOString(),
+        active: payload.active ?? true,
+        updated_at: new Date().toISOString(),
+      };
+    case "material_consumptions":
+      return {
+        id: aggregateId,
+        material_id: payload.materialId,
+        planned_meters: payload.plannedMeters ?? 0,
+        actual_meters: payload.actualMeters ?? 0,
+        unit_cost: payload.unitCost ?? 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    default:
+      return { ...payload, id: aggregateId };
+  }
+}
+
+function matchQuery(table: string, aggregateId: UUID): string {
+  return table === "production_workflows" ? `order_id=eq.${aggregateId}` : `id=eq.${aggregateId}`;
+}
+
 export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): CloudAdapter {
   return {
     async push(events: OutboxEvent[]) {
@@ -20,23 +96,17 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         try {
           const payload = typeof ev.payload === "string" ? JSON.parse(ev.payload) : ev.payload;
           const table = ev.aggregateType;
+          const row = remoteRow(table, ev.aggregateId, payload as Record<string, unknown>);
           if (ev.eventType === "delete") {
-            const r = await client.update(table, `id=eq.${ev.aggregateId}`, {
+            const r = await client.update(table, matchQuery(table, ev.aggregateId), {
               deleted_at: new Date().toISOString(),
             });
             if (r.error) rejected.push({ id: ev.id, error: r.error });
             else accepted.push(ev.id);
           } else {
-            const r = await client.insert(table, {
-              ...(payload as object),
-              id: ev.aggregateId,
-            });
+            const r = await client.insert(table, row);
             if (r.error) {
-              const u = await client.update(
-                table,
-                `id=eq.${ev.aggregateId}`,
-                payload as Record<string, unknown>
-              );
+              const u = await client.update(table, matchQuery(table, ev.aggregateId), row);
               if (u.error) rejected.push({ id: ev.id, error: u.error });
               else accepted.push(ev.id);
             } else {
@@ -56,10 +126,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
             attempts: 0,
           });
         } catch (e) {
-          rejected.push({
-            id: ev.id,
-            error: e instanceof Error ? e.message : String(e),
-          });
+          rejected.push({ id: ev.id, error: e instanceof Error ? e.message : String(e) });
         }
       }
       return { accepted, rejected };
@@ -78,14 +145,15 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         const res = await client.select(table, q);
         if (res.data) {
           for (const row of res.data) {
+            const recordId = table === "production_workflows" ? String(row.order_id) : String(row.id);
             records.push({
               tableName: table,
               record: {
-                id: String(row.id),
-                version: Number(row.version || 1),
-                updatedAt: String(row.updated_at || since),
-                deletedAt: (row.deleted_at as string) || null,
                 ...row,
+                id: recordId,
+                version: Number(row.version || 1),
+                updatedAt: String(row.updated_at || row.changed_at || row.created_at || since),
+                deletedAt: (row.deleted_at as string) || null,
               } as VersionedRecord,
             });
           }
