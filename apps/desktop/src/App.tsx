@@ -88,7 +88,7 @@ export function App() {
       fetchDashboardData().then(setDash);
     })();
     return () => { cancelled = true; };
-  }, []);
+  };
 
   React.useEffect(() => { if (dbReady) refreshAll(); }, [dbReady, refreshAll]);
   React.useEffect(() => {
