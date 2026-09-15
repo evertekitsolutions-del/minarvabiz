@@ -53,7 +53,7 @@ export function App() {
   const [staffForm, setStaffForm] = React.useState({ name: "", phone: "", email: "", role: "staff" as RoleName, salary: "", joiningDate: "", notes: "" });
   const autoBackupInFlight = React.useRef(false);
 
-  const refreshAll = () => {
+  const refreshAll = React.useCallback(() => {
     setCustomers(store.listCustomers());
     setProducts(store.listProducts({ lowStockOnly }));
     setCategories(store.listCategories());
@@ -61,9 +61,9 @@ export function App() {
     setOrders(ordersStore.listOrders({ query: orderQuery || undefined, status: orderStatus ?? undefined, serviceType: orderType ?? undefined }));
     setProfiles(selectedOrder ? ordersStore.listMeasurementProfiles(selectedOrder.customerId) : []);
     setModuleTick((v) => v + 1);
-  };
+  }, [lowStockOnly, orderQuery, orderStatus, orderType, selectedOrder]);
 
-  const persistAndRefresh = async () => {
+  const persistAndRefresh = React.useCallback(async () => {
     refreshAll();
     try {
       const persisted = await persistDomainToSqlite();
@@ -71,7 +71,7 @@ export function App() {
     } catch {
       scheduleAutoSave(250);
     }
-  };
+  }, [refreshAll]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -243,7 +243,7 @@ export function App() {
   }
 
   const navTo = (id: NavItemId) => { setActiveNav(id); setSelectedOrder(null); };
-  const handleInsightAction = React.useCallback((action: string) => {
+  const handleInsightAction = (action: string) => {
     const targets: Record<string, NavItemId> = {
       "Review low stock": "sales",
       "Open outstanding payments": "reports",
@@ -254,7 +254,7 @@ export function App() {
     };
     const target = targets[action];
     if (target) navTo(target);
-  }, []);
+  };
   const laundry = phase5Store.listLaundryOrders();
   const expenses = phase5Store.listExpenses();
   const purchases = phase5Store.listPurchases();
