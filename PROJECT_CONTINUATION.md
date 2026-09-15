@@ -42,15 +42,16 @@ Dashboard, Customers, Products/Inventory, POS/Sales, Service Orders, Measurement
 - Explainable Next-Best-Action engine as a safe deterministic layer beneath future AI assistant features
 
 ## Current UI integration
-Desktop dashboard data now calculates and returns Customer Intelligence, Inventory Intelligence and Staff Productivity signals. Dashboard UI was updated to surface these sections while preserving the existing KPI, charts, order, stock and business-insight areas.
+Desktop dashboard data now calculates and returns Customer Intelligence, Inventory Intelligence and Staff Productivity signals. Dashboard UI surfaces production, customer, inventory and staff intelligence while preserving existing KPI, charts, order, stock and business-insight areas. Business Insights now consumes the Next-Best-Action engine to show explainable operational priorities.
+
+## Production persistence hardening completed
+- `25a2653ae95bdbe54fd40addeb5be1e33610a2df8` — persist Phase 6 staff, assignments, incentives and notification mutations through the existing autosave/SQLite path; incentive payouts are also enqueued for sync.
+- `592abd41d2bca58de4d7bd11a5e2413f006d1eb8` — persist branch creation and active-branch changes; branch creation also enters the sync outbox.
 
 ## Current HEAD / verification
-- Current main HEAD: `8288829127b1ae66ff2a88179dd2ded3ca8cb357`
-- Latest code change: `fix(design): correct revision snapshot typing`.
-- The earlier CI run `34939434493` failed at desktop typecheck because inventory dashboard mapping referenced `InventoryIntelligenceResult.stockQuantity`; this was corrected in commit `482f8a0911d668eb24c06a6f30f868840f5a22b2`.
-- A new CI run for the corrected desktop integration was observed at run `34939514306`; desktop, web and license-admin subsequently passed while Windows runtime smoke was still running when last observed.
-- Newer feature commits after that verification added Business Intelligence, appointments, design, delivery, business modes, branch intelligence and next-best-action engines plus exports.
-- CI run `34939837568` for HEAD `828882...` was in progress at last observation. It must finish before any release/build claim is made.
+- Current main HEAD: `592abd41d2bca58de4d7bd11a5e2413f006d1eb8`.
+- CI Run `34951538055` / #397 is associated with the current HEAD. At last observation it was still in progress; desktop was already successful, while web/license-admin/Windows packaging were still running.
+- Previous CI Run #395 for `4fad78a43bdc517daa592c63aff534f626b4c6d8` was fully successful, including Windows installed-runtime smoke and bridge/SQLite verification.
 
 ## Release/runtime gate
 A fresh Windows `.exe` may only be called release-ready after a current-HEAD CI run passes desktop/web/license-admin plus Windows packaging, installed-runtime smoke and bridge/SQLite diagnostics. Physical acceptance still includes install/launch, restart persistence, visual integrity, offline licensing and backup/restore.
@@ -63,9 +64,8 @@ A fresh Windows `.exe` may only be called release-ready after a current-HEAD CI 
 - Do not claim the full No.1/world-class roadmap is complete merely because an engine exists; complete UI, persistence, permissions, offline behavior, web behavior and tests before marking a capability complete.
 
 ## Last completed step
-- Corrected the inventory dashboard type error in commit `482f8a0911d668eb24c06a6f30f868840f5a22b2`.
-- Added and exported production workflow, fabric/material intelligence, BI, appointments, design library, delivery logistics, business modes, branch intelligence and explainable next-best-action engines through commits leading to `8288829127b1ae66ff2a88179dd2ded3ca8cb357`.
-- Integrated customer/inventory/staff intelligence into the desktop dashboard UI/data path.
+- Hardened Phase 6 and Phase 9 persistence in commits `25a2653ae95bdbe54fd40addeb5be1e33610a2df8` and `592abd41d2bca58de4d7bd11a5e2413f006d1eb8`.
+- Current-head CI was triggered and is still running; no release claim is made until it finishes.
 
 ## Single next step
-Finish CI verification for HEAD `8288829127b1ae66ff2a88179dd2ded3ca8cb357`; fix any newly reported errors, then move the new production/material/design/appointment/delivery engines from domain-only implementation into persisted store + user-facing module workflows without regressing existing functionality.
+Finish CI verification for HEAD `592abd41d2bca58de4d7bd11a5e2413f006d1eb8`. If green, continue with the next concrete persistence/integration gap among the advanced modules (starting with actual business-intelligence/production/material workflow wiring); if any job fails, fix that blocker first and re-verify.
