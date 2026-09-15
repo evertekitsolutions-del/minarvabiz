@@ -243,7 +243,7 @@ export function App() {
   }
 
   const navTo = (id: NavItemId) => { setActiveNav(id); setSelectedOrder(null); };
-  const handleInsightAction = React.useCallback((action: string) => {
+  const handleInsightAction = (action: string) => {
     const targets: Record<string, NavItemId> = {
       "Review low stock": "sales",
       "Open outstanding payments": "reports",
@@ -254,7 +254,7 @@ export function App() {
     };
     const target = targets[action];
     if (target) navTo(target);
-  }, []);
+  };
   const laundry = phase5Store.listLaundryOrders();
   const expenses = phase5Store.listExpenses();
   const purchases = phase5Store.listPurchases();
