@@ -59,13 +59,20 @@ export async function hydrateStoresFromSupabase(): Promise<{
     registerRemoteWriter({
       upsertCustomer: async (customer) => {
         const existing = await db.customers.get(customer.id);
-        if (existing) await db.customers.update(customer.id, customer);
-        else await db.customers.create(customer);
+        if (existing) {
+          await db.customers.update(customer.id, customer);
+          return;
+        }
+        const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, outstandingBalance: _outstandingBalance, totalSpending: _totalSpending, ...createData } = customer;
+        await db.customers.create(createData);
       },
       upsertProduct: async (product) => {
         const existing = await db.products.get(product.id);
-        if (existing) await db.products.update(product.id, product);
-        else await db.products.create(product);
+        if (existing) {
+          await db.products.update(product.id, product);
+          return;
+        }
+        await db.products.create(product);
       },
       createSale: async (sale) => { await db.sales.create(sale); },
       createOrder: async (order) => { await db.orders.create(order); },
