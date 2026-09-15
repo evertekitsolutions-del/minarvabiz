@@ -34,7 +34,7 @@ export async function getUnitOfWork(): Promise<UnitOfWork> {
   return uowPromise;
 }
 
-/** Pull remote data into in-memory stores so existing UI keeps working */
+/** Pull remote data into in-memory stores so existing UI keeps working. */
 export async function hydrateStoresFromSupabase(): Promise<{
   ok: boolean;
   message: string;
@@ -54,15 +54,21 @@ export async function hydrateStoresFromSupabase(): Promise<{
       db.sales.list(),
       db.orders.list(),
     ]);
-    store.hydrateCore({
-      customers,
-      products,
-      sales,
-    });
+    store.hydrateCore({ customers, products, sales });
     ordersStore.hydrateOrders({ orders });
     registerRemoteWriter({
-      createSale: async (s) => { await db.sales.create(s); },
-      createOrder: async (o) => { await db.orders.create(o); },
+      upsertCustomer: async (customer) => {
+        const existing = await db.customers.get(customer.id);
+        if (existing) await db.customers.update(customer.id, customer);
+        else await db.customers.create(customer);
+      },
+      upsertProduct: async (product) => {
+        const existing = await db.products.get(product.id);
+        if (existing) await db.products.update(product.id, product);
+        else await db.products.create(product);
+      },
+      createSale: async (sale) => { await db.sales.create(sale); },
+      createOrder: async (order) => { await db.orders.create(order); },
       updateOrder: async (id, patch) => { await db.orders.update(id, patch); },
     });
     return {
