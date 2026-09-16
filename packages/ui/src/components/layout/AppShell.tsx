@@ -6,6 +6,7 @@ import { Sidebar, type SidebarProps } from "./Sidebar";
 import { Header, type HeaderProps } from "./Header";
 import { CommandPalette } from "../command/CommandPalette";
 import { GlobalSearchPalette } from "../search/GlobalSearchPalette";
+import { OfflineModulesPanel } from "../desktop/OfflineModulesPanel";
 import type { NavItemId } from "../../lib/nav";
 
 export interface AppShellProps {
@@ -47,44 +48,22 @@ export function AppShell({
 
   return (
     <div className={cn("flex h-screen w-full overflow-hidden bg-slate-50", className)}>
-      {/* Desktop sidebar */}
       <div className="hidden md:flex">
-        <Sidebar
-          activeId={activeNav}
-          collapsed={collapsed}
-          onNavigate={handleNavigate}
-          {...sidebar}
-        />
+        <Sidebar activeId={activeNav} collapsed={collapsed} onNavigate={handleNavigate} {...sidebar} />
       </div>
-
-      {/* Mobile overlay sidebar */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 flex md:hidden">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setMobileOpen(false)}
-          />
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
           <div className="relative z-10 h-full">
-            <Sidebar
-              activeId={activeNav}
-              onNavigate={(href, id) => {
-                handleNavigate(href, id);
-                setMobileOpen(false);
-              }}
-              {...sidebar}
-            />
+            <Sidebar activeId={activeNav} onNavigate={(href, id) => { handleNavigate(href, id); setMobileOpen(false); }} {...sidebar} />
           </div>
         </div>
       )}
-
       <div className="flex min-w-0 flex-1 flex-col">
         <Header
           onMenuClick={() => {
-            if (typeof window !== "undefined" && window.innerWidth < 768) {
-              setMobileOpen((v) => !v);
-            } else {
-              setCollapsed((v) => !v);
-            }
+            if (typeof window !== "undefined" && window.innerWidth < 768) setMobileOpen((v) => !v);
+            else setCollapsed((v) => !v);
           }}
           {...header}
           onSearch={(query) => {
@@ -93,13 +72,12 @@ export function AppShell({
           }}
         />
         {showLocalSearch && searchQuery && (
-          <GlobalSearchPalette
-            query={searchQuery}
-            onClose={() => setSearchQuery("")}
-            onNavigate={handleNavigate}
-          />
+          <GlobalSearchPalette query={searchQuery} onClose={() => setSearchQuery("")} onNavigate={handleNavigate} />
         )}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+          {children}
+          {typeof window !== "undefined" && !!window.minarvaDesktop && <OfflineModulesPanel activeNav={activeNav} />}
+        </main>
       </div>
       <CommandPalette activeNav={activeNav} onNavigate={handleNavigate} />
     </div>
