@@ -13,10 +13,6 @@ import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, Servic
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
 
-function ModuleCard({ title, description }: { title: string; description: string }) {
-  return <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"><h2 className="text-xl font-semibold text-slate-900">{title}</h2><p className="mt-2 text-sm text-slate-500">{description}</p></div>;
-}
-
 export function App() {
   const [dbReady, setDbReady] = React.useState(false);
   const [dbError, setDbError] = React.useState<string | null>(null);
@@ -50,9 +46,9 @@ export function App() {
   const [purchaseOpen, setPurchaseOpen] = React.useState(false);
   const [staffOpen, setStaffOpen] = React.useState(false);
   const [moduleError, setModuleError] = React.useState<string | null>(null);
-  const [expenseForm, setExpenseForm] = React.useState({ categoryId: "", amount: "", paymentMethod: "cash" as PaymentMethod, description: "", reference: "", orderId: "" });
-  const [purchaseForm, setPurchaseForm] = React.useState({ supplierId: "", description: "", amount: "", paidAmount: "", paymentMethod: "cash" as PaymentMethod, kind: "general" as "general" | "order_specific", orderId: "", notes: "" });
-  const [staffForm, setStaffForm] = React.useState({ name: "", phone: "", email: "", role: "staff" as RoleName, salary: "", joiningDate: "", notes: "" });
+  const [expenseForm, setExpenseForm] = React.useState({ date:"", categoryId:"", amount:"", paymentMethod:"cash" as PaymentMethod, description:"", reference:"", receiptUrl:"", staffId:"", orderId:"" });
+  const [purchaseForm, setPurchaseForm] = React.useState({ date:"", supplierId:"", description:"", amount:"", paidAmount:"", paymentMethod:"cash" as PaymentMethod, kind:"general" as "general"|"order_specific", orderId:"", notes:"" });
+  const [staffForm, setStaffForm] = React.useState({ name:"", phone:"", email:"", role:"staff" as RoleName, salary:"", joiningDate:"", status:"active" as "active"|"inactive"|"on_leave", notes:"" });
   const autoBackupInFlight = React.useRef(false);
 
   const refreshAll = React.useCallback(() => {
@@ -67,237 +63,64 @@ export function App() {
 
   const persistAndRefresh = React.useCallback(async () => {
     refreshAll();
-    try {
-      const persisted = await persistDomainToSqlite();
-      if (!persisted) scheduleAutoSave(250);
-    } catch {
-      scheduleAutoSave(250);
-    }
+    try { const persisted = await persistDomainToSqlite(); if (!persisted) scheduleAutoSave(250); }
+    catch { scheduleAutoSave(250); }
   }, [refreshAll]);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      for (let i = 0; i < 50 && !window.minarvaDesktop; i++) await new Promise((r) => setTimeout(r, 20));
-      if (!window.minarvaDesktop) { if (!cancelled) setDbError("Electron bridge missing. Reinstall Minarva Biz desktop."); return; }
-      const result = await bootstrapDesktopSqlite();
-      if (cancelled) return;
-      if (!result.ok) { setDbError(result.error || "SQLite failed to initialize"); return; }
-      const state = await window.minarvaDesktop.getTrialState();
-      if (cancelled) return;
-      setTrialState(state);
-      setDbReady(true);
-      fetchDashboardData().then(setDash);
-    })();
-    return () => { cancelled = true; };
-  }, []);
+  React.useEffect(() => { let cancelled=false; (async()=>{ for(let i=0;i<50&&!window.minarvaDesktop;i++) await new Promise(r=>setTimeout(r,20)); if(!window.minarvaDesktop){if(!cancelled)setDbError("Electron bridge missing. Reinstall Minarva Biz desktop.");return;} const result=await bootstrapDesktopSqlite(); if(cancelled)return; if(!result.ok){setDbError(result.error||"SQLite failed to initialize");return;} const state=await window.minarvaDesktop.getTrialState(); if(cancelled)return; setTrialState(state); setDbReady(true); fetchDashboardData().then(setDash); })(); return()=>{cancelled=true;}; }, []);
+  React.useEffect(() => { if(dbReady) refreshAll(); }, [dbReady, refreshAll]);
+  React.useEffect(() => { if(!dbReady)return; fetchDashboardData().then(setDash); const reminders=runAutomatedCustomerReminders(); if(reminders.deliveryRemindersQueued||reminders.paymentRemindersQueued)void persistDomainToSqlite(); if(!window.minarvaDesktop||!shouldRunAutoBackup()||autoBackupInFlight.current)return; autoBackupInFlight.current=true; let cancelled=false; (async()=>{try{const settings=getAutoBackupSettings();const result=await window.minarvaDesktop!.createAutomaticBackup();if(cancelled||result.cancelled)return;if(!result.ok){recordBackupFailure(result.error||"Automatic backup failed");return;}if(result.path)recordBackupSuccess(result.path,"auto",result.sizeBytes);await window.minarvaDesktop!.pruneAutomaticBackups(settings.retentionCount);if(!cancelled)void persistDomainToSqlite();}catch(error){if(!cancelled)recordBackupFailure(error instanceof Error?error.message:String(error));}finally{autoBackupInFlight.current=false;}})(); return()=>{cancelled=true;}; }, [dbReady,moduleTick]);
+  React.useEffect(() => { if(!trialState?.activated||trialState.synced||!trialState.registration)return; const apiUrl=import.meta.env.VITE_LICENSE_API_URL as string|undefined; if(!apiUrl||!window.minarvaDesktop)return; let cancelled=false; (async()=>{try{const deviceId=await window.minarvaDesktop!.getDeviceId!();const response=await fetch(`${apiUrl.replace(/\/$/,"")}/api/trial/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...trialState.registration,deviceId})});const payload=await response.json().catch(()=>({}));if(!cancelled&&response.ok&&payload.ok){await window.minarvaDesktop!.markTrialSynced();setTrialState(await window.minarvaDesktop!.getTrialState());}}catch{/* offline retry */}})(); return()=>{cancelled=true;}; }, [trialState]);
 
-  React.useEffect(() => { if (dbReady) refreshAll(); }, [dbReady, refreshAll]);
-  React.useEffect(() => {
-    if (!dbReady) return;
-    fetchDashboardData().then(setDash);
-    const reminders = runAutomatedCustomerReminders();
-    if (reminders.deliveryRemindersQueued || reminders.paymentRemindersQueued) {
-      void persistDomainToSqlite();
-    }
-    if (!window.minarvaDesktop || !shouldRunAutoBackup() || autoBackupInFlight.current) return;
-    autoBackupInFlight.current = true;
-    let cancelled = false;
-    (async () => {
-      try {
-        const settings = getAutoBackupSettings();
-        const result = await window.minarvaDesktop!.createAutomaticBackup();
-        if (cancelled || result.cancelled) return;
-        if (!result.ok) {
-          recordBackupFailure(result.error || "Automatic backup failed");
-          return;
-        }
-        if (result.path) recordBackupSuccess(result.path, "auto", result.sizeBytes);
-        await window.minarvaDesktop!.pruneAutomaticBackups(settings.retentionCount);
-        if (!cancelled) void persistDomainToSqlite();
-      } catch (error) {
-        if (!cancelled) recordBackupFailure(error instanceof Error ? error.message : String(error));
-      } finally {
-        autoBackupInFlight.current = false;
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [dbReady, moduleTick]);
-
-  React.useEffect(() => {
-    if (!trialState?.activated || trialState.synced || !trialState.registration) return;
-    const apiUrl = import.meta.env.VITE_LICENSE_API_URL as string | undefined;
-    if (!apiUrl || !window.minarvaDesktop) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const deviceId = await window.minarvaDesktop!.getDeviceId!();
-        const response = await fetch(`${apiUrl.replace(/\/$/, "")}/api/trial/register`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...trialState.registration, deviceId }),
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!cancelled && response.ok && payload.ok) {
-          await window.minarvaDesktop!.markTrialSynced();
-          setTrialState(await window.minarvaDesktop!.getTrialState());
-        }
-      } catch { /* offline: retry on a later launch/connect */ }
-    })();
-    return () => { cancelled = true; };
-  }, [trialState]);
-
-  async function activateTrial(registration: TrialRegistration): Promise<{ ok: boolean; error?: string }> {
-    if (!window.minarvaDesktop) return { ok: false, error: "Desktop security bridge is unavailable." };
-    const apiUrl = import.meta.env.VITE_LICENSE_API_URL as string | undefined;
-    if (apiUrl) {
-      try {
-        const deviceId = await window.minarvaDesktop.getDeviceId!();
-        const response = await fetch(`${apiUrl.replace(/\/$/, "")}/api/trial/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...registration, deviceId }) });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok || !payload.ok) return { ok: false, error: payload.error || "Trial registration was not accepted." };
-        const local = await window.minarvaDesktop.activateTrial(registration);
-        if (!local.ok) return local;
-        if (payload.ok && window.minarvaDesktop.markTrialSynced) await window.minarvaDesktop.markTrialSynced();
-        setTrialState(await window.minarvaDesktop.getTrialState());
-        return { ok: true };
-      } catch { /* allow an offline first activation below */ }
-    }
-    const local = await window.minarvaDesktop.activateTrial(registration);
-    if (!local.ok) return local;
-    setTrialState(await window.minarvaDesktop.getTrialState());
-    return { ok: true };
-  }
+  async function activateTrial(registration: TrialRegistration): Promise<{ok:boolean;error?:string}>{ if(!window.minarvaDesktop)return{ok:false,error:"Desktop security bridge is unavailable."}; const apiUrl=import.meta.env.VITE_LICENSE_API_URL as string|undefined; if(apiUrl){try{const deviceId=await window.minarvaDesktop.getDeviceId!();const response=await fetch(`${apiUrl.replace(/\/$/,"")}/api/trial/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...registration,deviceId})});const payload=await response.json().catch(()=>({}));if(!response.ok||!payload.ok)return{ok:false,error:payload.error||"Trial registration was not accepted."};const local=await window.minarvaDesktop.activateTrial(registration);if(!local.ok)return local;if(payload.ok&&window.minarvaDesktop.markTrialSynced)await window.minarvaDesktop.markTrialSynced();setTrialState(await window.minarvaDesktop.getTrialState());return{ok:true};}catch{/* offline activation below */}} const local=await window.minarvaDesktop.activateTrial(registration);if(!local.ok)return local;setTrialState(await window.minarvaDesktop.getTrialState());return{ok:true}; }
 
   function resetCustomerForm(){setCustForm({name:"",phone:"",whatsapp:"",email:"",address:"",birthday:"",notes:""});}
   function resetProductForm(){setProductForm({name:"",sku:"",barcode:"",categoryId:"",brand:"",size:"",color:"",fabric:"",unit:"pcs",costPrice:"",sellingPrice:"",discount:"0",taxRate:"0",stockQuantity:"",minimumStock:"0",supplierId:"",imageUrl:"",notes:"",hasVariants:false});}
   function openCustomerCreator(){setModuleError(null);setCustOpen(true);}
-  function handleCreateCustomer(){try{if(!custForm.name.trim())throw new Error("Customer name is required");store.createCustomer({name:custForm.name.trim(),phone:custForm.phone||null,whatsapp:custForm.whatsapp||null,email:custForm.email||null,address:custForm.address||null,birthday:custForm.birthday||null,notes:custForm.notes||null});setCustomers(store.listCustomers());setCustOpen(false);resetCustomerForm();setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(error instanceof Error?error.message:String(error));}}
+  function handleCreateCustomer(){try{if(!custForm.name.trim())throw new Error("Customer name is required");store.createCustomer({name:custForm.name.trim(),phone:custForm.phone||null,whatsapp:custForm.whatsapp||null,email:custForm.email||null,address:custForm.address||null,notes:custForm.notes||null});setCustomers(store.listCustomers());setCustOpen(false);resetCustomerForm();setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(error instanceof Error?error.message:String(error));}}
   function handleCreateProduct(){try{if(!productForm.name.trim())throw new Error("Product name is required");store.createProduct({name:productForm.name.trim(),sku:productForm.sku||null,barcode:productForm.barcode||null,categoryId:productForm.categoryId||null,brand:productForm.brand||null,size:productForm.size||null,color:productForm.color||null,fabric:productForm.fabric||null,unit:productForm.unit||"pcs",costPrice:Number(productForm.costPrice)||0,sellingPrice:Number(productForm.sellingPrice)||0,discount:Number(productForm.discount)||0,taxRate:Number(productForm.taxRate)||0,stockQuantity:Number(productForm.stockQuantity)||0,minimumStock:Number(productForm.minimumStock)||0,supplierId:productForm.supplierId||null,imageUrl:productForm.imageUrl||null,notes:productForm.notes||null,isActive:true});setProducts(store.listProducts({lowStockOnly}));setProductOpen(false);resetProductForm();setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(error instanceof Error?error.message:String(error));}}
-  if (dbError) return <div style={{ padding: 32, fontFamily: "system-ui", maxWidth: 560 }}><h1>Database required</h1><p>Minarva Biz Offline cannot start without SQLite.</p><pre>{dbError}</pre></div>;
-  if (!dbReady || !trialState) return <div style={{ padding: 48, fontFamily: "system-ui", textAlign: "center" }}><p>Initializing Minarva Biz…</p></div>;
-  if (trialState.status !== "active") return <TrialGate state={trialState} onActivate={activateTrial} />;
 
-  const actions: QuickAction[] = [
-    { id: "sale", label: "New Sale", description: "Create Invoice", icon: <span>🛒</span>, tone: "blue", onClick: () => { setActiveNav("sales"); setSalesTab("pos"); } },
-    { id: "order", label: "New Order", description: "Tailoring Order", icon: <span>👗</span>, tone: "pink", onClick: () => { setActiveNav("services"); setCreateOpen(true); } },
-  ];
+  if(dbError)return <div style={{padding:32,fontFamily:"system-ui",maxWidth:560}}><h1>Database required</h1><p>Minarva Biz Offline cannot start without SQLite.</p><pre>{dbError}</pre></div>;
+  if(!dbReady||!trialState)return <div style={{padding:48,fontFamily:"system-ui",textAlign:"center"}}><p>Initializing Minarva Biz…</p></div>;
+  if(trialState.status!=="active")return <TrialGate state={trialState} onActivate={activateTrial}/>;
 
-  function handleSale(payload: { customerId: string | null; lines: CartLine[]; paidAmount: number; paymentMethod: PaymentMethod }) {
-    const result = store.createSale(payload); if (result.errors.length) return { success: false, errors: result.errors }; void persistAndRefresh(); return { success: true, invoiceNumber: result.sale.invoiceNumber };
-  }
+  const actions:QuickAction[]=[{id:"sale",label:"New Sale",description:"Create Invoice",icon:<span>🛒</span>,tone:"blue",onClick:()=>{setActiveNav("sales");setSalesTab("pos");}},{id:"order",label:"New Order",description:"Tailoring Order",icon:<span>👗</span>,tone:"pink",onClick:()=>{setActiveNav("services");setCreateOpen(true);}}];
+  function handleSale(payload:{customerId:string|null;lines:CartLine[];paidAmount:number;paymentMethod:PaymentMethod}){const result=store.createSale(payload);if(result.errors.length)return{success:false,errors:result.errors};void persistAndRefresh();return{success:true,invoiceNumber:result.sale.invoiceNumber};}
+  function handleCreateOrder(){const price=form.serviceType==="tshirt_printing"?form.tshirt.customerPrice:form.serviceType==="wholesale"||form.serviceType==="uniform"?(parseFloat(form.unitPrice)||0)*(parseInt(form.quantity,10)||1):parseFloat(form.price)||0;const result=ordersStore.createOrder({customerId:form.customerId,serviceType:form.serviceType,deliveryDate:form.deliveryDate||null,price,discount:parseFloat(form.discount)||0,advance:parseFloat(form.advance)||0,notes:form.notes||null,materialDetails:form.materialDetails||null,customerSuppliedMaterial:form.customerSuppliedMaterial,shopSuppliedMaterial:form.shopSuppliedMaterial,measurements:form.measurements,measurementProfileId:form.measurementProfileId||null,externalMaterialCost:parseFloat(form.externalMaterialCost)||0,quantity:parseInt(form.quantity,10)||1,unitPrice:parseFloat(form.unitPrice)||undefined,bulkDiscount:parseFloat(form.bulkDiscount)||0,tshirt:form.serviceType==="tshirt_printing"?form.tshirt:null});if(result.errors.length||!result.order){setFormError(result.errors.join("; ")||"Failed");return;}setCreateOpen(false);setForm(emptyOrderForm());setFormError(null);void persistAndRefresh();setSelectedOrder(result.order);}
+  function handleOrderStatusChange(orderId:string,status:OrderStatus){const result=ordersStore.updateOrderStatus(orderId,status);if(result.error||!result.order){setModuleError(result.error||"Unable to change order status");return;}setModuleError(null);setSelectedOrder(result.order);void persistAndRefresh();}
+  function handleQualityCheck(input:{passed:boolean;notes:string;issues:string[]}){if(!selectedOrder)return;const result=recordOrderQualityCheck({orderId:selectedOrder.id,...input});if(result.error||!result.order){setModuleError(result.error||"Unable to record quality check");return;}setModuleError(null);setSelectedOrder(result.order);void persistAndRefresh();}
+  function handleAssignStaff(orderId:string,staffId:string){const result=phase6Store.assignStaffToOrder({orderId,staffId});if(result.errors.length||!result.assignment){setModuleError(result.errors.join("; ")||"Unable to assign staff");return;}setModuleError(null);const updated=ordersStore.getOrder(orderId);if(updated)setSelectedOrder(updated);void persistAndRefresh();}
+  function handleCreateLaundry(data:{customerId:string;garment:string;quantity:number;supplierId:string|null;supplierRate:number;customerRate:number;paidAmount:number;notes:string}){if(!laundryMode)return;const result=phase5Store.createLaundryOrder({...data,mode:laundryMode,paymentMethod:"cash"});if(result.errors.length||!result.order){setLaundryError(result.errors.join("; ")||"Failed to create laundry ticket");return;}setLaundryMode(null);setLaundryError(null);void persistAndRefresh();}
+  function handleCreateExpense(){const result=phase5Store.createExpense({date:expenseForm.date||undefined,categoryId:expenseForm.categoryId,amount:parseFloat(expenseForm.amount)||0,paymentMethod:expenseForm.paymentMethod,description:expenseForm.description||null,reference:expenseForm.reference||null,receiptUrl:expenseForm.receiptUrl||null,staffId:expenseForm.staffId||null,orderId:expenseForm.orderId||null});if(result.errors.length||!result.expense){setModuleError(result.errors.join("; ")||"Failed to create expense");return;}setExpenseOpen(false);setModuleError(null);setExpenseForm({date:"",categoryId:"",amount:"",paymentMethod:"cash",description:"",reference:"",receiptUrl:"",staffId:"",orderId:""});void persistAndRefresh();}
+  function handleCreatePurchase(){const result=phase5Store.createPurchase({date:purchaseForm.date||undefined,supplierId:purchaseForm.supplierId||null,description:purchaseForm.description,amount:parseFloat(purchaseForm.amount)||0,paymentMethod:purchaseForm.paymentMethod,paidAmount:parseFloat(purchaseForm.paidAmount)||0,kind:purchaseForm.kind,orderId:purchaseForm.orderId||null,notes:purchaseForm.notes||null});if(result.errors.length||!result.purchase){setModuleError(result.errors.join("; ")||"Failed to create purchase");return;}setPurchaseOpen(false);setModuleError(null);setPurchaseForm({date:"",supplierId:"",description:"",amount:"",paidAmount:"",paymentMethod:"cash",kind:"general",orderId:"",notes:""});void persistAndRefresh();}
+  function handleCreateStaff(){if(!staffForm.name.trim()){setModuleError("Staff name is required");return;}const result=phase6Store.createStaff({name:staffForm.name.trim(),phone:staffForm.phone||null,email:staffForm.email||null,role:staffForm.role,salary:parseFloat(staffForm.salary)||0,joiningDate:staffForm.joiningDate||null,status:staffForm.status,notes:staffForm.notes||null});if(!result){setModuleError("Failed to create staff");return;}setStaffOpen(false);setModuleError(null);setStaffForm({name:"",phone:"",email:"",role:"staff",salary:"",joiningDate:"",status:"active",notes:""});void persistAndRefresh();}
+  function saveSettings(){void persistAndRefresh();setModuleTick(v=>v+1);}
+  const navTo=(id:NavItemId)=>{setActiveNav(id);setSelectedOrder(null);};
+  const handleInsightAction=(action:string)=>{const targets:Record<string,NavItemId>={"Review low stock":"sales","Open outstanding payments":"reports","Review pending orders":"services","Open ready orders":"services","Open reports":"reports","Review expenses":"expenses"};const target=targets[action];if(target)navTo(target);};
 
-  function handleCreateOrder() {
-    const price = form.serviceType === "tshirt_printing" ? form.tshirt.customerPrice : form.serviceType === "wholesale" || form.serviceType === "uniform" ? (parseFloat(form.unitPrice) || 0) * (parseInt(form.quantity, 10) || 1) : parseFloat(form.price) || 0;
-    const result = ordersStore.createOrder({ customerId: form.customerId, serviceType: form.serviceType, deliveryDate: form.deliveryDate || null, price, discount: parseFloat(form.discount) || 0, advance: parseFloat(form.advance) || 0, notes: form.notes || null, materialDetails: form.materialDetails || null, customerSuppliedMaterial: form.customerSuppliedMaterial, shopSuppliedMaterial: form.shopSuppliedMaterial, measurements: form.measurements, measurementProfileId: form.measurementProfileId || null, externalMaterialCost: parseFloat(form.externalMaterialCost) || 0, quantity: parseInt(form.quantity, 10) || 1, unitPrice: parseFloat(form.unitPrice) || undefined, bulkDiscount: parseFloat(form.bulkDiscount) || 0, tshirt: form.serviceType === "tshirt_printing" ? form.tshirt : null });
-    if (result.errors.length || !result.order) { setFormError(result.errors.join("; ") || "Failed"); return; }
-    setCreateOpen(false); setForm(emptyOrderForm()); setFormError(null); void persistAndRefresh(); setSelectedOrder(result.order);
-  }
+  const laundry=phase5Store.listLaundryOrders(), expenses=phase5Store.listExpenses(), purchases=phase5Store.listPurchases(), staff=phase6Store.listStaff(), assignments=phase6Store.listAssignments(), notifications=phase6Store.listNotifications(), reportSales=phase7Store.salesReport(), reportDayEnd=phase7Store.dayEndReport(), reportStock=phase7Store.stockReport(), reportOutstanding=phase7Store.outstandingPaymentsReport(), backups=phase7Store.listBackups(), suppliers=phase5Store.listSuppliers(), expenseCategories=phase5Store.listExpenseCategories(), profile=getShopProfile(), tax=getTaxConfig(), backupSettings=getAutoBackupSettings(), view=activeNav as string;
 
-  function handleOrderStatusChange(orderId: string, status: OrderStatus) {
-    const result = ordersStore.updateOrderStatus(orderId, status);
-    if (result.error || !result.order) { setModuleError(result.error || "Unable to change order status"); return; }
-    setModuleError(null);
-    setSelectedOrder(result.order);
-    void persistAndRefresh();
-  }
+  return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png"}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:phase6Store.unreadNotificationCount(),onMessagesClick:()=>navTo("notifications"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("reports")}}>
+    {view==="dashboard"&&dash&&<Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/>}
+    {view==="customers"&&<CustomerList customers={customers} onAdd={openCustomerCreator} onSearch={q=>setCustomers(store.listCustomers(q))}/>}
+    {view==="products"&&<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={()=>setLowStockOnly(v=>!v)} onAdd={()=>{resetProductForm();setProductOpen(true);}}/>}
+    {view==="sales"&&<div className="space-y-4"><div className="flex gap-2"><Button variant={salesTab==="pos"?"primary":"outline"} onClick={()=>setSalesTab("pos")}>POS Billing</Button><Button variant={salesTab==="history"?"primary":"outline"} onClick={()=>setSalesTab("history")}>Sales History</Button></div>{salesTab==="pos"?<PosBilling products={products} customers={customers} onAddCustomer={openCustomerCreator} onCompleteSale={handleSale}/>:<SalesList sales={sales}/>}</div>}
+    {view==="services"&&<div className="space-y-4"><div className="flex flex-wrap items-center gap-2"><Button variant={orderView==="table"?"primary":"outline"} onClick={()=>setOrderView("table")}>Orders Table</Button><Button variant={orderView==="production"?"primary":"outline"} onClick={()=>setOrderView("production")}>Production Board</Button></div>{orderView==="production"?<ProductionBoard orders={orders} staff={staff} assignments={assignments} onSelect={setSelectedOrder} onStatusChange={handleOrderStatusChange} onAssignStaff={handleAssignStaff}/>:<OrderList orders={orders} onSearch={setOrderQuery} onFilterStatus={setOrderStatus} onFilterType={setOrderType} onAdd={()=>{setForm(emptyOrderForm());setCreateOpen(true);}} onSelect={order=>{setSelectedOrder(order);setProfiles(ordersStore.listMeasurementProfiles(order.customerId));}}/>}{selectedOrder&&<OrderDetail order={selectedOrder} measurementProfiles={profiles} onStatusChange={handleOrderStatusChange.bind(null,selectedOrder.id)} onQualityCheck={handleQualityCheck}/>}<Modal open={createOpen} title="New Service Order" onClose={()=>setCreateOpen(false)}><OrderForm value={form} customers={customers} profiles={profiles} onChange={setForm} onLoadProfiles={customerId=>setProfiles(ordersStore.listMeasurementProfiles(customerId))} onAddCustomer={openCustomerCreator} onSubmit={handleCreateOrder} onCancel={()=>setCreateOpen(false)} error={formError}/></Modal></div>}
+    {view==="laundry"&&<LaundryList orders={laundry} onAddIroning={()=>setLaundryMode("in_house_ironing")} onAddOutsourced={()=>setLaundryMode("outsourced")}/>} 
+    {view==="expenses"&&<ExpenseList expenses={expenses} onAdd={()=>setExpenseOpen(true)}/>} 
+    {view==="purchases"&&<PurchaseList purchases={purchases} onAdd={()=>setPurchaseOpen(true)}/>} 
+    {view==="staff"&&<StaffList staff={staff} onAdd={()=>setStaffOpen(true)}/>} 
+    {view==="notifications"&&<NotificationCenter notifications={notifications}/>} 
+    {view==="reports"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding}/>} 
+    {view==="backup"&&<BackupPanel backups={backups}/>} 
+    {view==="settings"&&<SettingsPanel profile={profile} tax={tax} backup={backupSettings} onSaveProfile={v=>{updateShopProfile(v);saveSettings();}} onSaveTax={v=>{updateTaxConfig(v);saveSettings();}} onSaveBackup={v=>{setAutoBackupSettings(v);saveSettings();}}/>}
 
-  function handleQualityCheck(input: { passed: boolean; notes: string; issues: string[] }) {
-    if (!selectedOrder) return;
-    const result = recordOrderQualityCheck({ orderId: selectedOrder.id, ...input });
-    if (result.error || !result.order) { setModuleError(result.error || "Unable to record quality check"); return; }
-    setModuleError(null);
-    setSelectedOrder(result.order);
-    void persistAndRefresh();
-  }
-
-  function handleAssignStaff(orderId: string, staffId: string) {
-    const result = phase6Store.assignStaffToOrder({ orderId, staffId });
-    if (result.errors.length || !result.assignment) { setModuleError(result.errors.join("; ") || "Unable to assign staff"); return; }
-    setModuleError(null);
-    const updated = ordersStore.getOrder(orderId);
-    if (updated) setSelectedOrder(updated);
-    void persistAndRefresh();
-  }
-
-  function handleCreateLaundry(data: { customerId: string; garment: string; quantity: number; supplierId: string | null; supplierRate: number; customerRate: number; paidAmount: number; notes: string }) {
-    if (!laundryMode) return;
-    const result = phase5Store.createLaundryOrder({ ...data, mode: laundryMode, paymentMethod: "cash" });
-    if (result.errors.length || !result.order) { setLaundryError(result.errors.join("; ") || "Failed to create laundry ticket"); return; }
-    setLaundryMode(null); setLaundryError(null); void persistAndRefresh();
-  }
-
-  function handleCreateExpense() {
-    const result = phase5Store.createExpense({ categoryId: expenseForm.categoryId, amount: parseFloat(expenseForm.amount) || 0, paymentMethod: expenseForm.paymentMethod, description: expenseForm.description || null, reference: expenseForm.reference || null, orderId: expenseForm.orderId || null });
-    if (result.errors.length || !result.expense) { setModuleError(result.errors.join("; ") || "Failed to create expense"); return; }
-    setExpenseOpen(false); setModuleError(null); setExpenseForm({ categoryId: "", amount: "", paymentMethod: "cash", description: "", reference: "", orderId: "" }); void persistAndRefresh();
-  }
-
-  function handleCreatePurchase() {
-    const result = phase5Store.createPurchase({ supplierId: purchaseForm.supplierId || null, description: purchaseForm.description, amount: parseFloat(purchaseForm.amount) || 0, paymentMethod: purchaseForm.paymentMethod, paidAmount: parseFloat(purchaseForm.paidAmount) || 0, kind: purchaseForm.kind, orderId: purchaseForm.orderId || null, notes: purchaseForm.notes || null });
-    if (result.errors.length || !result.purchase) { setModuleError(result.errors.join("; ") || "Failed to create purchase"); return; }
-    setPurchaseOpen(false); setModuleError(null); setPurchaseForm({ supplierId: "", description: "", amount: "", paidAmount: "", paymentMethod: "cash", kind: "general", orderId: "", notes: "" }); void persistAndRefresh();
-  }
-
-  function handleCreateStaff() {
-    if (!staffForm.name.trim()) { setModuleError("Staff name is required"); return; }
-    phase6Store.createStaff({ name: staffForm.name.trim(), phone: staffForm.phone || null, email: staffForm.email || null, role: staffForm.role, salary: parseFloat(staffForm.salary) || 0, joiningDate: staffForm.joiningDate || null, notes: staffForm.notes || null });
-    setStaffOpen(false); setModuleError(null); setStaffForm({ name: "", phone: "", email: "", role: "staff", salary: "", joiningDate: "", notes: "" }); void persistAndRefresh();
-  }
-
-  function saveSettings() {
-    void persistAndRefresh();
-    setModuleTick((v) => v + 1);
-  }
-
-  const navTo = (id: NavItemId) => { setActiveNav(id); setSelectedOrder(null); };
-  const handleInsightAction = (action: string) => {
-    const targets: Record<string, NavItemId> = {
-      "Review low stock": "sales",
-      "Open outstanding payments": "reports",
-      "Review pending orders": "services",
-      "Open ready orders": "services",
-      "Open reports": "reports",
-      "Review expenses": "expenses",
-    };
-    const target = targets[action];
-    if (target) navTo(target);
-  };
-  const laundry = phase5Store.listLaundryOrders();
-  const expenses = phase5Store.listExpenses();
-  const purchases = phase5Store.listPurchases();
-  const staff = phase6Store.listStaff();
-  const assignments = phase6Store.listAssignments();
-  const notifications = phase6Store.listNotifications();
-  const reportSales = phase7Store.salesReport();
-  const reportDayEnd = phase7Store.dayEndReport();
-  const reportStock = phase7Store.stockReport();
-  const reportOutstanding = phase7Store.outstandingPaymentsReport();
-  const backups = phase7Store.listBackups();
-  const suppliers = phase5Store.listSuppliers();
-  const expenseCategories = phase5Store.listExpenseCategories();
-  const profile = getShopProfile();
-  const tax = getTaxConfig();
-  const backupSettings = getAutoBackupSettings();
-  const view = activeNav as string;
-
-  return <AppShell activeNav={activeNav} onNavigate={(_href, id) => navTo(id)} sidebar={{ user: { name: "Admin", role: "Super Admin" }, logoSrc: "logo-mark.png" }} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:phase6Store.unreadNotificationCount(),onMessagesClick:()=>navTo("notifications"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("reports")}}>
-    {view === "dashboard" && dash && <Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction} />}
-    {view === "customers" && <CustomerList customers={customers} onAdd={openCustomerCreator} onSearch={(q)=>setCustomers(store.listCustomers(q))} />}
-    {view === "products" && <ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={() => setLowStockOnly((v) => !v)} onAdd={()=>{resetProductForm();setProductOpen(true);}} />}
-    {view === "sales" && <div className="space-y-4"><div className="flex gap-2"><Button variant={salesTab === "pos" ? "primary" : "outline"} onClick={() => setSalesTab("pos")}>POS Billing</Button><Button variant={salesTab === "history" ? "primary" : "outline"} onClick={() => setSalesTab("history")}>Sales History</Button></div>{salesTab === "pos" ? <PosBilling products={products} customers={customers} onAddCustomer={openCustomerCreator} onCompleteSale={handleSale} /> : <SalesList sales={sales} />}</div>}
-    {view === "services" && <div className="space-y-4"><div className="flex flex-wrap items-center gap-2"><Button variant={orderView === "table" ? "primary" : "outline"} onClick={() => setOrderView("table")}>Orders Table</Button><Button variant={orderView === "production" ? "primary" : "outline"} onClick={() => setOrderView("production")}>Production Board</Button></div>{orderView === "production" ? <ProductionBoard orders={orders} staff={staff} assignments={assignments} onSelect={setSelectedOrder} onStatusChange={handleOrderStatusChange} onAssignStaff={handleAssignStaff} /> : <OrderList orders={orders} onSearch={setOrderQuery} onFilterStatus={setOrderStatus} onFilterType={setOrderType} onAdd={() => { setForm(emptyOrderForm()); setCreateOpen(true); }} onSelect={(order) => { setSelectedOrder(order); setProfiles(ordersStore.listMeasurementProfiles(order.customerId)); }} />}{selectedOrder && <OrderDetail order={selectedOrder} measurementProfiles={profiles} onStatusChange={handleOrderStatusChange.bind(null, selectedOrder.id)} onQualityCheck={handleQualityCheck} />}<Modal open={createOpen} title="New Service Order" onClose={() => setCreateOpen(false)}><OrderForm value={form} customers={customers} profiles={profiles} onChange={setForm} onLoadProfiles={(customerId) => setProfiles(ordersStore.listMeasurementProfiles(customerId))} onAddCustomer={openCustomerCreator} onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} error={formError} /></Modal></div>}
-    {view === "laundry" && <LaundryList orders={laundry} onAddIroning={() => setLaundryMode("in_house_ironing")} onAddOutsourced={() => setLaundryMode("outsourced")} />}
-    {view === "expenses" && <ExpenseList expenses={expenses} onAdd={() => setExpenseOpen(true)} />}
-    {view === "purchases" && <PurchaseList purchases={purchases} onAdd={() => setPurchaseOpen(true)} />}
-    {view === "staff" && <StaffList staff={staff} onAdd={() => setStaffOpen(true)} />}
-    {view === "notifications" && <NotificationCenter notifications={notifications} />}
-    {view === "reports" && <ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} />}
-    {view === "backup" && <BackupPanel backups={backups} />}
-    {view === "settings" && <SettingsPanel profile={profile} tax={tax} backup={backupSettings} onSaveProfile={(v) => { updateShopProfile(v); saveSettings(); }} onSaveTax={(v) => { updateTaxConfig(v); saveSettings(); }} onSaveBackup={(v) => { setAutoBackupSettings(v); saveSettings(); }} />}
-    <Modal open={!!laundryMode} title={laundryMode === "outsourced" ? "Outsourced Laundry" : "In-house Ironing"} onClose={() => setLaundryMode(null)}><LaundryForm mode={laundryMode || "outsourced"} customers={customers} suppliers={suppliers} onAddCustomer={openCustomerCreator} onSubmit={handleCreateLaundry} onCancel={() => setLaundryMode(null)} error={laundryError} /></Modal>
-    <Modal open={expenseOpen} title="Add Expense" onClose={() => setExpenseOpen(false)}><div className="space-y-4"><FormField label="Category"><select className={selectClass} value={expenseForm.categoryId} onChange={(e) => setExpenseForm({ ...expenseForm, categoryId: e.target.value })}>{expenseCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></FormField><FormField label="Amount"><input className={inputClass} type="number" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} /></FormField><Button onClick={handleCreateExpense}>Save Expense</Button></div></Modal>
-    <Modal open={purchaseOpen} title="Add Purchase" onClose={() => setPurchaseOpen(false)}><div className="space-y-4"><FormField label="Description"><input className={inputClass} value={purchaseForm.description} onChange={(e) => setPurchaseForm({ ...purchaseForm, description: e.target.value })} /></FormField><FormField label="Amount"><input className={inputClass} type="number" value={purchaseForm.amount} onChange={(e) => setPurchaseForm({ ...purchaseForm, amount: e.target.value })} /></FormField><Button onClick={handleCreatePurchase}>Save Purchase</Button></div></Modal>
-    <Modal open={staffOpen} title="Add Staff" onClose={() => setStaffOpen(false)}><div className="space-y-4"><FormField label="Name"><input className={inputClass} value={staffForm.name} onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })} /></FormField><FormField label="Phone"><input className={inputClass} value={staffForm.phone} onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })} /></FormField><Button onClick={handleCreateStaff}>Save Staff</Button></div></Modal>
-    {moduleError && <div className="fixed bottom-4 right-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 shadow">{moduleError}</div>}
+    <Modal open={!!laundryMode} title={laundryMode==="outsourced"?"Outsourced Laundry":"In-house Ironing"} onClose={()=>setLaundryMode(null)}><LaundryForm mode={laundryMode||"outsourced"} customers={customers} suppliers={suppliers} onAddCustomer={openCustomerCreator} onSubmit={handleCreateLaundry} onCancel={()=>setLaundryMode(null)} error={laundryError}/></Modal>
+    <Modal open={custOpen} title="Add Customer" onClose={()=>setCustOpen(false)} footer={<><Button type="button" variant="outline" onClick={()=>setCustOpen(false)}>Cancel</Button><Button type="button" onClick={handleCreateCustomer}>Save Customer</Button></>}><div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><FormField label="Name *"><input className={inputClass} value={custForm.name} onChange={e=>setCustForm({...custForm,name:e.target.value})}/></FormField><FormField label="Phone"><input className={inputClass} value={custForm.phone} onChange={e=>setCustForm({...custForm,phone:e.target.value})}/></FormField><FormField label="WhatsApp"><input className={inputClass} value={custForm.whatsapp} onChange={e=>setCustForm({...custForm,whatsapp:e.target.value})}/></FormField><FormField label="Email"><input className={inputClass} type="email" value={custForm.email} onChange={e=>setCustForm({...custForm,email:e.target.value})}/></FormField><FormField label="Address"><textarea className={inputClass} value={custForm.address} onChange={e=>setCustForm({...custForm,address:e.target.value})}/></FormField><FormField label="Birthday"><input className={inputClass} type="date" value={custForm.birthday} onChange={e=>setCustForm({...custForm,birthday:e.target.value})}/></FormField><FormField label="Notes"><textarea className={inputClass} value={custForm.notes} onChange={e=>setCustForm({...custForm,notes:e.target.value})}/></FormField></div></Modal>
+    <Modal open={productOpen} title="Add Product" onClose={()=>setProductOpen(false)} footer={<><Button type="button" variant="outline" onClick={()=>setProductOpen(false)}>Cancel</Button><Button type="button" onClick={handleCreateProduct}>Save Product</Button></>}><div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><FormField label="Product name *"><input className={inputClass} value={productForm.name} onChange={e=>setProductForm({...productForm,name:e.target.value})}/></FormField><FormField label="Category"><select className={selectClass} value={productForm.categoryId} onChange={e=>setProductForm({...productForm,categoryId:e.target.value})}><option value="">No category</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></FormField><FormField label="SKU"><input className={inputClass} value={productForm.sku} onChange={e=>setProductForm({...productForm,sku:e.target.value})}/></FormField><FormField label="Barcode"><input className={inputClass} value={productForm.barcode} onChange={e=>setProductForm({...productForm,barcode:e.target.value})}/></FormField><FormField label="Brand"><input className={inputClass} value={productForm.brand} onChange={e=>setProductForm({...productForm,brand:e.target.value})}/></FormField><FormField label="Fabric"><input className={inputClass} value={productForm.fabric} onChange={e=>setProductForm({...productForm,fabric:e.target.value})}/></FormField><FormField label="Size"><input className={inputClass} value={productForm.size} onChange={e=>setProductForm({...productForm,size:e.target.value})}/></FormField><FormField label="Color"><input className={inputClass} value={productForm.color} onChange={e=>setProductForm({...productForm,color:e.target.value})}/></FormField><FormField label="Unit"><input className={inputClass} value={productForm.unit} onChange={e=>setProductForm({...productForm,unit:e.target.value})}/></FormField><FormField label="Cost price"><input className={inputClass} type="number" value={productForm.costPrice} onChange={e=>setProductForm({...productForm,costPrice:e.target.value})}/></FormField><FormField label="Selling price *"><input className={inputClass} type="number" min="0" value={productForm.sellingPrice} onChange={e=>setProductForm({...productForm,sellingPrice:e.target.value})}/></FormField><FormField label="Discount %"><input className={inputClass} type="number" min="0" value={productForm.discount} onChange={e=>setProductForm({...productForm,discount:e.target.value})}/></FormField><FormField label="Tax %"><input className={inputClass} type="number" min="0" value={productForm.taxRate} onChange={e=>setProductForm({...productForm,taxRate:e.target.value})}/></FormField><FormField label="Opening stock"><input className={inputClass} type="number" min="0" value={productForm.stockQuantity} onChange={e=>setProductForm({...productForm,stockQuantity:e.target.value})}/></FormField><FormField label="Minimum stock"><input className={inputClass} type="number" min="0" value={productForm.minimumStock} onChange={e=>setProductForm({...productForm,minimumStock:e.target.value})}/></FormField><FormField label="Supplier"><select className={selectClass} value={productForm.supplierId} onChange={e=>setProductForm({...productForm,supplierId:e.target.value})}><option value="">No supplier</option>{suppliers.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></FormField><FormField label="Image URL"><input className={inputClass} value={productForm.imageUrl} onChange={e=>setProductForm({...productForm,imageUrl:e.target.value})}/></FormField><FormField label="Notes"><textarea className={inputClass} value={productForm.notes} onChange={e=>setProductForm({...productForm,notes:e.target.value})}/></FormField></div></Modal>
+    <Modal open={expenseOpen} title="Add Expense" onClose={()=>setExpenseOpen(false)} footer={<><Button type="button" variant="outline" onClick={()=>setExpenseOpen(false)}>Cancel</Button><Button type="button" onClick={handleCreateExpense}>Save Expense</Button></>}><div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><FormField label="Date"><input className={inputClass} type="date" value={expenseForm.date} onChange={e=>setExpenseForm({...expenseForm,date:e.target.value})}/></FormField><FormField label="Category *"><select className={selectClass} value={expenseForm.categoryId} onChange={e=>setExpenseForm({...expenseForm,categoryId:e.target.value})}>{expenseCategories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></FormField><FormField label="Amount *"><input className={inputClass} type="number" min="0" value={expenseForm.amount} onChange={e=>setExpenseForm({...expenseForm,amount:e.target.value})}/></FormField><FormField label="Payment method"><select className={selectClass} value={expenseForm.paymentMethod} onChange={e=>setExpenseForm({...expenseForm,paymentMethod:e.target.value as PaymentMethod})}><option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="other">Other</option></select></FormField><FormField label="Staff / Paid to"><select className={selectClass} value={expenseForm.staffId} onChange={e=>setExpenseForm({...expenseForm,staffId:e.target.value})}><option value="">General</option>{staff.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></FormField><FormField label="Order link"><select className={selectClass} value={expenseForm.orderId} onChange={e=>setExpenseForm({...expenseForm,orderId:e.target.value})}><option value="">General</option>{orders.map(o=><option key={o.id} value={o.id}>{o.orderNumber}</option>)}</select></FormField><FormField label="Description"><textarea className={inputClass} value={expenseForm.description} onChange={e=>setExpenseForm({...expenseForm,description:e.target.value})}/></FormField><FormField label="Reference"><input className={inputClass} value={expenseForm.reference} onChange={e=>setExpenseForm({...expenseForm,reference:e.target.value})}/></FormField><FormField label="Receipt reference"><input className={inputClass} value={expenseForm.receiptUrl} onChange={e=>setExpenseForm({...expenseForm,receiptUrl:e.target.value})}/></FormField></div></Modal>
+    <Modal open={purchaseOpen} title="Add Purchase" onClose={()=>setPurchaseOpen(false)} footer={<><Button type="button" variant="outline" onClick={()=>setPurchaseOpen(false)}>Cancel</Button><Button type="button" onClick={handleCreatePurchase}>Save Purchase</Button></>}><div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><FormField label="Date"><input className={inputClass} type="date" value={purchaseForm.date} onChange={e=>setPurchaseForm({...purchaseForm,date:e.target.value})}/></FormField><FormField label="Supplier"><select className={selectClass} value={purchaseForm.supplierId} onChange={e=>setPurchaseForm({...purchaseForm,supplierId:e.target.value})}><option value="">Select supplier</option>{suppliers.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></FormField><FormField label="Description *"><textarea className={inputClass} value={purchaseForm.description} onChange={e=>setPurchaseForm({...purchaseForm,description:e.target.value})}/></FormField><FormField label="Amount *"><input className={inputClass} type="number" min="0" value={purchaseForm.amount} onChange={e=>setPurchaseForm({...purchaseForm,amount:e.target.value})}/></FormField><FormField label="Paid amount"><input className={inputClass} type="number" min="0" value={purchaseForm.paidAmount} onChange={e=>setPurchaseForm({...purchaseForm,paidAmount:e.target.value})}/></FormField><FormField label="Payment method"><select className={selectClass} value={purchaseForm.paymentMethod} onChange={e=>setPurchaseForm({...purchaseForm,paymentMethod:e.target.value as PaymentMethod})}><option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="other">Other</option></select></FormField><FormField label="Purchase type"><select className={selectClass} value={purchaseForm.kind} onChange={e=>setPurchaseForm({...purchaseForm,kind:e.target.value as "general"|"order_specific"})}><option value="general">General / Stock</option><option value="order_specific">Order-specific</option></select></FormField><FormField label="Order link"><select className={selectClass} value={purchaseForm.orderId} onChange={e=>setPurchaseForm({...purchaseForm,orderId:e.target.value})}><option value="">None</option>{orders.map(o=><option key={o.id} value={o.id}>{o.orderNumber}</option>)}</select></FormField><FormField label="Notes"><textarea className={inputClass} value={purchaseForm.notes} onChange={e=>setPurchaseForm({...purchaseForm,notes:e.target.value})}/></FormField></div></Modal>
+    <Modal open={staffOpen} title="Add Staff" onClose={()=>setStaffOpen(false)} footer={<><Button type="button" variant="outline" onClick={()=>setStaffOpen(false)}>Cancel</Button><Button type="button" onClick={handleCreateStaff}>Save Staff</Button></>}><div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><FormField label="Full name *"><input className={inputClass} value={staffForm.name} onChange={e=>setStaffForm({...staffForm,name:e.target.value})}/></FormField><FormField label="Phone"><input className={inputClass} value={staffForm.phone} onChange={e=>setStaffForm({...staffForm,phone:e.target.value})}/></FormField><FormField label="Email"><input className={inputClass} type="email" value={staffForm.email} onChange={e=>setStaffForm({...staffForm,email:e.target.value})}/></FormField><FormField label="Role"><select className={selectClass} value={staffForm.role} onChange={e=>setStaffForm({...staffForm,role:e.target.value as RoleName})}><option value="staff">Staff</option><option value="tailor">Tailor</option><option value="cashier">Cashier</option><option value="manager">Manager</option><option value="admin">Admin</option></select></FormField><FormField label="Salary"><input className={inputClass} type="number" min="0" value={staffForm.salary} onChange={e=>setStaffForm({...staffForm,salary:e.target.value})}/></FormField><FormField label="Joining date"><input className={inputClass} type="date" value={staffForm.joiningDate} onChange={e=>setStaffForm({...staffForm,joiningDate:e.target.value})}/></FormField><FormField label="Status"><select className={selectClass} value={staffForm.status} onChange={e=>setStaffForm({...staffForm,status:e.target.value as "active"|"inactive"|"on_leave"})}><option value="active">Active</option><option value="inactive">Inactive</option><option value="on_leave">On leave</option></select></FormField><FormField label="Notes"><textarea className={inputClass} value={staffForm.notes} onChange={e=>setStaffForm({...staffForm,notes:e.target.value})}/></FormField></div></Modal>
+    {moduleError&&<div className="fixed bottom-4 right-4 z-50 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 shadow">{moduleError}</div>}
   </AppShell>;
 }
