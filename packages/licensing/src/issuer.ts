@@ -3,9 +3,7 @@
  * Never import this into web/desktop client bundles with a real private key.
  */
 
-import type {
-  LicensePayload, LicensePlan, Edition, LicenseFeatures, UUID,
-} from "@minarvabiz/types";
+import type { LicensePayload, LicensePlan, Edition, LicenseFeatures, UUID } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { signLicense } from "./token";
 import { PLAN_FEATURES } from "./features";
@@ -19,18 +17,13 @@ export interface IssueLicenseInput {
   expiresAt?: string | null;
   activationLimit?: number;
   deviceBindings?: string[];
+  /** Optional per-license feature reductions. Features not enabled by the plan cannot be granted. */
+  featureOverrides?: Partial<LicenseFeatures>;
   privateKeyHex: string;
 }
 
-export interface IssuedLicense {
-  token: string;
-  payload: LicensePayload;
-  customerName: string;
-  issuedAt: string;
-}
-
+export interface IssuedLicense { token: string; payload: LicensePayload; customerName: string; issuedAt: string; }
 const issuedLog: IssuedLicense[] = [];
-
 const PLANS = new Set<LicensePlan>(["trial", "basic", "professional", "business", "enterprise"]);
 const EDITIONS = new Set<Edition>(["online", "offline", "hybrid"]);
 
@@ -42,27 +35,26 @@ function normalizedActivationLimit(plan: LicensePlan, requested?: number): numbe
   if (maximum >= 0 && value > maximum) throw new Error(`Activation limit exceeds the ${plan} plan device limit (${maximum})`);
   return value;
 }
-
-function validatePrivateKey(privateKeyHex: string): void {
-  if (!/^[0-9a-f]{64}$/i.test(privateKeyHex)) throw new Error("A valid 32-byte Ed25519 private key is required");
-}
-
+function validatePrivateKey(privateKeyHex: string): void { if (!/^[0-9a-f]{64}$/i.test(privateKeyHex)) throw new Error("A valid 32-byte Ed25519 private key is required"); }
 function validateExpiry(expiresAt: string | null | undefined, issuedAt: string): string | null {
   if (expiresAt == null) return null;
-  const expiry = new Date(expiresAt);
-  const issued = new Date(issuedAt);
-  if (!Number.isFinite(expiry.getTime()) || expiry.getTime() < issued.getTime()) {
-    throw new Error("License expiry must be a valid date on or after issuance");
-  }
+  const expiry = new Date(expiresAt); const issued = new Date(issuedAt);
+  if (!Number.isFinite(expiry.getTime()) || expiry.getTime() < issued.getTime()) throw new Error("License expiry must be a valid date on or after issuance");
   return expiry.toISOString();
 }
-
 function validateDeviceBindings(bindings: string[] | undefined): string[] {
   const value = bindings ?? [];
-  if (!value.every((binding) => typeof binding === "string" && /^[a-f0-9]{64}$/i.test(binding))) {
-    throw new Error("Device bindings must contain 64-character hexadecimal device fingerprints");
-  }
+  if (!value.every((binding) => typeof binding === "string" && /^[a-f0-9]{64}$/i.test(binding))) throw new Error("Device bindings must contain 64-character hexadecimal device fingerprints");
   return value;
+}
+function resolveFeatures(plan: LicensePlan, overrides?: Partial<LicenseFeatures>): LicenseFeatures {
+  const base = { ...PLAN_FEATURES[plan] };
+  if (!overrides) return base;
+  for (const key of Object.keys(base) as (keyof LicenseFeatures)[]) {
+    if (overrides[key] === false) base[key] = false;
+    if (overrides[key] === true && !base[key]) throw new Error(`Feature '${key}' is not included in the ${plan} plan and cannot be granted by an individual license`);
+  }
+  return base;
 }
 
 export async function issueLicense(input: IssueLicenseInput): Promise<IssuedLicense> {
@@ -71,35 +63,14 @@ export async function issueLicense(input: IssueLicenseInput): Promise<IssuedLice
   if (!PLANS.has(input.plan)) throw new Error("Invalid license plan");
   if (!EDITIONS.has(input.edition)) throw new Error("Invalid license edition");
   const issuedAt = nowISO();
-  const features: LicenseFeatures = { ...PLAN_FEATURES[input.plan] };
+  const features = resolveFeatures(input.plan, input.featureOverrides);
   const activationLimit = normalizedActivationLimit(input.plan, input.activationLimit);
   const deviceBindings = validateDeviceBindings(input.deviceBindings);
-  if (activationLimit >= 0 && deviceBindings.length > activationLimit) {
-    throw new Error("Device binding count exceeds the activation limit");
-  }
-  const payload: LicensePayload = {
-    licenseId: generateId() as UUID,
-    customerId: (input.customerId || generateId()) as UUID,
-    product: "minarvabiz",
-    edition: input.edition,
-    plan: input.plan,
-    features,
-    issuedAt,
-    expiresAt: validateExpiry(input.expiresAt, issuedAt),
-    activationLimit,
-    deviceBindings,
-  };
+  if (activationLimit >= 0 && deviceBindings.length > activationLimit) throw new Error("Device binding count exceeds the activation limit");
+  const payload: LicensePayload = { licenseId: generateId() as UUID, customerId: (input.customerId || generateId()) as UUID, product: "minarvabiz", edition: input.edition, plan: input.plan, features, issuedAt, expiresAt: validateExpiry(input.expiresAt, issuedAt), activationLimit, deviceBindings };
   const token = await signLicense(payload, input.privateKeyHex);
-  const record: IssuedLicense = {
-    token,
-    payload,
-    customerName: input.customerName.trim(),
-    issuedAt,
-  };
+  const record: IssuedLicense = { token, payload, customerName: input.customerName.trim(), issuedAt };
   issuedLog.unshift(record);
   return record;
 }
-
-export function listIssued(): IssuedLicense[] {
-  return [...issuedLog];
-}
+export function listIssued(): IssuedLicense[] { return [...issuedLog]; }
