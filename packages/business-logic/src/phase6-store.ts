@@ -24,6 +24,33 @@ export function listIncentiveRules(){return incentiveRules.filter(r=>r.isActive)
 export function upsertIncentiveRule(input:{id?:UUID;name:string;serviceType?:string|null;type:"fixed"|"percentage";value:number}){assertPermission("staff.manage");if(input.id){const existing=incentiveRules.find(r=>r.id===input.id);if(existing){Object.assign(existing,input,{updatedAt:nowISO()});enqueueOutbox("incentive_rules",existing.id,"update",existing);touchPersistence();return existing;}}const r:IncentiveRuleRecord={id:generateId(),name:input.name,serviceType:input.serviceType??null,type:input.type,value:input.value,isActive:true,createdAt:nowISO(),updatedAt:nowISO()};incentiveRules.push(r);enqueueOutbox("incentive_rules",r.id,"insert",r);touchPersistence();return r;}
 export function listIncentivePayouts(staffId?:UUID){let list=[...payouts];if(staffId)list=list.filter(p=>p.staffId===staffId);return list.sort((a,b)=>b.calculatedAt.localeCompare(a.calculatedAt));}
 export function markIncentivePaid(id:UUID){assertPermission("staff.manage");const p=payouts.find(x=>x.id===id);if(!p)return null;p.paid=true;p.paidAt=nowISO();enqueueOutbox("staff_incentive_payouts",p.id,"update",p);touchPersistence();return p;}
+
+/** Restore Phase 6 state from a persisted snapshot without emitting outbox events. */
+export function hydratePhase6(input:{staff?:StaffMember[];assignments?:StaffAssignment[];incentiveRules?:IncentiveRuleRecord[];payouts?:StaffIncentivePayout[];notifications?:AppNotification[]}):void{
+  if(input.staff){staff.length=0;staff.push(...input.staff);}
+  if(input.assignments){assignments.length=0;assignments.push(...input.assignments);}
+  if(input.incentiveRules){incentiveRules.length=0;incentiveRules.push(...input.incentiveRules);}
+  if(input.payouts){payouts.length=0;payouts.push(...input.payouts);}
+  if(input.notifications){notifications.length=0;notifications.push(...input.notifications);}
+}
+
+/** Build the customer-facing CRM aggregate used by the customer profile UI. */
+export function getCustomerCrmProfile(customerId:UUID):CustomerCrmProfile|null{
+  const customer=mainStore.getCustomer(customerId);
+  if(!customer)return null;
+  const profiles=ordersStore.listMeasurementProfiles(customerId);
+  const customerOrders=ordersStore.listOrders({customerId});
+  const customerSales=mainStore.listSales().filter(s=>s.customerId===customerId);
+  return{
+    customer,
+    measurementCount:profiles.length,
+    orderCount:customerOrders.length,
+    saleCount:customerSales.length,
+    recentOrders:customerOrders.slice(0,5).map(order=>({id:order.id,orderNumber:order.orderNumber,status:order.status,price:order.price,date:order.orderDate})),
+    recentSales:customerSales.slice(0,5).map(sale=>({id:sale.id,invoiceNumber:sale.invoiceNumber,total:sale.total,date:sale.saleDate})),
+  };
+}
+
 function findRule(serviceType:ServiceType){return incentiveRules.find(r=>r.isActive&&r.serviceType===serviceType)||incentiveRules.find(r=>r.isActive&&!r.serviceType);}
 export function staffProductivity(staffId:UUID){const assigned=assignments.filter(a=>a.staffId===staffId),completed=assigned.filter(a=>a.status==="completed"),incentives=payouts.filter(p=>p.staffId===staffId),totalIncentive=incentives.reduce((s,p)=>s+p.amount,0),unpaid=incentives.filter(p=>!p.paid).reduce((s,p)=>s+p.amount,0);return{assigned:assigned.length,completed:completed.length,totalIncentive,unpaidIncentive:unpaid};}
 export function listNotifications(unreadOnly=false){let list=[...notifications];if(unreadOnly)list=list.filter(n=>!n.read);return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));}
