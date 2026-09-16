@@ -3,13 +3,16 @@
 import * as React from "react";
 import { PurchaseList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
 import { phase5Store, ordersStore } from "@minarvabiz/business-logic";
-import type { Purchase, ServiceOrder, PaymentMethod } from "@minarvabiz/types";
+import type { Purchase, ServiceOrder, PaymentMethod, Supplier } from "@minarvabiz/types";
 
 export default function PurchasesPage() {
   const [purchases, setPurchases] = React.useState<Purchase[]>([]);
   const [orders, setOrders] = React.useState<ServiceOrder[]>([]);
+  const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [open, setOpen] = React.useState(false);
+  const [supplierOpen, setSupplierOpen] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [supplierError, setSupplierError] = React.useState<string | null>(null);
   const [form, setForm] = React.useState({
     description: "",
     amount: "",
@@ -19,10 +22,12 @@ export default function PurchasesPage() {
     orderId: "",
     supplierId: "",
   });
+  const [supplierForm, setSupplierForm] = React.useState({ name: "", company: "", phone: "", category: "materials", notes: "" });
 
   const refresh = React.useCallback(() => {
     setPurchases(phase5Store.listPurchases());
     setOrders(ordersStore.listOrders());
+    setSuppliers(phase5Store.listSuppliers());
   }, []);
 
   React.useEffect(() => { refresh(); }, [refresh]);
@@ -48,6 +53,28 @@ export default function PurchasesPage() {
     refresh();
   }
 
+  function saveSupplier() {
+    if (!supplierForm.name.trim()) {
+      setSupplierError("Supplier name is required");
+      return;
+    }
+    try {
+      phase5Store.createSupplier({
+        name: supplierForm.name.trim(),
+        company: supplierForm.company.trim() || null,
+        phone: supplierForm.phone.trim() || null,
+        category: supplierForm.category || "materials",
+        notes: supplierForm.notes.trim() || null,
+      });
+      setSupplierOpen(false);
+      setSupplierError(null);
+      setSupplierForm({ name: "", company: "", phone: "", category: "materials", notes: "" });
+      refresh();
+    } catch (e) {
+      setSupplierError(e instanceof Error ? e.message : "Unable to create supplier");
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -62,6 +89,15 @@ export default function PurchasesPage() {
 
       <Modal open={open} title="Add Purchase" onClose={() => setOpen(false)} footer={<><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={savePurchase}>Save</Button></>}>
         <div className="space-y-3">
+          <FormField label="Supplier">
+            <div className="flex gap-2">
+              <select className={selectClass} value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })}>
+                <option value="">No supplier / direct purchase</option>
+                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}{s.company ? ` — ${s.company}` : ""}</option>)}
+              </select>
+              <Button type="button" size="sm" variant="outline" onClick={() => { setSupplierError(null); setSupplierOpen(true); }} aria-label="Add supplier">+</Button>
+            </div>
+          </FormField>
           <FormField label="Description *"><input className={inputClass} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Thread, lining cloth, needles…" /></FormField>
           <FormField label="Amount *"><input type="number" min="0" step="0.01" className={inputClass} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></FormField>
           <FormField label="Paid amount"><input type="number" min="0" step="0.01" className={inputClass} value={form.paidAmount} onChange={(e) => setForm({ ...form, paidAmount: e.target.value })} /></FormField>
@@ -69,6 +105,17 @@ export default function PurchasesPage() {
           <FormField label="Kind"><select className={selectClass} value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as "general" | "order_specific" })}><option value="general">General (shop stock)</option><option value="order_specific">Order-specific</option></select></FormField>
           {form.kind === "order_specific" && <FormField label="Order *"><select className={selectClass} value={form.orderId} onChange={(e) => setForm({ ...form, orderId: e.target.value })}><option value="">Select order</option>{orders.map((o) => <option key={o.id} value={o.id}>{o.orderNumber} — {o.customerName}</option>)}</select></FormField>}
           {error && <p className="text-sm text-rose-600">{error}</p>}
+        </div>
+      </Modal>
+
+      <Modal open={supplierOpen} title="Add Supplier" onClose={() => setSupplierOpen(false)} footer={<><Button variant="outline" onClick={() => setSupplierOpen(false)}>Cancel</Button><Button onClick={saveSupplier}>Save Supplier</Button></>}>
+        <div className="space-y-3">
+          <FormField label="Name *"><input className={inputClass} autoFocus value={supplierForm.name} onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })} /></FormField>
+          <FormField label="Company"><input className={inputClass} value={supplierForm.company} onChange={(e) => setSupplierForm({ ...supplierForm, company: e.target.value })} /></FormField>
+          <FormField label="Phone"><input className={inputClass} value={supplierForm.phone} onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })} /></FormField>
+          <FormField label="Category"><select className={selectClass} value={supplierForm.category} onChange={(e) => setSupplierForm({ ...supplierForm, category: e.target.value })}><option value="materials">Materials</option><option value="laundry">Laundry</option><option value="general">General</option></select></FormField>
+          <FormField label="Notes"><textarea className={inputClass + " h-20 py-2"} value={supplierForm.notes} onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })} /></FormField>
+          {supplierError && <p className="text-sm text-rose-600">{supplierError}</p>}
         </div>
       </Modal>
     </div>
