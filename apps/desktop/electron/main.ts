@@ -13,7 +13,7 @@ function sqlitePath() { return path.join(app.getPath("userData"), "minarvabiz.db
 function backupDir() { return path.join(app.getPath("userData"), "backups"); }
 function backupDestinationConfigPath() { return path.join(app.getPath("userData"), "backup-destination.txt"); }
 function configuredBackupDir(): string | null { try { const value = fs.readFileSync(backupDestinationConfigPath(), "utf8").trim(); return value ? path.resolve(value) : null; } catch { return null; } }
-function backupDestinationDir() { const configured = configuredBackupDir(); if (configured) return configured; if (process.platform === "win32" && fs.existsSync("D:\\")) return path.join("D:\\", "Minarva Biz Backups"); return backupDir(); }
+function backupDestinationDir() { const configured = configuredBackupDir(); if (configured) return configured; if (process.platform === "win32" && fs.existsSync("D:/")) return path.join("D:\\", "Minarva Biz Backups"); return backupDir(); }
 function runtimeSmokeLog(message: string) { if (!runtimeSmoke) return; try { fs.mkdirSync(app.getPath("userData"), { recursive: true }); fs.appendFileSync(path.join(app.getPath("userData"), "runtime-smoke.log"), `${new Date().toISOString()} ${message}\n`, "utf8"); } catch {} }
 function timestamp() { return new Date().toISOString().replace(/[:.]/g, "-"); }
 function isTrustedRenderer(event: Electron.IpcMainInvokeEvent): boolean { const url = event.senderFrame?.url || ""; if (app.isPackaged) return url.startsWith("file://"); return url.startsWith("http://localhost:") || url.startsWith("http://127.0.0.1:") || url.startsWith("file://"); }
