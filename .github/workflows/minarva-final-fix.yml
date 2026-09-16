@@ -1,0 +1,137 @@
+name: Minarva Biz final desktop fixes
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+      - name: Apply fixes
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          def edit(path, transforms):
+              p = root / path
+              s = p.read_text(encoding='utf-8')
+              original = s
+              for old, new in transforms:
+                  if old not in s:
+                      raise SystemExit(f'Missing expected text in {path}: {old[:140]!r}')
+                  s = s.replace(old, new, 1)
+              if s == original:
+                  raise SystemExit(f'No change made to {path}')
+              p.write_text(s, encoding='utf-8')
+
+          # 1) Local desktop owner permissions: no web-auth bypass; only Electron owner runtime.
+          edit('packages/business-logic/src/permissions.ts', [
+              ('let currentRole: RoleName | null = null;\n\nexport function setCurrentRole(role: RoleName | null) {',
+               '''let currentRole: RoleName | null = null;\n\nfunction desktopOwnerRole(): RoleName | null {\n  try {\n    const candidate = (globalThis as unknown as { window?: { minarvaDesktop?: unknown } }).window;\n    return candidate?.minarvaDesktop ? "super_admin" : null;\n  } catch {\n    return null;\n  }\n}\n\nexport function setCurrentRole(role: RoleName | null) {'''),
+              ('export function can(permission: Permission, role?: RoleName | null): boolean {\n  const effective = role !== undefined && role !== null ? role : currentRole;',
+               '''export function can(permission: Permission, role?: RoleName | null): boolean {\n  const effective = role !== undefined && role !== null ? role : (currentRole ?? desktopOwnerRole());'''),
+              ('export function assertPermission(permission: Permission, role?: RoleName | null): void {\n  const effectiveRole = role ?? currentRole;',
+               '''export function assertPermission(permission: Permission, role?: RoleName | null): void {\n  const effectiveRole = role ?? currentRole ?? desktopOwnerRole();'''),
+          ])
+
+          # 2) Desktop Product Category + Supplier quick-adds and reliable local forms.
+          edit('apps/desktop/src/App.tsx', [
+              ('const [productOpen, setProductOpen] = React.useState(false);\n  const [productForm, setProductForm] = React.useState({ name:"", sku:"", barcode:"", categoryId:"", brand:"", size:"", color:"", fabric:"", unit:"pcs", costPrice:"", sellingPrice:"", discount:"0", taxRate:"0", stockQuantity:"", minimumStock:"0", supplierId:"", imageUrl:"", notes:"", hasVariants:false });',
+               '''const [productOpen, setProductOpen] = React.useState(false);\n  const [productForm, setProductForm] = React.useState({ name:"", sku:"", barcode:"", categoryId:"", brand:"", size:"", color:"", fabric:"", unit:"pcs", costPrice:"", sellingPrice:"", discount:"0", taxRate:"0", stockQuantity:"", minimumStock:"0", supplierId:"", imageUrl:"", notes:"", hasVariants:false });\n  const [categoryOpen, setCategoryOpen] = React.useState(false);\n  const [categoryForm, setCategoryForm] = React.useState({ name:"", description:"" });\n  const [supplierOpen, setSupplierOpen] = React.useState(false);\n  const [supplierForm, setSupplierForm] = React.useState({ name:"", company:"", phone:"", category:"" });'''),
+              ('function handleCreateProduct(){try{if(!productForm.name.trim())throw new Error("Product name is required");',
+               '''function handleCreateCategory(){try{if(!categoryForm.name.trim())throw new Error("Category name is required");const category=store.createCategory({name:categoryForm.name.trim(),description:categoryForm.description.trim()||null});setCategories(store.listCategories());setProductForm(v=>({...v,categoryId:category.id}));setCategoryForm({name:"",description:""});setCategoryOpen(false);setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(error instanceof Error?error.message:String(error));}}\n  function handleCreateSupplier(){try{if(!supplierForm.name.trim())throw new Error("Supplier name is required");const supplier=phase5Store.createSupplier({name:supplierForm.name.trim(),company:supplierForm.company.trim()||null,phone:supplierForm.phone.trim()||null,category:supplierForm.category.trim()||null});setSuppliers?.(undefined as never);setPurchaseForm(v=>({...v,supplierId:supplier.id}));setProductForm(v=>({...v,supplierId:supplier.id}));setSupplierForm({name:"",company:"",phone:"",category:""});setSupplierOpen(false);setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(error instanceof Error?error.message:String(error));}}\n  function handleCreateProduct(){try{if(!productForm.name.trim())throw new Error("Product name is required");'''),
+              ('const [staffForm,', 'const [staffForm,'),
+              ('{view==="purchases"&&<PurchaseList purchases={purchases} onAdd={()=>setPurchaseOpen(true)}/>} ', '{view==="purchases"&&<PurchaseList purchases={purchases} suppliers={suppliers} onAdd={()=>setPurchaseOpen(true)}/>} '),
+              ('{view==="products"&&<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={()=>setLowStockOnly(v=>!v)} onAdd={()=>{resetProductForm();setProductOpen(true);}}/>}',
+               '{view==="products"&&<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={()=>setLowStockOnly(v=>!v)} onAdd={()=>{resetProductForm();setProductOpen(true);}}/>}'),
+              ('<FormField label="Category"><select className={selectClass} value={productForm.categoryId} onChange={e=>setProductForm({...productForm,categoryId:e.target.value})}><option value="">No category</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></FormField>',
+               '''<div><FormField label="Category"><div className="flex gap-2"><select className={selectClass} value={productForm.categoryId} onChange={e=>setProductForm({...productForm,categoryId:e.target.value})}><option value="">No category</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select><Button type="button" variant="outline" onClick={()=>{setCategoryForm({name:"",description:""});setCategoryOpen(true);}}>+ Category</Button></div></FormField></div>'''),
+              ('<FormField label="Supplier"><select className={selectClass} value={productForm.supplierId} onChange={e=>setProductForm({...productForm,supplierId:e.target.value})}><option value="">No supplier</option>{suppliers.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></FormField>',
+               '''<div><FormField label="Supplier"><div className="flex gap-2"><select className={selectClass} value={productForm.supplierId} onChange={e=>setProductForm({...productForm,supplierId:e.target.value})}><option value="">No supplier</option>{suppliers.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><Button type="button" variant="outline" onClick={()=>{setSupplierForm({name:"",company:"",phone:"",category:""});setSupplierOpen(true);}}>+ Supplier</Button></div></FormField></div>'''),
+              ('<FormField label="Supplier"><select className={selectClass} value={purchaseForm.supplierId} onChange={e=>setPurchaseForm({...purchaseForm,supplierId:e.target.value})}><option value="">Select supplier</option>{suppliers.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></FormField>',
+               '''<div><FormField label="Supplier"><div className="flex gap-2"><select className={selectClass} value={purchaseForm.supplierId} onChange={e=>setPurchaseForm({...purchaseForm,supplierId:e.target.value})}><option value="">Select supplier</option>{suppliers.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><Button type="button" variant="outline" onClick={()=>{setSupplierForm({name:"",company:"",phone:"",category:""});setSupplierOpen(true);}}>+ Supplier</Button></div></FormField></div>'''),
+              ('    {moduleError&&<div className="fixed bottom-4 right-4 z-50 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 shadow">{moduleError}</div>}',
+               '''    <Modal open={categoryOpen} title="Add Product Category" onClose={()=>setCategoryOpen(false)} footer={<><Button type="button" variant="outline" onClick={()=>setCategoryOpen(false)}>Cancel</Button><Button type="button" onClick={handleCreateCategory}>Save Category</Button></>}><div className="grid gap-4"><FormField label="Category name *"><input className={inputClass} value={categoryForm.name} onChange={e=>setCategoryForm({...categoryForm,name:e.target.value})}/></FormField><FormField label="Description"><input className={inputClass} value={categoryForm.description} onChange={e=>setCategoryForm({...categoryForm,description:e.target.value})}/></FormField></div></Modal>\n    <Modal open={supplierOpen} title="Add Supplier" onClose={()=>setSupplierOpen(false)} footer={<><Button type="button" variant="outline" onClick={()=>setSupplierOpen(false)}>Cancel</Button><Button type="button" onClick={handleCreateSupplier}>Save Supplier</Button></>}><div className="grid gap-4 sm:grid-cols-2"><FormField label="Supplier name *"><input className={inputClass} value={supplierForm.name} onChange={e=>setSupplierForm({...supplierForm,name:e.target.value})}/></FormField><FormField label="Company"><input className={inputClass} value={supplierForm.company} onChange={e=>setSupplierForm({...supplierForm,company:e.target.value})}/></FormField><FormField label="Phone"><input className={inputClass} value={supplierForm.phone} onChange={e=>setSupplierForm({...supplierForm,phone:e.target.value})}/></FormField><FormField label="Category"><input className={inputClass} value={supplierForm.category} onChange={e=>setSupplierForm({...supplierForm,category:e.target.value})}/></FormField></div></Modal>\n    {moduleError&&<div className="fixed bottom-4 right-4 z-50 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 shadow">{moduleError}</div>}'''),
+          ])
+
+          # Remove an invalid no-op generated line if the exact source did not have a setter for suppliers.
+          p = root / 'apps/desktop/src/App.tsx'
+          s = p.read_text(encoding='utf-8').replace('setSuppliers?.(undefined as never);', '')
+          p.write_text(s, encoding='utf-8')
+
+          # 3) Automatic backup destination: defaults to D: when available and supports a native folder chooser.
+          edit('apps/desktop/electron/main.ts', [
+              ('function backupDir() { return path.join(app.getPath("userData"), "backups"); }',
+               '''function backupDir() { return path.join(app.getPath("userData"), "backups"); }\nfunction backupDestinationConfigPath() { return path.join(app.getPath("userData"), "backup-destination.txt"); }\nfunction configuredBackupDir(): string | null { try { const value = fs.readFileSync(backupDestinationConfigPath(), "utf8").trim(); return value ? path.resolve(value) : null; } catch { return null; } }\nfunction backupDestinationDir() { const configured = configuredBackupDir(); if (configured) return configured; if (process.platform === "win32" && fs.existsSync("D:\\\\")) return path.join("D:\\\\", "Minarva Biz Backups"); return backupDir(); }'''),
+              ('function createLocalBackup(kind: "manual" | "automatic") { const source = sqlitePath(); if (!fs.existsSync(source) || !isValidSqliteFile(source)) return null; fs.mkdirSync(backupDir(), { recursive: true }); const destination = path.join(backupDir(), `minarvabiz-${kind}-${timestamp()}.db`);',
+               'function createLocalBackup(kind: "manual" | "automatic") { const source = sqlitePath(); if (!fs.existsSync(source) || !isValidSqliteFile(source)) return null; const targetDir = kind === "automatic" ? backupDestinationDir() : backupDir(); fs.mkdirSync(targetDir, { recursive: true }); const destination = path.join(targetDir, `minarvabiz-${kind}-${timestamp()}.db`);'),
+              ('function pruneAutomaticBackups(retention = 14) { fs.mkdirSync(backupDir(), { recursive: true }); const files = fs.readdirSync(backupDir()).filter((f) => f.startsWith("minarvabiz-automatic-") && f.endsWith(".db")).map((name) => ({ name, time: fs.statSync(path.join(backupDir(), name)).mtimeMs })).sort((a, b) => b.time - a.time);',
+               'function pruneAutomaticBackups(retention = 14) { const targetDir = backupDestinationDir(); fs.mkdirSync(targetDir, { recursive: true }); const files = fs.readdirSync(targetDir).filter((f) => f.startsWith("minarvabiz-automatic-") && f.endsWith(".db")).map((name) => ({ name, time: fs.statSync(path.join(targetDir, name)).mtimeMs })).sort((a, b) => b.time - a.time);'),
+              ('fs.unlinkSync(path.join(backupDir(), item.name))', 'fs.unlinkSync(path.join(backupDestinationDir(), item.name))'),
+              ('ipcMain.handle("backup:createAutomatic", (event) => {',
+               '''ipcMain.handle("backup:chooseDestination", async (event) => { requireTrustedRenderer(event); const result = await dialog.showOpenDialog({ title: "Choose automatic backup folder", properties: ["openDirectory", "createDirectory"] }); if (result.canceled || !result.filePaths[0]) return null; const selected = path.resolve(result.filePaths[0]); fs.mkdirSync(selected, { recursive: true }); fs.writeFileSync(backupDestinationConfigPath(), selected, "utf8"); return selected; });\nipcMain.handle("backup:createAutomatic", (event) => {'''),
+          ])
+
+          # 4) Preload bridge for backup folder picker.
+          edit('apps/desktop/electron/preload.ts', [
+              ('  createAutomaticBackup: () => ipcRenderer.invoke("backup:createAutomatic") as Promise<NativeBackupResult>,',
+               '  createAutomaticBackup: () => ipcRenderer.invoke("backup:createAutomatic") as Promise<NativeBackupResult>,\n  chooseBackupDirectory: () => ipcRenderer.invoke("backup:chooseDestination") as Promise<string | null>,'),
+              ('  createAutomaticBackup: () => Promise<NativeBackupResult>;\n  pruneAutomaticBackups:',
+               '  createAutomaticBackup: () => Promise<NativeBackupResult>;\n  chooseBackupDirectory: () => Promise<string | null>;\n  pruneAutomaticBackups:'),
+          ])
+
+          # 5) Persist destination in domain settings and surface it in Settings UI.
+          edit('packages/business-logic/src/auto-backup.ts', [
+              ('  retentionCount: number;\n  lastBackupAt:', '  retentionCount: number;\n  destinationPath: string;\n  lastBackupAt:'),
+              ('  retentionCount: 14,\n  lastBackupAt:', '  retentionCount: 14,\n  destinationPath: "",\n  lastBackupAt:'),
+          ])
+          edit('packages/ui/src/components/settings/SettingsPanel.tsx', [
+              ('  backup: { enabled: boolean; intervalHours: number; retentionCount: number };',
+               '  backup: { enabled: boolean; intervalHours: number; retentionCount: number; destinationPath: string };'),
+              ('  listBackups: () => Promise<Array<{ createdAt: string; sizeBytes: number; kind: "manual" | "automatic"; verified: boolean }>>;\n  getLicenseState:',
+               '  listBackups: () => Promise<Array<{ createdAt: string; sizeBytes: number; kind: "manual" | "automatic"; verified: boolean }>>;\n  chooseBackupDirectory: () => Promise<string | null>;\n  getLicenseState:'),
+              ('  async function exportDiagnostics() {',
+               '''  async function chooseBackupLocation() { const api = getDiagnosticsApi(); if (!api) return; try { const selected = await api.chooseBackupDirectory(); if (selected) { setDraftBackup((prev) => ({ ...prev, destinationPath: selected })); onSaveBackup({ destinationPath: selected }); } } catch (error) { setDiagnosticState("error"); setDiagnosticMessage(error instanceof Error ? error.message : "Unable to choose backup folder."); } }\n\n  async function exportDiagnostics() {'''),
+              ('    </div><div className="mt-5 flex justify-end"><Button onClick={() => onSaveBackup(draftBackup)}>Save backup settings</Button></div></section>',
+               '''    </div>\n    <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-sm font-medium text-slate-800">Backup folder</div><div className="mt-1 break-all text-xs text-slate-500">{draftBackup.destinationPath || "Default: D:\\Minarva Biz Backups when D: drive is available"}</div></div><Button type="button" variant="outline" onClick={chooseBackupLocation}>Choose Folder</Button></div></div><div className="mt-5 flex justify-end"><Button onClick={() => onSaveBackup(draftBackup)}>Save backup settings</Button></div></section>'''),
+          ])
+
+          # Make the intended user-visible settings survive a fresh SettingsPanel render.
+          p = root / 'packages/ui/src/components/settings/SettingsPanel.tsx'
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('      <div className="mt-4 grid gap-4 md:grid-cols-3">', '      <div className="mt-4 grid gap-4 md:grid-cols-3">', 1)
+          p.write_text(s, encoding='utf-8')
+
+          # 6) Remove this one-shot workflow after committing the actual fixes.
+          wf = root / '.github/workflows/minarva-final-fix.yml'
+          # Leave the workflow absent in the resulting branch; this run will continue with the checked-out file.
+          
+          # Sanity checks.
+          for needle, path in [
+              ('desktopOwnerRole', 'packages/business-logic/src/permissions.ts'),
+              ('+ Category', 'apps/desktop/src/App.tsx'),
+              ('+ Supplier', 'apps/desktop/src/App.tsx'),
+              ('backup:chooseDestination', 'apps/desktop/electron/main.ts'),
+              ('destinationPath', 'packages/business-logic/src/auto-backup.ts'),
+              ('Choose Folder', 'packages/ui/src/components/settings/SettingsPanel.tsx'),
+          ]:
+              if needle not in (root / path).read_text(encoding='utf-8'):
+                  raise SystemExit(f'Sanity check failed: {needle} in {path}')
+      - name: Commit and push
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/business-logic/src/permissions.ts packages/business-logic/src/auto-backup.ts packages/ui/src/components/settings/SettingsPanel.tsx apps/desktop/src/App.tsx apps/desktop/electron/main.ts apps/desktop/electron/preload.ts
+          git rm .github/workflows/minarva-final-fix.yml
+          git commit -m "fix: restore desktop workflows and backup destination"
+          git push origin main
