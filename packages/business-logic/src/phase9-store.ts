@@ -2,16 +2,14 @@
  * Phase 9: Branches + license runtime bridge.
  */
 
-import type { Branch, LicensePlan, Edition, UUID } from "@minarvabiz/types";
+import type { Branch, UUID } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import {
   startTrial,
-  activateDemoPlan,
   activateWithToken,
   evaluateStoredLicense,
   clearLicense,
   getStoredLicense,
-  DEMO_PUBLIC_KEY_HEX,
   type LicenseState,
   PLAN_LIMITS,
   checkLimit,
@@ -21,6 +19,18 @@ import {
 import * as mainStore from "./store";
 import { touchPersistence } from "./autosave";
 import { enqueueOutbox } from "./outbox-bridge";
+
+const DEV_PUBLIC_KEY_HEX = "110016b7ca4899194a6f5408c0cc36271f67119bf1fa99e50eb9da90458e7ce7";
+
+function licensePublicKeyHex(): string {
+  if (typeof process !== "undefined") {
+    const configured = String(
+      process.env.MINARVA_LICENSE_PUBLIC_KEY_HEX || process.env.NEXT_PUBLIC_LICENSE_PUBLIC_KEY || "",
+    ).replace(/^0x/i, "").replace(/\s/g, "").toLowerCase();
+    if (configured) return configured;
+  }
+  return DEV_PUBLIC_KEY_HEX;
+}
 
 const branches: Branch[] = [
   {
@@ -70,10 +80,15 @@ export function createBranch(input: {
 }
 
 export function getLicenseState(): LicenseState { return licenseState; }
-export async function refreshLicense(): Promise<LicenseState> { licenseState = await evaluateStoredLicense(DEMO_PUBLIC_KEY_HEX); return licenseState; }
+export async function refreshLicense(): Promise<LicenseState> {
+  licenseState = await evaluateStoredLicense(licensePublicKeyHex());
+  return licenseState;
+}
 export function applyTrial(): LicenseState { licenseState = startTrial("hybrid"); return licenseState; }
-export function applyDemoPlan(plan: LicensePlan, edition: Edition = "hybrid"): LicenseState { licenseState = activateDemoPlan(plan, edition); return licenseState; }
-export async function applyLicenseToken(token: string, fingerprintHash?: string): Promise<LicenseState> { licenseState = await activateWithToken(token, DEMO_PUBLIC_KEY_HEX, fingerprintHash); return licenseState; }
+export async function applyLicenseToken(token: string, fingerprintHash?: string): Promise<LicenseState> {
+  licenseState = await activateWithToken(token, licensePublicKeyHex(), fingerprintHash);
+  return licenseState;
+}
 export function deactivateLicense(): LicenseState {
   clearLicense();
   licenseState = { status: "unlicensed", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason: "License cleared", payload: null, stored: getStoredLicense() };
