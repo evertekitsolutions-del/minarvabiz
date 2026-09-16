@@ -8,6 +8,9 @@ import { PaymentsPanel } from "../payments/PaymentsPanel";
 import { ReturnsPanel } from "../returns/ReturnsPanel";
 import { StaffDetail } from "../staff/StaffDetail";
 import { SupplierList } from "../suppliers/SupplierList";
+import { Button } from "../Button";
+import { FormField, inputClass } from "../forms/FormField";
+import { Modal } from "../forms/Modal";
 import { closeBusinessDay, listDayEndCloses, ordersStore, phase5Store, phase6Store, phase7Store, store } from "@minarvabiz/business-logic";
 import type { NavItemId } from "../../lib/nav";
 
@@ -26,6 +29,9 @@ export function OfflineModulesPanel({ activeNav }: { activeNav: NavItemId }) {
   const [customerId, setCustomerId] = React.useState("");
   const [staffId, setStaffId] = React.useState("");
   const [supplierQuery, setSupplierQuery] = React.useState("");
+  const [supplierOpen, setSupplierOpen] = React.useState(false);
+  const [supplierForm, setSupplierForm] = React.useState({ name: "", company: "", phone: "", category: "" });
+  const [supplierError, setSupplierError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (activeNav === "customer-crm" && !customerId) setCustomerId(store.listCustomers()[0]?.id || "");
@@ -69,7 +75,7 @@ export function OfflineModulesPanel({ activeNav }: { activeNav: NavItemId }) {
 
   if (activeNav === "suppliers") {
     const suppliers = phase5Store.listSuppliers().filter((s) => { const q = supplierQuery.trim().toLowerCase(); return !q || s.name.toLowerCase().includes(q) || s.company?.toLowerCase().includes(q) || s.phone?.includes(q); });
-    return <SupplierList suppliers={suppliers} onSearch={setSupplierQuery} onAdd={() => setSupplierQuery("")} />;
+    return <><SupplierList suppliers={suppliers} onSearch={setSupplierQuery} onAdd={() => { setSupplierError(null); setSupplierForm({ name: "", company: "", phone: "", category: "" }); setSupplierOpen(true); }} /><Modal open={supplierOpen} title="Add Supplier" onClose={() => setSupplierOpen(false)} footer={<><Button variant="outline" onClick={() => setSupplierOpen(false)}>Cancel</Button><Button onClick={() => { try { if (!supplierForm.name.trim()) throw new Error("Supplier name is required"); phase5Store.createSupplier({ name: supplierForm.name.trim(), company: supplierForm.company.trim() || null, phone: supplierForm.phone.trim() || null, category: supplierForm.category.trim() || null }); setSupplierOpen(false); setSupplierError(null); persistDesktop(); refresh(); } catch (e) { setSupplierError(e instanceof Error ? e.message : String(e)); } }}>Save Supplier</Button></>}> <div className="grid gap-4 sm:grid-cols-2"><FormField label="Supplier name *"><input className={inputClass} value={supplierForm.name} onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })} /></FormField><FormField label="Company"><input className={inputClass} value={supplierForm.company} onChange={(e) => setSupplierForm({ ...supplierForm, company: e.target.value })} /></FormField><FormField label="Phone"><input className={inputClass} value={supplierForm.phone} onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })} /></FormField><FormField label="Category"><input className={inputClass} value={supplierForm.category} onChange={(e) => setSupplierForm({ ...supplierForm, category: e.target.value })} /></FormField>{supplierError && <p className="text-sm text-rose-600">{supplierError}</p>}</div></Modal></>;
   }
 
   if (activeNav === "staff-detail") {
