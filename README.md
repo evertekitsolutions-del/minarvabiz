@@ -7,6 +7,10 @@ Built for real boutique, tailoring, and laundry shops.
 
 ---
 
+## Current commercial release
+
+**Version 1.0.4** — current Windows commercial RC baseline.
+
 ## Editions
 
 | Edition | Target | Database | Sync |
@@ -52,7 +56,7 @@ apps/
   license-admin/       License issuance panel
 packages/
   ui/                  Shared components (AppShell, dashboard, modules)
-  business-logic/      Pure domain + in-memory stores (swap to DB adapters)
+  business-logic/      Domain logic and local stores
   database/            Schema foundations (Postgres + SQLite)
   licensing/           Tokens, fingerprint, limits, activation
   sync/                Outbox, engine, conflict resolution
@@ -69,15 +73,83 @@ docs/
 ```bash
 pnpm install
 cp .env.example .env
-# Fill Supabase + secrets (see .env.example)
-
+# Fill the required environment values.
 pnpm dev:web            # http://localhost:3000
 pnpm typecheck
 pnpm --filter @minarvabiz/web build
 ```
 
-Desktop shell lives in `apps/desktop`. Install Electron/Vite locally when packaging
-for Windows (kept optional here to avoid heavy installs in CI/low-RAM environments).
+## Windows packaging
+
+From the repository root on Windows PowerShell:
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm --filter @minarvabiz/desktop run package:win
+```
+
+Or use the helper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build-windows.ps1
+```
+
+For the current release the installer is `apps/desktop/release/MinarvaBiz-Setup-1.0.4.exe`. The helper script is version-independent and discovers `MinarvaBiz-Setup-*.exe` automatically.
+
+## Verification commands
+
+```bash
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm --filter @minarvabiz/web exec tsc --noEmit
+pnpm --filter @minarvabiz/web build
+pnpm --filter @minarvabiz/database typecheck
+pnpm --filter @minarvabiz/business-logic typecheck
+pnpm --filter @minarvabiz/ui typecheck
+pnpm --filter @minarvabiz/desktop typecheck
+pnpm --filter @minarvabiz/desktop build:renderer
+pnpm --filter @minarvabiz/desktop build:electron
+node scripts/quality-smoke.mjs
+node scripts/smoke.mjs
+```
+
+## Production environment
+
+Required production configuration includes:
+
+- `NODE_ENV=production`
+- `APP_VERSION=1.0.4`
+- `APP_EDITION=online` or `hybrid`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — browser-safe anon key
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY` — server-only
+- `SUPABASE_SECRET_KEY` when required by server integrations — server-only
+- `DATABASE_URL` where server-side database tooling uses it
+- `NEXT_PUBLIC_REQUIRE_AUTH=true`
+- `MINARVA_MODE=production`
+- `NEXT_PUBLIC_MINARVA_MODE=production`
+- `JWT_SECRET`
+- `JWT_EXPIRES_IN`
+- `ENCRYPTION_KEY`
+- `LICENSE_PRIVATE_KEY` — license-admin/server only
+- `LICENSE_API_SECRET`
+- `MINARVA_LICENSE_PUBLIC_KEY_HEX` — public key bundled into desktop at build time
+- `VITE_LICENSE_API_URL` or `MINARVA_LICENSE_API_URL` — production HTTPS license API
+
+Optional notification/email configuration: `RESEND_API_KEY`, `TRIAL_NOTIFICATION_FROM`.
+
+Never expose service-role, secret, private-license, encryption, JWT or provider secrets in browser/public variables.
+
+## Web deployment
+
+The root `vercel.json` targets the Next.js app with:
+
+```bash
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm --filter @minarvabiz/web build
+```
+
+Expected output: `apps/web/.next`. Configure the production environment variables in the Vercel project before deployment.
 
 ---
 
@@ -91,16 +163,12 @@ for Windows (kept optional here to avoid heavy installs in CI/low-RAM environmen
 6. No secrets in source — environment configuration only  
 7. Online + Offline + Hybrid from one core  
 
----
-
 ## License plans (defaults)
 
 Trial · Basic · Professional · Business · Enterprise  
 
 Limits cover users, devices, branches, products, customers.  
 Multi-branch and API access are Enterprise features.
-
----
 
 ## Scripts
 
@@ -110,8 +178,7 @@ Multi-branch and API access are Enterprise features.
 | `pnpm typecheck` | TypeScript across workspace |
 | `pnpm build` | Turbo build |
 | `pnpm --filter @minarvabiz/web build` | Production web build |
-
----
+| `pnpm --filter @minarvabiz/desktop run package:win` | Windows installer |
 
 ## Documentation
 
@@ -131,5 +198,3 @@ Multi-branch and API access are Enterprise features.
 
 Proprietary — Evertek IT Solutions. All rights reserved.  
 Not open source. Commercial distribution under signed license only.
-
-<!-- React renderer hotfix trigger: complete UI repair pass -->
