@@ -1,0 +1,32 @@
+name: Licensing Smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  licensing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.0
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter @minarvabiz/licensing typecheck
+      - run: pnpm --filter @minarvabiz/licensing exec tsx src/__tests__/licensing-smoke.test.ts
+      - name: Reject demo license paths
+        shell: bash
+        run: |
+          set -e
+          if grep -RIn --include='*.ts' --include='*.tsx' --exclude-dir=node_modules --exclude-dir=.git -E 'issueDemoLicense|activateDemoPlan|DEMO_PUBLIC_KEY_HEX|demo:' packages/licensing apps/desktop apps/license-admin; then
+            echo "Development/demo licensing path is present in a production-facing TypeScript source tree."
+            exit 1
+          fi
