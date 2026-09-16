@@ -27,7 +27,7 @@ import type { ShopProfile } from "./shop-profile";
 import type { TaxConfig } from "./tax-config";
 import type { AutoBackupSettings, BackupMeta } from "./auto-backup";
 
-export const SNAPSHOT_VERSION = 5;
+export const SNAPSHOT_VERSION = 4;
 
 export interface DomainSnapshot {
   version: number;
@@ -66,34 +66,26 @@ export interface DomainSnapshot {
 
 export function exportDomainSnapshot(): DomainSnapshot {
   return {
-    version: SNAPSHOT_VERSION,
-    exportedAt: new Date().toISOString(),
-    customers: store.listCustomers(), products: store.listProducts(), categories: store.listCategories(),
-    sales: store.listSales(), payments: store.listPayments(), orders: ordersStore.listOrders(), measurements: [],
-    laundry: phase5Store.listLaundryOrders(), expenses: phase5Store.listExpenses(), purchases: phase5Store.listPurchases(),
-    suppliers: phase5Store.listSuppliers(), expenseCategories: phase5Store.listExpenseCategories(), staff: phase6Store.listStaff(),
-    assignments: phase6Store.listAssignments(), incentiveRules: phase6Store.listIncentiveRules(), payouts: phase6Store.listIncentivePayouts(),
-    notifications: phase6Store.listNotifications(), returns: phase7Store.listReturns(), audit: phase7Store.listAuditLogs(500),
-    branches: phase9Store.listBranches(), activeBranchId: phase9Store.getActiveBranch()?.id ?? null,
-    shopProfile: shopProfile.getShopProfile(), taxConfig: taxConfig.getTaxConfig(), autoBackup: autoBackup.exportAutoBackupState(),
-    outbox: exportOutbox(), quotations: quotationsMod.exportQuotationsState().quotations,
-    cashSessions: cashReg.exportCashRegisterState().sessions, purchaseReturns: purchaseReturnsMod.exportPurchaseReturnsState().returns,
-    phase10: phase10Store.exportPhase10State(), dayEndCloses: dayEnd.listDayEndCloses(),
+    version: SNAPSHOT_VERSION, exportedAt: new Date().toISOString(),
+    customers: store.listCustomers(), products: store.listProducts(), categories: store.listCategories(), sales: store.listSales(), payments: store.listPayments(),
+    orders: ordersStore.listOrders(), measurements: [], laundry: phase5Store.listLaundryOrders(), expenses: phase5Store.listExpenses(), purchases: phase5Store.listPurchases(),
+    suppliers: phase5Store.listSuppliers(), expenseCategories: phase5Store.listExpenseCategories(), staff: phase6Store.listStaff(), assignments: phase6Store.listAssignments(),
+    incentiveRules: phase6Store.listIncentiveRules(), payouts: phase6Store.listIncentivePayouts(), notifications: phase6Store.listNotifications(), returns: phase7Store.listReturns(), audit: phase7Store.listAuditLogs(500),
+    branches: phase9Store.listBranches(), activeBranchId: phase9Store.getActiveBranch()?.id ?? null, shopProfile: shopProfile.getShopProfile(), taxConfig: taxConfig.getTaxConfig(),
+    autoBackup: autoBackup.exportAutoBackupState(), outbox: exportOutbox(), quotations: quotationsMod.exportQuotationsState().quotations, cashSessions: cashReg.exportCashRegisterState().sessions,
+    purchaseReturns: purchaseReturnsMod.exportPurchaseReturnsState().returns, phase10: phase10Store.exportPhase10State(), dayEndCloses: dayEnd.listDayEndCloses(),
   };
 }
 
 export function exportDomainSnapshotFull(): DomainSnapshot {
-  const snap = exportDomainSnapshot();
-  const profiles: MeasurementProfile[] = [];
+  const snap = exportDomainSnapshot(); const profiles: MeasurementProfile[] = [];
   for (const c of snap.customers) profiles.push(...ordersStore.listMeasurementProfiles(c.id));
-  snap.measurements = profiles;
-  return snap;
+  snap.measurements = profiles; return snap;
 }
-
 export function exportDomainSnapshotJson(): string { return JSON.stringify(exportDomainSnapshotFull(), null, 2); }
 
 export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error?: string; counts?: Record<string, number> } {
-  if (!snap || ![1, 2, 3, 4, 5].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
+  if (!snap || ![1, 2, 3, 4].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
   try {
     if (snap.outbox) hydrateOutbox(snap.outbox);
     if (snap.quotations) quotationsMod.hydrateQuotations({ quotations: snap.quotations });
@@ -111,13 +103,8 @@ export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error
     if (snap.autoBackup) autoBackup.hydrateAutoBackup(snap.autoBackup);
     if (snap.dayEndCloses) dayEnd.hydrateDayEnd({ closes: snap.dayEndCloses });
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
-  return { ok: true, counts: {
-    customers: snap.customers?.length ?? 0, products: snap.products?.length ?? 0, sales: snap.sales?.length ?? 0,
-    orders: snap.orders?.length ?? 0, staff: snap.staff?.length ?? 0, expenses: snap.expenses?.length ?? 0,
-    productionWorkflows: snap.phase10?.productionWorkflows?.length ?? 0, materialRolls: snap.phase10?.materialRolls?.length ?? 0,
-  } };
+  return { ok: true, counts: { customers: snap.customers?.length ?? 0, products: snap.products?.length ?? 0, sales: snap.sales?.length ?? 0, orders: snap.orders?.length ?? 0, staff: snap.staff?.length ?? 0, expenses: snap.expenses?.length ?? 0, productionWorkflows: snap.phase10?.productionWorkflows?.length ?? 0, materialRolls: snap.phase10?.materialRolls?.length ?? 0 } };
 }
-
 export function importDomainSnapshotJson(json: string) { try { return importDomainSnapshot(JSON.parse(json) as DomainSnapshot); } catch { return { ok: false as const, error: "Invalid snapshot JSON" }; } }
 
 const LOCAL_KEY = "minarvabiz-domain-v2";
