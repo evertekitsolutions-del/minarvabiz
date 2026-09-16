@@ -3,7 +3,7 @@ import {
   AppShell, Dashboard, CustomerList, ProductList, PosBilling, SalesList,
   OrderList, OrderForm, emptyOrderForm, OrderDetail, ProductionBoard, LaundryList, LaundryForm,
   ExpenseList, PurchaseList, StaffList, NotificationCenter, ReportsPanel,
-  BackupPanel, SettingsPanel, Modal, Button, FormField, inputClass, selectClass,
+  BackupPanel, SettingsPanel, Modal, Button, FormField, inputClass, selectClass, GlobalSearchPalette,
   TrialGate,
   type QuickAction, type NavItemId, type DashboardData, type OrderFormValues,
   type TrialRegistration, type TrialState,
@@ -44,6 +44,7 @@ export function App() {
   const [supplierForm, setSupplierForm] = React.useState({ name:"", company:"", phone:"", category:"" });
   const [lowStockOnly, setLowStockOnly] = React.useState(false);
   const [moduleTick, setModuleTick] = React.useState(0);
+  const [globalSearchQuery, setGlobalSearchQuery] = React.useState("");
   const [laundryMode, setLaundryMode] = React.useState<"outsourced" | "in_house_ironing" | null>(null);
   const [laundryError, setLaundryError] = React.useState<string | null>(null);
   const [expenseOpen, setExpenseOpen] = React.useState(false);
@@ -106,8 +107,9 @@ export function App() {
 
   const laundry=phase5Store.listLaundryOrders(), expenses=phase5Store.listExpenses(), purchases=phase5Store.listPurchases(), staff=phase6Store.listStaff(), assignments=phase6Store.listAssignments(), notifications=phase6Store.listNotifications(), reportSales=phase7Store.salesReport(), reportDayEnd=phase7Store.dayEndReport(), reportStock=phase7Store.stockReport(), reportOutstanding=phase7Store.outstandingPaymentsReport(), backups=phase7Store.listBackups(), suppliers=phase5Store.listSuppliers(), expenseCategories=phase5Store.listExpenseCategories(), profile=getShopProfile(), tax=getTaxConfig(), backupSettings=getAutoBackupSettings(), view=activeNav as string;
 
-  return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png"}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:phase6Store.unreadNotificationCount(),onMessagesClick:()=>navTo("notifications"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("reports")}}>
+  return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png"}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:phase6Store.unreadNotificationCount(),onMessagesClick:()=>navTo("notifications"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("reports"),onSearch:setGlobalSearchQuery}}>
     {view==="dashboard"&&dash&&<Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/>}
+    {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery("")} onNavigate={(href,id)=>{setGlobalSearchQuery("");navTo(id);}}/>}
     {view==="customers"&&<CustomerList customers={customers} onAdd={openCustomerCreator} onSearch={q=>setCustomers(store.listCustomers(q))}/>}
     {view==="products"&&<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={()=>setLowStockOnly(v=>!v)} onAdd={()=>{resetProductForm();setProductOpen(true);}}/>}
     {view==="sales"&&<div className="space-y-4"><div className="flex gap-2"><Button variant={salesTab==="pos"?"primary":"outline"} onClick={()=>setSalesTab("pos")}>POS Billing</Button><Button variant={salesTab==="history"?"primary":"outline"} onClick={()=>setSalesTab("history")}>Sales History</Button></div>{salesTab==="pos"?<PosBilling products={products} customers={customers} onAddCustomer={openCustomerCreator} onCompleteSale={handleSale}/>:<SalesList sales={sales}/>}</div>}
@@ -116,8 +118,8 @@ export function App() {
     {view==="expenses"&&<ExpenseList expenses={expenses} onAdd={()=>setExpenseOpen(true)}/>} 
     {view==="purchases"&&<PurchaseList purchases={purchases} suppliers={suppliers} onAdd={()=>setPurchaseOpen(true)}/>} 
     {view==="staff"&&<StaffList staff={staff} onAdd={()=>setStaffOpen(true)}/>} 
-    {view==="notifications"&&<NotificationCenter notifications={notifications}/>} 
-    {view==="reports"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding}/>} 
+    {view==="notifications"&&<NotificationCenter notifications={notifications} onMarkAllRead={()=>{phase6Store.markAllNotificationsRead();void persistAndRefresh();}} onMarkRead={id=>{phase6Store.markNotificationRead(id);void persistAndRefresh();}} onNavigate={(href)=>{const target=href.startsWith("/services")?"services":href.startsWith("/reports")?"reports":href.startsWith("/inventory")?"products":href.startsWith("/sales")?"sales":"dashboard";navTo(target as NavItemId);}}/>} 
+    {view==="reports"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} onRefresh={()=>{refreshAll();}}/>} 
     {view==="backup"&&<BackupPanel backups={backups}/>} 
     {view==="settings"&&<SettingsPanel profile={profile} tax={tax} backup={backupSettings} onSaveProfile={v=>{updateShopProfile(v);saveSettings();}} onSaveTax={v=>{updateTaxConfig(v);saveSettings();}} onSaveBackup={v=>{setAutoBackupSettings(v);saveSettings();}}/>}
 
