@@ -25,11 +25,11 @@ jobs:
           exec(compile(script,'<repair-ui-v2>','exec'),{'__name__':'__repair__'})
           p=Path('packages/ui/src/components/reports/ReportsPanel.tsx')
           s=p.read_text()
-          s=s.replace('\\\\n','\n')
-          s=s.replace('return /[",\n]/.test(s)','return /[",\\\\n]/.test(s)')
-          s=s.replace('.join("\n")','.join("\\\\n")')
+          s=s.replace('\\"','"')
+          s=s.replace('\\n','\n')
+          s=s.replace('return /[",\n]/.test(s)','return /[",\\n]/.test(s)')
+          s=s.replace('.join("\n")','.join("\\n")')
           p.write_text(s)
-          print('normalized',p)
           PY
       - name: Validate repaired source
         shell: bash
