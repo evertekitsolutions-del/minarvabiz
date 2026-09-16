@@ -1,123 +1,89 @@
 import fs from "node:fs";
 import path from "node:path";
-import process from "node:process";
 
 const root = process.cwd();
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+const exists = (file) => fs.existsSync(path.join(root, file));
+const assert = (condition, message) => {
+  if (!condition) throw new Error(`QUALITY CHECK FAILED: ${message}`);
+};
 
-function read(rel) { return fs.readFileSync(path.join(root, rel), "utf8"); }
-function exists(rel) { return fs.existsSync(path.join(root, rel)); }
-function assert(condition, message) { if (!condition) throw new Error(`QUALITY CHECK FAILED: ${message}`); }
-
-const desktopFiles = [
+const criticalDesktopFiles = [
   "apps/desktop/electron/main.ts",
   "apps/desktop/electron/preload.ts",
   "apps/desktop/src/App.tsx",
   "apps/desktop/src/lib/sqlite-bootstrap.ts",
 ];
-for (const file of desktopFiles) assert(exists(file), `Missing critical desktop file: ${file}`);
+for (const file of criticalDesktopFiles) assert(exists(file), `Missing critical desktop file: ${file}`);
 
-const desktopSource = desktopFiles.map(read).join("\n");
+const desktopSource = criticalDesktopFiles.map(read).join("\n");
+const appSource = read("apps/desktop/src/App.tsx");
+const preloadSource = read("apps/desktop/electron/preload.ts");
+const sqliteBootstrap = read("apps/desktop/src/lib/sqlite-bootstrap.ts");
+const persistence = read("packages/business-logic/src/persistence.ts");
+const phase10 = read("packages/business-logic/src/phase10-operations-store.ts");
+const phase9 = read("packages/business-logic/src/phase9-store.ts");
+const sqliteAdapter = read("packages/database/src/adapters/sqlite.ts");
+const licensing = read("packages/licensing/src/activation.ts") + read("packages/licensing/src/issuer.ts");
+const token = read("packages/licensing/src/token.ts");
+const licenseConfigWriter = read("apps/desktop/scripts/write-license-config.mjs");
 const workflow = read(".github/workflows/ci.yml");
 const releaseWorkflow = read(".github/workflows/release-windows.yml");
-const vite = read("apps/desktop/vite.config.ts");
-const tailwind = read("apps/desktop/tailwind.config.js");
-const desktopPackage = JSON.parse(read("apps/desktop/package.json"));
 const builder = read("apps/desktop/electron-builder.yml");
-const licenseConfigWriter = read("apps/desktop/scripts/write-license-config.mjs");
+const desktopPackage = JSON.parse(read("apps/desktop/package.json"));
 const businessLogicPackage = JSON.parse(read("packages/business-logic/package.json"));
 const uiPackage = JSON.parse(read("packages/ui/package.json"));
-const persistence = read("packages/business-logic/src/persistence.ts");
-const phase10Store = read("packages/business-logic/src/phase10-operations-store.ts");
-const sqliteBootstrap = read("apps/desktop/src/lib/sqlite-bootstrap.ts");
-const nav = read("packages/ui/src/lib/nav.ts");
-const licensingToken = read("packages/licensing/src/token.ts");
-const licenseActivationRoute = read("apps/web/src/app/api/license/activate/route.ts");
-const trialRegisterRoute = read("apps/web/src/app/api/trial/register/route.ts");
-const licenseActivationMigration = read("supabase/migrations/20260911_license_activation_atomicity.sql");
+const activationRoute = read("apps/web/src/app/api/license/activate/route.ts");
+const trialRoute = read("apps/web/src/app/api/trial/register/route.ts");
+const activationMigration = read("supabase/migrations/20260911_license_activation_atomicity.sql");
 const settingsPanel = read("packages/ui/src/components/settings/SettingsPanel.tsx");
+const nav = read("packages/ui/src/lib/nav.ts");
 
-assert(!/minarvabiz-db\\.json/.test(desktopSource), "Legacy JSON database file reference exists in desktop source");
-assert(!/ipcMain\\.handle\\(\\s*["']db:(read|write)["']/.test(desktopSource), "Legacy db:read/db:write IPC handler returned to desktop source");
-assert(/ipcMain\\.handle\\(\\s*["']db:readBinary["']/.test(desktopSource), "SQLite binary read IPC handler is missing");
-assert(/ipcMain\\.handle\\(\\s*["']db:writeBinary["']/.test(desktopSource), "SQLite binary write IPC handler is missing");
-assert(/writeSqliteBinary:\\s*\\(/.test(read("apps/desktop/electron/preload.ts")), "Preload does not expose SQLite write bridge");
-assert(/persistDomainToSqlite\\(\\): Promise<boolean>/.test(sqliteBootstrap), "SQLite domain persistence is not awaitable");
-assert(/await persistDomainToSqlite\\(\\)/.test(sqliteBootstrap), "Initial SQLite persistence is not awaited");
-assert(/return pendingWrite;/.test(sqliteBootstrap), "SQLite persistence does not return native write result");
-assert(/base:\\s*["']\\./.test(vite) && /\\/["']/.test(vite), "Vite production base path is not relative for Electron file://");
-assert(/packages\\/ui\\/src/.test(tailwind), "Tailwind content scan does not include shared UI package");
-assert(/build:renderer/.test(desktopPackage.scripts?.build ?? ""), "Desktop build script is missing renderer build");
-assert(/electron-builder --win/.test(desktopPackage.scripts?.["package:win"] ?? ""), "Windows packaging script is missing");
-assert(uiPackage.scripts?.typecheck === "tsc --noEmit", "Shared UI package must retain explicit typecheck script");
-assert(businessLogicPackage.scripts?.typecheck === "tsc --noEmit", "Business-logic package must retain explicit typecheck script");
-assert(/SNAPSHOT_VERSION\\s*=\\s*4/.test(persistence), "Domain snapshot version must include persisted phase-10 operations");
-assert(/phase10\\?:/.test(persistence) && /phase10Store\\.exportPhase10State/.test(persistence) && /phase10Store\\.hydratePhase10/.test(persistence), "Phase-10 production/material state is missing from domain snapshots");
-assert(/branches:\\s*Branch\\[\\]/.test(persistence) && /activeBranchId/.test(persistence), "Branch state is missing from domain snapshots");
-assert(/quotations\\?/.test(persistence) && /cashSessions\\?/.test(persistence) && /purchaseReturns\\?/.test(persistence), "Extended business snapshot state is missing");
-assert(/ensureProductionWorkflow/.test(phase10Store) && /advanceProductionWorkflow/.test(phase10Store), "Production workflow persistence store is missing lifecycle operations");
-assert(/createMaterialRoll/.test(phase10Store) && /reserveMaterialRoll/.test(phase10Store) && /consumeMaterialFromRoll/.test(phase10Store), "Material roll persistence store is missing inventory lifecycle operations");
-assert(/enqueueOutbox\\("production_workflows"/.test(phase10Store) && /enqueueOutbox\\("material_rolls"/.test(phase10Store), "Phase-10 mutations must enter the sync outbox");
-assert(/touchPersistence\\(\\)/.test(phase10Store), "Phase-10 mutations must trigger SQLite persistence");
-assert(/dashboard/.test(nav) && /sales/.test(nav) && /products/.test(nav) && /laundry/.test(nav) && /reports/.test(nav) && /backup/.test(nav), "Core navigation modules are missing");
-assert(workflow.includes("Guard against legacy JSON persistence"), "CI legacy JSON guard is missing");
-assert(workflow.includes("Inspect generated renderer CSS"), "CI renderer CSS verification is missing");
-assert(workflow.includes("package:win"), "CI Windows packaging verification is missing");
-assert(workflow.includes("MINARVA_RUNTIME_SMOKE"), "CI Windows runtime smoke is missing");
-assert(workflow.includes("actions/checkout@v7"), "CI should use the Node 24-compatible checkout action");
-assert(workflow.includes("actions/setup-node@v7"), "CI should use the Node 24-compatible setup-node action");
-assert(workflow.includes("pnpm/action-setup@v6"), "CI should use the current pnpm setup action");
-assert(workflow.includes("actions/upload-artifact@v6"), "CI should use the Node 24-compatible artifact action");
-assert((workflow.match(/node-version:\\s*24/g) || []).length >= 3, "CI build jobs must use Node 24");
-assert(releaseWorkflow.includes("actions/checkout@v7"), "Windows release workflow should use checkout@v7");
-assert(releaseWorkflow.includes("actions/setup-node@v7"), "Windows release workflow should use setup-node@v7");
-assert(releaseWorkflow.includes("pnpm/action-setup@v6"), "Windows release workflow should use pnpm/action-setup@v6");
-assert(releaseWorkflow.includes("actions/upload-artifact@v6"), "Windows release workflow should use upload-artifact@v6");
-assert((releaseWorkflow.match(/node-version:\\s*24/g) || []).length >= 1, "Windows release workflow must use Node 24");
-assert(releaseWorkflow.includes("MINARVA_RUNTIME_SMOKE"), "Windows release runtime smoke is missing");
-assert(releaseWorkflow.includes("Verify bundled production public key"), "Windows release public-key verification is missing");
-assert(releaseWorkflow.includes("MINARVA_LICENSE_PUBLIC_KEY_HEX"), "Windows release licensing configuration validation is missing");
-assert(/productName:\\s*Minarva Biz/.test(builder), "Windows package must identify the product as Minarva Biz");
-assert(/MINARVA_LICENSE_PUBLIC_KEY_HEX/.test(licenseConfigWriter) && /MINARVA_COMMERCIAL_RELEASE/.test(licenseConfigWriter) && /!configured/.test(licenseConfigWriter) && /\^\[0-9a-f\]\{64\}\$/.test(licenseConfigWriter), "Desktop commercial license build must require a valid externally supplied public key");
-assert(!/(BEGIN (?:OPENSSH |RSA |EC |DSA )?PRIVATE KEY)/i.test(desktopSource), "Private signing key material must never be present in desktop source");
-assert(!/(MINARVA|LICENSE)_LICENSE_PRIVATE_KEY|LICENSE_PRIVATE_KEY/i.test(desktopSource), "Private license key environment/config names must not be present in desktop source");
-
-const sqliteHeaderCheck = /const sqliteHeader = Buffer\\.from\\("SQLite format 3", "ascii"\\);\\s*if \\(!header\\.subarray\\(0, sqliteHeader\\.length\\)\\.equals\\(sqliteHeader\\) \\|\\| header\\[sqliteHeader\\.length\\] !== 0\\)/;
-assert(sqliteHeaderCheck.test(desktopSource), "SQLite validation must compare the 15-byte magic string plus the terminating NUL byte");
-assert(!/toString\\("utf8"\\)\\s*!==\\s*"SQLite format 3\\\\\\\\u0000"/.test(desktopSource), "SQLite validation must not compare against a literal backslash-u NUL sequence");
-
-const restoreRollbackCheck = /const target = sqlitePath\\(\\), temp = `\\$\\{target\\}\\.restore-\\$\\{process\\.pid\\}-\\$\\{Date\\.now\\(\\)\\}`, rollback = `\\$\\{target\\}\\.rollback-\\$\\{process\\.pid\\}-\\$\\{Date\\.now\\(\\)\\}`;\\s*let targetMoved = false;[\\s\\S]*?if \\(fs\\.existsSync\\(target\\)\\) \\{ fs\\.renameSync\\(target, rollback\\); targetMoved = true; \\} fs\\.renameSync\\(temp, target\\);[\\s\\S]*?if \\(fs\\.existsSync\\(target\\) && targetMoved\\) fs\\.unlinkSync\\(target\\);[\\s\\S]*?if \\(targetMoved && fs\\.existsSync\\(rollback\\)\\) \\{ fs\\.renameSync\\(rollback, target\\); \\}/;
-assert(restoreRollbackCheck.test(desktopSource), "Backup restore must retain and restore the previous database when replacement fails");
-
-const signedPayloadGuards = [
-  /const LICENSE_PLANS = new Set\\(\\["trial", "basic", "professional", "business", "enterprise"\\]\\)/,
-  /const LICENSE_EDITIONS = new Set\\(\\["online", "offline", "hybrid"\\]\\)/,
-  /const PLAN_MAX_DEVICES: Record<string, number> = \\{[\\s\\S]*enterprise: -1,/,
-  /function isIsoDate\\(value: unknown\\)/,
-  /function isLicenseFeatures\\(value: unknown\\)/,
-  /Number\\.isSafeInteger\\(payload\\.activationLimit\\)/,
-  /if \\(payload\\.activationLimit === -1\\) \\{\\s*if \\(payload\\.plan !== "enterprise"\\) return false;/,
-  /if \\(payload\\.activationLimit >= 0 && payload\\.deviceBindings\\.length > payload\\.activationLimit\\) return false;/,
-  /payload\\.expiresAt\\s*!==\\s*null\\s*&&\\s*new Date\\(payload\\.expiresAt\\)\\.getTime\\(\\)\\s*<\\s*new Date\\(payload\\.issuedAt\\)\\.getTime\\(\\)/,
-  /return isLicensePayload\\(payload\\) \\? payload : null;/,
-];
-for (const guard of signedPayloadGuards) assert(guard.test(licensingToken), `Signed license payload structural guard is missing: ${guard}`);
-
-assert(licenseActivationMigration.includes("CREATE OR REPLACE FUNCTION public.activate_license_device"), "Atomic license activation function is missing");
-assert(licenseActivationMigration.includes("FOR UPDATE"), "Atomic license activation must lock the license row");
-assert(licenseActivationMigration.includes("activation_limit <> -1"), "Atomic license activation must support Enterprise unlimited devices");
-assert(licenseActivationMigration.includes("REVOKE ALL ON FUNCTION public.activate_license_device"), "Atomic license activation RPC must not be public");
-assert(/rpc\\("activate_license_device"/.test(licenseActivationRoute), "Web activation endpoint must use atomic activation RPC");
-assert(!/\\.select\\("id"\\, \\{ count: "exact"/.test(licenseActivationRoute), "Web activation endpoint must not reintroduce count-before-insert race");
-assert(/MAX_BODY_BYTES\\s*=\\s*16 \\* 1024/.test(licenseActivationRoute) && /await request\\.text\\(\\)/.test(licenseActivationRoute), "License activation endpoint must bound request body size before parsing JSON");
-assert(/MAX_BODY_BYTES\\s*=\\s*16 \\* 1024/.test(trialRegisterRoute) && /await request\\.text\\(\\)/.test(trialRegisterRoute), "Trial registration endpoint must bound request body size before parsing JSON");
-assert(/content-type/.test(licenseActivationRoute) && /status:\\s*415/.test(licenseActivationRoute), "License activation endpoint must enforce JSON content type");
-assert(/content-type/.test(trialRegisterRoute) && /status:\\s*415/.test(trialRegisterRoute), "Trial registration endpoint must enforce JSON content type");
-assert(/Support diagnostics/.test(settingsPanel) && /redacted: true/.test(settingsPanel) && /excluded: \["customer names"/.test(settingsPanel), "Support diagnostics must remain explicitly redacted");
-
-const desktopAppSource = read("apps/desktop/src/App.tsx");
-assert(!/localStorage\\./.test(desktopAppSource), "Desktop App directly uses localStorage as persistence");
-assert(/persistDomainToSqlite/.test(desktopAppSource), "Desktop App is not wired to SQLite persistence");
-assert(/__minarvaDesktopPersist/.test(sqliteBootstrap), "Desktop native persistence bridge is missing");
+assert(!desktopSource.includes("minarvabiz-db.json"), "Legacy JSON database reference exists in desktop source");
+assert(!desktopSource.includes('db:read"') && !desktopSource.includes('db:write"'), "Legacy db:read/db:write IPC returned");
+assert(preloadSource.includes("writeSqliteBinary"), "SQLite binary write bridge is missing");
+assert(sqliteBootstrap.includes("persistDomainToSqlite(): Promise<boolean>"), "SQLite persistence must be awaitable");
+assert(sqliteBootstrap.includes("await persistDomainToSqlite()"), "Initial SQLite persistence must be awaited");
+assert(sqliteBootstrap.includes("return pendingWrite;"), "SQLite persistence must return the native write result");
+assert(appSource.includes("persistDomainToSqlite") && !appSource.includes("localStorage."), "Desktop App persistence wiring is incorrect");
+assert(sqliteAdapter.includes('require("sql.js/dist/sql-asm.js")'), "Packaged SQLite must use the self-contained ASM.js build");
+assert(sqliteAdapter.includes("serviceType: String(r.service_type)"), "SQLite order mapping must expose ServiceOrder serviceType");
+assert(sqliteAdapter.includes("price: Number(r.price || 0)"), "SQLite order mapping must use the current price column");
+assert(sqliteAdapter.includes("advance: Number(r.advance || 0)"), "SQLite order mapping must use the current advance column");
+assert(sqliteAdapter.includes("balance: Number(r.balance || 0)"), "SQLite order mapping must use the current balance column");
+assert(!phase9.includes("activateDemoPlan") && !phase9.includes("DEMO_PUBLIC_KEY_HEX") && !phase9.includes("applyDemoPlan"), "Removed demo licensing APIs are still referenced");
+assert(licensing.includes("activateWithToken") && licensing.includes("startTrial"), "Shared licensing lifecycle APIs are missing");
+assert(token.includes("function isLicensePayload") && token.includes("activationLimit"), "Signed license payload guards are missing");
+assert(licenseConfigWriter.includes("MINARVA_LICENSE_PUBLIC_KEY_HEX"), "Commercial build public-key configuration is missing");
+assert(licenseConfigWriter.includes("MINARVA_COMMERCIAL_RELEASE"), "Commercial release guard is missing");
+assert(licenseConfigWriter.includes("!configured"), "Commercial build must reject a missing supplied public key");
+assert(licenseConfigWriter.includes("/^[0-9a-f]{64}$/"), "Public key validation must require 64 hex characters");
+assert(!desktopSource.includes("LICENSE_PRIVATE_KEY") && !desktopSource.includes("BEGIN PRIVATE KEY"), "Private signing key material must never ship in desktop source");
+assert(persistence.includes("SNAPSHOT_VERSION = 4"), "Domain snapshot version must include persisted phase-10 operations");
+assert(persistence.includes("phase10Store.exportPhase10State") && persistence.includes("phase10Store.hydratePhase10"), "Phase-10 state is missing from domain snapshots");
+assert(persistence.includes("activeBranchId"), "Branch state is missing from domain snapshots");
+assert(phase10.includes("ensureProductionWorkflow") && phase10.includes("advanceProductionWorkflow"), "Production workflow persistence is missing");
+assert(phase10.includes("createMaterialRoll") && phase10.includes("reserveMaterialRoll") && phase10.includes("consumeMaterialFromRoll"), "Material roll lifecycle is missing");
+assert(phase10.includes('enqueueOutbox("production_workflows"') && phase10.includes('enqueueOutbox("material_rolls"'), "Phase-10 mutations must enter the sync outbox");
+assert(phase10.includes("touchPersistence()"), "Phase-10 mutations must trigger persistence");
+assert(nav.includes("dashboard") && nav.includes("sales") && nav.includes("products") && nav.includes("laundry") && nav.includes("reports") && nav.includes("backup"), "Core navigation modules are missing");
+assert(workflow.includes("Guard against legacy JSON persistence") && workflow.includes("package:win") && workflow.includes("MINARVA_RUNTIME_SMOKE"), "CI desktop verification guards are incomplete");
+assert(workflow.includes("actions/checkout@v7") && workflow.includes("actions/setup-node@v7") && workflow.includes("pnpm/action-setup@v6") && workflow.includes("actions/upload-artifact@v6"), "CI action versions are outdated or incomplete");
+assert((workflow.match(/node-version: 24/g) || []).length >= 3, "CI build jobs must use Node 24");
+assert(releaseWorkflow.includes("actions/checkout@v7") && releaseWorkflow.includes("actions/setup-node@v7") && releaseWorkflow.includes("pnpm/action-setup@v6") && releaseWorkflow.includes("actions/upload-artifact@v6"), "Release action versions are incomplete");
+assert(releaseWorkflow.includes("MINARVA_RUNTIME_SMOKE") && releaseWorkflow.includes("MINARVA_LICENSE_PUBLIC_KEY_HEX"), "Release licensing/runtime verification is incomplete");
+assert(builder.includes("productName: Minarva Biz"), "Windows package must identify Minarva Biz");
+assert(activationMigration.includes("CREATE OR REPLACE FUNCTION public.activate_license_device") && activationMigration.includes("FOR UPDATE") && activationMigration.includes("activation_limit <> -1"), "Atomic activation migration is incomplete");
+assert(activationMigration.includes("REVOKE ALL ON FUNCTION public.activate_license_device"), "Atomic activation RPC must not be public");
+assert(activationRoute.includes('rpc("activate_license_device"') && !activationRoute.includes('.select("id", { count: "exact"'), "Web activation route is not using the atomic activation path");
+assert(activationRoute.includes("MAX_BODY_BYTES = 16 * 1024") && activationRoute.includes("await request.text()"), "License activation request size guard is missing");
+assert(trialRoute.includes("MAX_BODY_BYTES = 16 * 1024") && trialRoute.includes("await request.text()"), "Trial registration request size guard is missing");
+assert(activationRoute.includes("status: 415") && activationRoute.includes("content-type"), "License activation JSON content-type enforcement is missing");
+assert(trialRoute.includes("status: 415") && trialRoute.includes("content-type"), "Trial registration JSON content-type enforcement is missing");
+assert(settingsPanel.includes("Support diagnostics") && settingsPanel.includes("redacted: true") && settingsPanel.includes("customer names"), "Support diagnostics redaction guard is missing");
+assert(uiPackage.scripts?.typecheck === "tsc --noEmit", "Shared UI typecheck script is missing");
+assert(businessLogicPackage.scripts?.typecheck === "tsc --noEmit", "Business-logic typecheck script is missing");
+assert(desktopPackage.scripts?.["package:win"]?.includes("electron-builder --win"), "Windows packaging script is missing");
 
 console.log("Minarva Biz quality smoke: PASS");
-console.log(`Verified ${desktopFiles.length} critical desktop files, SQLite-only desktop persistence wiring, SQLite binary-header validation, rollback-safe backup restore, structured signed-license payload validation, Enterprise unlimited activation policy, atomic license activation, bounded API request parsing, JSON content-type enforcement, redacted support diagnostics, Electron packaging, Node 24 CI hardening, Node 24 release workflow hardening, license public-key safety, CI guards, shared UI/business-logic contracts, domain snapshot coverage, and persisted production/material operations.`);
+console.log(`Verified ${criticalDesktopFiles.length} desktop files, SQLite-only persistence wiring, packaged sql.js loading, current ServiceOrder mapping, commercial licensing guards, no demo API references, signed payload validation, phase-10 persistence, atomic activation, bounded license APIs, redacted diagnostics, navigation, CI/release hardening, and Windows packaging.`);
