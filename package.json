@@ -1,8 +1,8 @@
 {
   "name": "minarvabiz",
-  "version": "0.1.0",
+  "version": "1.0.4",
   "private": true,
-  "description": "MINARVA BIZ \u2014 Commercial Boutique Billing & Management Software (Online / Offline / Hybrid)",
+  "description": "MINARVA BIZ — Commercial Boutique Billing & Management Software (Online / Offline / Hybrid)",
   "author": "Evertek IT Solutions",
   "license": "UNLICENSED",
   "packageManager": "pnpm@9.15.0",
