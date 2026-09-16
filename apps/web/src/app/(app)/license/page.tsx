@@ -3,7 +3,7 @@
 import * as React from "react";
 import { LicensePanel, BranchPanel } from "@minarvabiz/ui";
 import { phase9Store } from "@minarvabiz/business-logic";
-import type { Branch, LicensePlan } from "@minarvabiz/types";
+import type { Branch } from "@minarvabiz/types";
 
 export default function LicensePage() {
   const [state, setState] = React.useState(() => phase9Store.getLicenseState());
@@ -21,8 +21,7 @@ export default function LicensePage() {
 
   React.useEffect(() => { refresh(); }, [refresh]);
 
-  const canAdd =
-    usage.limits.multiBranch && usage.checks.branches.allowed;
+  const canAdd = usage.limits.multiBranch && usage.checks.branches.allowed;
 
   return (
     <div className="space-y-8">
@@ -42,10 +41,6 @@ export default function LicensePage() {
         }}
         onStartTrial={() => {
           phase9Store.applyTrial();
-          refresh();
-        }}
-        onDemoPlan={(plan: LicensePlan) => {
-          phase9Store.applyDemoPlan(plan);
           refresh();
         }}
         onDeactivate={() => {
