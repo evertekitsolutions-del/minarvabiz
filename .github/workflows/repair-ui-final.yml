@@ -1,0 +1,107 @@
+name: Final desktop UI repair
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - name: Apply tested repair changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re, textwrap
+          wf=Path('.github/workflows/repair-ui-v2.yml').read_text()
+          m=re.search(r"python - <<'PY'\n(?P<script>.*?)\n\s*PY\n",wf,re.S)
+          if not m: raise SystemExit('repair script not found')
+          exec(compile(textwrap.dedent(m.group('script')),'<repair>','exec'),{'__name__':'__repair__'})
+          PY
+      - name: Replace reports component with clean implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > packages/ui/src/components/reports/ReportsPanel.tsx <<'EOF'
+          "use client";
+          import * as React from "react";
+          import type { SalesReportRow, Customer, Expense, Purchase, ServiceOrder, StaffMember, Payment } from "@minarvabiz/types";
+          import { Button } from "../Button";
+          import { Card, CardContent, CardHeader, CardTitle } from "../Card";
+          import { formatMoney } from "../customers/format";
+
+          export interface DayEndView { totalSales:number; totalExpenses:number; costOfGoods:number; serviceRevenue:number; serviceExpenses:number; grossProfit:number; netProfit:number; cashReceived:number; cardPayments:number; otherPayments:number; outstandingAmount:number; }
+          export interface StockRow { id:string; name:string; sku?:string|null; stock:number; min:number; value:number; low:boolean; }
+          type Tab="sales"|"dayend"|"stock"|"outstanding"|"customers"|"services"|"expenses"|"purchases"|"staff"|"payments";
+
+          function downloadCsv(name:string, rows: unknown[][]) {
+            const dq = String.fromCharCode(34);
+            const nl = String.fromCharCode(10);
+            const quote = (v:unknown) => { const s=String(v ?? ""); return s.includes(dq)||s.includes(nl) ? dq + s.replaceAll(dq,dq+dq) + dq : s; };
+            const blob = new Blob([rows.map(r=>r.map(quote).join(",")).join(nl)], { type:"text/csv;charset=utf-8" });
+            const url = URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=name; a.click(); URL.revokeObjectURL(url);
+          }
+
+          export function ReportsPanel({ salesRows, sales, dayEnd, stock, outstanding, customers=[], expenses=[], purchases=[], orders=[], staff=[], payments=[], onRefresh, onPrint, onPdf }: {
+            salesRows?:SalesReportRow[]; sales?:SalesReportRow[]; dayEnd:DayEndView; stock:StockRow[]; outstanding:Array<{id:string;name:string;phone?:string|null;outstanding:number}>;
+            customers?:Customer[]; expenses?:Expense[]; purchases?:Purchase[]; orders?:ServiceOrder[]; staff?:StaffMember[]; payments?:Payment[];
+            onRefresh?:()=>void; onPrint?:()=>void; onPdf?:()=>void;
+          }) {
+            const [tab,setTab]=React.useState<Tab>("sales");
+            const rows=salesRows ?? sales ?? [];
+            const services=React.useMemo(()=>{const m=new Map<string,{count:number;revenue:number;balance:number}>(); for(const o of orders){if(o.status==="cancelled")continue;const x=m.get(o.serviceType)||{count:0,revenue:0,balance:0};x.count++;x.revenue+=o.price;x.balance+=o.balance;m.set(o.serviceType,x);}return [...m.entries()];},[orders]);
+            const expenseGroups=React.useMemo(()=>{const m=new Map<string,number>();for(const e of expenses){const k=e.categoryName||e.categoryId;m.set(k,(m.get(k)||0)+e.amount);}return [...m.entries()];},[expenses]);
+            const purchaseGroups=React.useMemo(()=>{const m=new Map<string,{amount:number;paid:number;balance:number}>();for(const p of purchases){const k=p.supplierName||"Unassigned";const x=m.get(k)||{amount:0,paid:0,balance:0};x.amount+=p.amount;x.paid+=p.paidAmount;x.balance+=p.balanceAmount;m.set(k,x);}return [...m.entries()];},[purchases]);
+            const paymentGroups=React.useMemo(()=>{const m=new Map<string,number>();for(const p of payments)m.set(p.method,(m.get(p.method)||0)+p.amount);return [...m.entries()];},[payments]);
+            function exportCurrent(){
+              let h:string[]=[];let d:unknown[][]=[];
+              if(tab==="sales"){h=["Period","Products","Services","Laundry","Revenue","Expenses","Net Profit"];d=rows.map(r=>[r.label,r.productSales,r.serviceRevenue,r.laundryRevenue,r.totalRevenue,r.expenses,r.netProfit]);}
+              else if(tab==="dayend"){h=["Metric","Value"];d=[["Total sales",dayEnd.totalSales],["Service revenue",dayEnd.serviceRevenue],["COGS",dayEnd.costOfGoods],["Gross profit",dayEnd.grossProfit],["Expenses",dayEnd.totalExpenses],["Net profit",dayEnd.netProfit],["Cash",dayEnd.cashReceived],["Card/UPI",dayEnd.cardPayments],["Other",dayEnd.otherPayments],["Outstanding",dayEnd.outstandingAmount]];}
+              else if(tab==="stock"){h=["Product","SKU","Stock","Minimum","Value"];d=stock.map(r=>[r.name,r.sku||"",r.stock,r.min,r.value]);}
+              else if(tab==="outstanding"){h=["Customer","Phone","Outstanding"];d=outstanding.map(r=>[r.name,r.phone||"",r.outstanding]);}
+              else if(tab==="customers"){h=["Name","Phone","WhatsApp","Email","Address","Birthday","Spend","Outstanding"];d=customers.map(c=>[c.name,c.phone||"",c.whatsapp||"",c.email||"",c.address||"",c.birthday||"",c.totalSpending,c.outstandingBalance]);}
+              else if(tab==="services"){h=["Service","Orders","Revenue","Balance"];d=services.map(([k,v])=>[k,v.count,v.revenue,v.balance]);}
+              else if(tab==="expenses"){h=["Category","Amount"];d=expenseGroups;}
+              else if(tab==="purchases"){h=["Supplier","Amount","Paid","Balance"];d=purchaseGroups.map(([k,v])=>[k,v.amount,v.paid,v.balance]);}
+              else if(tab==="staff"){h=["Name","Role","Salary","Status","Joining Date"];d=staff.map(s=>[s.name,s.role,s.salary,s.status,s.joiningDate||""]);}
+              else {h=["Payment Method","Amount"];d=paymentGroups;}
+              downloadCsv(`minarvabiz-${tab}-report-${new Date().toISOString().slice(0,10)}.csv`,[h,...d]);
+            }
+            const tabs:[Tab,string][]=[["sales","Sales"],["dayend","Day-end"],["stock","Inventory"],["outstanding","Outstanding"],["customers","Customers"],["services","Services"],["expenses","Expenses"],["purchases","Purchases"],["staff","Staff"],["payments","Payments"]];
+            return <div className="space-y-4" id="minarva-report-print-root">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-xl font-semibold text-slate-900">Reports & Analytics</h2><p className="text-sm text-slate-500">Complete operational, financial and customer reporting.</p></div><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={onRefresh}>Refresh</Button><Button type="button" variant="outline" onClick={exportCurrent}>Export CSV</Button><Button type="button" variant="outline" onClick={()=>onPrint?onPrint():window.print()}>Print</Button><Button type="button" onClick={()=>onPdf?onPdf():window.print()}>Save PDF</Button></div></div>
+              <div className="flex flex-wrap gap-2">{tabs.map(([t,l])=><Button type="button" key={t} size="sm" variant={tab===t?"primary":"outline"} onClick={()=>setTab(t)}>{l}</Button>)}</div>
+              {tab==="sales"&&<Card><CardHeader><CardTitle className="text-sm">Sales summary</CardTitle></CardHeader><CardContent className="overflow-x-auto"><table className="w-full text-sm"><thead><tr><th>Period</th><th>Products</th><th>Services</th><th>Laundry</th><th>Revenue</th><th>Expenses</th><th>Net profit</th></tr></thead><tbody>{rows.map(r=><tr key={r.label}><td>{r.label}</td><td>{formatMoney(r.productSales)}</td><td>{formatMoney(r.serviceRevenue)}</td><td>{formatMoney(r.laundryRevenue)}</td><td>{formatMoney(r.totalRevenue)}</td><td>{formatMoney(r.expenses)}</td><td>{formatMoney(r.netProfit)}</td></tr>)}</tbody></table></CardContent></Card>}
+              {tab==="dayend"&&<div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{[["Total sales",dayEnd.totalSales],["Service revenue",dayEnd.serviceRevenue],["COGS",dayEnd.costOfGoods],["Gross profit",dayEnd.grossProfit],["Expenses",dayEnd.totalExpenses],["Net profit",dayEnd.netProfit],["Cash",dayEnd.cashReceived],["Card/UPI",dayEnd.cardPayments],["Other",dayEnd.otherPayments],["Outstanding",dayEnd.outstandingAmount]].map(([l,v])=><Card key={String(l)}><CardContent className="p-4"><div className="text-xs text-slate-500">{l}</div><div className="text-lg font-bold">{formatMoney(v as number)}</div></CardContent></Card>)}</div>}
+              {tab==="stock"&&<Card><CardContent className="overflow-x-auto p-4"><table className="w-full text-sm"><tbody>{stock.map(r=><tr key={r.id}><td>{r.name}</td><td>{r.sku||"—"}</td><td>{r.stock}</td><td>{r.min}</td><td>{formatMoney(r.value)}</td></tr>)}</tbody></table></CardContent></Card>}
+              {tab==="outstanding"&&<Card><CardContent className="space-y-2 p-4">{outstanding.map(c=><div key={c.id} className="flex justify-between"><span>{c.name}</span><strong>{formatMoney(c.outstanding)}</strong></div>)}{outstanding.length===0&&<p className="text-sm text-slate-400">No outstanding balances</p>}</CardContent></Card>}
+              {tab==="customers"&&<Card><CardContent className="overflow-x-auto p-4"><table className="w-full text-sm"><tbody>{customers.map(c=><tr key={c.id}><td>{c.name}</td><td>{c.phone||"—"}</td><td>{c.whatsapp||"—"}</td><td>{c.email||"—"}</td><td>{c.address||"—"}</td><td>{c.birthday||"—"}</td><td>{formatMoney(c.totalSpending)}</td><td>{formatMoney(c.outstandingBalance)}</td></tr>)}</tbody></table></CardContent></Card>}
+              {tab==="services"&&<Card><CardContent className="p-4"><table className="w-full text-sm"><tbody>{services.map(([k,v])=><tr key={k}><td>{k}</td><td>{v.count}</td><td>{formatMoney(v.revenue)}</td><td>{formatMoney(v.balance)}</td></tr>)}</tbody></table></CardContent></Card>}
+              {tab==="expenses"&&<Card><CardContent className="p-4"><table className="w-full text-sm"><tbody>{expenseGroups.map(([k,v])=><tr key={k}><td>{k}</td><td>{formatMoney(v)}</td></tr>)}</tbody></table></CardContent></Card>}
+              {tab==="purchases"&&<Card><CardContent className="p-4"><table className="w-full text-sm"><tbody>{purchaseGroups.map(([k,v])=><tr key={k}><td>{k}</td><td>{formatMoney(v.amount)}</td><td>{formatMoney(v.paid)}</td><td>{formatMoney(v.balance)}</td></tr>)}</tbody></table></CardContent></Card>}
+              {tab==="staff"&&<Card><CardContent className="p-4"><table className="w-full text-sm"><tbody>{staff.map(s=><tr key={s.id}><td>{s.name}</td><td>{s.role}</td><td>{formatMoney(s.salary)}</td><td>{s.status}</td><td>{s.joiningDate||"—"}</td></tr>)}</tbody></table></CardContent></Card>}
+              {tab==="payments"&&<Card><CardContent className="p-4"><table className="w-full text-sm"><tbody>{paymentGroups.map(([k,v])=><tr key={k}><td>{k}</td><td>{formatMoney(v)}</td></tr>)}</tbody></table></CardContent></Card>}
+            </div>;
+          }
+          EOF
+      - name: Validate and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@9.15.0 --activate
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm --filter @minarvabiz/database typecheck
+          pnpm --filter @minarvabiz/business-logic typecheck
+          pnpm --filter @minarvabiz/ui typecheck
+          pnpm --filter @minarvabiz/desktop typecheck
+          git add apps packages
+          git rm .github/workflows/repair-ui-v2.yml .github/workflows/repair-ui-v3.yml .github/workflows/repair-ui-final.yml || true
+          git diff --cached --check
+          git commit -m "fix: complete desktop UI workflows forms reports and printing"
+          git push
