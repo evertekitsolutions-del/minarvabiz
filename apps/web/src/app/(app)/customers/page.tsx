@@ -36,18 +36,22 @@ export default function CustomersPage() {
       setError(parsed.error.errors[0]?.message ?? "Invalid input");
       return;
     }
-    store.createCustomer(parsed.data);
-    setOpen(false);
-    setForm({ name: "", phone: "", email: "", address: "", notes: "" });
-    setError(null);
-    refresh();
+    try {
+      store.createCustomer(parsed.data);
+      setOpen(false);
+      setForm({ name: "", phone: "", email: "", address: "", notes: "" });
+      setError(null);
+      refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to create customer");
+    }
   }
 
   return (
     <>
       <CustomerList
         customers={list}
-        onAdd={() => setOpen(true)}
+        onAdd={() => { setError(null); setOpen(true); }}
         onSearch={(q) => refresh(q)}
         onSelect={(c) => setProfile(phase6Store.getCustomerCrmProfile(c.id))}
       />
