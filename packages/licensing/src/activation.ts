@@ -1,6 +1,7 @@
 /**
- * License activation lifecycle — local storage of signed token + grace tracking.
- * Signing keys never ship in client apps; only public key for verification.
+ * License activation lifecycle — client-side verification + local trial state.
+ * Commercial license signing keys never ship in client apps; only the public
+ * verification key is bundled into the desktop application.
  */
 
 import type {
@@ -40,10 +41,6 @@ export interface LicenseState {
   stored: StoredLicense | null;
 }
 
-/** Dev/demo public key placeholder — replace with real Ed25519 public key in production */
-export const DEMO_PUBLIC_KEY_HEX =
-  "0000000000000000000000000000000000000000000000000000000000000000";
-
 let stored: StoredLicense | null = null;
 
 export function getStoredLicense(): StoredLicense | null {
@@ -55,8 +52,9 @@ export function clearLicense(): void {
 }
 
 /**
- * Activate with a signed token (production path).
- * Falls back to invalid if signature fails.
+ * Verify and activate a cryptographically signed commercial token.
+ * Desktop production storage/activation is implemented by Electron IPC;
+ * this shared lifecycle remains useful for web/shared business logic tests.
  */
 export async function activateWithToken(
   token: string,
@@ -87,12 +85,12 @@ export async function activateWithToken(
     plan: result.payload.plan,
     edition: result.payload.edition,
   };
-  return evaluateState(result, publicKeyHex, fingerprintHash);
+  return evaluateState(result);
 }
 
 /**
- * Start local trial without signed token (first-run experience).
- * Token is a structured local marker — NOT a commercial license.
+ * Start the local first-run trial. The trial is not a commercial license;
+ * it is deliberately distinct from signed license activation.
  */
 export function startTrial(edition: Edition = "offline"): LicenseState {
   const expires = new Date();
@@ -199,14 +197,10 @@ export async function evaluateStoredLicense(
       lastOnlineValidation: stored.lastOnlineValidation ?? undefined,
     }
   );
-  return evaluateState(result, publicKeyHex, fingerprintHash);
+  return evaluateState(result);
 }
 
-async function evaluateState(
-  result: ValidationResult,
-  _publicKeyHex: string,
-  _fingerprintHash?: string
-): Promise<LicenseState> {
+function evaluateState(result: ValidationResult): LicenseState {
   if (result.valid && result.payload) {
     return {
       status: result.payload.plan === "trial" ? "trial" : "active",
@@ -254,39 +248,6 @@ async function evaluateState(
     graceDaysRemaining: null,
     reason: result.reason,
     payload: result.payload,
-    stored,
-  };
-}
-
-/** Demo helper — activate a plan without cryptography (development only) */
-export function activateDemoPlan(plan: LicensePlan, edition: Edition = "hybrid"): LicenseState {
-  stored = {
-    token: `demo:${plan}:${generateId()}`,
-    activatedAt: nowISO(),
-    lastOnlineValidation: nowISO(),
-    fingerprintHash: null,
-    plan,
-    edition,
-  };
-  return {
-    status: plan === "trial" ? "trial" : "active",
-    plan,
-    edition,
-    features: PLAN_FEATURES[plan],
-    daysRemaining: plan === "trial" ? PLAN_LIMITS.trial.trialDays : 365,
-    graceDaysRemaining: null,
-    payload: {
-      licenseId: generateId() as UUID,
-      customerId: generateId() as UUID,
-      product: "minarvabiz",
-      edition,
-      plan,
-      features: PLAN_FEATURES[plan],
-      issuedAt: nowISO(),
-      expiresAt: null,
-      activationLimit: PLAN_LIMITS[plan].maxDevices,
-      deviceBindings: [],
-    },
     stored,
   };
 }
