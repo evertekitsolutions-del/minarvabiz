@@ -10,6 +10,7 @@ export interface AutoBackupSettings {
   enabled: boolean;
   intervalHours: number; // 24 = daily
   retentionCount: number;
+  destinationPath: string;
   lastBackupAt: string | null;
   lastBackupPath: string | null;
   lastError: string | null;
@@ -27,6 +28,7 @@ const settings: AutoBackupSettings = {
   enabled: true,
   intervalHours: 24,
   retentionCount: 14,
+  destinationPath: "",
   lastBackupAt: null,
   lastBackupPath: null,
   lastError: null,
