@@ -9,6 +9,7 @@ export interface QuickAction {
   description: string;
   icon: React.ReactNode;
   onClick?: () => void;
+  href?: string;
   tone?: "blue" | "pink" | "cyan" | "green" | "violet" | "indigo" | "emerald" | "teal";
 }
 
@@ -41,7 +42,10 @@ export function QuickActions({
         <button
           key={a.id}
           type="button"
-          onClick={a.onClick}
+          onClick={() => {
+            if (a.onClick) a.onClick();
+            else if (a.href) window.location.assign(a.href);
+          }}
           className={cn(
             "flex flex-col items-center gap-2 rounded-2xl border border-slate-100 bg-white p-4 text-center shadow-sm transition hover:shadow-md",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
