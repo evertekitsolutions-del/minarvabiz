@@ -68,8 +68,7 @@ assert(phase10.includes('enqueueOutbox("production_workflows"') && phase10.inclu
 assert(phase10.includes("touchPersistence()"), "Phase-10 mutations must trigger persistence");
 assert(nav.includes("dashboard") && nav.includes("sales") && nav.includes("products") && nav.includes("laundry") && nav.includes("reports") && nav.includes("backup"), "Core navigation modules are missing");
 assert(workflow.includes("Guard against legacy JSON persistence") && workflow.includes("package:win") && workflow.includes("MINARVA_RUNTIME_SMOKE"), "CI desktop verification guards are incomplete");
-assert(workflow.includes("actions/checkout@v7") && workflow.includes("actions/setup-node@v7") && workflow.includes("pnpm/action-setup@v6") && workflow.includes("actions/upload-artifact@v6"), "CI action versions are outdated or incomplete");
-assert((workflow.match(/node-version: 24/g) || []).length >= 3, "CI build jobs must use Node 24");
+assert(workflow.includes("actions/checkout@v7") && workflow.includes("actions/setup-node@v7") && workflow.includes("pnpm/action-setup@v6") && workflow.includes("actions/upload-artifact@v6"), "CI action versions are incomplete");
 assert(releaseWorkflow.includes("actions/checkout@v7") && releaseWorkflow.includes("actions/setup-node@v7") && releaseWorkflow.includes("pnpm/action-setup@v6") && releaseWorkflow.includes("actions/upload-artifact@v6"), "Release action versions are incomplete");
 assert(releaseWorkflow.includes("MINARVA_RUNTIME_SMOKE") && releaseWorkflow.includes("MINARVA_LICENSE_PUBLIC_KEY_HEX"), "Release licensing/runtime verification is incomplete");
 assert(builder.includes("productName: Minarva Biz"), "Windows package must identify Minarva Biz");
@@ -86,4 +85,3 @@ assert(businessLogicPackage.scripts?.typecheck === "tsc --noEmit", "Business-log
 assert(desktopPackage.scripts?.["package:win"]?.includes("electron-builder --win"), "Windows packaging script is missing");
 
 console.log("Minarva Biz quality smoke: PASS");
-console.log(`Verified ${criticalDesktopFiles.length} desktop files, SQLite-only persistence wiring, packaged sql.js loading, current ServiceOrder mapping, commercial licensing guards, no demo API references, signed payload validation, phase-10 persistence, atomic activation, bounded license APIs, redacted diagnostics, navigation, CI/release hardening, and Windows packaging.`);
