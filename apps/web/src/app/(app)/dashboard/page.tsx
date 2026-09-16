@@ -52,14 +52,14 @@ export default async function DashboardPage() {
   const data = await fetchDashboardData();
 
   const actions: QuickAction[] = [
-    { id: "sale", label: "New Sale", description: "Create Invoice", icon: quickActionIcons.sale, tone: "blue" },
-    { id: "order", label: "New Order", description: "Add Tailoring Order", icon: quickActionIcons.order, tone: "pink" },
-    { id: "laundry", label: "Laundry In", description: "Add Laundry Item", icon: quickActionIcons.laundry, tone: "cyan" },
-    { id: "expense", label: "Expense", description: "Add Expense", icon: quickActionIcons.expense, tone: "green" },
-    { id: "purchase", label: "Purchase", description: "Add Purchase", icon: quickActionIcons.purchase, tone: "violet" },
-    { id: "customer", label: "Customer", description: "Add New Customer", icon: quickActionIcons.customer, tone: "indigo" },
-    { id: "reports", label: "Reports", description: "View Reports", icon: quickActionIcons.reports, tone: "emerald" },
-    { id: "sms", label: "SMS / WhatsApp", description: "Send Message", icon: quickActionIcons.sms, tone: "teal" },
+    { id: "sale", label: "New Sale", description: "Create Invoice", icon: quickActionIcons.sale, tone: "blue", href: "/sales" },
+    { id: "order", label: "New Order", description: "Add Tailoring Order", icon: quickActionIcons.order, tone: "pink", href: "/services" },
+    { id: "laundry", label: "Laundry In", description: "Add Laundry Item", icon: quickActionIcons.laundry, tone: "cyan", href: "/laundry" },
+    { id: "expense", label: "Expense", description: "Add Expense", icon: quickActionIcons.expense, tone: "green", href: "/expenses" },
+    { id: "purchase", label: "Purchase", description: "Add Purchase", icon: quickActionIcons.purchase, tone: "violet", href: "/purchases" },
+    { id: "customer", label: "Customer", description: "Add New Customer", icon: quickActionIcons.customer, tone: "indigo", href: "/customers" },
+    { id: "reports", label: "Reports", description: "View Reports", icon: quickActionIcons.reports, tone: "emerald", href: "/reports" },
+    { id: "sms", label: "SMS / WhatsApp", description: "Send Message", icon: quickActionIcons.sms, tone: "teal", href: "/notifications" },
   ];
 
   return <Dashboard data={data} quickActions={actions} />;
