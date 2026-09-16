@@ -9,23 +9,9 @@ import { GlobalSearchPalette } from "../search/GlobalSearchPalette";
 import { OfflineModulesPanel } from "../desktop/OfflineModulesPanel";
 import type { NavItemId } from "../../lib/nav";
 
-export interface AppShellProps {
-  children: React.ReactNode;
-  activeNav?: NavItemId;
-  sidebar?: Partial<SidebarProps>;
-  header?: Partial<HeaderProps>;
-  onNavigate?: (href: string, id: NavItemId) => void;
-  className?: string;
-}
+export interface AppShellProps { children: React.ReactNode; activeNav?: NavItemId; sidebar?: Partial<SidebarProps>; header?: Partial<HeaderProps>; onNavigate?: (href: string, id: NavItemId) => void; className?: string; }
 
-export function AppShell({
-  children,
-  activeNav = "dashboard",
-  sidebar,
-  header,
-  onNavigate,
-  className,
-}: AppShellProps) {
+export function AppShell({ children, activeNav = "dashboard", sidebar, header, onNavigate, className }: AppShellProps) {
   const [collapsed, setCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -34,50 +20,21 @@ export function AppShell({
 
   React.useEffect(() => {
     if (!showLocalSearch || !searchQuery) return;
-    const handler = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSearchQuery("");
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    const handler = (event: KeyboardEvent) => { if (event.key === "Escape") setSearchQuery(""); };
+    window.addEventListener("keydown", handler); return () => window.removeEventListener("keydown", handler);
   }, [searchQuery, showLocalSearch]);
 
-  const handleNavigate = React.useCallback((href: string, id: NavItemId) => {
-    setSearchQuery("");
-    onNavigate?.(href, id);
-  }, [onNavigate]);
+  const handleNavigate = React.useCallback((href: string, id: NavItemId) => { setSearchQuery(""); onNavigate?.(href, id); }, [onNavigate]);
+  const isDesktopShell = typeof window !== "undefined" && "minarvaDesktop" in window;
 
   return (
     <div className={cn("flex h-screen w-full overflow-hidden bg-slate-50", className)}>
-      <div className="hidden md:flex">
-        <Sidebar activeId={activeNav} collapsed={collapsed} onNavigate={handleNavigate} {...sidebar} />
-      </div>
-      {mobileOpen && (
-        <div className="fixed inset-0 z-40 flex md:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <div className="relative z-10 h-full">
-            <Sidebar activeId={activeNav} onNavigate={(href, id) => { handleNavigate(href, id); setMobileOpen(false); }} {...sidebar} />
-          </div>
-        </div>
-      )}
+      <div className="hidden md:flex"><Sidebar activeId={activeNav} collapsed={collapsed} onNavigate={handleNavigate} {...sidebar} /></div>
+      {mobileOpen && <div className="fixed inset-0 z-40 flex md:hidden"><div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} /><div className="relative z-10 h-full"><Sidebar activeId={activeNav} onNavigate={(href, id) => { handleNavigate(href, id); setMobileOpen(false); }} {...sidebar} /></div></div>}
       <div className="flex min-w-0 flex-1 flex-col">
-        <Header
-          onMenuClick={() => {
-            if (typeof window !== "undefined" && window.innerWidth < 768) setMobileOpen((v) => !v);
-            else setCollapsed((v) => !v);
-          }}
-          {...header}
-          onSearch={(query) => {
-            header?.onSearch?.(query);
-            if (showLocalSearch) setSearchQuery(query);
-          }}
-        />
-        {showLocalSearch && searchQuery && (
-          <GlobalSearchPalette query={searchQuery} onClose={() => setSearchQuery("")} onNavigate={handleNavigate} />
-        )}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          {children}
-          {typeof window !== "undefined" && !!window.minarvaDesktop && <OfflineModulesPanel activeNav={activeNav} />}
-        </main>
+        <Header onMenuClick={() => { if (typeof window !== "undefined" && window.innerWidth < 768) setMobileOpen((v) => !v); else setCollapsed((v) => !v); }} {...header} onSearch={(query) => { header?.onSearch?.(query); if (showLocalSearch) setSearchQuery(query); }} />
+        {showLocalSearch && searchQuery && <GlobalSearchPalette query={searchQuery} onClose={() => setSearchQuery("")} onNavigate={handleNavigate} />}
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}{isDesktopShell && <OfflineModulesPanel activeNav={activeNav} />}</main>
       </div>
       <CommandPalette activeNav={activeNav} onNavigate={handleNavigate} />
     </div>
