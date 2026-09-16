@@ -22,11 +22,12 @@ import * as quotationsMod from "./quotations";
 import * as cashReg from "./cash-register";
 import * as purchaseReturnsMod from "./purchase-returns";
 import { exportOutbox, hydrateOutbox, type LocalOutboxEvent } from "./outbox-bridge";
+import * as dayEnd from "./day-end";
 import type { ShopProfile } from "./shop-profile";
 import type { TaxConfig } from "./tax-config";
 import type { AutoBackupSettings, BackupMeta } from "./auto-backup";
 
-export const SNAPSHOT_VERSION = 4;
+export const SNAPSHOT_VERSION = 5;
 
 export interface DomainSnapshot {
   version: number;
@@ -54,161 +55,74 @@ export interface DomainSnapshot {
   activeBranchId?: string | null;
   shopProfile?: ShopProfile | null;
   taxConfig?: TaxConfig | null;
-  autoBackup?: {
-    settings: AutoBackupSettings;
-    history: BackupMeta[];
-  } | null;
+  autoBackup?: { settings: AutoBackupSettings; history: BackupMeta[] } | null;
   outbox?: LocalOutboxEvent[];
   quotations?: ReturnType<typeof quotationsMod.exportQuotationsState>["quotations"];
   cashSessions?: ReturnType<typeof cashReg.exportCashRegisterState>["sessions"];
   purchaseReturns?: ReturnType<typeof purchaseReturnsMod.exportPurchaseReturnsState>["returns"];
   phase10?: ReturnType<typeof phase10Store.exportPhase10State>;
+  dayEndCloses?: ReturnType<typeof dayEnd.listDayEndCloses>;
 }
 
 export function exportDomainSnapshot(): DomainSnapshot {
   return {
     version: SNAPSHOT_VERSION,
     exportedAt: new Date().toISOString(),
-    customers: store.listCustomers(),
-    products: store.listProducts(),
-    categories: store.listCategories(),
-    sales: store.listSales(),
-    payments: store.listPayments(),
-    orders: ordersStore.listOrders(),
-    measurements: [],
-    laundry: phase5Store.listLaundryOrders(),
-    expenses: phase5Store.listExpenses(),
-    purchases: phase5Store.listPurchases(),
-    suppliers: phase5Store.listSuppliers(),
-    expenseCategories: phase5Store.listExpenseCategories(),
-    staff: phase6Store.listStaff(),
-    assignments: phase6Store.listAssignments(),
-    incentiveRules: phase6Store.listIncentiveRules(),
-    payouts: phase6Store.listIncentivePayouts(),
-    notifications: phase6Store.listNotifications(),
-    returns: phase7Store.listReturns(),
-    audit: phase7Store.listAuditLogs(500),
-    branches: phase9Store.listBranches(),
-    activeBranchId: phase9Store.getActiveBranch()?.id ?? null,
-    shopProfile: shopProfile.getShopProfile(),
-    taxConfig: taxConfig.getTaxConfig(),
-    autoBackup: autoBackup.exportAutoBackupState(),
-    outbox: exportOutbox(),
-    quotations: quotationsMod.exportQuotationsState().quotations,
-    cashSessions: cashReg.exportCashRegisterState().sessions,
-    purchaseReturns: purchaseReturnsMod.exportPurchaseReturnsState().returns,
-    phase10: phase10Store.exportPhase10State(),
+    customers: store.listCustomers(), products: store.listProducts(), categories: store.listCategories(),
+    sales: store.listSales(), payments: store.listPayments(), orders: ordersStore.listOrders(), measurements: [],
+    laundry: phase5Store.listLaundryOrders(), expenses: phase5Store.listExpenses(), purchases: phase5Store.listPurchases(),
+    suppliers: phase5Store.listSuppliers(), expenseCategories: phase5Store.listExpenseCategories(), staff: phase6Store.listStaff(),
+    assignments: phase6Store.listAssignments(), incentiveRules: phase6Store.listIncentiveRules(), payouts: phase6Store.listIncentivePayouts(),
+    notifications: phase6Store.listNotifications(), returns: phase7Store.listReturns(), audit: phase7Store.listAuditLogs(500),
+    branches: phase9Store.listBranches(), activeBranchId: phase9Store.getActiveBranch()?.id ?? null,
+    shopProfile: shopProfile.getShopProfile(), taxConfig: taxConfig.getTaxConfig(), autoBackup: autoBackup.exportAutoBackupState(),
+    outbox: exportOutbox(), quotations: quotationsMod.exportQuotationsState().quotations,
+    cashSessions: cashReg.exportCashRegisterState().sessions, purchaseReturns: purchaseReturnsMod.exportPurchaseReturnsState().returns,
+    phase10: phase10Store.exportPhase10State(), dayEndCloses: dayEnd.listDayEndCloses(),
   };
 }
 
-/** Collect measurements for all customers */
 export function exportDomainSnapshotFull(): DomainSnapshot {
   const snap = exportDomainSnapshot();
   const profiles: MeasurementProfile[] = [];
-  for (const c of snap.customers) {
-    profiles.push(...ordersStore.listMeasurementProfiles(c.id));
-  }
+  for (const c of snap.customers) profiles.push(...ordersStore.listMeasurementProfiles(c.id));
   snap.measurements = profiles;
   return snap;
 }
 
-export function exportDomainSnapshotJson(): string {
-  return JSON.stringify(exportDomainSnapshotFull(), null, 2);
-}
+export function exportDomainSnapshotJson(): string { return JSON.stringify(exportDomainSnapshotFull(), null, 2); }
 
-export function importDomainSnapshot(snap: DomainSnapshot): {
-  ok: boolean;
-  error?: string;
-  counts?: Record<string, number>;
-} {
-  if (!snap || (snap.version !== 1 && snap.version !== 2 && snap.version !== 3 && snap.version !== 4)) {
-    return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
-  }
+export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error?: string; counts?: Record<string, number> } {
+  if (!snap || ![1, 2, 3, 4, 5].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
   try {
     if (snap.outbox) hydrateOutbox(snap.outbox);
     if (snap.quotations) quotationsMod.hydrateQuotations({ quotations: snap.quotations });
     if (snap.cashSessions) cashReg.hydrateCashRegister({ sessions: snap.cashSessions });
     if (snap.purchaseReturns) purchaseReturnsMod.hydratePurchaseReturns({ returns: snap.purchaseReturns });
-    store.hydrateCore({
-      customers: snap.customers,
-      products: snap.products,
-      categories: snap.categories,
-      sales: snap.sales,
-      payments: snap.payments,
-    });
+    store.hydrateCore({ customers: snap.customers, products: snap.products, categories: snap.categories, sales: snap.sales, payments: snap.payments });
     ordersStore.hydrateOrders({ orders: snap.orders, measurements: snap.measurements });
-    phase5Store.hydratePhase5({
-      suppliers: snap.suppliers,
-      laundryOrders: snap.laundry,
-      expenses: snap.expenses,
-      purchases: snap.purchases,
-      expenseCategories: snap.expenseCategories,
-    });
-    phase6Store.hydratePhase6({
-      staff: snap.staff,
-      assignments: snap.assignments,
-      incentiveRules: snap.incentiveRules,
-      payouts: snap.payouts,
-      notifications: snap.notifications,
-    });
+    phase5Store.hydratePhase5({ suppliers: snap.suppliers, laundryOrders: snap.laundry, expenses: snap.expenses, purchases: snap.purchases, expenseCategories: snap.expenseCategories });
+    phase6Store.hydratePhase6({ staff: snap.staff, assignments: snap.assignments, incentiveRules: snap.incentiveRules, payouts: snap.payouts, notifications: snap.notifications });
     phase7Store.hydratePhase7({ returns: snap.returns, auditLogs: snap.audit });
-    if (snap.branches?.length) {
-      phase9Store.hydratePhase9({ branches: snap.branches, activeBranchId: snap.activeBranchId ?? undefined });
-    }
+    if (snap.branches?.length) phase9Store.hydratePhase9({ branches: snap.branches, activeBranchId: snap.activeBranchId ?? undefined });
     if (snap.phase10) phase10Store.hydratePhase10(snap.phase10);
     if (snap.shopProfile) shopProfile.hydrateShopProfile(snap.shopProfile);
     if (snap.taxConfig) taxConfig.hydrateTaxConfig(snap.taxConfig);
     if (snap.autoBackup) autoBackup.hydrateAutoBackup(snap.autoBackup);
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
-  return {
-    ok: true,
-    counts: {
-      customers: snap.customers?.length ?? 0,
-      products: snap.products?.length ?? 0,
-      sales: snap.sales?.length ?? 0,
-      orders: snap.orders?.length ?? 0,
-      staff: snap.staff?.length ?? 0,
-      expenses: snap.expenses?.length ?? 0,
-      productionWorkflows: snap.phase10?.productionWorkflows?.length ?? 0,
-      materialRolls: snap.phase10?.materialRolls?.length ?? 0,
-    },
-  };
+    if (snap.dayEndCloses) dayEnd.hydrateDayEnd({ closes: snap.dayEndCloses });
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+  return { ok: true, counts: {
+    customers: snap.customers?.length ?? 0, products: snap.products?.length ?? 0, sales: snap.sales?.length ?? 0,
+    orders: snap.orders?.length ?? 0, staff: snap.staff?.length ?? 0, expenses: snap.expenses?.length ?? 0,
+    productionWorkflows: snap.phase10?.productionWorkflows?.length ?? 0, materialRolls: snap.phase10?.materialRolls?.length ?? 0,
+  } };
 }
 
-export function importDomainSnapshotJson(json: string) {
-  try {
-    return importDomainSnapshot(JSON.parse(json) as DomainSnapshot);
-  } catch {
-    return { ok: false as const, error: "Invalid snapshot JSON" };
-  }
-}
+export function importDomainSnapshotJson(json: string) { try { return importDomainSnapshot(JSON.parse(json) as DomainSnapshot); } catch { return { ok: false as const, error: "Invalid snapshot JSON" }; } }
 
 const LOCAL_KEY = "minarvabiz-domain-v2";
-
-export function saveToLocalStorage(): boolean {
-  if (typeof localStorage === "undefined") return false;
-  localStorage.setItem(LOCAL_KEY, exportDomainSnapshotJson());
-  return true;
-}
-
-export function loadFromLocalStorage(): { ok: boolean; error?: string } {
-  if (typeof localStorage === "undefined") return { ok: false, error: "localStorage unavailable" };
-  const raw = localStorage.getItem(LOCAL_KEY);
-  if (!raw) return { ok: false, error: "No saved snapshot" };
-  return importDomainSnapshotJson(raw);
-}
-
+export function saveToLocalStorage(): boolean { if (typeof localStorage === "undefined") return false; localStorage.setItem(LOCAL_KEY, exportDomainSnapshotJson()); return true; }
+export function loadFromLocalStorage(): { ok: boolean; error?: string } { if (typeof localStorage === "undefined") return { ok: false, error: "localStorage unavailable" }; const raw = localStorage.getItem(LOCAL_KEY); if (!raw) return { ok: false, error: "No saved snapshot" }; return importDomainSnapshotJson(raw); }
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
-
-export function scheduleAutoSave(delayMs = 800) {
-  if (typeof localStorage === "undefined") return;
-  if (autoSaveTimer) clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(() => { saveToLocalStorage(); }, delayMs);
-}
-
-export function bootstrapFromLocalStorage(): boolean {
-  const result = loadFromLocalStorage();
-  return result.ok;
-}
+export function scheduleAutoSave(delayMs = 800) { if (typeof localStorage === "undefined") return; if (autoSaveTimer) clearTimeout(autoSaveTimer); autoSaveTimer = setTimeout(() => { saveToLocalStorage(); }, delayMs); }
+export function bootstrapFromLocalStorage(): boolean { return loadFromLocalStorage().ok; }
