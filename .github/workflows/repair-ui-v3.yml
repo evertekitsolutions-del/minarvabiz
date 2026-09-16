@@ -18,26 +18,19 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import re, textwrap
-
-          wf = Path('.github/workflows/repair-ui-v2.yml').read_text()
-          m = re.search(r"python - <<'PY'\n(?P<script>.*?)\n\s*PY\n", wf, re.S)
-          if not m:
-              raise SystemExit('Could not extract tested repair script from repair-ui-v2.yml')
-          script = textwrap.dedent(m.group('script'))
-          exec(compile(script, '<repair-ui-v2>', 'exec'), {'__name__': '__repair__'})
-
-          # The v2 repair embeds ReportsPanel in a raw Python string. Normalize
-          # its escaped newlines back into real source newlines, then restore
-          # JavaScript string/regex newline escapes that must remain escaped.
-          p = Path('packages/ui/src/components/reports/ReportsPanel.tsx')
-          s = p.read_text()
-          s = s.replace('\\\\n', '\n')
-          s = s.replace('return /[",\n]/.test(s)', 'return /[",\\\\n]/.test(s)')
-          s = s.replace('.join("\n")', '.join("\\\\n")')
+          wf=Path('.github/workflows/repair-ui-v2.yml').read_text()
+          m=re.search(r"python - <<'PY'\n(?P<script>.*?)\n\s*PY\n",wf,re.S)
+          if not m: raise SystemExit('Could not extract tested repair script from repair-ui-v2.yml')
+          script=textwrap.dedent(m.group('script'))
+          exec(compile(script,'<repair-ui-v2>','exec'),{'__name__':'__repair__'})
+          p=Path('packages/ui/src/components/reports/ReportsPanel.tsx')
+          s=p.read_text()
+          s=s.replace('\\\\n','\n')
+          s=s.replace('return /[",\n]/.test(s)','return /[",\\\\n]/.test(s)')
+          s=s.replace('.join("\n")','.join("\\\\n")')
           p.write_text(s)
-          print('normalized', p)
+          print('normalized',p)
           PY
-
       - name: Validate repaired source
         shell: bash
         run: |
@@ -50,7 +43,6 @@ jobs:
           pnpm --filter @minarvabiz/business-logic typecheck
           pnpm --filter @minarvabiz/ui typecheck
           pnpm --filter @minarvabiz/desktop typecheck
-
       - name: Commit completed repair and remove one-time workflows
         shell: bash
         run: |
