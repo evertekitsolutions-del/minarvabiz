@@ -64,7 +64,9 @@ let SQL: { Database: new (data?: ArrayLike<number>) => SqlJsDb } | null = null;
 
 async function loadSqlJs() {
   if (SQL) return SQL;
-  const initSqlJs = require("sql.js");
+  // Use the self-contained ASM.js build in the packaged desktop runtime.
+  // This avoids sql.js trying to fetch sql-wasm.wasm from file:// / asar.
+  const initSqlJs = require("sql.js/dist/sql-asm.js");
   SQL = await initSqlJs();
   return SQL!;
 }
@@ -373,48 +375,35 @@ export function createSqliteUnitOfWork(sqlite: SqliteDatabase): UnitOfWork {
 
   const orders: OrderRepository = {
     async list() {
-      return query("SELECT * FROM orders WHERE deleted_at IS NULL ORDER BY order_date DESC LIMIT 500").map(
-        (r) =>
-          ({
-            id: String(r.id),
-            orderNumber: String(r.order_number),
-            customerId: String(r.customer_id),
-            customerName: (r.customer_name as string) ?? null,
-            orderDate: String(r.order_date),
-            deliveryDate: (r.delivery_date as string) ?? null,
-            serviceType: r.service_type,
-            status: r.status,
-            price: Number(r.price),
-            discount: Number(r.discount),
-            advance: Number(r.advance),
-            balance: Number(r.balance),
-            externalMaterialCost: Number(r.external_material_cost || 0),
-            orderExpensesTotal: Number(r.order_expenses_total || 0),
-            quantity: Number(r.quantity || 1),
-            unitPrice: Number(r.unit_price || 0),
-            bulkDiscount: Number(r.bulk_discount || 0),
-            customerSuppliedMaterial: false,
-            shopSuppliedMaterial: true,
-            notes: (r.notes as string) ?? null,
-            expenses: [],
-            createdAt: String(r.created_at),
-            updatedAt: String(r.updated_at),
-            version: Number(r.version || 1),
-          }) as unknown as ServiceOrder
-      );
+      return query("SELECT * FROM orders WHERE deleted_at IS NULL ORDER BY order_date DESC LIMIT 500").map((r) => ({
+        id: String(r.id) as UUID,
+        orderNumber: String(r.order_number),
+        customerId: String(r.customer_id) as UUID,
+        customerName: String(r.customer_name || ""),
+        orderDate: String(r.order_date),
+        deliveryDate: (r.delivery_date as string) ?? null,
+        status: r.status as ServiceOrder["status"],
+        total: Number(r.total || 0),
+        paidAmount: Number(r.paid_amount || 0),
+        balanceAmount: Number(r.balance_amount || 0),
+        notes: (r.notes as string) ?? null,
+        createdAt: String(r.created_at),
+        updatedAt: String(r.updated_at),
+        version: Number(r.version || 1),
+      })) as ServiceOrder[];
     },
     async get(id) {
-      return (await this.list()).find((o) => o.id === id) ?? null;
+      const rows = query("SELECT * FROM orders WHERE id=? AND deleted_at IS NULL", [id]);
+      return rows[0] ? (await this.list()).find((o) => o.id === id) ?? null : null;
     },
     async create(order) {
       transaction(() => {
         exec(
-          `INSERT INTO orders (id,order_number,customer_id,customer_name,order_date,delivery_date,service_type,status,price,discount,advance,balance,external_material_cost,order_expenses_total,quantity,notes,created_at,updated_at,version)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [order.id, order.orderNumber, order.customerId, order.customerName, order.orderDate, order.deliveryDate, order.serviceType, order.status, order.price, order.discount, order.advance, order.balance, order.externalMaterialCost, order.orderExpensesTotal, order.quantity, order.notes, order.createdAt, order.updatedAt, order.version || 1]
+          `INSERT INTO orders (id,order_number,customer_id,customer_name,order_date,delivery_date,status,total,paid_amount,balance_amount,notes,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [order.id, order.orderNumber, order.customerId, order.customerName, order.orderDate, order.deliveryDate, order.status, order.total, order.paidAmount, order.balanceAmount, order.notes, order.createdAt, order.updatedAt, order.version || 1]
         );
       });
-      return order;
+      return (await this.get(order.id))!;
     },
     async update(id, patch) {
       const cur = await this.get(id);
@@ -422,27 +411,19 @@ export function createSqliteUnitOfWork(sqlite: SqliteDatabase): UnitOfWork {
       const next = { ...cur, ...patch, updatedAt: nowISO() };
       transaction(() => {
         exec(
-          `UPDATE orders SET status=?, price=?, discount=?, advance=?, balance=?, external_material_cost=?, order_expenses_total=?, notes=?, delivery_date=?, updated_at=?, version=version+1 WHERE id=?`,
-          [next.status, next.price, next.discount, next.advance, next.balance, next.externalMaterialCost, next.orderExpensesTotal, next.notes, next.deliveryDate, next.updatedAt, id]
+          `UPDATE orders SET order_number=?, customer_id=?, customer_name=?, order_date=?, delivery_date=?, status=?, total=?, paid_amount=?, balance_amount=?, notes=?, updated_at=?, version=version+1 WHERE id=?`,
+          [next.orderNumber, next.customerId, next.customerName, next.orderDate, next.deliveryDate, next.status, next.total, next.paidAmount, next.balanceAmount, next.notes, next.updatedAt, id]
         );
       });
       return this.get(id);
     },
   };
 
-  return { customers, products, sales, orders, edition: "offline" };
-}
-
-export function backupSqliteFile(dbPath: string, backupPath: string, io: SqliteFileIO = nodeFileIO()): boolean {
-  const data = io.readFile(dbPath);
-  if (!data) return false;
-  io.writeFile(backupPath, new Uint8Array(data));
-  return true;
-}
-
-export function restoreSqliteFile(backupPath: string, dbPath: string, io: SqliteFileIO = nodeFileIO()): boolean {
-  const data = io.readFile(backupPath);
-  if (!data) return false;
-  io.writeFile(dbPath, new Uint8Array(data));
-  return true;
+  return {
+    edition: "offline",
+    customers,
+    products,
+    sales,
+    orders,
+  };
 }
