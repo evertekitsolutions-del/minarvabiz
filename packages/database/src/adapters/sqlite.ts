@@ -379,16 +379,34 @@ export function createSqliteUnitOfWork(sqlite: SqliteDatabase): UnitOfWork {
         id: String(r.id) as UUID,
         orderNumber: String(r.order_number),
         customerId: String(r.customer_id) as UUID,
-        customerName: String(r.customer_name || ""),
+        customerName: (r.customer_name as string) ?? null,
         orderDate: String(r.order_date),
         deliveryDate: (r.delivery_date as string) ?? null,
+        serviceType: String(r.service_type),
         status: r.status as ServiceOrder["status"],
-        total: Number(r.total || 0),
-        paidAmount: Number(r.paid_amount || 0),
-        balanceAmount: Number(r.balance_amount || 0),
+        assignedTailorId: (r.assigned_tailor_id as UUID) ?? null,
+        measurements: r.measurements_json ? JSON.parse(String(r.measurements_json)) : null,
         notes: (r.notes as string) ?? null,
+        materialDetails: (r.material_details as string) ?? null,
+        customerSuppliedMaterial: Number(r.customer_supplied_material || 0) !== 0,
+        shopSuppliedMaterial: Number(r.shop_supplied_material || 0) !== 0,
+        price: Number(r.price || 0),
+        discount: Number(r.discount || 0),
+        advance: Number(r.advance || 0),
+        balance: Number(r.balance || 0),
+        externalMaterialCost: Number(r.external_material_cost || 0),
+        orderExpensesTotal: Number(r.order_expenses_total || 0),
+        quantity: Number(r.quantity || 1),
+        unitPrice: Number(r.unit_price ?? 0),
+        bulkDiscount: Number(r.bulk_discount || 0),
+        tshirt: r.tshirt_json ? JSON.parse(String(r.tshirt_json)) : null,
+        expenses: [],
         createdAt: String(r.created_at),
         updatedAt: String(r.updated_at),
+        deletedAt: (r.deleted_at as string) ?? null,
+        branchId: (r.branch_id as UUID) ?? null,
+        deviceId: (r.device_id as UUID) ?? null,
+        createdBy: (r.created_by as UUID) ?? null,
         version: Number(r.version || 1),
       })) as ServiceOrder[];
     },
@@ -399,8 +417,18 @@ export function createSqliteUnitOfWork(sqlite: SqliteDatabase): UnitOfWork {
     async create(order) {
       transaction(() => {
         exec(
-          `INSERT INTO orders (id,order_number,customer_id,customer_name,order_date,delivery_date,status,total,paid_amount,balance_amount,notes,created_at,updated_at,version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [order.id, order.orderNumber, order.customerId, order.customerName, order.orderDate, order.deliveryDate, order.status, order.total, order.paidAmount, order.balanceAmount, order.notes, order.createdAt, order.updatedAt, order.version || 1]
+          `INSERT INTO orders (id,order_number,customer_id,customer_name,order_date,delivery_date,service_type,status,assigned_tailor_id,measurements_json,notes,price,discount,advance,balance,external_material_cost,order_expenses_total,quantity,unit_price,bulk_discount,tshirt_json,created_at,updated_at,deleted_at,branch_id,device_id,created_by,version)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [
+            order.id, order.orderNumber, order.customerId, order.customerName ?? null,
+            order.orderDate, order.deliveryDate ?? null, order.serviceType, order.status,
+            order.assignedTailorId ?? null, order.measurements ? JSON.stringify(order.measurements) : null,
+            order.notes ?? null, order.price, order.discount, order.advance, order.balance,
+            order.externalMaterialCost, order.orderExpensesTotal, order.quantity, order.unitPrice,
+            order.bulkDiscount, order.tshirt ? JSON.stringify(order.tshirt) : null,
+            order.createdAt, order.updatedAt, order.deletedAt ?? null, order.branchId ?? null,
+            order.deviceId ?? null, order.createdBy ?? null, order.version || 1,
+          ]
         );
       });
       return (await this.get(order.id))!;
@@ -411,8 +439,15 @@ export function createSqliteUnitOfWork(sqlite: SqliteDatabase): UnitOfWork {
       const next = { ...cur, ...patch, updatedAt: nowISO() };
       transaction(() => {
         exec(
-          `UPDATE orders SET order_number=?, customer_id=?, customer_name=?, order_date=?, delivery_date=?, status=?, total=?, paid_amount=?, balance_amount=?, notes=?, updated_at=?, version=version+1 WHERE id=?`,
-          [next.orderNumber, next.customerId, next.customerName, next.orderDate, next.deliveryDate, next.status, next.total, next.paidAmount, next.balanceAmount, next.notes, next.updatedAt, id]
+          `UPDATE orders SET order_number=?, customer_id=?, customer_name=?, order_date=?, delivery_date=?, service_type=?, status=?, assigned_tailor_id=?, measurements_json=?, notes=?, price=?, discount=?, advance=?, balance=?, external_material_cost=?, order_expenses_total=?, quantity=?, unit_price=?, bulk_discount=?, tshirt_json=?, branch_id=?, device_id=?, created_by=?, updated_at=?, version=version+1 WHERE id=?`,
+          [
+            next.orderNumber, next.customerId, next.customerName ?? null, next.orderDate, next.deliveryDate ?? null,
+            next.serviceType, next.status, next.assignedTailorId ?? null, next.measurements ? JSON.stringify(next.measurements) : null,
+            next.notes ?? null, next.price, next.discount, next.advance, next.balance, next.externalMaterialCost,
+            next.orderExpensesTotal, next.quantity, next.unitPrice, next.bulkDiscount,
+            next.tshirt ? JSON.stringify(next.tshirt) : null, next.branchId ?? null, next.deviceId ?? null,
+            next.createdBy ?? null, next.updatedAt, id,
+          ]
         );
       });
       return this.get(id);
