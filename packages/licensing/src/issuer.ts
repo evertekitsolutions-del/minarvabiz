@@ -72,6 +72,11 @@ export async function issueLicense(input: IssueLicenseInput): Promise<IssuedLice
   if (!EDITIONS.has(input.edition)) throw new Error("Invalid license edition");
   const issuedAt = nowISO();
   const features: LicenseFeatures = { ...PLAN_FEATURES[input.plan] };
+  const activationLimit = normalizedActivationLimit(input.plan, input.activationLimit);
+  const deviceBindings = validateDeviceBindings(input.deviceBindings);
+  if (activationLimit >= 0 && deviceBindings.length > activationLimit) {
+    throw new Error("Device binding count exceeds the activation limit");
+  }
   const payload: LicensePayload = {
     licenseId: generateId() as UUID,
     customerId: (input.customerId || generateId()) as UUID,
@@ -81,15 +86,15 @@ export async function issueLicense(input: IssueLicenseInput): Promise<IssuedLice
     features,
     issuedAt,
     expiresAt: validateExpiry(input.expiresAt, issuedAt),
-    activationLimit: normalizedActivationLimit(input.plan, input.activationLimit),
-    deviceBindings: validateDeviceBindings(input.deviceBindings),
+    activationLimit,
+    deviceBindings,
   };
   const token = await signLicense(payload, input.privateKeyHex);
   const record: IssuedLicense = {
     token,
     payload,
     customerName: input.customerName.trim(),
-    issuedAt: nowISO(),
+    issuedAt,
   };
   issuedLog.unshift(record);
   return record;
@@ -97,35 +102,4 @@ export async function issueLicense(input: IssueLicenseInput): Promise<IssuedLice
 
 export function listIssued(): IssuedLicense[] {
   return [...issuedLog];
-}
-
-/**
- * Demo issuance without real crypto — for UI development only.
- * Produces a demo:* token that client activateDemoPlan path can mirror.
- */
-export function issueDemoLicense(input: {
-  customerName: string;
-  plan: LicensePlan;
-  edition: Edition;
-}): IssuedLicense {
-  const payload: LicensePayload = {
-    licenseId: generateId() as UUID,
-    customerId: generateId() as UUID,
-    product: "minarvabiz",
-    edition: input.edition,
-    plan: input.plan,
-    features: { ...PLAN_FEATURES[input.plan] },
-    issuedAt: nowISO(),
-    expiresAt: null,
-    activationLimit: PLAN_LIMITS[input.plan].maxDevices,
-    deviceBindings: [],
-  };
-  const record: IssuedLicense = {
-    token: `demo:${input.plan}:${payload.licenseId}`,
-    payload,
-    customerName: input.customerName,
-    issuedAt: nowISO(),
-  };
-  issuedLog.unshift(record);
-  return record;
 }
