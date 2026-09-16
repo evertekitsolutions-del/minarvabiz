@@ -1,0 +1,82 @@
+name: Repair Desktop Gaps
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Patch desktop App.tsx
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('apps/desktop/src/App.tsx')
+          s = p.read_text(encoding='utf-8')
+          original = s
+
+          s = s.replace(
+            '  BackupPanel, SettingsPanel, Modal, Button, FormField, inputClass, selectClass,\n',
+            '  BackupPanel, SettingsPanel, Modal, Button, FormField, inputClass, selectClass, GlobalSearchPalette,\n'
+          )
+
+          s = s.replace(
+            '  const [moduleTick, setModuleTick] = React.useState(0);\n',
+            '  const [moduleTick, setModuleTick] = React.useState(0);\n  const [globalSearchQuery, setGlobalSearchQuery] = React.useState(\"\");\n'
+          )
+
+          old_header = 'header={{showSearch:view!==\"dashboard\",title:view===\"services\"?\"Services & Orders\":view,subtitle:\"Welcome back, Admin!\",notificationCount:phase6Store.unreadNotificationCount(),messageCount:phase6Store.unreadNotificationCount(),onMessagesClick:()=>navTo(\"notifications\"),onNotificationsClick:()=>navTo(\"notifications\"),onCalendarClick:()=>navTo(\"reports\")}}'
+          new_header = 'header={{showSearch:view!==\"dashboard\",title:view===\"services\"?\"Services & Orders\":view,subtitle:\"Welcome back, Admin!\",notificationCount:phase6Store.unreadNotificationCount(),messageCount:phase6Store.unreadNotificationCount(),onMessagesClick:()=>navTo(\"notifications\"),onNotificationsClick:()=>navTo(\"notifications\"),onCalendarClick:()=>navTo(\"reports\"),onSearch:setGlobalSearchQuery}}'
+          if old_header not in s:
+              raise SystemExit('header pattern not found')
+          s = s.replace(old_header, new_header, 1)
+
+          old_notifications = '{view===\"notifications\"&&<NotificationCenter notifications={notifications}/>}'
+          new_notifications = '{view===\"notifications\"&&<NotificationCenter notifications={notifications} onMarkAllRead={()=>{phase6Store.markAllNotificationsRead();void persistAndRefresh();}} onMarkRead={id=>{phase6Store.markNotificationRead(id);void persistAndRefresh();}} onNavigate={(href)=>{const target=href.startsWith(\"/services\")?\"services\":href.startsWith(\"/reports\")?\"reports\":href.startsWith(\"/inventory\")?\"products\":href.startsWith(\"/sales\")?\"sales\":\"dashboard\";navTo(target as NavItemId);}}/>}'
+          if old_notifications not in s:
+              raise SystemExit('notification pattern not found')
+          s = s.replace(old_notifications, new_notifications, 1)
+
+          old_reports = '{view===\"reports\"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding}/>}'
+          new_reports = '{view===\"reports\"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} onRefresh={()=>{refreshAll();}}/>}'
+          if old_reports not in s:
+              raise SystemExit('reports pattern not found')
+          s = s.replace(old_reports, new_reports, 1)
+
+          marker = '    {view===\"dashboard\"&&dash&&<Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/>}'
+          palette = '    {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery(\"\")} onNavigate={(href,id)=>{setGlobalSearchQuery(\"\");navTo(id);}}/>}'
+          if marker not in s:
+              raise SystemExit('dashboard marker not found')
+          s = s.replace(marker, marker + '\n' + palette, 1)
+
+          if s == original:
+              raise SystemExit('no changes made')
+          p.write_text(s, encoding='utf-8')
+      - name: Validate source wiring
+        run: |
+          grep -F 'onSearch:setGlobalSearchQuery' apps/desktop/src/App.tsx
+          grep -F 'onMarkAllRead' apps/desktop/src/App.tsx
+          grep -F 'onRefresh={()=>{refreshAll();}}' apps/desktop/src/App.tsx
+          grep -F 'GlobalSearchPalette' apps/desktop/src/App.tsx
+      - name: Commit repair and remove temporary workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/desktop/src/App.tsx
+          git commit -m 'fix: wire desktop search notifications and reports refresh' || exit 0
+          git push origin HEAD:main
