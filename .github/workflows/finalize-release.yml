@@ -1,0 +1,119 @@
+name: Finalize Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Apply final product fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          MSG="$(git show -s --format=%s)"
+          if [ "$MSG" = "chore(release): finalize source" ]; then exit 0; fi
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          app = Path('apps/desktop/src/App.tsx')
+          s = app.read_text()
+
+          def require_replace(old, new, label):
+              global s
+              if old not in s:
+                  raise SystemExit(f'{label}: target not found')
+              s = s.replace(old, new, 1)
+
+          require_replace(
+              'const [custForm, setCustForm] = React.useState({ name: "", phone: "", email: "" });',
+              'const [custForm, setCustForm] = React.useState({ name: "", phone: "", whatsapp: "", email: "", address: "", birthday: "", notes: "" });\n  const [productOpen, setProductOpen] = React.useState(false);\n  const [productForm, setProductForm] = React.useState({ name: "", sku: "", barcode: "", categoryId: "", brand: "", size: "", color: "", fabric: "", unit: "pcs", costPrice: "", sellingPrice: "", minimumStock: "0", supplierId: "", notes: "" });',
+              'customer state',
+          )
+
+          require_replace(
+              '  function handleCreateOrder() {',
+              '''  function handleCreateCustomer() {
+            if (!custForm.name.trim()) { setModuleError("Customer name is required"); return; }
+            try {
+              store.createCustomer({ name: custForm.name.trim(), phone: custForm.phone || null, whatsapp: custForm.whatsapp || null, email: custForm.email || null, address: custForm.address || null, notes: custForm.notes || null });
+              setCustOpen(false);
+              setCustForm({ name: "", phone: "", whatsapp: "", email: "", address: "", birthday: "", notes: "" });
+              setModuleError(null);
+              void persistAndRefresh();
+            } catch (error) { setModuleError(error instanceof Error ? error.message : String(error)); }
+          }
+
+          function handleCreateProduct() {
+            if (!productForm.name.trim()) { setModuleError("Product name is required"); return; }
+            const costPrice = parseFloat(productForm.costPrice) || 0;
+            const sellingPrice = parseFloat(productForm.sellingPrice) || 0;
+            const minimumStock = parseFloat(productForm.minimumStock) || 0;
+            if (costPrice < 0 || sellingPrice < 0 || minimumStock < 0) { setModuleError("Prices and stock limits cannot be negative"); return; }
+            try {
+              store.createProduct({ name: productForm.name.trim(), sku: productForm.sku || null, barcode: productForm.barcode || null, categoryId: productForm.categoryId || null, brand: productForm.brand || null, size: productForm.size || null, color: productForm.color || null, fabric: productForm.fabric || null, unit: productForm.unit || "pcs", costPrice, sellingPrice, discount: 0, taxRate: 0, stockQuantity: 0, minimumStock, supplierId: productForm.supplierId || null, imageUrl: null, notes: productForm.notes || null, isActive: true });
+              setProductOpen(false);
+              setProductForm({ name: "", sku: "", barcode: "", categoryId: "", brand: "", size: "", color: "", fabric: "", unit: "pcs", costPrice: "", sellingPrice: "", minimumStock: "0", supplierId: "", notes: "" });
+              setModuleError(null);
+              void persistAndRefresh();
+            } catch (error) { setModuleError(error instanceof Error ? error.message : String(error)); }
+          }
+
+          function handleCreateOrder() {''',
+              'create handlers',
+          )
+
+          require_replace(
+              'header={{ showSearch: view !== "dashboard", title: view === "services" ? "Services & Orders" : view, subtitle: "Welcome back, Admin!", notificationCount: phase6Store.unreadNotificationCount(), messageCount: 3 }}',
+              'header={{ showSearch: view !== "dashboard", title: view === "services" ? "Services & Orders" : view, subtitle: "Welcome back, Admin!", notificationCount: phase6Store.unreadNotificationCount(), messageCount: 3, onCalendarClick: () => navTo("reports"), onMessagesClick: () => navTo("notifications"), onNotificationsClick: () => navTo("notifications") }}',
+              'header wiring',
+          )
+
+          require_replace(
+              '<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={() => setLowStockOnly((v) => !v)} />',
+              '<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={() => setLowStockOnly((v) => !v)} onAdd={() => setProductOpen(true)} />',
+              'product add wiring',
+          )
+
+          require_replace(
+              '<PosBilling products={products} customers={customers} onCompleteSale={handleSale} />',
+              '<PosBilling products={products} customers={customers} onCompleteSale={handleSale} onAddCustomer={() => setCustOpen(true)} onFindByBarcode={(barcode) => store.getProductByBarcode(barcode)} />',
+              'POS wiring',
+          )
+
+          require_replace(
+              'onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} error={formError}',
+              'onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} onAddCustomer={() => setCustOpen(true)} error={formError}',
+              'order customer wiring',
+          )
+
+          app.write_text(s)
+
+          pkg = Path('apps/desktop/package.json')
+          data = json.loads(pkg.read_text())
+          data['version'] = '1.0.4'
+          pkg.write_text(json.dumps(data, indent=2) + '\n')
+          PY
+
+          corepack enable
+          corepack prepare pnpm@9.15.0 --activate
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm --filter @minarvabiz/ui typecheck
+          pnpm --filter @minarvabiz/desktop typecheck
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/desktop/src/App.tsx apps/desktop/package.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'chore(release): finalize source'
+          git push origin main
