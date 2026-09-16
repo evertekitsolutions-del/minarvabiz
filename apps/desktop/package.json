@@ -31,8 +31,13 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
-    "electron": "^39.2.7",
-    "electron-builder": "^26.0.12",
-    "vite": "^6.0.7"
+    "app-builder-bin": "^4.2.0",
+    "autoprefixer": "^10.4.20",
+    "electron": "33.2.1",
+    "electron-builder": "24.13.3",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.7.2",
+    "vite": "6.0.3"
   }
 }
