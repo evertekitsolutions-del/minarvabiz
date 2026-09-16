@@ -13,7 +13,6 @@ export type NavItemId =
   | "customers"
   | "staff"
   | "reports"
-  | "sms"
   | "notifications"
   | "settings"
   | "backup";
