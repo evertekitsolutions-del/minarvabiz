@@ -1,20 +1,17 @@
 "use client";
 
 import * as React from "react";
-import {
-  AuditLogList,
-  CustomerProfile,
-  DayEndClosePanel,
-  PaymentsPanel,
-  ReturnsPanel,
-  StaffDetail,
-  SupplierList,
-} from "../index";
+import { AuditLogList } from "../audit/AuditLogList";
+import { CustomerProfile } from "../crm/CustomerProfile";
+import { DayEndClosePanel } from "../reports/DayEndClose";
+import { PaymentsPanel } from "../payments/PaymentsPanel";
+import { ReturnsPanel } from "../returns/ReturnsPanel";
+import { StaffDetail } from "../staff/StaffDetail";
+import { SupplierList } from "../suppliers/SupplierList";
 import {
   closeBusinessDay,
   getCustomerCrmProfile,
   listDayEndCloses,
-  calculateStaffProductivity,
   ordersStore,
   phase5Store,
   phase6Store,
@@ -22,7 +19,6 @@ import {
   store,
 } from "@minarvabiz/business-logic";
 import type { NavItemId } from "../../lib/nav";
-import type { Customer, StaffMember } from "@minarvabiz/types";
 
 function persistDesktop() {
   try {
@@ -36,8 +32,8 @@ function persistDesktop() {
 export function OfflineModulesPanel({ activeNav }: { activeNav: NavItemId }) {
   const [, setTick] = React.useState(0);
   const refresh = React.useCallback(() => setTick((v) => v + 1), []);
-  const [customerId, setCustomerId] = React.useState<string>("");
-  const [staffId, setStaffId] = React.useState<string>("");
+  const [customerId, setCustomerId] = React.useState("");
+  const [staffId, setStaffId] = React.useState("");
   const [supplierQuery, setSupplierQuery] = React.useState("");
 
   React.useEffect(() => {
@@ -100,10 +96,7 @@ export function OfflineModulesPanel({ activeNav }: { activeNav: NavItemId }) {
       const q = supplierQuery.trim().toLowerCase();
       return !q || s.name.toLowerCase().includes(q) || s.company?.toLowerCase().includes(q) || s.phone?.includes(q);
     });
-    return <SupplierList suppliers={suppliers} onSearch={setSupplierQuery} onAdd={() => {
-      // Supplier creation remains available from Purchase/Product forms; the dedicated list is read/search-first.
-      setSupplierQuery("");
-    }} />;
+    return <SupplierList suppliers={suppliers} onSearch={setSupplierQuery} onAdd={() => setSupplierQuery("")} />;
   }
 
   if (activeNav === "staff-detail") {
