@@ -40,8 +40,8 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS on_auth_user_created_minvarva_org ON auth.users;
-CREATE TRIGGER on_auth_user_created_minvarva_org
+DROP TRIGGER IF EXISTS on_auth_user_created_minarva_org ON auth.users;
+CREATE TRIGGER on_auth_user_created_minarva_org
 AFTER INSERT ON auth.users
 FOR EACH ROW
 EXECUTE FUNCTION private.bootstrap_new_user();
@@ -99,11 +99,13 @@ BEGIN
     'staff_members','sale_returns','audit_logs'
   ]
   LOOP
-    EXECUTE format('DROP TRIGGER IF EXISTS set_current_user_org_id ON public.%I', t);
-    EXECUTE format(
-      'CREATE TRIGGER set_current_user_org_id BEFORE INSERT ON public.%I FOR EACH ROW EXECUTE FUNCTION private.set_current_user_org_id()',
-      t
-    );
+    IF to_regclass(format('public.%I', t)) IS NOT NULL THEN
+      EXECUTE format('DROP TRIGGER IF EXISTS set_current_user_org_id ON public.%I', t);
+      EXECUTE format(
+        'CREATE TRIGGER set_current_user_org_id BEFORE INSERT ON public.%I FOR EACH ROW EXECUTE FUNCTION private.set_current_user_org_id()',
+        t
+      );
+    END IF;
   END LOOP;
 END $$;
 
