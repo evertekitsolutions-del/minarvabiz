@@ -2,8 +2,7 @@ name: Finalize Release
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: write
@@ -15,8 +14,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-
-      - name: Apply final product fixes
+      - name: Patch source
         shell: bash
         run: |
           set -euo pipefail
@@ -24,93 +22,52 @@ jobs:
           if [ "$MSG" = "chore(release): finalize source" ]; then exit 0; fi
           python - <<'PY'
           from pathlib import Path
-          import json
+          import re, json
+          p=Path('apps/desktop/src/App.tsx'); s=p.read_text()
+          def req(old,new,label):
+            global s
+            if old not in s: raise SystemExit(label+' not found')
+            s=s.replace(old,new,1)
+          req('const [custForm, setCustForm] = React.useState({ name: "", phone: "", email: "" });','const [custForm, setCustForm] = React.useState({ name: "", phone: "", whatsapp: "", email: "", address: "", birthday: "", notes: "" });\n  const [productOpen, setProductOpen] = React.useState(false);\n  const [productForm, setProductForm] = React.useState({ name: "", sku: "", barcode: "", categoryId: "", brand: "", size: "", color: "", fabric: "", unit: "pcs", costPrice: "", sellingPrice: "", minimumStock: "0", supplierId: "", notes: "" });','state')
+          req('  function handleCreateOrder() {','''  function handleCreateCustomer() {
+    if (!custForm.name.trim()) { setModuleError("Customer name is required"); return; }
+    try { store.createCustomer({ name: custForm.name.trim(), phone: custForm.phone || null, whatsapp: custForm.whatsapp || null, email: custForm.email || null, address: custForm.address || null, notes: custForm.notes || null }); setCustOpen(false); setCustForm({ name: "", phone: "", whatsapp: "", email: "", address: "", birthday: "", notes: "" }); setModuleError(null); void persistAndRefresh(); }
+    catch (error) { setModuleError(error instanceof Error ? error.message : String(error)); }
+  }
 
-          app = Path('apps/desktop/src/App.tsx')
-          s = app.read_text()
+  function handleCreateProduct() {
+    if (!productForm.name.trim()) { setModuleError("Product name is required"); return; }
+    const costPrice=parseFloat(productForm.costPrice)||0, sellingPrice=parseFloat(productForm.sellingPrice)||0, minimumStock=parseFloat(productForm.minimumStock)||0;
+    if (costPrice<0 || sellingPrice<0 || minimumStock<0) { setModuleError("Prices and stock limits cannot be negative"); return; }
+    try { store.createProduct({ name: productForm.name.trim(), sku: productForm.sku||null, barcode: productForm.barcode||null, categoryId: productForm.categoryId||null, brand: productForm.brand||null, size: productForm.size||null, color: productForm.color||null, fabric: productForm.fabric||null, unit: productForm.unit||"pcs", costPrice, sellingPrice, discount:0, taxRate:0, stockQuantity:0, minimumStock, supplierId: productForm.supplierId||null, imageUrl:null, notes: productForm.notes||null, isActive:true }); setProductOpen(false); setProductForm({ name:"", sku:"", barcode:"", categoryId:"", brand:"", size:"", color:"", fabric:"", unit:"pcs", costPrice:"", sellingPrice:"", minimumStock:"0", supplierId:"", notes:"" }); setModuleError(null); void persistAndRefresh(); }
+    catch (error) { setModuleError(error instanceof Error ? error.message : String(error)); }
+  }
 
-          def require_replace(old, new, label):
-              global s
-              if old not in s:
-                  raise SystemExit(f'{label}: target not found')
-              s = s.replace(old, new, 1)
-
-          require_replace(
-              'const [custForm, setCustForm] = React.useState({ name: "", phone: "", email: "" });',
-              'const [custForm, setCustForm] = React.useState({ name: "", phone: "", whatsapp: "", email: "", address: "", birthday: "", notes: "" });\n  const [productOpen, setProductOpen] = React.useState(false);\n  const [productForm, setProductForm] = React.useState({ name: "", sku: "", barcode: "", categoryId: "", brand: "", size: "", color: "", fabric: "", unit: "pcs", costPrice: "", sellingPrice: "", minimumStock: "0", supplierId: "", notes: "" });',
-              'customer state',
-          )
-
-          require_replace(
-              '  function handleCreateOrder() {',
-              '''  function handleCreateCustomer() {
-            if (!custForm.name.trim()) { setModuleError("Customer name is required"); return; }
-            try {
-              store.createCustomer({ name: custForm.name.trim(), phone: custForm.phone || null, whatsapp: custForm.whatsapp || null, email: custForm.email || null, address: custForm.address || null, notes: custForm.notes || null });
-              setCustOpen(false);
-              setCustForm({ name: "", phone: "", whatsapp: "", email: "", address: "", birthday: "", notes: "" });
-              setModuleError(null);
-              void persistAndRefresh();
-            } catch (error) { setModuleError(error instanceof Error ? error.message : String(error)); }
-          }
-
-          function handleCreateProduct() {
-            if (!productForm.name.trim()) { setModuleError("Product name is required"); return; }
-            const costPrice = parseFloat(productForm.costPrice) || 0;
-            const sellingPrice = parseFloat(productForm.sellingPrice) || 0;
-            const minimumStock = parseFloat(productForm.minimumStock) || 0;
-            if (costPrice < 0 || sellingPrice < 0 || minimumStock < 0) { setModuleError("Prices and stock limits cannot be negative"); return; }
-            try {
-              store.createProduct({ name: productForm.name.trim(), sku: productForm.sku || null, barcode: productForm.barcode || null, categoryId: productForm.categoryId || null, brand: productForm.brand || null, size: productForm.size || null, color: productForm.color || null, fabric: productForm.fabric || null, unit: productForm.unit || "pcs", costPrice, sellingPrice, discount: 0, taxRate: 0, stockQuantity: 0, minimumStock, supplierId: productForm.supplierId || null, imageUrl: null, notes: productForm.notes || null, isActive: true });
-              setProductOpen(false);
-              setProductForm({ name: "", sku: "", barcode: "", categoryId: "", brand: "", size: "", color: "", fabric: "", unit: "pcs", costPrice: "", sellingPrice: "", minimumStock: "0", supplierId: "", notes: "" });
-              setModuleError(null);
-              void persistAndRefresh();
-            } catch (error) { setModuleError(error instanceof Error ? error.message : String(error)); }
-          }
-
-          function handleCreateOrder() {''',
-              'create handlers',
-          )
-
-          require_replace(
-              'header={{ showSearch: view !== "dashboard", title: view === "services" ? "Services & Orders" : view, subtitle: "Welcome back, Admin!", notificationCount: phase6Store.unreadNotificationCount(), messageCount: 3 }}',
-              'header={{ showSearch: view !== "dashboard", title: view === "services" ? "Services & Orders" : view, subtitle: "Welcome back, Admin!", notificationCount: phase6Store.unreadNotificationCount(), messageCount: 3, onCalendarClick: () => navTo("reports"), onMessagesClick: () => navTo("notifications"), onNotificationsClick: () => navTo("notifications") }}',
-              'header wiring',
-          )
-
-          require_replace(
-              '<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={() => setLowStockOnly((v) => !v)} />',
-              '<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={() => setLowStockOnly((v) => !v)} onAdd={() => setProductOpen(true)} />',
-              'product add wiring',
-          )
-
-          require_replace(
-              '<PosBilling products={products} customers={customers} onCompleteSale={handleSale} />',
-              '<PosBilling products={products} customers={customers} onCompleteSale={handleSale} onAddCustomer={() => setCustOpen(true)} onFindByBarcode={(barcode) => store.getProductByBarcode(barcode)} />',
-              'POS wiring',
-          )
-
-          require_replace(
-              'onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} error={formError}',
-              'onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} onAddCustomer={() => setCustOpen(true)} error={formError}',
-              'order customer wiring',
-          )
-
-          app.write_text(s)
-
-          pkg = Path('apps/desktop/package.json')
-          data = json.loads(pkg.read_text())
-          data['version'] = '1.0.4'
-          pkg.write_text(json.dumps(data, indent=2) + '\n')
+  function handleCreateOrder() {''','handlers')
+          req('header={{ showSearch: view !== "dashboard", title: view === "services" ? "Services & Orders" : view, subtitle: "Welcome back, Admin!", notificationCount: phase6Store.unreadNotificationCount(), messageCount: 3 }}','header={{ showSearch: view !== "dashboard", title: view === "services" ? "Services & Orders" : view, subtitle: "Welcome back, Admin!", notificationCount: phase6Store.unreadNotificationCount(), messageCount: 3, onCalendarClick: () => navTo("reports"), onMessagesClick: () => navTo("notifications"), onNotificationsClick: () => navTo("notifications") }}','header')
+          req('<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={() => setLowStockOnly((v) => !v)} />','<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={() => setLowStockOnly((v) => !v)} onAdd={() => setProductOpen(true)} />','product add')
+          req('<PosBilling products={products} customers={customers} onCompleteSale={handleSale} />','<PosBilling products={products} customers={customers} onCompleteSale={handleSale} onAddCustomer={() => setCustOpen(true)} onFindByBarcode={(barcode) => store.getProductByBarcode(barcode)} />','POS')
+          req('onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} error={formError}','onSubmit={handleCreateOrder} onCancel={() => setCreateOpen(false)} onAddCustomer={() => setCustOpen(true)} error={formError}','order add')
+          def between(a,b,new,label):
+            global s
+            x=s.find(a); y=s.find(b,x+len(a))
+            if x<0 or y<0: raise SystemExit(label+' region not found')
+            s=s[:x]+new+s[y:]
+          between('{view === "customers" &&','{view === "products" &&','''{view === "customers" && <><CustomerList customers={customers} onAdd={() => setCustOpen(true)} onSearch={(q) => setCustomers(store.listCustomers(q))} /><Modal open={custOpen} title="Add Customer" onClose={() => setCustOpen(false)} footer={<><Button variant="outline" onClick={() => setCustOpen(false)}>Cancel</Button><Button onClick={handleCreateCustomer}>Save Customer</Button></>}><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><FormField label="Name *"><input className={inputClass} value={custForm.name} onChange={(e) => setCustForm({ ...custForm, name: e.target.value })} /></FormField><FormField label="Phone"><input className={inputClass} value={custForm.phone} onChange={(e) => setCustForm({ ...custForm, phone: e.target.value })} /></FormField><FormField label="WhatsApp"><input className={inputClass} value={custForm.whatsapp} onChange={(e) => setCustForm({ ...custForm, whatsapp: e.target.value })} /></FormField><FormField label="Email"><input className={inputClass} type="email" value={custForm.email} onChange={(e) => setCustForm({ ...custForm, email: e.target.value })} /></FormField><FormField label="Birthday"><input className={inputClass} type="date" value={custForm.birthday} onChange={(e) => setCustForm({ ...custForm, birthday: e.target.value })} /></FormField><FormField label="Address"><textarea className={inputClass + " h-20 py-2"} value={custForm.address} onChange={(e) => setCustForm({ ...custForm, address: e.target.value })} /></FormField><FormField label="Notes"><textarea className={inputClass + " h-20 py-2 sm:col-span-2"} value={custForm.notes} onChange={(e) => setCustForm({ ...custForm, notes: e.target.value })} /></FormField></div></Modal></>}
+    ''','customer form')
+          between('{view === "products" &&','{view === "sales" &&','''{view === "products" && <><ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={() => setLowStockOnly((v) => !v)} onAdd={() => setProductOpen(true)} /><Modal open={productOpen} title="Add Product" onClose={() => setProductOpen(false)} footer={<><Button variant="outline" onClick={() => setProductOpen(false)}>Cancel</Button><Button onClick={handleCreateProduct}>Save Product</Button></>}><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><FormField label="Product name *"><input className={inputClass} value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} /></FormField><FormField label="Category"><select className={selectClass} value={productForm.categoryId} onChange={(e) => setProductForm({ ...productForm, categoryId: e.target.value })}><option value="">Select category</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></FormField><FormField label="SKU"><input className={inputClass} value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} /></FormField><FormField label="Barcode"><input className={inputClass} value={productForm.barcode} onChange={(e) => setProductForm({ ...productForm, barcode: e.target.value })} /></FormField><FormField label="Brand"><input className={inputClass} value={productForm.brand} onChange={(e) => setProductForm({ ...productForm, brand: e.target.value })} /></FormField><FormField label="Fabric"><input className={inputClass} value={productForm.fabric} onChange={(e) => setProductForm({ ...productForm, fabric: e.target.value })} /></FormField><FormField label="Size"><input className={inputClass} value={productForm.size} onChange={(e) => setProductForm({ ...productForm, size: e.target.value })} /></FormField><FormField label="Color"><input className={inputClass} value={productForm.color} onChange={(e) => setProductForm({ ...productForm, color: e.target.value })} /></FormField><FormField label="Unit"><input className={inputClass} value={productForm.unit} onChange={(e) => setProductForm({ ...productForm, unit: e.target.value })} /></FormField><FormField label="Cost price"><input className={inputClass} type="number" min="0" value={productForm.costPrice} onChange={(e) => setProductForm({ ...productForm, costPrice: e.target.value })} /></FormField><FormField label="Selling price *"><input className={inputClass} type="number" min="0" value={productForm.sellingPrice} onChange={(e) => setProductForm({ ...productForm, sellingPrice: e.target.value })} /></FormField><FormField label="Minimum stock"><input className={inputClass} type="number" min="0" value={productForm.minimumStock} onChange={(e) => setProductForm({ ...productForm, minimumStock: e.target.value })} /></FormField><FormField label="Notes"><textarea className={inputClass + " h-20 py-2 sm:col-span-2"} value={productForm.notes} onChange={(e) => setProductForm({ ...productForm, notes: e.target.value })} /></FormField></div></Modal></>}
+    ''','product form')
+          def modal(open_marker,new,label):
+            global s
+            x=s.find(open_marker); y=s.find('</Modal>',x)
+            if x<0 or y<0: raise SystemExit(label+' modal not found')
+            s=s[:x]+new+s[y+len('</Modal>'):]
+          modal('<Modal open={expenseOpen}','''<Modal open={expenseOpen} title="Add Expense" onClose={() => setExpenseOpen(false)} footer={<><Button variant="outline" onClick={() => setExpenseOpen(false)}>Cancel</Button><Button onClick={handleCreateExpense}>Save Expense</Button></>}><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><FormField label="Category"><select className={selectClass} value={expenseForm.categoryId} onChange={(e) => setExpenseForm({ ...expenseForm, categoryId: e.target.value })}><option value="">Select category</option>{expenseCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></FormField><FormField label="Amount *"><input className={inputClass} type="number" min="0" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} /></FormField><FormField label="Payment method"><select className={selectClass} value={expenseForm.paymentMethod} onChange={(e) => setExpenseForm({ ...expenseForm, paymentMethod: e.target.value as PaymentMethod })}><option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="other">Other</option></select></FormField><FormField label="Order reference"><select className={selectClass} value={expenseForm.orderId} onChange={(e) => setExpenseForm({ ...expenseForm, orderId: e.target.value })}><option value="">None</option>{orders.map(o => <option key={o.id} value={o.id}>{o.orderNumber}</option>)}</select></FormField><FormField label="Description"><input className={inputClass} value={expenseForm.description} onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })} /></FormField><FormField label="Reference"><input className={inputClass} value={expenseForm.reference} onChange={(e) => setExpenseForm({ ...expenseForm, reference: e.target.value })} /></FormField></div></Modal>''','expense')
+          modal('<Modal open={purchaseOpen}','''<Modal open={purchaseOpen} title="Add Purchase" onClose={() => setPurchaseOpen(false)} footer={<><Button variant="outline" onClick={() => setPurchaseOpen(false)}>Cancel</Button><Button onClick={handleCreatePurchase}>Save Purchase</Button></>}><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><FormField label="Supplier ID"><input className={inputClass} value={purchaseForm.supplierId} onChange={(e) => setPurchaseForm({ ...purchaseForm, supplierId: e.target.value })} /></FormField><FormField label="Description *"><input className={inputClass} value={purchaseForm.description} onChange={(e) => setPurchaseForm({ ...purchaseForm, description: e.target.value })} /></FormField><FormField label="Amount *"><input className={inputClass} type="number" min="0" value={purchaseForm.amount} onChange={(e) => setPurchaseForm({ ...purchaseForm, amount: e.target.value })} /></FormField><FormField label="Paid amount"><input className={inputClass} type="number" min="0" value={purchaseForm.paidAmount} onChange={(e) => setPurchaseForm({ ...purchaseForm, paidAmount: e.target.value })} /></FormField><FormField label="Payment method"><select className={selectClass} value={purchaseForm.paymentMethod} onChange={(e) => setPurchaseForm({ ...purchaseForm, paymentMethod: e.target.value as PaymentMethod })}><option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="other">Other</option></select></FormField><FormField label="Purchase type"><select className={selectClass} value={purchaseForm.kind} onChange={(e) => setPurchaseForm({ ...purchaseForm, kind: e.target.value as "general" | "order_specific" })}><option value="general">General</option><option value="order_specific">Order specific</option></select></FormField><FormField label="Order reference"><select className={selectClass} value={purchaseForm.orderId} onChange={(e) => setPurchaseForm({ ...purchaseForm, orderId: e.target.value })}><option value="">None</option>{orders.map(o => <option key={o.id} value={o.id}>{o.orderNumber}</option>)}</select></FormField><FormField label="Notes"><textarea className={inputClass + " h-20 py-2 sm:col-span-2"} value={purchaseForm.notes} onChange={(e) => setPurchaseForm({ ...purchaseForm, notes: e.target.value })} /></FormField></div></Modal>''','purchase')
+          modal('<Modal open={staffOpen}','''<Modal open={staffOpen} title="Add Staff" onClose={() => setStaffOpen(false)} footer={<><Button variant="outline" onClick={() => setStaffOpen(false)}>Cancel</Button><Button onClick={handleCreateStaff}>Save Staff</Button></>}><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><FormField label="Name *"><input className={inputClass} value={staffForm.name} onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })} /></FormField><FormField label="Phone"><input className={inputClass} value={staffForm.phone} onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })} /></FormField><FormField label="Email"><input className={inputClass} type="email" value={staffForm.email} onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })} /></FormField><FormField label="Role"><select className={selectClass} value={staffForm.role} onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value as RoleName })}><option value="staff">Staff</option><option value="tailor">Tailor</option><option value="cashier">Cashier</option><option value="manager">Manager</option><option value="admin">Admin</option></select></FormField><FormField label="Salary"><input className={inputClass} type="number" min="0" value={staffForm.salary} onChange={(e) => setStaffForm({ ...staffForm, salary: e.target.value })} /></FormField><FormField label="Joining date"><input className={inputClass} type="date" value={staffForm.joiningDate} onChange={(e) => setStaffForm({ ...staffForm, joiningDate: e.target.value })} /></FormField><FormField label="Notes"><textarea className={inputClass + " h-20 py-2 sm:col-span-2"} value={staffForm.notes} onChange={(e) => setStaffForm({ ...staffForm, notes: e.target.value })} /></FormField></div></Modal>''','staff')
+          p.write_text(s)
+          pkg=Path('apps/desktop/package.json'); d=json.loads(pkg.read_text()); d['version']='1.0.4'; pkg.write_text(json.dumps(d,indent=2)+'\n')
           PY
-
-          corepack enable
-          corepack prepare pnpm@9.15.0 --activate
-          pnpm install --frozen-lockfile --ignore-scripts
-          pnpm --filter @minarvabiz/ui typecheck
-          pnpm --filter @minarvabiz/desktop typecheck
-
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add apps/desktop/src/App.tsx apps/desktop/package.json
