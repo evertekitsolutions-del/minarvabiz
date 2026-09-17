@@ -1,0 +1,76 @@
+name: Windows Deep Installed Smoke
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-deep-smoke:
+    runs-on: windows-latest
+    env:
+      MINARVA_RUNTIME_SMOKE: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.0
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter @minarvabiz/desktop run package:win
+
+      - name: Clean install
+        shell: pwsh
+        run: |
+          $installRoot = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Deep-UAT"
+          if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot }
+          New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
+          $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
+          $installProc = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
+          if ($installProc.ExitCode -ne 0) { throw "Installer exited with code $($installProc.ExitCode)." }
+          $exe = Join-Path $installRoot "Minarva Biz.exe"
+          if (-not (Test-Path $exe)) { throw "Installed executable not found at $exe" }
+          "INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "INSTALLED_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Launch installed app with CDP
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath $env:INSTALLED_EXE -ArgumentList "--remote-debugging-port=9222" -PassThru
+          "APP_PID=$($proc.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          for ($i=1; $i -le 30; $i++) {
+            try {
+              $response = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:9222/json/list -TimeoutSec 2
+              if ($response.StatusCode -eq 200) { break }
+            } catch {}
+            Start-Sleep -Seconds 1
+          }
+          if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port 9222 -InformationLevel Quiet)) { throw "Electron CDP port 9222 did not open." }
+
+      - name: Installed UI + licensing deep smoke
+        shell: pwsh
+        run: node scripts/windows-installed-deep-smoke.mjs
+
+      - name: Cleanup app
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:APP_PID) { Stop-Process -Id ([int]$env:APP_PID) -Force -ErrorAction SilentlyContinue }
+          Get-Process | Where-Object { $_.Path -like "*$env:INSTALL_ROOT*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+
+      - name: Upload deep smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: minarvabiz-windows-deep-smoke-diagnostics
+          path: |
+            ${{ runner.temp }}/MinarvaBiz-Deep-UAT/**
+            ${{ runner.temp }}/**/runtime-smoke.log
+          if-no-files-found: ignore
+          retention-days: 14
