@@ -39,6 +39,37 @@ SUPABASE_SECRET_KEY=<production server-side Supabase secret key>
 
 `LICENSE_PRIVATE_KEY`, `SUPABASE_SECRET_KEY`, and `LICENSE_API_SECRET` must never be exposed to the browser or desktop client.
 
+### Simplest isolated deployment: Render
+
+Do not change the existing Vercel project that serves the live production web application. The repository now contains a root `render.yaml` blueprint for a separate `minarvabiz-license-admin` Render Web Service.
+
+Render supports pnpm monorepos and lets each service use its own build/start commands. Keep the service root at the repository root so the workspace lockfile and shared packages remain available.
+
+Create a Render **Web Service** from `evertekitsolutions-del/minarvabiz`, use branch `main`, and use the committed `render.yaml` Blueprint. The generated service uses:
+
+```text
+Build command:
+corepack enable && corepack prepare pnpm@9.15.0 --activate && pnpm install --frozen-lockfile --ignore-scripts && pnpm --filter @minarvabiz/license-admin build
+
+Start command:
+pnpm --filter @minarvabiz/license-admin exec next start -p $PORT
+```
+
+For the initial Blueprint sync, Render prompts for the values marked `sync: false`; enter them only in Render's secret environment-variable UI. Never put them into `render.yaml` or Git. Render documents `sync: false` as the mechanism for prompting for secret values during initial Blueprint creation. urlRender Blueprint environment-variable documentationhttps://render.com/docs/blueprint-spec
+
+Set:
+
+```text
+LICENSE_API_SECRET=<strong random admin/API secret>
+LICENSE_PRIVATE_KEY=<matching production Ed25519 private key>
+SUPABASE_URL=https://wmjgefbaliuwmaxyzxkq.supabase.co
+SUPABASE_SECRET_KEY=<production server-side Supabase secret key>
+```
+
+After deployment, open the Render service URL and verify the license-admin UI loads. The repository's desktop client does **not** normally use the license-admin UI URL directly for activation. `VITE_LICENSE_API_URL` must be the base URL of the live web service that implements the license API routes under `/api/license/*` and `/api/trial/*` (currently those routes live under `apps/web`).
+
+Render's official monorepo guidance recommends keeping the repository root available when workspace dependencies/shared packages are needed, and Render Web Services provide configurable build/start commands and environment variables. urlRender monorepo supporthttps://render.com/docs/monorepo-support urlRender Next.js deployment guidehttps://render.com/docs/deploy-nextjs-app
+
 ## 3. Configure the desktop build environment
 
 Set:
