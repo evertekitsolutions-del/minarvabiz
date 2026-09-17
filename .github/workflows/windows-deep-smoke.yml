@@ -12,6 +12,7 @@ jobs:
     runs-on: windows-latest
     env:
       MINARVA_RUNTIME_SMOKE: "1"
+      MINARVA_COMMERCIAL_RELEASE: "1"
       MINARVA_LICENSE_PUBLIC_KEY_HEX: ${{ secrets.MINARVA_LICENSE_PUBLIC_KEY_HEX }}
       VITE_LICENSE_API_URL: ${{ secrets.VITE_LICENSE_API_URL }}
     steps:
@@ -24,14 +25,19 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - name: Report production-key availability
+      - name: Validate production licensing configuration
         shell: pwsh
         run: |
           $key = "$env:MINARVA_LICENSE_PUBLIC_KEY_HEX".Trim()
           $url = "$env:VITE_LICENSE_API_URL".Trim()
-          if ($key -match '^[0-9a-fA-F]{64}$') { Write-Host "PRODUCTION_LICENSE_KEY PASS: configured 64-hex public verification key." } else { Write-Host "PRODUCTION_LICENSE_KEY BLOCKED: MINARVA_LICENSE_PUBLIC_KEY_HEX missing/invalid." }
-          if ($url -match '^https://') { Write-Host "LICENSE_API_URL PASS: configured HTTPS endpoint." } else { Write-Host "LICENSE_API_URL BLOCKED: VITE_LICENSE_API_URL missing/invalid." }
+          if ($key -notmatch '^[0-9a-fA-F]{64}$') { throw "MINARVA_LICENSE_PUBLIC_KEY_HEX must be exactly 64 hexadecimal characters." }
+          if (-not $url -or $url -notmatch '^https://') { throw "VITE_LICENSE_API_URL must be a non-empty HTTPS URL." }
+          Write-Host "PRODUCTION_LICENSE_KEY PASS: configured 64-hex public verification key."
+          Write-Host "LICENSE_API_URL PASS: configured HTTPS endpoint."
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify commercial fallback refusal
+        shell: pwsh
+        run: node scripts/verify-production-license-config.mjs
       - run: pnpm --filter @minarvabiz/desktop run package:win
       - name: Verify bundled key has no private key
         shell: pwsh
@@ -39,9 +45,11 @@ jobs:
           $configPath = "apps/desktop/electron/license-config.ts"
           if (-not (Test-Path $configPath)) { throw "Generated desktop license config is missing." }
           $config = Get-Content -Raw $configPath
+          $expected = $env:MINARVA_LICENSE_PUBLIC_KEY_HEX.Trim().ToLower()
+          if ($config -notmatch [regex]::Escape($expected)) { throw "Bundled production public key does not match configured GitHub secret." }
           if ($config -match 'PRIVATE_KEY|LICENSE_PRIVATE_KEY|privateKey') { throw "Potential private-key content found in bundled license configuration." }
           if ($config -notmatch 'BUNDLED_LICENSE_PUBLIC_KEY_HEX') { throw "Bundled public key constant is missing." }
-          Write-Host "Bundled licensing configuration contains only a public verification key."
+          Write-Host "Bundled production public key verified without private-key material."
 
       - name: Clean install
         shell: pwsh
