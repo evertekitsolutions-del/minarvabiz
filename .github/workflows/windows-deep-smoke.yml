@@ -12,6 +12,8 @@ jobs:
     runs-on: windows-latest
     env:
       MINARVA_RUNTIME_SMOKE: "1"
+      MINARVA_LICENSE_PUBLIC_KEY_HEX: ${{ secrets.MINARVA_LICENSE_PUBLIC_KEY_HEX }}
+      VITE_LICENSE_API_URL: ${{ vars.VITE_LICENSE_API_URL }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -22,8 +24,27 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Validate production licensing configuration
+        shell: pwsh
+        run: |
+          $key = "$env:MINARVA_LICENSE_PUBLIC_KEY_HEX".Trim()
+          $url = "$env:VITE_LICENSE_API_URL".Trim()
+          if ($key -notmatch '^[0-9a-fA-F]{64}$') { throw "MINARVA_LICENSE_PUBLIC_KEY_HEX must be exactly 64 hexadecimal characters." }
+          if (-not $url -or $url -notmatch '^https://') { throw "VITE_LICENSE_API_URL must be a non-empty HTTPS URL." }
+          Write-Host "Production license public key is configured."
+          Write-Host "Production license API URL is configured: $url"
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @minarvabiz/desktop run package:win
+      - name: Verify bundled production public key
+        shell: pwsh
+        run: |
+          $configPath = "apps/desktop/electron/license-config.ts"
+          if (-not (Test-Path $configPath)) { throw "Generated desktop license config is missing." }
+          $config = Get-Content -Raw $configPath
+          $expected = $env:MINARVA_LICENSE_PUBLIC_KEY_HEX.Trim().ToLower()
+          if ($config -notmatch [regex]::Escape($expected)) { throw "Bundled production public key does not match configured GitHub secret." }
+          if ($config -match 'PRIVATE_KEY|LICENSE_PRIVATE_KEY|privateKey') { throw "Potential private-key content found in bundled license configuration." }
+          Write-Host "Bundled production public key verified."
 
       - name: Clean install
         shell: pwsh
@@ -62,7 +83,7 @@ jobs:
         shell: pwsh
         run: |
           if ($env:APP_PID) { Stop-Process -Id ([int]$env:APP_PID) -Force -ErrorAction SilentlyContinue }
-          Get-Process | Where-Object { $_.Path -like "*$env:INSTALL_ROOT*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+          if ($env:INSTALL_ROOT) { Get-Process | Where-Object { $_.Path -like "*$env:INSTALL_ROOT*" } | Stop-Process -Force -ErrorAction SilentlyContinue }
 
       - name: Upload deep smoke diagnostics
         if: always()
@@ -74,3 +95,12 @@ jobs:
             ${{ runner.temp }}/**/runtime-smoke.log
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Upload final installer
+        if: success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: minarvabiz-windows-installer-final
+          path: apps/desktop/release/*.exe
+          if-no-files-found: error
+          retention-days: 30
