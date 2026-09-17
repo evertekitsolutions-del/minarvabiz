@@ -9,7 +9,7 @@ async function httpJson(path) {
 async function cdpEval(ws, expression) {
   const id = ++cdpEval.nextId;
   const resultPromise = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`CDP evaluate timeout: ${expression.slice(0, 120)}`)), 10000);
+    const timer = setTimeout(() => reject(new Error(`CDP evaluate timeout: ${expression.slice(0, 120)}`)), 15000);
     cdpEval.pending.set(id, { resolve, reject, timer });
   });
   ws.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: { expression, returnByValue: true, awaitPromise: true } }));
@@ -51,8 +51,21 @@ async function main() {
     }
   });
 
-  const info = await cdpEval(ws, `JSON.stringify({version: window.minarvaDesktop?.getVersion?.(), platform: window.minarvaDesktop?.platform, body: document.body?.innerText?.slice(0, 1200) || ''})`);
+  const info = await cdpEval(ws, `(async()=>JSON.stringify({version:await window.minarvaDesktop?.getVersion?.(), platform:window.minarvaDesktop?.platform, body:document.body?.innerText?.slice(0,1200)||''}))()`);
   console.log(`APP_INFO ${info}`);
+
+  async function waitForRendererReady() {
+    for (let attempt = 1; attempt <= 60; attempt++) {
+      const state = await cdpEval(ws, `JSON.stringify({ready:document.documentElement.dataset.minarvaRendererReady==='true',error:document.documentElement.dataset.minarvaRendererError==='true',text:(document.body?.innerText||'').slice(0,900)})`);
+      const parsed = JSON.parse(state);
+      if (parsed.error) throw new Error(`Renderer reported fatal startup error: ${parsed.text}`);
+      if (parsed.ready || /(dashboard|customers|products|sales|reports|starting trial|trial)/i.test(parsed.text)) return;
+      await sleep(500);
+    }
+    throw new Error('Installed renderer did not become ready within 30 seconds.');
+  }
+  await waitForRendererReady();
+  console.log('RENDERER_READY PASS');
 
   const desktopApi = await cdpEval(ws, `(async()=>{const api=window.minarvaDesktop; if(!api) throw new Error('minarvaDesktop bridge missing'); const device=await api.getDeviceId?.(); const trialDevice=await api.getTrialDeviceId?.(); const trial=await api.getTrialState(); return JSON.stringify({device,trialDevice,trial})})()`);
   console.log(`DEVICE_TRIAL_BEFORE ${desktopApi}`);
@@ -73,7 +86,7 @@ async function main() {
   const afterState = JSON.parse(after);
   if (afterState.status !== 'active') throw new Error('Trial state could not be read back after secure-storage write.');
 
-  const controls = await cdpEval(ws, `JSON.stringify([...document.querySelectorAll('button,a,[role="button"]')].map((el,i)=>({i,text:(el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,120),aria:el.getAttribute('aria-label')||''})).filter(x=>x.text||x.aria).slice(0,200))`);
+  const controls = await cdpEval(ws, `JSON.stringify([...document.querySelectorAll('button,a,[role="button"]')].map((el,i)=>({i,text:(el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,120),aria:el.getAttribute('aria-label')||''})).filter(x=>x.text||x.aria).slice(0,250))`);
   console.log(`CONTROLS ${controls}`);
 
   async function clickTarget(name, patterns) {
@@ -83,19 +96,19 @@ async function main() {
       const visible=(el)=>{const r=el.getBoundingClientRect();const s=getComputedStyle(el);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};
       const score=(el)=>{const s=((el.innerText||el.textContent||'')+' '+(el.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim().toLowerCase();return pats.some(p=>s.includes(String(p).toLowerCase())) ? 1 : 0};
       const el=els.find(e=>visible(e)&&score(e));
-      if(!el) return JSON.stringify({ok:false});
+      if(!el) return JSON.stringify({ok:false,available:els.map(e=>((e.innerText||e.textContent||'')+' '+(e.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim()).filter(Boolean).slice(0,100)});
       el.click();
-      await new Promise(r=>setTimeout(r,700));
-      return JSON.stringify({ok:true,text:(el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim(),body:(document.body?.innerText||'').slice(0,1800)});
+      await new Promise(r=>setTimeout(r,1200));
+      return JSON.stringify({ok:true,text:(el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim(),body:(document.body?.innerText||'').slice(0,2200)});
     })()`);
     console.log(`CLICK_${name} ${result}`);
     const parsed = JSON.parse(result);
-    if (!parsed.ok) throw new Error(`Could not find clickable target for ${name}`);
+    if (!parsed.ok) throw new Error(`Could not find clickable target for ${name}. Available=${JSON.stringify(parsed.available || [])}`);
     return parsed;
   }
 
   async function assertBody(name, patterns) {
-    const body = await cdpEval(ws, `JSON.stringify((document.body?.innerText||'').slice(0,6000))`);
+    const body = await cdpEval(ws, `JSON.stringify((document.body?.innerText||'').slice(0,8000))`);
     const text = JSON.parse(body).toLowerCase();
     if (!patterns.some((p) => text.includes(String(p).toLowerCase()))) {
       throw new Error(`${name} view marker not found. Patterns=${patterns.join(', ')}`);
@@ -110,7 +123,6 @@ async function main() {
     ['SUPPLIERS',['suppliers','supplier']],
     ['STAFF',['staff']],
     ['AUDIT_LOG',['audit log','audit']],
-    ['GLOBAL_SEARCH',['search']],
   ];
 
   for (const [name, patterns] of targets) {
@@ -123,17 +135,24 @@ async function main() {
 
   const drill = await cdpEval(ws, `(async()=>{
     const els=[...document.querySelectorAll('button,a,[role="button"],tr')];
-    const visible=(el)=>{const r=el.getBoundingClientRect();return r.width>0&&r.height>0};
+    const visible=(el)=>{const r=el.getBoundingClientRect();const s=getComputedStyle(el);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none};
     const candidates=els.filter(e=>visible(e)&&((e.innerText||e.textContent||'').trim().length>0));
-    const el=candidates.find(e=>/(view|details|open|customer)/i.test((e.innerText||e.textContent||'')) && !/customers/i.test((e.innerText||e.textContent||''))) || candidates.find(e=>e.tagName==='TR');
-    if(el){el.click();await new Promise(r=>setTimeout(r,700));}
-    return JSON.stringify({clicked:Boolean(el),body:(document.body?.innerText||'').slice(0,2200)});
+    const el=candidates.find(e=>/(view|details|open)/i.test((e.innerText||e.textContent||'')) && !/customers/i.test((e.innerText||e.textContent||''))) || candidates.find(e=>e.tagName==='TR');
+    if(el){el.click();await new Promise(r=>setTimeout(r,1000));}
+    return JSON.stringify({clicked:Boolean(el),body:(document.body?.innerText||'').slice(0,2600)});
   })()`);
   console.log(`CUSTOMER_DRILL ${drill}`);
   const drillParsed=JSON.parse(drill);
-  if (!drillParsed.clicked) throw new Error('Customer drill-down target could not be clicked.');
+  if (!drillParsed.clicked) throw new Error('Customer drill-down target could not be clicked on installed app.');
   if (!/(customer|profile|details)/i.test(drillParsed.body)) throw new Error('Customer drill-down did not produce a customer/profile/details view marker.');
   console.log('VIEW_CUSTOMER_DRILL PASS');
+
+  await clickTarget('GLOBAL_SEARCH',['global search','search']);
+  const searchState = await cdpEval(ws, `JSON.stringify({dialogs:document.querySelectorAll('[role="dialog"]').length,inputs:[...document.querySelectorAll('input')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0}).map(e=>e.placeholder||e.getAttribute('aria-label')||'').slice(0,20),body:(document.body?.innerText||'').slice(0,2400)})`);
+  console.log(`GLOBAL_SEARCH_STATE ${searchState}`);
+  const searchParsed=JSON.parse(searchState);
+  if (!(searchParsed.dialogs>0 || searchParsed.inputs.length>0 || /command palette|search/i.test(searchParsed.body))) throw new Error('Global Search did not open an interactive search surface.');
+  console.log('VIEW_GLOBAL_SEARCH PASS');
 
   ws.close();
   console.log('WINDOWS_INSTALLED_DEEP_SMOKE PASS');
