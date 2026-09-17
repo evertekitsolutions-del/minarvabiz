@@ -22,6 +22,8 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @minarvabiz/licensing typecheck
       - run: pnpm --filter @minarvabiz/licensing exec tsx src/__tests__/licensing-smoke.test.ts
+      - name: Verify commercial fallback refusal
+        run: node scripts/verify-production-license-config.mjs
       - name: Reject demo license paths
         shell: bash
         run: |
