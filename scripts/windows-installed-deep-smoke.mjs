@@ -81,6 +81,12 @@ async function main() {
   if (activated.state?.status !== 'active') throw new Error(`Fresh-install trial did not become active: ${activated.state?.status}`);
   if (!(Number(activated.state?.daysRemaining) >= 29)) throw new Error(`Fresh-install trial daysRemaining unexpected: ${activated.state?.daysRemaining}`);
 
+  const reloadResult = await cdpEval(ws, `(async()=>{location.reload(); return 'reloading'})()`);
+  console.log(`RENDERER_RELOAD ${reloadResult}`);
+  await sleep(1200);
+  await waitForRendererReady();
+  console.log('POST_TRIAL_RENDERER_READY PASS');
+
   const after = await cdpEval(ws, `(async()=>JSON.stringify(await window.minarvaDesktop.getTrialState()))()`);
   console.log(`TRIAL_AFTER ${after}`);
   const afterState = JSON.parse(after);
@@ -96,10 +102,10 @@ async function main() {
       const visible=(el)=>{const r=el.getBoundingClientRect();const s=getComputedStyle(el);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};
       const score=(el)=>{const s=((el.innerText||el.textContent||'')+' '+(el.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim().toLowerCase();return pats.some(p=>s.includes(String(p).toLowerCase())) ? 1 : 0};
       const el=els.find(e=>visible(e)&&score(e));
-      if(!el) return JSON.stringify({ok:false,available:els.map(e=>((e.innerText||e.textContent||'')+' '+(e.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim()).filter(Boolean).slice(0,100)});
+      if(!el) return JSON.stringify({ok:false,available:els.map(e=>((e.innerText||e.textContent||'')+' '+(e.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim()).filter(Boolean).slice(0,120)});
       el.click();
-      await new Promise(r=>setTimeout(r,1200));
-      return JSON.stringify({ok:true,text:(el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim(),body:(document.body?.innerText||'').slice(0,2200)});
+      await new Promise(r=>setTimeout(r,1000));
+      return JSON.stringify({ok:true,text:(el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim(),body:(document.body?.innerText||'').slice(0,2600)});
     })()`);
     console.log(`CLICK_${name} ${result}`);
     const parsed = JSON.parse(result);
@@ -108,7 +114,7 @@ async function main() {
   }
 
   async function assertBody(name, patterns) {
-    const body = await cdpEval(ws, `JSON.stringify((document.body?.innerText||'').slice(0,8000))`);
+    const body = await cdpEval(ws, `JSON.stringify((document.body?.innerText||'').slice(0,9000))`);
     const text = JSON.parse(body).toLowerCase();
     if (!patterns.some((p) => text.includes(String(p).toLowerCase()))) {
       throw new Error(`${name} view marker not found. Patterns=${patterns.join(', ')}`);
@@ -139,7 +145,7 @@ async function main() {
     const candidates=els.filter(e=>visible(e)&&((e.innerText||e.textContent||'').trim().length>0));
     const el=candidates.find(e=>/(view|details|open)/i.test((e.innerText||e.textContent||'')) && !/customers/i.test((e.innerText||e.textContent||''))) || candidates.find(e=>e.tagName==='TR');
     if(el){el.click();await new Promise(r=>setTimeout(r,1000));}
-    return JSON.stringify({clicked:Boolean(el),body:(document.body?.innerText||'').slice(0,2600)});
+    return JSON.stringify({clicked:Boolean(el),body:(document.body?.innerText||'').slice(0,3000)});
   })()`);
   console.log(`CUSTOMER_DRILL ${drill}`);
   const drillParsed=JSON.parse(drill);
@@ -148,7 +154,7 @@ async function main() {
   console.log('VIEW_CUSTOMER_DRILL PASS');
 
   await clickTarget('GLOBAL_SEARCH',['global search','search']);
-  const searchState = await cdpEval(ws, `JSON.stringify({dialogs:document.querySelectorAll('[role="dialog"]').length,inputs:[...document.querySelectorAll('input')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0}).map(e=>e.placeholder||e.getAttribute('aria-label')||'').slice(0,20),body:(document.body?.innerText||'').slice(0,2400)})`);
+  const searchState = await cdpEval(ws, `JSON.stringify({dialogs:document.querySelectorAll('[role="dialog"]').length,inputs:[...document.querySelectorAll('input')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0}).map(e=>e.placeholder||e.getAttribute('aria-label')||'').slice(0,20),body:(document.body?.innerText||'').slice(0,3000)})`);
   console.log(`GLOBAL_SEARCH_STATE ${searchState}`);
   const searchParsed=JSON.parse(searchState);
   if (!(searchParsed.dialogs>0 || searchParsed.inputs.length>0 || /command palette|search/i.test(searchParsed.body))) throw new Error('Global Search did not open an interactive search surface.');
