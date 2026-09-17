@@ -56,7 +56,7 @@ async function main() {
 
   async function waitForRendererReady() {
     for (let attempt = 1; attempt <= 60; attempt++) {
-      const state = await cdpEval(ws, `JSON.stringify({ready:document.documentElement.dataset.minarvaRendererReady==='true',error:document.documentElement.dataset.minarvaRendererError==='true',text:(document.body?.innerText||'').slice(0,900)})`);
+      const state = await cdpEval(ws, `JSON.stringify({ready:document.documentElement.dataset.minarvaRendererReady==='true',error:document.documentElement.dataset.minarvaRendererError==='true',text:(document.body?.innerText||'').slice(0,1200)})`);
       const parsed = JSON.parse(state);
       if (parsed.error) throw new Error(`Renderer reported fatal startup error: ${parsed.text}`);
       if (parsed.ready || /(dashboard|customers|products|sales|reports|starting trial|trial)/i.test(parsed.text)) return;
@@ -81,8 +81,7 @@ async function main() {
   if (activated.state?.status !== 'active') throw new Error(`Fresh-install trial did not become active: ${activated.state?.status}`);
   if (!(Number(activated.state?.daysRemaining) >= 29)) throw new Error(`Fresh-install trial daysRemaining unexpected: ${activated.state?.daysRemaining}`);
 
-  const reloadResult = await cdpEval(ws, `(async()=>{location.reload(); return 'reloading'})()`);
-  console.log(`RENDERER_RELOAD ${reloadResult}`);
+  await cdpEval(ws, `(async()=>{location.reload(); return 'reloading'})()`);
   await sleep(1200);
   await waitForRendererReady();
   console.log('POST_TRIAL_RENDERER_READY PASS');
@@ -92,7 +91,7 @@ async function main() {
   const afterState = JSON.parse(after);
   if (afterState.status !== 'active') throw new Error('Trial state could not be read back after secure-storage write.');
 
-  const controls = await cdpEval(ws, `JSON.stringify([...document.querySelectorAll('button,a,[role="button"]')].map((el,i)=>({i,text:(el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,120),aria:el.getAttribute('aria-label')||''})).filter(x=>x.text||x.aria).slice(0,250))`);
+  const controls = await cdpEval(ws, `JSON.stringify([...document.querySelectorAll('button,a,[role="button"]')].map((el,i)=>({i,text:(el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,120),aria:el.getAttribute('aria-label')||''})).filter(x=>x.text||x.aria).slice(0,260))`);
   console.log(`CONTROLS ${controls}`);
 
   async function clickTarget(name, patterns) {
@@ -100,12 +99,12 @@ async function main() {
       const pats=${JSON.stringify(patterns)};
       const els=[...document.querySelectorAll('button,a,[role="button"]')];
       const visible=(el)=>{const r=el.getBoundingClientRect();const s=getComputedStyle(el);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};
-      const score=(el)=>{const s=((el.innerText||el.textContent||'')+' '+(el.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim().toLowerCase();return pats.some(p=>s.includes(String(p).toLowerCase())) ? 1 : 0};
+      const score=(el)=>{const s=((el.innerText||el.textContent||'')+' '+(el.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim().toLowerCase();return pats.some(p=>s.includes(String(p).toLowerCase()))};
       const el=els.find(e=>visible(e)&&score(e));
-      if(!el) return JSON.stringify({ok:false,available:els.map(e=>((e.innerText||e.textContent||'')+' '+(e.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim()).filter(Boolean).slice(0,120)});
+      if(!el) return JSON.stringify({ok:false,available:els.map(e=>((e.innerText||e.textContent||'')+' '+(e.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim()).filter(Boolean).slice(0,140)});
       el.click();
-      await new Promise(r=>setTimeout(r,1000));
-      return JSON.stringify({ok:true,text:(el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim(),body:(document.body?.innerText||'').slice(0,2600)});
+      await new Promise(r=>setTimeout(r,900));
+      return JSON.stringify({ok:true,text:(el.innerText||el.textContent||'').replace(/\\s+/g,' ').trim(),body:(document.body?.innerText||'').slice(0,3200)});
     })()`);
     console.log(`CLICK_${name} ${result}`);
     const parsed = JSON.parse(result);
@@ -114,7 +113,7 @@ async function main() {
   }
 
   async function assertBody(name, patterns) {
-    const body = await cdpEval(ws, `JSON.stringify((document.body?.innerText||'').slice(0,9000))`);
+    const body = await cdpEval(ws, `JSON.stringify((document.body?.innerText||'').slice(0,10000))`);
     const text = JSON.parse(body).toLowerCase();
     if (!patterns.some((p) => text.includes(String(p).toLowerCase()))) {
       throw new Error(`${name} view marker not found. Patterns=${patterns.join(', ')}`);
@@ -124,11 +123,11 @@ async function main() {
 
   const targets = [
     ['DAY_END_CLOSE',['day-end','day end','close day']],
-    ['PAYMENTS',['payments','payment']],
-    ['RETURNS',['returns','return']],
-    ['SUPPLIERS',['suppliers','supplier']],
-    ['STAFF',['staff']],
-    ['AUDIT_LOG',['audit log','audit']],
+    ['PAYMENTS',['payments']],
+    ['RETURNS',['returns & refunds','returns','return']],
+    ['SUPPLIERS',['suppliers']],
+    ['STAFF_DETAILS',['staff details']],
+    ['AUDIT_LOG',['audit log']],
   ];
 
   for (const [name, patterns] of targets) {
@@ -136,16 +135,41 @@ async function main() {
     await assertBody(name, patterns);
   }
 
-  await clickTarget('CUSTOMERS',['customers','customer']);
-  await assertBody('CUSTOMERS',['customers','customer']);
+  await clickTarget('STAFF_MANAGEMENT',['staff management']);
+  await assertBody('STAFF_MANAGEMENT',['staff management']);
+
+  await clickTarget('CUSTOMERS',['customers']);
+  await assertBody('CUSTOMERS',['customers']);
+
+  const addCustomer = await clickTarget('CUSTOMER_ADD',['add customer']);
+  await assertBody('CUSTOMER_ADD',['add customer']);
+
+  const formInfo = await cdpEval(ws, `JSON.stringify({inputs:[...document.querySelectorAll('input,textarea')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0}).map(e=>({tag:e.tagName,placeholder:e.placeholder||'',name:e.name||'',aria:e.getAttribute('aria-label')||'',value:e.value||''})),buttons:[...document.querySelectorAll('button')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0}).map(e=>(e.innerText||e.textContent||'').replace(/\\s+/g,' ').trim()).filter(Boolean).slice(-30)})`);
+  console.log(`CUSTOMER_FORM ${formInfo}`);
+  const fillResult = await cdpEval(ws, `(async()=>{
+    const fields=[...document.querySelectorAll('input,textarea')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0});
+    const set=(el,val)=>{const proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;if(setter) setter.call(el,val); else el.value=val;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));};
+    const match=(el,re)=>re.test(((el.placeholder||'')+' '+(el.name||'')+' '+(el.getAttribute('aria-label')||'')).toLowerCase());
+    let used=0;
+    for(const el of fields){
+      if(match(el,/name|customer/)){set(el,'QA Customer');used++;}
+      else if(match(el,/phone|mobile|contact/)){set(el,'9999900001');used++;}
+      else if(match(el,/email/)){set(el,`qa-customer-${Date.now()}@example.com`);used++;}
+      else if(used===0 && !el.value){set(el,'QA Customer');used++;}
+    }
+    return JSON.stringify({used,values:fields.map(e=>e.value)});
+  })()`);
+  console.log(`CUSTOMER_FORM_FILLED ${fillResult}`);
+  await clickTarget('CUSTOMER_SAVE',['save customer','save','create customer']);
+  await assertBody('CUSTOMER_SAVED',['qa customer','customers']);
 
   const drill = await cdpEval(ws, `(async()=>{
     const els=[...document.querySelectorAll('button,a,[role="button"],tr')];
     const visible=(el)=>{const r=el.getBoundingClientRect();const s=getComputedStyle(el);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none};
     const candidates=els.filter(e=>visible(e)&&((e.innerText||e.textContent||'').trim().length>0));
-    const el=candidates.find(e=>/(view|details|open)/i.test((e.innerText||e.textContent||'')) && !/customers/i.test((e.innerText||e.textContent||''))) || candidates.find(e=>e.tagName==='TR');
+    const el=candidates.find(e=>/(view|details|open)/i.test((e.innerText||e.textContent||'')) && !/customers/i.test((e.innerText||e.textContent||''))) || candidates.find(e=>e.tagName==='TR' && /qa customer/i.test(e.innerText||''));
     if(el){el.click();await new Promise(r=>setTimeout(r,1000));}
-    return JSON.stringify({clicked:Boolean(el),body:(document.body?.innerText||'').slice(0,3000)});
+    return JSON.stringify({clicked:Boolean(el),body:(document.body?.innerText||'').slice(0,3600)});
   })()`);
   console.log(`CUSTOMER_DRILL ${drill}`);
   const drillParsed=JSON.parse(drill);
@@ -153,12 +177,29 @@ async function main() {
   if (!/(customer|profile|details)/i.test(drillParsed.body)) throw new Error('Customer drill-down did not produce a customer/profile/details view marker.');
   console.log('VIEW_CUSTOMER_DRILL PASS');
 
-  await clickTarget('GLOBAL_SEARCH',['global search','search']);
-  const searchState = await cdpEval(ws, `JSON.stringify({dialogs:document.querySelectorAll('[role="dialog"]').length,inputs:[...document.querySelectorAll('input')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0}).map(e=>e.placeholder||e.getAttribute('aria-label')||'').slice(0,20),body:(document.body?.innerText||'').slice(0,3000)})`);
+  await clickTarget('GLOBAL_SEARCH',['open command palette','quick commands','command palette']);
+  const searchState = await cdpEval(ws, `JSON.stringify({dialogs:document.querySelectorAll('[role="dialog"]').length,inputs:[...document.querySelectorAll('input')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0}).map(e=>e.placeholder||e.getAttribute('aria-label')||'').slice(0,20),body:(document.body?.innerText||'').slice(0,3200)})`);
   console.log(`GLOBAL_SEARCH_STATE ${searchState}`);
   const searchParsed=JSON.parse(searchState);
-  if (!(searchParsed.dialogs>0 || searchParsed.inputs.length>0 || /command palette|search/i.test(searchParsed.body))) throw new Error('Global Search did not open an interactive search surface.');
+  if (!(searchParsed.dialogs>0 || searchParsed.inputs.length>0 || /command palette|quick commands/i.test(searchParsed.body))) throw new Error('Global Search did not open an interactive search surface.');
   console.log('VIEW_GLOBAL_SEARCH PASS');
+
+  await clickTarget('NOTIFICATIONS',['notifications']);
+  const notificationBody = await cdpEval(ws, `JSON.stringify((document.body?.innerText||'').slice(0,4200))`);
+  console.log(`NOTIFICATIONS_OPEN ${notificationBody}`);
+  const ntext = JSON.parse(notificationBody).toLowerCase();
+  if (!/notification/.test(ntext)) throw new Error('Notifications surface did not open.');
+  const mark = await cdpEval(ws, `(async()=>{const els=[...document.querySelectorAll('button,[role="button"]')];const el=els.find(e=>/mark all read|mark all as read/i.test(((e.innerText||e.textContent||'')+' '+(e.getAttribute('aria-label')||''))));if(!el)return JSON.stringify({found:false});el.click();await new Promise(r=>setTimeout(r,800));return JSON.stringify({found:true,body:(document.body?.innerText||'').slice(0,3800)});})()`);
+  console.log(`NOTIFICATIONS_MARK_ALL ${mark}`);
+  if (!JSON.parse(mark).found) throw new Error('Notifications mark-all-read control was not clickable.');
+  console.log('NOTIFICATIONS_MARK_ALL PASS');
+
+  await clickTarget('REPORTS',['reports & analytics']);
+  await assertBody('REPORTS',['reports & analytics']);
+  const refresh = await cdpEval(ws, `(async()=>{const els=[...document.querySelectorAll('button,[role="button"]')];const el=els.find(e=>/refresh/i.test(((e.innerText||e.textContent||'')+' '+(e.getAttribute('aria-label')||''))));if(!el)return JSON.stringify({found:false});el.click();await new Promise(r=>setTimeout(r,700));return JSON.stringify({found:true,body:(document.body?.innerText||'').slice(0,3800)});})()`);
+  console.log(`REPORTS_REFRESH ${refresh}`);
+  if (!JSON.parse(refresh).found) throw new Error('Reports refresh control was not clickable.');
+  console.log('REPORTS_REFRESH PASS');
 
   ws.close();
   console.log('WINDOWS_INSTALLED_DEEP_SMOKE PASS');
