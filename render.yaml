@@ -2,7 +2,7 @@ services:
   - type: web
     name: minarvabiz-license-admin
     runtime: node
-    plan: starter
+    plan: free
     region: singapore
     buildCommand: corepack enable && corepack prepare pnpm@9.15.0 --activate && pnpm install --frozen-lockfile --ignore-scripts && pnpm --filter @minarvabiz/license-admin build
     startCommand: pnpm --filter @minarvabiz/license-admin exec next start -p $PORT
