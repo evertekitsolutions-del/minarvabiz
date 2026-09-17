@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: minarvabiz-license-admin
+    runtime: node
+    plan: starter
+    region: singapore
+    buildCommand: corepack enable && corepack prepare pnpm@9.15.0 --activate && pnpm install --frozen-lockfile --ignore-scripts && pnpm --filter @minarvabiz/license-admin build
+    startCommand: pnpm --filter @minarvabiz/license-admin exec next start -p $PORT
+    envVars:
+      - key: NODE_VERSION
+        value: 24.20.0
+      - key: LICENSE_API_SECRET
+        sync: false
+      - key: LICENSE_PRIVATE_KEY
+        sync: false
+      - key: SUPABASE_URL
+        value: https://wmjgefbaliuwmaxyzxkq.supabase.co
+      - key: SUPABASE_SECRET_KEY
+        sync: false
