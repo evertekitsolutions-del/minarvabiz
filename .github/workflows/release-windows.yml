@@ -15,8 +15,7 @@ jobs:
     env:
       MINARVA_RUNTIME_SMOKE: "1"
       MINARVA_COMMERCIAL_RELEASE: "1"
-      MINARVA_LICENSE_PUBLIC_KEY_HEX: ${{ secrets.MINARVA_LICENSE_PUBLIC_KEY_HEX }}
-      VITE_LICENSE_API_URL: ${{ secrets.VITE_LICENSE_API_URL }}
+      VITE_LICENSE_API_URL: "https://minarvabiz-license-admin.onrender.com"
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
