@@ -5,6 +5,7 @@
 
 import type {
   Customer,
+  Category,
   Product,
   Sale,
   ServiceOrder,
@@ -18,6 +19,7 @@ import { enqueueOutbox } from "./outbox-bridge";
 
 export interface RemoteWriter {
   upsertCustomer?: (c: Customer) => Promise<void>;
+  upsertCategory?: (c: Category) => Promise<void>;
   upsertProduct?: (p: Product) => Promise<void>;
   createSale?: (s: Sale) => Promise<void>;
   createOrder?: (o: ServiceOrder) => Promise<void>;
@@ -43,6 +45,12 @@ export async function remoteUpsertCustomer(c: Customer) {
   enqueueOutbox("customers", c.id, "insert", c);
   try { await writer?.upsertCustomer?.(c); }
   catch (e) { console.warn("[minarvabiz] remote customer write failed", e); }
+}
+
+export async function remoteUpsertCategory(c: Category) {
+  enqueueOutbox("categories", c.id, "insert", c);
+  try { await writer?.upsertCategory?.(c); }
+  catch (e) { console.warn("[minarvabiz] remote category write failed", e); }
 }
 
 export async function remoteUpsertProduct(p: Product) {
