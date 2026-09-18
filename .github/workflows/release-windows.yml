@@ -24,6 +24,9 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      - name: Fetch production license public key
+        run: node scripts/fetch-license-public-key.mjs
+
       - name: Validate production licensing configuration
         shell: pwsh
         run: |
