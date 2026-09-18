@@ -138,7 +138,7 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
           email: customer.email ?? null, address: customer.address ?? null, birthday: customer.birthday ?? null,
           notes: customer.notes ?? null, outstanding_balance: customer.outstandingBalance ?? 0,
           total_spending: customer.totalSpending ?? 0, created_at: customer.createdAt, updated_at: customer.updatedAt,
-          branch_id: customer.branchId ?? null, device_id: customer.deviceId ?? null, version: customer.version || 1,
+          branch_id: customer.branchId ?? null,
         });
         if (res.error) throw new Error(res.error.message);
       },
@@ -166,7 +166,7 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
           stock_quantity: product.stockQuantity ?? 0, minimum_stock: product.minimumStock ?? 0,
           supplier_id: product.supplierId ?? null, image_url: product.imageUrl ?? null, notes: product.notes ?? null,
           is_active: product.isActive !== false, created_at: product.createdAt, updated_at: product.updatedAt,
-          branch_id: product.branchId ?? null, device_id: product.deviceId ?? null, version: product.version || 1,
+          branch_id: product.branchId ?? null, version: product.version || 1,
         });
         if (res.error) throw new Error(res.error.message);
       },
