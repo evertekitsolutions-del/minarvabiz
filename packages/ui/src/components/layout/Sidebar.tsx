@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { cn } from "../../lib/cn";
-import { MAIN_NAV, type NavItemId } from "../../lib/nav";
+import { MAIN_NAV, type NavItem, type NavItemId } from "../../lib/nav";
 
 export interface SidebarUser {
   name: string;
@@ -16,6 +16,7 @@ export interface SidebarProps {
   onNavigate?: (href: string, id: NavItemId) => void;
   user?: SidebarUser;
   logoSrc?: string;
+  navItems?: NavItem[];
   className?: string;
 }
 
@@ -156,6 +157,7 @@ export function Sidebar({
   onNavigate,
   user = { name: "Admin", role: "Super Admin" },
   logoSrc = "/logo-mark.png",
+  navItems = MAIN_NAV,
   className,
 }: SidebarProps) {
   const brandLogo = logoSrc || "/logo-mark.png";
@@ -185,7 +187,7 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {MAIN_NAV.map((item) => {
+        {navItems.map((item) => {
           const active = item.id === activeId;
           return (
             <button

@@ -4,19 +4,73 @@ import {
   OrderList, OrderForm, emptyOrderForm, OrderDetail, ProductionBoard, LaundryList, LaundryForm,
   ExpenseList, PurchaseList, StaffList, NotificationCenter, ReportsPanel,
   BackupPanel, SettingsPanel, Modal, Button, FormField, inputClass, selectClass, GlobalSearchPalette,
-  TrialGate,
+  TrialGate, MAIN_NAV,
   type QuickAction, type NavItemId, type DashboardData, type OrderFormValues,
   type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders } from "@minarvabiz/business-logic";
-import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy } from "@minarvabiz/business-logic";
+import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName, LicenseFeatures, LicensePlan, Edition } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
+
+type CommercialLicenseState = {
+  status: "unlicensed" | "active" | "grace" | "expired" | "invalid";
+  plan: LicensePlan | null;
+  edition: Edition | null;
+  features: LicenseFeatures | null;
+  daysRemaining: number | null;
+  graceDaysRemaining: number | null;
+  reason?: string;
+  licenseId?: string;
+  activationId?: string;
+};
+
+const FULL_TRIAL_FEATURES: LicenseFeatures = {
+  sales: true, customers: true, inventory: true, tailoring: true, orders: true, laundry: true,
+  reports: true, staff: true, advancedReports: true, cloudSync: true, multiUser: true,
+  multiBranch: true, apiAccess: true,
+};
+
+const NAV_FEATURE: Partial<Record<NavItemId, keyof LicenseFeatures>> = {
+  sales: "sales",
+  products: "inventory",
+  services: "orders",
+  laundry: "laundry",
+  expenses: "inventory",
+  purchases: "inventory",
+  customers: "customers",
+  "customer-crm": "customers",
+  staff: "staff",
+  "staff-detail": "staff",
+  suppliers: "inventory",
+  payments: "sales",
+  returns: "sales",
+  reports: "reports",
+  "day-end": "reports",
+  audit: "advancedReports",
+};
+
+function featuresForLicense(state: CommercialLicenseState | null, trial: TrialState | null): LicenseFeatures | null {
+  if (state && (state.status === "active" || state.status === "grace") && state.features) {
+    const features = { ...state.features };
+    if (state.status === "grace") {
+      features.advancedReports = false;
+      features.cloudSync = false;
+      features.multiUser = false;
+      features.multiBranch = false;
+      features.apiAccess = false;
+    }
+    return features;
+  }
+  if (trial?.status === "active") return FULL_TRIAL_FEATURES;
+  return null;
+}
 
 export function App() {
   const [dbReady, setDbReady] = React.useState(false);
   const [dbError, setDbError] = React.useState<string | null>(null);
   const [trialState, setTrialState] = React.useState<TrialState | null>(null);
+  const [commercialLicense, setCommercialLicense] = React.useState<CommercialLicenseState | null>(null);
   const [activeNav, setActiveNav] = React.useState<NavItemId>("dashboard");
   const [dash, setDash] = React.useState<DashboardData | null>(null);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
@@ -72,8 +126,12 @@ export function App() {
     catch { scheduleAutoSave(250); }
   }, [refreshAll]);
 
-  React.useEffect(() => { let cancelled=false; (async()=>{ for(let i=0;i<50&&!window.minarvaDesktop;i++) await new Promise(r=>setTimeout(r,20)); if(!window.minarvaDesktop){if(!cancelled)setDbError("Electron bridge missing. Reinstall Minarva Biz desktop.");return;} const result=await bootstrapDesktopSqlite(); if(cancelled)return; if(!result.ok){setDbError(result.error||"SQLite failed to initialize");return;} const state=await window.minarvaDesktop.getTrialState(); if(cancelled)return; setTrialState(state); setDbReady(true); fetchDashboardData().then(setDash); })(); return()=>{cancelled=true;}; }, []);
+  React.useEffect(() => { let cancelled=false; (async()=>{ for(let i=0;i<50&&!window.minarvaDesktop;i++) await new Promise(r=>setTimeout(r,20)); if(!window.minarvaDesktop){if(!cancelled)setDbError("Electron bridge missing. Reinstall Minarva Biz desktop.");return;} const result=await bootstrapDesktopSqlite(); if(cancelled)return; if(!result.ok){setDbError(result.error||"SQLite failed to initialize");return;} const [state, license] = await Promise.all([window.minarvaDesktop.getTrialState(), window.minarvaDesktop.getLicenseState()]); if(cancelled)return; setTrialState(state); setCommercialLicense(license as CommercialLicenseState); setDbReady(true); fetchDashboardData().then(setDash); })(); return()=>{cancelled=true;}; }, []);
   React.useEffect(() => { if(dbReady) refreshAll(); }, [dbReady, refreshAll]);
+  React.useEffect(() => {
+    setRuntimeFeaturePolicy(featuresForLicense(commercialLicense, trialState));
+  }, [commercialLicense, trialState]);
+
   React.useEffect(() => { if(!dbReady)return; fetchDashboardData().then(setDash); const reminders=runAutomatedCustomerReminders(); if(reminders.deliveryRemindersQueued||reminders.paymentRemindersQueued)void persistDomainToSqlite(); if(!window.minarvaDesktop||!shouldRunAutoBackup()||autoBackupInFlight.current)return; autoBackupInFlight.current=true; let cancelled=false; (async()=>{try{const settings=getAutoBackupSettings();const result=await window.minarvaDesktop!.createAutomaticBackup();if(cancelled||result.cancelled)return;if(!result.ok){recordBackupFailure(result.error||"Automatic backup failed");return;}if(result.path)recordBackupSuccess(result.path,"auto",result.sizeBytes);await window.minarvaDesktop!.pruneAutomaticBackups(settings.retentionCount);if(!cancelled)void persistDomainToSqlite();}catch(error){if(!cancelled)recordBackupFailure(error instanceof Error?error.message:String(error));}finally{autoBackupInFlight.current=false;}})(); return()=>{cancelled=true;}; }, [dbReady,moduleTick]);
   React.useEffect(() => { if(!trialState?.activated||trialState.synced||!trialState.registration)return; const apiUrl=import.meta.env.VITE_LICENSE_API_URL as string|undefined; if(!apiUrl||!window.minarvaDesktop)return; let cancelled=false; (async()=>{try{const deviceId=await window.minarvaDesktop!.getDeviceId!();const response=await fetch(`${apiUrl.replace(/\/$/,"")}/api/trial/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...trialState.registration,deviceId})});const payload=await response.json().catch(()=>({}));if(!cancelled&&response.ok&&payload.ok){await window.minarvaDesktop!.markTrialSynced();setTrialState(await window.minarvaDesktop!.getTrialState());}}catch{/* offline retry */}})(); return()=>{cancelled=true;}; }, [trialState]);
 
@@ -88,10 +146,16 @@ export function App() {
   function handleCreateProduct(){try{if(!productForm.name.trim())throw new Error("Product name is required");store.createProduct({name:productForm.name.trim(),sku:productForm.sku||null,barcode:productForm.barcode||null,categoryId:productForm.categoryId||null,brand:productForm.brand||null,size:productForm.size||null,color:productForm.color||null,fabric:productForm.fabric||null,unit:productForm.unit||"pcs",costPrice:Number(productForm.costPrice)||0,sellingPrice:Number(productForm.sellingPrice)||0,discount:Number(productForm.discount)||0,taxRate:Number(productForm.taxRate)||0,stockQuantity:Number(productForm.stockQuantity)||0,minimumStock:Number(productForm.minimumStock)||0,supplierId:productForm.supplierId||null,imageUrl:productForm.imageUrl||null,notes:productForm.notes||null,isActive:true});setProducts(store.listProducts({lowStockOnly}));setProductOpen(false);resetProductForm();setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(error instanceof Error?error.message:String(error));}}
 
   if(dbError)return <div style={{padding:32,fontFamily:"system-ui",maxWidth:560}}><h1>Database required</h1><p>Minarva Biz Offline cannot start without SQLite.</p><pre>{dbError}</pre></div>;
-  if(!dbReady||!trialState)return <div style={{padding:48,fontFamily:"system-ui",textAlign:"center"}}><p>Initializing Minarva Biz…</p></div>;
-  if(trialState.status!=="active")return <TrialGate state={trialState} onActivate={activateTrial}/>;
+  if(!dbReady||!trialState||!commercialLicense)return <div style={{padding:48,fontFamily:"system-ui",textAlign:"center"}}><p>Initializing Minarva Biz…</p></div>;
+  const licenseFeatures = featuresForLicense(commercialLicense, trialState);
+  const commercialActive = commercialLicense.status==="active"||commercialLicense.status==="grace";
+  if(!commercialActive&&trialState.status!=="active")return <TrialGate state={trialState} onActivate={activateTrial}/>;
+  if(!licenseFeatures)return <TrialGate state={trialState} onActivate={activateTrial}/>;
 
-  const actions:QuickAction[]=[{id:"sale",label:"New Sale",description:"Create Invoice",icon:<span>🛒</span>,tone:"blue",onClick:()=>{setActiveNav("sales");setSalesTab("pos");}},{id:"order",label:"New Order",description:"Tailoring Order",icon:<span>👗</span>,tone:"pink",onClick:()=>{setActiveNav("services");setCreateOpen(true);}}];
+  const allowedNav = MAIN_NAV.filter((item)=>{const feature=NAV_FEATURE[item.id];return !feature||Boolean(licenseFeatures[feature]);});
+  const actions:QuickAction[]=[];
+  if(licenseFeatures.sales) actions.push({id:"sale",label:"New Sale",description:"Create Invoice",icon:<span>🛒</span>,tone:"blue",onClick:()=>{setActiveNav("sales");setSalesTab("pos");}});
+  if(licenseFeatures.orders) actions.push({id:"order",label:"New Order",description:"Tailoring Order",icon:<span>👗</span>,tone:"pink",onClick:()=>{setActiveNav("services");setCreateOpen(true);}});
   function handleSale(payload:{customerId:string|null;lines:CartLine[];paidAmount:number;paymentMethod:PaymentMethod}){const result=store.createSale(payload);if(result.errors.length)return{success:false,errors:result.errors};void persistAndRefresh();return{success:true,invoiceNumber:result.sale.invoiceNumber};}
   function handleCreateOrder(){const price=form.serviceType==="tshirt_printing"?form.tshirt.customerPrice:form.serviceType==="wholesale"||form.serviceType==="uniform"?(parseFloat(form.unitPrice)||0)*(parseInt(form.quantity,10)||1):parseFloat(form.price)||0;const result=ordersStore.createOrder({customerId:form.customerId,serviceType:form.serviceType,deliveryDate:form.deliveryDate||null,price,discount:parseFloat(form.discount)||0,advance:parseFloat(form.advance)||0,notes:form.notes||null,materialDetails:form.materialDetails||null,customerSuppliedMaterial:form.customerSuppliedMaterial,shopSuppliedMaterial:form.shopSuppliedMaterial,measurements:form.measurements,measurementProfileId:form.measurementProfileId||null,externalMaterialCost:parseFloat(form.externalMaterialCost)||0,quantity:parseInt(form.quantity,10)||1,unitPrice:parseFloat(form.unitPrice)||undefined,bulkDiscount:parseFloat(form.bulkDiscount)||0,tshirt:form.serviceType==="tshirt_printing"?form.tshirt:null});if(result.errors.length||!result.order){setFormError(result.errors.join("; ")||"Failed");return;}setCreateOpen(false);setForm(emptyOrderForm());setFormError(null);void persistAndRefresh();setSelectedOrder(result.order);}
   function handleOrderStatusChange(orderId:string,status:OrderStatus){const result=ordersStore.updateOrderStatus(orderId,status);if(result.error||!result.order){setModuleError(result.error||"Unable to change order status");return;}setModuleError(null);setSelectedOrder(result.order);void persistAndRefresh();}
@@ -102,12 +166,12 @@ export function App() {
   function handleCreatePurchase(){const result=phase5Store.createPurchase({date:purchaseForm.date||undefined,supplierId:purchaseForm.supplierId||null,description:purchaseForm.description,amount:parseFloat(purchaseForm.amount)||0,paymentMethod:purchaseForm.paymentMethod,paidAmount:parseFloat(purchaseForm.paidAmount)||0,kind:purchaseForm.kind,orderId:purchaseForm.orderId||null,notes:purchaseForm.notes||null});if(result.errors.length||!result.purchase){setModuleError(result.errors.join("; ")||"Failed to create purchase");return;}setPurchaseOpen(false);setModuleError(null);setPurchaseForm({date:"",supplierId:"",description:"",amount:"",paidAmount:"",paymentMethod:"cash",kind:"general",orderId:"",notes:""});void persistAndRefresh();}
   function handleCreateStaff(){if(!staffForm.name.trim()){setModuleError("Staff name is required");return;}const result=phase6Store.createStaff({name:staffForm.name.trim(),phone:staffForm.phone||null,email:staffForm.email||null,role:staffForm.role,salary:parseFloat(staffForm.salary)||0,joiningDate:staffForm.joiningDate||null,status:staffForm.status,notes:staffForm.notes||null});if(!result){setModuleError("Failed to create staff");return;}setStaffOpen(false);setModuleError(null);setStaffForm({name:"",phone:"",email:"",role:"staff",salary:"",joiningDate:"",status:"active",notes:""});void persistAndRefresh();}
   function saveSettings(){void persistAndRefresh();setModuleTick(v=>v+1);}
-  const navTo=(id:NavItemId)=>{setActiveNav(id);setSelectedOrder(null);};
+  const navTo=(id:NavItemId)=>{const feature=NAV_FEATURE[id];if(feature&&!licenseFeatures[feature]){setModuleError(`Feature not included in current license: ${feature}`);setActiveNav("dashboard");setSelectedOrder(null);return;}setModuleError(null);setActiveNav(id);setSelectedOrder(null);};
   const handleInsightAction=(action:string)=>{const targets:Record<string,NavItemId>={"Review low stock":"sales","Open outstanding payments":"reports","Review pending orders":"services","Open ready orders":"services","Open reports":"reports","Review expenses":"expenses"};const target=targets[action];if(target)navTo(target);};
 
   const laundry=phase5Store.listLaundryOrders(), expenses=phase5Store.listExpenses(), purchases=phase5Store.listPurchases(), staff=phase6Store.listStaff(), assignments=phase6Store.listAssignments(), notifications=phase6Store.listNotifications(), reportSales=phase7Store.salesReport(), reportDayEnd=phase7Store.dayEndReport(), reportStock=phase7Store.stockReport(), reportOutstanding=phase7Store.outstandingPaymentsReport(), backups=phase7Store.listBackups(), suppliers=phase5Store.listSuppliers(), expenseCategories=phase5Store.listExpenseCategories(), profile=getShopProfile(), tax=getTaxConfig(), backupSettings=getAutoBackupSettings(), view=activeNav as string;
 
-  return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png"}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:phase6Store.unreadNotificationCount(),onMessagesClick:()=>navTo("notifications"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("reports"),onSearch:setGlobalSearchQuery}}>
+  return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png",navItems:allowedNav}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:phase6Store.unreadNotificationCount(),onMessagesClick:()=>navTo("notifications"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("reports"),onSearch:setGlobalSearchQuery}}>
     {view==="dashboard"&&dash&&<Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/>}
     {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery("")} onNavigate={(_href,id)=>{setGlobalSearchQuery("");navTo(id);}}/>}
     {view==="customers"&&<CustomerList customers={customers} onAdd={openCustomerCreator} onSearch={q=>setCustomers(store.listCustomers(q))}/>}
