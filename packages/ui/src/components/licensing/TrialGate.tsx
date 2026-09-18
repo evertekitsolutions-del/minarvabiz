@@ -32,7 +32,12 @@ function licenseBridge(): LicenseBridge | null {
 }
 
 export function TrialGate({ state, onActivate }: Props) {
-  const [form, setForm] = React.useState<TrialRegistration>({ email: "", phone: "", organizationName: "", address: "" });
+  const [form, setForm] = React.useState<TrialRegistration>({
+    email: "",
+    phone: "",
+    organizationName: "",
+    address: "",
+  });
   const [licenseToken, setLicenseToken] = React.useState("");
   const [licenseError, setLicenseError] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -42,8 +47,14 @@ export function TrialGate({ state, onActivate }: Props) {
   async function activateCommercialToken(token: string) {
     setLicenseError(null);
     const bridge = licenseBridge();
-    if (!bridge) { setLicenseError("Desktop security bridge is unavailable."); return; }
-    if (!token.trim()) { setLicenseError("Enter a commercial license token."); return; }
+    if (!bridge) {
+      setLicenseError("Desktop security bridge is unavailable.");
+      return;
+    }
+    if (!token.trim()) {
+      setLicenseError("Enter a commercial license token.");
+      return;
+    }
     setLicenseBusy(true);
     try {
       const result = await bridge.activateLicenseToken(token.trim());
@@ -52,53 +63,208 @@ export function TrialGate({ state, onActivate }: Props) {
         return;
       }
       setLicenseError(result.reason || "The license could not be activated on this computer.");
-    } catch { setLicenseError("The license could not be verified. Please check the token and try again."); }
-    finally { setLicenseBusy(false); }
+    } catch {
+      setLicenseError("The license could not be verified. Please check the token and try again.");
+    } finally {
+      setLicenseBusy(false);
+    }
   }
 
   async function importLicenseFile(file: File | undefined) {
     if (!file) return;
     const bridge = licenseBridge();
-    if (!bridge?.activateLicensePackage) { setLicenseError("Offline activation is not available in this desktop build."); return; }
+    if (!bridge?.activateLicensePackage) {
+      setLicenseError("Offline activation is not available in this desktop build.");
+      return;
+    }
     setLicenseError(null);
     setLicenseBusy(true);
     try {
-      if (!file.name.toLowerCase().endsWith(".lic")) { setLicenseError("Please select a Minarva Biz .lic activation file."); return; }
+      if (!file.name.toLowerCase().endsWith(".lic")) {
+        setLicenseError("Please select a Minarva Biz .lic activation file.");
+        return;
+      }
       const result = await bridge.activateLicensePackage(await file.text());
       if (result.status === "active" || result.status === "grace") {
         window.location.reload();
         return;
       }
       setLicenseError(result.reason || "The offline activation file is not valid for this Windows device.");
-    } catch { setLicenseError("Could not verify the selected offline activation file."); }
-    finally { setLicenseBusy(false); }
+    } catch {
+      setLicenseError("Could not verify the selected offline activation file.");
+    } finally {
+      setLicenseBusy(false);
+    }
   }
 
+  const commercialActivation = (
+    <div className="rounded-xl border border-slate-200 bg-white p-5">
+      <h2 className="font-semibold text-slate-900">Activate commercial license</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Already purchased Minarva Biz? Paste the signed license token, or import the offline .lic file supplied for this PC.
+      </p>
+      <textarea
+        rows={5}
+        className="mt-4 w-full rounded-lg border border-slate-300 p-3 font-mono text-xs"
+        placeholder="Paste license token here…"
+        value={licenseToken}
+        onChange={(e) => setLicenseToken(e.target.value)}
+      />
+      <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+        <button
+          type="button"
+          disabled={licenseBusy}
+          onClick={() => void activateCommercialToken(licenseToken)}
+          className="h-11 rounded-lg bg-blue-600 px-5 font-semibold text-white disabled:opacity-60"
+        >
+          {licenseBusy ? "Verifying…" : "Activate License"}
+        </button>
+        <label className="flex h-11 cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-5 text-sm font-semibold text-slate-700">
+          <input
+            type="file"
+            accept=".lic"
+            className="hidden"
+            disabled={licenseBusy}
+            onChange={(e) => {
+              void importLicenseFile(e.target.files?.[0]);
+              e.currentTarget.value = "";
+            }}
+          />
+          Import .lic Activation File
+        </label>
+      </div>
+      {licenseError && <div className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{licenseError}</div>}
+      <p className="mt-3 text-xs leading-5 text-slate-500">
+        Commercial licenses are verified with Minarva Biz&apos;s embedded public signing key and locked to this Windows device.
+        The private signing key is never stored in the desktop application.
+      </p>
+    </div>
+  );
+
   if (state?.status === "active") {
-    return <div className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-2xl rounded-2xl border border-emerald-200 bg-white p-8 shadow-sm"><div className="text-sm font-semibold text-emerald-700">MINARVA BIZ TRIAL ACTIVE</div><h1 className="mt-2 text-3xl font-bold text-slate-900">Welcome to Minarva Biz</h1><p className="mt-2 text-slate-600">All features are unlocked for your 30-day trial.</p><p className="mt-4 text-lg font-semibold text-slate-900">{state.daysRemaining} day{state.daysRemaining === 1 ? "" : "s"} remaining</p>{state.registration && <div className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600"><div className="font-medium text-slate-900">Registered organization</div><div>{state.registration.organizationName}</div><div>{state.registration.email} · {state.registration.phone}</div></div>}</div></div>;
+    return (
+      <div className="min-h-screen bg-slate-50 p-6">
+        <div className="mx-auto max-w-2xl rounded-2xl border border-emerald-200 bg-white p-8 shadow-sm">
+          <div className="text-sm font-semibold text-emerald-700">MINARVA BIZ TRIAL ACTIVE</div>
+          <h1 className="mt-2 text-3xl font-bold text-slate-900">Welcome to Minarva Biz</h1>
+          <p className="mt-2 text-slate-600">All features are unlocked for your 30-day trial.</p>
+          <p className="mt-4 text-lg font-semibold text-slate-900">
+            {state.daysRemaining} day{state.daysRemaining === 1 ? "" : "s"} remaining
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (state?.status === "expired") {
-    return <div className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-2xl space-y-5 rounded-2xl border border-amber-200 bg-white p-8 shadow-sm"><div><div className="text-sm font-semibold text-amber-700">LICENSE REQUIRED</div><h1 className="mt-2 text-3xl font-bold text-slate-900">Your Minarva Biz trial has ended</h1><p className="mt-2 text-slate-600">Activate a commercial license to continue using Minarva Biz.</p></div><div className="rounded-xl border border-slate-200 p-5"><h2 className="font-semibold text-slate-900">Activate commercial license</h2><p className="mt-1 text-sm text-slate-500">Paste the signed license token supplied by Minarva Technologies, or import an offline activation file.</p><textarea rows={5} className="mt-4 w-full rounded-lg border border-slate-300 p-3 font-mono text-xs" placeholder="Paste license token here…" value={licenseToken} onChange={(e) => setLicenseToken(e.target.value)} /><div className="mt-3 flex flex-col gap-3 sm:flex-row"><button disabled={licenseBusy} onClick={() => activateCommercialToken(licenseToken)} className="h-11 rounded-lg bg-blue-600 px-5 font-semibold text-white disabled:opacity-60">{licenseBusy ? "Verifying…" : "Activate License"}</button><label className="flex h-11 cursor-pointer items-center justify-center rounded-lg border border-slate-300 px-5 text-sm font-semibold text-slate-700"><input type="file" accept=".lic" className="hidden" disabled={licenseBusy} onChange={(e) => { void importLicenseFile(e.target.files?.[0]); e.currentTarget.value = ""; }} />Import .lic Activation File</label></div>{licenseError && <div className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{licenseError}</div>}</div><p className="text-xs leading-5 text-slate-500">The license is verified locally using Minarva Biz's embedded public signing key and locked to this Windows device. The private signing key is never stored in the desktop application.</p></div></div>;
+    return (
+      <div className="min-h-screen bg-slate-50 p-6">
+        <div className="mx-auto max-w-2xl space-y-5 rounded-2xl border border-amber-200 bg-white p-8 shadow-sm">
+          <div>
+            <div className="text-sm font-semibold text-amber-700">LICENSE REQUIRED</div>
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">Your Minarva Biz trial has ended</h1>
+            <p className="mt-2 text-slate-600">Activate a commercial license to continue using Minarva Biz.</p>
+          </div>
+          {commercialActivation}
+        </div>
+      </div>
+    );
   }
 
   if (state?.status === "invalid_clock") {
-    return <div className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-2xl rounded-2xl border border-rose-200 bg-white p-8 shadow-sm"><div className="text-sm font-semibold text-rose-700">SYSTEM TIME CHECK FAILED</div><h1 className="mt-2 text-3xl font-bold text-slate-900">Please correct the Windows date and time</h1><p className="mt-2 text-slate-600">Minarva Biz detected that the system clock was moved backwards. Correct the Windows date/time and restart the application.</p></div></div>;
+    return (
+      <div className="min-h-screen bg-slate-50 p-6">
+        <div className="mx-auto max-w-2xl space-y-5 rounded-2xl border border-rose-200 bg-white p-8 shadow-sm">
+          <div>
+            <div className="text-sm font-semibold text-rose-700">SYSTEM TIME CHECK FAILED</div>
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">Please correct the Windows date and time</h1>
+            <p className="mt-2 text-slate-600">
+              Minarva Biz detected that the system clock was moved backwards. Correct the Windows date/time and restart the application.
+            </p>
+          </div>
+          {commercialActivation}
+        </div>
+      </div>
+    );
   }
 
   if (state?.status === "invalid_device") {
-    return <div className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-2xl rounded-2xl border border-rose-200 bg-white p-8 shadow-sm"><div className="text-sm font-semibold text-rose-700">TRIAL DEVICE CHECK FAILED</div><h1 className="mt-2 text-3xl font-bold text-slate-900">This trial is locked to another Windows system</h1><p className="mt-2 text-slate-600">The saved trial registration does not match this computer. A 30-day trial can only be used on the machine where it was first activated.</p><p className="mt-4 text-sm text-slate-500">Contact Minarva Technologies if the computer was replaced or the Windows installation was repaired.</p></div></div>;
+    return (
+      <div className="min-h-screen bg-slate-50 p-6">
+        <div className="mx-auto max-w-2xl space-y-5 rounded-2xl border border-rose-200 bg-white p-8 shadow-sm">
+          <div>
+            <div className="text-sm font-semibold text-rose-700">TRIAL DEVICE CHECK FAILED</div>
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">This trial is locked to another Windows system</h1>
+            <p className="mt-2 text-slate-600">
+              A trial can only be used on the Windows system where it was first activated.
+            </p>
+          </div>
+          {commercialActivation}
+        </div>
+      </div>
+    );
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!form.email.trim() || !form.phone.trim() || !form.organizationName.trim() || !form.address.trim()) { setError("Email, phone number, organization name, and address are required."); return; }
+    if (!form.email.trim() || !form.phone.trim() || !form.organizationName.trim() || !form.address.trim()) {
+      setError("Email, phone number, organization name, and address are required.");
+      return;
+    }
     setBusy(true);
-    try { const result = await onActivate({ email: form.email.trim(), phone: form.phone.trim(), organizationName: form.organizationName.trim(), address: form.address.trim() }); if (!result.ok) setError(result.error || "Could not activate the trial."); }
-    catch { setError("Could not activate the trial. Please try again."); }
-    finally { setBusy(false); }
+    try {
+      const result = await onActivate({
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        organizationName: form.organizationName.trim(),
+        address: form.address.trim(),
+      });
+      if (!result.ok) setError(result.error || "Could not activate the trial.");
+    } catch {
+      setError("Could not activate the trial. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  return <div className="min-h-screen bg-slate-50 p-6"><div className="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"><div className="text-sm font-semibold text-blue-700">MINARVA BIZ · 30-DAY FREE TRIAL</div><h1 className="mt-2 text-3xl font-bold text-slate-900">Activate your free trial</h1><p className="mt-2 text-slate-600">Enter your business details to unlock all Minarva Biz features for 30 days.</p><form className="mt-7 space-y-4" onSubmit={submit}><label className="block text-sm font-medium text-slate-700">Email address<input type="email" required autoComplete="email" className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label className="block text-sm font-medium text-slate-700">Phone number<input type="tel" required autoComplete="tel" className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label><label className="block text-sm font-medium text-slate-700">Organization / business name<input required className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" value={form.organizationName} onChange={(e) => setForm({ ...form, organizationName: e.target.value })} /></label><label className="block text-sm font-medium text-slate-700">Business address<textarea required rows={3} className="mt-1 w-full rounded-lg border border-slate-300 p-3" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></label>{error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}<button disabled={busy} className="h-11 w-full rounded-lg bg-blue-600 px-4 font-semibold text-white disabled:opacity-60">{busy ? "Activating…" : "Activate 30-Day Trial"}</button></form><p className="mt-5 text-xs leading-5 text-slate-500">Your registration details are used for trial licensing and support. When internet is available, Minarva Biz securely sends the registration to the Minarva Technologies licensing service.</p></div></div>;
+  return (
+    <div className="min-h-screen bg-slate-50 p-6">
+      <div className="mx-auto max-w-2xl space-y-5 rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+        <div>
+          <div className="text-sm font-semibold text-blue-700">MINARVA BIZ · 30-DAY FREE TRIAL</div>
+          <h1 className="mt-2 text-3xl font-bold text-slate-900">Activate your free trial</h1>
+          <p className="mt-2 text-slate-600">Enter your business details to unlock all Minarva Biz features for 30 days.</p>
+        </div>
+        <form className="space-y-4" onSubmit={submit}>
+          <label className="block text-sm font-medium text-slate-700">
+            Email address
+            <input type="email" required autoComplete="email" className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            Phone number
+            <input type="tel" required autoComplete="tel" className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            Organization / business name
+            <input required className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" value={form.organizationName} onChange={(e) => setForm({ ...form, organizationName: e.target.value })} />
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            Business address
+            <textarea required rows={3} className="mt-1 w-full rounded-lg border border-slate-300 p-3" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          </label>
+          {error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
+          <button disabled={busy} className="h-11 w-full rounded-lg bg-blue-600 px-4 font-semibold text-white disabled:opacity-60">
+            {busy ? "Activating…" : "Activate 30-Day Trial"}
+          </button>
+        </form>
+        <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-slate-400">
+          <span className="h-px flex-1 bg-slate-200" />
+          or
+          <span className="h-px flex-1 bg-slate-200" />
+        </div>
+        {commercialActivation}
+      </div>
+    </div>
+  );
 }
