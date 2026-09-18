@@ -9,7 +9,7 @@ import {
 } from "./sales";
 import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
-import { remoteUpsertCustomer, remoteUpsertProduct, remoteCreateSale } from "./remote-write";
+import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remoteCreateSale } from "./remote-write";
 import { auditAction } from "./audit-actions";
 import { enqueueOutbox } from "./outbox-bridge";
 import { assertPermission } from "./permissions";
@@ -66,6 +66,7 @@ export function createCategory(input: { name: string; description?: string | nul
   };
   categories.push(cat);
   touchPersistence();
+  void remoteUpsertCategory(cat);
   return cat;
 }
 
