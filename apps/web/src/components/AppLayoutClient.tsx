@@ -8,6 +8,7 @@ import {
   setCurrentRole,
   clearSession,
   getSessionUser,
+  getSessionToken,
   phase6Store,
 } from "@minarvabiz/business-logic";
 import { hydrateStoresFromSupabase } from "@/lib/data-source";
@@ -18,15 +19,21 @@ const pathToNav: Record<string, NavItemId> = {
   "/sales": "sales",
   "/quotations": "sales",
   "/cash-register": "reports",
-  "/payments": "sales",
+  "/payments": "payments",
   "/services": "services",
   "/services/production": "services",
   "/laundry": "laundry",
   "/expenses": "expenses",
   "/purchases": "purchases",
   "/customers": "customers",
+  "/customer-crm": "customer-crm",
   "/staff": "staff",
+  "/staff-detail": "staff-detail",
+  "/suppliers": "suppliers",
+  "/returns": "returns",
   "/reports": "reports",
+  "/day-end": "day-end",
+  "/audit": "audit",
   "/notifications": "notifications",
   "/settings": "settings",
   "/users": "settings",
@@ -38,7 +45,6 @@ const pathToNav: Record<string, NavItemId> = {
   "/tools": "settings",
   "/license": "settings",
   "/backup": "backup",
-  "/suppliers": "expenses",
 };
 
 export function AppLayoutClient({ children }: { children: React.ReactNode }) {
@@ -55,15 +61,17 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     bootstrapFromLocalStorage();
-    void hydrateStoresFromSupabase().then((r) => {
-      if (r.ok) console.info("[minarvabiz]", r.message, r.counts);
-      refreshNotificationCount();
-    });
     const u = getSessionUser();
+    const token = getSessionToken();
     if (u) {
       setUserName(u.fullName || u.email);
       setCurrentRole(u.role as Parameters<typeof setCurrentRole>[0]);
     }
+    void hydrateStoresFromSupabase(token).then((r) => {
+      if (r.ok) console.info("[minarvabiz]", r.message, r.counts);
+      else console.warn("[minarvabiz] Supabase hydration failed:", r.message);
+      refreshNotificationCount();
+    });
     refreshNotificationCount();
   }, [refreshNotificationCount]);
   const activeNav = pathToNav[pathname] ?? "dashboard";
