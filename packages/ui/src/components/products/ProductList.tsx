@@ -10,6 +10,7 @@ export function ProductList({
   products,
   categories,
   onAdd,
+  onAddCategory,
   onSearch,
   onFilterCategory,
   onSelect,
@@ -21,6 +22,7 @@ export function ProductList({
   products: Product[];
   categories: Category[];
   onAdd?: () => void;
+  onAddCategory?: () => void;
   onSearch?: (q: string) => void;
   onFilterCategory?: (id: string | null) => void;
   onSelect?: (p: Product) => void;
@@ -122,6 +124,7 @@ export function ProductList({
           <Button variant={lowStockOnly ? "primary" : "outline"} onClick={toggleLowStock}>
             Low stock
           </Button>
+          {onAddCategory && <Button variant="outline" onClick={onAddCategory}>+ Category</Button>}
           <Button onClick={onAdd}>+ Add Product</Button>
         </div>
       </div>

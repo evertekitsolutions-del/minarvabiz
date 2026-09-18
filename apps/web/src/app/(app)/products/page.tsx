@@ -13,6 +13,10 @@ export default function ProductsPage() {
   const [categoryId, setCategoryId] = React.useState<string | null>(null);
   const [lowStockOnly, setLowStockOnly] = React.useState(false);
   const [open, setOpen] = React.useState(false);
+  const [categoryOpen, setCategoryOpen] = React.useState(false);
+  const [categoryName, setCategoryName] = React.useState("");
+  const [categoryDescription, setCategoryDescription] = React.useState("");
+  const [categoryError, setCategoryError] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [form, setForm] = React.useState({
     name: "", sku: "", barcode: "", categoryId: "", unit: "pcs",
@@ -25,6 +29,25 @@ export default function ProductsPage() {
   }, [query, categoryId, lowStockOnly]);
 
   React.useEffect(() => { refresh(); }, [refresh]);
+
+  function handleCreateCategory() {
+    const name = categoryName.trim();
+    if (!name) {
+      setCategoryError("Category name is required");
+      return;
+    }
+    try {
+      const category = store.createCategory({ name, description: categoryDescription.trim() || null });
+      setForm((prev) => ({ ...prev, categoryId: category.id }));
+      setCategoryName("");
+      setCategoryDescription("");
+      setCategoryError(null);
+      setCategoryOpen(false);
+      refresh();
+    } catch (err) {
+      setCategoryError(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   function handleCreate() {
     const parsed = productSchema.safeParse({
@@ -58,8 +81,30 @@ export default function ProductsPage() {
         onToggleLowStock={() => setLowStockOnly((v) => !v)}
         onSearch={(q) => setQuery(q)}
         onFilterCategory={setCategoryId}
+        onAddCategory={() => setCategoryOpen(true)}
         onAdd={() => setOpen(true)}
       />
+      <Modal
+        open={categoryOpen}
+        title="Add Category"
+        onClose={() => setCategoryOpen(false)}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setCategoryOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateCategory}>Save Category</Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <FormField label="Category name *">
+            <input className={inputClass} value={categoryName} onChange={(e) => setCategoryName(e.target.value)} />
+          </FormField>
+          <FormField label="Description">
+            <input className={inputClass} value={categoryDescription} onChange={(e) => setCategoryDescription(e.target.value)} />
+          </FormField>
+          {categoryError && <p className="text-sm text-rose-600">{categoryError}</p>}
+        </div>
+      </Modal>
       <Modal
         open={open}
         title="Add Product"
