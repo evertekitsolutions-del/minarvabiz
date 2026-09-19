@@ -8,19 +8,25 @@
 5. Keep this file aligned with the current delivery state and one clear next owner step.
 
 ## Latest continuation audit — 2026-09-19
-- Inspected main `630e7d06c7152e20d83bd0875df20ef741a938f2`; PRs #4, #5 and #6 are merged.
-- Desktop POS/Add/button fixes and expanded category/order/barcode/laundry/settings/automatic-backup UAT are already in main. Do not recreate them.
-- Main CI `35421549044` and Licensing Smoke `35421549071` passed.
-- Main Feature Click Smoke `35421549053` and Deep Installed Smoke `35421549078` failed during clean installation with NSIS exit `-1073741819`, before interaction tests ran. PR #6 feature UAT passed on `d96c9607`.
-- Current repair: allow one retry only for that observed installer access violation in both UAT workflows, preserve installer hash/attempt diagnostics, bound jobs to 20 minutes, and run production-key deep UAT on PRs too.
-- The historical green audit below is NOT evidence that the latest expanded main UAT passed. Release verification remains pending until the repaired workflows pass.
-- Next step: inspect the repair PR's CI and both Windows UAT results; investigate any repeat installer crash or interaction failure before customer delivery.
+- PR #7 merged into main as `4d5f2a81156590486fa7375fa8f8d945aaa744f6`.
+- Verified that exact code commit after merge:
+  - [CI 35422776241](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35422776241) — PASS
+  - [Licensing Smoke 35422776261](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35422776261) — PASS
+  - [Windows Feature Click Smoke 35422776173](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35422776173) — PASS
+  - [Windows Deep Installed Smoke 35422776302](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35422776302) — PASS
+- Both Windows jobs installed on attempt 1 (exit 0), launched the installed app, and logged `WINDOWS_INTERACTION_AUDIT PASS`.
+- Explicitly verified POS customer + creation/save, barcode empty -> added -> cleared cart state, sale completion, customer/product/category/order/payment/return/expense/supplier/purchase/staff/laundry/day-end/report/settings and automatic-backup interactions.
+- The previous main installer access violation now has one bounded retry for that exact exit code plus hash/attempt diagnostics. These successful runs did not exercise retry; they do not prove the intermittent NSIS fault eliminated.
+- Latest production-key installer: [minarvabiz-windows-installer-final](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35422776302/artifacts/10578415750), artifact ID `10578415750`, contains `MinarvaBiz-Setup-1.0.4.exe`.
+- Artifact ZIP digest: `sha256:d4ab0ccee55c1e46c264450c15915020c9a46e600bdd040519b096505ae7ae3a` (this is NOT the installer EXE hash).
+- This checkpoint update changes documentation only; automated evidence above belongs to the exact code commit named above.
+- Next owner step: use this main installer on the intended Windows PC for real commercial/offline license activation, restart/grace, printer output, and manual backup/restore UAT. Investigate any reported regression from that evidence; do not repeat already-passed automated fixes.
 
 ## Repository
 - `evertekitsolutions-del/minarvabiz`
 - Branch: `main`
 - Product version: **1.0.4**
-- Latest audited main before this checkpoint update: `4c8599db659dfa6798697ee530536072c23af8f9`
+- Latest audited code main before this documentation update: `4d5f2a81156590486fa7375fa8f8d945aaa744f6`
 
 ## Current architecture
 - Online: Next.js + authenticated Supabase/PostgREST
@@ -41,7 +47,7 @@
 - Previously missing web routes no longer produce 404s.
 - Desktop callbacks/modules previously found missing are wired and smoke-tested.
 
-## Verified automated evidence
+## Historical automated evidence (superseded by latest audit above)
 Latest verified runs on main commit `4c8599db659dfa6798697ee530536072c23af8f9`:
 
 - CI `35380365555` — PASS
@@ -54,7 +60,7 @@ Final installer artifact from the deep Windows run:
 - SHA-256: `40ae5ee6546e3c9d6ad5a419127fdf961fecbf86027bb482b720a60dfb2f297b`
 - Artifact ID: `10561709928`
 
-## Live environment state
+## Historical live environment state (not rechecked in this continuation)
 - Render license-admin is configured with server-side license/Supabase secrets.
 - License-admin health previously returned signing key = ok and database = ok.
 - Supabase project is active/healthy.
