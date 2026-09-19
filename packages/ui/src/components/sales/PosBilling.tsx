@@ -10,14 +10,15 @@ import { calculateCartTotals } from "@minarvabiz/business-logic";
 export interface PosBillingProps {
   products: Product[];
   customers: Customer[];
-  onCompleteSale?: (payload: { customerId: string | null; lines: CartLine[]; paidAmount: number; paymentMethod: PaymentMethod; notes?: string }) => { success: boolean; invoiceNumber?: string; errors?: string[] };
+  onCompleteSale?: (payload: { customerId: string | null; lines: CartLine[]; paidAmount: number; paymentMethod: PaymentMethod; notes?: string }) => { success: boolean; invoiceNumber?: string; saleId?: string; errors?: string[] };
   onComplete?: PosBillingProps["onCompleteSale"];
   onFindByBarcode?: (barcode: string) => Product | undefined;
   onAddCustomer?: () => void;
   onAddProduct?: () => void;
+  onPrintSale?: (saleId: string, paper: "a4" | "thermal") => void;
 }
 
-export function PosBilling({ products, customers, onCompleteSale, onComplete, onFindByBarcode, onAddCustomer, onAddProduct }: PosBillingProps) {
+export function PosBilling({ products, customers, onCompleteSale, onComplete, onFindByBarcode, onAddCustomer, onAddProduct, onPrintSale }: PosBillingProps) {
   const [cart, setCart] = React.useState<CartLine[]>([]);
   const [search, setSearch] = React.useState("");
   const [barcode, setBarcode] = React.useState("");
@@ -25,6 +26,7 @@ export function PosBilling({ products, customers, onCompleteSale, onComplete, on
   const [paidAmount, setPaidAmount] = React.useState("");
   const [method, setMethod] = React.useState<PaymentMethod>("cash");
   const [message, setMessage] = React.useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [lastSale, setLastSale] = React.useState<{ id: string; invoice: string } | null>(null);
   const totals = React.useMemo(() => calculateCartTotals(cart), [cart]);
   function addProduct(p: Product, qty = 1) {
     setCart((prev) => { const existing = prev.find((l) => l.productId === p.id); return existing ? prev.map((l) => l.productId === p.id ? { ...l, quantity: l.quantity + qty } : l) : [...prev, { productId: p.id, productName: p.name, sku: p.sku, barcode: p.barcode, quantity: qty, unitPrice: p.sellingPrice, costPrice: p.costPrice, discountPercent: p.discount ?? 0, taxRate: p.taxRate ?? 0, stockQuantity: p.stockQuantity }]; });
@@ -61,6 +63,7 @@ export function PosBilling({ products, customers, onCompleteSale, onComplete, on
       const result = submit({ customerId: customerId || null, lines: cart, paidAmount: paid, paymentMethod: method });
       if (result.success) {
         setMessage({ type: "ok", text: `Sale completed — ${result.invoiceNumber}` });
+        setLastSale(result.saleId && result.invoiceNumber ? { id: result.saleId, invoice: result.invoiceNumber } : null);
         setCart([]);
         setPaidAmount("");
         setCustomerId("");
@@ -102,7 +105,7 @@ export function PosBilling({ products, customers, onCompleteSale, onComplete, on
     <div className="xl:col-span-5"><Card className="sticky top-4"><CardHeader><CardTitle className="text-base font-semibold text-slate-800">Current Sale</CardTitle></CardHeader><CardContent className="space-y-4"><div className="flex gap-2"><select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Walk-in customer</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` (${c.phone})` : ""}</option>)}</select><Button type="button" size="sm" variant="outline" onClick={onAddCustomer} aria-label="Add customer">+</Button></div>
       <div className="max-h-56 space-y-2 overflow-y-auto">{cart.length === 0 && <p className="py-6 text-center text-sm text-slate-400">Cart is empty</p>}{cart.map((line) => <div key={line.productId} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2"><div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{line.productName}</div><div className="text-xs text-slate-500">{formatMoney(line.unitPrice)} each</div></div><input type="number" min={1} value={line.quantity} onChange={(e) => updateQty(line.productId, parseInt(e.target.value, 10) || 0)} className="h-8 w-16 rounded border border-slate-200 px-2 text-center text-sm" /><div className="w-20 text-right text-sm font-semibold">{formatMoney(line.quantity * line.unitPrice)}</div></div>)}</div>
       <div className="space-y-1 border-t border-slate-100 pt-3 text-sm"><div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{formatMoney(totals.itemsSubtotal)}</span></div>{totals.itemsDiscount > 0 && <div className="flex justify-between text-slate-600"><span>Discount</span><span>-{formatMoney(totals.itemsDiscount)}</span></div>}{totals.itemsTax > 0 && <div className="flex justify-between text-slate-600"><span>Tax</span><span>{formatMoney(totals.itemsTax)}</span></div>}<div className="flex justify-between text-base font-bold text-slate-900"><span>Total</span><span>{formatMoney(totals.grandTotal)}</span></div></div>
-      <div className="grid grid-cols-2 gap-2"><select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)} className="h-10 rounded-lg border border-slate-200 px-3 text-sm"><option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="other">Other</option></select><input type="number" min={0} step="0.01" placeholder="Amount paid" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} className="h-10 rounded-lg border border-slate-200 px-3 text-sm" /></div>{message && <p className={`text-sm ${message.type === "ok" ? "text-emerald-600" : "text-rose-600"}`}>{message.text}</p>}<div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => setCart([])}>Clear</Button><Button className="flex-1" disabled={cart.length === 0} onClick={complete}>Complete Sale</Button></div>
+      <div className="grid grid-cols-2 gap-2"><select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)} className="h-10 rounded-lg border border-slate-200 px-3 text-sm"><option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="online">Online</option><option value="other">Other</option></select><input type="number" min={0} step="0.01" placeholder="Amount paid" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} className="h-10 rounded-lg border border-slate-200 px-3 text-sm" /></div>{message && <p className={`text-sm ${message.type === "ok" ? "text-emerald-600" : "text-rose-600"}`}>{message.text}</p>}{lastSale && onPrintSale && <div className="flex flex-wrap gap-2 rounded-lg bg-emerald-50 p-2"><span className="self-center text-xs font-medium text-emerald-800">{lastSale.invoice}</span><Button size="sm" variant="outline" onClick={() => onPrintSale(lastSale.id, "a4")}>Print A4</Button><Button size="sm" variant="outline" onClick={() => onPrintSale(lastSale.id, "thermal")}>Print Thermal</Button></div>}<div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => setCart([])}>Clear</Button><Button className="flex-1" disabled={cart.length === 0} onClick={complete}>Complete Sale</Button></div>
     </CardContent></Card></div>
   </div>;
 }
