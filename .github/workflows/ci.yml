@@ -111,6 +111,14 @@ jobs:
           node packages/database/src/__tests__/sqlite-backup.test.mjs
           node packages/database/src/__tests__/desktop-sqlite-flow.test.mjs
       - run: pnpm --filter @minarvabiz/business-logic typecheck
+      - name: Run complete business logic test suite
+        shell: bash
+        run: |
+          set -e
+          for test_file in packages/business-logic/src/__tests__/*.test.mjs; do
+            echo "Running $test_file"
+            node "$test_file"
+          done
       - name: Run operations completion contract tests
         run: node packages/business-logic/src/__tests__/operations-completion-contract.test.mjs
       - run: pnpm --filter @minarvabiz/ui typecheck
