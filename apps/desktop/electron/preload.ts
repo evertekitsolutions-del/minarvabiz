@@ -58,6 +58,8 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   chooseBackupDirectory: () => ipcRenderer.invoke("backup:chooseDestination") as Promise<string | null>,
   pruneAutomaticBackups: (retention?: number) => ipcRenderer.invoke("backup:pruneAutomatic", retention) as Promise<boolean>,
   restoreBackup: () => ipcRenderer.invoke("backup:restoreFromFile") as Promise<NativeRestoreResult>,
+  listPrinters: () => ipcRenderer.invoke("printer:list") as Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>,
+  printHtml: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal"; thermalWidthMm?: number }) => ipcRenderer.invoke("printer:printHtml", input) as Promise<{ ok: boolean; error?: string }>,
   relaunch: () => ipcRenderer.invoke("app:relaunch") as Promise<boolean>,
 });
 
@@ -98,6 +100,8 @@ export type MinarvaDesktopApi = {
   chooseBackupDirectory: () => Promise<string | null>;
   pruneAutomaticBackups: (retention?: number) => Promise<boolean>;
   restoreBackup: () => Promise<NativeRestoreResult>;
+  listPrinters: () => Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>;
+  printHtml: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal"; thermalWidthMm?: number }) => Promise<{ ok: boolean; error?: string }>;
   relaunch: () => Promise<boolean>;
 };
 
