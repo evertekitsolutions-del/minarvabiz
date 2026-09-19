@@ -2,6 +2,7 @@ import { allowDemoSeed } from "./runtime-mode";
 
 import type {
   Customer, Product, Category, Sale, SaleItem, Payment, CartLine, UUID, PaymentMethod, InventoryTransaction,
+  HeldSale, PaymentTender,
 } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import {
@@ -60,6 +61,7 @@ if (allowDemoSeed()) {
 
 const sales: Sale[] = [];
 const payments: Payment[] = [];
+const heldSales: HeldSale[] = [];
 let lastInvoice: string | null = null;
 
 function touchProduct(p: Product) {
@@ -90,6 +92,7 @@ function applyProductionEmptyState() {
   products.length = 0;
   sales.length = 0;
   payments.length = 0;
+  heldSales.length = 0;
 }
 applyProductionEmptyState();
 
@@ -289,12 +292,81 @@ export function getSale(id: UUID): Sale | undefined {
   return sales.find((s) => s.id === id && !s.deletedAt);
 }
 
+export function listHeldSales(): HeldSale[] {
+  return heldSales
+    .map((sale) => ({ ...sale, lines: sale.lines.map((line) => ({ ...line })) }))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export function holdSale(input: {
+  id?: UUID;
+  label?: string;
+  customerId?: UUID | null;
+  lines: CartLine[];
+  notes?: string | null;
+}): { heldSale: HeldSale | null; errors: string[] } {
+  assertPermission("sales.create");
+  const errors = validateCart(input.lines, { allowNegativeStock: false });
+  if (!input.lines.length) errors.push("Add at least one item before holding the sale");
+  const customer = input.customerId ? getCustomer(input.customerId) : undefined;
+  if (input.customerId && !customer) errors.push("Customer not found");
+  if (errors.length) return { heldSale: null, errors };
+
+  const now = nowISO();
+  const existing = input.id ? heldSales.find((sale) => sale.id === input.id) : undefined;
+  const held: HeldSale = existing ?? {
+    id: generateId(),
+    label: "",
+    customerId: null,
+    customerName: null,
+    lines: [],
+    notes: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  held.label = input.label?.trim() || held.label || `Held ${new Date(now).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
+  held.customerId = input.customerId ?? null;
+  held.customerName = customer?.name ?? null;
+  held.lines = input.lines.map((line) => ({ ...line }));
+  held.notes = input.notes ?? null;
+  held.updatedAt = now;
+  if (!existing) heldSales.push(held);
+  touchPersistence();
+  auditAction(existing ? "sale_hold.update" : "sale_hold.create", "held_sales", held.id, null, {
+    label: held.label,
+    customerId: held.customerId,
+    lineCount: held.lines.length,
+  });
+  return { heldSale: { ...held, lines: held.lines.map((line) => ({ ...line })) }, errors: [] };
+}
+
+export function releaseHeldSale(id: UUID): HeldSale | null {
+  assertPermission("sales.create");
+  const index = heldSales.findIndex((sale) => sale.id === id);
+  if (index < 0) return null;
+  const [held] = heldSales.splice(index, 1);
+  touchPersistence();
+  auditAction("sale_hold.resume", "held_sales", held.id, { label: held.label }, null);
+  return { ...held, lines: held.lines.map((line) => ({ ...line })) };
+}
+
+export function deleteHeldSale(id: UUID): boolean {
+  assertPermission("sales.create");
+  const index = heldSales.findIndex((sale) => sale.id === id);
+  if (index < 0) return false;
+  const [held] = heldSales.splice(index, 1);
+  touchPersistence();
+  auditAction("sale_hold.delete", "held_sales", held.id, { label: held.label }, null);
+  return true;
+}
+
 export function createSale(input: {
   customerId?: UUID | null; lines: CartLine[]; paidAmount: number; paymentMethod: PaymentMethod;
+  tenders?: PaymentTender[];
   notes?: string | null; allowNegativeStock?: boolean; createdBy?: UUID | null;
   /** Internal non-cash settlement such as exchange credit. No Payment row is emitted for this amount. */
   creditAmount?: number;
-}): { sale: Sale; payment: Payment | null; errors: string[] } {
+}): { sale: Sale; payment: Payment | null; payments: Payment[]; errors: string[] } {
   assertPermission("sales.create");
   const errors = validateCart(input.lines, { allowNegativeStock: input.allowNegativeStock });
   if (!input.allowNegativeStock) {
@@ -304,13 +376,36 @@ export function createSale(input: {
       else if (line.quantity > live.stockQuantity) errors.push(`${live.name}: insufficient stock (available ${live.stockQuantity})`);
     }
   }
-  if (errors.length) return { sale: null as unknown as Sale, payment: null, errors };
 
   const totals = calculateCartTotals(input.lines);
   const requestedCredit = round2(Math.max(0, input.creditAmount ?? 0));
   const creditApplied = round2(Math.min(requestedCredit, totals.grandTotal));
   const remainingAfterCredit = round2(Math.max(0, totals.grandTotal - creditApplied));
-  const actualPayment = round2(Math.min(Math.max(0, input.paidAmount), remainingAfterCredit));
+
+  let tenderInputs: PaymentTender[] = [];
+  if (input.tenders?.length) {
+    for (const tender of input.tenders) {
+      const amount = round2(Number(tender.amount));
+      if (!Number.isFinite(amount) || amount <= 0) {
+        errors.push(`Invalid ${tender.method} tender amount`);
+        continue;
+      }
+      tenderInputs.push({ method: tender.method, amount });
+    }
+    const requestedTenderTotal = round2(tenderInputs.reduce((sum, tender) => sum + tender.amount, 0));
+    if (requestedTenderTotal > remainingAfterCredit + 0.009) {
+      errors.push(`Payment total ${requestedTenderTotal.toFixed(2)} exceeds amount due ${remainingAfterCredit.toFixed(2)}`);
+    }
+  } else {
+    const actual = round2(Math.min(Math.max(0, input.paidAmount), remainingAfterCredit));
+    if (actual > 0) tenderInputs = [{ method: input.paymentMethod, amount: actual }];
+  }
+
+  if (errors.length) {
+    return { sale: null as unknown as Sale, payment: null, payments: [], errors };
+  }
+
+  const actualPayment = round2(tenderInputs.reduce((sum, tender) => sum + tender.amount, 0));
   const allocation = allocatePayment(totals.grandTotal, creditApplied + actualPayment);
   const invoiceNumber = nextInvoiceNumber(lastInvoice);
   lastInvoice = invoiceNumber;
@@ -344,22 +439,37 @@ export function createSale(input: {
   sales.push(sale);
   touchPersistence();
 
-  let payment: Payment | null = null;
-  if (actualPayment > 0) {
-    payment = {
-      id: generateId(), amount: actualPayment, method: input.paymentMethod,
-      referenceType: "sale", referenceId: saleId, customerId: input.customerId ?? null,
-      paidAt: nowISO(), createdAt: nowISO(), version: 1,
-    };
-    payments.push(payment);
+  const createdPayments: Payment[] = tenderInputs.map((tender, index) => ({
+    id: generateId(),
+    amount: tender.amount,
+    method: tender.method,
+    referenceType: "sale",
+    referenceId: saleId,
+    customerId: input.customerId ?? null,
+    notes: tenderInputs.length > 1 ? `Split tender ${index + 1}/${tenderInputs.length}` : null,
+    paidAt: nowISO(),
+    createdAt: nowISO(),
+    version: 1,
+  }));
+  if (createdPayments.length) {
+    payments.push(...createdPayments);
     touchPersistence();
   }
 
   void remoteCreateSale(sale);
   enqueueOutbox("sales", sale.id, "insert", sale);
-  if (payment) enqueueOutbox("payments", payment.id, "insert", payment);
-  auditAction("sale.create", "sales", sale.id, null, { total: sale.total, invoice: sale.invoiceNumber, actualPayment, creditApplied });
-  return { sale, payment, errors: [] };
+  for (const payment of createdPayments) {
+    enqueueOutbox("payments", payment.id, "insert", payment);
+    void remoteCreatePayment(payment);
+  }
+  auditAction("sale.create", "sales", sale.id, null, {
+    total: sale.total,
+    invoice: sale.invoiceNumber,
+    actualPayment,
+    creditApplied,
+    tenders: tenderInputs,
+  });
+  return { sale, payment: createdPayments[0] ?? null, payments: createdPayments, errors: [] };
 }
 
 export function listPayments(): Payment[] {
@@ -407,7 +517,8 @@ function round2(n: number) {
 }
 
 export function hydrateCore(data: {
-  customers?: Customer[]; products?: Product[]; categories?: Category[]; sales?: Sale[]; payments?: Payment[]; stockTransfers?: StockTransferRecord[];
+  customers?: Customer[]; products?: Product[]; categories?: Category[]; sales?: Sale[]; payments?: Payment[];
+  stockTransfers?: StockTransferRecord[]; heldSales?: HeldSale[];
 }) {
   if (data.categories) { categories.length = 0; categories.push(...data.categories); }
   if (data.customers) { customers.length = 0; customers.push(...data.customers); }
@@ -415,6 +526,10 @@ export function hydrateCore(data: {
   if (data.sales) { sales.length = 0; sales.push(...data.sales); }
   if (data.payments) { payments.length = 0; payments.push(...data.payments); }
   if (data.stockTransfers) { stockTransfers.length = 0; stockTransfers.push(...data.stockTransfers); }
+  if (data.heldSales) {
+    heldSales.length = 0;
+    heldSales.push(...data.heldSales.map((sale) => ({ ...sale, lines: sale.lines.map((line) => ({ ...line })) })));
+  }
 }
 
 export function recordCustomerPayment(input: {
