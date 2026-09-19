@@ -78,6 +78,64 @@ function remoteRow(table: string, aggregateId: UUID, payload: Record<string, unk
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
+    case "warehouses":
+      return {
+        id: aggregateId,
+        branch_id: payload.branchId ?? null,
+        name: payload.name,
+        code: payload.code,
+        is_default: payload.isDefault ?? false,
+        is_active: payload.isActive ?? true,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        updated_at: payload.updatedAt ?? new Date().toISOString(),
+        deleted_at: payload.deletedAt ?? null,
+        version: payload.version ?? 1,
+      };
+    case "warehouse_locations":
+      return {
+        id: aggregateId,
+        warehouse_id: payload.warehouseId,
+        code: payload.code,
+        name: payload.name,
+        type: payload.type ?? "storage",
+        is_active: payload.isActive ?? true,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        updated_at: payload.updatedAt ?? new Date().toISOString(),
+        deleted_at: payload.deletedAt ?? null,
+        version: payload.version ?? 1,
+      };
+    case "warehouse_stock":
+      return {
+        id: aggregateId,
+        warehouse_id: payload.warehouseId,
+        location_id: payload.locationId,
+        product_id: payload.productId,
+        on_hand: payload.onHand ?? 0,
+        reserved: payload.reserved ?? 0,
+        updated_at: payload.updatedAt ?? new Date().toISOString(),
+        version: payload.version ?? 1,
+      };
+    case "warehouse_transfers":
+      return {
+        id: aggregateId,
+        transfer_number: payload.transferNumber,
+        product_id: payload.productId,
+        source_warehouse_id: payload.sourceWarehouseId,
+        source_location_id: payload.sourceLocationId,
+        destination_warehouse_id: payload.destinationWarehouseId,
+        destination_location_id: payload.destinationLocationId,
+        quantity: payload.quantity ?? 0,
+        status: payload.status ?? "draft",
+        notes: payload.notes ?? null,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        updated_at: payload.updatedAt ?? new Date().toISOString(),
+        approved_at: payload.approvedAt ?? null,
+        dispatched_at: payload.dispatchedAt ?? null,
+        received_at: payload.receivedAt ?? null,
+        cancelled_at: payload.cancelledAt ?? null,
+        created_by: payload.createdBy ?? null,
+        version: payload.version ?? 1,
+      };
     default:
       return { ...payload, id: aggregateId };
   }
@@ -138,6 +196,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         "order_expenses", "laundry_orders", "expenses", "purchases", "suppliers",
         "staff_members", "sale_returns", "audit_logs",
         "production_workflows", "production_stage_events", "material_rolls", "material_consumptions",
+        "warehouses", "warehouse_locations", "warehouse_stock", "warehouse_transfers",
       ];
       const records: Array<{ tableName: string; record: VersionedRecord }> = [];
       for (const table of tables) {
