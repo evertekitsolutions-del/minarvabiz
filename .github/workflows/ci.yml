@@ -29,6 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NEXT_PUBLIC_REQUIRE_AUTH: "false"
+      MINARVA_MODE: "demo"
+      NEXT_PUBLIC_MINARVA_MODE: "demo"
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
