@@ -436,7 +436,7 @@ export function createSale(input: {
 
   void remoteCreateSale(sale);
   enqueueOutbox("sales", sale.id, "insert", sale);
-  for (const payment of salePayments) enqueueOutbox("payments", payment.id, "insert", payment);
+  for (const payment of salePayments) void remoteCreatePayment(payment);
   auditAction("sale.create", "sales", sale.id, null, {
     total: sale.total,
     invoice: sale.invoiceNumber,
