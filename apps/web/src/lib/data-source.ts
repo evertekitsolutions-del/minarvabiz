@@ -7,6 +7,8 @@ import {
   isSupabaseConfigured,
   verifySupabaseConnection,
   authSignIn,
+  authRequestPasswordReset,
+  authUpdatePassword,
   configFromEnv,
   pgInsert,
   pgSelect,
@@ -194,4 +196,22 @@ export async function supabaseLogin(email: string, password: string) {
   const cfg = configFromEnv(); if (!cfg) return { ok: false as const, error: "Supabase not configured" };
   const res = await authSignIn(cfg, email, password); if (res.error || !res.data) return { ok: false as const, error: res.error?.message || "Login failed" };
   return { ok: true as const, token: res.data.access_token, user: res.data.user };
+}
+
+
+export async function requestPasswordReset(email: string, redirectTo: string) {
+  const cfg = configFromEnv();
+  if (!cfg) return { ok: false as const, error: "Password recovery requires the online Supabase edition." };
+  const res = await authRequestPasswordReset(cfg, email.trim().toLowerCase(), redirectTo);
+  if (res.error) return { ok: false as const, error: res.error.message };
+  return { ok: true as const };
+}
+
+export async function updatePasswordFromRecovery(accessToken: string, password: string) {
+  const cfg = configFromEnv();
+  if (!cfg) return { ok: false as const, error: "Password reset requires the online Supabase edition." };
+  if (!accessToken) return { ok: false as const, error: "The recovery link is missing or has expired." };
+  const res = await authUpdatePassword(cfg, accessToken, password);
+  if (res.error) return { ok: false as const, error: res.error.message };
+  return { ok: true as const };
 }
