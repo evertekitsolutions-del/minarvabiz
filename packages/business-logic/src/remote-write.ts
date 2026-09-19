@@ -18,6 +18,7 @@ import type {
   WarehouseLocation,
   WarehouseStockPosition,
   WarehouseTransfer,
+  PurchaseOrder,
 } from "@minarvabiz/types";
 import { enqueueOutbox } from "./outbox-bridge";
 
@@ -38,6 +39,7 @@ export interface RemoteWriter {
   upsertWarehouseLocation?: (l: WarehouseLocation) => Promise<void>;
   upsertWarehouseStock?: (s: WarehouseStockPosition) => Promise<void>;
   upsertWarehouseTransfer?: (t: WarehouseTransfer) => Promise<void>;
+  upsertPurchaseOrder?: (po: PurchaseOrder) => Promise<void>;
 }
 
 let writer: RemoteWriter | null = null;
@@ -145,4 +147,13 @@ export async function remoteUpsertWarehouseTransfer(t: WarehouseTransfer) {
   enqueueOutbox("warehouse_transfers", t.id, "update", t);
   try { await writer?.upsertWarehouseTransfer?.(t); }
   catch (e) { console.warn("[minarvabiz] remote warehouse transfer write failed", e); }
+}
+
+export async function remoteUpsertPurchaseOrder(po: PurchaseOrder) {
+  enqueueOutbox("purchase_orders", po.id, "update", po);
+  for (const line of po.lines) {
+    enqueueOutbox("purchase_order_lines", line.id, "update", line);
+  }
+  try { await writer?.upsertPurchaseOrder?.(po); }
+  catch (e) { console.warn("[minarvabiz] remote purchase-order write failed", e); }
 }
