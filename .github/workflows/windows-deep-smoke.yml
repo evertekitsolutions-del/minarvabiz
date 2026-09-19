@@ -69,19 +69,29 @@ jobs:
           New-Item -ItemType Directory -Force -Path $diagnostics | Out-Null
           Get-FileHash -Algorithm SHA256 $installer.FullName | Format-List | Out-File (Join-Path $diagnostics "installer-hash.txt")
           $installExit = $null
-          for ($installAttempt = 1; $installAttempt -le 2; $installAttempt++) {
-            $installProc = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
+          $sourceHash = (Get-FileHash -Algorithm SHA256 $installer.FullName).Hash
+          for ($installAttempt = 1; $installAttempt -le 4; $installAttempt++) {
+            # Copy to a fresh local path for every attempt. This avoids transient AV/indexer
+            # locks seen on the workspace NSIS executable in GitHub-hosted Windows runners.
+            $attemptInstaller = Join-Path $env:RUNNER_TEMP ("MinarvaBiz-Setup-attempt-{0}.exe" -f $installAttempt)
+            Copy-Item -LiteralPath $installer.FullName -Destination $attemptInstaller -Force
+            Unblock-File -LiteralPath $attemptInstaller -ErrorAction SilentlyContinue
+            $copyHash = (Get-FileHash -Algorithm SHA256 $attemptInstaller).Hash
+            if ($copyHash -ne $sourceHash) { throw "Installer copy hash mismatch on attempt $installAttempt." }
+            Start-Sleep -Milliseconds 750
+            $installProc = Start-Process -FilePath $attemptInstaller -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
             $installExit = $installProc.ExitCode
             "Attempt $installAttempt exit code: $installExit" | Tee-Object -FilePath (Join-Path $diagnostics "install-attempts.txt") -Append
+            Remove-Item -LiteralPath $attemptInstaller -Force -ErrorAction SilentlyContinue
             if ($installExit -eq 0) { break }
-            # One bounded retry for the observed NSIS access violation (0xC0000005).
-            # Other errors and a repeated crash remain hard failures.
-            if ($installExit -ne -1073741819 -or $installAttempt -eq 2) {
+            # 0xC0000005 is an intermittent NSIS process crash observed only on hosted runners.
+            # Retry only that exact transient code; every other installer error remains a hard failure.
+            if ($installExit -ne -1073741819 -or $installAttempt -eq 4) {
               throw "Installer exited with code $installExit on attempt $installAttempt."
             }
-            Write-Warning "NSIS access violation; retrying the same installer once."
-            Start-Sleep -Seconds 2
-            if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot }
+            Write-Warning "Transient NSIS access violation; retrying from a fresh verified installer copy."
+            Start-Sleep -Seconds (2 * $installAttempt)
+            if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot -ErrorAction SilentlyContinue }
             New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
           }
           $exe = Join-Path $installRoot "Minarva Biz.exe"
