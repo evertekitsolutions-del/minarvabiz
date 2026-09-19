@@ -178,6 +178,20 @@ async function main() {
     await click(ws, "CATEGORY_SAVE", ["save category"]);
     await assertMain(ws, "CATEGORY_SAVED", ["QA Category"]);
 
+    // WMS: create a real warehouse + receiving bin so the later GRN can
+    // post physical stock into a concrete location in the installed app.
+    await click(ws, "WAREHOUSE", ["warehouse / wms"]);
+    await assertMain(ws, "WAREHOUSE", ["Warehouse Management", "Create warehouse", "Transfer workflow"]);
+    await setMainField(ws, "Name", "QA Warehouse");
+    await setMainField(ws, "Code", "QAWH");
+    await click(ws, "CREATE_WAREHOUSE", ["create warehouse"]);
+    await assertMain(ws, "WAREHOUSE_CREATED", ["QA Warehouse"]);
+    await selectFieldByText(ws, "Warehouse", "QA Warehouse");
+    await setByPlaceholder(ws, "A-01", "RCV-01");
+    await setByPlaceholder(ws, "Rack A / Bin 01", "QA Receiving Bin");
+    await selectFieldByText(ws, "Type", "Receiving");
+    await click(ws, "CREATE_LOCATION", ["create location"]);
+    await assertMain(ws, "WAREHOUSE_LOCATION_CREATED", ["QA Receiving Bin", "RCV-01"]);
 
     // POS: select customer, add product card, complete a credit sale.
     await click(ws, "SALES", ["sales & billing"]);
@@ -292,6 +306,7 @@ async function main() {
     await assertMain(ws, "PO_APPROVED", ["PO-", "approved"]);
     await click(ws, "PO_RECEIVE", ["receive goods"]);
     await setField(ws, "Receive goods", "received quantity", "2");
+    await selectDialogFieldByText(ws, "Receive goods", "Receive into warehouse / bin", "RCV-01");
     await click(ws, "POST_GRN", ["post goods receipt"]);
     await assertMain(ws, "GRN_POSTED", ["GRN-", "received"]);
 
