@@ -15,8 +15,8 @@ import {
   pgUpdate,
   type UnitOfWork,
 } from "@minarvabiz/database";
-import { store, ordersStore, phase5Store, phase6Store, warehouseStore, procurementStore, registerRemoteWriter, getRuntimeMode } from "@minarvabiz/business-logic";
-import type { Category, Expense, GoodsReceipt, GoodsReceiptLine, LaundryOrder, Payment, Purchase, PurchaseInvoice, PurchaseInvoiceLine, PurchaseOrder, PurchaseOrderLine, StaffMember, Supplier, Warehouse, WarehouseLocation, WarehouseStockPosition, WarehouseTransfer } from "@minarvabiz/types";
+import { store, ordersStore, phase5Store, phase6Store, warehouseStore, procurementStore, accountingStore, registerRemoteWriter, getRuntimeMode } from "@minarvabiz/business-logic";
+import type { AccountingAccount, Category, Expense, GoodsReceipt, GoodsReceiptLine, JournalEntry, JournalEntryLine, LaundryOrder, Payment, Purchase, PurchaseInvoice, PurchaseInvoiceLine, PurchaseOrder, PurchaseOrderLine, StaffMember, Supplier, Warehouse, WarehouseLocation, WarehouseStockPosition, WarehouseTransfer } from "@minarvabiz/types";
 
 let uowPromise: Promise<UnitOfWork> | null = null;
 let uowAccessToken: string | null = null;
@@ -271,6 +271,61 @@ function mapPurchaseInvoice(row: Record<string, unknown>, lines: PurchaseInvoice
   };
 }
 
+
+function mapAccountingAccount(row: Record<string, unknown>): AccountingAccount {
+  return {
+    id: String(row.id),
+    code: String(row.code || ""),
+    name: String(row.name || ""),
+    type: (row.type as AccountingAccount["type"]) || "expense",
+    normalBalance: (row.normal_balance as AccountingAccount["normalBalance"]) || "debit",
+    parentId: (row.parent_id as string) ?? null,
+    systemKey: (row.system_key as string) ?? null,
+    isActive: row.is_active !== false,
+    branchId: (row.branch_id as string) ?? null,
+    createdAt: String(row.created_at || new Date().toISOString()),
+    updatedAt: String(row.updated_at || new Date().toISOString()),
+    deletedAt: (row.deleted_at as string) ?? null,
+    version: Number(row.version || 1),
+  };
+}
+
+function mapJournalEntryLine(row: Record<string, unknown>): JournalEntryLine {
+  return {
+    id: String(row.id),
+    journalEntryId: String(row.journal_entry_id),
+    accountId: String(row.account_id),
+    accountCode: String(row.account_code || ""),
+    accountName: String(row.account_name || ""),
+    debit: Number(row.debit || 0),
+    credit: Number(row.credit || 0),
+    memo: (row.memo as string) ?? null,
+  };
+}
+
+function mapJournalEntry(row: Record<string, unknown>, lines: JournalEntryLine[]): JournalEntry {
+  return {
+    id: String(row.id),
+    journalNumber: String(row.journal_number || row.id),
+    entryDate: String(row.entry_date || new Date().toISOString().slice(0, 10)),
+    description: String(row.description || ""),
+    referenceType: (row.reference_type as string) ?? null,
+    referenceId: (row.reference_id as string) ?? null,
+    status: (row.status as JournalEntry["status"]) || "draft",
+    lines,
+    totalDebit: Number(row.total_debit || 0),
+    totalCredit: Number(row.total_credit || 0),
+    postedAt: (row.posted_at as string) ?? null,
+    voidedAt: (row.voided_at as string) ?? null,
+    reversalJournalId: (row.reversal_journal_id as string) ?? null,
+    branchId: (row.branch_id as string) ?? null,
+    createdBy: (row.created_by as string) ?? null,
+    createdAt: String(row.created_at || new Date().toISOString()),
+    updatedAt: String(row.updated_at || new Date().toISOString()),
+    version: Number(row.version || 1),
+  };
+}
+
 export async function hydrateStoresFromSupabase(accessToken: string | null = null): Promise<{ ok: boolean; message: string; counts?: Record<string, number> }> {
   if (!isSupabaseConfigured()) return { ok: false, message: "Supabase is not configured for online production." };
   const cfg = configFromEnv();
@@ -281,7 +336,7 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
   const db = await getUnitOfWork(accessToken);
   try {
     const [customers, products, sales, orders] = await Promise.all([db.customers.list(), db.products.list(), db.sales.list(), db.orders.list()]);
-    const [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, warehousesRes, warehouseLocationsRes, warehouseStockRes, warehouseTransfersRes, purchaseOrdersRes, purchaseOrderLinesRes, goodsReceiptsRes, goodsReceiptLinesRes, purchaseInvoicesRes, purchaseInvoiceLinesRes] = await Promise.all([
+    const [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, warehousesRes, warehouseLocationsRes, warehouseStockRes, warehouseTransfersRes, purchaseOrdersRes, purchaseOrderLinesRes, goodsReceiptsRes, goodsReceiptLinesRes, purchaseInvoicesRes, purchaseInvoiceLinesRes, accountsRes, journalEntriesRes, journalLinesRes] = await Promise.all([
       pgSelect<Record<string, unknown>>(cfg, "categories", "select=*&deleted_at=is.null&order=name.asc"),
       pgSelect<Record<string, unknown>>(cfg, "expenses", "select=*&deleted_at=is.null&order=date.desc"),
       pgSelect<Record<string, unknown>>(cfg, "purchases", "select=*&deleted_at=is.null&order=date.desc"),
@@ -299,8 +354,11 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
       pgSelect<Record<string, unknown>>(cfg, "goods_receipt_lines", "select=*&order=created_at.asc"),
       pgSelect<Record<string, unknown>>(cfg, "purchase_invoices", "select=*&order=created_at.desc"),
       pgSelect<Record<string, unknown>>(cfg, "purchase_invoice_lines", "select=*&order=created_at.asc"),
+      pgSelect<Record<string, unknown>>(cfg, "accounts", "select=*&deleted_at=is.null&order=code.asc"),
+      pgSelect<Record<string, unknown>>(cfg, "journal_entries", "select=*&order=entry_date.desc,created_at.desc"),
+      pgSelect<Record<string, unknown>>(cfg, "journal_entry_lines", "select=*&order=created_at.asc"),
     ]);
-    for (const result of [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, warehousesRes, warehouseLocationsRes, warehouseStockRes, warehouseTransfersRes, purchaseOrdersRes, purchaseOrderLinesRes, goodsReceiptsRes, goodsReceiptLinesRes, purchaseInvoicesRes, purchaseInvoiceLinesRes]) if (result.error) throw new Error(result.error.message);
+    for (const result of [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, warehousesRes, warehouseLocationsRes, warehouseStockRes, warehouseTransfersRes, purchaseOrdersRes, purchaseOrderLinesRes, goodsReceiptsRes, goodsReceiptLinesRes, purchaseInvoicesRes, purchaseInvoiceLinesRes, accountsRes, journalEntriesRes, journalLinesRes]) if (result.error) throw new Error(result.error.message);
     store.hydrateCore({ customers, products, categories: (categoriesRes.data || []).map(mapCategory), sales, payments: (paymentsRes.data || []).map(mapPayment) });
     ordersStore.hydrateOrders({ orders });
     phase5Store.hydratePhase5({ expenses: (expensesRes.data || []).map(mapExpense), purchases: (purchasesRes.data || []).map(mapPurchase), suppliers: (suppliersRes.data || []).map(mapSupplier), laundryOrders: (laundryRes.data || []).map(mapLaundry) });
@@ -323,6 +381,13 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
       ),
       purchaseInvoices: (purchaseInvoicesRes.data || []).map((row) =>
         mapPurchaseInvoice(row, invoiceLines.filter((line) => line.purchaseInvoiceId === String(row.id)))
+      ),
+    });
+    const journalLines = (journalLinesRes.data || []).map(mapJournalEntryLine);
+    accountingStore.hydrateAccountingState({
+      accounts: (accountsRes.data || []).map(mapAccountingAccount),
+      journals: (journalEntriesRes.data || []).map((row) =>
+        mapJournalEntry(row, journalLines.filter((line) => line.journalEntryId === String(row.id)))
       ),
     });
 
@@ -550,8 +615,95 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
           }
         }
       },
+      upsertAccountingAccount: async (account) => {
+        const row = {
+          branch_id: account.branchId ?? null,
+          code: account.code,
+          name: account.name,
+          type: account.type,
+          normal_balance: account.normalBalance,
+          parent_id: account.parentId ?? null,
+          system_key: account.systemKey ?? null,
+          is_active: account.isActive,
+          created_at: account.createdAt,
+          updated_at: account.updatedAt,
+          deleted_at: account.deletedAt ?? null,
+          version: account.version,
+        };
+        const updated = await pgUpdate<Record<string, unknown>>(cfg, "accounts", `id=eq.${account.id}`, row);
+        if (updated.error || !updated.data?.length) {
+          const inserted = await pgInsert<Record<string, unknown>>(cfg, "accounts", { id: account.id, ...row });
+          if (inserted.error) throw new Error(inserted.error.message);
+        }
+      },
+      upsertJournalEntry: async (entry) => {
+        const row = {
+          branch_id: entry.branchId ?? null,
+          journal_number: entry.journalNumber,
+          entry_date: String(entry.entryDate).slice(0, 10),
+          description: entry.description,
+          reference_type: entry.referenceType ?? null,
+          reference_id: entry.referenceId ?? null,
+          status: entry.status,
+          total_debit: entry.totalDebit,
+          total_credit: entry.totalCredit,
+          posted_at: entry.postedAt ?? null,
+          voided_at: entry.voidedAt ?? null,
+          reversal_journal_id: entry.reversalJournalId ?? null,
+          created_by: entry.createdBy ?? null,
+          created_at: entry.createdAt,
+          updated_at: entry.updatedAt,
+          version: entry.version,
+        };
+        const updated = await pgUpdate<Record<string, unknown>>(cfg, "journal_entries", `id=eq.${entry.id}`, row);
+        if (updated.error || !updated.data?.length) {
+          const inserted = await pgInsert<Record<string, unknown>>(cfg, "journal_entries", { id: entry.id, ...row });
+          if (inserted.error) throw new Error(inserted.error.message);
+        }
+        for (const line of entry.lines) {
+          const lineRow = {
+            journal_entry_id: entry.id,
+            account_id: line.accountId,
+            account_code: line.accountCode,
+            account_name: line.accountName,
+            debit: line.debit,
+            credit: line.credit,
+            memo: line.memo ?? null,
+            updated_at: entry.updatedAt,
+          };
+          const lineUpdated = await pgUpdate<Record<string, unknown>>(cfg, "journal_entry_lines", `id=eq.${line.id}`, lineRow);
+          if (lineUpdated.error || !lineUpdated.data?.length) {
+            const lineInserted = await pgInsert<Record<string, unknown>>(cfg, "journal_entry_lines", { id: line.id, ...lineRow, created_at: entry.createdAt });
+            if (lineInserted.error) throw new Error(lineInserted.error.message);
+          }
+        }
+      },
     });
-    return { ok: true, message: "Hydrated from Supabase", counts: { customers: customers.length, products: products.length, categories: categoriesRes.data?.length || 0, sales: sales.length, orders: orders.length, expenses: expensesRes.data?.length || 0, purchases: purchasesRes.data?.length || 0, suppliers: suppliersRes.data?.length || 0, laundry: laundryRes.data?.length || 0, staff: staffRes.data?.length || 0, payments: paymentsRes.data?.length || 0, warehouses: warehousesRes.data?.length || 0, warehouseLocations: warehouseLocationsRes.data?.length || 0, warehouseStock: warehouseStockRes.data?.length || 0, warehouseTransfers: warehouseTransfersRes.data?.length || 0, purchaseOrders: purchaseOrdersRes.data?.length || 0, goodsReceipts: goodsReceiptsRes.data?.length || 0, purchaseInvoices: purchaseInvoicesRes.data?.length || 0 } };
+
+    // Ensure the standard tenant chart exists before journal lines can reference it.
+    // IDs are generated per tenant, so there is no cross-organization primary-key collision.
+    for (const account of accountingStore.listAccounts()) {
+      const row = {
+        branch_id: account.branchId ?? null,
+        code: account.code,
+        name: account.name,
+        type: account.type,
+        normal_balance: account.normalBalance,
+        parent_id: account.parentId ?? null,
+        system_key: account.systemKey ?? null,
+        is_active: account.isActive,
+        created_at: account.createdAt,
+        updated_at: account.updatedAt,
+        deleted_at: account.deletedAt ?? null,
+        version: account.version,
+      };
+      const updated = await pgUpdate<Record<string, unknown>>(cfg, "accounts", `id=eq.${account.id}`, row);
+      if (updated.error || !updated.data?.length) {
+        const inserted = await pgInsert<Record<string, unknown>>(cfg, "accounts", { id: account.id, ...row });
+        if (inserted.error) throw new Error(inserted.error.message);
+      }
+    }
+    return { ok: true, message: "Hydrated from Supabase", counts: { customers: customers.length, products: products.length, categories: categoriesRes.data?.length || 0, sales: sales.length, orders: orders.length, expenses: expensesRes.data?.length || 0, purchases: purchasesRes.data?.length || 0, suppliers: suppliersRes.data?.length || 0, laundry: laundryRes.data?.length || 0, staff: staffRes.data?.length || 0, payments: paymentsRes.data?.length || 0, warehouses: warehousesRes.data?.length || 0, warehouseLocations: warehouseLocationsRes.data?.length || 0, warehouseStock: warehouseStockRes.data?.length || 0, warehouseTransfers: warehouseTransfersRes.data?.length || 0, purchaseOrders: purchaseOrdersRes.data?.length || 0, goodsReceipts: goodsReceiptsRes.data?.length || 0, purchaseInvoices: purchaseInvoicesRes.data?.length || 0, accounts: accountingStore.listAccounts().length, journals: journalEntriesRes.data?.length || 0 } };
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : String(e) }; }
 }
 
