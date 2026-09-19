@@ -184,6 +184,69 @@ export interface CartLine {
   stockQuantity: number;
 }
 
+
+/** Warehouse / WMS foundation shared by Online, Offline and Hybrid editions. */
+export type WarehouseLocationType = "receiving" | "storage" | "dispatch" | "returns";
+export type WarehouseTransferStatus = "draft" | "approved" | "in_transit" | "received" | "cancelled";
+
+export interface Warehouse {
+  id: UUID;
+  name: string;
+  code: string;
+  branchId?: UUID | null;
+  isDefault: boolean;
+  isActive: boolean;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+  version: number;
+}
+
+export interface WarehouseLocation {
+  id: UUID;
+  warehouseId: UUID;
+  code: string;
+  name: string;
+  type: WarehouseLocationType;
+  isActive: boolean;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+  version: number;
+}
+
+export interface WarehouseStockPosition {
+  id: UUID;
+  warehouseId: UUID;
+  locationId: UUID;
+  productId: UUID;
+  onHand: number;
+  reserved: number;
+  updatedAt: ISODateString;
+  version: number;
+}
+
+export interface WarehouseTransfer {
+  id: UUID;
+  transferNumber: string;
+  productId: UUID;
+  sourceWarehouseId: UUID;
+  sourceLocationId: UUID;
+  destinationWarehouseId: UUID;
+  destinationLocationId: UUID;
+  quantity: number;
+  status: WarehouseTransferStatus;
+  notes?: string | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  approvedAt?: ISODateString | null;
+  dispatchedAt?: ISODateString | null;
+  receivedAt?: ISODateString | null;
+  cancelledAt?: ISODateString | null;
+  createdBy?: UUID | null;
+  version: number;
+}
+
 // ---------------------------------------------------------------------------
 // Phase 4 — Services, Orders, Measurements, Wedding, Bulk, T-shirt
 // ---------------------------------------------------------------------------
