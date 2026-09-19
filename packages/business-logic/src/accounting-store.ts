@@ -17,7 +17,6 @@ import type {
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { auditAction } from "./audit-actions";
-import { enqueueOutbox } from "./outbox-bridge";
 import { touchPersistence } from "./autosave";
 import { remoteUpsertAccountingAccount, remoteUpsertJournalEntry } from "./remote-write";
 
@@ -33,24 +32,24 @@ function normalBalance(type: AccountingAccountType): "debit" | "credit" {
   return type === "asset" || type === "expense" ? "debit" : "credit";
 }
 
-const SYSTEM_ACCOUNTS: Array<{ id: UUID; code: string; name: string; type: AccountingAccountType; systemKey: string }> = [
-  { id: "00000000-0000-4000-8000-000000000001", code: "1000", name: "Cash", type: "asset", systemKey: "cash" },
-  { id: "00000000-0000-4000-8000-000000000002", code: "1010", name: "Bank", type: "asset", systemKey: "bank" },
-  { id: "00000000-0000-4000-8000-000000000003", code: "1100", name: "Accounts Receivable", type: "asset", systemKey: "accounts_receivable" },
-  { id: "00000000-0000-4000-8000-000000000004", code: "1200", name: "Inventory Asset", type: "asset", systemKey: "inventory_asset" },
-  { id: "00000000-0000-4000-8000-000000000005", code: "1300", name: "Input Tax Credit", type: "asset", systemKey: "input_tax" },
-  { id: "00000000-0000-4000-8000-000000000006", code: "2000", name: "Accounts Payable", type: "liability", systemKey: "accounts_payable" },
-  { id: "00000000-0000-4000-8000-000000000007", code: "2100", name: "Tax Payable", type: "liability", systemKey: "tax_payable" },
-  { id: "00000000-0000-4000-8000-000000000008", code: "3000", name: "Owner Equity", type: "equity", systemKey: "owner_equity" },
-  { id: "00000000-0000-4000-8000-000000000009", code: "3100", name: "Opening Balance Equity", type: "equity", systemKey: "opening_balance_equity" },
-  { id: "00000000-0000-4000-8000-000000000010", code: "4000", name: "Product Sales", type: "income", systemKey: "product_sales" },
-  { id: "00000000-0000-4000-8000-000000000011", code: "4100", name: "Service Revenue", type: "income", systemKey: "service_revenue" },
-  { id: "00000000-0000-4000-8000-000000000012", code: "4200", name: "Laundry Revenue", type: "income", systemKey: "laundry_revenue" },
-  { id: "00000000-0000-4000-8000-000000000013", code: "5000", name: "Cost of Goods Sold", type: "expense", systemKey: "cogs" },
-  { id: "00000000-0000-4000-8000-000000000014", code: "5100", name: "Material Costs", type: "expense", systemKey: "material_costs" },
-  { id: "00000000-0000-4000-8000-000000000015", code: "5200", name: "Order-specific Expenses", type: "expense", systemKey: "order_expenses" },
-  { id: "00000000-0000-4000-8000-000000000016", code: "5300", name: "Staff Incentives", type: "expense", systemKey: "staff_incentives" },
-  { id: "00000000-0000-4000-8000-000000000017", code: "6000", name: "General Expenses", type: "expense", systemKey: "general_expenses" },
+const SYSTEM_ACCOUNTS: Array<{ code: string; name: string; type: AccountingAccountType; systemKey: string }> = [
+  { code: "1000", name: "Cash", type: "asset", systemKey: "cash" },
+  { code: "1010", name: "Bank", type: "asset", systemKey: "bank" },
+  { code: "1100", name: "Accounts Receivable", type: "asset", systemKey: "accounts_receivable" },
+  { code: "1200", name: "Inventory Asset", type: "asset", systemKey: "inventory_asset" },
+  { code: "1300", name: "Input Tax Credit", type: "asset", systemKey: "input_tax" },
+  { code: "2000", name: "Accounts Payable", type: "liability", systemKey: "accounts_payable" },
+  { code: "2100", name: "Tax Payable", type: "liability", systemKey: "tax_payable" },
+  { code: "3000", name: "Owner Equity", type: "equity", systemKey: "owner_equity" },
+  { code: "3100", name: "Opening Balance Equity", type: "equity", systemKey: "opening_balance_equity" },
+  { code: "4000", name: "Product Sales", type: "income", systemKey: "product_sales" },
+  { code: "4100", name: "Service Revenue", type: "income", systemKey: "service_revenue" },
+  { code: "4200", name: "Laundry Revenue", type: "income", systemKey: "laundry_revenue" },
+  { code: "5000", name: "Cost of Goods Sold", type: "expense", systemKey: "cogs" },
+  { code: "5100", name: "Material Costs", type: "expense", systemKey: "material_costs" },
+  { code: "5200", name: "Order-specific Expenses", type: "expense", systemKey: "order_expenses" },
+  { code: "5300", name: "Staff Incentives", type: "expense", systemKey: "staff_incentives" },
+  { code: "6000", name: "General Expenses", type: "expense", systemKey: "general_expenses" },
 ];
 
 function seedSystemAccounts() {
@@ -59,6 +58,7 @@ function seedSystemAccounts() {
   for (const item of SYSTEM_ACCOUNTS) {
     accounts.push({
       ...item,
+      id: generateId(),
       normalBalance: normalBalance(item.type),
       parentId: null,
       isActive: true,
@@ -132,7 +132,6 @@ export function createAccount(input: {
     version: 1,
   };
   accounts.push(account);
-  enqueueOutbox("accounts", account.id, "insert", account);
   void remoteUpsertAccountingAccount(account);
   auditAction("accounting.account.create", "accounts", account.id, null, account);
   touchPersistence();
@@ -148,7 +147,6 @@ export function setAccountActive(id: UUID, isActive: boolean): { account: Accoun
   account.isActive = isActive;
   account.updatedAt = nowISO();
   account.version += 1;
-  enqueueOutbox("accounts", account.id, "update", account);
   void remoteUpsertAccountingAccount(account);
   auditAction("accounting.account.status", "accounts", account.id, before, account);
   touchPersistence();
@@ -227,8 +225,10 @@ export function createJournalEntry(input: {
     version: 1,
   };
   journals.unshift(journalEntry);
-  enqueueOutbox("journal_entries", journalEntry.id, "insert", journalEntry);
-  for (const line of journalEntry.lines) enqueueOutbox("journal_entry_lines", line.id, "insert", line);
+  for (const accountId of [...new Set(journalEntry.lines.map((line) => line.accountId))]) {
+    const account = accounts.find((candidate) => candidate.id === accountId);
+    if (account) void remoteUpsertAccountingAccount(account);
+  }
   void remoteUpsertJournalEntry(cloneEntry(journalEntry));
   auditAction("accounting.journal.create", "journal_entries", journalEntry.id, null, journalEntry);
   touchPersistence();
@@ -256,7 +256,6 @@ export function postJournalEntry(id: UUID): { journalEntry: JournalEntry | null;
   entry.postedAt = nowISO();
   entry.updatedAt = nowISO();
   entry.version += 1;
-  enqueueOutbox("journal_entries", entry.id, "update", entry);
   void remoteUpsertJournalEntry(cloneEntry(entry));
   auditAction("accounting.journal.post", "journal_entries", entry.id, before, entry);
   touchPersistence();
@@ -308,9 +307,6 @@ export function voidJournalEntry(id: UUID): { original: JournalEntry | null; rev
   original.version += 1;
   journals.unshift(reversal);
 
-  enqueueOutbox("journal_entries", original.id, "update", original);
-  enqueueOutbox("journal_entries", reversal.id, "insert", reversal);
-  for (const line of reversal.lines) enqueueOutbox("journal_entry_lines", line.id, "insert", line);
   void remoteUpsertJournalEntry(cloneEntry(original));
   void remoteUpsertJournalEntry(cloneEntry(reversal));
   auditAction("accounting.journal.void", "journal_entries", original.id, before, original);
@@ -328,7 +324,6 @@ function reportableEntries(asOf?: string): JournalEntry[] {
 }
 
 export function buildTrialBalance(asOf?: string): TrialBalanceRow[] {
-  assertPermission("accounting.view");
   const totals = new Map<string, { debit: number; credit: number }>();
   for (const entry of reportableEntries(asOf)) {
     for (const line of entry.lines) {
@@ -353,7 +348,6 @@ export function buildTrialBalance(asOf?: string): TrialBalanceRow[] {
 }
 
 export function buildGeneralLedger(accountId: UUID, from?: string, to?: string): GeneralLedgerRow[] {
-  assertPermission("accounting.view");
   const account = accounts.find((candidate) => candidate.id === accountId && !candidate.deletedAt);
   if (!account) return [];
   const all = reportableEntries(to).sort((a, b) => a.entryDate.localeCompare(b.entryDate) || a.createdAt.localeCompare(b.createdAt));
