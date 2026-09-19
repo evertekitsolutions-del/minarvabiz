@@ -214,6 +214,7 @@ async function main() {
 
     // Barcode Add button must add a matching product to the POS cart.
     await click(ws, "SALES_BARCODE", ["sales & billing"]);
+    await click(ws, "POS_TAB_BARCODE", ["pos billing"]);
     await setByPlaceholder(ws, "Scan barcode", "QA1001");
     await click(ws, "ADD_BARCODE", ["add barcode"]);
     await assertMain(ws, "BARCODE_CART", ["QA POS Product", "₹100.00"]);
