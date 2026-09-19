@@ -296,7 +296,9 @@ export function transferStock(input: {
 }
 
 export function listHeldSales(): HeldSale[] {
-  return [...heldSales].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return heldSales
+    .map((sale) => ({ ...sale, lines: sale.lines.map((line) => ({ ...line })) }))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 export function holdSale(input: {
