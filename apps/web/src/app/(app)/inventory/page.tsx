@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
 import { store } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 
 export default function InventoryPage() {
+  const router = useRouter();
   const [products, setProducts] = React.useState<Product[]>([]);
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [lowStockOnly, setLowStockOnly] = React.useState(true);
@@ -44,7 +46,7 @@ export default function InventoryPage() {
           setSelected(p);
           setAdjustOpen(true);
         }}
-        onAdd={() => { /* use Products page for create */ }}
+        onAdd={() => router.push("/products")}
       />
       <p className="mt-2 text-xs text-slate-500">Click a product to adjust stock. Use Products page to add new items.</p>
       <Modal
