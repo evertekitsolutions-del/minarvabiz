@@ -117,6 +117,28 @@ export interface InventoryTransaction {
   version: number;
 }
 
+export type StockTransferStatus = "pending" | "completed" | "cancelled";
+
+export interface StockTransferRecord {
+  id: UUID;
+  referenceNumber: string;
+  sourceProductId: UUID;
+  destinationProductId: UUID;
+  sourceBranchId?: UUID | null;
+  destinationBranchId?: UUID | null;
+  quantity: number;
+  notes?: string | null;
+  status: StockTransferStatus;
+  requestedAt: ISODateString;
+  requestedBy?: UUID | null;
+  approvedAt?: ISODateString | null;
+  approvedBy?: UUID | null;
+  cancelledAt?: ISODateString | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  version: number;
+}
+
 export interface SaleItem {
   id: UUID;
   saleId: UUID;
