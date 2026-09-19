@@ -11,6 +11,7 @@ export default function SalesPage() {
   const [products, setProducts] = React.useState<Product[]>([]);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [sales, setSales] = React.useState<Sale[]>([]);
+  const [heldSales, setHeldSales] = React.useState(() => store.listHeldSales());
   const [customerOpen, setCustomerOpen] = React.useState(false);
   const [customerError, setCustomerError] = React.useState<string | null>(null);
   const [customerForm, setCustomerForm] = React.useState({ name: "", phone: "", email: "", address: "", notes: "" });
@@ -19,6 +20,7 @@ export default function SalesPage() {
     setProducts(store.listProducts());
     setCustomers(store.listCustomers());
     setSales(store.listSales());
+    setHeldSales(store.listHeldSales());
   }, []);
 
   React.useEffect(() => { refresh(); }, [refresh]);
@@ -28,6 +30,7 @@ export default function SalesPage() {
     lines: CartLine[];
     paidAmount: number;
     paymentMethod: PaymentMethod;
+    paymentSplits?: Array<{ method: PaymentMethod; amount: number; reference?: string | null }>;
     notes?: string;
   }) {
     const result = store.createSale({
@@ -35,6 +38,7 @@ export default function SalesPage() {
       lines: payload.lines,
       paidAmount: payload.paidAmount,
       paymentMethod: payload.paymentMethod,
+      paymentSplits: payload.paymentSplits,
       notes: payload.notes,
     });
     if (result.errors.length) {
@@ -99,6 +103,20 @@ export default function SalesPage() {
           onCompleteSale={handleComplete}
           onFindByBarcode={(code) => store.getProductByBarcode(code)}
           onAddCustomer={openCustomerQuickAdd}
+          heldSales={heldSales}
+          onHoldSale={(payload) => {
+            const result = store.holdSale(payload);
+            refresh();
+            return {
+              success: result.errors.length === 0 && Boolean(result.heldSale),
+              holdNumber: result.heldSale?.holdNumber,
+              errors: result.errors,
+            };
+          }}
+          onRemoveHeldSale={(id) => {
+            store.removeHeldSale(id);
+            refresh();
+          }}
           onPrintSale={(id, paper) => { const sale = store.getSale(id); if (sale) printSaleInvoice(sale, paper); }}
         />
       )}
