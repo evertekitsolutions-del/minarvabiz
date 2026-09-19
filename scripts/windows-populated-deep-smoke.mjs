@@ -278,6 +278,19 @@ async function main() {
     await click(ws, "SAVE_PURCHASE", ["save purchase"]);
     await assertMain(ws, "PURCHASE_SAVED", ["1 records", "QA stock purchase"]);
 
+    // Procurement Step 3A: purchase order is separate from direct purchase and
+    // must be explicitly approved before any later receipt/accounting step.
+    await assertMain(ws, "PURCHASE_ORDER_PANEL", ["Purchase Order", "Create Purchase Order"]);
+    await selectFieldByText(ws, "Supplier", "QA Supplier");
+    await setByAriaLabel(ws, "Purchase order product", "QA POS Product");
+    await setByPlaceholder(ws, "Qty", "2");
+    await setByPlaceholder(ws, "Unit cost", "60");
+    await click(ws, "PO_ADD_LINE", ["add line"]);
+    await click(ws, "PO_CREATE", ["create purchase order"]);
+    await assertMain(ws, "PO_CREATED", ["PO-", "draft"]);
+    await click(ws, "PO_APPROVE", ["approve"]);
+    await assertMain(ws, "PO_APPROVED", ["PO-", "approved"]);
+
     // Staff create + row drill-down.
     await click(ws, "STAFF", ["staff management"]);
     await assertMain(ws, "STAFF", ["Staff Management", "Add Staff"]);
