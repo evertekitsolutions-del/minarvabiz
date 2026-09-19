@@ -343,7 +343,7 @@ export function hydrateProcurementState(input: { purchaseOrders?: PurchaseOrder[
   } else if (input.goodsReceipts?.length) {
     grnSequence = Math.max(
       0,
-      ...input.goodsReceipts.map((receipt) => Number(/(\\d+)$/.exec(receipt.grnNumber)?.[1] || 0))
+      ...input.goodsReceipts.map((receipt) => Number(/(\d+)$/.exec(receipt.grnNumber)?.[1] || 0))
     );
   }
 }
