@@ -30,6 +30,23 @@ export function listSuppliers(query?: string): Supplier[] { let list = suppliers
 export function getSupplier(id: UUID): Supplier | undefined { return suppliers.find((s) => s.id === id && !s.deletedAt); }
 export function createSupplier(input: { name: string; company?: string | null; phone?: string | null; email?: string | null; address?: string | null; category?: string | null; notes?: string | null; openingBalance?: number; }): Supplier { assertPermission("purchases.manage"); const s: Supplier={id:generateId(),name:input.name,company:input.company??null,phone:input.phone??null,email:input.email??null,address:input.address??null,category:input.category??null,openingBalance:input.openingBalance??0,outstandingBalance:input.openingBalance??0,notes:input.notes??null,createdAt:nowISO(),updatedAt:nowISO()}; suppliers.push(s);touchPersistence();void remoteCreateSupplier(s);return s; }
 
+export function adjustSupplierOutstanding(
+  supplierId: UUID,
+  delta: number
+): { supplier: Supplier | null; error?: string } {
+  assertPermission("purchases.manage");
+  const supplier = getSupplier(supplierId);
+  if (!supplier) return { supplier: null, error: "Supplier not found" };
+  if (!Number.isFinite(delta) || delta === 0) return { supplier: null, error: "Outstanding adjustment must be non-zero" };
+  const next = r2(supplier.outstandingBalance + delta);
+  if (next < 0) return { supplier: null, error: "Supplier outstanding cannot become negative" };
+  supplier.outstandingBalance = next;
+  supplier.updatedAt = nowISO();
+  touchPersistence();
+  void remoteUpsertSupplier(supplier);
+  return { supplier };
+}
+
 export function listSupplierPayments(supplierId?: UUID) {
   return mainStore.listPayments()
     .filter((payment) => payment.referenceType === "supplier" && (!supplierId || payment.referenceId === supplierId))
