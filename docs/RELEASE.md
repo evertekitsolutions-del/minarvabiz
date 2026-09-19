@@ -1,43 +1,49 @@
 # Release readiness — Minarva Biz 1.0.4
 
-## Automated release gates
+## Verified main baseline
 
-1. `pnpm install --frozen-lockfile --ignore-scripts`
-2. `pnpm --filter @minarvabiz/web exec tsc --noEmit`
-3. `pnpm --filter @minarvabiz/web build`
-4. `node scripts/smoke.mjs`
-5. `node scripts/quality-smoke.mjs`
-6. `pnpm --filter @minarvabiz/database typecheck`
-7. `pnpm --filter @minarvabiz/business-logic typecheck`
-8. `pnpm --filter @minarvabiz/ui typecheck`
-9. `pnpm --filter @minarvabiz/desktop typecheck`
-10. `pnpm --filter @minarvabiz/desktop build:renderer`
-11. `pnpm --filter @minarvabiz/desktop build:electron`
-12. `pnpm --filter @minarvabiz/desktop run package:win`
+- Main commit audited: `4c8599db659dfa6798697ee530536072c23af8f9`
+- Product version: `1.0.4`
+- Windows installer: `MinarvaBiz-Setup-1.0.4.exe`
+- Installer SHA-256: `40ae5ee6546e3c9d6ad5a419127fdf961fecbf86027bb482b720a60dfb2f297b`
+- Final installer artifact: `minarvabiz-windows-installer-final` (artifact ID `10561709928`)
 
-CI run #514 on the `e7b6824b075c8cf9081d34df953a4205f86baca1` production baseline passed the web, license-admin, desktop and Windows-package jobs. The Windows package gate built `MinarvaBiz-Setup-1.0.4.exe`, installed it, verified a valid SQLite database, preload bridge readiness and renderer mount, and uploaded the installer artifact.
+## Automated release gates — PASS
 
-## Current release artifact
+Latest verified runs on the audited main commit:
 
-`MinarvaBiz-Setup-1.0.4.exe`
+- CI: run `35380365555` — PASS
+- Licensing Smoke: run `35380365569` — PASS
+- Windows Feature Click Smoke: run `35380365428` — PASS
+- Windows Deep Installed Smoke: run `35380365482` — PASS
 
-CI artifact: `minarvabiz-windows-installer`  
-Artifact ID: `10431675300`  
-SHA-256: `0cea4b9409a70735389722de9662062ecda9b3664df33f539e8d0a59645a1a64`  
-Artifact expiry: 2026-09-30
+The Windows deep smoke built the NSIS installer, verified the production public verification key was bundled without private-key material, installed the app on a clean Windows runner, launched the installed executable, activated the 30-day trial, exercised representative populated UI flows, and uploaded the final installer.
 
-## License-key setup
+The feature-click smoke exercised the installed app through Chromium DevTools Protocol and verified the previously missing desktop modules/callbacks including Day-end Close, Payments, Returns, Suppliers, Staff Details, Audit Log, Customer Profile, Global Search/Command Palette, Notifications mark-all-read, and Reports refresh.
 
-Generate an Ed25519 keypair outside the source repository. The private key must remain only in the license-admin/server secret store. The public verification key may be bundled into the desktop build.
+## Licensing deployment
 
-## Supabase setup
+The production license-admin service is hosted on Render. The desktop build fetches the production public key from the license-admin public-key endpoint and uses the Render HTTPS base URL for online activation/validation/deactivation.
 
-Apply the repository migrations to the live Minarva Biz Supabase project in filename order, then configure the production environment variables from `.env.example`. Live RLS/tenant behavior and end-to-end hybrid sync require owner credentials and are not considered verified by repository CI alone.
+Production private signing material remains server-side. The commercial build refuses a missing/invalid public key and refuses the repository fallback key.
 
-## Physical Windows UAT gate
+## Supabase production state
 
-Before release, the owner must install the installer on the target Windows PC and validate the complete acceptance checklist: visual dashboard theme, first-run trial/license, customer/product/sale/payment flow, stock deduction, tailoring/measurement/order expense/profit, laundry, backup/restore, close/reopen persistence, uninstall AppData preservation and real printer output.
+The live Minarva Biz Supabase project is healthy and RLS security advisor currently reports no security findings. The database contains the licensing/trial schema and tenant-aware business schema.
+
+A final tenant-policy alignment migration is kept in the repository so a fresh deployment reaches the same hardened RLS/default behavior as production.
+
+## Remaining owner/UAT gates
+
+Repository automation does **not** replace these physical/environment checks:
+
+- Issue one real commercial test license and perform online activation on the target Windows PC.
+- Test offline `.lic` activation, deactivation and PC replacement.
+- Verify restart persistence and a manual backup/restore drill on the actual customer PC.
+- Verify real printer/thermal-printer output where required.
+- Online/hybrid production still needs an actual Supabase Auth user and tenant-isolation UAT with representative data.
+- Windows code signing is not configured; unsigned builds can show Windows SmartScreen/Unknown Publisher warnings.
 
 ## Version policy
 
-`1.0.4` is the current commercial release version for the product-facing root/apps. Internal workspace libraries may retain independent implementation versions because they are not distributed as separate commercial artifacts.
+`1.0.4` remains the customer-delivery candidate because no public GitHub release has been published yet. If a customer receives a different binary after 1.0.4 is formally released, increment the product version before distributing it.
