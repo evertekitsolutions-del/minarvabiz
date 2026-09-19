@@ -216,6 +216,7 @@ export function approveWarehouseTransfer(id: UUID, approvedBy?: UUID | null): Wa
   const row = transitionTransfer(id, ["pending"], "approved");
   row.approvedAt = nowISO();
   row.approvedBy = approvedBy ?? null;
+  remoteWrite((w) => w.upsertWarehouseTransfer?.(row));
   auditAction("warehouse_transfer.approve", "warehouse_transfers", row.id, { status: "pending" }, { status: "approved" });
   return row;
 }
@@ -224,6 +225,7 @@ export function dispatchWarehouseTransfer(id: UUID): WarehouseTransfer {
   assertPermission("inventory.adjust");
   const row = transitionTransfer(id, ["approved"], "in_transit");
   row.dispatchedAt = nowISO();
+  remoteWrite((w) => w.upsertWarehouseTransfer?.(row));
   auditAction("warehouse_transfer.dispatch", "warehouse_transfers", row.id, { status: "approved" }, { status: "in_transit" });
   return row;
 }
@@ -256,6 +258,7 @@ export function completeWarehouseTransfer(id: UUID): WarehouseTransfer {
   enqueueOutbox("warehouse_transfers", row.id, "update", row as unknown as Record<string, unknown>);
   remoteWrite((w) => w.upsertWarehouseBinStock?.(source));
   remoteWrite((w) => w.upsertWarehouseBinStock?.(destination));
+  remoteWrite((w) => w.upsertWarehouseTransfer?.(row));
   auditAction("warehouse_transfer.complete", "warehouse_transfers", row.id, null, row);
   touchPersistence();
   return row;
@@ -276,6 +279,7 @@ export function cancelWarehouseTransfer(id: UUID): WarehouseTransfer {
   const before = row.status;
   row.status = "cancelled"; row.updatedAt = nowISO(); row.version += 1;
   enqueueOutbox("warehouse_transfers", row.id, "update", row as unknown as Record<string, unknown>);
+  remoteWrite((w) => w.upsertWarehouseTransfer?.(row));
   auditAction("warehouse_transfer.cancel", "warehouse_transfers", row.id, { status: before }, { status: "cancelled" });
   touchPersistence();
   return row;
