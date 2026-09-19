@@ -22,7 +22,7 @@ function emptyLine(): DraftJournalLine {
 
 export function AccountingPanel() {
   const [tick, setTick] = React.useState(0);
-  const [tab, setTab] = React.useState<"accounts" | "journal" | "trial" | "ledger">("accounts");
+  const [tab, setTab] = React.useState<"accounts" | "journal" | "trial" | "ledger" | "statements">("accounts");
   const [message, setMessage] = React.useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [accountForm, setAccountForm] = React.useState({ code: "", name: "", type: "expense" as AccountingAccountType });
   const [journalDate, setJournalDate] = React.useState(todayLocal());
@@ -31,6 +31,16 @@ export function AccountingPanel() {
   const [ledgerAccountId, setLedgerAccountId] = React.useState("");
   const [ledgerFrom, setLedgerFrom] = React.useState("");
   const [ledgerTo, setLedgerTo] = React.useState("");
+
+  const [statementFrom, setStatementFrom] = React.useState("");
+  const [statementTo, setStatementTo] = React.useState(todayLocal());
+  let statements: { profit: ReturnType<typeof accountingStore.buildProfitAndLoss>; balance: ReturnType<typeof accountingStore.buildBalanceSheet> } | null = null;
+  let statementError = "";
+  if (tab === "statements") {
+    try {
+      statements = { profit: accountingStore.buildProfitAndLoss(statementFrom || undefined, statementTo || undefined), balance: accountingStore.buildBalanceSheet(statementTo || undefined) };
+    } catch (error) { statementError = error instanceof Error ? error.message : String(error); }
+  }
 
   void tick;
   const accounts = accountingStore.listAccounts(true);
@@ -120,6 +130,7 @@ export function AccountingPanel() {
         {tabButton("journal", "Journal Entries")}
         {tabButton("trial", "Trial Balance")}
         {tabButton("ledger", "General Ledger")}
+        {tabButton("statements", "Financial Statements")}
       </div>
 
       {message && (
@@ -231,6 +242,40 @@ export function AccountingPanel() {
         </Card>
       )}
 
+      {tab === "statements" && (
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">Based on posted journals, including dated reversals. Sales and purchases appear here after their accounting entries are posted.</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <FormField label="Profit and loss from"><input aria-label="Profit and loss from" className={inputClass} type="date" value={statementFrom} onChange={(e) => setStatementFrom(e.target.value)} /></FormField>
+            <FormField label="Statement end / balance sheet as of"><input aria-label="Statement end date" className={inputClass} type="date" value={statementTo} onChange={(e) => setStatementTo(e.target.value)} /></FormField>
+          </div>
+          {statementError && <p role="alert" className="text-sm text-rose-700">{statementError}</p>}
+          {statements && <div className="grid gap-4 xl:grid-cols-2">
+            <Card>
+              <CardHeader><CardTitle className="text-base">Profit &amp; Loss</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <StatementSection title="Income" rows={statements.profit.income} total={statements.profit.totalIncome} />
+                <StatementSection title="Expenses" rows={statements.profit.expenses} total={statements.profit.totalExpenses} />
+                <div className="flex justify-between rounded-xl bg-slate-100 p-3 font-semibold"><span>Net profit / (loss)</span><span data-testid="statement-net-profit">{formatMoney(statements.profit.netProfit)}</span></div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle className="text-base">Balance Sheet</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-slate-500">Cumulative balances through {statementTo || "all dates"}; the profit and loss start date does not limit this report.</p>
+                <StatementSection title="Assets" rows={statements.balance.assets} total={statements.balance.totalAssets} />
+                <StatementSection title="Liabilities" rows={statements.balance.liabilities} total={statements.balance.totalLiabilities} />
+                <StatementSection title="Recorded equity" rows={statements.balance.equity} total={statements.balance.recordedEquity} />
+                <div className="flex justify-between text-sm"><span>Unclosed earnings / (loss)</span><span>{formatMoney(statements.balance.unclosedEarnings)}</span></div>
+                <div className="flex justify-between text-sm font-semibold"><span>Total equity including earnings</span><span>{formatMoney(statements.balance.totalEquity)}</span></div>
+                <div className="flex justify-between rounded-xl bg-slate-100 p-3 font-semibold"><span>Liabilities + equity</span><span>{formatMoney(statements.balance.liabilitiesAndEquity)}</span></div>
+                <p role="status" data-testid="statement-balance-status" className={statements.balance.balanced ? "text-sm text-emerald-700" : "text-sm text-rose-700"}>{statements.balance.balanced ? "Balance sheet balanced" : "Balance sheet difference: " + formatMoney(statements.balance.difference)}</p>
+              </CardContent>
+            </Card>
+          </div>}
+        </div>
+      )}
+
       {tab === "ledger" && (
         <Card>
           <CardHeader><CardTitle className="text-base">General Ledger</CardTitle></CardHeader>
@@ -260,4 +305,19 @@ export function AccountingPanel() {
       )}
     </div>
   );
+}
+
+function StatementSection({ title, rows, total }: { title: string; rows: Array<{ accountId: string; code: string; name: string; amount: number }>; total: number }) {
+  return <section className="space-y-2">
+    <h3 className="font-semibold text-slate-800">{title}</h3>
+    <table className="w-full text-sm">
+      <caption className="sr-only">{title} account balances</caption>
+      <thead className="sr-only"><tr><th>Account</th><th>Amount</th></tr></thead>
+      <tbody>
+        {!rows.length && <tr><td colSpan={2} className="py-2 text-slate-500">No posted activity</td></tr>}
+        {rows.map((row) => <tr key={row.accountId} className="border-b border-slate-100"><td className="py-2 pr-3">{row.code} · {row.name}</td><td className="py-2 text-right tabular-nums">{formatMoney(row.amount)}</td></tr>)}
+      </tbody>
+      <tfoot><tr className="font-semibold"><td className="pt-2">Total {title.toLowerCase()}</td><td className="pt-2 text-right">{formatMoney(total)}</td></tr></tfoot>
+    </table>
+  </section>;
 }
