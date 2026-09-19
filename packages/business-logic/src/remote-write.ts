@@ -14,6 +14,10 @@ import type {
   Supplier,
   LaundryOrder,
   Purchase,
+  Warehouse,
+  WarehouseBin,
+  WarehouseBinStock,
+  WarehouseTransfer,
 } from "@minarvabiz/types";
 import { enqueueOutbox } from "./outbox-bridge";
 
@@ -30,6 +34,10 @@ export interface RemoteWriter {
   upsertSupplier?: (s: Supplier) => Promise<void>;
   createLaundry?: (o: LaundryOrder) => Promise<void>;
   createPurchase?: (p: Purchase) => Promise<void>;
+  upsertWarehouse?: (w: Warehouse) => Promise<void>;
+  upsertWarehouseBin?: (b: WarehouseBin) => Promise<void>;
+  upsertWarehouseBinStock?: (s: WarehouseBinStock) => Promise<void>;
+  upsertWarehouseTransfer?: (t: WarehouseTransfer) => Promise<void>;
 }
 
 let writer: RemoteWriter | null = null;
