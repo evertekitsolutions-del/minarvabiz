@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
 import { store, generateProductBarcode, printBarcodeLabels } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 
 export default function ProductsPage() {
+  const router = useRouter();
   const [products, setProducts] = React.useState<Product[]>([]);
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [query, setQuery] = React.useState("");
@@ -94,6 +96,7 @@ export default function ProductsPage() {
 
   return (
     <>
+      <div className="mb-3 flex justify-end"><Button variant="outline" onClick={() => router.push("/warehouse")}>Warehouse / WMS</Button></div>
       <ProductList
         products={products}
         categories={categories}
