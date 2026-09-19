@@ -191,7 +191,7 @@ async function main() {
     await setByPlaceholder(ws, "Rack A / Bin 01", "QA Receiving Bin");
     await selectFieldByText(ws, "Type", "Receiving");
     await click(ws, "CREATE_LOCATION", ["create location"]);
-    await assertMain(ws, "WAREHOUSE_LOCATION_CREATED", ["QA Receiving Bin", "RCV-01"]);
+    await assertMain(ws, "WAREHOUSE_LOCATION_CREATED", ["Location created", "Locations", "1", "RCV-01"]);
 
     // POS: select customer, add product card, complete a credit sale.
     await click(ws, "SALES", ["sales & billing"]);
