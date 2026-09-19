@@ -81,6 +81,7 @@ export default function LoginPage() {
         <label className="block text-sm"><span className="text-slate-600">Password</span><input type="password" minLength={8} className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={password} onChange={e => setPassword(e.target.value)} required /></label>
         {error && <p className="text-sm text-rose-600">{error}</p>}
         <Button type="submit" className="w-full" disabled={loading}>{loading ? "Please wait…" : setup ? "Create Administrator" : "Sign in"}</Button>
+        {!setup && <div className="text-center"><a href="/forgot-password" className="text-sm font-medium text-indigo-600 hover:underline">Forgot password?</a></div>}
         {setup && <p className="text-center text-[11px] text-slate-400">No default password is shipped. Choose your administrator credentials now.</p>}
       </form>
     </main>
