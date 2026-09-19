@@ -4,6 +4,7 @@ import * as React from "react";
 import type { Sale, Customer } from "@minarvabiz/types";
 import { DataTable, type Column } from "../data/DataTable";
 import { formatMoney } from "../customers/format";
+import { Button } from "../Button";
 
 const statusStyle: Record<string, string> = {
   completed: "bg-emerald-50 text-emerald-700",
@@ -13,7 +14,7 @@ const statusStyle: Record<string, string> = {
   returned: "bg-violet-50 text-violet-700",
 };
 
-export function SalesList({ sales, customers: _customers, onSelect }: { sales: Sale[]; customers?: Customer[]; onSelect?: (s: Sale) => void }) {
+export function SalesList({ sales, customers: _customers, onSelect, onPrintA4, onPrintThermal }: { sales: Sale[]; customers?: Customer[]; onSelect?: (s: Sale) => void; onPrintA4?: (s: Sale) => void; onPrintThermal?: (s: Sale) => void }) {
   const columns: Column<Sale>[] = [
     { key: "invoiceNumber", header: "Invoice", render: (r) => <span className="font-medium text-slate-900">{r.invoiceNumber}</span> },
     { key: "customerName", header: "Customer", render: (r) => r.customerName || "Walk-in" },
@@ -22,6 +23,11 @@ export function SalesList({ sales, customers: _customers, onSelect }: { sales: S
     { key: "balanceAmount", header: "Balance", render: (r) => <span className={r.balanceAmount > 0 ? "text-rose-600" : "text-slate-500"}>{formatMoney(r.balanceAmount)}</span> },
     { key: "status", header: "Status", render: (r) => <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyle[r.status] ?? ""}`}>{r.status}</span> },
     { key: "saleDate", header: "Date", render: (r) => new Date(r.saleDate).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) },
+    ...(onPrintA4 || onPrintThermal ? [{
+      key: "id" as keyof Sale,
+      header: "Print",
+      render: (r: Sale) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{onPrintA4 && <Button size="sm" variant="outline" onClick={() => onPrintA4(r)}>A4</Button>}{onPrintThermal && <Button size="sm" variant="outline" onClick={() => onPrintThermal(r)}>Thermal</Button>}</div>,
+    }] : []),
   ];
   return <div className="space-y-4"><div><h2 className="text-xl font-semibold text-slate-900">Sales</h2><p className="text-sm text-slate-500">{sales.length} invoices</p></div><DataTable columns={columns} rows={sales} onRowClick={onSelect} emptyMessage="No sales yet" /></div>;
 }
