@@ -7,7 +7,9 @@ import {
 import { phase5Store, ordersStore } from "@minarvabiz/business-logic";
 import type { Expense, Purchase, ExpenseCategory, ServiceOrder, PaymentMethod } from "@minarvabiz/types";
 
-function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }\n\nexport default function ExpensesPage() {
+function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
+
+export default function ExpensesPage() {
   const [tab, setTab] = React.useState<"expenses" | "purchases">("expenses");
   const [expenses, setExpenses] = React.useState<Expense[]>([]);
   const [purchases, setPurchases] = React.useState<Purchase[]>([]);
@@ -31,6 +33,7 @@ function todayLocal(): string { const d = new Date(); const off = d.getTimezoneO
 
   function saveExpense() {
     const result = phase5Store.createExpense({
+      date: expForm.date,
       categoryId: expForm.categoryId,
       amount: parseFloat(expForm.amount) || 0,
       paymentMethod: expForm.paymentMethod,
@@ -38,11 +41,12 @@ function todayLocal(): string { const d = new Date(); const off = d.getTimezoneO
       orderId: expForm.orderId || null,
     });
     if (result.errors.length) { setError(result.errors.join("; ")); return; }
-    setExpOpen(false); setError(null); refresh();
+    setExpOpen(false); setError(null); setExpForm((v) => ({ ...v, date: todayLocal(), amount: "", description: "", orderId: "" })); refresh();
   }
 
   function savePurchase() {
     const result = phase5Store.createPurchase({
+      date: purForm.date,
       description: purForm.description,
       amount: parseFloat(purForm.amount) || 0,
       paidAmount: parseFloat(purForm.paidAmount) || 0,
@@ -52,7 +56,7 @@ function todayLocal(): string { const d = new Date(); const off = d.getTimezoneO
       supplierId: purForm.supplierId || null,
     });
     if (result.errors.length) { setError(result.errors.join("; ")); return; }
-    setPurOpen(false); setError(null); refresh();
+    setPurOpen(false); setError(null); setPurForm((v) => ({ ...v, date: todayLocal(), description: "", amount: "", paidAmount: "", orderId: "" })); refresh();
   }
 
   return (
@@ -66,7 +70,8 @@ function todayLocal(): string { const d = new Date(); const off = d.getTimezoneO
 
       <Modal open={expOpen} title="Add Expense" onClose={() => setExpOpen(false)} footer={<><Button variant="outline" onClick={() => setExpOpen(false)}>Cancel</Button><Button onClick={saveExpense}>Save</Button></>}>
         <div className="space-y-3">
-          <FormField label="Date"><input type="date" className={inputClass} value={expForm.date} onChange={(e) => setExpForm({ ...expForm, date: e.target.value })} /></FormField>\n          <FormField label="Category *"><select className={selectClass} value={expForm.categoryId} onChange={(e) => setExpForm({ ...expForm, categoryId: e.target.value })}><option value="">Select</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></FormField>
+          <FormField label="Date"><input type="date" className={inputClass} value={expForm.date} onChange={(e) => setExpForm({ ...expForm, date: e.target.value })} /></FormField>
+          <FormField label="Category *"><select className={selectClass} value={expForm.categoryId} onChange={(e) => setExpForm({ ...expForm, categoryId: e.target.value })}><option value="">Select</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></FormField>
           <FormField label="Amount *"><input type="number" className={inputClass} value={expForm.amount} onChange={(e) => setExpForm({ ...expForm, amount: e.target.value })} /></FormField>
           <FormField label="Description"><input className={inputClass} value={expForm.description} onChange={(e) => setExpForm({ ...expForm, description: e.target.value })} /></FormField>
           <FormField label="Payment method"><select className={selectClass} value={expForm.paymentMethod} onChange={(e) => setExpForm({ ...expForm, paymentMethod: e.target.value as PaymentMethod })}><option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="bank">Bank</option></select></FormField>
@@ -77,7 +82,8 @@ function todayLocal(): string { const d = new Date(); const off = d.getTimezoneO
 
       <Modal open={purOpen} title="Add Purchase" onClose={() => setPurOpen(false)} footer={<><Button variant="outline" onClick={() => setPurOpen(false)}>Cancel</Button><Button onClick={savePurchase}>Save</Button></>}>
         <div className="space-y-3">
-          <FormField label="Date"><input type="date" className={inputClass} value={purForm.date} onChange={(e) => setPurForm({ ...purForm, date: e.target.value })} /></FormField>\n          <FormField label="Description *"><input className={inputClass} value={purForm.description} onChange={(e) => setPurForm({ ...purForm, description: e.target.value })} placeholder="Thread, lining cloth, needles…" /></FormField>
+          <FormField label="Date"><input type="date" className={inputClass} value={purForm.date} onChange={(e) => setPurForm({ ...purForm, date: e.target.value })} /></FormField>
+          <FormField label="Description *"><input className={inputClass} value={purForm.description} onChange={(e) => setPurForm({ ...purForm, description: e.target.value })} placeholder="Thread, lining cloth, needles…" /></FormField>
           <FormField label="Amount *"><input type="number" className={inputClass} value={purForm.amount} onChange={(e) => setPurForm({ ...purForm, amount: e.target.value })} /></FormField>
           <FormField label="Paid amount"><input type="number" className={inputClass} value={purForm.paidAmount} onChange={(e) => setPurForm({ ...purForm, paidAmount: e.target.value })} /></FormField>
           <FormField label="Kind"><select className={selectClass} value={purForm.kind} onChange={(e) => setPurForm({ ...purForm, kind: e.target.value as "general" | "order_specific" })}><option value="general">General (shop stock)</option><option value="order_specific">Order-specific</option></select></FormField>
