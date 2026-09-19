@@ -266,11 +266,14 @@ function round2(n: number) {
   if (custs.length === 0) return;
   const c = custs[0];
   if (!latestMeasurementProfile(c.id, "Standard")) {
-    saveMeasurementProfile({
+    const profile = createMeasurementRevision({
       customerId: c.id,
       label: "Standard",
       fields: { shoulder: 14, chest: 36, waist: 30, hip: 38, sleeve: 22, length: 42 },
+      notes: "Demo seed",
+      previous: null,
     });
+    measurements.push(profile);
   }
 })();
 
