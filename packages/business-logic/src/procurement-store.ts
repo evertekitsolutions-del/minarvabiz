@@ -11,20 +11,25 @@ import type {
   PurchaseOrder,
   PurchaseOrderLine,
   PurchaseOrderStatus,
+  SupplierInvoice,
+  SupplierInvoiceLine,
+  SupplierInvoiceStatus,
   UUID,
 } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { touchPersistence } from "./autosave";
 import { auditAction } from "./audit-actions";
-import { remoteUpsertGoodsReceipt, remoteUpsertPurchaseOrder } from "./remote-write";
+import { remoteUpsertGoodsReceipt, remoteUpsertPurchaseOrder, remoteUpsertSupplierInvoice } from "./remote-write";
 import * as phase5Store from "./phase5-store";
 import * as mainStore from "./store";
 
 const purchaseOrders: PurchaseOrder[] = [];
 const goodsReceipts: GoodsReceipt[] = [];
+const supplierInvoices: SupplierInvoice[] = [];
 let poSequence = 0;
 let grnSequence = 0;
+let supplierInvoiceSequence = 0;
 
 function r2(n: number): number {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -46,12 +51,22 @@ function nextGrnNumber(): string {
   return `GRN-${year}-${String(grnSequence).padStart(5, "0")}`;
 }
 
+function nextSupplierInvoiceNumber(): string {
+  supplierInvoiceSequence += 1;
+  const year = new Date().getFullYear();
+  return `PINV-${year}-${String(supplierInvoiceSequence).padStart(5, "0")}`;
+}
+
 function cloneOrder(order: PurchaseOrder): PurchaseOrder {
   return { ...order, lines: order.lines.map((line) => ({ ...line })) };
 }
 
 function cloneReceipt(receipt: GoodsReceipt): GoodsReceipt {
   return { ...receipt, lines: receipt.lines.map((line) => ({ ...line })) };
+}
+
+function cloneSupplierInvoice(invoice: SupplierInvoice): SupplierInvoice {
+  return { ...invoice, lines: invoice.lines.map((line) => ({ ...line })) };
 }
 
 export function listPurchaseOrders(status?: PurchaseOrderStatus): PurchaseOrder[] {
@@ -76,6 +91,19 @@ export function listGoodsReceipts(purchaseOrderId?: UUID): GoodsReceipt[] {
 export function getGoodsReceipt(id: UUID): GoodsReceipt | undefined {
   const found = goodsReceipts.find((receipt) => receipt.id === id);
   return found ? cloneReceipt(found) : undefined;
+}
+
+
+export function listSupplierInvoices(status?: SupplierInvoiceStatus): SupplierInvoice[] {
+  return supplierInvoices
+    .filter((invoice) => !status || invoice.status === status)
+    .map(cloneSupplierInvoice)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function getSupplierInvoice(id: UUID): SupplierInvoice | undefined {
+  const found = supplierInvoices.find((invoice) => invoice.id === id);
+  return found ? cloneSupplierInvoice(found) : undefined;
 }
 
 export function createPurchaseOrder(input: {
@@ -290,6 +318,140 @@ export function receivePurchaseOrder(input: {
   return { goodsReceipt: cloneReceipt(goodsReceipt), purchaseOrder: cloneOrder(po), errors: [] };
 }
 
+
+export function createSupplierInvoiceFromGoodsReceipt(input: {
+  goodsReceiptId: UUID;
+  supplierInvoiceNumber: string;
+  invoiceDate?: string;
+  dueDate?: string | null;
+  notes?: string | null;
+  createdBy?: UUID | null;
+}): { supplierInvoice: SupplierInvoice | null; errors: string[] } {
+  assertPermission("purchases.manage");
+  const errors: string[] = [];
+  const receipt = goodsReceipts.find((item) => item.id === input.goodsReceiptId);
+  if (!receipt) return { supplierInvoice: null, errors: ["Goods receipt not found"] };
+  const po = purchaseOrders.find((item) => item.id === receipt.purchaseOrderId);
+  if (!po) return { supplierInvoice: null, errors: ["Purchase order not found"] };
+  const vendorNumber = input.supplierInvoiceNumber.trim();
+  if (!vendorNumber) errors.push("Supplier invoice number is required");
+  if (supplierInvoices.some((invoice) =>
+    invoice.status !== "void" &&
+    invoice.supplierId === receipt.supplierId &&
+    invoice.supplierInvoiceNumber.trim().toLowerCase() === vendorNumber.toLowerCase()
+  )) errors.push("Supplier invoice number already exists for this supplier");
+  if (supplierInvoices.some((invoice) => invoice.status !== "void" && invoice.goodsReceiptId === receipt.id)) {
+    errors.push("This goods receipt already has a supplier invoice");
+  }
+  if (!receipt.lines.length) errors.push("Goods receipt has no lines");
+  if (errors.length) return { supplierInvoice: null, errors };
+
+  const invoiceId = generateId();
+  const lines: SupplierInvoiceLine[] = receipt.lines.map((receiptLine) => {
+    const poLine = po.lines.find((line) => line.id === receiptLine.purchaseOrderLineId);
+    const taxRate = r2(Math.max(0, Number(poLine?.taxRate || 0)));
+    const quantity = r3(receiptLine.receivedQuantity);
+    const lineSubtotal = r2(quantity * receiptLine.unitCost);
+    const taxAmount = r2(lineSubtotal * taxRate / 100);
+    return {
+      id: generateId(),
+      supplierInvoiceId: invoiceId,
+      goodsReceiptLineId: receiptLine.id,
+      purchaseOrderLineId: receiptLine.purchaseOrderLineId,
+      productId: receiptLine.productId ?? null,
+      description: receiptLine.description,
+      quantity,
+      unitCost: r2(receiptLine.unitCost),
+      taxRate,
+      lineSubtotal,
+      taxAmount,
+      lineTotal: r2(lineSubtotal + taxAmount),
+    };
+  });
+  const subtotal = r2(lines.reduce((sum, line) => sum + line.lineSubtotal, 0));
+  const taxAmount = r2(lines.reduce((sum, line) => sum + line.taxAmount, 0));
+  const total = r2(subtotal + taxAmount);
+  const now = nowISO();
+  const invoice: SupplierInvoice = {
+    id: invoiceId,
+    internalNumber: nextSupplierInvoiceNumber(),
+    supplierInvoiceNumber: vendorNumber,
+    supplierId: receipt.supplierId,
+    supplierName: receipt.supplierName ?? null,
+    purchaseOrderId: po.id,
+    poNumber: po.poNumber,
+    goodsReceiptId: receipt.id,
+    grnNumber: receipt.grnNumber,
+    status: "draft",
+    invoiceDate: input.invoiceDate || now.slice(0, 10),
+    dueDate: input.dueDate || null,
+    lines,
+    subtotal,
+    taxAmount,
+    total,
+    balanceAmount: total,
+    notes: input.notes ?? null,
+    createdAt: now,
+    updatedAt: now,
+    branchId: receipt.branchId ?? null,
+    createdBy: input.createdBy ?? null,
+    version: 1,
+  };
+  supplierInvoices.unshift(invoice);
+  void remoteUpsertSupplierInvoice(cloneSupplierInvoice(invoice));
+  auditAction("supplier_invoice.create", "supplier_invoices", invoice.id, null, invoice);
+  touchPersistence();
+  return { supplierInvoice: cloneSupplierInvoice(invoice), errors: [] };
+}
+
+function findMutableSupplierInvoice(id: UUID): SupplierInvoice | undefined {
+  return supplierInvoices.find((invoice) => invoice.id === id);
+}
+
+export function postSupplierInvoice(id: UUID): { supplierInvoice: SupplierInvoice | null; error?: string } {
+  assertPermission("purchases.manage");
+  const invoice = findMutableSupplierInvoice(id);
+  if (!invoice) return { supplierInvoice: null, error: "Supplier invoice not found" };
+  if (invoice.status !== "draft") return { supplierInvoice: null, error: "Only draft supplier invoices can be posted" };
+  const balanceResult = phase5Store.adjustSupplierOutstanding(invoice.supplierId, invoice.total);
+  if (!balanceResult.supplier) return { supplierInvoice: null, error: balanceResult.error || "Unable to post supplier AP" };
+  const before = cloneSupplierInvoice(invoice);
+  invoice.status = "posted";
+  invoice.postedAt = nowISO();
+  invoice.updatedAt = invoice.postedAt;
+  invoice.version += 1;
+  void remoteUpsertSupplierInvoice(cloneSupplierInvoice(invoice));
+  auditAction("supplier_invoice.post", "supplier_invoices", invoice.id, before, invoice);
+  touchPersistence();
+  return { supplierInvoice: cloneSupplierInvoice(invoice) };
+}
+
+export function voidSupplierInvoice(id: UUID): { supplierInvoice: SupplierInvoice | null; error?: string } {
+  assertPermission("purchases.manage");
+  const invoice = findMutableSupplierInvoice(id);
+  if (!invoice) return { supplierInvoice: null, error: "Supplier invoice not found" };
+  if (invoice.status === "void") return { supplierInvoice: null, error: "Supplier invoice is already void" };
+  const before = cloneSupplierInvoice(invoice);
+  if (invoice.status === "posted") {
+    const supplier = phase5Store.getSupplier(invoice.supplierId);
+    if (!supplier) return { supplierInvoice: null, error: "Supplier not found" };
+    if (supplier.outstandingBalance < invoice.balanceAmount) {
+      return { supplierInvoice: null, error: "Cannot void: supplier balance has already been reduced below this invoice balance" };
+    }
+    const balanceResult = phase5Store.adjustSupplierOutstanding(invoice.supplierId, -invoice.balanceAmount);
+    if (!balanceResult.supplier) return { supplierInvoice: null, error: balanceResult.error || "Unable to reverse supplier AP" };
+  }
+  invoice.status = "void";
+  invoice.balanceAmount = 0;
+  invoice.voidedAt = nowISO();
+  invoice.updatedAt = invoice.voidedAt;
+  invoice.version += 1;
+  void remoteUpsertSupplierInvoice(cloneSupplierInvoice(invoice));
+  auditAction("supplier_invoice.void", "supplier_invoices", invoice.id, before, invoice);
+  touchPersistence();
+  return { supplierInvoice: cloneSupplierInvoice(invoice) };
+}
+
 export function cancelPurchaseOrder(id: UUID): { purchaseOrder: PurchaseOrder | null; error?: string } {
   assertPermission("purchases.manage");
   const po = findMutable(id);
@@ -314,8 +476,10 @@ export function cancelPurchaseOrder(id: UUID): { purchaseOrder: PurchaseOrder | 
 export function hydrateProcurementState(input: {
   purchaseOrders?: PurchaseOrder[];
   goodsReceipts?: GoodsReceipt[];
+  supplierInvoices?: SupplierInvoice[];
   poSequence?: number;
   grnSequence?: number;
+  supplierInvoiceSequence?: number;
 }) {
   if (input.purchaseOrders) {
     purchaseOrders.length = 0;
@@ -324,6 +488,10 @@ export function hydrateProcurementState(input: {
   if (input.goodsReceipts) {
     goodsReceipts.length = 0;
     goodsReceipts.push(...input.goodsReceipts.map(cloneReceipt));
+  }
+  if (input.supplierInvoices) {
+    supplierInvoices.length = 0;
+    supplierInvoices.push(...input.supplierInvoices.map(cloneSupplierInvoice));
   }
   if (typeof input.poSequence === "number") {
     poSequence = input.poSequence;
@@ -335,13 +503,20 @@ export function hydrateProcurementState(input: {
   } else if (input.goodsReceipts?.length) {
     grnSequence = Math.max(0, ...input.goodsReceipts.map((receipt) => Number(/(\d+)$/.exec(receipt.grnNumber)?.[1] || 0)));
   }
+  if (typeof input.supplierInvoiceSequence === "number") {
+    supplierInvoiceSequence = input.supplierInvoiceSequence;
+  } else if (input.supplierInvoices?.length) {
+    supplierInvoiceSequence = Math.max(0, ...input.supplierInvoices.map((invoice) => Number(/(\d+)$/.exec(invoice.internalNumber)?.[1] || 0)));
+  }
 }
 
 export function exportProcurementState() {
   return {
     purchaseOrders: listPurchaseOrders(),
     goodsReceipts: listGoodsReceipts(),
+    supplierInvoices: listSupplierInvoices(),
     poSequence,
     grnSequence,
+    supplierInvoiceSequence,
   };
 }
