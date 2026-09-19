@@ -184,6 +184,22 @@ export interface CartLine {
   stockQuantity: number;
 }
 
+export interface PaymentTender {
+  method: PaymentMethod;
+  amount: number;
+}
+
+export interface HeldSale {
+  id: UUID;
+  label: string;
+  customerId?: UUID | null;
+  customerName?: string | null;
+  lines: CartLine[];
+  notes?: string | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+}
+
 // ---------------------------------------------------------------------------
 // Phase 4 — Services, Orders, Measurements, Wedding, Bulk, T-shirt
 // ---------------------------------------------------------------------------
