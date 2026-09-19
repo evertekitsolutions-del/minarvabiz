@@ -30,6 +30,15 @@ export function buildSupplierStatement(supplierId: UUID): SupplierStatement | nu
     totalReturns += r.amount;
     lines.push({ date: r.createdAt.slice(0, 10), type: "return", amount: -r.amount, notes: r.reason || "" });
   }
+  for (const payment of phase5.listSupplierPayments(supplierId)) {
+    totalPaid += payment.amount;
+    lines.push({
+      date: payment.paidAt.slice(0, 10),
+      type: "payment",
+      amount: -payment.amount,
+      notes: payment.notes || payment.method,
+    });
+  }
   lines.sort((a, b) => a.date.localeCompare(b.date));
   return {
     supplierId,

@@ -1,6 +1,6 @@
 import { assertPermission } from "./permissions";
 import { enqueueOutbox } from "./outbox-bridge";
-import { remoteCreateExpense, remoteCreateSupplier, remoteCreateLaundry, remoteCreatePurchase } from "./remote-write";
+import { remoteCreateExpense, remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase } from "./remote-write";
 import type { Supplier, LaundryOrder, Expense, ExpenseCategory, Purchase, PaymentMethod, UUID } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { calculateLaundryProfit } from "./laundry";
@@ -29,6 +29,43 @@ let lastPurchaseNo: string | null = null;
 export function listSuppliers(query?: string): Supplier[] { let list = suppliers.filter((s) => !s.deletedAt); if (query?.trim()) { const q = query.toLowerCase(); list = list.filter((s) => s.name.toLowerCase().includes(q) || s.company?.toLowerCase().includes(q) || s.phone?.includes(q)); } return list.sort((a,b)=>a.name.localeCompare(b.name)); }
 export function getSupplier(id: UUID): Supplier | undefined { return suppliers.find((s) => s.id === id && !s.deletedAt); }
 export function createSupplier(input: { name: string; company?: string | null; phone?: string | null; email?: string | null; address?: string | null; category?: string | null; notes?: string | null; openingBalance?: number; }): Supplier { assertPermission("purchases.manage"); const s: Supplier={id:generateId(),name:input.name,company:input.company??null,phone:input.phone??null,email:input.email??null,address:input.address??null,category:input.category??null,openingBalance:input.openingBalance??0,outstandingBalance:input.openingBalance??0,notes:input.notes??null,createdAt:nowISO(),updatedAt:nowISO()}; suppliers.push(s);touchPersistence();void remoteCreateSupplier(s);return s; }
+
+export function listSupplierPayments(supplierId?: UUID) {
+  return mainStore.listPayments()
+    .filter((payment) => payment.referenceType === "supplier" && (!supplierId || payment.referenceId === supplierId))
+    .sort((a, b) => b.paidAt.localeCompare(a.paidAt));
+}
+
+export function recordSupplierPayment(input: {
+  supplierId: UUID;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  date?: string;
+  reference?: string | null;
+  notes?: string | null;
+}): { payment: ReturnType<typeof mainStore.recordSupplierPaymentEntry> | null; supplier: Supplier | null; errors: string[] } {
+  assertPermission("purchases.manage");
+  const supplier = getSupplier(input.supplierId);
+  const errors: string[] = [];
+  if (!supplier) errors.push("Supplier not found");
+  if (input.amount <= 0) errors.push("Amount must be positive");
+  if (supplier && supplier.outstandingBalance <= 0) errors.push("Supplier has no outstanding balance");
+  if (errors.length || !supplier) return { payment: null, supplier: null, errors };
+  const applied = r2(Math.min(input.amount, supplier.outstandingBalance));
+  supplier.outstandingBalance = r2(Math.max(0, supplier.outstandingBalance - applied));
+  supplier.updatedAt = nowISO();
+  const payment = mainStore.recordSupplierPaymentEntry({
+    supplierId: supplier.id,
+    amount: applied,
+    method: input.paymentMethod,
+    paidAt: input.date,
+    reference: input.reference,
+    notes: input.notes,
+  });
+  touchPersistence();
+  void remoteUpsertSupplier(supplier);
+  return { payment, supplier, errors: [] };
+}
 export function listLaundryOrders(opts?: { mode?: "outsourced"|"in_house_ironing"; query?: string }): LaundryOrder[] { let list=laundryOrders.filter(o=>!o.deletedAt);if(opts?.mode)list=list.filter(o=>o.mode===opts.mode);if(opts?.query?.trim()){const q=opts.query.toLowerCase();list=list.filter(o=>o.orderNumber.toLowerCase().includes(q)||o.customerName?.toLowerCase().includes(q)||o.garment?.toLowerCase().includes(q));}return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
 export function createLaundryOrder(input: { customerId: UUID; garment?: string|null; quantity:number; mode:"outsourced"|"in_house_ironing"; supplierId?: UUID|null; supplierRate:number; customerRate:number; notes?:string|null; paidAmount?:number; paymentMethod?:PaymentMethod }): {order:LaundryOrder|null;errors:string[]} { assertPermission("orders.manage");const errors:string[]=[];if(!input.customerId)errors.push("Customer is required");if(input.quantity<=0)errors.push("Quantity must be positive");if(input.customerRate<0)errors.push("Customer rate cannot be negative");if(input.mode==="outsourced"&&!input.supplierId)errors.push("Supplier is required for outsourced laundry");if(errors.length)return{order:null,errors};const customer=mainStore.getCustomer(input.customerId);if(!customer)return{order:null,errors:["Customer not found"]};const supplierRate=input.mode==="in_house_ironing"?0:input.supplierRate;const calc=calculateLaundryProfit({customerRate:input.customerRate,supplierRate,quantity:input.quantity});const supplier=input.supplierId?getSupplier(input.supplierId):undefined;const paid=Math.min(input.paidAmount??0,calc.totalCustomerCharge);const balance=Math.max(0,calc.totalCustomerCharge-paid);const orderNumber=nextDocNumber(lastLaundryNo,"LDY");lastLaundryNo=orderNumber;const order:LaundryOrder={id:generateId(),orderNumber,customerId:input.customerId,customerName:customer.name,garment:input.garment??null,quantity:input.quantity,mode:input.mode,supplierId:input.supplierId??null,supplierName:supplier?.name??null,supplierRate,customerRate:input.customerRate,profit:calc.totalProfit,totalCustomerCharge:calc.totalCustomerCharge,totalSupplierCost:calc.totalSupplierCost,status:input.mode==="in_house_ironing"?"delivered":"pending",notes:input.notes??null,paidAmount:paid,balanceAmount:balance,createdAt:nowISO(),updatedAt:nowISO(),version:1};if(balance>0)customer.outstandingBalance=r2(customer.outstandingBalance+balance);if(paid>0)customer.totalSpending=r2(customer.totalSpending+paid);customer.updatedAt=nowISO();if(supplier&&calc.totalSupplierCost>0){supplier.outstandingBalance=r2(supplier.outstandingBalance+calc.totalSupplierCost);supplier.updatedAt=nowISO();}laundryOrders.push(order);touchPersistence();void remoteCreateLaundry(order);return{order,errors:[]}; }
 export function updateLaundryStatus(id: UUID,status:LaundryOrder["status"]): LaundryOrder|null { assertPermission("orders.manage");const o=laundryOrders.find(x=>x.id===id&&!x.deletedAt);if(!o)return null;o.status=status;o.updatedAt=nowISO();o.version+=1;touchPersistence();enqueueOutbox("laundry_orders",o.id,"update",o);return o; }

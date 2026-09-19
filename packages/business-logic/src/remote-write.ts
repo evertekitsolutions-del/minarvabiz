@@ -27,6 +27,7 @@ export interface RemoteWriter {
   createPayment?: (p: Payment) => Promise<void>;
   createExpense?: (e: Expense) => Promise<void>;
   createSupplier?: (s: Supplier) => Promise<void>;
+  upsertSupplier?: (s: Supplier) => Promise<void>;
   createLaundry?: (o: LaundryOrder) => Promise<void>;
   createPurchase?: (p: Purchase) => Promise<void>;
 }
@@ -85,8 +86,20 @@ export async function remoteCreateExpense(e: Expense) {
 
 export async function remoteCreateSupplier(s: Supplier) {
   enqueueOutbox("suppliers", s.id, "insert", s);
-  try { await writer?.createSupplier?.(s); }
+  try {
+    if (writer?.upsertSupplier) await writer.upsertSupplier(s);
+    else await writer?.createSupplier?.(s);
+  }
   catch (e) { console.warn("[minarvabiz] remote supplier write failed", e); }
+}
+
+export async function remoteUpsertSupplier(s: Supplier) {
+  enqueueOutbox("suppliers", s.id, "update", s);
+  try {
+    if (writer?.upsertSupplier) await writer.upsertSupplier(s);
+    else await writer?.createSupplier?.(s);
+  }
+  catch (e) { console.warn("[minarvabiz] remote supplier update failed", e); }
 }
 
 export async function remoteCreateLaundry(o: LaundryOrder) {

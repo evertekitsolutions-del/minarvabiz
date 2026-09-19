@@ -10,10 +10,12 @@ export function SupplierList({
   suppliers,
   onAdd,
   onSearch,
+  onPay,
 }: {
   suppliers: Supplier[];
   onAdd?: () => void;
   onSearch?: (q: string) => void;
+  onPay?: (supplier: Supplier) => void;
 }) {
   const [q, setQ] = React.useState("");
   const columns: Column<Supplier>[] = [
@@ -37,6 +39,11 @@ export function SupplierList({
           {formatMoney(r.outstandingBalance)}
         </span>
       ),
+    },
+    {
+      key: "id",
+      header: "Actions",
+      render: (r) => onPay ? <Button size="sm" variant="outline" disabled={r.outstandingBalance <= 0} onClick={() => onPay(r)}>Record Payment</Button> : null,
     },
   ];
 

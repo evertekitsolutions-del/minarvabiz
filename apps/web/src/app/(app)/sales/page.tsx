@@ -1,13 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { PosBilling, SalesList, Button, Modal, FormField, inputClass } from "@minarvabiz/ui";
+import { PosBilling, NormalBilling, SalesList, Button, Modal, FormField, inputClass } from "@minarvabiz/ui";
 import { store, printSaleInvoice, assertLimit } from "@minarvabiz/business-logic";
 import type { Product, Customer, Sale, CartLine, PaymentMethod } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
 export default function SalesPage() {
-  const [tab, setTab] = React.useState<"pos" | "history">("pos");
+  const [tab, setTab] = React.useState<"pos" | "normal" | "history">("pos");
   const [products, setProducts] = React.useState<Product[]>([]);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [sales, setSales] = React.useState<Sale[]>([]);
@@ -46,7 +46,7 @@ export default function SalesPage() {
     } catch {
       /* print blocked */
     }
-    return { success: true, invoiceNumber: result.sale.invoiceNumber };
+    return { success: true, invoiceNumber: result.sale.invoiceNumber, saleId: result.sale.id };
   }
 
   function openCustomerQuickAdd() {
@@ -87,12 +87,9 @@ export default function SalesPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-slate-900">Sales & Billing</h2>
         <div className="flex gap-2">
-          <Button variant={tab === "pos" ? "primary" : "outline"} onClick={() => setTab("pos")}>
-            New Sale
-          </Button>
-          <Button variant={tab === "history" ? "primary" : "outline"} onClick={() => setTab("history")}>
-            History
-          </Button>
+          <Button variant={tab === "pos" ? "primary" : "outline"} onClick={() => setTab("pos")}>POS Billing</Button>
+          <Button variant={tab === "normal" ? "primary" : "outline"} onClick={() => setTab("normal")}>Normal Billing</Button>
+          <Button variant={tab === "history" ? "primary" : "outline"} onClick={() => setTab("history")}>History</Button>
         </div>
       </div>
       {tab === "pos" && (
@@ -102,9 +99,11 @@ export default function SalesPage() {
           onCompleteSale={handleComplete}
           onFindByBarcode={(code) => store.getProductByBarcode(code)}
           onAddCustomer={openCustomerQuickAdd}
+          onPrintSale={(id, paper) => { const sale = store.getSale(id); if (sale) printSaleInvoice(sale, paper); }}
         />
       )}
-      {tab === "history" && <SalesList sales={sales} />}
+      {tab === "normal" && <NormalBilling products={products} customers={customers} onCompleteSale={handleComplete} onAddCustomer={openCustomerQuickAdd} onPrintSale={(id, paper) => { const sale = store.getSale(id); if (sale) printSaleInvoice(sale, paper); }} />}
+      {tab === "history" && <SalesList sales={sales} onPrintA4={(sale) => printSaleInvoice(sale, "a4")} onPrintThermal={(sale) => printSaleInvoice(sale, "thermal")} />}
 
       <Modal
         open={customerOpen}

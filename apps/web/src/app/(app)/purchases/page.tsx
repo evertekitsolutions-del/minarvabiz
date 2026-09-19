@@ -5,6 +5,8 @@ import { PurchaseList, Modal, Button, FormField, inputClass, selectClass } from 
 import { phase5Store, ordersStore } from "@minarvabiz/business-logic";
 import type { Purchase, ServiceOrder, PaymentMethod, Supplier } from "@minarvabiz/types";
 
+function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
+
 export default function PurchasesPage() {
   const [purchases, setPurchases] = React.useState<Purchase[]>([]);
   const [orders, setOrders] = React.useState<ServiceOrder[]>([]);
@@ -14,6 +16,7 @@ export default function PurchasesPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [supplierError, setSupplierError] = React.useState<string | null>(null);
   const [form, setForm] = React.useState({
+    date: todayLocal(),
     description: "",
     amount: "",
     paidAmount: "",
@@ -34,6 +37,7 @@ export default function PurchasesPage() {
 
   function savePurchase() {
     const result = phase5Store.createPurchase({
+      date: form.date,
       description: form.description.trim(),
       amount: parseFloat(form.amount) || 0,
       paidAmount: parseFloat(form.paidAmount) || 0,
@@ -49,7 +53,7 @@ export default function PurchasesPage() {
     }
     setOpen(false);
     setError(null);
-    setForm({ description: "", amount: "", paidAmount: "", paymentMethod: "cash", kind: "general", orderId: "", supplierId: "" });
+    setForm({ date: todayLocal(), description: "", amount: "", paidAmount: "", paymentMethod: "cash", kind: "general", orderId: "", supplierId: "" });
     refresh();
   }
 
@@ -89,6 +93,7 @@ export default function PurchasesPage() {
 
       <Modal open={open} title="Add Purchase" onClose={() => setOpen(false)} footer={<><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={savePurchase}>Save</Button></>}>
         <div className="space-y-3">
+          <FormField label="Date"><input className={inputClass} type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></FormField>
           <FormField label="Supplier">
             <div className="flex gap-2">
               <select className={selectClass} value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })}>
