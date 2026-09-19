@@ -9,7 +9,7 @@ import {
 } from "./sales";
 import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
-import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remoteCreateSale } from "./remote-write";
+import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remoteCreateSale, remoteCreatePayment } from "./remote-write";
 import { auditAction } from "./audit-actions";
 import { enqueueOutbox } from "./outbox-bridge";
 import { assertPermission } from "./permissions";
@@ -155,18 +155,39 @@ export function updateProduct(id: UUID, patch: Partial<Product>): Product | null
   assertPermission("products.manage");
   const p = getProduct(id);
   if (!p) return null;
-  Object.assign(p, patch, { updatedAt: nowISO() });
+  const before = { ...p };
+  Object.assign(p, patch, { updatedAt: nowISO(), version: (p.version ?? 1) + 1 });
   touchPersistence();
   void remoteUpsertProduct(p);
+  auditAction("product.update", "products", p.id, before, { ...p });
   return p;
 }
 
-export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "adjustment", quantity: number, _notes?: string | null): Product | null {
+export function deleteProduct(id: UUID): Product | null {
+  assertPermission("products.manage");
+  const p = getProduct(id);
+  if (!p) return null;
+  const before = { ...p };
+  p.deletedAt = nowISO();
+  p.isActive = false;
+  p.updatedAt = nowISO();
+  p.version = (p.version ?? 1) + 1;
+  touchPersistence();
+  void remoteUpsertProduct(p);
+  enqueueOutbox("products", p.id, "delete", p);
+  auditAction("product.delete", "products", p.id, before, { deletedAt: p.deletedAt });
+  return p;
+}
+
+export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "adjustment", quantity: number, notes?: string | null): Product | null {
   assertPermission("inventory.adjust");
   const p = getProduct(productId);
   if (!p) return null;
+  const before = p.stockQuantity;
   p.stockQuantity = applyStockMovement(p.stockQuantity, type, quantity);
   touchProduct(p);
+  void remoteUpsertProduct(p);
+  auditAction("inventory.adjust", "products", p.id, { stockQuantity: before }, { stockQuantity: p.stockQuantity, type, quantity, notes: notes ?? null });
   return p;
 }
 
@@ -245,6 +266,42 @@ export function createSale(input: {
 
 export function listPayments(): Payment[] {
   return [...payments].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function recordSupplierPaymentEntry(input: {
+  supplierId: UUID;
+  amount: number;
+  method: PaymentMethod;
+  paidAt?: string;
+  reference?: string | null;
+  notes?: string | null;
+}): Payment {
+  assertPermission("purchases.manage");
+  if (input.amount <= 0) throw new Error("Amount must be positive");
+  const paidAt = input.paidAt
+    ? (input.paidAt.length === 10 ? `${input.paidAt}T00:00:00.000Z` : input.paidAt)
+    : nowISO();
+  const payment: Payment = {
+    id: generateId(),
+    amount: round2(input.amount),
+    method: input.method,
+    referenceType: "supplier",
+    referenceId: input.supplierId,
+    customerId: null,
+    notes: [input.reference, input.notes].filter(Boolean).join(" · ") || null,
+    paidAt,
+    createdAt: nowISO(),
+    version: 1,
+  };
+  payments.push(payment);
+  touchPersistence();
+  void remoteCreatePayment(payment);
+  auditAction("supplier.payment", "payments", payment.id, null, {
+    supplierId: input.supplierId,
+    amount: payment.amount,
+    method: payment.method,
+  });
+  return payment;
 }
 
 function round2(n: number) {
