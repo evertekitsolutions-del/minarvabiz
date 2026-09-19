@@ -80,6 +80,8 @@ export function App() {
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [sales, setSales] = React.useState<Sale[]>([]);
   const [salesTab, setSalesTab] = React.useState<"pos" | "normal" | "history">("pos");
+  const [reportFrom, setReportFrom] = React.useState("");
+  const [reportTo, setReportTo] = React.useState("");
   const [orders, setOrders] = React.useState<ServiceOrder[]>([]);
   const [profiles, setProfiles] = React.useState<MeasurementProfile[]>([]);
   const [orderQuery, setOrderQuery] = React.useState("");
@@ -215,7 +217,7 @@ export function App() {
   const navTo=(id:NavItemId)=>{const feature=NAV_FEATURE[id];if(feature&&!licenseFeatures[feature]){setModuleError(`Feature not included in current license: ${feature}`);setActiveNav("dashboard");setSelectedOrder(null);return;}setModuleError(null);setActiveNav(id);setSelectedOrder(null);};
   const handleInsightAction=(action:string)=>{const targets:Record<string,NavItemId>={"Review low stock":"products","Open outstanding payments":"payments","Review pending orders":"services","Open ready orders":"services","Open reports":"reports","Review expenses":"expenses"};const target=targets[action];if(target)navTo(target);};
 
-  const laundry=phase5Store.listLaundryOrders(), expenses=phase5Store.listExpenses(), purchases=phase5Store.listPurchases(), staff=phase6Store.listStaff(), assignments=phase6Store.listAssignments(), notifications=phase6Store.listNotifications(), reportSales=phase7Store.salesReport(), reportDayEnd=phase7Store.dayEndReport(), reportStock=phase7Store.stockReport(), reportOutstanding=phase7Store.outstandingPaymentsReport(), backups=phase7Store.listBackups(), suppliers=phase5Store.listSuppliers(), expenseCategories=phase5Store.listExpenseCategories(), profile=getShopProfile(), tax=getTaxConfig(), backupSettings=getAutoBackupSettings(), printSettings=getPrintSettings(), view=activeNav as string;
+  const laundry=phase5Store.listLaundryOrders(), expenses=phase5Store.listExpenses(), purchases=phase5Store.listPurchases(), staff=phase6Store.listStaff(), assignments=phase6Store.listAssignments(), notifications=phase6Store.listNotifications(), reportSales=phase7Store.salesReport(reportFrom||undefined,reportTo?`${reportTo}T23:59:59.999Z`:undefined), reportDayEnd=phase7Store.dayEndReport(), reportStock=phase7Store.stockReport(), reportOutstanding=phase7Store.outstandingPaymentsReport(), backups=phase7Store.listBackups(), suppliers=phase5Store.listSuppliers(), expenseCategories=phase5Store.listExpenseCategories(), profile=getShopProfile(), tax=getTaxConfig(), backupSettings=getAutoBackupSettings(), printSettings=getPrintSettings(), view=activeNav as string;
 
   return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} desktopModuleContext={{customerId:crmCustomerId,staffId:staffDetailId}} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png",navItems:allowedNav}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:phase6Store.unreadNotificationCount(),onMessagesClick:()=>navTo("notifications"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("reports"),onSearch:setGlobalSearchQuery}}>
     {view==="dashboard"&&dash&&<Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/>}
@@ -229,7 +231,7 @@ export function App() {
     {view==="purchases"&&<PurchaseList purchases={purchases} suppliers={suppliers} onAdd={()=>{setModuleError(null);setPurchaseForm(v=>({...v,date:v.date||todayLocal()}));setPurchaseOpen(true);}}/>} 
     {view==="staff"&&<StaffList staff={staff} onAdd={()=>{setModuleError(null);setStaffOpen(true);}} onSelect={member=>{setStaffDetailId(member.id);navTo("staff-detail");}}/>} 
     {view==="notifications"&&<NotificationCenter notifications={notifications} onMarkAllRead={()=>{phase6Store.markAllNotificationsRead();void persistAndRefresh();}} onMarkRead={id=>{phase6Store.markNotificationRead(id);void persistAndRefresh();}} onNavigate={(href)=>{const target=href.startsWith("/services")?"services":href.startsWith("/reports")?"reports":href.startsWith("/inventory")?"products":href.startsWith("/sales")?"sales":"dashboard";navTo(target as NavItemId);}}/>} 
-    {view==="reports"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} onRefresh={()=>{refreshAll();}}/>} 
+    {view==="reports"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} onRefresh={()=>{refreshAll();}} from={reportFrom} to={reportTo} onFromChange={setReportFrom} onToChange={setReportTo}/>} 
     {view==="backup"&&<BackupPanel backups={backups}/>} 
     {view==="settings"&&<SettingsPanel profile={profile} tax={tax} backup={backupSettings} printing={printSettings} onSaveProfile={v=>{updateShopProfile(v);saveSettings();}} onSaveTax={v=>{updateTaxConfig(v);saveSettings();}} onSaveBackup={v=>{setAutoBackupSettings(v);saveSettings();}} onSavePrinting={v=>{updatePrintSettings(v);saveSettings();}}/>}
 
