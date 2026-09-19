@@ -5,7 +5,7 @@ import type {
 } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import {
-  calculateCartTotals, cartLineToSaleItem, allocatePayment, validateCart, nextInvoiceNumber,
+  calculateCartTotals, cartLineToSaleItem, allocatePayment, validateCart, nextInvoiceNumber, validateTender,
 } from "./sales";
 import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
@@ -379,12 +379,15 @@ export function createSale(input: {
     : [{ method: input.paymentMethod, amount: input.paidAmount }])
     .map((split) => ({
       method: split.method,
-      amount: round2(Math.max(0, Number(split.amount) || 0)),
+      amount: round2(Number(split.amount) || 0),
       reference: split.reference ?? null,
     }))
-    .filter((split) => split.amount > 0);
-  const tendered = round2(requestedSplits.reduce((sum, split) => sum + split.amount, 0));
-  const actualPayment = round2(Math.min(tendered, remainingAfterCredit));
+    .filter((split) => split.amount !== 0);
+  const tender = validateTender(remainingAfterCredit, requestedSplits);
+  if (tender.errors.length) {
+    return { sale: null as unknown as Sale, payment: null, payments: [], errors: tender.errors };
+  }
+  const actualPayment = tender.collectible;
   const allocation = allocatePayment(totals.grandTotal, creditApplied + actualPayment);
   const invoiceNumber = nextInvoiceNumber(lastInvoice);
   lastInvoice = invoiceNumber;
@@ -445,6 +448,8 @@ export function createSale(input: {
     actualPayment,
     creditApplied,
     paymentSplits: salePayments.map((p) => ({ method: p.method, amount: p.amount })),
+    tendered: tender.tendered,
+    changeDue: tender.changeDue,
   });
   return { sale, payment: salePayments[0] ?? null, payments: salePayments, errors: [] };
 }
