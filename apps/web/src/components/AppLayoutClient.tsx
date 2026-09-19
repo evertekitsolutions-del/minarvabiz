@@ -23,6 +23,7 @@ const pathToNav: Record<string, NavItemId> = {
   "/quotations": "sales",
   "/cash-register": "reports",
   "/payments": "payments",
+  "/accounting": "accounting",
   "/services": "services",
   "/services/production": "services",
   "/laundry": "laundry",
