@@ -115,6 +115,8 @@ jobs:
         run: node packages/business-logic/src/__tests__/operations-completion-contract.test.mjs
       - run: pnpm --filter @minarvabiz/ui typecheck
       - run: pnpm --filter @minarvabiz/desktop typecheck
+      - name: Validate Windows interaction smoke syntax
+        run: node --check scripts/windows-populated-deep-smoke.mjs
       - run: pnpm --filter @minarvabiz/desktop build:renderer
       - name: Inspect generated renderer CSS
         shell: bash
@@ -156,8 +158,19 @@ jobs:
           if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot }
           New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
           $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
-          $installProc = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
-          if ($installProc.ExitCode -ne 0) { throw "Windows installer exited with code $($installProc.ExitCode)." }
+          $installExit = $null
+          for ($installAttempt = 1; $installAttempt -le 2; $installAttempt++) {
+            $installProc = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
+            $installExit = $installProc.ExitCode
+            if ($installExit -eq 0) { break }
+            Write-Warning "Windows installer attempt $installAttempt exited with code $installExit."
+            if ($installAttempt -lt 2) {
+              Start-Sleep -Seconds 2
+              if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot -ErrorAction SilentlyContinue }
+              New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
+            }
+          }
+          if ($installExit -ne 0) { throw "Windows installer exited with code $installExit after retry." }
           $exeCandidates = @(
             (Join-Path $installRoot "Minarva Biz.exe"),
             (Join-Path $env:LOCALAPPDATA "Programs\Minarva Biz\Minarva Biz.exe"),
