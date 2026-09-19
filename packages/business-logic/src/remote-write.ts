@@ -21,6 +21,8 @@ import type {
   PurchaseOrder,
   GoodsReceipt,
   PurchaseInvoice,
+  AccountingAccount,
+  JournalEntry,
 } from "@minarvabiz/types";
 import { enqueueOutbox } from "./outbox-bridge";
 
@@ -44,6 +46,8 @@ export interface RemoteWriter {
   upsertPurchaseOrder?: (po: PurchaseOrder) => Promise<void>;
   upsertGoodsReceipt?: (receipt: GoodsReceipt) => Promise<void>;
   upsertPurchaseInvoice?: (invoice: PurchaseInvoice) => Promise<void>;
+  upsertAccountingAccount?: (account: AccountingAccount) => Promise<void>;
+  upsertJournalEntry?: (entry: JournalEntry) => Promise<void>;
 }
 
 let writer: RemoteWriter | null = null;
@@ -180,4 +184,18 @@ export async function remoteUpsertPurchaseInvoice(invoice: PurchaseInvoice) {
   }
   try { await writer?.upsertPurchaseInvoice?.(invoice); }
   catch (e) { console.warn("[minarvabiz] remote purchase-invoice write failed", e); }
+}
+
+
+export async function remoteUpsertAccountingAccount(account: AccountingAccount) {
+  enqueueOutbox("accounts", account.id, "update", account);
+  try { await writer?.upsertAccountingAccount?.(account); }
+  catch (e) { console.warn("[minarvabiz] remote accounting account write failed", e); }
+}
+
+export async function remoteUpsertJournalEntry(entry: JournalEntry) {
+  enqueueOutbox("journal_entries", entry.id, "update", entry);
+  for (const line of entry.lines) enqueueOutbox("journal_entry_lines", line.id, "update", line);
+  try { await writer?.upsertJournalEntry?.(entry); }
+  catch (e) { console.warn("[minarvabiz] remote journal write failed", e); }
 }
