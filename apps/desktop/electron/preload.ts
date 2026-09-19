@@ -60,6 +60,9 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   restoreBackup: () => ipcRenderer.invoke("backup:restoreFromFile") as Promise<NativeRestoreResult>,
   listPrinters: () => ipcRenderer.invoke("printer:list") as Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>,
   printHtml: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal"; thermalWidthMm?: number }) => ipcRenderer.invoke("printer:printHtml", input) as Promise<{ ok: boolean; error?: string }>,
+  checkForUpdates: () => ipcRenderer.invoke("update:check") as Promise<UpdateCheckResult>,
+  downloadUpdate: () => ipcRenderer.invoke("update:download") as Promise<UpdateDownloadResult>,
+  installUpdate: () => ipcRenderer.invoke("update:install") as Promise<{ ok: boolean; version?: string; backupPath?: string; error?: string }>,
   relaunch: () => ipcRenderer.invoke("app:relaunch") as Promise<boolean>,
 });
 
@@ -74,6 +77,9 @@ export type NativeBackupMeta = {
 };
 export type NativeBackupResult = { ok: boolean; path?: string; filename?: string; sizeBytes?: number; error?: string; cancelled?: boolean };
 export type NativeRestoreResult = { ok: boolean; source?: string; preRestoreBackup?: string | null; error?: string; cancelled?: boolean };
+
+export type UpdateCheckResult = { status: "disabled" | "up_to_date" | "available" | "error"; currentVersion: string; version?: string; publishedAt?: string; notes?: string; error?: string };
+export type UpdateDownloadResult = { ok: boolean; version?: string; installerPath?: string; error?: string };
 
 export type MinarvaDesktopApi = {
   getVersion: () => Promise<string>;
@@ -102,6 +108,9 @@ export type MinarvaDesktopApi = {
   restoreBackup: () => Promise<NativeRestoreResult>;
   listPrinters: () => Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>;
   printHtml: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal"; thermalWidthMm?: number }) => Promise<{ ok: boolean; error?: string }>;
+  checkForUpdates: () => Promise<UpdateCheckResult>;
+  downloadUpdate: () => Promise<UpdateDownloadResult>;
+  installUpdate: () => Promise<{ ok: boolean; version?: string; backupPath?: string; error?: string }>;
   relaunch: () => Promise<boolean>;
 };
 
