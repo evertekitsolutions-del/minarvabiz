@@ -9,9 +9,17 @@ import { GlobalSearchPalette } from "../search/GlobalSearchPalette";
 import { OfflineModulesPanel } from "../desktop/OfflineModulesPanel";
 import type { NavItemId } from "../../lib/nav";
 
-export interface AppShellProps { children: React.ReactNode; activeNav?: NavItemId; sidebar?: Partial<SidebarProps>; header?: Partial<HeaderProps>; onNavigate?: (href: string, id: NavItemId) => void; className?: string; }
+export interface AppShellProps {
+  children: React.ReactNode;
+  activeNav?: NavItemId;
+  sidebar?: Partial<SidebarProps>;
+  header?: Partial<HeaderProps>;
+  onNavigate?: (href: string, id: NavItemId) => void;
+  desktopModuleContext?: { customerId?: string; staffId?: string };
+  className?: string;
+}
 
-export function AppShell({ children, activeNav = "dashboard", sidebar, header, onNavigate, className }: AppShellProps) {
+export function AppShell({ children, activeNav = "dashboard", sidebar, header, onNavigate, desktopModuleContext, className }: AppShellProps) {
   const [collapsed, setCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -34,7 +42,7 @@ export function AppShell({ children, activeNav = "dashboard", sidebar, header, o
       <div className="flex min-w-0 flex-1 flex-col">
         <Header onMenuClick={() => { if (typeof window !== "undefined" && window.innerWidth < 768) setMobileOpen((v) => !v); else setCollapsed((v) => !v); }} {...header} onSearch={(query) => { header?.onSearch?.(query); if (showLocalSearch) setSearchQuery(query); }} />
         {showLocalSearch && searchQuery && <GlobalSearchPalette query={searchQuery} onClose={() => setSearchQuery("")} onNavigate={handleNavigate} />}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}{isDesktopShell && <OfflineModulesPanel activeNav={activeNav} />}</main>
+        <main data-testid="app-content" className="flex-1 overflow-y-auto p-4 md:p-6">{children}{isDesktopShell && <OfflineModulesPanel activeNav={activeNav} preferredCustomerId={desktopModuleContext?.customerId} preferredStaffId={desktopModuleContext?.staffId} />}</main>
       </div>
       <CommandPalette activeNav={activeNav} onNavigate={handleNavigate} />
     </div>
