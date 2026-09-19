@@ -30,7 +30,7 @@ import type { ShopProfile } from "./shop-profile";
 import type { TaxConfig } from "./tax-config";
 import type { AutoBackupSettings, BackupMeta } from "./auto-backup";
 
-export const SNAPSHOT_VERSION = 10;
+export const SNAPSHOT_VERSION = 11;
 
 export interface DomainSnapshot {
   version: number;
@@ -93,7 +93,7 @@ export function exportDomainSnapshotFull(): DomainSnapshot {
 export function exportDomainSnapshotJson(): string { return JSON.stringify(exportDomainSnapshotFull(), null, 2); }
 
 export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error?: string; counts?: Record<string, number> } {
-  if (!snap || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
+  if (!snap || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
   try {
     if (snap.outbox) hydrateOutbox(snap.outbox);
     if (snap.quotations) quotationsMod.hydrateQuotations({ quotations: snap.quotations });

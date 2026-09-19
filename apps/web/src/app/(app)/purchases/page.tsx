@@ -3,7 +3,7 @@
 import * as React from "react";
 import { PurchaseList, ProcurementPanel, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
 import { phase5Store, ordersStore, procurementStore, store } from "@minarvabiz/business-logic";
-import type { GoodsReceipt, Purchase, PurchaseOrder, Product, ServiceOrder, PaymentMethod, Supplier } from "@minarvabiz/types";
+import type { GoodsReceipt, Purchase, PurchaseInvoice, PurchaseOrder, Product, ServiceOrder, PaymentMethod, Supplier, SupplierPayableAging } from "@minarvabiz/types";
 
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
 
@@ -14,6 +14,8 @@ export default function PurchasesPage() {
   const [products, setProducts] = React.useState<Product[]>([]);
   const [purchaseOrders, setPurchaseOrders] = React.useState<PurchaseOrder[]>([]);
   const [goodsReceipts, setGoodsReceipts] = React.useState<GoodsReceipt[]>([]);
+  const [purchaseInvoices, setPurchaseInvoices] = React.useState<PurchaseInvoice[]>([]);
+  const [payableAging, setPayableAging] = React.useState<SupplierPayableAging[]>([]);
   const [open, setOpen] = React.useState(false);
   const [supplierOpen, setSupplierOpen] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -37,6 +39,8 @@ export default function PurchasesPage() {
     setProducts(store.listProducts());
     setPurchaseOrders(procurementStore.listPurchaseOrders());
     setGoodsReceipts(procurementStore.listGoodsReceipts());
+    setPurchaseInvoices(procurementStore.listPurchaseInvoices());
+    setPayableAging(procurementStore.buildSupplierPayableAging());
   }, []);
 
   React.useEffect(() => { refresh(); }, [refresh]);
@@ -100,6 +104,8 @@ export default function PurchasesPage() {
       <ProcurementPanel
         purchaseOrders={purchaseOrders}
         goodsReceipts={goodsReceipts}
+        purchaseInvoices={purchaseInvoices}
+        payableAging={payableAging}
         suppliers={suppliers}
         products={products}
         onCreate={(payload) => {
@@ -130,6 +136,31 @@ export default function PurchasesPage() {
             status: result.purchaseOrder?.status,
             errors: result.errors,
           };
+        }}
+        getInvoiceableLines={(purchaseOrderId) => procurementStore.getInvoiceablePurchaseOrderLines(purchaseOrderId)}
+        onCreateInvoice={(payload) => {
+          const result = procurementStore.createPurchaseInvoice(payload);
+          refresh();
+          return {
+            success: result.errors.length === 0 && Boolean(result.purchaseInvoice),
+            invoiceNumber: result.purchaseInvoice?.invoiceNumber,
+            errors: result.errors,
+          };
+        }}
+        onPostInvoice={(id) => {
+          const result = procurementStore.postPurchaseInvoice(id);
+          refresh();
+          return { success: Boolean(result.purchaseInvoice), error: result.error };
+        }}
+        onPayInvoice={(payload) => {
+          const result = procurementStore.payPurchaseInvoice(payload);
+          refresh();
+          return { success: Boolean(result.purchaseInvoice), error: result.error };
+        }}
+        onCancelInvoice={(id) => {
+          const result = procurementStore.cancelPurchaseInvoice(id);
+          refresh();
+          return { success: Boolean(result.purchaseInvoice), error: result.error };
         }}
       />
 

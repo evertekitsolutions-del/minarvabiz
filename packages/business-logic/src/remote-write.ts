@@ -20,6 +20,7 @@ import type {
   WarehouseTransfer,
   PurchaseOrder,
   GoodsReceipt,
+  PurchaseInvoice,
 } from "@minarvabiz/types";
 import { enqueueOutbox } from "./outbox-bridge";
 
@@ -42,6 +43,7 @@ export interface RemoteWriter {
   upsertWarehouseTransfer?: (t: WarehouseTransfer) => Promise<void>;
   upsertPurchaseOrder?: (po: PurchaseOrder) => Promise<void>;
   upsertGoodsReceipt?: (receipt: GoodsReceipt) => Promise<void>;
+  upsertPurchaseInvoice?: (invoice: PurchaseInvoice) => Promise<void>;
 }
 
 let writer: RemoteWriter | null = null;
@@ -168,4 +170,14 @@ export async function remoteUpsertGoodsReceipt(receipt: GoodsReceipt) {
   }
   try { await writer?.upsertGoodsReceipt?.(receipt); }
   catch (e) { console.warn("[minarvabiz] remote goods-receipt write failed", e); }
+}
+
+
+export async function remoteUpsertPurchaseInvoice(invoice: PurchaseInvoice) {
+  enqueueOutbox("purchase_invoices", invoice.id, "update", invoice);
+  for (const line of invoice.lines) {
+    enqueueOutbox("purchase_invoice_lines", line.id, "update", line);
+  }
+  try { await writer?.upsertPurchaseInvoice?.(invoice); }
+  catch (e) { console.warn("[minarvabiz] remote purchase-invoice write failed", e); }
 }

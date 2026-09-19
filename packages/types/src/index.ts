@@ -537,6 +537,61 @@ export interface GoodsReceipt {
 }
 
 
+export type PurchaseInvoiceStatus = "draft" | "posted" | "partially_paid" | "paid" | "cancelled";
+
+export interface PurchaseInvoiceLine {
+  id: UUID;
+  purchaseInvoiceId: UUID;
+  purchaseOrderLineId?: UUID | null;
+  productId?: UUID | null;
+  description: string;
+  invoicedQuantity: number;
+  unitCost: number;
+  taxRate: number;
+  lineSubtotal: number;
+  taxAmount: number;
+  lineTotal: number;
+}
+
+export interface PurchaseInvoice {
+  id: UUID;
+  invoiceNumber: string;
+  supplierInvoiceNumber?: string | null;
+  purchaseOrderId?: UUID | null;
+  poNumber?: string | null;
+  supplierId: UUID;
+  supplierName?: string | null;
+  status: PurchaseInvoiceStatus;
+  invoiceDate: ISODateString;
+  dueDate?: ISODateString | null;
+  lines: PurchaseInvoiceLine[];
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  paidAmount: number;
+  balanceAmount: number;
+  notes?: string | null;
+  postedAt?: ISODateString | null;
+  cancelledAt?: ISODateString | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  branchId?: UUID | null;
+  createdBy?: UUID | null;
+  version: number;
+}
+
+export interface SupplierPayableAging {
+  supplierId: UUID;
+  supplierName: string;
+  current: number;
+  days1to30: number;
+  days31to60: number;
+  days61to90: number;
+  days90plus: number;
+  totalOutstanding: number;
+}
+
+
 // ---------------------------------------------------------------------------
 // Phase 6 — Staff, Assignments, Incentives, CRM, Notifications
 // ---------------------------------------------------------------------------
