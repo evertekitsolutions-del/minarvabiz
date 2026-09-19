@@ -9,6 +9,5 @@
       "*": false,
       "main": true
     }
-  },
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- apps/web packages/ui packages/business-logic packages/database packages/licensing packages/sync packages/validation packages/types packages/utils package.json pnpm-lock.yaml turbo.json vercel.json"
+  }
 }
