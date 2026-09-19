@@ -13,6 +13,7 @@ out
 *.key
 license-private.key
 apps/desktop/electron/license-config.ts
+apps/desktop/electron/update-config.ts
 apps/desktop/release
 apps/desktop/dist-electron
 *.exe
