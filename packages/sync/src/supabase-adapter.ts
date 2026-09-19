@@ -136,6 +136,45 @@ function remoteRow(table: string, aggregateId: UUID, payload: Record<string, unk
         created_by: payload.createdBy ?? null,
         version: payload.version ?? 1,
       };
+    case "purchase_orders":
+      return {
+        id: aggregateId,
+        branch_id: payload.branchId ?? null,
+        po_number: payload.poNumber,
+        supplier_id: payload.supplierId,
+        supplier_name: payload.supplierName ?? null,
+        status: payload.status ?? "draft",
+        order_date: String(payload.orderDate ?? new Date().toISOString()).slice(0, 10),
+        expected_delivery_date: payload.expectedDeliveryDate ? String(payload.expectedDeliveryDate).slice(0, 10) : null,
+        subtotal: payload.subtotal ?? 0,
+        tax_amount: payload.taxAmount ?? 0,
+        total: payload.total ?? 0,
+        notes: payload.notes ?? null,
+        approved_at: payload.approvedAt ?? null,
+        approved_by: payload.approvedBy ?? null,
+        cancelled_at: payload.cancelledAt ?? null,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        updated_at: payload.updatedAt ?? new Date().toISOString(),
+        deleted_at: payload.deletedAt ?? null,
+        created_by: payload.createdBy ?? null,
+        version: payload.version ?? 1,
+      };
+    case "purchase_order_lines":
+      return {
+        id: aggregateId,
+        purchase_order_id: payload.purchaseOrderId,
+        product_id: payload.productId ?? null,
+        description: payload.description,
+        ordered_quantity: payload.orderedQuantity ?? 0,
+        received_quantity: payload.receivedQuantity ?? 0,
+        unit_cost: payload.unitCost ?? 0,
+        tax_rate: payload.taxRate ?? 0,
+        line_subtotal: payload.lineSubtotal ?? 0,
+        tax_amount: payload.taxAmount ?? 0,
+        line_total: payload.lineTotal ?? 0,
+        updated_at: new Date().toISOString(),
+        version: 1,
+      };
     default:
       return { ...payload, id: aggregateId };
   }
@@ -197,6 +236,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         "staff_members", "sale_returns", "audit_logs",
         "production_workflows", "production_stage_events", "material_rolls", "material_consumptions",
         "warehouses", "warehouse_locations", "warehouse_stock", "warehouse_transfers",
+        "purchase_orders", "purchase_order_lines",
       ];
       const records: Array<{ tableName: string; record: VersionedRecord }> = [];
       for (const table of tables) {
