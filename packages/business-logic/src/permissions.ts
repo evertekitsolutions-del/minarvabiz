@@ -10,6 +10,7 @@ export type Permission =
   | "sales.void"
   | "products.manage"
   | "inventory.adjust"
+  | "inventory.transfer.approve"
   | "customers.manage"
   | "orders.manage"
   | "orders.assign"
@@ -26,19 +27,19 @@ export type Permission =
 
 const ROLE_PERMS: Record<RoleName, Permission[]> = {
   super_admin: [
-    "sales.create", "sales.void", "products.manage", "inventory.adjust", "customers.manage",
+    "sales.create", "sales.void", "products.manage", "inventory.adjust", "inventory.transfer.approve", "customers.manage",
     "orders.manage", "orders.assign", "expenses.manage", "purchases.manage", "staff.manage",
     "reports.view", "settings.manage", "users.manage", "backup.manage", "license.manage",
     "returns.manage", "payments.collect",
   ],
   admin: [
-    "sales.create", "sales.void", "products.manage", "inventory.adjust", "customers.manage",
+    "sales.create", "sales.void", "products.manage", "inventory.adjust", "inventory.transfer.approve", "customers.manage",
     "orders.manage", "orders.assign", "expenses.manage", "purchases.manage", "staff.manage",
     "reports.view", "settings.manage", "users.manage", "backup.manage", "license.manage",
     "returns.manage", "payments.collect",
   ],
   manager: [
-    "sales.create", "sales.void", "products.manage", "inventory.adjust", "customers.manage",
+    "sales.create", "sales.void", "products.manage", "inventory.adjust", "inventory.transfer.approve", "customers.manage",
     "orders.manage", "orders.assign", "expenses.manage", "purchases.manage", "staff.manage",
     "reports.view", "settings.manage", "backup.manage", "returns.manage", "payments.collect",
   ],
@@ -54,6 +55,7 @@ const PERMISSION_FEATURE: Partial<Record<Permission, keyof LicenseFeatures>> = {
   "sales.void": "sales",
   "products.manage": "inventory",
   "inventory.adjust": "inventory",
+  "inventory.transfer.approve": "inventory",
   "customers.manage": "customers",
   "orders.manage": "orders",
   "orders.assign": "orders",
