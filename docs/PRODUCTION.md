@@ -43,19 +43,23 @@ pnpm --filter @minarvabiz/web build
 
 ## Go-live checklist
 
-- [ ] Generate real Ed25519 keypair; store private key offline
-- [ ] Configure Supabase project + RLS policies
-- [ ] Rotate JWT / encryption / license API secrets
-- [ ] Set `APP_EDITION` and feature flags per deployment
-- [ ] Test offline grace path on a clean Windows machine
-- [ ] Run backup + restore drill
-- [ ] Confirm plan limits with a trial license
+- [x] Production Ed25519 signing key is server-side and matching public verification key is fetched for commercial Windows builds
+- [x] Render license-admin is deployed with server-only secrets
+- [x] Supabase production project and RLS are configured; security advisor reports no security findings
+- [x] Commercial release build refuses missing/invalid/fallback public keys
+- [x] Clean Windows install/launch, populated click smoke and trial activation pass in GitHub Actions
+- [ ] Issue and activate one real commercial test license on the intended customer Windows PC
+- [ ] Test offline .lic activation, grace, deactivation and PC replacement on the intended customer PC
+- [ ] Run a manual backup + restore drill on the intended customer PC
+- [ ] Create a real Supabase Auth user and verify online/hybrid tenant isolation with representative data
+- [ ] Verify real printer hardware output where required
+- [ ] Add Windows Authenticode code signing if SmartScreen/Unknown Publisher warnings are unacceptable
 
 ## Production security gates
 
 - Do not ship with demo mode enabled.
 - Do not ship predictable/default credentials.
-- Apply Supabase migrations 001, 002, and 003 before enabling online/hybrid mode.
+- Apply all repository Supabase migrations in order on a fresh environment; do not manually replay migrations against the already-migrated production project.
 - Every cloud business record must have a non-null `org_id`; legacy records must be explicitly backfilled before strict tenant RLS is enabled.
 - Organization membership is provisioned by trusted admin/server tooling; end users cannot self-join an organization.
 - The license private key and Supabase service-role key must remain outside Git and client bundles.

@@ -17,24 +17,13 @@ The installer is produced as `apps/desktop/release/MinarvaBiz-Setup-1.0.4.exe` f
 
 For a clean Windows build machine, `BUILD-WINDOWS.cmd` runs the Windows build helper and installs the required Electron/Vite packaging tools.
 
-## 2. Configure the commercial signing key
+## 2. Production signing key
 
-Generate a new Ed25519 keypair on a secure owner/admin machine:
+The current production signing key is managed by the Render license-admin service. The private seed remains server-side. Commercial Windows CI fetches the matching **public** verification key from the deployed license-admin public-key endpoint before building the installer.
 
-```powershell
-pnpm --filter @minarvabiz/licensing generate-keys
-```
+Do not generate a replacement keypair for routine customer delivery. Replacing the production signing key would require rebuilding every desktop installer with the new public key.
 
-The command prints a **private key** and **public key**. Store the private key in a secure password manager/secret store. Never commit it to Git and never put it in a `NEXT_PUBLIC_*` variable.
-
-Before producing the customer installer, set only the public key in the build environment:
-
-```powershell
-$env:MINARVA_LICENSE_PUBLIC_KEY_HEX="YOUR_64_HEX_PUBLIC_KEY"
-$env:MINARVA_COMMERCIAL_RELEASE="1"
-```
-
-The commercial release build refuses to use the repository fallback verification key when `MINARVA_COMMERCIAL_RELEASE=1`.
+If key rotation is intentionally required, use the repository key-generation script on a secure owner/admin machine, place only the private key in the license-admin secret store, verify the public-key endpoint, and rebuild the Windows installer. Never commit or share the private key.
 
 ## 3. Configure license-admin server secrets
 
@@ -131,32 +120,16 @@ Primary offline business database:
 
 License state is kept separately in OS-protected storage under the Electron user-data directory. Legacy JSON database persistence is disabled from the production TypeScript path.
 
-## 9. Supabase migration order — ALL files
+## 9. Supabase migrations
 
-Apply **all 15 repository migrations in exactly this order** before enabling online/hybrid production:
+For a **fresh** Supabase environment, apply every SQL file under `supabase/migrations/` in filename order, including the current tenant-policy alignment migration.
 
-1. `001_core_schema.sql`
-2. `002_rls_policies.sql`
-3. `003_tenant_rls.sql`
-4. `004_quotations_and_extensions.sql`
-5. `005_product_variants.sql`
-6. `006_integrity_indexes.sql`
-7. `007_trial_registrations.sql`
-8. `20260901_license_lifecycle.sql`
-9. `20260901_trial_registrations.sql`
-10. `20260911_license_activation_atomicity.sql`
-11. `20260911_production_hardening.sql`
-12. `20260915_align_phase4_phase5_columns.sql`
-13. `20260915_operations_completion.sql`
-14. `20260915_operations_tenant_hardening.sql`
-15. `20260915_purchase_payment_method.sql`
+For the existing production Minarva Biz Supabase project, migrations are already applied and tracked. **Do not manually replay the migration files against production.** Add new changes as a new migration and apply that migration through the normal Supabase migration workflow.
 
-Do not skip a migration because a later table or function appears to already exist. Use the Supabase CLI migration workflow where possible so migration history is tracked consistently.
+The current repository includes tenant bootstrap/default handling and a final RLS policy alignment so authenticated inserts receive the user's organization and tenant policies do not depend on browser access to privileged helper functions.
 
-The `20260915_operations_completion.sql` migration creates the operations/material persistence tables; the immediately following `20260915_operations_tenant_hardening.sql` migration applies organization-aware RLS to those tables. Both are required.
-
-Supabase client configuration uses the public client key only. Elevated secret/service-role credentials stay on the server.
+Supabase browser configuration uses only the public client key. Elevated secret/service-role credentials remain server-side.
 
 ## 10. Release rule
 
-Repository CI proves code/build/package gates. Customer delivery is complete only after the owner performs the real Windows UAT checklist, applies the live Supabase migrations, deploys license-admin, generates the production keypair, and produces the final installer with the matching public verification key.
+Repository CI proves code/build/package gates. The production license-admin, signing key and Supabase database are already configured. Customer delivery is complete only after one real commercial license is issued/activated on the intended Windows PC and the physical UAT checklist (restart persistence, backup/restore, deactivation/replacement and required printer output) is completed.

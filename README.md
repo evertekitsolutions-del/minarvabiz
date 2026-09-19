@@ -9,7 +9,7 @@ Built for real boutique, tailoring, and laundry shops.
 
 ## Current commercial release
 
-**Version 1.0.4** — current Windows commercial RC baseline.
+**Version 1.0.4** — current customer-delivery candidate. Automated Windows install/click/deep-smoke gates pass; physical customer-PC UAT remains the final delivery gate.
 
 ## Editions
 
