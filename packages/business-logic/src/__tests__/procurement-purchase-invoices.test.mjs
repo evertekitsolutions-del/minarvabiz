@@ -7,6 +7,7 @@ const persistence = fs.readFileSync(new URL("../persistence.ts", import.meta.url
 const remote = fs.readFileSync(new URL("../remote-write.ts", import.meta.url), "utf8");
 const ui = fs.readFileSync(new URL("../../../ui/src/components/purchases/ProcurementPanel.tsx", import.meta.url), "utf8");
 const migration = fs.readFileSync(new URL("../../../../supabase/migrations/20260919_purchase_invoices_ap.sql", import.meta.url), "utf8");
+const syncAdapter = fs.readFileSync(new URL("../../../sync/src/supabase-adapter.ts", import.meta.url), "utf8");
 
 assert.match(types, /PurchaseInvoiceStatus/);
 assert.match(types, /interface PurchaseInvoice/);
@@ -22,6 +23,9 @@ assert.match(source, /recordSupplierPayment/);
 assert.match(source, /auditAction\("purchase_invoice\.post"/);
 assert.match(remote, /remoteUpsertPurchaseInvoice/);
 assert.match(remote, /enqueueOutbox\("purchase_invoices"/);
+assert.match(syncAdapter, /case "purchase_invoices"/);
+assert.match(syncAdapter, /case "purchase_invoice_lines"/);
+assert.match(syncAdapter, /"purchase_invoices", "purchase_invoice_lines"/);
 assert.match(persistence, /SNAPSHOT_VERSION = 11/);
 assert.match(ui, /Supplier Invoices \/ Accounts Payable/);
 assert.match(ui, /AP Aging/);

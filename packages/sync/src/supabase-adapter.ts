@@ -175,6 +175,80 @@ function remoteRow(table: string, aggregateId: UUID, payload: Record<string, unk
         updated_at: new Date().toISOString(),
         version: 1,
       };
+    case "goods_receipts":
+      return {
+        id: aggregateId,
+        branch_id: payload.branchId ?? null,
+        grn_number: payload.grnNumber,
+        purchase_order_id: payload.purchaseOrderId,
+        po_number: payload.poNumber,
+        supplier_id: payload.supplierId,
+        supplier_name: payload.supplierName ?? null,
+        receipt_date: String(payload.receiptDate ?? new Date().toISOString()).slice(0, 10),
+        subtotal: payload.subtotal ?? 0,
+        notes: payload.notes ?? null,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        updated_at: payload.updatedAt ?? payload.createdAt ?? new Date().toISOString(),
+        created_by: payload.createdBy ?? null,
+        version: payload.version ?? 1,
+      };
+    case "goods_receipt_lines":
+      return {
+        id: aggregateId,
+        goods_receipt_id: payload.goodsReceiptId,
+        purchase_order_line_id: payload.purchaseOrderLineId,
+        product_id: payload.productId ?? null,
+        warehouse_location_id: payload.warehouseLocationId ?? null,
+        description: payload.description,
+        received_quantity: payload.receivedQuantity ?? 0,
+        unit_cost: payload.unitCost ?? 0,
+        line_total: payload.lineTotal ?? 0,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        updated_at: payload.updatedAt ?? payload.createdAt ?? new Date().toISOString(),
+      };
+    case "purchase_invoices":
+      return {
+        id: aggregateId,
+        branch_id: payload.branchId ?? null,
+        invoice_number: payload.invoiceNumber,
+        supplier_invoice_number: payload.supplierInvoiceNumber ?? null,
+        purchase_order_id: payload.purchaseOrderId ?? null,
+        po_number: payload.poNumber ?? null,
+        supplier_id: payload.supplierId,
+        supplier_name: payload.supplierName ?? null,
+        status: payload.status ?? "draft",
+        invoice_date: String(payload.invoiceDate ?? new Date().toISOString()).slice(0, 10),
+        due_date: payload.dueDate ? String(payload.dueDate).slice(0, 10) : null,
+        subtotal: payload.subtotal ?? 0,
+        tax_amount: payload.taxAmount ?? 0,
+        total: payload.total ?? 0,
+        paid_amount: payload.paidAmount ?? 0,
+        balance_amount: payload.balanceAmount ?? 0,
+        notes: payload.notes ?? null,
+        posted_at: payload.postedAt ?? null,
+        cancelled_at: payload.cancelledAt ?? null,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        updated_at: payload.updatedAt ?? new Date().toISOString(),
+        created_by: payload.createdBy ?? null,
+        version: payload.version ?? 1,
+      };
+    case "purchase_invoice_lines":
+      return {
+        id: aggregateId,
+        purchase_invoice_id: payload.purchaseInvoiceId,
+        purchase_order_line_id: payload.purchaseOrderLineId ?? null,
+        product_id: payload.productId ?? null,
+        description: payload.description,
+        invoiced_quantity: payload.invoicedQuantity ?? 0,
+        unit_cost: payload.unitCost ?? 0,
+        tax_rate: payload.taxRate ?? 0,
+        line_subtotal: payload.lineSubtotal ?? 0,
+        tax_amount: payload.taxAmount ?? 0,
+        line_total: payload.lineTotal ?? 0,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        updated_at: payload.updatedAt ?? new Date().toISOString(),
+        version: payload.version ?? 1,
+      };
     default:
       return { ...payload, id: aggregateId };
   }
@@ -236,7 +310,8 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         "staff_members", "sale_returns", "audit_logs",
         "production_workflows", "production_stage_events", "material_rolls", "material_consumptions",
         "warehouses", "warehouse_locations", "warehouse_stock", "warehouse_transfers",
-        "purchase_orders", "purchase_order_lines",
+        "purchase_orders", "purchase_order_lines", "goods_receipts", "goods_receipt_lines",
+        "purchase_invoices", "purchase_invoice_lines",
       ];
       const records: Array<{ tableName: string; record: VersionedRecord }> = [];
       for (const table of tables) {

@@ -110,7 +110,7 @@ async function assertMainFieldValue(ws, labelText, expected) {
 }
 
 async function selectFieldByText(ws, labelText, optionText) {
-  const raw = await evalIn(ws, `(()=>{const main=document.querySelector('[data-testid="app-content"]');const labels=[...(main?.querySelectorAll('label')||[])];const label=labels.find(x=>(x.innerText||'').toLowerCase().includes(${JSON.stringify(labelText.toLowerCase())}));const el=label?.querySelector('select');if(!el)return JSON.stringify({ok:false,labels:labels.map(x=>(x.innerText||'').trim())});const option=[...el.options].find(o=>(o.textContent||'').toLowerCase().includes(${JSON.stringify(optionText.toLowerCase())}));if(!option)return JSON.stringify({ok:false,options:[...el.options].map(o=>o.textContent)});el.value=option.value;el.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true,value:el.value,text:option.textContent});})()`);
+  const raw = await evalIn(ws, `(()=>{const main=document.querySelector('[data-testid="app-content"]');const labels=[...(main?.querySelectorAll('label')||[])];const wanted=${JSON.stringify(labelText.toLowerCase())};const matching=labels.filter(x=>x.querySelector('select')&&(x.innerText||'').toLowerCase().includes(wanted));const exact=matching.find(x=>{const first=(x.childNodes?.[0]?.textContent||'').trim().toLowerCase();return first===wanted;});const label=exact||matching[0];const el=label?.querySelector('select');if(!el)return JSON.stringify({ok:false,labels:labels.map(x=>(x.innerText||'').trim())});const option=[...el.options].find(o=>(o.textContent||'').toLowerCase().includes(${JSON.stringify(optionText.toLowerCase())}));if(!option)return JSON.stringify({ok:false,options:[...el.options].map(o=>o.textContent)});el.value=option.value;el.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true,value:el.value,text:option.textContent});})()`);
   const result = JSON.parse(raw);
   if (!result.ok) throw new Error(`SELECT_FIELD ${labelText} -> ${optionText} failed: ${raw}`);
 }
@@ -178,6 +178,20 @@ async function main() {
     await click(ws, "CATEGORY_SAVE", ["save category"]);
     await assertMain(ws, "CATEGORY_SAVED", ["QA Category"]);
 
+    // WMS: create a real warehouse + receiving bin so the later GRN can
+    // post physical stock into a concrete location in the installed app.
+    await click(ws, "WAREHOUSE", ["warehouse / wms"]);
+    await assertMain(ws, "WAREHOUSE", ["Warehouse Management", "Create warehouse", "Transfer workflow"]);
+    await setMainField(ws, "Name", "QA Warehouse");
+    await setMainField(ws, "Code", "QAWH");
+    await click(ws, "CREATE_WAREHOUSE", ["create warehouse"]);
+    await assertMain(ws, "WAREHOUSE_CREATED", ["QA Warehouse"]);
+    await selectFieldByText(ws, "Warehouse", "QA Warehouse");
+    await setByPlaceholder(ws, "A-01", "RCV-01");
+    await setByPlaceholder(ws, "Rack A / Bin 01", "QA Receiving Bin");
+    await selectFieldByText(ws, "Type", "Receiving");
+    await click(ws, "CREATE_LOCATION", ["create location"]);
+    await assertMain(ws, "WAREHOUSE_LOCATION_CREATED", ["Location created", "Locations", "1", "RCV-01"]);
 
     // POS: select customer, add product card, complete a credit sale.
     await click(ws, "SALES", ["sales & billing"]);
@@ -292,6 +306,7 @@ async function main() {
     await assertMain(ws, "PO_APPROVED", ["PO-", "approved"]);
     await click(ws, "PO_RECEIVE", ["receive goods"]);
     await setField(ws, "Receive goods", "received quantity", "2");
+    await selectDialogFieldByText(ws, "Receive goods", "Receive into warehouse / bin", "RCV-01");
     await click(ws, "POST_GRN", ["post goods receipt"]);
     await assertMain(ws, "GRN_POSTED", ["GRN-", "received"]);
 
