@@ -13,6 +13,7 @@ import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remote
 import { auditAction } from "./audit-actions";
 import { enqueueOutbox } from "./outbox-bridge";
 import { assertPermission } from "./permissions";
+import { consumeWarehouseStock } from "./warehouse-store";
 
 const categories: Category[] = [];
 const customers: Customer[] = [];
@@ -212,6 +213,9 @@ export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "a
   const p = getProduct(productId);
   if (!p) return null;
   const before = p.stockQuantity;
+  if (type === "stock_out" || (type === "adjustment" && quantity < 0)) {
+    consumeWarehouseStock(p.id, type === "stock_out" ? Math.abs(quantity) : Math.abs(quantity), p.branchId ?? null);
+  }
   p.stockQuantity = applyStockMovement(p.stockQuantity, type, quantity);
   touchProduct(p);
   void remoteUpsertProduct(p);
@@ -407,6 +411,7 @@ export function createSale(input: {
   for (const line of input.lines) {
     const p = getProduct(line.productId);
     if (p) {
+      consumeWarehouseStock(p.id, line.quantity, p.branchId ?? null);
       p.stockQuantity = applyStockMovement(p.stockQuantity, "sale", line.quantity);
       touchProduct(p);
     }
