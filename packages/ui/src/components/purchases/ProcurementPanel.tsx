@@ -1,7 +1,15 @@
 "use client";
 
 import * as React from "react";
-import type { GoodsReceipt, Product, PurchaseOrder, Supplier } from "@minarvabiz/types";
+import type {
+  GoodsReceipt,
+  PaymentMethod,
+  Product,
+  PurchaseInvoice,
+  PurchaseOrder,
+  Supplier,
+  SupplierPayableAging,
+} from "@minarvabiz/types";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
@@ -16,18 +24,38 @@ type DraftLine = {
   taxRate: string;
 };
 
+type InvoiceableLine = {
+  purchaseOrderLineId: string;
+  description: string;
+  productId?: string | null;
+  receivedQuantity: number;
+  invoicedQuantity: number;
+  invoiceableQuantity: number;
+  unitCost: number;
+  taxRate: number;
+};
+
 export function ProcurementPanel({
   purchaseOrders,
   goodsReceipts,
+  purchaseInvoices,
+  payableAging,
   suppliers,
   products,
   onCreate,
   onApprove,
   onCancel,
   onReceive,
+  getInvoiceableLines,
+  onCreateInvoice,
+  onPostInvoice,
+  onPayInvoice,
+  onCancelInvoice,
 }: {
   purchaseOrders: PurchaseOrder[];
   goodsReceipts: GoodsReceipt[];
+  purchaseInvoices: PurchaseInvoice[];
+  payableAging: SupplierPayableAging[];
   suppliers: Supplier[];
   products: Product[];
   onCreate: (payload: {
@@ -43,6 +71,21 @@ export function ProcurementPanel({
     lines: Array<{ purchaseOrderLineId: string; quantity: number }>;
     notes?: string | null;
   }) => { success: boolean; grnNumber?: string; status?: string; errors?: string[] };
+  getInvoiceableLines: (purchaseOrderId: string) => InvoiceableLine[];
+  onCreateInvoice: (payload: {
+    purchaseOrderId: string;
+    supplierInvoiceNumber?: string | null;
+    dueDate?: string | null;
+    lines: Array<{ purchaseOrderLineId: string; quantity: number }>;
+    notes?: string | null;
+  }) => { success: boolean; invoiceNumber?: string; errors?: string[] };
+  onPostInvoice: (id: string) => { success: boolean; error?: string };
+  onPayInvoice: (payload: {
+    purchaseInvoiceId: string;
+    amount: number;
+    paymentMethod: PaymentMethod;
+  }) => { success: boolean; error?: string };
+  onCancelInvoice: (id: string) => { success: boolean; error?: string };
 }) {
   const [supplierId, setSupplierId] = React.useState("");
   const [expectedDate, setExpectedDate] = React.useState("");
@@ -50,11 +93,25 @@ export function ProcurementPanel({
   const [draft, setDraft] = React.useState<DraftLine>({ productId: "", description: "", quantity: "1", unitCost: "", taxRate: "0" });
   const [lines, setLines] = React.useState<Array<{ productId?: string | null; description: string; quantity: number; unitCost: number; taxRate: number }>>([]);
   const [message, setMessage] = React.useState<{ type: "ok" | "err"; text: string } | null>(null);
+
   const [receiveOrderId, setReceiveOrderId] = React.useState("");
   const [receiveQty, setReceiveQty] = React.useState<Record<string, string>>({});
   const [receiveNotes, setReceiveNotes] = React.useState("");
 
+  const [invoiceOrderId, setInvoiceOrderId] = React.useState("");
+  const [invoiceQty, setInvoiceQty] = React.useState<Record<string, string>>({});
+  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = React.useState("");
+  const [invoiceDueDate, setInvoiceDueDate] = React.useState("");
+  const [invoiceNotes, setInvoiceNotes] = React.useState("");
+
+  const [payInvoiceId, setPayInvoiceId] = React.useState("");
+  const [payAmount, setPayAmount] = React.useState("");
+  const [payMethod, setPayMethod] = React.useState<PaymentMethod>("bank");
+
   const receiveOrder = purchaseOrders.find((po) => po.id === receiveOrderId) ?? null;
+  const invoiceOrder = purchaseOrders.find((po) => po.id === invoiceOrderId) ?? null;
+  const invoiceableLines = invoiceOrder ? getInvoiceableLines(invoiceOrder.id) : [];
+  const payInvoice = purchaseInvoices.find((invoice) => invoice.id === payInvoiceId) ?? null;
 
   function chooseProduct(id: string) {
     const product = products.find((p) => p.id === id);
@@ -115,19 +172,60 @@ export function ProcurementPanel({
     const receiptLines = receiveOrder.lines
       .map((line) => ({ purchaseOrderLineId: line.id, quantity: Number(receiveQty[line.id] || 0) }))
       .filter((line) => Number.isFinite(line.quantity) && line.quantity > 0);
-    const result = onReceive({
-      purchaseOrderId: receiveOrder.id,
-      lines: receiptLines,
-      notes: receiveNotes.trim() || null,
-    });
+    const result = onReceive({ purchaseOrderId: receiveOrder.id, lines: receiptLines, notes: receiveNotes.trim() || null });
     if (!result.success) {
       setMessage({ type: "err", text: (result.errors || ["Unable to post goods receipt"]).join("; ") });
       return;
     }
     setMessage({ type: "ok", text: `${result.grnNumber || "Goods receipt"} posted · ${result.status || "received"}.` });
-    setReceiveOrderId("");
-    setReceiveQty({});
-    setReceiveNotes("");
+    setReceiveOrderId(""); setReceiveQty({}); setReceiveNotes("");
+  }
+
+  function openInvoice(po: PurchaseOrder) {
+    const available = getInvoiceableLines(po.id);
+    const quantities: Record<string, string> = {};
+    for (const line of available) quantities[line.purchaseOrderLineId] = line.invoiceableQuantity > 0 ? String(line.invoiceableQuantity) : "0";
+    setInvoiceOrderId(po.id);
+    setInvoiceQty(quantities);
+    setSupplierInvoiceNumber("");
+    setInvoiceDueDate("");
+    setInvoiceNotes("");
+    setMessage(null);
+  }
+
+  function submitInvoice() {
+    if (!invoiceOrder) return;
+    const invoiceLines = invoiceableLines
+      .map((line) => ({ purchaseOrderLineId: line.purchaseOrderLineId, quantity: Number(invoiceQty[line.purchaseOrderLineId] || 0) }))
+      .filter((line) => Number.isFinite(line.quantity) && line.quantity > 0);
+    const result = onCreateInvoice({
+      purchaseOrderId: invoiceOrder.id,
+      supplierInvoiceNumber: supplierInvoiceNumber.trim() || null,
+      dueDate: invoiceDueDate || null,
+      lines: invoiceLines,
+      notes: invoiceNotes.trim() || null,
+    });
+    if (!result.success) {
+      setMessage({ type: "err", text: (result.errors || ["Unable to create supplier invoice"]).join("; ") });
+      return;
+    }
+    setMessage({ type: "ok", text: `${result.invoiceNumber || "Supplier invoice"} created as draft.` });
+    setInvoiceOrderId(""); setInvoiceQty({}); setSupplierInvoiceNumber(""); setInvoiceDueDate(""); setInvoiceNotes("");
+  }
+
+  function submitPayment() {
+    if (!payInvoice) return;
+    const result = onPayInvoice({
+      purchaseInvoiceId: payInvoice.id,
+      amount: Number(payAmount),
+      paymentMethod: payMethod,
+    });
+    if (!result.success) {
+      setMessage({ type: "err", text: result.error || "Unable to record supplier invoice payment." });
+      return;
+    }
+    setMessage({ type: "ok", text: `Payment recorded for ${payInvoice.invoiceNumber}.` });
+    setPayInvoiceId(""); setPayAmount("");
   }
 
   return (
@@ -194,6 +292,7 @@ export function ProcurementPanel({
           {purchaseOrders.map((po) => {
             const ordered = po.lines.reduce((sum, line) => sum + line.orderedQuantity, 0);
             const received = po.lines.reduce((sum, line) => sum + line.receivedQuantity, 0);
+            const invoiceable = getInvoiceableLines(po.id).reduce((sum, line) => sum + line.invoiceableQuantity, 0);
             return (
               <div key={po.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 p-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
@@ -204,6 +303,7 @@ export function ProcurementPanel({
                   <span className="text-sm font-semibold">{formatMoney(po.total)}</span>
                   {po.status === "draft" && <Button size="sm" onClick={() => { const r = onApprove(po.id); setMessage(r.success ? { type: "ok", text: `${po.poNumber} approved.` } : { type: "err", text: r.error || "Approval failed" }); }}>Approve</Button>}
                   {(po.status === "approved" || po.status === "partially_received") && <Button size="sm" onClick={() => openReceipt(po)}>Receive goods</Button>}
+                  {invoiceable > 0 && <Button size="sm" variant="outline" onClick={() => openInvoice(po)}>Create supplier invoice</Button>}
                   {(po.status === "draft" || po.status === "approved") && <Button size="sm" variant="outline" onClick={() => { const r = onCancel(po.id); setMessage(r.success ? { type: "ok", text: `${po.poNumber} cancelled.` } : { type: "err", text: r.error || "Cancellation failed" }); }}>Cancel</Button>}
                 </div>
               </div>
@@ -215,7 +315,7 @@ export function ProcurementPanel({
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">Goods Receipts</CardTitle>
-          <p className="text-xs text-slate-500">GRNs update physical stock; supplier invoice/AP is posted separately.</p>
+          <p className="text-xs text-slate-500">GRNs update physical stock. Supplier invoices post AP separately, preventing double stock movement.</p>
         </CardHeader>
         <CardContent className="space-y-2">
           {!goodsReceipts.length && <p className="py-4 text-center text-sm text-slate-400">No goods receipts yet</p>}
@@ -231,15 +331,56 @@ export function ProcurementPanel({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Supplier Invoices / Accounts Payable</CardTitle>
+          <p className="text-xs text-slate-500">Invoice only quantities already received by GRN. Posting creates supplier payable; it never increases stock again.</p>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {!purchaseInvoices.length && <p className="py-4 text-center text-sm text-slate-400">No supplier invoices yet</p>}
+          {purchaseInvoices.map((invoice) => (
+            <div key={invoice.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 p-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="font-semibold text-slate-900">{invoice.invoiceNumber} · {invoice.supplierName || invoice.supplierId}</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {invoice.status.replace(/_/g, " ")} · PO {invoice.poNumber || "—"} · Supplier ref {invoice.supplierInvoiceNumber || "—"} · Due {invoice.dueDate || "—"}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold">{formatMoney(invoice.total)} · balance {formatMoney(invoice.balanceAmount)}</span>
+                {invoice.status === "draft" && <Button size="sm" onClick={() => { const r = onPostInvoice(invoice.id); setMessage(r.success ? { type: "ok", text: `${invoice.invoiceNumber} posted to AP.` } : { type: "err", text: r.error || "Posting failed" }); }}>Post</Button>}
+                {(invoice.status === "posted" || invoice.status === "partially_paid") && invoice.balanceAmount > 0 && <Button size="sm" variant="outline" onClick={() => { setPayInvoiceId(invoice.id); setPayAmount(String(invoice.balanceAmount)); }}>Pay</Button>}
+                {(invoice.status === "draft" || invoice.status === "posted") && invoice.paidAmount === 0 && <Button size="sm" variant="outline" onClick={() => { const r = onCancelInvoice(invoice.id); setMessage(r.success ? { type: "ok", text: `${invoice.invoiceNumber} cancelled.` } : { type: "err", text: r.error || "Cancellation failed" }); }}>Cancel</Button>}
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">AP Aging</CardTitle>
+          <p className="text-xs text-slate-500">Outstanding posted supplier invoices grouped by due-date age.</p>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-[760px] w-full text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-600"><tr><th className="px-3 py-2 text-left">Supplier</th><th className="px-3 py-2 text-right">Current</th><th className="px-3 py-2 text-right">1–30</th><th className="px-3 py-2 text-right">31–60</th><th className="px-3 py-2 text-right">61–90</th><th className="px-3 py-2 text-right">90+</th><th className="px-3 py-2 text-right">Total</th></tr></thead>
+              <tbody>
+                {!payableAging.length && <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-400">No posted supplier payables</td></tr>}
+                {payableAging.map((row) => <tr key={row.supplierId} className="border-t border-slate-100"><td className="px-3 py-2 font-medium">{row.supplierName}</td><td className="px-3 py-2 text-right">{formatMoney(row.current)}</td><td className="px-3 py-2 text-right">{formatMoney(row.days1to30)}</td><td className="px-3 py-2 text-right">{formatMoney(row.days31to60)}</td><td className="px-3 py-2 text-right">{formatMoney(row.days61to90)}</td><td className="px-3 py-2 text-right">{formatMoney(row.days90plus)}</td><td className="px-3 py-2 text-right font-semibold">{formatMoney(row.totalOutstanding)}</td></tr>)}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
       <Modal
         open={Boolean(receiveOrder)}
         title={receiveOrder ? `Receive goods — ${receiveOrder.poNumber}` : "Receive goods"}
         onClose={() => { setReceiveOrderId(""); setReceiveQty({}); setReceiveNotes(""); }}
         className="max-w-2xl"
-        footer={<>
-          <Button variant="outline" onClick={() => { setReceiveOrderId(""); setReceiveQty({}); setReceiveNotes(""); }}>Cancel</Button>
-          <Button onClick={submitReceipt}>Post Goods Receipt</Button>
-        </>}
+        footer={<><Button variant="outline" onClick={() => { setReceiveOrderId(""); setReceiveQty({}); setReceiveNotes(""); }}>Cancel</Button><Button onClick={submitReceipt}>Post Goods Receipt</Button></>}
       >
         {receiveOrder && (
           <div className="space-y-4">
@@ -247,28 +388,53 @@ export function ProcurementPanel({
             <div className="space-y-3">
               {receiveOrder.lines.map((line) => {
                 const remaining = Math.max(0, line.orderedQuantity - line.receivedQuantity);
-                return (
-                  <FormField key={line.id} label={`${line.description} received quantity`}>
-                    <div className="grid grid-cols-[1fr_auto] items-center gap-3">
-                      <input
-                        className={inputClass}
-                        type="number"
-                        min="0"
-                        max={remaining}
-                        step="0.001"
-                        value={receiveQty[line.id] ?? "0"}
-                        disabled={remaining <= 0}
-                        onChange={(e) => setReceiveQty((current) => ({ ...current, [line.id]: e.target.value }))}
-                      />
-                      <span className="text-xs text-slate-500">remaining {remaining}</span>
-                    </div>
-                  </FormField>
-                );
+                return <FormField key={line.id} label={`${line.description} received quantity`}><div className="grid grid-cols-[1fr_auto] items-center gap-3"><input className={inputClass} type="number" min="0" max={remaining} step="0.001" value={receiveQty[line.id] ?? "0"} disabled={remaining <= 0} onChange={(e) => setReceiveQty((current) => ({ ...current, [line.id]: e.target.value }))} /><span className="text-xs text-slate-500">remaining {remaining}</span></div></FormField>;
               })}
             </div>
-            <FormField label="Receipt notes">
-              <input className={inputClass} value={receiveNotes} onChange={(e) => setReceiveNotes(e.target.value)} placeholder="Delivery note / inspection remarks" />
-            </FormField>
+            <FormField label="Receipt notes"><input className={inputClass} value={receiveNotes} onChange={(e) => setReceiveNotes(e.target.value)} placeholder="Delivery note / inspection remarks" /></FormField>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(invoiceOrder)}
+        title={invoiceOrder ? `Supplier invoice — ${invoiceOrder.poNumber}` : "Supplier invoice"}
+        onClose={() => { setInvoiceOrderId(""); setInvoiceQty({}); }}
+        className="max-w-2xl"
+        footer={<><Button variant="outline" onClick={() => { setInvoiceOrderId(""); setInvoiceQty({}); }}>Cancel</Button><Button onClick={submitInvoice}>Create Draft Invoice</Button></>}
+      >
+        {invoiceOrder && (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField label="Supplier invoice number"><input className={inputClass} value={supplierInvoiceNumber} onChange={(e) => setSupplierInvoiceNumber(e.target.value)} placeholder="Vendor invoice/reference" /></FormField>
+              <FormField label="Due date"><input className={inputClass} type="date" value={invoiceDueDate} onChange={(e) => setInvoiceDueDate(e.target.value)} /></FormField>
+            </div>
+            <div className="space-y-3">
+              {invoiceableLines.map((line) => (
+                <FormField key={line.purchaseOrderLineId} label={`${line.description} invoice quantity`}>
+                  <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+                    <input className={inputClass} type="number" min="0" max={line.invoiceableQuantity} step="0.001" value={invoiceQty[line.purchaseOrderLineId] ?? "0"} disabled={line.invoiceableQuantity <= 0} onChange={(e) => setInvoiceQty((current) => ({ ...current, [line.purchaseOrderLineId]: e.target.value }))} />
+                    <span className="text-xs text-slate-500">received {line.receivedQuantity} · already invoiced {line.invoicedQuantity} · available {line.invoiceableQuantity}</span>
+                  </div>
+                </FormField>
+              ))}
+            </div>
+            <FormField label="Invoice notes"><input className={inputClass} value={invoiceNotes} onChange={(e) => setInvoiceNotes(e.target.value)} placeholder="Tax invoice / terms / remarks" /></FormField>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(payInvoice)}
+        title={payInvoice ? `Pay supplier invoice — ${payInvoice.invoiceNumber}` : "Pay supplier invoice"}
+        onClose={() => { setPayInvoiceId(""); setPayAmount(""); }}
+        footer={<><Button variant="outline" onClick={() => { setPayInvoiceId(""); setPayAmount(""); }}>Cancel</Button><Button onClick={submitPayment}>Record Payment</Button></>}
+      >
+        {payInvoice && (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">Outstanding: <strong>{formatMoney(payInvoice.balanceAmount)}</strong></p>
+            <FormField label="Amount"><input className={inputClass} type="number" min="0.01" max={payInvoice.balanceAmount} step="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} /></FormField>
+            <FormField label="Payment method"><select className={selectClass} value={payMethod} onChange={(e) => setPayMethod(e.target.value as PaymentMethod)}><option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="bank">Bank transfer</option><option value="other">Other</option></select></FormField>
           </div>
         )}
       </Modal>
