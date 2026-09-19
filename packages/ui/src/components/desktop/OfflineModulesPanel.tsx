@@ -23,7 +23,15 @@ function persistDesktop() {
   }
 }
 
-export function OfflineModulesPanel({ activeNav }: { activeNav: NavItemId }) {
+export function OfflineModulesPanel({
+  activeNav,
+  preferredCustomerId,
+  preferredStaffId,
+}: {
+  activeNav: NavItemId;
+  preferredCustomerId?: string;
+  preferredStaffId?: string;
+}) {
   const [, setTick] = React.useState(0);
   const refresh = React.useCallback(() => setTick((v) => v + 1), []);
   const [customerId, setCustomerId] = React.useState("");
@@ -32,31 +40,51 @@ export function OfflineModulesPanel({ activeNav }: { activeNav: NavItemId }) {
   const [supplierOpen, setSupplierOpen] = React.useState(false);
   const [supplierForm, setSupplierForm] = React.useState({ name: "", company: "", phone: "", category: "" });
   const [supplierError, setSupplierError] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (activeNav === "customer-crm" && !customerId) setCustomerId(store.listCustomers()[0]?.id || "");
-    if (activeNav === "staff-detail" && !staffId) setStaffId(phase6Store.listStaff()[0]?.id || "");
-  }, [activeNav, customerId, staffId]);
+    if (activeNav === "customer-crm") {
+      if (preferredCustomerId) setCustomerId(preferredCustomerId);
+      else if (!customerId) setCustomerId(store.listCustomers()[0]?.id || "");
+    }
+    if (activeNav === "staff-detail") {
+      if (preferredStaffId) setStaffId(preferredStaffId);
+      else if (!staffId) setStaffId(phase6Store.listStaff()[0]?.id || "");
+    }
+    setActionError(null);
+  }, [activeNav, customerId, staffId, preferredCustomerId, preferredStaffId]);
 
   if (!["day-end", "payments", "customer-crm", "returns", "suppliers", "staff-detail", "audit"].includes(activeNav)) return null;
 
   if (activeNav === "day-end") {
     const closes = listDayEndCloses().map((c) => ({ id: c.id, businessDate: c.businessDate, closedAt: c.closedAt, report: { totalSales: c.report.totalSales, netProfit: c.report.netProfit, cashReceived: c.report.cashReceived, outstandingAmount: c.report.outstandingAmount }, metricsNote: c.metricsNote }));
     return <DayEndClosePanel closes={closes} onCloseDay={() => {
-      const result = closeBusinessDay();
-      if (!result.record) return { ok: false, error: result.error || "Failed" };
-      persistDesktop(); refresh();
-      return { ok: true, record: { id: result.record.id, businessDate: result.record.businessDate, closedAt: result.record.closedAt, report: { totalSales: result.record.report.totalSales, netProfit: result.record.report.netProfit, cashReceived: result.record.report.cashReceived, outstandingAmount: result.record.report.outstandingAmount }, metricsNote: result.record.metricsNote } };
+      try {
+        const result = closeBusinessDay();
+        if (!result.record) return { ok: false, error: result.error || "Failed" };
+        setActionError(null); persistDesktop(); refresh();
+        return { ok: true, record: { id: result.record.id, businessDate: result.record.businessDate, closedAt: result.record.closedAt, report: { totalSales: result.record.report.totalSales, netProfit: result.record.report.netProfit, cashReceived: result.record.report.cashReceived, outstandingAmount: result.record.report.outstandingAmount }, metricsNote: result.record.metricsNote } };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setActionError(message);
+        return { ok: false, error: message };
+      }
     }} />;
   }
 
   if (activeNav === "payments") {
     const outstanding = store.listCustomers().filter((c) => c.outstandingBalance > 0);
-    return <PaymentsPanel outstanding={outstanding} payments={store.listPayments()} onCollect={(data) => {
-      const result = store.recordCustomerPayment(data);
-      if (!result.errors.length) { persistDesktop(); refresh(); }
-      return result.errors.length ? { ok: false, error: result.errors.join("; ") } : { ok: true };
-    }} />;
+    return <><PaymentsPanel outstanding={outstanding} payments={store.listPayments()} onCollect={(data) => {
+      try {
+        const result = store.recordCustomerPayment(data);
+        if (!result.errors.length) { setActionError(null); persistDesktop(); refresh(); }
+        return result.errors.length ? { ok: false, error: result.errors.join("; ") } : { ok: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setActionError(message);
+        return { ok: false, error: message };
+      }
+    }} />{actionError && <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{actionError}</p>}</>;
   }
 
   if (activeNav === "customer-crm") {
@@ -66,11 +94,17 @@ export function OfflineModulesPanel({ activeNav }: { activeNav: NavItemId }) {
   }
 
   if (activeNav === "returns") {
-    return <ReturnsPanel returns={phase7Store.listReturns()} sales={phase7Store.listSalesForReturn()} onCreate={(payload) => {
-      const result = phase7Store.createReturn(payload);
-      if (!result.errors.length) { persistDesktop(); refresh(); }
-      return result.errors.length ? { success: false, errors: result.errors } : { success: true };
-    }} />;
+    return <><ReturnsPanel returns={phase7Store.listReturns()} sales={phase7Store.listSalesForReturn()} onCreate={(payload) => {
+      try {
+        const result = phase7Store.createReturn(payload);
+        if (!result.errors.length) { setActionError(null); persistDesktop(); refresh(); }
+        return result.errors.length ? { success: false, errors: result.errors } : { success: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setActionError(message);
+        return { success: false, errors: [message] };
+      }
+    }} />{actionError && <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{actionError}</p>}</>;
   }
 
   if (activeNav === "suppliers") {
@@ -86,7 +120,7 @@ export function OfflineModulesPanel({ activeNav }: { activeNav: NavItemId }) {
     const rules = phase6Store.listIncentiveRules();
     const productivity = selected ? phase6Store.staffProductivity(selected.id) : { assigned: 0, completed: 0, totalIncentive: 0, unpaidIncentive: 0 };
     const openOrders = ordersStore.listOrders().filter((o) => o.status !== "cancelled" && o.status !== "delivered").map((o) => ({ id: o.id, label: `${o.orderNumber} — ${o.customerName || "Customer"}` }));
-    return <div className="space-y-4"><div className="flex flex-wrap items-center gap-3"><h2 className="text-xl font-semibold text-slate-900">Staff Details</h2><select className="h-10 rounded-lg border border-slate-200 px-3 text-sm" value={staffId} onChange={(e) => setStaffId(e.target.value)}><option value="">Select staff</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>{selected && <StaffDetail staff={selected} assignments={assignments} payouts={payouts} rules={rules} productivity={productivity} ordersForAssign={openOrders} onAssign={(orderId) => { const r = phase6Store.assignStaffToOrder({ staffId: selected.id, orderId }); if (!r.errors.length) { persistDesktop(); refresh(); } }} onCompleteAssignment={(id) => { if (phase6Store.completeAssignment(id)) { persistDesktop(); refresh(); } }} onMarkPaid={(id) => { if (phase6Store.markIncentivePaid(id)) { persistDesktop(); refresh(); } }} onClose={() => setStaffId("")} />}</div>;
+    return <div className="space-y-4"><div className="flex flex-wrap items-center gap-3"><h2 className="text-xl font-semibold text-slate-900">Staff Details</h2><select className="h-10 rounded-lg border border-slate-200 px-3 text-sm" value={staffId} onChange={(e) => setStaffId(e.target.value)}><option value="">Select staff</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>{selected && <StaffDetail staff={selected} assignments={assignments} payouts={payouts} rules={rules} productivity={productivity} ordersForAssign={openOrders} onAssign={(orderId) => { try { const r = phase6Store.assignStaffToOrder({ staffId: selected.id, orderId }); if (r.errors.length) { setActionError(r.errors.join("; ")); return; } setActionError(null); persistDesktop(); refresh(); } catch (error) { setActionError(error instanceof Error ? error.message : String(error)); } }} onCompleteAssignment={(id) => { try { if (phase6Store.completeAssignment(id)) { setActionError(null); persistDesktop(); refresh(); } } catch (error) { setActionError(error instanceof Error ? error.message : String(error)); } }} onMarkPaid={(id) => { try { if (phase6Store.markIncentivePaid(id)) { setActionError(null); persistDesktop(); refresh(); } } catch (error) { setActionError(error instanceof Error ? error.message : String(error)); } }} onClose={() => setStaffId("")} />}{actionError && <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{actionError}</p>}</div>;
   }
 
   return <AuditLogList logs={phase7Store.listAuditLogs(500)} />;
