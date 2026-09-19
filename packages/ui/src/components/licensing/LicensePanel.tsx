@@ -42,6 +42,17 @@ function fmt(n: number) {
   return n < 0 ? "∞" : String(n);
 }
 
+function expiryWarning(daysRemaining: number | null, status: string): { stage: number; text: string } | null {
+  if (daysRemaining == null || daysRemaining < 0 || daysRemaining > 30) return null;
+  if (!["active", "trial", "grace"].includes(status)) return null;
+  const stage = daysRemaining <= 1 ? 1 : daysRemaining <= 3 ? 3 : daysRemaining <= 7 ? 7 : daysRemaining <= 15 ? 15 : 30;
+  const unit = daysRemaining === 1 ? "day" : "days";
+  return {
+    stage,
+    text: `License expiry warning: ${daysRemaining} ${unit} remaining. Renew before expiry to avoid feature restrictions; your business data will not be deleted.`,
+  };
+}
+
 export function LicensePanel({
   state,
   usage,
@@ -58,6 +69,7 @@ export function LicensePanel({
   onRefresh?: () => void;
 }) {
   const [token, setToken] = React.useState("");
+  const warning = expiryWarning(state.daysRemaining, state.status);
 
   const statusColor =
     state.status === "active" || state.status === "trial"
@@ -111,6 +123,12 @@ export function LicensePanel({
       </div>
 
       {state.reason && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{state.reason}</p>}
+      {warning && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">Renewal warning stage: {warning.stage} days</div>
+          <p className="mt-1 text-sm text-amber-900">{warning.text}</p>
+        </div>
+      )}
 
       <Card>
         <CardHeader><CardTitle className="text-sm font-semibold">Plan limits & usage</CardTitle></CardHeader>
