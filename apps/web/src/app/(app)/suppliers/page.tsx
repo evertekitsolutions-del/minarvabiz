@@ -15,7 +15,7 @@ export default function SuppliersPage() {
   const [paymentError, setPaymentError] = React.useState<string | null>(null);
   const [paymentForm, setPaymentForm] = React.useState({ date: todayLocal(), amount: "", paymentMethod: "cash" as PaymentMethod, reference: "", notes: "" });
   const [form, setForm] = React.useState({
-    name: "", company: "", phone: "", category: "materials", notes: "",
+    name: "", company: "", phone: "", email: "", address: "", category: "materials", openingBalance: "", notes: "",
   });
 
   const refresh = React.useCallback((q?: string) => {
@@ -26,9 +26,9 @@ export default function SuppliersPage() {
 
   function save() {
     if (!form.name.trim()) return;
-    phase5Store.createSupplier(form);
+    phase5Store.createSupplier({ ...form, openingBalance: parseFloat(form.openingBalance) || 0 });
     setOpen(false);
-    setForm({ name: "", company: "", phone: "", category: "materials", notes: "" });
+    setForm({ name: "", company: "", phone: "", email: "", address: "", category: "materials", openingBalance: "", notes: "" });
     refresh();
   }
 
@@ -62,12 +62,24 @@ export default function SuppliersPage() {
           <FormField label="Phone">
             <input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           </FormField>
+          <FormField label="Email">
+            <input className={inputClass} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </FormField>
+          <FormField label="Address">
+            <textarea className={inputClass + " h-auto py-2"} rows={2} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          </FormField>
           <FormField label="Category">
             <select className={selectClass} value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
               <option value="laundry">Laundry</option>
               <option value="materials">Materials</option>
               <option value="general">General</option>
             </select>
+          </FormField>
+          <FormField label="Opening balance">
+            <input className={inputClass} type="number" min="0" step="0.01" value={form.openingBalance} onChange={(e) => setForm({ ...form, openingBalance: e.target.value })} />
+          </FormField>
+          <FormField label="Notes">
+            <textarea className={inputClass + " h-auto py-2"} rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </FormField>
         </div>
       </Modal>
