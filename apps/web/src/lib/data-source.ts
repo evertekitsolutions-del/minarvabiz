@@ -189,7 +189,7 @@ function mapPurchaseOrder(row: Record<string, unknown>, lines: PurchaseOrderLine
     createdBy: (row.created_by as string) ?? null,
     version: Number(row.version || 1),
   };
-
+}
 
 export async function hydrateStoresFromSupabase(accessToken: string | null = null): Promise<{ ok: boolean; message: string; counts?: Record<string, number> }> {
   if (!isSupabaseConfigured()) return { ok: false, message: "Supabase is not configured for online production." };
