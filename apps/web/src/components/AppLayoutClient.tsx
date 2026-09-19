@@ -11,6 +11,7 @@ import {
   getSessionToken,
   phase6Store,
   phase9Store,
+  getRuntimeMode,
 } from "@minarvabiz/business-logic";
 import { hydrateStoresFromSupabase } from "@/lib/data-source";
 import { SetupBanner } from "@/components/SetupBanner";
@@ -67,6 +68,11 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
     if (u) {
       setUserName(u.fullName || u.email);
       setCurrentRole(u.role as Parameters<typeof setCurrentRole>[0]);
+    } else if (getRuntimeMode() === "demo") {
+      // Explicit demo mode is a non-production QA/demo environment. Give it an
+      // admin role so the visible demo controls can execute real domain mutations.
+      setUserName("Demo Admin");
+      setCurrentRole("admin");
     }
     void hydrateStoresFromSupabase(token).then((r) => {
       if (r.ok) {
