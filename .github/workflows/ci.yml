@@ -23,6 +23,64 @@ jobs:
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
       - run: pnpm --filter @minarvabiz/web build
 
+
+  web-ui-smoke:
+    needs: web
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_REQUIRE_AUTH: "false"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.0
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter @minarvabiz/web build
+      - name: Start production web server
+        shell: bash
+        run: |
+          set -e
+          nohup pnpm --filter @minarvabiz/web exec next start -p 3000 > /tmp/minarva-web.log 2>&1 &
+          echo $! > /tmp/minarva-web.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/dashboard >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/minarva-web.log || true
+          exit 1
+      - name: Launch headless Chrome
+        shell: bash
+        run: |
+          set -e
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "Chrome/Chromium was not found on the GitHub runner."
+            exit 1
+          fi
+          echo "Using browser: $CHROME"
+          nohup "$CHROME" --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage             --remote-debugging-address=127.0.0.1 --remote-debugging-port=9223             --user-data-dir=/tmp/minarva-chrome http://127.0.0.1:3000/dashboard             > /tmp/minarva-chrome.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:9223/json/list >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/minarva-chrome.log || true
+          exit 1
+      - name: Browser-driven commercial workflow smoke
+        run: node scripts/web-ui-deep-smoke.mjs
+      - name: Capture web UI diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          echo "=== Next.js log ==="
+          cat /tmp/minarva-web.log || true
+          echo "=== Chrome log ==="
+          cat /tmp/minarva-chrome.log || true
+
   license-admin:
     runs-on: ubuntu-latest
     steps:
