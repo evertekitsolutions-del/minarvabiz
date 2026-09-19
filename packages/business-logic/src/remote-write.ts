@@ -14,6 +14,10 @@ import type {
   Supplier,
   LaundryOrder,
   Purchase,
+  Warehouse,
+  WarehouseLocation,
+  WarehouseStockPosition,
+  WarehouseTransfer,
 } from "@minarvabiz/types";
 import { enqueueOutbox } from "./outbox-bridge";
 
@@ -30,6 +34,10 @@ export interface RemoteWriter {
   upsertSupplier?: (s: Supplier) => Promise<void>;
   createLaundry?: (o: LaundryOrder) => Promise<void>;
   createPurchase?: (p: Purchase) => Promise<void>;
+  upsertWarehouse?: (w: Warehouse) => Promise<void>;
+  upsertWarehouseLocation?: (l: WarehouseLocation) => Promise<void>;
+  upsertWarehouseStock?: (s: WarehouseStockPosition) => Promise<void>;
+  upsertWarehouseTransfer?: (t: WarehouseTransfer) => Promise<void>;
 }
 
 let writer: RemoteWriter | null = null;
@@ -112,4 +120,29 @@ export async function remoteCreatePurchase(p: Purchase) {
   enqueueOutbox("purchases", p.id, "insert", p);
   try { await writer?.createPurchase?.(p); }
   catch (e) { console.warn("[minarvabiz] remote purchase write failed", e); }
+}
+
+
+export async function remoteUpsertWarehouse(w: Warehouse) {
+  enqueueOutbox("warehouses", w.id, "update", w);
+  try { await writer?.upsertWarehouse?.(w); }
+  catch (e) { console.warn("[minarvabiz] remote warehouse write failed", e); }
+}
+
+export async function remoteUpsertWarehouseLocation(l: WarehouseLocation) {
+  enqueueOutbox("warehouse_locations", l.id, "update", l);
+  try { await writer?.upsertWarehouseLocation?.(l); }
+  catch (e) { console.warn("[minarvabiz] remote warehouse location write failed", e); }
+}
+
+export async function remoteUpsertWarehouseStock(s: WarehouseStockPosition) {
+  enqueueOutbox("warehouse_stock", s.id, "update", s);
+  try { await writer?.upsertWarehouseStock?.(s); }
+  catch (e) { console.warn("[minarvabiz] remote warehouse stock write failed", e); }
+}
+
+export async function remoteUpsertWarehouseTransfer(t: WarehouseTransfer) {
+  enqueueOutbox("warehouse_transfers", t.id, "update", t);
+  try { await writer?.upsertWarehouseTransfer?.(t); }
+  catch (e) { console.warn("[minarvabiz] remote warehouse transfer write failed", e); }
 }
