@@ -199,3 +199,19 @@ export async function remoteUpsertJournalEntry(entry: JournalEntry) {
   try { await writer?.upsertJournalEntry?.(entry); }
   catch (e) { console.warn("[minarvabiz] remote journal write failed", e); }
 }
+
+/** Queue the complete expense posting before awaiting any online I/O. */
+export async function remoteCreateExpenseWithJournal(expense: Expense, accounts: AccountingAccount[], entry: JournalEntry) {
+  enqueueOutbox("expenses", expense.id, "insert", expense);
+  for (const account of accounts) enqueueOutbox("accounts", account.id, "update", account);
+  enqueueOutbox("journal_entries", entry.id, "update", entry);
+  for (const line of entry.lines) enqueueOutbox("journal_entry_lines", line.id, "update", line);
+  const target = writer;
+  try {
+    await target?.createExpense?.(expense);
+    for (const account of accounts) await target?.upsertAccountingAccount?.(account);
+    await target?.upsertJournalEntry?.(entry);
+  } catch (error) {
+    console.warn("[minarvabiz] expense accounting write pending in outbox", error);
+  }
+}

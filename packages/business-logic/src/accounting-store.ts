@@ -7,6 +7,7 @@
  */
 import type {
   AccountingAccount,
+  Expense,
   AccountingAccountType,
   GeneralLedgerRow,
   JournalEntry,
@@ -18,7 +19,7 @@ import { generateId, nowISO } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { auditAction } from "./audit-actions";
 import { touchPersistence } from "./autosave";
-import { remoteUpsertAccountingAccount, remoteUpsertJournalEntry } from "./remote-write";
+import { remoteUpsertAccountingAccount, remoteUpsertJournalEntry, remoteCreateExpenseWithJournal } from "./remote-write";
 
 import { calculateProfitAndLoss, calculateBalanceSheet } from "./accounting-statements";
 
@@ -37,6 +38,7 @@ function normalBalance(type: AccountingAccountType): "debit" | "credit" {
 const SYSTEM_ACCOUNTS: Array<{ code: string; name: string; type: AccountingAccountType; systemKey: string }> = [
   { code: "1000", name: "Cash", type: "asset", systemKey: "cash" },
   { code: "1010", name: "Bank", type: "asset", systemKey: "bank" },
+  { code: "1020", name: "Payment Clearing", type: "asset", systemKey: "payment_clearing" },
   { code: "1100", name: "Accounts Receivable", type: "asset", systemKey: "accounts_receivable" },
   { code: "1200", name: "Inventory Asset", type: "asset", systemKey: "inventory_asset" },
   { code: "1300", name: "Input Tax Credit", type: "asset", systemKey: "input_tax" },
@@ -268,6 +270,7 @@ export function voidJournalEntry(id: UUID): { original: JournalEntry | null; rev
   assertPermission("accounting.manage");
   const original = journals.find((candidate) => candidate.id === id);
   if (!original) return { original: null, reversal: null, errors: ["Journal entry not found"] };
+  if (original.referenceType === "expense") return { original: null, reversal: null, errors: ["Automatic expense journals must be corrected through their source workflow"] };
   if (original.status !== "posted") return { original: null, reversal: null, errors: ["Only posted journals can be voided"] };
 
   const now = nowISO();
@@ -409,4 +412,62 @@ export function buildProfitAndLoss(from?: string, to?: string) {
 export function buildBalanceSheet(asOf?: string) {
   assertPermission("accounting.view");
   return calculateBalanceSheet(accounts, journals, asOf);
+}
+
+/** Post a newly created paid expense once, under expense permissions. */
+export function postExpenseJournal(expense: Expense): { journalEntry: JournalEntry | null; errors: string[] } {
+  assertPermission("expenses.manage");
+  const amount = r2(expense.amount);
+  const entryDate = String(expense.date).slice(0, 10);
+  if (!expense.id || expense.deletedAt || !Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
+    return { journalEntry: null, errors: ["Expense requires a valid ID and positive finite amount"] };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(entryDate) || !Number.isFinite(Date.parse(entryDate)) || new Date(entryDate).toISOString().slice(0, 10) !== entryDate) {
+    return { journalEntry: null, errors: ["Expense date is invalid"] };
+  }
+  if (!["cash", "bank", "card", "upi", "online", "other"].includes(expense.paymentMethod)) {
+    return { journalEntry: null, errors: ["Expense payment method is invalid"] };
+  }
+  const debitKey = expense.orderId ? "order_expenses" : "general_expenses";
+  const creditKey = expense.paymentMethod === "cash" ? "cash" : expense.paymentMethod === "bank" ? "bank" : "payment_clearing";
+  const existing = journals.find((entry) => entry.referenceType === "expense" && entry.referenceId === expense.id);
+  if (existing) {
+    const debitAccount = accounts.find((account) => account.systemKey === debitKey);
+    const creditAccount = accounts.find((account) => account.systemKey === creditKey);
+    const matches = existing.status === "posted" && existing.entryDate === entryDate && existing.totalDebit === amount && existing.totalCredit === amount
+      && existing.lines.length === 2 && existing.lines.some((line) => line.accountId === debitAccount?.id && line.debit === amount)
+      && existing.lines.some((line) => line.accountId === creditAccount?.id && line.credit === amount);
+    return matches ? { journalEntry: cloneEntry(existing), errors: [] } : { journalEntry: null, errors: ["Expense already has a different accounting posting"] };
+  }
+  const postingAccounts: AccountingAccount[] = [];
+  const now = nowISO();
+  for (const key of [debitKey, creditKey]) {
+    const template = SYSTEM_ACCOUNTS.find((item) => item.systemKey === key)!;
+    const existingAccount = accounts.find((account) => account.systemKey === key);
+    if (existingAccount && (!existingAccount.isActive || existingAccount.deletedAt || existingAccount.type !== template.type)) {
+      return { journalEntry: null, errors: ["Expense posting account is unavailable: " + template.name] };
+    }
+    if (!existingAccount && accounts.some((account) => account.code === template.code)) {
+      return { journalEntry: null, errors: ["Expense posting account code is already in use: " + template.code] };
+    }
+    postingAccounts.push(existingAccount || { ...template, id: generateId(), normalBalance: normalBalance(template.type), parentId: null,
+      isActive: true, createdAt: now, updatedAt: now, version: 1 });
+  }
+  const id = generateId();
+  const entry: JournalEntry = {
+    id, journalNumber: nextJournalNumber(), entryDate,
+    description: "Expense: " + (expense.description?.trim() || expense.categoryName || expense.id),
+    referenceType: "expense", referenceId: expense.id, status: "posted", postedAt: now,
+    totalDebit: amount, totalCredit: amount, branchId: expense.branchId ?? null, createdBy: expense.createdBy ?? null,
+    createdAt: now, updatedAt: now, version: 1,
+    lines: postingAccounts.map((account, index) => ({ id: generateId(), journalEntryId: id, accountId: account.id,
+      accountCode: account.code, accountName: account.name, debit: index === 0 ? amount : 0, credit: index === 1 ? amount : 0,
+      memo: expense.reference || null })),
+  };
+  for (const account of postingAccounts) if (!accounts.some((candidate) => candidate.id === account.id)) accounts.push(account);
+  journals.unshift(entry);
+  void remoteCreateExpenseWithJournal({ ...expense }, postingAccounts.map((account) => ({ ...account })), cloneEntry(entry));
+  auditAction("accounting.expense.post", "journal_entries", entry.id, null, cloneEntry(entry));
+  touchPersistence();
+  return { journalEntry: cloneEntry(entry), errors: [] };
 }
