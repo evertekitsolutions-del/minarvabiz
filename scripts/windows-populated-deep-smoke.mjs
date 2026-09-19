@@ -314,6 +314,10 @@ async function main() {
     // journal and verify the installed app exposes the Trial Balance.
     await click(ws, "ACCOUNTING", ["accounting"]);
     await assertMain(ws, "ACCOUNTING", ["Accounting & General Ledger", "Chart of Accounts"]);
+    await click(ws, "EXPENSE_STATEMENT", ["financial statements"]);
+    await assertMain(ws, "EXPENSE_AUTO_POSTED", ["Balance sheet balanced", "General Expenses"]);
+    await assertStatementProfit(ws, -50);
+    await click(ws, "ACCOUNTS_TAB", ["chart of accounts"]);
     await setMainField(ws, "Account code", "6100");
     await setMainField(ws, "Account name", "QA Expense");
     await selectFieldByText(ws, "Account type", "Expense");
@@ -335,7 +339,7 @@ async function main() {
 
     await click(ws, "FINANCIAL_STATEMENTS", ["financial statements"]);
     await assertMain(ws, "FINANCIAL_STATEMENTS", ["Profit & Loss", "Balance Sheet", "QA Expense", "Balance sheet balanced"]);
-    await assertStatementProfit(ws, -100);
+    await assertStatementProfit(ws, -150);
 
     // Staff create + row drill-down.
     await click(ws, "STAFF", ["staff management"]);

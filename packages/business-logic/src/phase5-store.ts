@@ -1,12 +1,13 @@
 import { assertPermission } from "./permissions";
 import { enqueueOutbox } from "./outbox-bridge";
-import { remoteCreateExpense, remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase } from "./remote-write";
+import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase } from "./remote-write";
 import type { Supplier, LaundryOrder, Expense, ExpenseCategory, Purchase, PaymentMethod, UUID } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { calculateLaundryProfit } from "./laundry";
 import { purchaseBalance, nextDocNumber } from "./expenses";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
+import { postExpenseJournal } from "./accounting-store";
 import { touchPersistence } from "./autosave";
 
 const suppliers: Supplier[] = [
@@ -72,7 +73,32 @@ export function updateLaundryStatus(id: UUID,status:LaundryOrder["status"]): Lau
 export function listExpenseCategories():ExpenseCategory[]{return[...expenseCategories];}
 export function createExpenseCategory(name:string):ExpenseCategory{assertPermission("expenses.manage");const c:ExpenseCategory={id:generateId(),name,isSystem:false,createdAt:nowISO()};expenseCategories.push(c);touchPersistence();enqueueOutbox("expense_categories",c.id,"insert",c);return c;}
 export function listExpenses(opts?:{orderId?:UUID}):Expense[]{let list=expenses.filter(e=>!e.deletedAt);if(opts?.orderId)list=list.filter(e=>e.orderId===opts.orderId);return list.sort((a,b)=>b.date.localeCompare(a.date));}
-export function createExpense(input:{date?:string;categoryId:UUID;amount:number;paymentMethod:PaymentMethod;description?:string|null;reference?:string|null;receiptUrl?:string|null;staffId?:UUID|null;orderId?:UUID|null}):{expense:Expense|null;errors:string[]}{assertPermission("expenses.manage");const errors:string[]=[];if(input.amount<=0)errors.push("Amount must be positive");const cat=expenseCategories.find(c=>c.id===input.categoryId);if(!cat)errors.push("Category required");if(errors.length)return{expense:null,errors};let orderNumber:string|null=null;if(input.orderId){const order=ordersStore.getOrder(input.orderId);if(!order)return{expense:null,errors:["Order not found"]};orderNumber=order.orderNumber;ordersStore.addOrderExpense(input.orderId,input.description||"Expense",input.amount);}const expense:Expense={id:generateId(),date:input.date||nowISO(),categoryId:input.categoryId,categoryName:cat!.name,amount:r2(input.amount),paymentMethod:input.paymentMethod,description:input.description??null,reference:input.reference??null,orderId:input.orderId??null,orderNumber,createdAt:nowISO(),updatedAt:nowISO(),version:1};expenses.push(expense);touchPersistence();void remoteCreateExpense(expense);return{expense,errors:[]};}
+export function createExpense(input: { date?: string; categoryId: UUID; amount: number; paymentMethod: PaymentMethod; description?: string | null; reference?: string | null; receiptUrl?: string | null; staffId?: UUID | null; orderId?: UUID | null }): { expense: Expense | null; errors: string[] } {
+  assertPermission("expenses.manage");
+  const errors: string[] = [];
+  if (!Number.isFinite(input.amount) || r2(input.amount) <= 0) errors.push("Amount must be positive and finite");
+  const cat = expenseCategories.find((category) => category.id === input.categoryId);
+  if (!cat) errors.push("Category required");
+  if (errors.length) return { expense: null, errors };
+  let orderNumber: string | null = null;
+  if (input.orderId) {
+    assertPermission("orders.manage");
+    const order = ordersStore.getOrder(input.orderId);
+    if (!order) return { expense: null, errors: ["Order not found"] };
+    orderNumber = order.orderNumber;
+  }
+  const expense: Expense = { id: generateId(), date: input.date || nowISO(), categoryId: input.categoryId, categoryName: cat!.name,
+    amount: r2(input.amount), paymentMethod: input.paymentMethod, description: input.description ?? null, reference: input.reference ?? null,
+    receiptUrl: input.receiptUrl ?? null, staffId: input.staffId ?? null, orderId: input.orderId ?? null, orderNumber,
+    createdAt: nowISO(), updatedAt: nowISO(), version: 1 };
+  // No persistence/outbox side effects until the journal passes validation.
+  expenses.push(expense);
+  const posting = postExpenseJournal(expense);
+  if (posting.errors.length) { expenses.pop(); return { expense: null, errors: posting.errors }; }
+  if (input.orderId) ordersStore.addOrderExpense(input.orderId, input.description || "Expense", expense.amount);
+  touchPersistence();
+  return { expense, errors: [] };
+}
 export function listPurchases(opts?:{kind?:"general"|"order_specific"}):Purchase[]{let list=purchases.filter(p=>!p.deletedAt);if(opts?.kind)list=list.filter(p=>p.kind===opts.kind);return list.sort((a,b)=>b.date.localeCompare(a.date));}
 export function createPurchase(input:{date?:string;supplierId?:UUID|null;description:string;amount:number;paymentMethod:PaymentMethod;paidAmount?:number;kind:"general"|"order_specific";orderId?:UUID|null;notes?:string|null}):{purchase:Purchase|null;errors:string[]}{assertPermission("purchases.manage");const errors:string[]=[];if(!input.description.trim())errors.push("Description required");if(input.amount<=0)errors.push("Amount must be positive");if(input.kind==="order_specific"&&!input.orderId)errors.push("Order is required for order-specific purchase");if(errors.length)return{purchase:null,errors};const bal=purchaseBalance(input.amount,input.paidAmount??0);const supplier=input.supplierId?getSupplier(input.supplierId):undefined;let orderNumber:string|null=null;if(input.orderId){const order=ordersStore.getOrder(input.orderId);if(!order)return{purchase:null,errors:["Order not found"]};orderNumber=order.orderNumber;ordersStore.addOrderExpense(input.orderId,input.description||"Order purchase",bal.amount);}const purchaseNumber=nextDocNumber(lastPurchaseNo,"PUR");lastPurchaseNo=purchaseNumber;const purchase:Purchase={id:generateId(),purchaseNumber,date:input.date||nowISO(),supplierId:input.supplierId??null,supplierName:supplier?.name??null,description:input.description,amount:bal.amount,paymentMethod:input.paymentMethod,paidAmount:bal.paidAmount,balanceAmount:bal.balanceAmount,kind:input.kind,orderId:input.orderId??null,orderNumber,notes:input.notes??null,createdAt:nowISO(),updatedAt:nowISO(),version:1};if(supplier&&bal.balanceAmount>0){supplier.outstandingBalance=r2(supplier.outstandingBalance+bal.balanceAmount);supplier.updatedAt=nowISO();}purchases.push(purchase);touchPersistence();void remoteCreatePurchase(purchase);return{purchase,errors:[]};}
 function r2(n:number){return Math.round((n+Number.EPSILON)*100)/100;}
