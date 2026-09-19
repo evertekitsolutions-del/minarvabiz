@@ -44,6 +44,9 @@ type DesktopDiagnosticsApi = {
   chooseBackupDirectory: () => Promise<string | null>;
   getLicenseState: () => Promise<{ status: string; plan: string | null; edition: string | null; daysRemaining: number | null; graceDaysRemaining: number | null; reason?: string }>;
   listPrinters?: () => Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>;
+  checkForUpdates?: () => Promise<{ status: "disabled" | "up_to_date" | "available" | "error"; currentVersion: string; version?: string; publishedAt?: string; notes?: string; error?: string }>;
+  downloadUpdate?: () => Promise<{ ok: boolean; version?: string; installerPath?: string; error?: string }>;
+  installUpdate?: () => Promise<{ ok: boolean; version?: string; backupPath?: string; error?: string }>;
 };
 
 function getDiagnosticsApi(): DesktopDiagnosticsApi | null {
@@ -59,6 +62,9 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
   const [theme, setTheme] = React.useState<ThemeId>(readTheme);
   const [diagnosticState, setDiagnosticState] = React.useState<"idle" | "working" | "done" | "error">("idle");
   const [diagnosticMessage, setDiagnosticMessage] = React.useState("");
+  const [updateState, setUpdateState] = React.useState<"idle" | "checking" | "available" | "downloading" | "ready" | "up_to_date" | "disabled" | "error">("idle");
+  const [updateVersion, setUpdateVersion] = React.useState("");
+  const [updateMessage, setUpdateMessage] = React.useState("");
   React.useEffect(() => setDraftProfile(profile), [profile]);
   React.useEffect(() => setDraftTax(tax), [tax]);
   React.useEffect(() => setDraftBackup(backup), [backup]);
@@ -69,6 +75,52 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
   function selectTheme(next: ThemeId) {
     setTheme(next);
     applyTheme(next);
+  }
+
+  async function checkUpdates() {
+    const api = getDiagnosticsApi();
+    if (!api?.checkForUpdates) {
+      setUpdateState("disabled");
+      setUpdateMessage("Secure updates are available in the Windows desktop edition.");
+      return;
+    }
+    setUpdateState("checking"); setUpdateMessage("");
+    try {
+      const result = await api.checkForUpdates();
+      setUpdateVersion(result.version || "");
+      if (result.status === "available") { setUpdateState("available"); setUpdateMessage(result.notes || `Version ${result.version} is available.`); return; }
+      if (result.status === "up_to_date") { setUpdateState("up_to_date"); setUpdateMessage(`Minarva Biz ${result.currentVersion} is up to date.`); return; }
+      if (result.status === "disabled") { setUpdateState("disabled"); setUpdateMessage("Secure update channel is not configured on this build."); return; }
+      setUpdateState("error"); setUpdateMessage(result.error || "Unable to check for updates.");
+    } catch (error) {
+      setUpdateState("error"); setUpdateMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function downloadUpdate() {
+    const api = getDiagnosticsApi();
+    if (!api?.downloadUpdate) return;
+    setUpdateState("downloading"); setUpdateMessage("Downloading and verifying the signed installer…");
+    try {
+      const result = await api.downloadUpdate();
+      if (!result.ok) { setUpdateState("error"); setUpdateMessage(result.error || "Update download failed."); return; }
+      setUpdateState("ready"); setUpdateVersion(result.version || updateVersion); setUpdateMessage("Update verified and ready. Installation will create a fresh database backup first.");
+    } catch (error) {
+      setUpdateState("error"); setUpdateMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function installUpdate() {
+    const api = getDiagnosticsApi();
+    if (!api?.installUpdate) return;
+    setUpdateMessage("Creating verified pre-update backup and starting installer…");
+    try {
+      const result = await api.installUpdate();
+      if (!result.ok) { setUpdateState("error"); setUpdateMessage(result.error || "Update installation was blocked."); return; }
+      setUpdateMessage(`Installer started for ${result.version || updateVersion}. Pre-update backup created successfully.`);
+    } catch (error) {
+      setUpdateState("error"); setUpdateMessage(error instanceof Error ? error.message : String(error));
+    }
   }
 
   async function chooseBackupLocation() { const api = getDiagnosticsApi(); if (!api) return; try { const selected = await api.chooseBackupDirectory(); if (selected) { setDraftBackup((prev) => ({ ...prev, destinationPath: selected })); onSaveBackup({ destinationPath: selected }); } } catch (error) { setDiagnosticState("error"); setDiagnosticMessage(error instanceof Error ? error.message : "Unable to choose backup folder."); } }
@@ -198,6 +250,17 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
         ))}
       </div>
       <div className="mt-4 flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3"><div><div className="text-sm font-medium text-slate-800">Current theme</div><div className="text-xs text-slate-500">{THEMES.find((item) => item.id === theme)?.name}</div></div><Button variant="outline" onClick={() => selectTheme("light")}>Reset to Light</Button></div>
+    </section>
+    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div><h3 className="text-lg font-semibold text-slate-900">Software updates</h3><p className="mt-1 max-w-2xl text-sm text-slate-500">Optional secure Windows updates. Minarva Biz verifies a signed manifest and installer SHA-256 before download/install. Updates are never forced and installation is blocked unless a verified database backup can be created.</p></div>
+        <Button variant="outline" onClick={checkUpdates} disabled={updateState === "checking" || updateState === "downloading"}>{updateState === "checking" ? "Checking…" : "Check for updates"}</Button>
+      </div>
+      {updateMessage && <p className={`mt-4 text-sm ${updateState === "error" ? "text-red-600" : updateState === "available" || updateState === "ready" ? "text-blue-700" : "text-slate-600"}`}>{updateMessage}</p>}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {updateState === "available" && <Button onClick={downloadUpdate}>Download & verify {updateVersion || "update"}</Button>}
+        {updateState === "ready" && <Button onClick={installUpdate}>Install update safely</Button>}
+      </div>
     </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
