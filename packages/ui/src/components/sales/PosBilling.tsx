@@ -14,9 +14,10 @@ export interface PosBillingProps {
   onComplete?: PosBillingProps["onCompleteSale"];
   onFindByBarcode?: (barcode: string) => Product | undefined;
   onAddCustomer?: () => void;
+  onAddProduct?: () => void;
 }
 
-export function PosBilling({ products, customers, onCompleteSale, onComplete, onFindByBarcode, onAddCustomer }: PosBillingProps) {
+export function PosBilling({ products, customers, onCompleteSale, onComplete, onFindByBarcode, onAddCustomer, onAddProduct }: PosBillingProps) {
   const [cart, setCart] = React.useState<CartLine[]>([]);
   const [search, setSearch] = React.useState("");
   const [barcode, setBarcode] = React.useState("");
@@ -30,11 +31,74 @@ export function PosBilling({ products, customers, onCompleteSale, onComplete, on
     setMessage(null);
   }
   function updateQty(productId: string, quantity: number) { if (quantity <= 0) setCart((p) => p.filter((l) => l.productId !== productId)); else setCart((p) => p.map((l) => l.productId === productId ? { ...l, quantity } : l)); }
-  function handleBarcode(e: React.FormEvent) { e.preventDefault(); const code = barcode.trim(); if (!code) return; const p = onFindByBarcode?.(code) || products.find((x) => x.barcode === code && x.isActive); if (p) { addProduct(p); setBarcode(""); } else setMessage({ type: "err", text: `No product for barcode ${code}` }); }
-  function complete() { const paid = parseFloat(paidAmount || "0") || 0; const submit = onCompleteSale ?? onComplete; if (!submit) { setMessage({ type: "err", text: "Sale action is unavailable" }); return; } const result = submit({ customerId: customerId || null, lines: cart, paidAmount: paid, paymentMethod: method }); if (result.success) { setMessage({ type: "ok", text: `Sale completed — ${result.invoiceNumber}` }); setCart([]); setPaidAmount(""); setCustomerId(""); } else setMessage({ type: "err", text: (result.errors || ["Sale failed"]).join("; ") }); }
+  function handleBarcode(e: React.FormEvent) {
+    e.preventDefault();
+    const code = barcode.trim();
+    if (!code) {
+      setMessage({ type: "err", text: "Enter or scan a barcode first." });
+      return;
+    }
+    const p = onFindByBarcode?.(code) || products.find((x) => x.barcode === code && x.isActive);
+    if (!p) {
+      setMessage({ type: "err", text: `No product found for barcode ${code}.` });
+      return;
+    }
+    if (p.stockQuantity <= 0) {
+      setMessage({ type: "err", text: `${p.name} is out of stock.` });
+      return;
+    }
+    addProduct(p);
+    setBarcode("");
+  }
+  function complete() {
+    const paid = parseFloat(paidAmount || "0") || 0;
+    const submit = onCompleteSale ?? onComplete;
+    if (!submit) {
+      setMessage({ type: "err", text: "Sale action is unavailable." });
+      return;
+    }
+    try {
+      const result = submit({ customerId: customerId || null, lines: cart, paidAmount: paid, paymentMethod: method });
+      if (result.success) {
+        setMessage({ type: "ok", text: `Sale completed — ${result.invoiceNumber}` });
+        setCart([]);
+        setPaidAmount("");
+        setCustomerId("");
+      } else {
+        setMessage({ type: "err", text: (result.errors || ["Sale failed"]).join("; ") });
+      }
+    } catch (error) {
+      setMessage({ type: "err", text: error instanceof Error ? error.message : String(error) });
+    }
+  }
   const filtered = search.trim() ? products.filter((p) => p.isActive && (p.name.toLowerCase().includes(search.toLowerCase()) || p.sku?.toLowerCase().includes(search.toLowerCase()) || p.barcode?.includes(search))) : products.filter((p) => p.isActive).slice(0, 12);
   return <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-    <div className="space-y-4 xl:col-span-7"><div className="flex flex-col gap-2 sm:flex-row"><input type="search" placeholder="Search products…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" /><form onSubmit={handleBarcode} className="flex gap-2"><input type="text" placeholder="Scan barcode" value={barcode} onChange={(e) => setBarcode(e.target.value)} className="h-10 w-40 rounded-lg border border-slate-200 px-3 text-sm" /><Button type="submit" variant="outline">Add</Button></form></div><div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{filtered.map((p) => <button key={p.id} type="button" onClick={() => addProduct(p)} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm"><div className="truncate text-sm font-medium text-slate-900">{p.name}</div><div className="mt-1 text-xs text-slate-500">Stock: {p.stockQuantity}</div><div className="mt-1 text-sm font-semibold text-indigo-600">{formatMoney(p.sellingPrice)}</div></button>)}</div></div>
+    <div className="space-y-4 xl:col-span-7">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input type="search" placeholder="Search products…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-10 flex-1 rounded-lg border border-slate-200 px-3 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
+        <form onSubmit={handleBarcode} className="flex gap-2">
+          <input type="text" placeholder="Scan barcode" value={barcode} onChange={(e) => setBarcode(e.target.value)} className="h-10 w-40 rounded-lg border border-slate-200 px-3 text-sm" />
+          <Button type="submit" variant="outline">Add Barcode</Button>
+        </form>
+        {onAddProduct && <Button type="button" variant="outline" onClick={onAddProduct}>+ Product</Button>}
+      </div>
+      {filtered.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+          <p className="font-medium text-slate-700">{products.length === 0 ? "No products available for POS." : "No products match this search."}</p>
+          <p className="mt-1 text-sm text-slate-500">{products.length === 0 ? "Add a product with selling price and opening stock, then return to billing." : "Try another name, SKU or barcode."}</p>
+          {products.length === 0 && onAddProduct && <Button type="button" className="mt-4" onClick={onAddProduct}>+ Add Product</Button>}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          {filtered.map((p) => <button key={p.id} type="button" disabled={p.stockQuantity <= 0} onClick={() => addProduct(p)} className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-indigo-300 disabled:cursor-not-allowed disabled:opacity-50">
+            <div className="truncate text-sm font-medium text-slate-900">{p.name}</div>
+            <div className="mt-1 text-xs text-slate-500">Stock: {p.stockQuantity}</div>
+            <div className="mt-1 text-sm font-semibold text-indigo-600">{formatMoney(p.sellingPrice)}</div>
+            {p.stockQuantity <= 0 && <div className="mt-1 text-xs font-medium text-rose-600">Out of stock</div>}
+          </button>)}
+        </div>
+      )}
+    </div>
     <div className="xl:col-span-5"><Card className="sticky top-4"><CardHeader><CardTitle className="text-base font-semibold text-slate-800">Current Sale</CardTitle></CardHeader><CardContent className="space-y-4"><div className="flex gap-2"><select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm"><option value="">Walk-in customer</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` (${c.phone})` : ""}</option>)}</select><Button type="button" size="sm" variant="outline" onClick={onAddCustomer} aria-label="Add customer">+</Button></div>
       <div className="max-h-56 space-y-2 overflow-y-auto">{cart.length === 0 && <p className="py-6 text-center text-sm text-slate-400">Cart is empty</p>}{cart.map((line) => <div key={line.productId} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2"><div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{line.productName}</div><div className="text-xs text-slate-500">{formatMoney(line.unitPrice)} each</div></div><input type="number" min={1} value={line.quantity} onChange={(e) => updateQty(line.productId, parseInt(e.target.value, 10) || 0)} className="h-8 w-16 rounded border border-slate-200 px-2 text-center text-sm" /><div className="w-20 text-right text-sm font-semibold">{formatMoney(line.quantity * line.unitPrice)}</div></div>)}</div>
       <div className="space-y-1 border-t border-slate-100 pt-3 text-sm"><div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{formatMoney(totals.itemsSubtotal)}</span></div>{totals.itemsDiscount > 0 && <div className="flex justify-between text-slate-600"><span>Discount</span><span>-{formatMoney(totals.itemsDiscount)}</span></div>}{totals.itemsTax > 0 && <div className="flex justify-between text-slate-600"><span>Tax</span><span>{formatMoney(totals.itemsTax)}</span></div>}<div className="flex justify-between text-base font-bold text-slate-900"><span>Total</span><span>{formatMoney(totals.grandTotal)}</span></div></div>
