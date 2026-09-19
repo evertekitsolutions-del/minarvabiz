@@ -15,8 +15,8 @@ import {
   pgUpdate,
   type UnitOfWork,
 } from "@minarvabiz/database";
-import { store, ordersStore, phase5Store, phase6Store, registerRemoteWriter, getRuntimeMode } from "@minarvabiz/business-logic";
-import type { Category, Expense, LaundryOrder, Payment, Purchase, StaffMember, Supplier } from "@minarvabiz/types";
+import { store, ordersStore, phase5Store, phase6Store, registerRemoteWriter, getRuntimeMode, hydrateWarehouseState } from "@minarvabiz/business-logic";
+import type { Category, Expense, LaundryOrder, Payment, Purchase, StaffMember, Supplier, Warehouse, WarehouseBin, WarehouseBinStock, WarehouseTransfer } from "@minarvabiz/types";
 
 let uowPromise: Promise<UnitOfWork> | null = null;
 let uowAccessToken: string | null = null;
@@ -106,6 +106,33 @@ function mapPayment(row: Record<string, unknown>): Payment {
     createdBy: (row.created_by as string) ?? null, branchId: (row.branch_id as string) ?? null, deviceId: (row.device_id as string) ?? null, version: Number(row.version || 1) };
 }
 
+function mapWarehouse(row: Record<string, unknown>): Warehouse {
+  return { id:String(row.id), name:String(row.name||""), code:String(row.code||""), branchId:(row.branch_id as string)??null,
+    address:(row.address as string)??null, isActive:row.is_active!==false, createdAt:String(row.created_at||new Date().toISOString()),
+    updatedAt:String(row.updated_at||new Date().toISOString()), version:Number(row.version||1) };
+}
+function mapWarehouseBin(row: Record<string, unknown>): WarehouseBin {
+  return { id:String(row.id), warehouseId:String(row.warehouse_id), code:String(row.code||""), name:(row.name as string)??null,
+    zone:(row.zone as string)??null, aisle:(row.aisle as string)??null, rack:(row.rack as string)??null, shelf:(row.shelf as string)??null,
+    isActive:row.is_active!==false, createdAt:String(row.created_at||new Date().toISOString()),
+    updatedAt:String(row.updated_at||new Date().toISOString()), version:Number(row.version||1) };
+}
+function mapWarehouseBinStock(row: Record<string, unknown>): WarehouseBinStock {
+  return { id:String(row.id), warehouseId:String(row.warehouse_id), binId:String(row.bin_id), productId:String(row.product_id),
+    quantity:Number(row.quantity||0), reservedQuantity:Number(row.reserved_quantity||0),
+    updatedAt:String(row.updated_at||new Date().toISOString()), version:Number(row.version||1) };
+}
+function mapWarehouseTransfer(row: Record<string, unknown>): WarehouseTransfer {
+  return { id:String(row.id), transferNumber:String(row.transfer_number||row.id), productId:String(row.product_id),
+    sourceWarehouseId:String(row.source_warehouse_id), sourceBinId:String(row.source_bin_id),
+    destinationWarehouseId:String(row.destination_warehouse_id), destinationBinId:String(row.destination_bin_id),
+    quantity:Number(row.quantity||0), status:(row.status as WarehouseTransfer["status"])||"pending", notes:(row.notes as string)??null,
+    requestedAt:String(row.requested_at||new Date().toISOString()), approvedAt:(row.approved_at as string)??null,
+    dispatchedAt:(row.dispatched_at as string)??null, completedAt:(row.completed_at as string)??null,
+    requestedBy:(row.requested_by as string)??null, approvedBy:(row.approved_by as string)??null,
+    updatedAt:String(row.updated_at||new Date().toISOString()), version:Number(row.version||1) };
+}
+
 export async function hydrateStoresFromSupabase(accessToken: string | null = null): Promise<{ ok: boolean; message: string; counts?: Record<string, number> }> {
   if (!isSupabaseConfigured()) return { ok: false, message: "Supabase is not configured for online production." };
   const cfg = configFromEnv();
@@ -116,7 +143,7 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
   const db = await getUnitOfWork(accessToken);
   try {
     const [customers, products, sales, orders] = await Promise.all([db.customers.list(), db.products.list(), db.sales.list(), db.orders.list()]);
-    const [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes] = await Promise.all([
+    const [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, warehousesRes, warehouseBinsRes, warehouseStockRes, warehouseTransfersRes] = await Promise.all([
       pgSelect<Record<string, unknown>>(cfg, "categories", "select=*&deleted_at=is.null&order=name.asc"),
       pgSelect<Record<string, unknown>>(cfg, "expenses", "select=*&deleted_at=is.null&order=date.desc"),
       pgSelect<Record<string, unknown>>(cfg, "purchases", "select=*&deleted_at=is.null&order=date.desc"),
@@ -124,12 +151,22 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
       pgSelect<Record<string, unknown>>(cfg, "laundry_orders", "select=*&deleted_at=is.null&order=created_at.desc"),
       pgSelect<Record<string, unknown>>(cfg, "staff_members", "select=*&deleted_at=is.null&order=name.asc"),
       pgSelect<Record<string, unknown>>(cfg, "payments", "select=*&order=created_at.desc"),
+      pgSelect<Record<string, unknown>>(cfg, "warehouses", "select=*&is_active=eq.true&order=name.asc"),
+      pgSelect<Record<string, unknown>>(cfg, "warehouse_bins", "select=*&is_active=eq.true&order=code.asc"),
+      pgSelect<Record<string, unknown>>(cfg, "warehouse_bin_stock", "select=*&order=updated_at.desc"),
+      pgSelect<Record<string, unknown>>(cfg, "warehouse_transfers", "select=*&order=requested_at.desc"),
     ]);
-    for (const result of [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes]) if (result.error) throw new Error(result.error.message);
+    for (const result of [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, warehousesRes, warehouseBinsRes, warehouseStockRes, warehouseTransfersRes]) if (result.error) throw new Error(result.error.message);
     store.hydrateCore({ customers, products, categories: (categoriesRes.data || []).map(mapCategory), sales, payments: (paymentsRes.data || []).map(mapPayment) });
     ordersStore.hydrateOrders({ orders });
     phase5Store.hydratePhase5({ expenses: (expensesRes.data || []).map(mapExpense), purchases: (purchasesRes.data || []).map(mapPurchase), suppliers: (suppliersRes.data || []).map(mapSupplier), laundryOrders: (laundryRes.data || []).map(mapLaundry) });
     phase6Store.hydratePhase6({ staff: (staffRes.data || []).map(mapStaff) });
+    hydrateWarehouseState({
+      warehouses: (warehousesRes.data || []).map(mapWarehouse),
+      bins: (warehouseBinsRes.data || []).map(mapWarehouseBin),
+      binStocks: (warehouseStockRes.data || []).map(mapWarehouseBinStock),
+      transfers: (warehouseTransfersRes.data || []).map(mapWarehouseTransfer),
+    });
 
     registerRemoteWriter({
       upsertCustomer: async (customer) => {
@@ -187,8 +224,32 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
       },
       createLaundry: async (laundry) => { const res = await pgInsert<Record<string, unknown>>(cfg, "laundry_orders", { id: laundry.id, order_number: laundry.orderNumber, customer_id: laundry.customerId, customer_name: laundry.customerName ?? null, supplier_id: laundry.supplierId ?? null, supplier_name: laundry.supplierName ?? null, garment: laundry.garment ?? "Laundry", quantity: laundry.quantity ?? 1, mode: laundry.mode, customer_rate: laundry.customerRate ?? 0, supplier_rate: laundry.supplierRate ?? 0, total_customer_charge: laundry.totalCustomerCharge ?? 0, total_supplier_cost: laundry.totalSupplierCost ?? 0, status: laundry.status ?? "pending", notes: laundry.notes ?? null, paid_amount: laundry.paidAmount ?? 0, balance_amount: laundry.balanceAmount ?? 0, created_at: laundry.createdAt, updated_at: laundry.updatedAt, branch_id: laundry.branchId ?? null, device_id: laundry.deviceId ?? null, version: laundry.version || 1 }); if (res.error) throw new Error(res.error.message); },
       createPurchase: async (purchase) => { const res = await pgInsert<Record<string, unknown>>(cfg, "purchases", { id: purchase.id, supplier_id: purchase.supplierId ?? null, doc_number: purchase.purchaseNumber, kind: purchase.kind, order_id: purchase.orderId ?? null, total: purchase.amount, paid: purchase.paidAmount, balance: purchase.balanceAmount, payment_method: purchase.paymentMethod, date: String(purchase.date).slice(0, 10), notes: purchase.notes ?? purchase.description ?? null, created_at: purchase.createdAt, updated_at: purchase.updatedAt, branch_id: purchase.branchId ?? null, device_id: purchase.deviceId ?? null, version: purchase.version || 1 }); if (res.error) throw new Error(res.error.message); },
+      upsertWarehouse: async (w) => {
+        const row={name:w.name,code:w.code,branch_id:w.branchId??null,address:w.address??null,is_active:w.isActive,updated_at:w.updatedAt,version:w.version};
+        const updated=await pgUpdate<Record<string, unknown>>(cfg,"warehouses",`id=eq.${w.id}`,row);
+        if(!updated.error&&updated.data?.length)return;
+        const inserted=await pgInsert<Record<string, unknown>>(cfg,"warehouses",{id:w.id,...row,created_at:w.createdAt}); if(inserted.error)throw new Error(inserted.error.message);
+      },
+      upsertWarehouseBin: async (b) => {
+        const row={warehouse_id:b.warehouseId,code:b.code,name:b.name??null,zone:b.zone??null,aisle:b.aisle??null,rack:b.rack??null,shelf:b.shelf??null,is_active:b.isActive,updated_at:b.updatedAt,version:b.version};
+        const updated=await pgUpdate<Record<string, unknown>>(cfg,"warehouse_bins",`id=eq.${b.id}`,row);
+        if(!updated.error&&updated.data?.length)return;
+        const inserted=await pgInsert<Record<string, unknown>>(cfg,"warehouse_bins",{id:b.id,...row,created_at:b.createdAt}); if(inserted.error)throw new Error(inserted.error.message);
+      },
+      upsertWarehouseBinStock: async (s) => {
+        const row={warehouse_id:s.warehouseId,bin_id:s.binId,product_id:s.productId,quantity:s.quantity,reserved_quantity:s.reservedQuantity,updated_at:s.updatedAt,version:s.version};
+        const updated=await pgUpdate<Record<string, unknown>>(cfg,"warehouse_bin_stock",`id=eq.${s.id}`,row);
+        if(!updated.error&&updated.data?.length)return;
+        const inserted=await pgInsert<Record<string, unknown>>(cfg,"warehouse_bin_stock",{id:s.id,...row}); if(inserted.error)throw new Error(inserted.error.message);
+      },
+      upsertWarehouseTransfer: async (t) => {
+        const row={transfer_number:t.transferNumber,product_id:t.productId,source_warehouse_id:t.sourceWarehouseId,source_bin_id:t.sourceBinId,destination_warehouse_id:t.destinationWarehouseId,destination_bin_id:t.destinationBinId,quantity:t.quantity,status:t.status,notes:t.notes??null,requested_at:t.requestedAt,approved_at:t.approvedAt??null,dispatched_at:t.dispatchedAt??null,completed_at:t.completedAt??null,requested_by:t.requestedBy??null,approved_by:t.approvedBy??null,updated_at:t.updatedAt,version:t.version};
+        const updated=await pgUpdate<Record<string, unknown>>(cfg,"warehouse_transfers",`id=eq.${t.id}`,row);
+        if(!updated.error&&updated.data?.length)return;
+        const inserted=await pgInsert<Record<string, unknown>>(cfg,"warehouse_transfers",{id:t.id,...row}); if(inserted.error)throw new Error(inserted.error.message);
+      },
     });
-    return { ok: true, message: "Hydrated from Supabase", counts: { customers: customers.length, products: products.length, categories: categoriesRes.data?.length || 0, sales: sales.length, orders: orders.length, expenses: expensesRes.data?.length || 0, purchases: purchasesRes.data?.length || 0, suppliers: suppliersRes.data?.length || 0, laundry: laundryRes.data?.length || 0, staff: staffRes.data?.length || 0, payments: paymentsRes.data?.length || 0 } };
+    return { ok: true, message: "Hydrated from Supabase", counts: { customers: customers.length, products: products.length, categories: categoriesRes.data?.length || 0, sales: sales.length, orders: orders.length, expenses: expensesRes.data?.length || 0, purchases: purchasesRes.data?.length || 0, suppliers: suppliersRes.data?.length || 0, laundry: laundryRes.data?.length || 0, staff: staffRes.data?.length || 0, payments: paymentsRes.data?.length || 0, warehouses: warehousesRes.data?.length || 0, warehouseBins: warehouseBinsRes.data?.length || 0, warehouseTransfers: warehouseTransfersRes.data?.length || 0 } };
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : String(e) }; }
 }
 

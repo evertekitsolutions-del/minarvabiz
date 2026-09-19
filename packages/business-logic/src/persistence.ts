@@ -22,13 +22,14 @@ import * as printSettings from "./print-settings";
 import * as quotationsMod from "./quotations";
 import * as cashReg from "./cash-register";
 import * as purchaseReturnsMod from "./purchase-returns";
+import * as warehouseMod from "./warehouse";
 import { exportOutbox, hydrateOutbox, type LocalOutboxEvent } from "./outbox-bridge";
 import * as dayEnd from "./day-end";
 import type { ShopProfile } from "./shop-profile";
 import type { TaxConfig } from "./tax-config";
 import type { AutoBackupSettings, BackupMeta } from "./auto-backup";
 
-export const SNAPSHOT_VERSION = 7;
+export const SNAPSHOT_VERSION = 8;
 
 export interface DomainSnapshot {
   version: number;
@@ -40,6 +41,7 @@ export interface DomainSnapshot {
   payments: Payment[];
   stockTransfers?: ReturnType<typeof store.listStockTransfers>;
   heldSales?: ReturnType<typeof store.listHeldSales>;
+  warehouse?: ReturnType<typeof warehouseMod.exportWarehouseState>;
   orders: ServiceOrder[];
   measurements: MeasurementProfile[];
   laundry: LaundryOrder[];
@@ -71,7 +73,7 @@ export interface DomainSnapshot {
 export function exportDomainSnapshot(): DomainSnapshot {
   return {
     version: SNAPSHOT_VERSION, exportedAt: new Date().toISOString(),
-    customers: store.listCustomers(), products: store.listProducts(), categories: store.listCategories(), sales: store.listSales(), payments: store.listPayments(), stockTransfers: store.listStockTransfers(), heldSales: store.listHeldSales(),
+    customers: store.listCustomers(), products: store.listProducts(), categories: store.listCategories(), sales: store.listSales(), payments: store.listPayments(), stockTransfers: store.listStockTransfers(), heldSales: store.listHeldSales(), warehouse: warehouseMod.exportWarehouseState(),
     orders: ordersStore.listOrders(), measurements: [], laundry: phase5Store.listLaundryOrders(), expenses: phase5Store.listExpenses(), purchases: phase5Store.listPurchases(),
     suppliers: phase5Store.listSuppliers(), expenseCategories: phase5Store.listExpenseCategories(), staff: phase6Store.listStaff(), assignments: phase6Store.listAssignments(),
     incentiveRules: phase6Store.listIncentiveRules(), payouts: phase6Store.listIncentivePayouts(), notifications: phase6Store.listNotifications(), returns: phase7Store.listReturns(), audit: phase7Store.listAuditLogs(500),
@@ -89,12 +91,13 @@ export function exportDomainSnapshotFull(): DomainSnapshot {
 export function exportDomainSnapshotJson(): string { return JSON.stringify(exportDomainSnapshotFull(), null, 2); }
 
 export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error?: string; counts?: Record<string, number> } {
-  if (!snap || ![1, 2, 3, 4, 5, 6, 7].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
+  if (!snap || ![1, 2, 3, 4, 5, 6, 7, 8].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
   try {
     if (snap.outbox) hydrateOutbox(snap.outbox);
     if (snap.quotations) quotationsMod.hydrateQuotations({ quotations: snap.quotations });
     if (snap.cashSessions) cashReg.hydrateCashRegister({ sessions: snap.cashSessions });
     if (snap.purchaseReturns) purchaseReturnsMod.hydratePurchaseReturns({ returns: snap.purchaseReturns });
+    if (snap.warehouse) warehouseMod.hydrateWarehouseState(snap.warehouse);
     store.hydrateCore({ customers: snap.customers, products: snap.products, categories: snap.categories, sales: snap.sales, payments: snap.payments, stockTransfers: snap.stockTransfers, heldSales: snap.heldSales });
     ordersStore.hydrateOrders({ orders: snap.orders, measurements: snap.measurements });
     phase5Store.hydratePhase5({ suppliers: snap.suppliers, laundryOrders: snap.laundry, expenses: snap.expenses, purchases: snap.purchases, expenseCategories: snap.expenseCategories });
@@ -108,7 +111,7 @@ export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error
     if (snap.printSettings) printSettings.hydratePrintSettings(snap.printSettings);
     if (snap.dayEndCloses) dayEnd.hydrateDayEnd({ closes: snap.dayEndCloses });
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
-  return { ok: true, counts: { customers: snap.customers?.length ?? 0, products: snap.products?.length ?? 0, sales: snap.sales?.length ?? 0, orders: snap.orders?.length ?? 0, staff: snap.staff?.length ?? 0, expenses: snap.expenses?.length ?? 0, productionWorkflows: snap.phase10?.productionWorkflows?.length ?? 0, materialRolls: snap.phase10?.materialRolls?.length ?? 0 } };
+  return { ok: true, counts: { customers: snap.customers?.length ?? 0, products: snap.products?.length ?? 0, sales: snap.sales?.length ?? 0, orders: snap.orders?.length ?? 0, staff: snap.staff?.length ?? 0, expenses: snap.expenses?.length ?? 0, productionWorkflows: snap.phase10?.productionWorkflows?.length ?? 0, materialRolls: snap.phase10?.materialRolls?.length ?? 0, warehouses: snap.warehouse?.warehouses?.length ?? 0, warehouseBins: snap.warehouse?.bins?.length ?? 0 } };
 }
 export function importDomainSnapshotJson(json: string) { try { return importDomainSnapshot(JSON.parse(json) as DomainSnapshot); } catch { return { ok: false as const, error: "Invalid snapshot JSON" }; } }
 

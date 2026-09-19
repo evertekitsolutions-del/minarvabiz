@@ -32,6 +32,35 @@ function remoteRow(table: string, aggregateId: UUID, payload: Record<string, unk
         device_id: payload.deviceId ?? null,
         version: payload.version ?? 1,
       };
+    case "warehouses":
+      return {
+        id: aggregateId, name: payload.name, code: payload.code, branch_id: payload.branchId ?? null,
+        address: payload.address ?? null, is_active: payload.isActive !== false,
+        created_at: payload.createdAt, updated_at: payload.updatedAt, version: payload.version ?? 1,
+      };
+    case "warehouse_bins":
+      return {
+        id: aggregateId, warehouse_id: payload.warehouseId, code: payload.code, name: payload.name ?? null,
+        zone: payload.zone ?? null, aisle: payload.aisle ?? null, rack: payload.rack ?? null, shelf: payload.shelf ?? null,
+        is_active: payload.isActive !== false, created_at: payload.createdAt, updated_at: payload.updatedAt, version: payload.version ?? 1,
+      };
+    case "warehouse_bin_stock":
+      return {
+        id: aggregateId, warehouse_id: payload.warehouseId, bin_id: payload.binId, product_id: payload.productId,
+        quantity: payload.quantity ?? 0, reserved_quantity: payload.reservedQuantity ?? 0,
+        updated_at: payload.updatedAt, version: payload.version ?? 1,
+      };
+    case "warehouse_transfers":
+      return {
+        id: aggregateId, transfer_number: payload.transferNumber, product_id: payload.productId,
+        source_warehouse_id: payload.sourceWarehouseId, source_bin_id: payload.sourceBinId,
+        destination_warehouse_id: payload.destinationWarehouseId, destination_bin_id: payload.destinationBinId,
+        quantity: payload.quantity, status: payload.status, notes: payload.notes ?? null,
+        requested_at: payload.requestedAt, approved_at: payload.approvedAt ?? null,
+        dispatched_at: payload.dispatchedAt ?? null, completed_at: payload.completedAt ?? null,
+        requested_by: payload.requestedBy ?? null, approved_by: payload.approvedBy ?? null,
+        updated_at: payload.updatedAt, version: payload.version ?? 1,
+      };
     case "production_workflows":
       return {
         id: aggregateId,
@@ -138,6 +167,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         "order_expenses", "laundry_orders", "expenses", "purchases", "suppliers",
         "staff_members", "sale_returns", "audit_logs",
         "production_workflows", "production_stage_events", "material_rolls", "material_consumptions",
+        "warehouses", "warehouse_bins", "warehouse_bin_stock", "warehouse_transfers",
       ];
       const records: Array<{ tableName: string; record: VersionedRecord }> = [];
       for (const table of tables) {

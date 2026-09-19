@@ -66,7 +66,7 @@ export default function InventoryPage() {
         }}
         onAdd={() => router.push("/products")}
       />
-      <p className="mt-2 text-xs text-slate-500">Click a product to adjust stock. Use Products page to add new items.</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2"><p className="text-xs text-slate-500">Click a product to adjust stock. Use Products page to add new items.</p><Button variant="outline" size="sm" onClick={() => router.push("/warehouse")}>Warehouse / WMS</Button></div>
       <Modal
         open={adjustOpen}
         title={selected ? `Adjust stock — ${selected.name}` : "Adjust stock"}

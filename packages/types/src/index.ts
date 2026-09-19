@@ -735,3 +735,69 @@ export interface CashRegisterSession {
   closedBy?: string | null;
   status: "open" | "closed";
 }
+
+
+// ---------------------------------------------------------------------------
+// Commercial WMS — warehouses, bins, bin stock and controlled transfers
+// ---------------------------------------------------------------------------
+
+export interface Warehouse {
+  id: UUID;
+  name: string;
+  code: string;
+  branchId?: UUID | null;
+  address?: string | null;
+  isActive: boolean;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  version: number;
+}
+
+export interface WarehouseBin {
+  id: UUID;
+  warehouseId: UUID;
+  code: string;
+  name?: string | null;
+  zone?: string | null;
+  aisle?: string | null;
+  rack?: string | null;
+  shelf?: string | null;
+  isActive: boolean;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  version: number;
+}
+
+export interface WarehouseBinStock {
+  id: UUID;
+  warehouseId: UUID;
+  binId: UUID;
+  productId: UUID;
+  quantity: number;
+  reservedQuantity: number;
+  updatedAt: ISODateString;
+  version: number;
+}
+
+export type WarehouseTransferStatus = "pending" | "approved" | "in_transit" | "completed" | "cancelled";
+
+export interface WarehouseTransfer {
+  id: UUID;
+  transferNumber: string;
+  productId: UUID;
+  sourceWarehouseId: UUID;
+  sourceBinId: UUID;
+  destinationWarehouseId: UUID;
+  destinationBinId: UUID;
+  quantity: number;
+  status: WarehouseTransferStatus;
+  notes?: string | null;
+  requestedAt: ISODateString;
+  approvedAt?: ISODateString | null;
+  dispatchedAt?: ISODateString | null;
+  completedAt?: ISODateString | null;
+  requestedBy?: UUID | null;
+  approvedBy?: UUID | null;
+  updatedAt: ISODateString;
+  version: number;
+}
