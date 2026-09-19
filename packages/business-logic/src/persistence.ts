@@ -15,6 +15,7 @@ import * as phase6Store from "./phase6-store";
 import * as phase7Store from "./phase7-store";
 import * as phase9Store from "./phase9-store";
 import * as phase10Store from "./phase10-operations-store";
+import * as warehouseStore from "./warehouse-store";
 import * as shopProfile from "./shop-profile";
 import * as taxConfig from "./tax-config";
 import * as autoBackup from "./auto-backup";
@@ -28,7 +29,7 @@ import type { ShopProfile } from "./shop-profile";
 import type { TaxConfig } from "./tax-config";
 import type { AutoBackupSettings, BackupMeta } from "./auto-backup";
 
-export const SNAPSHOT_VERSION = 7;
+export const SNAPSHOT_VERSION = 8;
 
 export interface DomainSnapshot {
   version: number;
@@ -65,6 +66,7 @@ export interface DomainSnapshot {
   cashSessions?: ReturnType<typeof cashReg.exportCashRegisterState>["sessions"];
   purchaseReturns?: ReturnType<typeof purchaseReturnsMod.exportPurchaseReturnsState>["returns"];
   phase10?: ReturnType<typeof phase10Store.exportPhase10State>;
+  warehouse?: ReturnType<typeof warehouseStore.exportWarehouseState>;
   dayEndCloses?: ReturnType<typeof dayEnd.listDayEndCloses>;
 }
 
@@ -77,7 +79,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     incentiveRules: phase6Store.listIncentiveRules(), payouts: phase6Store.listIncentivePayouts(), notifications: phase6Store.listNotifications(), returns: phase7Store.listReturns(), audit: phase7Store.listAuditLogs(500),
     branches: phase9Store.listBranches(), activeBranchId: phase9Store.getActiveBranch()?.id ?? null, shopProfile: shopProfile.getShopProfile(), taxConfig: taxConfig.getTaxConfig(),
     autoBackup: autoBackup.exportAutoBackupState(), printSettings: printSettings.getPrintSettings(), outbox: exportOutbox(), quotations: quotationsMod.exportQuotationsState().quotations, cashSessions: cashReg.exportCashRegisterState().sessions,
-    purchaseReturns: purchaseReturnsMod.exportPurchaseReturnsState().returns, phase10: phase10Store.exportPhase10State(), dayEndCloses: dayEnd.listDayEndCloses(),
+    purchaseReturns: purchaseReturnsMod.exportPurchaseReturnsState().returns, phase10: phase10Store.exportPhase10State(), warehouse: warehouseStore.exportWarehouseState(), dayEndCloses: dayEnd.listDayEndCloses(),
   };
 }
 
@@ -89,7 +91,7 @@ export function exportDomainSnapshotFull(): DomainSnapshot {
 export function exportDomainSnapshotJson(): string { return JSON.stringify(exportDomainSnapshotFull(), null, 2); }
 
 export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error?: string; counts?: Record<string, number> } {
-  if (!snap || ![1, 2, 3, 4, 5, 6, 7].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
+  if (!snap || ![1, 2, 3, 4, 5, 6, 7, 8].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
   try {
     if (snap.outbox) hydrateOutbox(snap.outbox);
     if (snap.quotations) quotationsMod.hydrateQuotations({ quotations: snap.quotations });
@@ -102,13 +104,14 @@ export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error
     phase7Store.hydratePhase7({ returns: snap.returns, auditLogs: snap.audit });
     if (snap.branches?.length) phase9Store.hydratePhase9({ branches: snap.branches, activeBranchId: snap.activeBranchId ?? undefined });
     if (snap.phase10) phase10Store.hydratePhase10(snap.phase10);
+    if (snap.warehouse) warehouseStore.hydrateWarehouseState(snap.warehouse);
     if (snap.shopProfile) shopProfile.hydrateShopProfile(snap.shopProfile);
     if (snap.taxConfig) taxConfig.hydrateTaxConfig(snap.taxConfig);
     if (snap.autoBackup) autoBackup.hydrateAutoBackup(snap.autoBackup);
     if (snap.printSettings) printSettings.hydratePrintSettings(snap.printSettings);
     if (snap.dayEndCloses) dayEnd.hydrateDayEnd({ closes: snap.dayEndCloses });
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
-  return { ok: true, counts: { customers: snap.customers?.length ?? 0, products: snap.products?.length ?? 0, sales: snap.sales?.length ?? 0, orders: snap.orders?.length ?? 0, staff: snap.staff?.length ?? 0, expenses: snap.expenses?.length ?? 0, productionWorkflows: snap.phase10?.productionWorkflows?.length ?? 0, materialRolls: snap.phase10?.materialRolls?.length ?? 0 } };
+  return { ok: true, counts: { customers: snap.customers?.length ?? 0, products: snap.products?.length ?? 0, sales: snap.sales?.length ?? 0, orders: snap.orders?.length ?? 0, staff: snap.staff?.length ?? 0, expenses: snap.expenses?.length ?? 0, productionWorkflows: snap.phase10?.productionWorkflows?.length ?? 0, materialRolls: snap.phase10?.materialRolls?.length ?? 0, warehouses: snap.warehouse?.warehouses?.length ?? 0, warehouseLocations: snap.warehouse?.locations?.length ?? 0 } };
 }
 export function importDomainSnapshotJson(json: string) { try { return importDomainSnapshot(JSON.parse(json) as DomainSnapshot); } catch { return { ok: false as const, error: "Invalid snapshot JSON" }; } }
 
