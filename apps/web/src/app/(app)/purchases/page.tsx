@@ -3,7 +3,7 @@
 import * as React from "react";
 import { PurchaseList, ProcurementPanel, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
 import { phase5Store, ordersStore, procurementStore, store } from "@minarvabiz/business-logic";
-import type { Purchase, PurchaseOrder, Product, ServiceOrder, PaymentMethod, Supplier } from "@minarvabiz/types";
+import type { GoodsReceipt, Purchase, PurchaseOrder, Product, ServiceOrder, PaymentMethod, Supplier } from "@minarvabiz/types";
 
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
 
@@ -13,6 +13,7 @@ export default function PurchasesPage() {
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [products, setProducts] = React.useState<Product[]>([]);
   const [purchaseOrders, setPurchaseOrders] = React.useState<PurchaseOrder[]>([]);
+  const [goodsReceipts, setGoodsReceipts] = React.useState<GoodsReceipt[]>([]);
   const [open, setOpen] = React.useState(false);
   const [supplierOpen, setSupplierOpen] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -35,6 +36,7 @@ export default function PurchasesPage() {
     setSuppliers(phase5Store.listSuppliers());
     setProducts(store.listProducts());
     setPurchaseOrders(procurementStore.listPurchaseOrders());
+    setGoodsReceipts(procurementStore.listGoodsReceipts());
   }, []);
 
   React.useEffect(() => { refresh(); }, [refresh]);
@@ -97,6 +99,7 @@ export default function PurchasesPage() {
 
       <ProcurementPanel
         purchaseOrders={purchaseOrders}
+        goodsReceipts={goodsReceipts}
         suppliers={suppliers}
         products={products}
         onCreate={(payload) => {
@@ -117,6 +120,16 @@ export default function PurchasesPage() {
           const result = procurementStore.cancelPurchaseOrder(id);
           refresh();
           return { success: Boolean(result.purchaseOrder), error: result.error };
+        }}
+        onReceive={(payload) => {
+          const result = procurementStore.receivePurchaseOrder(payload);
+          refresh();
+          return {
+            success: result.errors.length === 0 && Boolean(result.goodsReceipt),
+            grnNumber: result.goodsReceipt?.grnNumber,
+            status: result.purchaseOrder?.status,
+            errors: result.errors,
+          };
         }}
       />
 
