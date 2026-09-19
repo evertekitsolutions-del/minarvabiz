@@ -16,7 +16,7 @@ import {
   type UnitOfWork,
 } from "@minarvabiz/database";
 import { store, ordersStore, phase5Store, phase6Store, registerRemoteWriter, getRuntimeMode } from "@minarvabiz/business-logic";
-import type { Category, Expense, LaundryOrder, Payment, Purchase, StaffMember, Supplier } from "@minarvabiz/types";
+import type { Category, Expense, LaundryOrder, Payment, Purchase, StaffMember, Supplier, StockTransferRecord } from "@minarvabiz/types";
 
 let uowPromise: Promise<UnitOfWork> | null = null;
 let uowAccessToken: string | null = null;
@@ -106,6 +106,28 @@ function mapPayment(row: Record<string, unknown>): Payment {
     createdBy: (row.created_by as string) ?? null, branchId: (row.branch_id as string) ?? null, deviceId: (row.device_id as string) ?? null, version: Number(row.version || 1) };
 }
 
+function mapStockTransfer(row: Record<string, unknown>): StockTransferRecord {
+  return {
+    id: String(row.id),
+    referenceNumber: String(row.reference_number || row.id),
+    sourceProductId: String(row.source_product_id),
+    destinationProductId: String(row.destination_product_id),
+    sourceBranchId: (row.source_branch_id as string) ?? null,
+    destinationBranchId: (row.destination_branch_id as string) ?? null,
+    quantity: Number(row.quantity || 0),
+    notes: (row.notes as string) ?? null,
+    status: (row.status as StockTransferRecord["status"]) || "pending",
+    requestedAt: String(row.requested_at || row.created_at || new Date().toISOString()),
+    requestedBy: (row.requested_by as string) ?? null,
+    approvedAt: (row.approved_at as string) ?? null,
+    approvedBy: (row.approved_by as string) ?? null,
+    cancelledAt: (row.cancelled_at as string) ?? null,
+    createdAt: String(row.created_at || new Date().toISOString()),
+    updatedAt: String(row.updated_at || row.created_at || new Date().toISOString()),
+    version: Number(row.version || 1),
+  };
+}
+
 export async function hydrateStoresFromSupabase(accessToken: string | null = null): Promise<{ ok: boolean; message: string; counts?: Record<string, number> }> {
   if (!isSupabaseConfigured()) return { ok: false, message: "Supabase is not configured for online production." };
   const cfg = configFromEnv();
@@ -116,7 +138,7 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
   const db = await getUnitOfWork(accessToken);
   try {
     const [customers, products, sales, orders] = await Promise.all([db.customers.list(), db.products.list(), db.sales.list(), db.orders.list()]);
-    const [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes] = await Promise.all([
+    const [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, stockTransfersRes] = await Promise.all([
       pgSelect<Record<string, unknown>>(cfg, "categories", "select=*&deleted_at=is.null&order=name.asc"),
       pgSelect<Record<string, unknown>>(cfg, "expenses", "select=*&deleted_at=is.null&order=date.desc"),
       pgSelect<Record<string, unknown>>(cfg, "purchases", "select=*&deleted_at=is.null&order=date.desc"),
@@ -124,9 +146,10 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
       pgSelect<Record<string, unknown>>(cfg, "laundry_orders", "select=*&deleted_at=is.null&order=created_at.desc"),
       pgSelect<Record<string, unknown>>(cfg, "staff_members", "select=*&deleted_at=is.null&order=name.asc"),
       pgSelect<Record<string, unknown>>(cfg, "payments", "select=*&order=created_at.desc"),
+      pgSelect<Record<string, unknown>>(cfg, "stock_transfer_requests", "select=*&order=created_at.desc"),
     ]);
-    for (const result of [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes]) if (result.error) throw new Error(result.error.message);
-    store.hydrateCore({ customers, products, categories: (categoriesRes.data || []).map(mapCategory), sales, payments: (paymentsRes.data || []).map(mapPayment) });
+    for (const result of [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, stockTransfersRes]) if (result.error) throw new Error(result.error.message);
+    store.hydrateCore({ customers, products, categories: (categoriesRes.data || []).map(mapCategory), sales, payments: (paymentsRes.data || []).map(mapPayment), stockTransfers: (stockTransfersRes.data || []).map(mapStockTransfer) });
     ordersStore.hydrateOrders({ orders });
     phase5Store.hydratePhase5({ expenses: (expensesRes.data || []).map(mapExpense), purchases: (purchasesRes.data || []).map(mapPurchase), suppliers: (suppliersRes.data || []).map(mapSupplier), laundryOrders: (laundryRes.data || []).map(mapLaundry) });
     phase6Store.hydratePhase6({ staff: (staffRes.data || []).map(mapStaff) });
@@ -187,8 +210,31 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
       },
       createLaundry: async (laundry) => { const res = await pgInsert<Record<string, unknown>>(cfg, "laundry_orders", { id: laundry.id, order_number: laundry.orderNumber, customer_id: laundry.customerId, customer_name: laundry.customerName ?? null, supplier_id: laundry.supplierId ?? null, supplier_name: laundry.supplierName ?? null, garment: laundry.garment ?? "Laundry", quantity: laundry.quantity ?? 1, mode: laundry.mode, customer_rate: laundry.customerRate ?? 0, supplier_rate: laundry.supplierRate ?? 0, total_customer_charge: laundry.totalCustomerCharge ?? 0, total_supplier_cost: laundry.totalSupplierCost ?? 0, status: laundry.status ?? "pending", notes: laundry.notes ?? null, paid_amount: laundry.paidAmount ?? 0, balance_amount: laundry.balanceAmount ?? 0, created_at: laundry.createdAt, updated_at: laundry.updatedAt, branch_id: laundry.branchId ?? null, device_id: laundry.deviceId ?? null, version: laundry.version || 1 }); if (res.error) throw new Error(res.error.message); },
       createPurchase: async (purchase) => { const res = await pgInsert<Record<string, unknown>>(cfg, "purchases", { id: purchase.id, supplier_id: purchase.supplierId ?? null, doc_number: purchase.purchaseNumber, kind: purchase.kind, order_id: purchase.orderId ?? null, total: purchase.amount, paid: purchase.paidAmount, balance: purchase.balanceAmount, payment_method: purchase.paymentMethod, date: String(purchase.date).slice(0, 10), notes: purchase.notes ?? purchase.description ?? null, created_at: purchase.createdAt, updated_at: purchase.updatedAt, branch_id: purchase.branchId ?? null, device_id: purchase.deviceId ?? null, version: purchase.version || 1 }); if (res.error) throw new Error(res.error.message); },
+      upsertStockTransfer: async (transfer) => {
+        const row = {
+          reference_number: transfer.referenceNumber,
+          source_product_id: transfer.sourceProductId,
+          destination_product_id: transfer.destinationProductId,
+          source_branch_id: transfer.sourceBranchId ?? null,
+          destination_branch_id: transfer.destinationBranchId ?? null,
+          quantity: transfer.quantity,
+          notes: transfer.notes ?? null,
+          status: transfer.status,
+          requested_at: transfer.requestedAt,
+          requested_by: transfer.requestedBy ?? null,
+          approved_at: transfer.approvedAt ?? null,
+          approved_by: transfer.approvedBy ?? null,
+          cancelled_at: transfer.cancelledAt ?? null,
+          updated_at: transfer.updatedAt,
+          version: transfer.version,
+        };
+        const updated = await pgUpdate<Record<string, unknown>>(cfg, "stock_transfer_requests", `id=eq.${transfer.id}`, row);
+        if (!updated.error && updated.data?.length) return;
+        const inserted = await pgInsert<Record<string, unknown>>(cfg, "stock_transfer_requests", { id: transfer.id, ...row, created_at: transfer.createdAt });
+        if (inserted.error) throw new Error(inserted.error.message);
+      },
     });
-    return { ok: true, message: "Hydrated from Supabase", counts: { customers: customers.length, products: products.length, categories: categoriesRes.data?.length || 0, sales: sales.length, orders: orders.length, expenses: expensesRes.data?.length || 0, purchases: purchasesRes.data?.length || 0, suppliers: suppliersRes.data?.length || 0, laundry: laundryRes.data?.length || 0, staff: staffRes.data?.length || 0, payments: paymentsRes.data?.length || 0 } };
+    return { ok: true, message: "Hydrated from Supabase", counts: { customers: customers.length, products: products.length, categories: categoriesRes.data?.length || 0, sales: sales.length, orders: orders.length, expenses: expensesRes.data?.length || 0, purchases: purchasesRes.data?.length || 0, suppliers: suppliersRes.data?.length || 0, laundry: laundryRes.data?.length || 0, staff: staffRes.data?.length || 0, payments: paymentsRes.data?.length || 0, stockTransfers: stockTransfersRes.data?.length || 0 } };
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : String(e) }; }
 }
 
