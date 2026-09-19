@@ -3,7 +3,7 @@
  */
 
 import { roundMoney, subtractMoney } from "@minarvabiz/utils";
-import type { CartLine, SaleItem } from "@minarvabiz/types";
+import type { CartLine, SaleItem, PaymentMethod } from "@minarvabiz/types";
 import { calculateLineItem, calculateInvoiceTotals } from "@minarvabiz/billing";
 
 export interface CartTotals {
@@ -76,6 +76,58 @@ export function allocatePayment(total: number, paidAmount: number): PaymentAlloc
     balanceAmount: Math.max(0, balance),
     status,
   };
+}
+
+export interface TenderSplit {
+  method: PaymentMethod;
+  amount: number;
+  reference?: string | null;
+}
+
+export interface TenderValidation {
+  tendered: number;
+  collectible: number;
+  balanceDue: number;
+  changeDue: number;
+  cashTendered: number;
+  errors: string[];
+}
+
+/**
+ * Validate a POS tender before creating payment rows.
+ * Over-tender is only allowed when the excess can be returned from a cash split.
+ * This prevents accidental overcharging on card/UPI/bank tenders while still
+ * supporting normal cash-change workflows.
+ */
+export function validateTender(total: number, splits: TenderSplit[]): TenderValidation {
+  const payable = roundMoney(Math.max(0, total));
+  const normalized = splits
+    .map((split) => ({
+      method: split.method,
+      amount: roundMoney(Number(split.amount) || 0),
+      reference: split.reference ?? null,
+    }))
+    .filter((split) => split.amount !== 0);
+
+  const errors: string[] = [];
+  for (const split of normalized) {
+    if (split.amount < 0) errors.push(`${split.method}: payment amount cannot be negative`);
+  }
+
+  const positive = normalized.filter((split) => split.amount > 0);
+  const tendered = roundMoney(positive.reduce((sum, split) => sum + split.amount, 0));
+  const cashTendered = roundMoney(
+    positive.filter((split) => split.method === "cash").reduce((sum, split) => sum + split.amount, 0)
+  );
+  const collectible = roundMoney(Math.min(payable, tendered));
+  const balanceDue = roundMoney(Math.max(0, payable - tendered));
+  const changeDue = roundMoney(Math.max(0, tendered - payable));
+
+  if (changeDue > 0 && cashTendered < changeDue) {
+    errors.push("Overpayment must be covered by cash so the excess can be returned as change");
+  }
+
+  return { tendered, collectible, balanceDue, changeDue, cashTendered, errors };
 }
 
 /** Cost of goods for a sale (inventory cost) */

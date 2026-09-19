@@ -5,7 +5,7 @@ import type { Product, Customer, CartLine, PaymentMethod } from "@minarvabiz/typ
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
-import { calculateCartTotals } from "@minarvabiz/business-logic";
+import { calculateCartTotals, validateTender } from "@minarvabiz/business-logic";
 
 export interface PosPaymentSplit {
   method: PaymentMethod;
@@ -77,6 +77,7 @@ export function PosBilling({
   const [search, setSearch] = React.useState("");
   const [barcode, setBarcode] = React.useState("");
   const [customerId, setCustomerId] = React.useState<string>("");
+  const [notes, setNotes] = React.useState("");
   const [payments, setPayments] = React.useState<PaymentRow[]>([
     { method: "cash", amount: "", reference: "" },
   ]);
@@ -89,7 +90,19 @@ export function PosBilling({
     () => payments.reduce((sum, row) => sum + Math.max(0, Number(row.amount) || 0), 0),
     [payments]
   );
-  const balanceDue = Math.max(0, totals.grandTotal - totalTendered);
+  const tenderState = React.useMemo(
+    () => validateTender(
+      totals.grandTotal,
+      payments.map((row) => ({
+        method: row.method,
+        amount: Number(row.amount) || 0,
+        reference: row.reference.trim() || null,
+      }))
+    ),
+    [payments, totals.grandTotal]
+  );
+  const balanceDue = tenderState.balanceDue;
+  const changeDue = tenderState.changeDue;
 
   function addProduct(p: Product, qty = 1) {
     setCart((prev) => {
@@ -127,6 +140,11 @@ export function PosBilling({
       if (line.productId !== productId) return line;
       return { ...line, quantity: Math.min(quantity, line.stockQuantity) };
     }));
+  }
+
+  function updateDiscount(productId: string, discountPercent: number) {
+    const safe = Math.min(100, Math.max(0, Number.isFinite(discountPercent) ? discountPercent : 0));
+    setCart((prev) => prev.map((line) => line.productId === productId ? { ...line, discountPercent: safe } : line));
   }
 
   function handleBarcode(e: React.FormEvent) {
@@ -167,8 +185,17 @@ export function PosBilling({
   function resetCheckout() {
     setCart([]);
     setCustomerId("");
+    setNotes("");
     setPayments([{ method: "cash", amount: "", reference: "" }]);
     setHeldSaleId("");
+  }
+
+  function setExactPayment() {
+    if (totals.grandTotal <= 0) return;
+    setPayments((prev) => {
+      const first = prev[0] ?? { method: "cash" as PaymentMethod, amount: "", reference: "" };
+      return [{ ...first, amount: totals.grandTotal.toFixed(2) }];
+    });
   }
 
   function complete() {
@@ -190,6 +217,10 @@ export function PosBilling({
       .filter((row) => row.amount > 0);
     const paidAmount = paymentSplits.reduce((sum, row) => sum + row.amount, 0);
     const primaryMethod = paymentSplits[0]?.method ?? payments[0]?.method ?? "cash";
+    if (tenderState.errors.length) {
+      setMessage({ type: "err", text: tenderState.errors.join("; ") });
+      return;
+    }
 
     try {
       const result = submit({
@@ -198,6 +229,7 @@ export function PosBilling({
         paidAmount,
         paymentMethod: primaryMethod,
         paymentSplits,
+        notes: notes.trim() || undefined,
       });
       if (result.success) {
         setMessage({ type: "ok", text: `Sale completed — ${result.invoiceNumber}` });
@@ -217,7 +249,7 @@ export function PosBilling({
       setMessage({ type: "err", text: "Add at least one product before holding the sale." });
       return;
     }
-    const result = onHoldSale({ customerId: customerId || null, lines: cart });
+    const result = onHoldSale({ customerId: customerId || null, lines: cart, notes: notes.trim() || undefined });
     if (!result.success) {
       setMessage({ type: "err", text: (result.errors || ["Unable to hold sale"]).join("; ") });
       return;
@@ -235,6 +267,7 @@ export function PosBilling({
     }
     setCart(held.lines.map((line) => ({ ...line })));
     setCustomerId(held.customerId || "");
+    setNotes(held.notes || "");
     setPayments([{ method: "cash", amount: "", reference: "" }]);
     setMessage({ type: "ok", text: `Resumed ${held.holdNumber}` });
     onRemoveHeldSale?.(held.id);
@@ -349,14 +382,40 @@ export function PosBilling({
                     type="number"
                     min={1}
                     max={line.stockQuantity}
+                    aria-label={`Quantity ${line.productName}`}
                     value={line.quantity}
                     onChange={(e) => updateQty(line.productId, parseInt(e.target.value, 10) || 0)}
-                    className="h-8 w-16 rounded border border-slate-200 px-2 text-center text-sm"
+                    className="h-8 w-14 rounded border border-slate-200 px-2 text-center text-sm"
                   />
-                  <div className="w-20 text-right text-sm font-semibold">{formatMoney(line.quantity * line.unitPrice)}</div>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.01"
+                      aria-label={`Discount % ${line.productName}`}
+                      placeholder="Disc %"
+                      value={line.discountPercent || ""}
+                      onChange={(e) => updateDiscount(line.productId, Number(e.target.value) || 0)}
+                      className="h-8 w-16 rounded border border-slate-200 px-2 text-center text-xs"
+                    />
+                    <span className="text-[10px] text-slate-400">%</span>
+                  </div>
+                  <div className="w-20 text-right text-sm font-semibold">
+                    {formatMoney(calculateCartTotals([line]).grandTotal)}
+                  </div>
                 </div>
               ))}
             </div>
+
+            <input
+              type="text"
+              aria-label="Sale notes"
+              placeholder="Sale notes / reference"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm"
+            />
 
             <div className="space-y-1 border-t border-slate-100 pt-3 text-sm">
               <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{formatMoney(totals.itemsSubtotal)}</span></div>
@@ -371,10 +430,13 @@ export function PosBilling({
                   <div className="text-xs font-semibold text-slate-700">Split payment</div>
                   <div className="text-[11px] text-slate-500">Use one or more payment methods.</div>
                 </div>
-                <Button type="button" size="sm" variant="outline" onClick={addPaymentRow}>+ Payment</Button>
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={setExactPayment}>Exact</Button>
+                  <Button type="button" size="sm" variant="outline" onClick={addPaymentRow}>+ Payment</Button>
+                </div>
               </div>
               {payments.map((row, index) => (
-                <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                <div key={index} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2">
                   <select
                     aria-label={`Payment method ${index + 1}`}
                     value={row.method}
@@ -393,6 +455,14 @@ export function PosBilling({
                     onChange={(e) => updatePayment(index, { amount: e.target.value })}
                     className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm"
                   />
+                  <input
+                    aria-label={`Payment reference ${index + 1}`}
+                    type="text"
+                    placeholder="Reference"
+                    value={row.reference}
+                    onChange={(e) => updatePayment(index, { reference: e.target.value })}
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm"
+                  />
                   <Button
                     type="button"
                     size="sm"
@@ -405,10 +475,14 @@ export function PosBilling({
                   </Button>
                 </div>
               ))}
-              <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="grid grid-cols-3 gap-2 text-xs">
                 <div className="rounded-lg bg-white p-2 text-slate-600">Tendered <strong className="float-right text-slate-900">{formatMoney(totalTendered)}</strong></div>
                 <div className="rounded-lg bg-white p-2 text-slate-600">Balance <strong className="float-right text-slate-900">{formatMoney(balanceDue)}</strong></div>
+                <div className="rounded-lg bg-white p-2 text-slate-600">Change <strong className="float-right text-emerald-700">{formatMoney(changeDue)}</strong></div>
               </div>
+              {tenderState.errors.length > 0 && (
+                <p className="text-xs font-medium text-rose-600">{tenderState.errors.join("; ")}</p>
+              )}
             </div>
 
             {message && <p className={`text-sm ${message.type === "ok" ? "text-emerald-600" : "text-rose-600"}`}>{message.text}</p>}
@@ -422,7 +496,7 @@ export function PosBilling({
             )}
 
             <div className="grid grid-cols-3 gap-2">
-              <Button type="button" variant="outline" onClick={() => setCart([])}>Clear</Button>
+              <Button type="button" variant="outline" onClick={resetCheckout}>Clear</Button>
               <Button type="button" variant="outline" disabled={!cart.length || !onHoldSale} onClick={holdCurrentSale}>Hold Sale</Button>
               <Button type="button" disabled={cart.length === 0} onClick={complete}>Complete Sale</Button>
             </div>
