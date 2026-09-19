@@ -94,12 +94,12 @@ export function getCustomer(id: UUID): Customer | undefined {
 
 export function createCustomer(input: {
   name: string; phone?: string | null; whatsapp?: string | null; email?: string | null;
-  address?: string | null; notes?: string | null;
+  address?: string | null; birthday?: string | null; notes?: string | null;
 }): Customer {
   assertPermission("customers.manage");
   const c: Customer = {
     id: generateId(), name: input.name, phone: input.phone ?? null, whatsapp: input.whatsapp ?? null,
-    email: input.email || null, address: input.address ?? null, notes: input.notes ?? null,
+    email: input.email || null, address: input.address ?? null, birthday: input.birthday ?? null, notes: input.notes ?? null,
     outstandingBalance: 0, totalSpending: 0, createdAt: nowISO(), updatedAt: nowISO(),
   };
   customers.push(c);
