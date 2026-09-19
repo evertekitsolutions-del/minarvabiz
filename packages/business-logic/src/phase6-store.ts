@@ -61,3 +61,120 @@ export function unreadNotificationCount(){return notifications.filter(n=>!n.read
 export type NotificationChannel="in_app"|"sms"|"whatsapp"|"email";
 export interface NotificationPayload{channel:NotificationChannel;to:string;template:string;data:Record<string,string>}
 export async function sendNotification(payload:NotificationPayload){if(payload.channel==="in_app")return{ok:true,provider:"in_app"};return{ok:false,provider:"unconfigured",error:`No ${payload.channel} provider is configured.`};}
+
+
+function upsertOperationalNotification(input: {
+  key: string;
+  kind: AppNotification["kind"];
+  title: string;
+  body: string;
+  href?: string | null;
+}) {
+  const existing = notifications.find((n) => n.meta?.key === input.key);
+  if (existing) {
+    existing.kind = input.kind;
+    existing.title = input.title;
+    existing.body = input.body;
+    existing.href = input.href ?? null;
+    existing.createdAt = nowISO();
+    return existing;
+  }
+  return pushNotification({
+    kind: input.kind,
+    title: input.title,
+    body: input.body,
+    href: input.href ?? null,
+    meta: { key: input.key, operational: true },
+  });
+}
+
+/**
+ * Rebuild high-value operational alerts without creating duplicate rows.
+ * The caller may add runtime-only signals such as license, sync, or backup state.
+ */
+export function refreshOperationalNotifications(runtime?: {
+  licenseDaysRemaining?: number | null;
+  syncError?: string | null;
+  backupReminder?: boolean;
+}): AppNotification[] {
+  const lowStock = mainStore.listProducts().filter((p) => p.isActive && p.stockQuantity <= p.minimumStock);
+  if (lowStock.length > 0) {
+    upsertOperationalNotification({
+      key: "ops:low-stock",
+      kind: "low_stock",
+      title: "Low stock alert",
+      body: `${lowStock.length} item${lowStock.length === 1 ? "" : "s"} at or below minimum stock.`,
+      href: "/inventory",
+    });
+  }
+
+  const activeOrders = ordersStore.listOrders();
+  const ready = activeOrders.filter((o) => o.status === "ready_to_deliver");
+  if (ready.length > 0) {
+    upsertOperationalNotification({
+      key: "ops:ready-orders",
+      kind: "order_ready",
+      title: "Orders ready for delivery",
+      body: `${ready.length} order${ready.length === 1 ? "" : "s"} ready for delivery.`,
+      href: "/services",
+    });
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const due = activeOrders.filter((o) => o.status !== "delivered" && o.status !== "cancelled" && o.deliveryDate && o.deliveryDate.slice(0, 10) <= today);
+  if (due.length > 0) {
+    upsertOperationalNotification({
+      key: "ops:pending-delivery",
+      kind: "pending_delivery",
+      title: "Pending delivery",
+      body: `${due.length} order${due.length === 1 ? "" : "s"} due today or overdue.`,
+      href: "/delivery",
+    });
+  }
+
+  const outstanding = mainStore.listOutstandingCustomers();
+  if (outstanding.length > 0) {
+    const amount = outstanding.reduce((sum, customer) => sum + customer.outstandingBalance, 0);
+    upsertOperationalNotification({
+      key: "ops:payment-due",
+      kind: "payment_due",
+      title: "Customer payments due",
+      body: `${outstanding.length} customer${outstanding.length === 1 ? "" : "s"} have outstanding balances totalling ${amount.toFixed(2)}.`,
+      href: "/payments",
+    });
+  }
+
+  const days = runtime?.licenseDaysRemaining;
+  if (typeof days === "number" && days >= 0 && days <= 30) {
+    upsertOperationalNotification({
+      key: "ops:license-expiry",
+      kind: "license_expiry",
+      title: "License expiry warning",
+      body: `License expires in ${days} day${days === 1 ? "" : "s"}. Renew before expiry to avoid feature restrictions.`,
+      href: "/license",
+    });
+  }
+
+  if (runtime?.syncError) {
+    upsertOperationalNotification({
+      key: "ops:sync-error",
+      kind: "sync_error",
+      title: "Cloud sync needs attention",
+      body: runtime.syncError,
+      href: "/system",
+    });
+  }
+
+  if (runtime?.backupReminder) {
+    upsertOperationalNotification({
+      key: "ops:backup-reminder",
+      kind: "backup_reminder",
+      title: "Backup reminder",
+      body: "A verified backup is due. Create or verify a backup before major changes or updates.",
+      href: "/backup",
+    });
+  }
+
+  touchPersistence();
+  return listNotifications();
+}
