@@ -97,7 +97,7 @@ export default function InventoryPage() {
             <FormField label="Destination stock record">
               <select className={selectClass} value={destinationProductId} onChange={(e) => setDestinationProductId(e.target.value)}>
                 <option value="">Select destination</option>
-                {products.filter((p) => p.id !== selected?.id).map((p) => (
+                {store.listProducts().filter((p) => p.id !== selected?.id).map((p) => (
                   <option key={p.id} value={p.id}>{p.name}{p.sku ? ` · ${p.sku}` : ""}{p.branchId ? ` · branch ${p.branchId}` : ""}</option>
                 ))}
               </select>
