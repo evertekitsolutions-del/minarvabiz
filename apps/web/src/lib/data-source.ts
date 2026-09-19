@@ -154,6 +154,7 @@ function mapPurchaseOrderLine(row: Record<string, unknown>): PurchaseOrderLine {
     id: String(row.id),
     purchaseOrderId: String(row.purchase_order_id),
     productId: (row.product_id as string) ?? null,
+    warehouseLocationId: (row.warehouse_location_id as string) ?? null,
     description: String(row.description || ""),
     orderedQuantity: Number(row.ordered_quantity || 0),
     receivedQuantity: Number(row.received_quantity || 0),
@@ -388,6 +389,7 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
           const lineRow = {
             purchase_order_id: purchaseOrder.id,
             product_id: line.productId ?? null,
+            warehouse_location_id: line.warehouseLocationId ?? null,
             description: line.description,
             ordered_quantity: line.orderedQuantity,
             received_quantity: line.receivedQuantity,
