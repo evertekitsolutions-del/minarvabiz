@@ -291,7 +291,7 @@ async function main() {
     await click(ws, "PO_APPROVE", ["approve"]);
     await assertMain(ws, "PO_APPROVED", ["PO-", "approved"]);
     await click(ws, "PO_RECEIVE", ["receive goods"]);
-    await setField(ws, "Receive goods", "received quantity", "3");
+    await setField(ws, "Receive goods", "received quantity", "2");
     await click(ws, "POST_GRN", ["post goods receipt"]);
     await assertMain(ws, "GRN_POSTED", ["GRN-", "received"]);
 
