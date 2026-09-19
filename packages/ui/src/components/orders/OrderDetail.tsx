@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
 import {
   SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_FLOW,
-  measurementRevisionHistory, ordersStore,
+  measurementRevisionHistory, ordersStore, printOrderInvoice,
 } from "@minarvabiz/business-logic";
 
 function measurementLabel(key: string): string {
@@ -75,7 +75,11 @@ export function OrderDetail({
             {order.customerName} · {SERVICE_TYPE_LABELS[order.serviceType]}
           </p>
         </div>
-        {onClose && <Button variant="outline" onClick={onClose}>Close</Button>}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => printOrderInvoice(order, "a4")}>Print A4</Button>
+          <Button variant="outline" onClick={() => printOrderInvoice(order, "thermal")}>Print Thermal</Button>
+          {onClose && <Button variant="outline" onClick={onClose}>Close</Button>}
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
