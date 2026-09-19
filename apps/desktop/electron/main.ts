@@ -2,8 +2,9 @@ import { app, BrowserWindow, Menu, dialog, ipcMain, shell, safeStorage } from "e
 import * as path from "path";
 import * as fs from "fs";
 import { createHash, randomUUID } from "crypto";
-import { execFileSync } from "child_process";
+import { execFileSync, spawn } from "child_process";
 import { registerDesktopLicenseIpc, getDesktopLicenseState } from "./license";
+import { checkForSecureUpdate, downloadVerifiedUpdate, getDownloadedVerifiedUpdate } from "./updater";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 const runtimeSmoke = process.env.MINARVA_RUNTIME_SMOKE === "1";
@@ -128,5 +129,34 @@ ipcMain.handle("printer:list", async (event) => {
 ipcMain.handle("printer:printHtml", async (event, input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal"; thermalWidthMm?: number }) => {
   requireTrustedRenderer(event);
   return printHtmlDocument(input);
+});
+ipcMain.handle("update:check", async (event) => {
+  requireTrustedRenderer(event);
+  return checkForSecureUpdate(app.getVersion());
+});
+ipcMain.handle("update:download", async (event) => {
+  requireTrustedRenderer(event);
+  return downloadVerifiedUpdate(app.getPath("userData"));
+});
+ipcMain.handle("update:install", async (event) => {
+  requireTrustedRenderer(event);
+  if (process.platform !== "win32") return { ok: false, error: "Installer updates are supported on Windows only." };
+  const update = getDownloadedVerifiedUpdate();
+  if (!update) return { ok: false, error: "No verified downloaded update is available." };
+
+  // Upgrade safety gate: never start an updater unless a fresh valid SQLite backup exists.
+  const backup = createLocalBackup("automatic");
+  if (!backup || !isValidSqliteFile(backup.path)) {
+    return { ok: false, error: "Update blocked: a verified pre-update database backup could not be created." };
+  }
+
+  try {
+    const child = spawn(update.path, [], { detached: true, stdio: "ignore", windowsHide: false });
+    child.unref();
+    setTimeout(() => app.quit(), 350);
+    return { ok: true, version: update.version, backupPath: backup.path };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 });
 ipcMain.handle("app:relaunch", (event) => { requireTrustedRenderer(event); app.relaunch(); app.exit(0); return true; });
