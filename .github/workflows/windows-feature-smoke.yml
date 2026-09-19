@@ -13,6 +13,7 @@ permissions:
 jobs:
   feature-click-smoke:
     runs-on: windows-latest
+    timeout-minutes: 20
     env:
       MINARVA_RUNTIME_SMOKE: "1"
     steps:
@@ -36,8 +37,27 @@ jobs:
           if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot }
           New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
           $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
-          $installProc = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
-          if ($installProc.ExitCode -ne 0) { throw "Installer exited with code $($installProc.ExitCode)." }
+          if (-not $installer) { throw "Windows installer was not produced." }
+          # Keep attempt evidence even when installation fails before the app can log.
+          $diagnostics = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Install-Diagnostics"
+          New-Item -ItemType Directory -Force -Path $diagnostics | Out-Null
+          Get-FileHash -Algorithm SHA256 $installer.FullName | Format-List | Out-File (Join-Path $diagnostics "installer-hash.txt")
+          $installExit = $null
+          for ($installAttempt = 1; $installAttempt -le 2; $installAttempt++) {
+            $installProc = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
+            $installExit = $installProc.ExitCode
+            "Attempt $installAttempt exit code: $installExit" | Tee-Object -FilePath (Join-Path $diagnostics "install-attempts.txt") -Append
+            if ($installExit -eq 0) { break }
+            # One bounded retry for the observed NSIS access violation (0xC0000005).
+            # Other errors and a repeated crash remain hard failures.
+            if ($installExit -ne -1073741819 -or $installAttempt -eq 2) {
+              throw "Installer exited with code $installExit on attempt $installAttempt."
+            }
+            Write-Warning "NSIS access violation; retrying the same installer once."
+            Start-Sleep -Seconds 2
+            if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot }
+            New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
+          }
           $exe = Join-Path $installRoot "Minarva Biz.exe"
           if (-not (Test-Path $exe)) { throw "Installed executable not found at $exe" }
           "INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -88,5 +108,6 @@ jobs:
           path: |
             ${{ runner.temp }}/MinarvaBiz-Feature-UAT/**
             ${{ runner.temp }}/**/runtime-smoke.log
+            ${{ runner.temp }}/MinarvaBiz-Install-Diagnostics/**
           if-no-files-found: ignore
           retention-days: 14

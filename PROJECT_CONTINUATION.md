@@ -7,6 +7,15 @@
 4. Never claim tests/build/runtime verification without evidence.
 5. Keep this file aligned with the current delivery state and one clear next owner step.
 
+## Latest continuation audit — 2026-09-19
+- Inspected main `630e7d06c7152e20d83bd0875df20ef741a938f2`; PRs #4, #5 and #6 are merged.
+- Desktop POS/Add/button fixes and expanded category/order/barcode/laundry/settings/automatic-backup UAT are already in main. Do not recreate them.
+- Main CI `35421549044` and Licensing Smoke `35421549071` passed.
+- Main Feature Click Smoke `35421549053` and Deep Installed Smoke `35421549078` failed during clean installation with NSIS exit `-1073741819`, before interaction tests ran. PR #6 feature UAT passed on `d96c9607`.
+- Current repair: allow one retry only for that observed installer access violation in both UAT workflows, preserve installer hash/attempt diagnostics, bound jobs to 20 minutes, and run production-key deep UAT on PRs too.
+- The historical green audit below is NOT evidence that the latest expanded main UAT passed. Release verification remains pending until the repaired workflows pass.
+- Next step: inspect the repair PR's CI and both Windows UAT results; investigate any repeat installer crash or interaction failure before customer delivery.
+
 ## Repository
 - `evertekitsolutions-del/minarvabiz`
 - Branch: `main`
@@ -82,5 +91,5 @@ Final installer artifact from the deep Windows run:
 ### RED — code-side blockers
 - None identified after the latest automated release audit.
 
-## Single next owner step
+## Historical next owner step (superseded by the latest continuation audit)
 Install the verified `MinarvaBiz-Setup-1.0.4.exe` on the intended customer/test Windows PC, issue one temporary commercial test license from license-admin, and complete the physical UAT checklist. Any regression found there becomes the next code fix.

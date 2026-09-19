@@ -29,6 +29,7 @@ async function connect() {
       pending.delete(m.id);
       clearTimeout(p.timer);
       if (m.error) p.reject(new Error(m.error.message || "CDP error"));
+      else if (m.result?.exceptionDetails) p.reject(new Error(m.result.exceptionDetails.exception?.description || m.result.exceptionDetails.text || "Renderer evaluation failed"));
       else p.resolve(m.result?.result?.value);
     } catch {}
   });
@@ -74,6 +75,13 @@ async function assertMain(ws, name, patterns) {
     throw new Error(`${name} marker missing. Expected ${patterns.join(" + ")}. Main: ${value.slice(0,1400)}`);
   }
   console.log(`VIEW_${name} PASS`);
+}
+
+// Check cart state rather than matching product text already visible in the catalog.
+async function assertCart(ws, name, empty) {
+  const state = JSON.parse(await evalIn(ws, `JSON.stringify((()=>{const main=document.querySelector('[data-testid="app-content"]');const button=[...(main?.querySelectorAll('button')||[])].find(b=>(b.innerText||'').trim()==='Complete Sale');return {found:!!button,disabled:button?.disabled,empty:(main?.innerText||'').includes('Cart is empty')};})())`));
+  if (!state.found || state.disabled !== empty || state.empty !== empty) throw new Error(`${name}: unexpected cart state ${JSON.stringify(state)}`);
+  console.log(`CART_${name} PASS`);
 }
 
 async function setField(ws, dialogName, labelText, value) {
@@ -215,10 +223,17 @@ async function main() {
     // Barcode Add button must add a matching product to the POS cart.
     await click(ws, "SALES_BARCODE", ["sales & billing"]);
     await click(ws, "POS_TAB_BARCODE", ["pos billing"]);
+    await assertCart(ws, "BEFORE_BARCODE", true);
+    await click(ws, "POS_ADD_CUSTOMER", ["add customer"]);
+    await setField(ws, "Add Customer", "Name", "QA Quick Customer");
+    await click(ws, "POS_SAVE_CUSTOMER", ["save customer"]);
+    await assertMain(ws, "POS_QUICK_CUSTOMER", ["Current Sale", "QA Quick Customer"]);
     await setByPlaceholder(ws, "Scan barcode", "QA1001");
     await click(ws, "ADD_BARCODE", ["add barcode"]);
     await assertMain(ws, "BARCODE_CART", ["QA POS Product", "₹100.00"]);
+    await assertCart(ws, "AFTER_BARCODE_ADD", false);
     await click(ws, "CLEAR_CART", ["clear"]);
+    await assertCart(ws, "AFTER_CLEAR", true);
 
 
     // Expense create: default category must be real, not visually selected-only.
