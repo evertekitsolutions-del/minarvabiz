@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { GoodsReceipt, Product, PurchaseOrder, Supplier } from "@minarvabiz/types";
+import type { GoodsReceipt, Product, PurchaseOrder, Supplier, WarehouseLocation } from "@minarvabiz/types";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
@@ -21,6 +21,7 @@ export function ProcurementPanel({
   goodsReceipts,
   suppliers,
   products,
+  warehouseLocations = [],
   onCreate,
   onApprove,
   onCancel,
@@ -30,6 +31,7 @@ export function ProcurementPanel({
   goodsReceipts: GoodsReceipt[];
   suppliers: Supplier[];
   products: Product[];
+  warehouseLocations?: WarehouseLocation[];
   onCreate: (payload: {
     supplierId: string;
     expectedDeliveryDate?: string | null;
@@ -40,7 +42,7 @@ export function ProcurementPanel({
   onCancel: (id: string) => { success: boolean; error?: string };
   onReceive: (payload: {
     purchaseOrderId: string;
-    lines: Array<{ purchaseOrderLineId: string; quantity: number }>;
+    lines: Array<{ purchaseOrderLineId: string; quantity: number; warehouseLocationId?: string | null }>;
     notes?: string | null;
   }) => { success: boolean; grnNumber?: string; status?: string; errors?: string[] };
 }) {
@@ -52,6 +54,7 @@ export function ProcurementPanel({
   const [message, setMessage] = React.useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [receiveOrderId, setReceiveOrderId] = React.useState("");
   const [receiveQty, setReceiveQty] = React.useState<Record<string, string>>({});
+  const [receiveLocation, setReceiveLocation] = React.useState<Record<string, string>>({});
   const [receiveNotes, setReceiveNotes] = React.useState("");
 
   const receiveOrder = purchaseOrders.find((po) => po.id === receiveOrderId) ?? null;
@@ -106,6 +109,7 @@ export function ProcurementPanel({
     }
     setReceiveOrderId(po.id);
     setReceiveQty(quantities);
+    setReceiveLocation({});
     setReceiveNotes("");
     setMessage(null);
   }
@@ -113,7 +117,11 @@ export function ProcurementPanel({
   function submitReceipt() {
     if (!receiveOrder) return;
     const receiptLines = receiveOrder.lines
-      .map((line) => ({ purchaseOrderLineId: line.id, quantity: Number(receiveQty[line.id] || 0) }))
+      .map((line) => ({
+        purchaseOrderLineId: line.id,
+        quantity: Number(receiveQty[line.id] || 0),
+        warehouseLocationId: receiveLocation[line.id] || null,
+      }))
       .filter((line) => Number.isFinite(line.quantity) && line.quantity > 0);
     const result = onReceive({
       purchaseOrderId: receiveOrder.id,
@@ -127,6 +135,7 @@ export function ProcurementPanel({
     setMessage({ type: "ok", text: `${result.grnNumber || "Goods receipt"} posted · ${result.status || "received"}.` });
     setReceiveOrderId("");
     setReceiveQty({});
+    setReceiveLocation({});
     setReceiveNotes("");
   }
 
@@ -234,10 +243,10 @@ export function ProcurementPanel({
       <Modal
         open={Boolean(receiveOrder)}
         title={receiveOrder ? `Receive goods — ${receiveOrder.poNumber}` : "Receive goods"}
-        onClose={() => { setReceiveOrderId(""); setReceiveQty({}); setReceiveNotes(""); }}
+        onClose={() => { setReceiveOrderId(""); setReceiveQty({}); setReceiveLocation({}); setReceiveNotes(""); }}
         className="max-w-2xl"
         footer={<>
-          <Button variant="outline" onClick={() => { setReceiveOrderId(""); setReceiveQty({}); setReceiveNotes(""); }}>Cancel</Button>
+          <Button variant="outline" onClick={() => { setReceiveOrderId(""); setReceiveQty({}); setReceiveLocation({}); setReceiveNotes(""); }}>Cancel</Button>
           <Button onClick={submitReceipt}>Post Goods Receipt</Button>
         </>}
       >
@@ -248,21 +257,38 @@ export function ProcurementPanel({
               {receiveOrder.lines.map((line) => {
                 const remaining = Math.max(0, line.orderedQuantity - line.receivedQuantity);
                 return (
-                  <FormField key={line.id} label={`${line.description} received quantity`}>
-                    <div className="grid grid-cols-[1fr_auto] items-center gap-3">
-                      <input
-                        className={inputClass}
-                        type="number"
-                        min="0"
-                        max={remaining}
-                        step="0.001"
-                        value={receiveQty[line.id] ?? "0"}
-                        disabled={remaining <= 0}
-                        onChange={(e) => setReceiveQty((current) => ({ ...current, [line.id]: e.target.value }))}
-                      />
-                      <span className="text-xs text-slate-500">remaining {remaining}</span>
-                    </div>
-                  </FormField>
+                  <div key={line.id} className="grid gap-2 rounded-xl border border-slate-100 p-3 md:grid-cols-2">
+                    <FormField label={`${line.description} received quantity`}>
+                      <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+                        <input
+                          className={inputClass}
+                          type="number"
+                          min="0"
+                          max={remaining}
+                          step="0.001"
+                          value={receiveQty[line.id] ?? "0"}
+                          disabled={remaining <= 0}
+                          onChange={(e) => setReceiveQty((current) => ({ ...current, [line.id]: e.target.value }))}
+                        />
+                        <span className="text-xs text-slate-500">remaining {remaining}</span>
+                      </div>
+                    </FormField>
+                    <FormField label="Receive into warehouse / bin">
+                      <select
+                        className={selectClass}
+                        value={receiveLocation[line.id] || ""}
+                        disabled={!line.productId || remaining <= 0}
+                        onChange={(e) => setReceiveLocation((current) => ({ ...current, [line.id]: e.target.value }))}
+                      >
+                        <option value="">Unallocated stock</option>
+                        {warehouseLocations.map((location) => (
+                          <option key={location.id} value={location.id}>
+                            {location.code} — {location.name} ({location.type})
+                          </option>
+                        ))}
+                      </select>
+                    </FormField>
+                  </div>
                 );
               })}
             </div>
