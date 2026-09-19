@@ -79,25 +79,48 @@ export function printSaleInvoice(sale: Sale, paper: "a4" | "thermal" = "a4") {
   w.document.close();
 }
 
-export function buildOrderInvoiceHtml(order: ServiceOrder): string {
+export function buildOrderInvoiceHtml(order: ServiceOrder, opts?: { paper?: "a4" | "thermal" }): string {
   const shop = getShopProfile();
-  return `<!DOCTYPE html><html><head><title>${escapeHtml(order.orderNumber)}</title>
-<style>body{font-family:system-ui;padding:16px}table{width:100%;border-collapse:collapse}
-td,th{border-bottom:1px solid #e2e8f0;padding:6px;text-align:left}</style></head>
-<body>
-<h1>${escapeHtml(shop.shopName)}</h1>
-<p>Order ${escapeHtml(order.orderNumber)} · ${escapeHtml(order.customerName || "")}</p>
-<p>Service: ${escapeHtml(String(order.serviceType))} · Status: ${escapeHtml(String(order.status))}</p>
+  const paper = opts?.paper ?? "a4";
+  const width = paper === "thermal" ? "80mm" : "210mm";
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${escapeHtml(order.orderNumber)}</title>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;padding:16px;color:#0f172a}
+.sheet{max-width:${width};margin:0 auto}
+h1{font-size:18px;margin:0 0 4px}.muted{color:#64748b;font-size:12px}
+table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
+td,th{border-bottom:1px solid #e2e8f0;padding:6px 4px;text-align:left}.r{text-align:right}.tot{font-weight:700}
+@media print{body{padding:0}}
+</style></head>
+<body><div class="sheet">
+<h1>${escapeHtml(shop.shopName || "Minarva Biz")}</h1>
+<div class="muted">${escapeHtml(shop.address || "")}</div>
+<div class="muted">${shop.phone ? "Tel: " + escapeHtml(shop.phone) : ""}</div>
+<hr/>
+<p><strong>Order:</strong> ${escapeHtml(order.orderNumber)}</p>
+<p><strong>Customer:</strong> ${escapeHtml(order.customerName || "")}</p>
+<p><strong>Service:</strong> ${escapeHtml(String(order.serviceType))} &nbsp; <strong>Status:</strong> ${escapeHtml(String(order.status))}</p>
+<p><strong>Order date:</strong> ${new Date(order.orderDate).toLocaleString("en-IN")}</p>
+${order.deliveryDate ? `<p><strong>Delivery:</strong> ${new Date(order.deliveryDate).toLocaleDateString("en-IN")}</p>` : ""}
 <table>
-<tr><td>Price</td><td>${formatMoney(order.price)}</td></tr>
-<tr><td>Discount</td><td>${formatMoney(order.discount)}</td></tr>
-<tr><td>Advance</td><td>${formatMoney(order.advance)}</td></tr>
-<tr><td>Balance</td><td>${formatMoney(order.balance)}</td></tr>
-<tr><td>Material cost</td><td>${formatMoney(order.externalMaterialCost)}</td></tr>
-<tr><td>Order expenses</td><td>${formatMoney(order.orderExpensesTotal)}</td></tr>
+<tr><td>Price</td><td class="r">${formatMoney(order.price)}</td></tr>
+<tr><td>Discount</td><td class="r">${formatMoney(order.discount)}</td></tr>
+<tr><td>Advance</td><td class="r">${formatMoney(order.advance)}</td></tr>
+<tr class="tot"><td>Balance</td><td class="r">${formatMoney(order.balance)}</td></tr>
+${paper === "a4" ? `<tr><td>Material cost</td><td class="r">${formatMoney(order.externalMaterialCost)}</td></tr><tr><td>Order expenses</td><td class="r">${formatMoney(order.orderExpensesTotal)}</td></tr>` : ""}
 </table>
-<script>window.onload=function(){window.print()}</script>
-</body></html>`;
+${order.notes ? `<p class="muted">Notes: ${escapeHtml(order.notes)}</p>` : ""}
+<p class="muted">${escapeHtml(shop.receiptFooter || "Thank you!")}</p>
+</div><script>window.onload=function(){window.print&&window.print()}</script></body></html>`;
+}
+
+export function printOrderInvoice(order: ServiceOrder, paper: "a4" | "thermal" = "a4") {
+  if (typeof window === "undefined") return;
+  const html = buildOrderInvoiceHtml(order, { paper });
+  const w = window.open("", "_blank", paper === "thermal" ? "width=420,height=700" : "width=900,height=900");
+  if (!w) return;
+  w.document.write(html);
+  w.document.close();
 }
 
 function escapeHtml(s: string) {
