@@ -154,6 +154,54 @@ export async function authSignIn(
   }
 }
 
+export async function authRequestPasswordReset(
+  cfg: SupabaseConfig,
+  email: string,
+  redirectTo: string
+): Promise<PgResult<{ sent: true }>> {
+  try {
+    const endpoint = new URL(`${authBase(cfg)}/recover`);
+    if (redirectTo) endpoint.searchParams.set("redirect_to", redirectTo);
+    const res = await fetch(endpoint.toString(), {
+      method: "POST",
+      headers: { apikey: cfg.anonKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { data: null, error: { message: body.error_description || body.msg || res.statusText } };
+    }
+    return { data: { sent: true }, error: null };
+  } catch (e) {
+    return { data: null, error: { message: e instanceof Error ? e.message : String(e) } };
+  }
+}
+
+export async function authUpdatePassword(
+  cfg: SupabaseConfig,
+  accessToken: string,
+  password: string
+): Promise<PgResult<{ updated: true }>> {
+  try {
+    const res = await fetch(`${authBase(cfg)}/user`, {
+      method: "PUT",
+      headers: {
+        apikey: cfg.anonKey,
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { data: null, error: { message: body.error_description || body.msg || res.statusText } };
+    }
+    return { data: { updated: true }, error: null };
+  } catch (e) {
+    return { data: null, error: { message: e instanceof Error ? e.message : String(e) } };
+  }
+}
+
 export async function authSignUp(
   cfg: SupabaseConfig,
   email: string,

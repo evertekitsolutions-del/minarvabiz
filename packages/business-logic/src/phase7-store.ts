@@ -207,6 +207,9 @@ export function dayEndReport(): DayEndReport {
   const orderExp = orders.reduce((a, o) => a + o.orderExpensesTotal, 0);
   const laundryRevenue = laundry.reduce((a, l) => a + l.totalCustomerCharge, 0);
   const generalExp = expenses.filter((e) => !e.orderId).reduce((a, e) => a + e.amount, 0);
+  const staffIncentives = phase6Store.listIncentivePayouts()
+    .filter((p) => p.calculatedAt.startsWith(today))
+    .reduce((a, p) => a + p.amount, 0);
 
   const inflow = (method: PaymentMethod) => payments.filter((p) => p.method === method && p.referenceType !== "refund").reduce((a, p) => a + p.amount, 0);
   const refundOutflow = (method: PaymentMethod) => payments.filter((p) => p.method === method && p.referenceType === "refund").reduce((a, p) => a + p.amount, 0);
@@ -216,7 +219,7 @@ export function dayEndReport(): DayEndReport {
 
   const outstanding = sales.reduce((a, s) => a + s.balanceAmount, 0) + orders.reduce((a, o) => a + o.balance, 0);
   return buildDayEndReport({ productSales, serviceRevenue, laundryRevenue, costOfGoods: cogs, orderMaterialCosts: orderMat,
-    orderSpecificExpenses: orderExp, generalExpenses: generalExp, staffIncentives: 0, cashReceived: cash,
+    orderSpecificExpenses: orderExp, generalExpenses: generalExp, staffIncentives, cashReceived: cash,
     cardPayments: card, otherPayments: other, outstandingAmount: outstanding });
 }
 
