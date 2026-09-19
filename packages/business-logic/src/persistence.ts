@@ -27,7 +27,7 @@ import type { ShopProfile } from "./shop-profile";
 import type { TaxConfig } from "./tax-config";
 import type { AutoBackupSettings, BackupMeta } from "./auto-backup";
 
-export const SNAPSHOT_VERSION = 4;
+export const SNAPSHOT_VERSION = 5;
 
 export interface DomainSnapshot {
   version: number;
@@ -37,6 +37,7 @@ export interface DomainSnapshot {
   categories: Category[];
   sales: Sale[];
   payments: Payment[];
+  stockTransfers?: ReturnType<typeof store.listStockTransfers>;
   orders: ServiceOrder[];
   measurements: MeasurementProfile[];
   laundry: LaundryOrder[];
@@ -67,7 +68,7 @@ export interface DomainSnapshot {
 export function exportDomainSnapshot(): DomainSnapshot {
   return {
     version: SNAPSHOT_VERSION, exportedAt: new Date().toISOString(),
-    customers: store.listCustomers(), products: store.listProducts(), categories: store.listCategories(), sales: store.listSales(), payments: store.listPayments(),
+    customers: store.listCustomers(), products: store.listProducts(), categories: store.listCategories(), sales: store.listSales(), payments: store.listPayments(), stockTransfers: store.listStockTransfers(),
     orders: ordersStore.listOrders(), measurements: [], laundry: phase5Store.listLaundryOrders(), expenses: phase5Store.listExpenses(), purchases: phase5Store.listPurchases(),
     suppliers: phase5Store.listSuppliers(), expenseCategories: phase5Store.listExpenseCategories(), staff: phase6Store.listStaff(), assignments: phase6Store.listAssignments(),
     incentiveRules: phase6Store.listIncentiveRules(), payouts: phase6Store.listIncentivePayouts(), notifications: phase6Store.listNotifications(), returns: phase7Store.listReturns(), audit: phase7Store.listAuditLogs(500),
@@ -85,13 +86,13 @@ export function exportDomainSnapshotFull(): DomainSnapshot {
 export function exportDomainSnapshotJson(): string { return JSON.stringify(exportDomainSnapshotFull(), null, 2); }
 
 export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error?: string; counts?: Record<string, number> } {
-  if (!snap || ![1, 2, 3, 4].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
+  if (!snap || ![1, 2, 3, 4, 5].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
   try {
     if (snap.outbox) hydrateOutbox(snap.outbox);
     if (snap.quotations) quotationsMod.hydrateQuotations({ quotations: snap.quotations });
     if (snap.cashSessions) cashReg.hydrateCashRegister({ sessions: snap.cashSessions });
     if (snap.purchaseReturns) purchaseReturnsMod.hydratePurchaseReturns({ returns: snap.purchaseReturns });
-    store.hydrateCore({ customers: snap.customers, products: snap.products, categories: snap.categories, sales: snap.sales, payments: snap.payments });
+    store.hydrateCore({ customers: snap.customers, products: snap.products, categories: snap.categories, sales: snap.sales, payments: snap.payments, stockTransfers: snap.stockTransfers });
     ordersStore.hydrateOrders({ orders: snap.orders, measurements: snap.measurements });
     phase5Store.hydratePhase5({ suppliers: snap.suppliers, laundryOrders: snap.laundry, expenses: snap.expenses, purchases: snap.purchases, expenseCategories: snap.expenseCategories });
     phase6Store.hydratePhase6({ staff: snap.staff, assignments: snap.assignments, incentiveRules: snap.incentiveRules, payouts: snap.payouts, notifications: snap.notifications });
