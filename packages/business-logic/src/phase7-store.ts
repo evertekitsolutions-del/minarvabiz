@@ -5,9 +5,10 @@ import { assertPermission } from "./permissions";
 
 import type {
   SaleReturn, SaleReturnItem, ReturnReason, PaymentMethod,
-  AuditLogEntry, BackupMeta, SalesReportRow, UUID, Sale,
+  AuditLogEntry, BackupMeta, SalesReportRow, UUID, Sale, CartLine,
 } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
+import { calculateInvoiceTotals } from "@minarvabiz/billing";
 import { applyStockMovement } from "./inventory";
 import { buildDayEndReport, type DayEndReport } from "./reports";
 import { calculatePeriodSummary } from "./profit";
@@ -51,11 +52,13 @@ export function listReturns(): SaleReturn[] {
 export function createReturn(input: {
   saleId: UUID; reason: ReturnReason; notes?: string | null; refundMethod: PaymentMethod;
   items: Array<{ saleItemId: UUID; productId: UUID; productName: string; quantity: number; unitPrice: number; restock: boolean }>;
-}): { ret: SaleReturn | null; errors: string[] } {
+  /** "credit" preserves paid value as internal exchange credit instead of emitting a refund Payment row. */
+  refundMode?: "refund" | "credit";
+}): { ret: SaleReturn | null; errors: string[]; paidRefund: number; receivableReduction: number } {
   assertPermission("returns.manage");
   const sale = mainStore.getSale(input.saleId);
-  if (!sale) return { ret: null, errors: ["Sale not found"] };
-  if (input.items.length === 0) return { ret: null, errors: ["Select at least one item"] };
+  if (!sale) return { ret: null, errors: ["Sale not found"], paidRefund: 0, receivableReduction: 0 };
+  if (input.items.length === 0) return { ret: null, errors: ["Select at least one item"], paidRefund: 0, receivableReduction: 0 };
 
   const errors: string[] = [];
   const requestedByItem = new Map<UUID, number>();
@@ -71,7 +74,7 @@ export function createReturn(input: {
     const requested = requestedByItem.get(item.saleItemId) ?? item.quantity;
     if (alreadyReturned + requested > orig.quantity) errors.push(`${item.productName}: return quantity exceeds remaining quantity`);
   }
-  if (errors.length) return { ret: null, errors };
+  if (errors.length) return { ret: null, errors, paidRefund: 0, receivableReduction: 0 };
 
   const returnId = generateId();
   const returnItems: SaleReturnItem[] = input.items.map((item) => {
@@ -83,7 +86,7 @@ export function createReturn(input: {
   const totalRefund = Math.round(returnItems.reduce((s, i) => s + i.refundAmount, 0) * 100) / 100;
   const availableValue = Math.round((Math.max(0, sale.paidAmount) + Math.max(0, sale.balanceAmount)) * 100) / 100;
   if (totalRefund > availableValue) {
-    return { ret: null, errors: ["Refund exceeds the remaining paid and receivable amount on this sale"] };
+    return { ret: null, errors: ["Refund exceeds the remaining paid and receivable amount on this sale"], paidRefund: 0, receivableReduction: 0 };
   }
 
   const paidRefund = Math.min(totalRefund, Math.max(0, sale.paidAmount));
@@ -122,24 +125,185 @@ export function createReturn(input: {
   const ret: SaleReturn = {
     id: returnId, returnNumber: nextReturnNo(), saleId: sale.id, invoiceNumber: sale.invoiceNumber,
     customerId: sale.customerId, customerName: sale.customerName, reason: input.reason, notes: input.notes ?? null,
-    totalRefund, refundMethod: input.refundMethod, status: "completed", items: returnItems, createdAt: nowISO(), version: 1,
+    totalRefund, refundMethod: input.refundMethod, status: "completed", resolution: input.refundMode === "credit" ? "exchange" : "refund", items: returnItems, createdAt: nowISO(), version: 1,
   };
   returns.push(ret);
 
-  const refundPayment = mainStore.recordRefundPayment({ returnId: ret.id, saleId: sale.id, customerId: sale.customerId,
-    amount: paidRefund, method: input.refundMethod, notes: `Refund ${ret.returnNumber} for invoice ${sale.invoiceNumber}` });
+  const refundPayment = input.refundMode === "credit" ? null : mainStore.recordRefundPayment({
+    returnId: ret.id,
+    saleId: sale.id,
+    customerId: sale.customerId,
+    amount: paidRefund,
+    method: input.refundMethod,
+    notes: `Refund ${ret.returnNumber} for invoice ${sale.invoiceNumber}`,
+  });
 
   enqueueOutbox("returns", ret.id, "insert", ret);
   enqueueOutbox("sales", sale.id, "update", sale);
   if (updatedCustomer) enqueueOutbox("customers", updatedCustomer.id, "update", updatedCustomer);
 
   audit("sale.return", "returns", ret.id, oldSale, { returnNumber: ret.returnNumber, invoiceNumber: sale.invoiceNumber,
-    totalRefund, paidRefund, receivableReduction, refundPaymentId: refundPayment?.id ?? null, refundMethod: input.refundMethod });
+    totalRefund, paidRefund, receivableReduction, refundPaymentId: refundPayment?.id ?? null, refundMethod: input.refundMethod, refundMode: input.refundMode ?? "refund" });
 
-  phase6Store.pushNotification({ kind: "system", title: "Return processed",
-    body: `${ret.returnNumber} refund ${totalRefund} for ${sale.invoiceNumber}`, href: "/returns" });
+  phase6Store.pushNotification({
+    kind: "system",
+    title: input.refundMode === "credit" ? "Exchange return processed" : "Return processed",
+    body: `${ret.returnNumber} ${input.refundMode === "credit" ? "exchange credit" : "refund"} ${totalRefund} for ${sale.invoiceNumber}`,
+    href: "/returns",
+  });
   touchPersistence();
-  return { ret, errors: [] };
+  return { ret, errors: [], paidRefund, receivableReduction };
+}
+
+
+export function createExchange(input: {
+  saleId: UUID;
+  reason: ReturnReason;
+  notes?: string | null;
+  returnItems: Array<{ saleItemId: UUID; productId: UUID; productName: string; quantity: number; unitPrice: number; restock: boolean }>;
+  replacementLines: CartLine[];
+  paymentMethod: PaymentMethod;
+  additionalPaidAmount: number;
+  refundMethod: PaymentMethod;
+}): {
+  ret: SaleReturn | null;
+  replacementSale: Sale | null;
+  storeCreditApplied: number;
+  extraRefund: number;
+  amountDue: number;
+  errors: string[];
+} {
+  assertPermission("returns.manage");
+  assertPermission("sales.create");
+  const original = mainStore.getSale(input.saleId);
+  const errors: string[] = [];
+  if (!original) errors.push("Original sale not found");
+  if (!input.returnItems.length) errors.push("Select at least one item to return");
+  if (!input.replacementLines.length) errors.push("Add at least one replacement item");
+  if (errors.length || !original) {
+    return { ret: null, replacementSale: null, storeCreditApplied: 0, extraRefund: 0, amountDue: 0, errors };
+  }
+
+  const requestedByItem = new Map<UUID, number>();
+  const restockByProduct = new Map<UUID, number>();
+  let returnValue = 0;
+  for (const item of input.returnItems) {
+    const orig = original.items.find((saleItem) => saleItem.id === item.saleItemId);
+    if (!orig) { errors.push(`${item.productName}: item is not on the original invoice`); continue; }
+    const requested = (requestedByItem.get(item.saleItemId) ?? 0) + item.quantity;
+    requestedByItem.set(item.saleItemId, requested);
+    const alreadyReturned = returns
+      .filter((r) => r.saleId === original.id && r.status === "completed")
+      .flatMap((r) => r.items)
+      .filter((r) => r.saleItemId === item.saleItemId)
+      .reduce((sum, r) => sum + r.quantity, 0);
+    if (item.quantity <= 0 || alreadyReturned + requested > orig.quantity) {
+      errors.push(`${orig.productName}: invalid exchange return quantity`);
+      continue;
+    }
+    returnValue += item.quantity * orig.unitPrice;
+    if (item.restock) restockByProduct.set(orig.productId, (restockByProduct.get(orig.productId) ?? 0) + item.quantity);
+  }
+
+  for (const line of input.replacementLines) {
+    const live = mainStore.getProduct(line.productId);
+    if (!live) { errors.push(`Replacement product not found: ${line.productName}`); continue; }
+    if (!Number.isFinite(line.quantity) || line.quantity <= 0) errors.push(`${line.productName}: quantity must be greater than zero`);
+    if (!Number.isFinite(line.unitPrice) || line.unitPrice < 0) errors.push(`${line.productName}: invalid selling price`);
+    const projected = live.stockQuantity + (restockByProduct.get(live.id) ?? 0);
+    if (line.quantity > projected) errors.push(`${live.name}: insufficient replacement stock (available after return ${projected})`);
+  }
+  if (errors.length) {
+    return { ret: null, replacementSale: null, storeCreditApplied: 0, extraRefund: 0, amountDue: 0, errors };
+  }
+
+  returnValue = Math.round(returnValue * 100) / 100;
+  const paidCreditAvailable = Math.round(Math.min(returnValue, Math.max(0, original.paidAmount)) * 100) / 100;
+  const replacementTotals = calculateInvoiceTotals({
+    items: input.replacementLines.map((line) => ({
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      discountPercent: line.discountPercent,
+      taxRate: line.taxRate,
+    })),
+  });
+  const replacementTotal = replacementTotals.grandTotal;
+  const storeCreditApplied = Math.round(Math.min(paidCreditAvailable, replacementTotal) * 100) / 100;
+  const extraRefund = Math.round(Math.max(0, paidCreditAvailable - storeCreditApplied) * 100) / 100;
+  const amountDue = Math.round(Math.max(0, replacementTotal - storeCreditApplied) * 100) / 100;
+  const additionalPaid = Math.round(Math.max(0, input.additionalPaidAmount) * 100) / 100;
+  if (additionalPaid > amountDue) {
+    return {
+      ret: null, replacementSale: null, storeCreditApplied, extraRefund, amountDue,
+      errors: [`Additional payment cannot exceed amount due (${amountDue.toFixed(2)})`],
+    };
+  }
+
+  // Validation above is intentionally completed before mutating the original sale/stock.
+  const returned = createReturn({
+    saleId: original.id,
+    reason: input.reason,
+    notes: [input.notes, "Exchange"].filter(Boolean).join(" · "),
+    refundMethod: input.refundMethod,
+    items: input.returnItems,
+    refundMode: "credit",
+  });
+  if (!returned.ret || returned.errors.length) {
+    return { ret: null, replacementSale: null, storeCreditApplied: 0, extraRefund: 0, amountDue, errors: returned.errors };
+  }
+
+  const replacement = mainStore.createSale({
+    customerId: original.customerId,
+    lines: input.replacementLines,
+    paidAmount: additionalPaid,
+    paymentMethod: input.paymentMethod,
+    creditAmount: storeCreditApplied,
+    notes: `Exchange for ${original.invoiceNumber}; return ${returned.ret.returnNumber}${input.notes ? ` · ${input.notes}` : ""}`,
+  });
+  if (replacement.errors.length || !replacement.sale) {
+    // This path should only be reachable for a new synchronous validation failure after the preflight checks.
+    audit("sale.exchange.failed_after_return", "returns", returned.ret.id, null, { errors: replacement.errors });
+    return { ret: returned.ret, replacementSale: null, storeCreditApplied, extraRefund, amountDue, errors: replacement.errors.length ? replacement.errors : ["Replacement sale failed"] };
+  }
+
+  returned.ret.resolution = "exchange";
+  returned.ret.exchangeSaleId = replacement.sale.id;
+  returned.ret.exchangeInvoiceNumber = replacement.sale.invoiceNumber;
+  returned.ret.storeCreditApplied = storeCreditApplied;
+  enqueueOutbox("returns", returned.ret.id, "update", returned.ret);
+
+  let extraRefundPaymentId: string | null = null;
+  if (extraRefund > 0) {
+    const extraPayment = mainStore.recordRefundPayment({
+      returnId: returned.ret.id,
+      saleId: original.id,
+      customerId: original.customerId,
+      amount: extraRefund,
+      method: input.refundMethod,
+      notes: `Exchange excess credit refund ${returned.ret.returnNumber}`,
+    });
+    extraRefundPaymentId = extraPayment?.id ?? null;
+  }
+
+  audit("sale.exchange", "returns", returned.ret.id, null, {
+    originalInvoice: original.invoiceNumber,
+    replacementInvoice: replacement.sale.invoiceNumber,
+    returnValue,
+    paidCreditAvailable,
+    storeCreditApplied,
+    additionalPaid,
+    amountDue,
+    extraRefund,
+    extraRefundPaymentId,
+  });
+  phase6Store.pushNotification({
+    kind: "system",
+    title: "Exchange completed",
+    body: `${original.invoiceNumber} exchanged to ${replacement.sale.invoiceNumber}; credit ${storeCreditApplied.toFixed(2)}`,
+    href: "/returns",
+  });
+  touchPersistence();
+  return { ret: returned.ret, replacementSale: replacement.sale, storeCreditApplied, extraRefund, amountDue, errors: [] };
 }
 
 export function listAuditLogs(limit = 100): AuditLogEntry[] { return auditLogs.slice(0, limit); }
