@@ -28,6 +28,7 @@ export * from "./components/forms/Modal";
 export * from "./components/customers/CustomerList";
 export * from "./components/customers/format";
 export * from "./components/products/ProductList";
+export * from "./components/products/StockTransferPanel";
 export * from "./components/sales/PosBilling";
 export * from "./components/sales/NormalBilling";
 export * from "./components/sales/SalesList";
