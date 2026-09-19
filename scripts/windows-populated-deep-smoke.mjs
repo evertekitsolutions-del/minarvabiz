@@ -165,6 +165,7 @@ async function main() {
     await assertMain(ws, "PRODUCTS", ["Products & Inventory", "Add Product"]);
     await click(ws, "PRODUCT_ADD", ["add product"]);
     await setField(ws, "Add Product", "Product name", "QA POS Product");
+    await setField(ws, "Add Product", "SKU", "QA-SKU-1");
     await setField(ws, "Add Product", "Barcode", "QA1001");
     await setField(ws, "Add Product", "Cost price", "60");
     await setField(ws, "Add Product", "Selling price", "100");
@@ -177,6 +178,25 @@ async function main() {
     await setField(ws, "Add Product Category", "Category name", "QA Category");
     await click(ws, "CATEGORY_SAVE", ["save category"]);
     await assertMain(ws, "CATEGORY_SAVED", ["QA Category"]);
+
+    // Create a second stock record for the same SKU, then verify request -> approval.
+    await click(ws, "PRODUCT_ADD_DESTINATION", ["add product"]);
+    await setField(ws, "Add Product", "Product name", "QA POS Product Destination");
+    await setField(ws, "Add Product", "SKU", "QA-SKU-1");
+    await setField(ws, "Add Product", "Barcode", "QA1002");
+    await setField(ws, "Add Product", "Cost price", "60");
+    await setField(ws, "Add Product", "Selling price", "100");
+    await setField(ws, "Add Product", "Opening stock", "0");
+    await setField(ws, "Add Product", "Minimum stock", "0");
+    await click(ws, "PRODUCT_SAVE_DESTINATION", ["save product"]);
+    await assertMain(ws, "TRANSFER_CONTROL_VISIBLE", ["Stock Transfer Control", "QA POS Product Destination"]);
+    await setByAriaLabel(ws, "Transfer source", "QA POS Product · QA-SKU-1");
+    await setByAriaLabel(ws, "Transfer destination", "QA POS Product Destination");
+    await setByAriaLabel(ws, "Transfer quantity", "2");
+    await click(ws, "REQUEST_TRANSFER", ["request transfer"]);
+    await assertMain(ws, "TRANSFER_PENDING", ["submitted for approval", "1 pending"]);
+    await click(ws, "APPROVE_TRANSFER", ["approve & move"]);
+    await assertMain(ws, "TRANSFER_APPROVED", ["approved. stock moved successfully", "completed", "0 pending"]);
 
 
     // POS: select customer, add product card, complete a credit sale.
