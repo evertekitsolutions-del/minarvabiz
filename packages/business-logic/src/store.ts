@@ -1,7 +1,7 @@
 import { allowDemoSeed } from "./runtime-mode";
 
 import type {
-  Customer, Product, Category, Sale, SaleItem, Payment, CartLine, UUID, PaymentMethod, InventoryTransaction,
+  Customer, Product, Category, Sale, SaleItem, Payment, CartLine, UUID, PaymentMethod, InventoryTransaction, StockTransferRecord,
 } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import {
@@ -9,7 +9,7 @@ import {
 } from "./sales";
 import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
-import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remoteCreateSale, remoteCreatePayment } from "./remote-write";
+import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remoteCreateSale, remoteCreatePayment, remoteUpsertStockTransfer } from "./remote-write";
 import { auditAction } from "./audit-actions";
 import { enqueueOutbox } from "./outbox-bridge";
 import { assertPermission } from "./permissions";
@@ -17,18 +17,6 @@ import { assertPermission } from "./permissions";
 const categories: Category[] = [];
 const customers: Customer[] = [];
 const products: Product[] = [];
-
-export interface StockTransferRecord {
-  id: UUID;
-  referenceNumber: string;
-  sourceProductId: UUID;
-  destinationProductId: UUID;
-  sourceBranchId?: UUID | null;
-  destinationBranchId?: UUID | null;
-  quantity: number;
-  notes?: string | null;
-  createdAt: string;
-}
 
 const stockTransfers: StockTransferRecord[] = [];
 
@@ -226,17 +214,17 @@ function sameTransferProduct(source: Product, destination: Product): boolean {
   return source.name.trim().toLowerCase() === destination.name.trim().toLowerCase();
 }
 
-export function listStockTransfers(): StockTransferRecord[] {
-  return [...stockTransfers].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+export function listStockTransfers(opts?: { status?: StockTransferRecord["status"] }): StockTransferRecord[] {
+  let list = [...stockTransfers];
+  if (opts?.status) list = list.filter((transfer) => transfer.status === opts.status);
+  return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export function transferStock(input: {
+function validateTransferRequest(input: {
   sourceProductId: UUID;
   destinationProductId: UUID;
   quantity: number;
-  notes?: string | null;
-}): { transfer: StockTransferRecord | null; errors: string[] } {
-  assertPermission("inventory.adjust");
+}): { source?: Product; destination?: Product; quantity: number; errors: string[] } {
   const source = getProduct(input.sourceProductId);
   const destination = getProduct(input.destinationProductId);
   const quantity = Math.abs(Number(input.quantity));
@@ -247,52 +235,153 @@ export function transferStock(input: {
   if (source && destination && !sameTransferProduct(source, destination)) errors.push("Source and destination must represent the same SKU/barcode/product");
   if (!Number.isFinite(quantity) || quantity <= 0) errors.push("Transfer quantity must be greater than zero");
   if (source && Number.isFinite(quantity) && source.stockQuantity < quantity) errors.push(`Insufficient source stock (available ${source.stockQuantity})`);
-  if (errors.length || !source || !destination) return { transfer: null, errors };
+  return { source, destination, quantity, errors };
+}
 
-  const transferId = generateId();
-  const createdAt = nowISO();
+export function requestStockTransfer(input: {
+  sourceProductId: UUID;
+  destinationProductId: UUID;
+  quantity: number;
+  notes?: string | null;
+  requestedBy?: UUID | null;
+}): { transfer: StockTransferRecord | null; errors: string[] } {
+  assertPermission("inventory.adjust");
+  const check = validateTransferRequest(input);
+  if (check.errors.length || !check.source || !check.destination) return { transfer: null, errors: check.errors };
+
+  const id = generateId();
+  const now = nowISO();
   const transfer: StockTransferRecord = {
-    id: transferId,
-    referenceNumber: `TRF-${createdAt.slice(0, 10).replace(/-/g, "")}-${transferId.slice(0, 6).toUpperCase()}`,
-    sourceProductId: source.id,
-    destinationProductId: destination.id,
-    sourceBranchId: source.branchId ?? null,
-    destinationBranchId: destination.branchId ?? null,
-    quantity,
+    id,
+    referenceNumber: `TRF-${now.slice(0, 10).replace(/-/g, "")}-${id.slice(0, 6).toUpperCase()}`,
+    sourceProductId: check.source.id,
+    destinationProductId: check.destination.id,
+    sourceBranchId: check.source.branchId ?? null,
+    destinationBranchId: check.destination.branchId ?? null,
+    quantity: check.quantity,
     notes: input.notes ?? null,
-    createdAt,
+    status: "pending",
+    requestedAt: now,
+    requestedBy: input.requestedBy ?? null,
+    approvedAt: null,
+    approvedBy: null,
+    cancelledAt: null,
+    createdAt: now,
+    updatedAt: now,
+    version: 1,
   };
+  stockTransfers.unshift(transfer);
+  touchPersistence();
+  void remoteUpsertStockTransfer(transfer, "insert");
+  auditAction("inventory.transfer.request", "stock_transfer_requests", transfer.id, null, {
+    referenceNumber: transfer.referenceNumber,
+    sourceProductId: transfer.sourceProductId,
+    destinationProductId: transfer.destinationProductId,
+    quantity: transfer.quantity,
+  });
+  return { transfer: { ...transfer }, errors: [] };
+}
 
+export function approveStockTransfer(
+  id: UUID,
+  approvedBy?: UUID | null
+): { transfer: StockTransferRecord | null; errors: string[] } {
+  assertPermission("inventory.transfer.approve");
+  const transfer = stockTransfers.find((item) => item.id === id);
+  if (!transfer) return { transfer: null, errors: ["Transfer request not found"] };
+  if (transfer.status !== "pending") return { transfer: null, errors: [`Transfer is already ${transfer.status}`] };
+
+  const check = validateTransferRequest({
+    sourceProductId: transfer.sourceProductId,
+    destinationProductId: transfer.destinationProductId,
+    quantity: transfer.quantity,
+  });
+  if (check.errors.length || !check.source || !check.destination) return { transfer: null, errors: check.errors };
+
+  const source = check.source;
+  const destination = check.destination;
   const sourceBefore = source.stockQuantity;
   const destinationBefore = destination.stockQuantity;
-  source.stockQuantity = applyStockMovement(source.stockQuantity, "transfer", quantity);
-  destination.stockQuantity = applyStockMovement(destination.stockQuantity, "stock_in", quantity);
+  const completedAt = nowISO();
+
+  source.stockQuantity = applyStockMovement(source.stockQuantity, "transfer", transfer.quantity);
+  destination.stockQuantity = applyStockMovement(destination.stockQuantity, "stock_in", transfer.quantity);
   touchProduct(source);
   touchProduct(destination);
-  stockTransfers.unshift(transfer);
 
   const sourceTx: InventoryTransaction = {
-    id: generateId(), productId: source.id, type: "transfer", quantity: -quantity,
-    unitCost: source.costPrice, referenceType: "stock_transfer", referenceId: transferId,
-    notes: input.notes ?? null, createdAt, branchId: source.branchId ?? null, version: 1,
+    id: generateId(), productId: source.id, type: "transfer", quantity: -transfer.quantity,
+    unitCost: source.costPrice, referenceType: "stock_transfer", referenceId: transfer.id,
+    notes: transfer.notes ?? null, createdAt: completedAt, branchId: source.branchId ?? null, version: 1,
   };
   const destinationTx: InventoryTransaction = {
-    id: generateId(), productId: destination.id, type: "transfer", quantity,
-    unitCost: destination.costPrice, referenceType: "stock_transfer", referenceId: transferId,
-    notes: input.notes ?? null, createdAt, branchId: destination.branchId ?? null, version: 1,
+    id: generateId(), productId: destination.id, type: "transfer", quantity: transfer.quantity,
+    unitCost: destination.costPrice, referenceType: "stock_transfer", referenceId: transfer.id,
+    notes: transfer.notes ?? null, createdAt: completedAt, branchId: destination.branchId ?? null, version: 1,
   };
 
-  enqueueOutbox("products", source.id, "update", source);
-  enqueueOutbox("products", destination.id, "update", destination);
+  transfer.status = "completed";
+  transfer.approvedAt = completedAt;
+  transfer.approvedBy = approvedBy ?? null;
+  transfer.updatedAt = completedAt;
+  transfer.version += 1;
+
   enqueueOutbox("inventory_transactions", sourceTx.id, "insert", sourceTx);
   enqueueOutbox("inventory_transactions", destinationTx.id, "insert", destinationTx);
   void remoteUpsertProduct(source);
   void remoteUpsertProduct(destination);
-  auditAction("inventory.transfer", "inventory_transactions", transferId,
-    { sourceProductId: source.id, destinationProductId: destination.id, sourceStock: sourceBefore, destinationStock: destinationBefore },
-    { quantity, sourceStock: source.stockQuantity, destinationStock: destination.stockQuantity, sourceBranchId: source.branchId ?? null, destinationBranchId: destination.branchId ?? null });
+  void remoteUpsertStockTransfer(transfer, "update");
+
+  auditAction(
+    "inventory.transfer.approve",
+    "stock_transfer_requests",
+    transfer.id,
+    { status: "pending", sourceStock: sourceBefore, destinationStock: destinationBefore },
+    {
+      status: "completed",
+      quantity: transfer.quantity,
+      sourceStock: source.stockQuantity,
+      destinationStock: destination.stockQuantity,
+      sourceBranchId: transfer.sourceBranchId ?? null,
+      destinationBranchId: transfer.destinationBranchId ?? null,
+    }
+  );
   touchPersistence();
-  return { transfer, errors: [] };
+  return { transfer: { ...transfer }, errors: [] };
+}
+
+export function cancelStockTransfer(
+  id: UUID
+): { transfer: StockTransferRecord | null; errors: string[] } {
+  assertPermission("inventory.adjust");
+  const transfer = stockTransfers.find((item) => item.id === id);
+  if (!transfer) return { transfer: null, errors: ["Transfer request not found"] };
+  if (transfer.status !== "pending") return { transfer: null, errors: [`Only pending transfers can be cancelled (current: ${transfer.status})`] };
+  const before = { ...transfer };
+  const now = nowISO();
+  transfer.status = "cancelled";
+  transfer.cancelledAt = now;
+  transfer.updatedAt = now;
+  transfer.version += 1;
+  touchPersistence();
+  void remoteUpsertStockTransfer(transfer, "update");
+  auditAction("inventory.transfer.cancel", "stock_transfer_requests", transfer.id, before, { ...transfer });
+  return { transfer: { ...transfer }, errors: [] };
+}
+
+/**
+ * Backwards-compatible immediate transfer used by existing integrations/tests.
+ * New UI workflows should call requestStockTransfer() and approveStockTransfer().
+ */
+export function transferStock(input: {
+  sourceProductId: UUID;
+  destinationProductId: UUID;
+  quantity: number;
+  notes?: string | null;
+}): { transfer: StockTransferRecord | null; errors: string[] } {
+  const requested = requestStockTransfer(input);
+  if (!requested.transfer || requested.errors.length) return requested;
+  return approveStockTransfer(requested.transfer.id);
 }
 
 export function listHeldSales(): HeldSale[] {
@@ -506,7 +595,20 @@ export function hydrateCore(data: {
   if (data.products) { products.length = 0; products.push(...data.products); }
   if (data.sales) { sales.length = 0; sales.push(...data.sales); }
   if (data.payments) { payments.length = 0; payments.push(...data.payments); }
-  if (data.stockTransfers) { stockTransfers.length = 0; stockTransfers.push(...data.stockTransfers); }
+  if (data.stockTransfers) {
+    stockTransfers.length = 0;
+    stockTransfers.push(...data.stockTransfers.map((item) => {
+      const legacy = item as StockTransferRecord & { status?: StockTransferRecord["status"]; requestedAt?: string; updatedAt?: string; version?: number };
+      const createdAt = legacy.createdAt || nowISO();
+      return {
+        ...legacy,
+        status: legacy.status ?? "completed",
+        requestedAt: legacy.requestedAt ?? createdAt,
+        updatedAt: legacy.updatedAt ?? createdAt,
+        version: legacy.version ?? 1,
+      } as StockTransferRecord;
+    }));
+  }
   if (data.heldSales) {
     heldSales.length = 0;
     heldSales.push(...data.heldSales.map((sale) => ({ ...sale, lines: sale.lines.map((line) => ({ ...line })) })));

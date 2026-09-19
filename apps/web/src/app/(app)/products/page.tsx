@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
+import { ProductList, StockTransferPanel, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
 import { store, generateProductBarcode, printBarcodeLabels } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
@@ -23,6 +23,7 @@ export default function ProductsPage() {
   const [categoryDescription, setCategoryDescription] = React.useState("");
   const [categoryError, setCategoryError] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [transfers, setTransfers] = React.useState(() => store.listStockTransfers());
   const [form, setForm] = React.useState({
     name: "", sku: "", barcode: "", categoryId: "", unit: "pcs",
     costPrice: "0", sellingPrice: "0", stockQuantity: "0", minimumStock: "5",
@@ -31,6 +32,7 @@ export default function ProductsPage() {
   const refresh = React.useCallback(() => {
     setCategories(store.listCategories());
     setProducts(store.listProducts({ query, categoryId: categoryId ?? undefined, lowStockOnly }));
+    setTransfers(store.listStockTransfers());
   }, [query, categoryId, lowStockOnly]);
 
   React.useEffect(() => { refresh(); }, [refresh]);
@@ -108,6 +110,39 @@ export default function ProductsPage() {
         onDelete={(p) => { if (window.confirm(`Delete ${p.name}? Existing invoices remain unchanged.`)) { store.deleteProduct(p.id); refresh(); } }}
         onPrintBarcode={(p) => { setLabelProduct(p); setLabelCopies("1"); }}
       />
+      <div className="mt-6">
+        <StockTransferPanel
+          products={store.listProducts()}
+          transfers={transfers}
+          onRequest={(payload) => {
+            try {
+              const result = store.requestStockTransfer(payload);
+              refresh();
+              return { success: result.errors.length === 0 && Boolean(result.transfer), transfer: result.transfer, errors: result.errors };
+            } catch (err) {
+              return { success: false, errors: [err instanceof Error ? err.message : String(err)] };
+            }
+          }}
+          onApprove={(id) => {
+            try {
+              const result = store.approveStockTransfer(id);
+              refresh();
+              return { success: result.errors.length === 0 && Boolean(result.transfer), transfer: result.transfer, errors: result.errors };
+            } catch (err) {
+              return { success: false, errors: [err instanceof Error ? err.message : String(err)] };
+            }
+          }}
+          onCancel={(id) => {
+            try {
+              const result = store.cancelStockTransfer(id);
+              refresh();
+              return { success: result.errors.length === 0 && Boolean(result.transfer), transfer: result.transfer, errors: result.errors };
+            } catch (err) {
+              return { success: false, errors: [err instanceof Error ? err.message : String(err)] };
+            }
+          }}
+        />
+      </div>
       <Modal
         open={categoryOpen}
         title="Add Category"

@@ -32,6 +32,26 @@ function remoteRow(table: string, aggregateId: UUID, payload: Record<string, unk
         device_id: payload.deviceId ?? null,
         version: payload.version ?? 1,
       };
+    case "stock_transfer_requests":
+      return {
+        id: aggregateId,
+        reference_number: payload.referenceNumber,
+        source_product_id: payload.sourceProductId,
+        destination_product_id: payload.destinationProductId,
+        source_branch_id: payload.sourceBranchId ?? null,
+        destination_branch_id: payload.destinationBranchId ?? null,
+        quantity: payload.quantity ?? 0,
+        notes: payload.notes ?? null,
+        status: payload.status ?? "pending",
+        requested_at: payload.requestedAt ?? payload.createdAt ?? new Date().toISOString(),
+        requested_by: payload.requestedBy ?? null,
+        approved_at: payload.approvedAt ?? null,
+        approved_by: payload.approvedBy ?? null,
+        cancelled_at: payload.cancelledAt ?? null,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        updated_at: payload.updatedAt ?? new Date().toISOString(),
+        version: payload.version ?? 1,
+      };
     case "production_workflows":
       return {
         id: aggregateId,
@@ -136,7 +156,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         "branches", "customers", "categories", "products", "inventory_transactions",
         "sales", "sale_items", "payments", "measurement_profiles", "orders",
         "order_expenses", "laundry_orders", "expenses", "purchases", "suppliers",
-        "staff_members", "sale_returns", "audit_logs",
+        "staff_members", "sale_returns", "audit_logs", "stock_transfer_requests",
         "production_workflows", "production_stage_events", "material_rolls", "material_consumptions",
       ];
       const records: Array<{ tableName: string; record: VersionedRecord }> = [];

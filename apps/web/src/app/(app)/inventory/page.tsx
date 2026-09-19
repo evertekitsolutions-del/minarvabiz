@@ -19,10 +19,13 @@ export default function InventoryPage() {
   const [destinationProductId, setDestinationProductId] = React.useState("");
   const [movementError, setMovementError] = React.useState<string | null>(null);
   const [notes, setNotes] = React.useState("");
+  const [transfers, setTransfers] = React.useState(() => store.listStockTransfers());
+  const [transferMessage, setTransferMessage] = React.useState<string | null>(null);
 
   const refresh = React.useCallback(() => {
     setCategories(store.listCategories());
     setProducts(store.listProducts({ query, lowStockOnly }));
+    setTransfers(store.listStockTransfers());
   }, [query, lowStockOnly]);
 
   React.useEffect(() => { refresh(); }, [refresh]);
@@ -32,7 +35,7 @@ export default function InventoryPage() {
     const qty = parseFloat(adjQty) || 0;
     setMovementError(null);
     if (adjType === "transfer") {
-      const result = store.transferStock({
+      const result = store.requestStockTransfer({
         sourceProductId: selected.id,
         destinationProductId,
         quantity: qty,
@@ -42,6 +45,7 @@ export default function InventoryPage() {
         setMovementError(result.errors.join("; "));
         return;
       }
+      setTransferMessage(`Transfer request ${result.transfer?.referenceNumber || ""} is pending approval.`);
     } else {
       store.adjustStock(selected.id, adjType, qty, notes || null);
     }
@@ -67,6 +71,77 @@ export default function InventoryPage() {
         onAdd={() => router.push("/products")}
       />
       <p className="mt-2 text-xs text-slate-500">Click a product to adjust stock. Use Products page to add new items.</p>
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-semibold text-slate-900">Stock transfer approvals</h3>
+            <p className="text-xs text-slate-500">Transfers move stock only after an authorised approval.</p>
+          </div>
+          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+            {transfers.filter((item) => item.status === "pending").length} pending
+          </span>
+        </div>
+        {transferMessage && <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">{transferMessage}</p>}
+        <div className="mt-3 space-y-2">
+          {transfers.length === 0 && <p className="py-4 text-sm text-slate-400">No stock transfer requests yet.</p>}
+          {transfers.slice(0, 20).map((transfer) => {
+            const source = store.getProduct(transfer.sourceProductId);
+            const destination = store.getProduct(transfer.destinationProductId);
+            return (
+              <div key={transfer.id} className="flex flex-col gap-2 rounded-xl border border-slate-100 p-3 text-sm lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                  <div className="font-medium text-slate-900">{transfer.referenceNumber}</div>
+                  <div className="text-xs text-slate-500">
+                    {source?.name || transfer.sourceProductId} → {destination?.name || transfer.destinationProductId} · Qty {transfer.quantity}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-400">
+                    {transfer.sourceBranchId || "source branch"} → {transfer.destinationBranchId || "destination branch"}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-2 py-1 text-xs font-semibold ${transfer.status === "pending" ? "bg-amber-50 text-amber-700" : transfer.status === "completed" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                    {transfer.status}
+                  </span>
+                  {transfer.status === "pending" && (
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          try {
+                            const result = store.approveStockTransfer(transfer.id);
+                            setTransferMessage(result.errors.length ? result.errors.join("; ") : `${transfer.referenceNumber} approved and stock moved.`);
+                          } catch (error) {
+                            setTransferMessage(error instanceof Error ? error.message : String(error));
+                          }
+                          refresh();
+                        }}
+                      >
+                        Approve & Move
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          try {
+                            const result = store.cancelStockTransfer(transfer.id);
+                            setTransferMessage(result.errors.length ? result.errors.join("; ") : `${transfer.referenceNumber} cancelled.`);
+                          } catch (error) {
+                            setTransferMessage(error instanceof Error ? error.message : String(error));
+                          }
+                          refresh();
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <Modal
         open={adjustOpen}
         title={selected ? `Adjust stock — ${selected.name}` : "Adjust stock"}
