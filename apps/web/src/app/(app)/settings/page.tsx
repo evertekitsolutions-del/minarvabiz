@@ -36,18 +36,6 @@ export default function SettingsPage() {
         </a>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          onClick={() => {
-            syncBridge.enqueueDemoWrite();
-            refresh();
-          }}
-        >
-          Enqueue offline write
-        </Button>
-      </div>
-
       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
         <h2 className="text-sm font-semibold text-slate-800">Shop profile (receipts)</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
