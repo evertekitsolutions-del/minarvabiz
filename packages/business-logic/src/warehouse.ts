@@ -13,6 +13,7 @@ import { assertPermission } from "./permissions";
 import { touchPersistence } from "./autosave";
 import { enqueueOutbox } from "./outbox-bridge";
 import { auditAction } from "./audit-actions";
+import { getRemoteWriter, type RemoteWriter } from "./remote-write";
 import * as store from "./store";
 
 const warehouses: Warehouse[] = [];
@@ -20,6 +21,17 @@ const bins: WarehouseBin[] = [];
 const binStocks: WarehouseBinStock[] = [];
 const transfers: WarehouseTransfer[] = [];
 let transferSequence = 0;
+
+function remoteWrite(run: (writer: RemoteWriter) => Promise<void> | undefined) {
+  const writer = getRemoteWriter();
+  if (!writer) return;
+  try {
+    const pending = run(writer);
+    if (pending) void pending.catch((e) => console.warn("[minarvabiz] WMS remote write failed", e));
+  } catch (e) {
+    console.warn("[minarvabiz] WMS remote write failed", e);
+  }
+}
 
 function roundQty(n: number): number {
   return Math.round((n + Number.EPSILON) * 1000) / 1000;
@@ -55,6 +67,7 @@ export function createWarehouse(input: { name: string; code: string; branchId?: 
   };
   warehouses.push(row);
   enqueueOutbox("warehouses", row.id, "insert", row as unknown as Record<string, unknown>);
+  remoteWrite((w) => w.upsertWarehouse?.(row));
   auditAction("warehouse.create", "warehouses", row.id, null, row);
   touchPersistence();
   return row;
@@ -89,6 +102,7 @@ export function createWarehouseBin(input: {
   };
   bins.push(row);
   enqueueOutbox("warehouse_bins", row.id, "insert", row as unknown as Record<string, unknown>);
+  remoteWrite((w) => w.upsertWarehouseBin?.(row));
   auditAction("warehouse_bin.create", "warehouse_bins", row.id, null, row);
   touchPersistence();
   return row;
@@ -137,6 +151,7 @@ export function allocateStockToBin(input: { productId: UUID; binId: UUID; quanti
     binStocks.push(row);
   }
   enqueueOutbox("warehouse_bin_stock", row.id, before ? "update" : "insert", row as unknown as Record<string, unknown>);
+  remoteWrite((w) => w.upsertWarehouseBinStock?.(row));
   auditAction("warehouse.allocate", "warehouse_bin_stock", row.id, before, row);
   touchPersistence();
   return row;
@@ -176,6 +191,8 @@ export function requestWarehouseTransfer(input: {
   transfers.push(row);
   enqueueOutbox("warehouse_bin_stock", sourceStock!.id, "update", sourceStock! as unknown as Record<string, unknown>);
   enqueueOutbox("warehouse_transfers", row.id, "insert", row as unknown as Record<string, unknown>);
+  remoteWrite((w) => w.upsertWarehouseBinStock?.(sourceStock!));
+  remoteWrite((w) => w.upsertWarehouseTransfer?.(row));
   auditAction("warehouse_transfer.request", "warehouse_transfers", row.id, null, row);
   touchPersistence();
   return row;
@@ -189,6 +206,7 @@ function transitionTransfer(id: UUID, from: WarehouseTransferStatus[], to: Wareh
   row.updatedAt = nowISO();
   row.version += 1;
   enqueueOutbox("warehouse_transfers", row.id, "update", row as unknown as Record<string, unknown>);
+  remoteWrite((w) => w.upsertWarehouseTransfer?.(row));
   touchPersistence();
   return row;
 }
@@ -236,6 +254,8 @@ export function completeWarehouseTransfer(id: UUID): WarehouseTransfer {
   enqueueOutbox("warehouse_bin_stock", source.id, "update", source as unknown as Record<string, unknown>);
   enqueueOutbox("warehouse_bin_stock", destination.id, destination.version === 1 ? "insert" : "update", destination as unknown as Record<string, unknown>);
   enqueueOutbox("warehouse_transfers", row.id, "update", row as unknown as Record<string, unknown>);
+  remoteWrite((w) => w.upsertWarehouseBinStock?.(source));
+  remoteWrite((w) => w.upsertWarehouseBinStock?.(destination));
   auditAction("warehouse_transfer.complete", "warehouse_transfers", row.id, null, row);
   touchPersistence();
   return row;
@@ -251,6 +271,7 @@ export function cancelWarehouseTransfer(id: UUID): WarehouseTransfer {
     source.reservedQuantity = roundQty(Math.max(0, source.reservedQuantity - row.quantity));
     source.updatedAt = nowISO(); source.version += 1;
     enqueueOutbox("warehouse_bin_stock", source.id, "update", source as unknown as Record<string, unknown>);
+    remoteWrite((w) => w.upsertWarehouseBinStock?.(source));
   }
   const before = row.status;
   row.status = "cancelled"; row.updatedAt = nowISO(); row.version += 1;
