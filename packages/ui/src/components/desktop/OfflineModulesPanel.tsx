@@ -100,11 +100,23 @@ export function OfflineModulesPanel({
   }
 
   if (activeNav === "returns") {
-    return <><ReturnsPanel returns={phase7Store.listReturns()} sales={phase7Store.listSalesForReturn()} onCreate={(payload) => {
+    return <><ReturnsPanel returns={phase7Store.listReturns()} sales={phase7Store.listSalesForReturn()} products={store.listProducts()} onCreate={(payload) => {
       try {
         const result = phase7Store.createReturn(payload);
         if (!result.errors.length) { setActionError(null); persistDesktop(); refresh(); }
         return result.errors.length ? { success: false, errors: result.errors } : { success: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setActionError(message);
+        return { success: false, errors: [message] };
+      }
+    }} onExchange={(payload) => {
+      try {
+        const result = phase7Store.createExchange(payload);
+        if (!result.errors.length && result.replacementSale) { setActionError(null); persistDesktop(); refresh(); }
+        return result.errors.length || !result.replacementSale
+          ? { success: false, errors: result.errors.length ? result.errors : ["Exchange failed"] }
+          : { success: true, replacementInvoiceNumber: result.replacementSale.invoiceNumber, storeCreditApplied: result.storeCreditApplied, extraRefund: result.extraRefund, amountDue: result.amountDue };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setActionError(message);

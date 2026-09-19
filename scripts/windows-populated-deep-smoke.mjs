@@ -210,7 +210,7 @@ async function main() {
 
     // Return/refund with stock restock.
     await click(ws, "RETURNS", ["returns & refunds"]);
-    await assertMain(ws, "RETURNS", ["Returns & Refunds", "New Return"]);
+    await assertMain(ws, "RETURNS", ["New Return", "New Exchange"]);
     await click(ws, "NEW_RETURN", ["new return"]);
     const returnSelect = await evalIn(ws, `(()=>{const d=[...document.querySelectorAll('[role="dialog"]')].find(x=>(x.getAttribute('aria-label')||'').includes('Process return'));const s=d?.querySelector('select');if(!s||s.options.length<2)return JSON.stringify({ok:false,options:s?[...s.options].map(o=>o.textContent):[]});s.value=s.options[1].value;s.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true});})()`);
     if (!JSON.parse(returnSelect).ok) throw new Error(`Return invoice selection failed: ${returnSelect}`);
@@ -218,7 +218,7 @@ async function main() {
     const qty = await evalIn(ws, `(()=>{const d=[...document.querySelectorAll('[role="dialog"]')].find(x=>(x.getAttribute('aria-label')||'').includes('Process return'));const i=d?.querySelector('input[type="number"]');if(!i)return JSON.stringify({ok:false});const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;setter.call(i,'1');i.dispatchEvent(new Event('input',{bubbles:true}));i.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true});})()`);
     if (!JSON.parse(qty).ok) throw new Error("Return quantity input missing");
     await click(ws, "PROCESS_REFUND", ["process refund"]);
-    await assertMain(ws, "RETURN_RECORDED", ["Returns & Refunds", "QA POS Customer"]);
+    await assertMain(ws, "RETURN_RECORDED", ["QA POS Customer", "New Return", "New Exchange"]);
 
     // Barcode Add button must add a matching product to the POS cart.
     await click(ws, "SALES_BARCODE", ["sales & billing"]);

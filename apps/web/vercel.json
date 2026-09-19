@@ -2,5 +2,13 @@
   "framework": "nextjs",
   "buildCommand": "pnpm build",
   "installCommand": "pnpm install --frozen-lockfile --ignore-scripts",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "*": false,
+      "main": true
+    }
+  },
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../../packages/ui ../../packages/business-logic ../../packages/database ../../packages/licensing ../../packages/sync ../../packages/validation ../../packages/types ../../packages/utils ../../package.json ../../pnpm-lock.yaml ../../turbo.json"
 }

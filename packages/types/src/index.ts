@@ -529,6 +529,10 @@ export interface SaleReturn {
   totalRefund: number;
   refundMethod: PaymentMethod;
   status: "completed" | "pending" | "cancelled";
+  resolution?: "refund" | "exchange";
+  exchangeSaleId?: UUID | null;
+  exchangeInvoiceNumber?: string | null;
+  storeCreditApplied?: number | null;
   items: SaleReturnItem[];
   createdAt: ISODateString;
   createdBy?: UUID | null;

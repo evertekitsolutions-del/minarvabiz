@@ -292,6 +292,8 @@ export function getSale(id: UUID): Sale | undefined {
 export function createSale(input: {
   customerId?: UUID | null; lines: CartLine[]; paidAmount: number; paymentMethod: PaymentMethod;
   notes?: string | null; allowNegativeStock?: boolean; createdBy?: UUID | null;
+  /** Internal non-cash settlement such as exchange credit. No Payment row is emitted for this amount. */
+  creditAmount?: number;
 }): { sale: Sale; payment: Payment | null; errors: string[] } {
   assertPermission("sales.create");
   const errors = validateCart(input.lines, { allowNegativeStock: input.allowNegativeStock });
@@ -305,7 +307,11 @@ export function createSale(input: {
   if (errors.length) return { sale: null as unknown as Sale, payment: null, errors };
 
   const totals = calculateCartTotals(input.lines);
-  const allocation = allocatePayment(totals.grandTotal, input.paidAmount);
+  const requestedCredit = round2(Math.max(0, input.creditAmount ?? 0));
+  const creditApplied = round2(Math.min(requestedCredit, totals.grandTotal));
+  const remainingAfterCredit = round2(Math.max(0, totals.grandTotal - creditApplied));
+  const actualPayment = round2(Math.min(Math.max(0, input.paidAmount), remainingAfterCredit));
+  const allocation = allocatePayment(totals.grandTotal, creditApplied + actualPayment);
   const invoiceNumber = nextInvoiceNumber(lastInvoice);
   lastInvoice = invoiceNumber;
   const saleId = generateId();
@@ -315,7 +321,9 @@ export function createSale(input: {
     id: saleId, invoiceNumber, customerId: input.customerId ?? null, customerName: customer?.name ?? null,
     saleDate: nowISO(), subtotal: totals.itemsSubtotal, discountAmount: totals.itemsDiscount, taxAmount: totals.itemsTax,
     total: allocation.total, paidAmount: allocation.paidAmount, balanceAmount: allocation.balanceAmount,
-    status: allocation.status === "draft" ? "draft" : allocation.status, notes: input.notes ?? null, items,
+    status: allocation.status === "draft" ? "draft" : allocation.status,
+    notes: [input.notes, creditApplied > 0 ? `Exchange/store credit applied: ${creditApplied.toFixed(2)}` : null].filter(Boolean).join(" · ") || null,
+    items,
     createdAt: nowISO(), updatedAt: nowISO(), createdBy: input.createdBy ?? null, version: 1,
   };
 
@@ -337,9 +345,9 @@ export function createSale(input: {
   touchPersistence();
 
   let payment: Payment | null = null;
-  if (allocation.paidAmount > 0) {
+  if (actualPayment > 0) {
     payment = {
-      id: generateId(), amount: allocation.paidAmount, method: input.paymentMethod,
+      id: generateId(), amount: actualPayment, method: input.paymentMethod,
       referenceType: "sale", referenceId: saleId, customerId: input.customerId ?? null,
       paidAt: nowISO(), createdAt: nowISO(), version: 1,
     };
@@ -350,7 +358,7 @@ export function createSale(input: {
   void remoteCreateSale(sale);
   enqueueOutbox("sales", sale.id, "insert", sale);
   if (payment) enqueueOutbox("payments", payment.id, "insert", payment);
-  auditAction("sale.create", "sales", sale.id, null, { total: sale.total, invoice: sale.invoiceNumber });
+  auditAction("sale.create", "sales", sale.id, null, { total: sale.total, invoice: sale.invoiceNumber, actualPayment, creditApplied });
   return { sale, payment, errors: [] };
 }
 
