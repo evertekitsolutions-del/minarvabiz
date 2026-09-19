@@ -465,6 +465,48 @@ export interface Purchase {
   version: number;
 }
 
+
+export type PurchaseOrderStatus = "draft" | "approved" | "partially_received" | "received" | "cancelled";
+
+export interface PurchaseOrderLine {
+  id: UUID;
+  purchaseOrderId: UUID;
+  productId?: UUID | null;
+  description: string;
+  orderedQuantity: number;
+  receivedQuantity: number;
+  unitCost: number;
+  taxRate: number;
+  lineSubtotal: number;
+  taxAmount: number;
+  lineTotal: number;
+}
+
+export interface PurchaseOrder {
+  id: UUID;
+  poNumber: string;
+  supplierId: UUID;
+  supplierName?: string | null;
+  status: PurchaseOrderStatus;
+  orderDate: ISODateString;
+  expectedDeliveryDate?: ISODateString | null;
+  lines: PurchaseOrderLine[];
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  notes?: string | null;
+  approvedAt?: ISODateString | null;
+  approvedBy?: UUID | null;
+  cancelledAt?: ISODateString | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+  branchId?: UUID | null;
+  createdBy?: UUID | null;
+  version: number;
+}
+
+
 // ---------------------------------------------------------------------------
 // Phase 6 — Staff, Assignments, Incentives, CRM, Notifications
 // ---------------------------------------------------------------------------

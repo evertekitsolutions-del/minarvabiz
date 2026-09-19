@@ -29,6 +29,7 @@ export * as syncBridge from "./sync-bridge";
 export * as phase9Store from "./phase9-store";
 export * as phase10Store from "./phase10-operations-store";
 export * as warehouseStore from "./warehouse-store";
+export * as procurementStore from "./procurement-store";
 export * from "./feature-gates";
 export * from "./persistence";
 export * from "./session";

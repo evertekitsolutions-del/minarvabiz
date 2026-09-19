@@ -40,6 +40,7 @@ export * from "./components/measurements/MeasurementForm";
 export * from "./components/laundry/LaundryList";
 export * from "./components/laundry/LaundryForm";
 export * from "./components/expenses/ExpenseList";
+export * from "./components/purchases/ProcurementPanel";
 export * from "./components/suppliers/SupplierList";
 export * from "./components/staff/StaffList";
 export * from "./components/staff/StaffDetail";

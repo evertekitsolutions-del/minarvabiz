@@ -61,9 +61,11 @@ assert(licenseConfigWriter.includes("MINARVA_COMMERCIAL_RELEASE"), "Commercial r
 assert(licenseConfigWriter.includes("!configured"), "Commercial build must reject a missing supplied public key");
 assert(licenseConfigWriter.includes("/^[0-9a-f]{64}$/"), "Public key validation must require 64 hex characters");
 assert(!desktopSource.includes("LICENSE_PRIVATE_KEY") && !desktopSource.includes("BEGIN PRIVATE KEY"), "Private signing key material must never ship in desktop source");
-assert(persistence.includes("SNAPSHOT_VERSION = 8"), "Domain snapshot version must include operations, stock-transfer history, held POS sales, and WMS state");
+assert(persistence.includes("SNAPSHOT_VERSION = 9"), "Domain snapshot version must include operations, WMS and procurement state");
 assert(persistence.includes("phase10Store.exportPhase10State") && persistence.includes("phase10Store.hydratePhase10"), "Phase-10 state is missing from domain snapshots");
 assert(persistence.includes("warehouseStore.exportWarehouseState") && persistence.includes("warehouseStore.hydrateWarehouseState"), "Warehouse/WMS state is missing from domain snapshots");
+assert(persistence.includes("procurementStore.exportProcurementState") && persistence.includes("procurementStore.hydrateProcurementState"), "Procurement state is missing from domain snapshots");
+assert(appSource.includes("ProcurementPanel") && appSource.includes("createPurchaseOrder"), "Windows procurement workflow is not wired into the desktop shell");
 assert(persistence.includes("activeBranchId"), "Branch state is missing from domain snapshots");
 assert(phase10.includes("ensureProductionWorkflow") && phase10.includes("advanceProductionWorkflow"), "Production workflow persistence is missing");
 assert(phase10.includes("createMaterialRoll") && phase10.includes("reserveMaterialRoll") && phase10.includes("consumeMaterialFromRoll"), "Material roll lifecycle is missing");

@@ -16,6 +16,7 @@ import * as phase7Store from "./phase7-store";
 import * as phase9Store from "./phase9-store";
 import * as phase10Store from "./phase10-operations-store";
 import * as warehouseStore from "./warehouse-store";
+import * as procurementStore from "./procurement-store";
 import * as shopProfile from "./shop-profile";
 import * as taxConfig from "./tax-config";
 import * as autoBackup from "./auto-backup";
@@ -29,7 +30,7 @@ import type { ShopProfile } from "./shop-profile";
 import type { TaxConfig } from "./tax-config";
 import type { AutoBackupSettings, BackupMeta } from "./auto-backup";
 
-export const SNAPSHOT_VERSION = 8;
+export const SNAPSHOT_VERSION = 9;
 
 export interface DomainSnapshot {
   version: number;
@@ -67,6 +68,7 @@ export interface DomainSnapshot {
   purchaseReturns?: ReturnType<typeof purchaseReturnsMod.exportPurchaseReturnsState>["returns"];
   phase10?: ReturnType<typeof phase10Store.exportPhase10State>;
   warehouse?: ReturnType<typeof warehouseStore.exportWarehouseState>;
+  procurement?: ReturnType<typeof procurementStore.exportProcurementState>;
   dayEndCloses?: ReturnType<typeof dayEnd.listDayEndCloses>;
 }
 
@@ -79,7 +81,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     incentiveRules: phase6Store.listIncentiveRules(), payouts: phase6Store.listIncentivePayouts(), notifications: phase6Store.listNotifications(), returns: phase7Store.listReturns(), audit: phase7Store.listAuditLogs(500),
     branches: phase9Store.listBranches(), activeBranchId: phase9Store.getActiveBranch()?.id ?? null, shopProfile: shopProfile.getShopProfile(), taxConfig: taxConfig.getTaxConfig(),
     autoBackup: autoBackup.exportAutoBackupState(), printSettings: printSettings.getPrintSettings(), outbox: exportOutbox(), quotations: quotationsMod.exportQuotationsState().quotations, cashSessions: cashReg.exportCashRegisterState().sessions,
-    purchaseReturns: purchaseReturnsMod.exportPurchaseReturnsState().returns, phase10: phase10Store.exportPhase10State(), warehouse: warehouseStore.exportWarehouseState(), dayEndCloses: dayEnd.listDayEndCloses(),
+    purchaseReturns: purchaseReturnsMod.exportPurchaseReturnsState().returns, phase10: phase10Store.exportPhase10State(), warehouse: warehouseStore.exportWarehouseState(), procurement: procurementStore.exportProcurementState(), dayEndCloses: dayEnd.listDayEndCloses(),
   };
 }
 
@@ -91,7 +93,7 @@ export function exportDomainSnapshotFull(): DomainSnapshot {
 export function exportDomainSnapshotJson(): string { return JSON.stringify(exportDomainSnapshotFull(), null, 2); }
 
 export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error?: string; counts?: Record<string, number> } {
-  if (!snap || ![1, 2, 3, 4, 5, 6, 7, 8].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
+  if (!snap || ![1, 2, 3, 4, 5, 6, 7, 8, 9].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
   try {
     if (snap.outbox) hydrateOutbox(snap.outbox);
     if (snap.quotations) quotationsMod.hydrateQuotations({ quotations: snap.quotations });
@@ -105,6 +107,7 @@ export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error
     if (snap.branches?.length) phase9Store.hydratePhase9({ branches: snap.branches, activeBranchId: snap.activeBranchId ?? undefined });
     if (snap.phase10) phase10Store.hydratePhase10(snap.phase10);
     if (snap.warehouse) warehouseStore.hydrateWarehouseState(snap.warehouse);
+    if (snap.procurement) procurementStore.hydrateProcurementState(snap.procurement);
     if (snap.shopProfile) shopProfile.hydrateShopProfile(snap.shopProfile);
     if (snap.taxConfig) taxConfig.hydrateTaxConfig(snap.taxConfig);
     if (snap.autoBackup) autoBackup.hydrateAutoBackup(snap.autoBackup);
