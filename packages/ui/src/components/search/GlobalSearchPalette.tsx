@@ -14,9 +14,9 @@ const NAV_BY_KIND: Record<SearchResult["kind"], NavItemId> = {
   customer: "customers",
   sale: "sales",
   order: "services",
-  product: "sales",
+  product: "products",
   quotation: "sales",
-  payment: "sales",
+  payment: "payments",
   staff: "staff",
 };
 
