@@ -8,13 +8,13 @@ const sync = fs.readFileSync(new URL("../../../sync/src/supabase-adapter.ts", im
 const ui = fs.readFileSync(new URL("../../../ui/src/components/inventory/WarehousePanel.tsx", import.meta.url), "utf8");
 const migration = fs.readFileSync(new URL("../../../../supabase/migrations/20260919_wms_foundation.sql", import.meta.url), "utf8");
 
-assert.match(wms, /export function createWarehouse(/);
-assert.match(wms, /export function createWarehouseLocation(/);
-assert.match(wms, /export function allocateExistingStock(/);
-assert.match(wms, /export function createWarehouseTransfer(/);
-assert.match(wms, /export function approveWarehouseTransfer(/);
-assert.match(wms, /export function dispatchWarehouseTransfer(/);
-assert.match(wms, /export function receiveWarehouseTransfer(/);
+assert.ok(wms.includes("export function createWarehouse("));
+assert.ok(wms.includes("export function createWarehouseLocation("));
+assert.ok(wms.includes("export function allocateExistingStock("));
+assert.ok(wms.includes("export function createWarehouseTransfer("));
+assert.ok(wms.includes("export function approveWarehouseTransfer("));
+assert.ok(wms.includes("export function dispatchWarehouseTransfer("));
+assert.ok(wms.includes("export function receiveWarehouseTransfer("));
 assert.match(wms, /source\.reserved = roundQty\(source\.reserved \+ transfer\.quantity\)/);
 assert.match(wms, /source\.onHand = roundQty\(source\.onHand - transfer\.quantity\)/);
 assert.match(wms, /destination\.onHand = roundQty\(destination\.onHand \+ transfer\.quantity\)/);
