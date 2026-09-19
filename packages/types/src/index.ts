@@ -927,3 +927,80 @@ export interface CashRegisterSession {
   closedBy?: string | null;
   status: "open" | "closed";
 }
+
+
+// ---------------------------------------------------------------------------
+// Step 4A — Double-entry accounting core
+// ---------------------------------------------------------------------------
+
+export type AccountingAccountType = "asset" | "liability" | "equity" | "income" | "expense";
+export type AccountingNormalBalance = "debit" | "credit";
+export type JournalEntryStatus = "draft" | "posted" | "void";
+
+export interface AccountingAccount {
+  id: UUID;
+  code: string;
+  name: string;
+  type: AccountingAccountType;
+  normalBalance: AccountingNormalBalance;
+  parentId?: UUID | null;
+  systemKey?: string | null;
+  isActive: boolean;
+  branchId?: UUID | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  deletedAt?: ISODateString | null;
+  version: number;
+}
+
+export interface JournalEntryLine {
+  id: UUID;
+  journalEntryId: UUID;
+  accountId: UUID;
+  accountCode: string;
+  accountName: string;
+  debit: number;
+  credit: number;
+  memo?: string | null;
+}
+
+export interface JournalEntry {
+  id: UUID;
+  journalNumber: string;
+  entryDate: ISODateString;
+  description: string;
+  referenceType?: string | null;
+  referenceId?: UUID | null;
+  status: JournalEntryStatus;
+  lines: JournalEntryLine[];
+  totalDebit: number;
+  totalCredit: number;
+  postedAt?: ISODateString | null;
+  voidedAt?: ISODateString | null;
+  reversalJournalId?: UUID | null;
+  branchId?: UUID | null;
+  createdBy?: UUID | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  version: number;
+}
+
+export interface TrialBalanceRow {
+  accountId: UUID;
+  code: string;
+  name: string;
+  type: AccountingAccountType;
+  debit: number;
+  credit: number;
+}
+
+export interface GeneralLedgerRow {
+  journalEntryId: UUID;
+  journalNumber: string;
+  entryDate: ISODateString;
+  description: string;
+  debit: number;
+  credit: number;
+  runningBalance: number;
+  status: JournalEntryStatus;
+}
