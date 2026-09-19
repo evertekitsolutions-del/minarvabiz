@@ -8,23 +8,29 @@
 import type {
   GoodsReceipt,
   GoodsReceiptLine,
+  PaymentMethod,
+  PurchaseInvoice,
+  PurchaseInvoiceLine,
   PurchaseOrder,
   PurchaseOrderLine,
   PurchaseOrderStatus,
+  SupplierPayableAging,
   UUID,
 } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { touchPersistence } from "./autosave";
 import { auditAction } from "./audit-actions";
-import { remoteUpsertGoodsReceipt, remoteUpsertPurchaseOrder } from "./remote-write";
+import { remoteUpsertGoodsReceipt, remoteUpsertPurchaseInvoice, remoteUpsertPurchaseOrder, remoteUpsertSupplier } from "./remote-write";
 import * as phase5Store from "./phase5-store";
 import * as mainStore from "./store";
 
 const purchaseOrders: PurchaseOrder[] = [];
 const goodsReceipts: GoodsReceipt[] = [];
+const purchaseInvoices: PurchaseInvoice[] = [];
 let poSequence = 0;
 let grnSequence = 0;
+let invoiceSequence = 0;
 
 function r2(n: number): number {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -46,12 +52,22 @@ function nextGrnNumber(): string {
   return `GRN-${year}-${String(grnSequence).padStart(5, "0")}`;
 }
 
+function nextInvoiceNumber(): string {
+  invoiceSequence += 1;
+  const year = new Date().getFullYear();
+  return `PINV-${year}-${String(invoiceSequence).padStart(5, "0")}`;
+}
+
 function cloneOrder(order: PurchaseOrder): PurchaseOrder {
   return { ...order, lines: order.lines.map((line) => ({ ...line })) };
 }
 
 function cloneReceipt(receipt: GoodsReceipt): GoodsReceipt {
   return { ...receipt, lines: receipt.lines.map((line) => ({ ...line })) };
+}
+
+function cloneInvoice(invoice: PurchaseInvoice): PurchaseInvoice {
+  return { ...invoice, lines: invoice.lines.map((line) => ({ ...line })) };
 }
 
 export function listPurchaseOrders(status?: PurchaseOrderStatus): PurchaseOrder[] {
@@ -290,6 +306,237 @@ export function receivePurchaseOrder(input: {
   return { goodsReceipt: cloneReceipt(goodsReceipt), purchaseOrder: cloneOrder(po), errors: [] };
 }
 
+
+export function listPurchaseInvoices(supplierId?: UUID): PurchaseInvoice[] {
+  return purchaseInvoices
+    .filter((invoice) => !supplierId || invoice.supplierId === supplierId)
+    .map(cloneInvoice)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function getPurchaseInvoice(id: UUID): PurchaseInvoice | undefined {
+  const found = purchaseInvoices.find((invoice) => invoice.id === id);
+  return found ? cloneInvoice(found) : undefined;
+}
+
+function mutableInvoice(id: UUID): PurchaseInvoice | undefined {
+  return purchaseInvoices.find((invoice) => invoice.id === id);
+}
+
+function alreadyInvoicedQuantity(purchaseOrderLineId: UUID): number {
+  return r3(purchaseInvoices
+    .filter((invoice) => invoice.status !== "cancelled")
+    .flatMap((invoice) => invoice.lines)
+    .filter((line) => line.purchaseOrderLineId === purchaseOrderLineId)
+    .reduce((sum, line) => sum + line.invoicedQuantity, 0));
+}
+
+export function getInvoiceablePurchaseOrderLines(purchaseOrderId: UUID) {
+  const po = findMutable(purchaseOrderId);
+  if (!po) return [];
+  return po.lines.map((line) => ({
+    purchaseOrderLineId: line.id,
+    description: line.description,
+    productId: line.productId ?? null,
+    receivedQuantity: line.receivedQuantity,
+    invoicedQuantity: alreadyInvoicedQuantity(line.id),
+    invoiceableQuantity: r3(Math.max(0, line.receivedQuantity - alreadyInvoicedQuantity(line.id))),
+    unitCost: line.unitCost,
+    taxRate: line.taxRate,
+  }));
+}
+
+export function createPurchaseInvoice(input: {
+  purchaseOrderId: UUID;
+  supplierInvoiceNumber?: string | null;
+  invoiceDate?: string;
+  dueDate?: string | null;
+  lines: Array<{ purchaseOrderLineId: UUID; quantity: number; unitCost?: number; taxRate?: number }>;
+  notes?: string | null;
+  createdBy?: UUID | null;
+}): { purchaseInvoice: PurchaseInvoice | null; errors: string[] } {
+  assertPermission("purchases.manage");
+  const po = findMutable(input.purchaseOrderId);
+  if (!po) return { purchaseInvoice: null, errors: ["Purchase order not found"] };
+  if (!["approved", "partially_received", "received"].includes(po.status)) {
+    return { purchaseInvoice: null, errors: ["Purchase order must be approved before supplier invoicing"] };
+  }
+  const supplier = phase5Store.getSupplier(po.supplierId);
+  if (!supplier) return { purchaseInvoice: null, errors: ["Supplier not found"] };
+  const errors: string[] = [];
+  const invoiceId = generateId();
+  const seen = new Set<string>();
+  const lines: PurchaseInvoiceLine[] = [];
+
+  for (const item of input.lines) {
+    if (seen.has(item.purchaseOrderLineId)) { errors.push("Duplicate purchase-order line in supplier invoice"); continue; }
+    seen.add(item.purchaseOrderLineId);
+    const poLine = po.lines.find((line) => line.id === item.purchaseOrderLineId);
+    if (!poLine) { errors.push("Purchase-order line not found"); continue; }
+    const available = r3(Math.max(0, poLine.receivedQuantity - alreadyInvoicedQuantity(poLine.id)));
+    const quantity = r3(Number(item.quantity));
+    if (!Number.isFinite(quantity) || quantity <= 0) { errors.push(`${poLine.description}: invoice quantity must be greater than zero`); continue; }
+    if (quantity > available) { errors.push(`${poLine.description}: cannot invoice ${quantity}; only ${available} received and uninvoiced`); continue; }
+    const unitCost = r2(item.unitCost == null ? poLine.unitCost : Number(item.unitCost));
+    const taxRate = r2(item.taxRate == null ? poLine.taxRate : Math.max(0, Number(item.taxRate)));
+    if (!Number.isFinite(unitCost) || unitCost < 0) { errors.push(`${poLine.description}: unit cost cannot be negative`); continue; }
+    const lineSubtotal = r2(quantity * unitCost);
+    const taxAmount = r2(lineSubtotal * taxRate / 100);
+    lines.push({
+      id: generateId(),
+      purchaseInvoiceId: invoiceId,
+      purchaseOrderLineId: poLine.id,
+      productId: poLine.productId ?? null,
+      description: poLine.description,
+      invoicedQuantity: quantity,
+      unitCost,
+      taxRate,
+      lineSubtotal,
+      taxAmount,
+      lineTotal: r2(lineSubtotal + taxAmount),
+    });
+  }
+  if (errors.length || !lines.length) return { purchaseInvoice: null, errors: errors.length ? errors : ["Nothing to invoice"] };
+
+  const subtotal = r2(lines.reduce((sum, line) => sum + line.lineSubtotal, 0));
+  const taxAmount = r2(lines.reduce((sum, line) => sum + line.taxAmount, 0));
+  const now = nowISO();
+  const purchaseInvoice: PurchaseInvoice = {
+    id: invoiceId,
+    invoiceNumber: nextInvoiceNumber(),
+    supplierInvoiceNumber: input.supplierInvoiceNumber?.trim() || null,
+    purchaseOrderId: po.id,
+    poNumber: po.poNumber,
+    supplierId: supplier.id,
+    supplierName: supplier.name,
+    status: "draft",
+    invoiceDate: input.invoiceDate || now.slice(0, 10),
+    dueDate: input.dueDate || null,
+    lines,
+    subtotal,
+    taxAmount,
+    total: r2(subtotal + taxAmount),
+    paidAmount: 0,
+    balanceAmount: r2(subtotal + taxAmount),
+    notes: input.notes ?? null,
+    createdAt: now,
+    updatedAt: now,
+    branchId: po.branchId ?? null,
+    createdBy: input.createdBy ?? null,
+    version: 1,
+  };
+  purchaseInvoices.unshift(purchaseInvoice);
+  void remoteUpsertPurchaseInvoice(cloneInvoice(purchaseInvoice));
+  auditAction("purchase_invoice.create", "purchase_invoices", purchaseInvoice.id, null, purchaseInvoice);
+  touchPersistence();
+  return { purchaseInvoice: cloneInvoice(purchaseInvoice), errors: [] };
+}
+
+export function postPurchaseInvoice(id: UUID): { purchaseInvoice: PurchaseInvoice | null; error?: string } {
+  assertPermission("purchases.manage");
+  const invoice = mutableInvoice(id);
+  if (!invoice) return { purchaseInvoice: null, error: "Purchase invoice not found" };
+  if (invoice.status !== "draft") return { purchaseInvoice: null, error: "Only draft supplier invoices can be posted" };
+  const supplier = phase5Store.getSupplier(invoice.supplierId);
+  if (!supplier) return { purchaseInvoice: null, error: "Supplier not found" };
+  const before = cloneInvoice(invoice);
+  invoice.status = invoice.balanceAmount <= 0 ? "paid" : "posted";
+  invoice.postedAt = nowISO();
+  invoice.updatedAt = nowISO();
+  invoice.version += 1;
+  supplier.outstandingBalance = r2(supplier.outstandingBalance + invoice.balanceAmount);
+  supplier.updatedAt = nowISO();
+  void remoteUpsertPurchaseInvoice(cloneInvoice(invoice));
+  void remoteUpsertSupplier(supplier);
+  auditAction("purchase_invoice.post", "purchase_invoices", invoice.id, before, invoice);
+  touchPersistence();
+  return { purchaseInvoice: cloneInvoice(invoice) };
+}
+
+export function payPurchaseInvoice(input: {
+  purchaseInvoiceId: UUID;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  date?: string;
+  reference?: string | null;
+  notes?: string | null;
+}): { purchaseInvoice: PurchaseInvoice | null; error?: string } {
+  assertPermission("purchases.manage");
+  const invoice = mutableInvoice(input.purchaseInvoiceId);
+  if (!invoice) return { purchaseInvoice: null, error: "Purchase invoice not found" };
+  if (!["posted", "partially_paid"].includes(invoice.status)) return { purchaseInvoice: null, error: "Only posted unpaid invoices can receive payment" };
+  const amount = r2(Math.min(Math.max(0, Number(input.amount)), invoice.balanceAmount));
+  if (amount <= 0) return { purchaseInvoice: null, error: "Payment amount must be greater than zero" };
+  const result = phase5Store.recordSupplierPayment({
+    supplierId: invoice.supplierId,
+    amount,
+    paymentMethod: input.paymentMethod,
+    date: input.date,
+    reference: input.reference || invoice.invoiceNumber,
+    notes: input.notes || `Supplier invoice ${invoice.invoiceNumber}`,
+  });
+  if (result.errors.length || !result.payment) return { purchaseInvoice: null, error: result.errors.join("; ") || "Unable to record supplier payment" };
+  const before = cloneInvoice(invoice);
+  invoice.paidAmount = r2(invoice.paidAmount + amount);
+  invoice.balanceAmount = r2(Math.max(0, invoice.total - invoice.paidAmount));
+  invoice.status = invoice.balanceAmount <= 0 ? "paid" : "partially_paid";
+  invoice.updatedAt = nowISO();
+  invoice.version += 1;
+  void remoteUpsertPurchaseInvoice(cloneInvoice(invoice));
+  auditAction("purchase_invoice.payment", "purchase_invoices", invoice.id, before, invoice);
+  touchPersistence();
+  return { purchaseInvoice: cloneInvoice(invoice) };
+}
+
+export function cancelPurchaseInvoice(id: UUID): { purchaseInvoice: PurchaseInvoice | null; error?: string } {
+  assertPermission("purchases.manage");
+  const invoice = mutableInvoice(id);
+  if (!invoice) return { purchaseInvoice: null, error: "Purchase invoice not found" };
+  if (invoice.status === "cancelled") return { purchaseInvoice: null, error: "Purchase invoice already cancelled" };
+  if (invoice.status === "paid" || invoice.status === "partially_paid" || invoice.paidAmount > 0) {
+    return { purchaseInvoice: null, error: "Paid supplier invoice cannot be cancelled; use a debit note in the accounting workflow" };
+  }
+  const supplier = phase5Store.getSupplier(invoice.supplierId);
+  const before = cloneInvoice(invoice);
+  if (invoice.status === "posted" && supplier) {
+    supplier.outstandingBalance = r2(Math.max(0, supplier.outstandingBalance - invoice.balanceAmount));
+    supplier.updatedAt = nowISO();
+    void remoteUpsertSupplier(supplier);
+  }
+  invoice.status = "cancelled";
+  invoice.cancelledAt = nowISO();
+  invoice.updatedAt = nowISO();
+  invoice.version += 1;
+  void remoteUpsertPurchaseInvoice(cloneInvoice(invoice));
+  auditAction("purchase_invoice.cancel", "purchase_invoices", invoice.id, before, invoice);
+  touchPersistence();
+  return { purchaseInvoice: cloneInvoice(invoice) };
+}
+
+export function buildSupplierPayableAging(asOfDate = new Date().toISOString().slice(0, 10)): SupplierPayableAging[] {
+  const asOf = Date.parse(asOfDate + "T00:00:00Z");
+  const bySupplier = new Map<string, SupplierPayableAging>();
+  for (const invoice of purchaseInvoices) {
+    if (!["posted", "partially_paid"].includes(invoice.status) || invoice.balanceAmount <= 0) continue;
+    const due = Date.parse((invoice.dueDate || invoice.invoiceDate).slice(0, 10) + "T00:00:00Z");
+    const overdueDays = Number.isFinite(due) ? Math.max(0, Math.floor((asOf - due) / 86400000)) : 0;
+    const row = bySupplier.get(invoice.supplierId) || {
+      supplierId: invoice.supplierId,
+      supplierName: invoice.supplierName || invoice.supplierId,
+      current: 0, days1to30: 0, days31to60: 0, days61to90: 0, days90plus: 0, totalOutstanding: 0,
+    };
+    const amount = r2(invoice.balanceAmount);
+    if (overdueDays <= 0) row.current = r2(row.current + amount);
+    else if (overdueDays <= 30) row.days1to30 = r2(row.days1to30 + amount);
+    else if (overdueDays <= 60) row.days31to60 = r2(row.days31to60 + amount);
+    else if (overdueDays <= 90) row.days61to90 = r2(row.days61to90 + amount);
+    else row.days90plus = r2(row.days90plus + amount);
+    row.totalOutstanding = r2(row.totalOutstanding + amount);
+    bySupplier.set(invoice.supplierId, row);
+  }
+  return [...bySupplier.values()].sort((a, b) => b.totalOutstanding - a.totalOutstanding);
+}
+
 export function cancelPurchaseOrder(id: UUID): { purchaseOrder: PurchaseOrder | null; error?: string } {
   assertPermission("purchases.manage");
   const po = findMutable(id);
@@ -314,8 +561,10 @@ export function cancelPurchaseOrder(id: UUID): { purchaseOrder: PurchaseOrder | 
 export function hydrateProcurementState(input: {
   purchaseOrders?: PurchaseOrder[];
   goodsReceipts?: GoodsReceipt[];
+  purchaseInvoices?: PurchaseInvoice[];
   poSequence?: number;
   grnSequence?: number;
+  invoiceSequence?: number;
 }) {
   if (input.purchaseOrders) {
     purchaseOrders.length = 0;
@@ -324,6 +573,10 @@ export function hydrateProcurementState(input: {
   if (input.goodsReceipts) {
     goodsReceipts.length = 0;
     goodsReceipts.push(...input.goodsReceipts.map(cloneReceipt));
+  }
+  if (input.purchaseInvoices) {
+    purchaseInvoices.length = 0;
+    purchaseInvoices.push(...input.purchaseInvoices.map(cloneInvoice));
   }
   if (typeof input.poSequence === "number") {
     poSequence = input.poSequence;
@@ -335,13 +588,20 @@ export function hydrateProcurementState(input: {
   } else if (input.goodsReceipts?.length) {
     grnSequence = Math.max(0, ...input.goodsReceipts.map((receipt) => Number(/(\d+)$/.exec(receipt.grnNumber)?.[1] || 0)));
   }
+  if (typeof input.invoiceSequence === "number") {
+    invoiceSequence = input.invoiceSequence;
+  } else if (input.purchaseInvoices?.length) {
+    invoiceSequence = Math.max(0, ...input.purchaseInvoices.map((invoice) => Number(/(\d+)$/.exec(invoice.invoiceNumber)?.[1] || 0)));
+  }
 }
 
 export function exportProcurementState() {
   return {
     purchaseOrders: listPurchaseOrders(),
     goodsReceipts: listGoodsReceipts(),
+    purchaseInvoices: listPurchaseInvoices(),
     poSequence,
     grnSequence,
+    invoiceSequence,
   };
 }
