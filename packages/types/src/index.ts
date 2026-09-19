@@ -537,6 +537,52 @@ export interface GoodsReceipt {
 }
 
 
+export type SupplierInvoiceStatus = "draft" | "posted" | "void";
+
+export interface SupplierInvoiceLine {
+  id: UUID;
+  supplierInvoiceId: UUID;
+  goodsReceiptLineId: UUID;
+  purchaseOrderLineId: UUID;
+  productId?: UUID | null;
+  description: string;
+  quantity: number;
+  unitCost: number;
+  taxRate: number;
+  lineSubtotal: number;
+  taxAmount: number;
+  lineTotal: number;
+}
+
+export interface SupplierInvoice {
+  id: UUID;
+  internalNumber: string;
+  supplierInvoiceNumber: string;
+  supplierId: UUID;
+  supplierName?: string | null;
+  purchaseOrderId: UUID;
+  poNumber: string;
+  goodsReceiptId: UUID;
+  grnNumber: string;
+  status: SupplierInvoiceStatus;
+  invoiceDate: ISODateString;
+  dueDate?: ISODateString | null;
+  lines: SupplierInvoiceLine[];
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  balanceAmount: number;
+  notes?: string | null;
+  postedAt?: ISODateString | null;
+  voidedAt?: ISODateString | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+  branchId?: UUID | null;
+  createdBy?: UUID | null;
+  version: number;
+}
+
+
 // ---------------------------------------------------------------------------
 // Phase 6 — Staff, Assignments, Incentives, CRM, Notifications
 // ---------------------------------------------------------------------------
