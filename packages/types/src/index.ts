@@ -507,6 +507,36 @@ export interface PurchaseOrder {
 }
 
 
+
+export interface GoodsReceiptLine {
+  id: UUID;
+  goodsReceiptId: UUID;
+  purchaseOrderLineId: UUID;
+  productId?: UUID | null;
+  description: string;
+  receivedQuantity: number;
+  unitCost: number;
+  lineTotal: number;
+}
+
+export interface GoodsReceipt {
+  id: UUID;
+  grnNumber: string;
+  purchaseOrderId: UUID;
+  poNumber: string;
+  supplierId: UUID;
+  supplierName?: string | null;
+  receiptDate: ISODateString;
+  lines: GoodsReceiptLine[];
+  subtotal: number;
+  notes?: string | null;
+  createdAt: ISODateString;
+  branchId?: UUID | null;
+  createdBy?: UUID | null;
+  version: number;
+}
+
+
 // ---------------------------------------------------------------------------
 // Phase 6 — Staff, Assignments, Incentives, CRM, Notifications
 // ---------------------------------------------------------------------------
