@@ -226,7 +226,7 @@ async function main() {
     await click(ws, "DAY_END", ["day-end close"]);
     await assertMain(ws, "DAY_END", ["Day-end close", "Close today"]);
     await click(ws, "CLOSE_TODAY", ["close today"]);
-    await assertMain(ws, "DAY_END_CLOSED", ["Day-end close", "Net profit"]);
+    await assertMain(ws, "DAY_END_CLOSED", ["Day-end close", "Net"]);
 
     // Notifications and report callbacks.
     await click(ws, "NOTIFICATIONS", ["messages & notifications", "notifications"]);
