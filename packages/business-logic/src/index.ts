@@ -73,3 +73,5 @@ export * from "./quality-control-types";
 export * from "./quality-control";
 
 export * from "./print-settings";
+
+export * from "./warehouse";
