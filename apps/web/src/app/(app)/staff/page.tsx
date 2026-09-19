@@ -7,6 +7,8 @@ import {
 import { phase6Store, ordersStore } from "@minarvabiz/business-logic";
 import type { StaffMember, StaffAssignment, StaffIncentivePayout, IncentiveRuleRecord, RoleName } from "@minarvabiz/types";
 
+function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
+
 export default function StaffPage() {
   const [staff, setStaff] = React.useState<StaffMember[]>([]);
   const [selected, setSelected] = React.useState<StaffMember | null>(null);
@@ -15,7 +17,7 @@ export default function StaffPage() {
   const [rules, setRules] = React.useState<IncentiveRuleRecord[]>([]);
   const [open, setOpen] = React.useState(false);
   const [form, setForm] = React.useState({
-    name: "", phone: "", role: "tailor" as RoleName | "tailor" | "staff", salary: "15000",
+    name: "", phone: "", role: "tailor" as RoleName | "tailor" | "staff", salary: "15000", joiningDate: todayLocal(),
   });
 
   const refresh = React.useCallback(() => {
@@ -38,9 +40,10 @@ export default function StaffPage() {
       phone: form.phone || null,
       role: form.role,
       salary: parseFloat(form.salary) || 0,
+      joiningDate: form.joiningDate || null,
     });
     setOpen(false);
-    setForm({ name: "", phone: "", role: "tailor", salary: "15000" });
+    setForm({ name: "", phone: "", role: "tailor", salary: "15000", joiningDate: todayLocal() });
     refresh();
   }
 
@@ -101,6 +104,10 @@ export default function StaffPage() {
           <FormField label="Salary">
             <input type="number" className={inputClass} value={form.salary}
               onChange={(e) => setForm({ ...form, salary: e.target.value })} />
+          </FormField>
+          <FormField label="Joining date">
+            <input type="date" className={inputClass} value={form.joiningDate}
+              onChange={(e) => setForm({ ...form, joiningDate: e.target.value })} />
           </FormField>
         </div>
       </Modal>
