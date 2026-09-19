@@ -333,6 +333,10 @@ async function main() {
     await click(ws, "TRIAL_BALANCE", ["trial balance"]);
     await assertMain(ws, "TRIAL_BALANCE", ["Trial Balance", "QA Expense", "Cash"]);
 
+    await click(ws, "FINANCIAL_STATEMENTS", ["financial statements"]);
+    await assertMain(ws, "FINANCIAL_STATEMENTS", ["Profit & Loss", "Balance Sheet", "QA Expense", "Balance sheet balanced"]);
+    await assertStatementProfit(ws, -100);
+
     // Staff create + row drill-down.
     await click(ws, "STAFF", ["staff management"]);
     await assertMain(ws, "STAFF", ["Staff Management", "Add Staff"]);
@@ -411,3 +415,9 @@ main().catch((e) => {
   console.error(`WINDOWS_INTERACTION_AUDIT FAIL: ${e instanceof Error ? e.stack || e.message : String(e)}`);
   process.exit(1);
 });
+
+async function assertStatementProfit(ws, expected) {
+  const actual = await evalIn(ws, `Number((document.querySelector('[data-testid="statement-net-profit"]')?.textContent || 'NaN').replace(/[^0-9.\\-]/g, ''))`);
+  if (actual !== expected) throw new Error(`Financial statement profit mismatch: expected ${expected}, received ${actual}`);
+  console.log('FINANCIAL_STATEMENT_AMOUNT PASS');
+}

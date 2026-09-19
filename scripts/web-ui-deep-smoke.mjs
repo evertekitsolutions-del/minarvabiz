@@ -41,6 +41,10 @@ async function run(){const ws=await connect();try{
   await clickText(ws,'ACCOUNTING',['accounting']); await waitFor(ws,['Accounting & General Ledger','Chart of Accounts']);
   await setMainField(ws,'Account code','6100'); await setMainField(ws,'Account name','QA Web Expense'); await setMainField(ws,'Account type','Expense'); await clickText(ws,'CREATE_ACCOUNT',['create account'],500); await waitFor(ws,['QA Web Expense','6100']);
   await clickText(ws,'JOURNAL_TAB',['journal entries']); await waitFor(ws,['New manual journal','Save Draft Journal']); await setMainField(ws,'Description','QA Web balanced journal'); await setMainByAriaLabel(ws,'Journal account 1','QA Web Expense'); await setMainByAriaLabel(ws,'Journal debit 1','100'); await setMainByAriaLabel(ws,'Journal account 2','Cash'); await setMainByAriaLabel(ws,'Journal credit 2','100'); await clickText(ws,'SAVE_JOURNAL',['save draft journal'],600); await waitFor(ws,['JV-','draft','QA Web balanced journal']); await clickText(ws,'POST_JOURNAL',['post'],600); await waitFor(ws,['posted','QA Web balanced journal']); await clickText(ws,'TRIAL_BALANCE',['trial balance'],500); await waitFor(ws,['Trial Balance','QA Web Expense','Cash']);
+  await clickText(ws,'FINANCIAL_STATEMENTS',['financial statements']); await waitFor(ws,['Profit & Loss','Balance Sheet','QA Web Expense','Balance sheet balanced']);
+  await assertStatementProfit(ws, -100);
+  await setMainField(ws,'Profit and loss from','9999-12-31'); await waitFor(ws,['start date must be on or before end date']);
+  await setMainField(ws,'Profit and loss from',''); await waitFor(ws,['Balance sheet balanced']); await assertStatementProfit(ws, -100);
   await clickText(ws,'REPORTS',['reports & analytics']); await waitFor(ws,['Reports & Analytics','Export Excel','Download PDF','Refresh']);
   await clickText(ws,'NOTIFICATIONS',['messages & notifications','notifications']); await waitFor(ws,['Notifications']);
   await clickText(ws,'SETTINGS',['settings']); await waitFor(ws,['Settings','Shop profile','Browser printing defaults']); await setMainField(ws,'Shop name','QA Minarva Web'); await clickText(ws,'SAVE_SHOP',['save shop profile']); await waitFor(ws,['Shop profile saved']);
@@ -50,3 +54,9 @@ async function run(){const ws=await connect();try{
   console.log('MINARVA_WEB_UI_DEEP_SMOKE PASS');
 }finally{ws.close();}}
 run().catch(e=>{console.error('MINARVA_WEB_UI_DEEP_SMOKE FAIL');console.error(e?.stack||e);process.exit(1);});
+
+async function assertStatementProfit(ws, expected) {
+  const actual = await evalIn(ws, `Number((document.querySelector('[data-testid="statement-net-profit"]')?.textContent || 'NaN').replace(/[^0-9.\\-]/g, ''))`);
+  if (actual !== expected) throw new Error(`Financial statement profit mismatch: expected ${expected}, received ${actual}`);
+  console.log('FINANCIAL_STATEMENT_AMOUNT PASS');
+}

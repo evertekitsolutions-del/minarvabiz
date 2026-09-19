@@ -20,6 +20,8 @@ import { auditAction } from "./audit-actions";
 import { touchPersistence } from "./autosave";
 import { remoteUpsertAccountingAccount, remoteUpsertJournalEntry } from "./remote-write";
 
+import { calculateProfitAndLoss, calculateBalanceSheet } from "./accounting-statements";
+
 const accounts: AccountingAccount[] = [];
 const journals: JournalEntry[] = [];
 let journalSequence = 0;
@@ -397,4 +399,14 @@ export function exportAccountingState() {
     journals: journals.map(cloneEntry),
     journalSequence,
   };
+}
+
+export function buildProfitAndLoss(from?: string, to?: string) {
+  assertPermission("accounting.view");
+  return calculateProfitAndLoss(accounts, journals, from, to);
+}
+
+export function buildBalanceSheet(asOf?: string) {
+  assertPermission("accounting.view");
+  return calculateBalanceSheet(accounts, journals, asOf);
 }
