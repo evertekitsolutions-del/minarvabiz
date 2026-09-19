@@ -20,6 +20,7 @@ import { auditAction } from "./audit-actions";
 import { remoteUpsertGoodsReceipt, remoteUpsertPurchaseOrder } from "./remote-write";
 import * as phase5Store from "./phase5-store";
 import * as mainStore from "./store";
+import * as warehouseStore from "./warehouse-store";
 
 const purchaseOrders: PurchaseOrder[] = [];
 const goodsReceipts: GoodsReceipt[] = [];
@@ -181,7 +182,7 @@ export function approvePurchaseOrder(id: UUID, approvedBy?: UUID | null): { purc
 
 export function receivePurchaseOrder(input: {
   purchaseOrderId: UUID;
-  lines: Array<{ purchaseOrderLineId: UUID; quantity: number }>;
+  lines: Array<{ purchaseOrderLineId: UUID; quantity: number; warehouseLocationId?: UUID | null }>;
   receiptDate?: string;
   notes?: string | null;
   createdBy?: UUID | null;
@@ -225,11 +226,31 @@ export function receivePurchaseOrder(input: {
       errors.push(`${poLine.description}: linked product no longer exists`);
       continue;
     }
+    const warehouseLocationId = item.warehouseLocationId ?? null;
+    if (warehouseLocationId) {
+      if (!poLine.productId) {
+        errors.push(`${poLine.description}: warehouse location can only be used for a linked product`);
+        continue;
+      }
+      const location = warehouseStore.listWarehouseLocations().find((candidate) => candidate.id === warehouseLocationId);
+      if (!location) {
+        errors.push(`${poLine.description}: warehouse location not found`);
+        continue;
+      }
+      if (po.branchId) {
+        const warehouse = warehouseStore.listWarehouses(true).find((candidate) => candidate.id === location.warehouseId);
+        if (warehouse?.branchId && warehouse.branchId !== po.branchId) {
+          errors.push(`${poLine.description}: warehouse location belongs to a different branch`);
+          continue;
+        }
+      }
+    }
     receiptLines.push({
       id: generateId(),
       goodsReceiptId: receiptId,
       purchaseOrderLineId: poLine.id,
       productId: poLine.productId ?? null,
+      warehouseLocationId,
       description: poLine.description,
       receivedQuantity: quantity,
       unitCost: poLine.unitCost,
@@ -249,6 +270,18 @@ export function receivePurchaseOrder(input: {
     poLine.receivedQuantity = r3(poLine.receivedQuantity + receiptLine.receivedQuantity);
     if (receiptLine.productId) {
       mainStore.adjustStock(receiptLine.productId, "stock_in", receiptLine.receivedQuantity, `Goods receipt ${grnNumber} against ${po.poNumber}`);
+      if (receiptLine.warehouseLocationId) {
+        const product = mainStore.getProduct(receiptLine.productId);
+        const allocation = warehouseStore.allocateExistingStock({
+          productId: receiptLine.productId,
+          locationId: receiptLine.warehouseLocationId,
+          quantity: receiptLine.receivedQuantity,
+          productTotalStock: product?.stockQuantity ?? receiptLine.receivedQuantity,
+        });
+        if (allocation.errors.length) {
+          throw new Error(`${receiptLine.description}: warehouse allocation failed — ${allocation.errors.join("; ")}`);
+        }
+      }
     }
   }
 

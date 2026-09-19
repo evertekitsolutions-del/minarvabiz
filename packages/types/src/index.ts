@@ -513,6 +513,8 @@ export interface GoodsReceiptLine {
   goodsReceiptId: UUID;
   purchaseOrderLineId: UUID;
   productId?: UUID | null;
+  /** Physical warehouse/bin where this receipt quantity was placed. */
+  warehouseLocationId?: UUID | null;
   description: string;
   receivedQuantity: number;
   unitCost: number;

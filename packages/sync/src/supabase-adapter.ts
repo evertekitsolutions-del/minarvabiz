@@ -175,6 +175,35 @@ function remoteRow(table: string, aggregateId: UUID, payload: Record<string, unk
         updated_at: new Date().toISOString(),
         version: 1,
       };
+    case "goods_receipts":
+      return {
+        id: aggregateId,
+        branch_id: payload.branchId ?? null,
+        grn_number: payload.grnNumber,
+        purchase_order_id: payload.purchaseOrderId,
+        po_number: payload.poNumber,
+        supplier_id: payload.supplierId,
+        supplier_name: payload.supplierName ?? null,
+        receipt_date: String(payload.receiptDate ?? new Date().toISOString()).slice(0, 10),
+        subtotal: payload.subtotal ?? 0,
+        notes: payload.notes ?? null,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        created_by: payload.createdBy ?? null,
+        version: payload.version ?? 1,
+      };
+    case "goods_receipt_lines":
+      return {
+        id: aggregateId,
+        goods_receipt_id: payload.goodsReceiptId,
+        purchase_order_line_id: payload.purchaseOrderLineId,
+        product_id: payload.productId ?? null,
+        warehouse_location_id: payload.warehouseLocationId ?? null,
+        description: payload.description,
+        received_quantity: payload.receivedQuantity ?? 0,
+        unit_cost: payload.unitCost ?? 0,
+        line_total: payload.lineTotal ?? 0,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+      };
     default:
       return { ...payload, id: aggregateId };
   }
@@ -236,7 +265,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         "staff_members", "sale_returns", "audit_logs",
         "production_workflows", "production_stage_events", "material_rolls", "material_consumptions",
         "warehouses", "warehouse_locations", "warehouse_stock", "warehouse_transfers",
-        "purchase_orders", "purchase_order_lines",
+        "purchase_orders", "purchase_order_lines", "goods_receipts", "goods_receipt_lines",
       ];
       const records: Array<{ tableName: string; record: VersionedRecord }> = [];
       for (const table of tables) {
