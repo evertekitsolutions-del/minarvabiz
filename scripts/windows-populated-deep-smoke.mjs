@@ -115,6 +115,12 @@ async function selectFieldByText(ws, labelText, optionText) {
   if (!result.ok) throw new Error(`SELECT_FIELD ${labelText} -> ${optionText} failed: ${raw}`);
 }
 
+async function setByAriaLabel(ws, label, value) {
+  const raw = await evalIn(ws, `(()=>{const els=[...document.querySelectorAll('input,textarea,select')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0});const el=els.find(e=>(e.getAttribute('aria-label')||'').toLowerCase().includes(${JSON.stringify(label.toLowerCase())}));if(!el)return JSON.stringify({ok:false,labels:els.map(e=>e.getAttribute('aria-label')).filter(Boolean)});const v=${JSON.stringify(value)};if(el.tagName==='SELECT'){const opt=[...el.options].find(o=>(o.textContent||'').toLowerCase().includes(String(v).toLowerCase()));el.value=opt?opt.value:v;el.dispatchEvent(new Event('change',{bubbles:true}));}else{const proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;setter?setter.call(el,v):el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}return JSON.stringify({ok:true,value:el.value});})()`);
+  const result = JSON.parse(raw);
+  if (!result.ok) throw new Error(`SET_ARIA ${label} failed: ${raw}`);
+}
+
 async function setByPlaceholder(ws, placeholder, value) {
   const raw = await evalIn(ws, `(()=>{const els=[...document.querySelectorAll('input,textarea')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0});const el=els.find(e=>(e.placeholder||'').toLowerCase().includes(${JSON.stringify(placeholder.toLowerCase())}));if(!el)return JSON.stringify({ok:false,placeholders:els.map(e=>e.placeholder)});const proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;setter?setter.call(el,${JSON.stringify(value)}):el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true,value:el.value});})()`);
   const result = JSON.parse(raw);
@@ -181,9 +187,18 @@ async function main() {
       if (!JSON.parse(raw).ok) throw new Error("POS customer select failed");
     });
     await click(ws, "POS_PRODUCT", ["QA POS Product"]);
-    await setByPlaceholder(ws, "Amount paid", "10");
+    await click(ws, "HOLD_SALE", ["hold sale"]);
+    await assertMain(ws, "SALE_HELD", ["Held sales (1)", "Sale held"]);
+    const heldSelect = await evalIn(ws, `(()=>{const s=[...document.querySelectorAll('select')].find(x=>(x.getAttribute('aria-label')||'').includes('Held sales'));if(!s||s.options.length<2)return JSON.stringify({ok:false,options:s?[...s.options].map(o=>o.textContent):[]});s.value=s.options[1].value;s.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true,value:s.value});})()`);
+    if (!JSON.parse(heldSelect).ok) throw new Error(`Held-sale selection failed: ${heldSelect}`);
+    await click(ws, "RESUME_SALE", ["resume sale"]);
+    await assertMain(ws, "SALE_RESUMED", ["Resumed HOLD-", "QA POS Product"]);
+    await setByAriaLabel(ws, "Payment amount 1", "5");
+    await click(ws, "ADD_SPLIT_PAYMENT", ["+ payment"]);
+    await setByAriaLabel(ws, "Payment method 2", "Card");
+    await setByAriaLabel(ws, "Payment amount 2", "5");
     const cartState = JSON.parse(await evalIn(ws, `JSON.stringify({main:(document.querySelector('[data-testid="app-content"]')?.innerText||''),complete:[...document.querySelectorAll('button')].find(b=>(b.innerText||'').includes('Complete Sale'))?.disabled})`));
-    if (cartState.complete) throw new Error("Complete Sale remained disabled after adding a product");
+    if (cartState.complete) throw new Error("Complete Sale remained disabled after resuming held sale");
     await click(ws, "COMPLETE_SALE", ["complete sale"]);
     await assertMain(ws, "SALE_COMPLETED", ["Sale completed"]);
     await click(ws, "SALES_HISTORY", ["sales history"]);
