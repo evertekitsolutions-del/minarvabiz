@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import { PurchaseList, ProcurementPanel, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { phase5Store, ordersStore, procurementStore, store } from "@minarvabiz/business-logic";
-import type { GoodsReceipt, Purchase, PurchaseOrder, Product, ServiceOrder, PaymentMethod, Supplier } from "@minarvabiz/types";
+import { phase5Store, ordersStore, procurementStore, store, warehouseStore } from "@minarvabiz/business-logic";
+import type { GoodsReceipt, Purchase, PurchaseOrder, Product, ServiceOrder, PaymentMethod, Supplier, WarehouseLocation } from "@minarvabiz/types";
 
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
 
@@ -14,6 +14,7 @@ export default function PurchasesPage() {
   const [products, setProducts] = React.useState<Product[]>([]);
   const [purchaseOrders, setPurchaseOrders] = React.useState<PurchaseOrder[]>([]);
   const [goodsReceipts, setGoodsReceipts] = React.useState<GoodsReceipt[]>([]);
+  const [warehouseLocations, setWarehouseLocations] = React.useState<WarehouseLocation[]>([]);
   const [open, setOpen] = React.useState(false);
   const [supplierOpen, setSupplierOpen] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -37,6 +38,7 @@ export default function PurchasesPage() {
     setProducts(store.listProducts());
     setPurchaseOrders(procurementStore.listPurchaseOrders());
     setGoodsReceipts(procurementStore.listGoodsReceipts());
+    setWarehouseLocations(warehouseStore.listWarehouseLocations());
   }, []);
 
   React.useEffect(() => { refresh(); }, [refresh]);
@@ -102,6 +104,7 @@ export default function PurchasesPage() {
         goodsReceipts={goodsReceipts}
         suppliers={suppliers}
         products={products}
+        warehouseLocations={warehouseLocations}
         onCreate={(payload) => {
           const result = procurementStore.createPurchaseOrder(payload);
           refresh();
