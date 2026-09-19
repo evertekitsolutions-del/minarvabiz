@@ -198,7 +198,7 @@ async function main() {
     await click(ws, "COLLECT_PAYMENT", ["collect"]);
     await setField(ws, "Collect payment", "Amount", "90");
     await click(ws, "RECORD_PAYMENT", ["record payment"]);
-    await assertMain(ws, "PAYMENT_RECORDED", ["Payments", "No outstanding balances"]);
+    await assertMain(ws, "PAYMENT_RECORDED", ["Payments", "QA POS Customer", "₹200.00"]);
 
     // Return/refund with stock restock.
     await click(ws, "RETURNS", ["returns & refunds"]);
