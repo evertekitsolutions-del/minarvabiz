@@ -27,6 +27,8 @@ const sqliteAdapter = read("packages/database/src/adapters/sqlite.ts");
 const licensing = read("packages/licensing/src/activation.ts") + read("packages/licensing/src/issuer.ts");
 const token = read("packages/licensing/src/token.ts");
 const licenseConfigWriter = read("apps/desktop/scripts/write-license-config.mjs");
+const updateConfigWriter = read("apps/desktop/scripts/write-update-config.mjs");
+const updater = read("apps/desktop/electron/updater.ts");
 const workflow = read(".github/workflows/ci.yml");
 const releaseWorkflow = read(".github/workflows/release-windows.yml");
 const builder = read("apps/desktop/electron-builder.yml");
@@ -83,5 +85,14 @@ assert(settingsPanel.includes("Support diagnostics") && settingsPanel.includes("
 assert(uiPackage.scripts?.typecheck === "tsc --noEmit", "Shared UI typecheck script is missing");
 assert(businessLogicPackage.scripts?.typecheck === "tsc --noEmit", "Business-logic typecheck script is missing");
 assert(desktopPackage.scripts?.["package:win"]?.includes("electron-builder --win"), "Windows packaging script is missing");
+assert(updateConfigWriter.includes("MINARVA_UPDATE_MANIFEST_URL") && updateConfigWriter.includes("MINARVA_UPDATE_PUBLIC_KEY_HEX") && updateConfigWriter.includes("https:"), "Secure updater build configuration is incomplete");
+assert(updater.includes("verifyManifestSignature") && updater.includes("createPublicKey") && updater.includes("verify(null"), "Secure updater manifest signature verification is missing");
+assert(updater.includes('createHash("sha256")') && updater.includes("Installer SHA-256 verification failed"), "Secure updater installer hash verification is missing");
+assert(updater.includes("500 * 1024 * 1024") && updater.includes("AbortSignal.timeout"), "Secure updater download guards are incomplete");
+assert(desktopSource.includes('ipcMain.handle("update:install"') && desktopSource.includes('createLocalBackup("automatic")') && desktopSource.includes("isValidSqliteFile(backup.path)"), "Updater must require a verified pre-update SQLite backup");
+assert(preloadSource.includes("checkForUpdates") && preloadSource.includes("downloadUpdate") && preloadSource.includes("installUpdate"), "Updater IPC preload bridge is incomplete");
+assert(settingsPanel.includes("Software updates") && settingsPanel.includes("Updates are never forced"), "Customer-facing secure updater controls are missing");
+assert(desktopPackage.scripts?.["prepare:update"]?.includes("write-update-config.mjs") && desktopPackage.scripts?.["build:electron"]?.includes("prepare:update"), "Updater config generation is missing from desktop build");
+
 
 console.log("Minarva Biz quality smoke: PASS");
