@@ -26,7 +26,7 @@ assert.match(source, /receivedQuantity/);
 assert.match(source, /adjustStock\(receiptLine\.productId, "stock_in"/);
 assert.match(source, /auditAction\("goods_receipt\.create"/);
 assert.match(source, /remoteUpsertGoodsReceipt/);
-assert.match(persistence, /SNAPSHOT_VERSION = 11/);
+assert.match(persistence, /SNAPSHOT_VERSION = 12/);
 assert.match(persistence, /procurementStore\.exportProcurementState/);
 assert.match(remote, /enqueueOutbox\("goods_receipts"/);
 assert.match(remote, /enqueueOutbox\("goods_receipt_lines"/);

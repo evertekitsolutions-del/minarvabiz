@@ -4,7 +4,7 @@
 
 export type NavItemId =
   | "dashboard" | "sales" | "products" | "warehouse" | "services" | "laundry" | "expenses" | "purchases"
-  | "customers" | "customer-crm" | "staff" | "staff-detail" | "suppliers" | "payments" | "returns"
+  | "customers" | "customer-crm" | "staff" | "staff-detail" | "suppliers" | "payments" | "accounting" | "returns"
   | "reports" | "day-end" | "audit" | "notifications" | "settings" | "backup";
 
 export interface NavItem { id: NavItemId; label: string; href: string; icon: string; }
@@ -24,6 +24,7 @@ export const MAIN_NAV: NavItem[] = [
   { id: "staff-detail", label: "Staff Details", href: "/staff-detail", icon: "user-cog" },
   { id: "suppliers", label: "Suppliers", href: "/suppliers", icon: "truck" },
   { id: "payments", label: "Payments", href: "/payments", icon: "wallet" },
+  { id: "accounting", label: "Accounting", href: "/accounting", icon: "bar-chart-3" },
   { id: "returns", label: "Returns & Refunds", href: "/returns", icon: "shopping-bag" },
   { id: "reports", label: "Reports & Analytics", href: "/reports", icon: "bar-chart-3" },
   { id: "day-end", label: "Day-end Close", href: "/day-end", icon: "bar-chart-3" },

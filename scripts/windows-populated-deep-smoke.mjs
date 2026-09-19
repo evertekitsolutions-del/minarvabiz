@@ -310,6 +310,29 @@ async function main() {
     await click(ws, "POST_GRN", ["post goods receipt"]);
     await assertMain(ws, "GRN_POSTED", ["GRN-", "received"]);
 
+    // Accounting Step 4A: create an account, post a balanced double-entry
+    // journal and verify the installed app exposes the Trial Balance.
+    await click(ws, "ACCOUNTING", ["accounting"]);
+    await assertMain(ws, "ACCOUNTING", ["Accounting & General Ledger", "Chart of Accounts"]);
+    await setMainField(ws, "Account code", "6100");
+    await setMainField(ws, "Account name", "QA Expense");
+    await selectFieldByText(ws, "Account type", "Expense");
+    await click(ws, "CREATE_ACCOUNT", ["create account"]);
+    await assertMain(ws, "ACCOUNT_CREATED", ["6100", "QA Expense"]);
+    await click(ws, "JOURNAL_TAB", ["journal entries"]);
+    await assertMain(ws, "JOURNAL_FORM", ["New manual journal", "Save Draft Journal"]);
+    await setMainField(ws, "Description", "QA balanced journal");
+    await setByAriaLabel(ws, "Journal account 1", "QA Expense");
+    await setByAriaLabel(ws, "Journal debit 1", "100");
+    await setByAriaLabel(ws, "Journal account 2", "Cash");
+    await setByAriaLabel(ws, "Journal credit 2", "100");
+    await click(ws, "SAVE_JOURNAL", ["save draft journal"]);
+    await assertMain(ws, "JOURNAL_DRAFT", ["JV-", "draft", "QA balanced journal"]);
+    await click(ws, "POST_JOURNAL", ["post"]);
+    await assertMain(ws, "JOURNAL_POSTED", ["posted", "QA balanced journal"]);
+    await click(ws, "TRIAL_BALANCE", ["trial balance"]);
+    await assertMain(ws, "TRIAL_BALANCE", ["Trial Balance", "QA Expense", "Cash"]);
+
     // Staff create + row drill-down.
     await click(ws, "STAFF", ["staff management"]);
     await assertMain(ws, "STAFF", ["Staff Management", "Add Staff"]);

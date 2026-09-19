@@ -29,6 +29,7 @@ export * from "./components/customers/CustomerList";
 export * from "./components/customers/format";
 export * from "./components/products/ProductList";
 export * from "./components/inventory/WarehousePanel";
+export * from "./components/accounting/AccountingPanel";
 export * from "./components/sales/PosBilling";
 export * from "./components/sales/NormalBilling";
 export * from "./components/sales/SalesList";

@@ -22,25 +22,27 @@ export type Permission =
   | "backup.manage"
   | "license.manage"
   | "returns.manage"
-  | "payments.collect";
+  | "payments.collect"
+  | "accounting.view"
+  | "accounting.manage";
 
 const ROLE_PERMS: Record<RoleName, Permission[]> = {
   super_admin: [
     "sales.create", "sales.void", "products.manage", "inventory.adjust", "customers.manage",
     "orders.manage", "orders.assign", "expenses.manage", "purchases.manage", "staff.manage",
     "reports.view", "settings.manage", "users.manage", "backup.manage", "license.manage",
-    "returns.manage", "payments.collect",
+    "returns.manage", "payments.collect", "accounting.view", "accounting.manage",
   ],
   admin: [
     "sales.create", "sales.void", "products.manage", "inventory.adjust", "customers.manage",
     "orders.manage", "orders.assign", "expenses.manage", "purchases.manage", "staff.manage",
     "reports.view", "settings.manage", "users.manage", "backup.manage", "license.manage",
-    "returns.manage", "payments.collect",
+    "returns.manage", "payments.collect", "accounting.view", "accounting.manage",
   ],
   manager: [
     "sales.create", "sales.void", "products.manage", "inventory.adjust", "customers.manage",
     "orders.manage", "orders.assign", "expenses.manage", "purchases.manage", "staff.manage",
-    "reports.view", "settings.manage", "backup.manage", "returns.manage", "payments.collect",
+    "reports.view", "settings.manage", "backup.manage", "returns.manage", "payments.collect", "accounting.view", "accounting.manage",
   ],
   cashier: [
     "sales.create", "customers.manage", "payments.collect", "reports.view", "orders.manage",
@@ -64,6 +66,8 @@ const PERMISSION_FEATURE: Partial<Record<Permission, keyof LicenseFeatures>> = {
   "users.manage": "multiUser",
   "returns.manage": "sales",
   "payments.collect": "sales",
+  "accounting.view": "advancedReports",
+  "accounting.manage": "advancedReports",
 };
 
 let currentRole: RoleName | null = null;

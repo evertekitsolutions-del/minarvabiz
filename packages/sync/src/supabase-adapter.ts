@@ -206,6 +206,55 @@ function remoteRow(table: string, aggregateId: UUID, payload: Record<string, unk
         created_at: payload.createdAt ?? new Date().toISOString(),
         updated_at: payload.updatedAt ?? payload.createdAt ?? new Date().toISOString(),
       };
+    case "accounts":
+      return {
+        id: aggregateId,
+        branch_id: payload.branchId ?? null,
+        code: payload.code,
+        name: payload.name,
+        type: payload.type,
+        normal_balance: payload.normalBalance,
+        parent_id: payload.parentId ?? null,
+        system_key: payload.systemKey ?? null,
+        is_active: payload.isActive ?? true,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        updated_at: payload.updatedAt ?? new Date().toISOString(),
+        deleted_at: payload.deletedAt ?? null,
+        version: payload.version ?? 1,
+      };
+    case "journal_entries":
+      return {
+        id: aggregateId,
+        branch_id: payload.branchId ?? null,
+        journal_number: payload.journalNumber,
+        entry_date: String(payload.entryDate ?? new Date().toISOString()).slice(0, 10),
+        description: payload.description,
+        reference_type: payload.referenceType ?? null,
+        reference_id: payload.referenceId ?? null,
+        status: payload.status ?? "draft",
+        total_debit: payload.totalDebit ?? 0,
+        total_credit: payload.totalCredit ?? 0,
+        posted_at: payload.postedAt ?? null,
+        voided_at: payload.voidedAt ?? null,
+        reversal_journal_id: payload.reversalJournalId ?? null,
+        created_by: payload.createdBy ?? null,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        updated_at: payload.updatedAt ?? new Date().toISOString(),
+        version: payload.version ?? 1,
+      };
+    case "journal_entry_lines":
+      return {
+        id: aggregateId,
+        journal_entry_id: payload.journalEntryId,
+        account_id: payload.accountId,
+        account_code: payload.accountCode,
+        account_name: payload.accountName,
+        debit: payload.debit ?? 0,
+        credit: payload.credit ?? 0,
+        memo: payload.memo ?? null,
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        updated_at: payload.updatedAt ?? payload.createdAt ?? new Date().toISOString(),
+      };
     case "purchase_invoices":
       return {
         id: aggregateId,
@@ -312,6 +361,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         "warehouses", "warehouse_locations", "warehouse_stock", "warehouse_transfers",
         "purchase_orders", "purchase_order_lines", "goods_receipts", "goods_receipt_lines",
         "purchase_invoices", "purchase_invoice_lines",
+        "accounts", "journal_entries", "journal_entry_lines",
       ];
       const records: Array<{ tableName: string; record: VersionedRecord }> = [];
       for (const table of tables) {
