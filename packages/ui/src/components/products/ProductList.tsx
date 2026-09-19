@@ -18,6 +18,10 @@ export function ProductList({
   onToggleLowStock,
   onLowStockChange,
   onRefresh,
+  onEdit,
+  onAdjustStock,
+  onDelete,
+  onPrintBarcode,
 }: {
   products: Product[];
   categories: Category[];
@@ -30,6 +34,10 @@ export function ProductList({
   onToggleLowStock?: () => void;
   onLowStockChange?: (value: boolean) => void;
   onRefresh?: () => void;
+  onEdit?: (p: Product) => void;
+  onAdjustStock?: (p: Product) => void;
+  onDelete?: (p: Product) => void;
+  onPrintBarcode?: (p: Product) => void;
 }) {
   const [q, setQ] = React.useState("");
   const catMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
@@ -83,6 +91,18 @@ export function ProductList({
         >
           {r.isActive ? "Active" : "Inactive"}
         </span>
+      ),
+    },
+    {
+      key: "id",
+      header: "Actions",
+      render: (r) => (
+        <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
+          {onEdit && <Button size="sm" variant="outline" onClick={() => onEdit(r)}>Edit</Button>}
+          {onAdjustStock && <Button size="sm" variant="outline" onClick={() => onAdjustStock(r)}>Stock</Button>}
+          {onPrintBarcode && <Button size="sm" variant="outline" onClick={() => onPrintBarcode(r)}>Label</Button>}
+          {onDelete && <Button size="sm" variant="outline" onClick={() => onDelete(r)}>Delete</Button>}
+        </div>
       ),
     },
   ];
