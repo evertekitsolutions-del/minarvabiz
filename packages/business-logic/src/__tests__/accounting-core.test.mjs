@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const source = fs.readFileSync(new URL("../accounting-store.ts", import.meta.url), "utf8");
+const remote = fs.readFileSync(new URL("../remote-write.ts", import.meta.url), "utf8");
 const types = fs.readFileSync(new URL("../../../types/src/index.ts", import.meta.url), "utf8");
 const ui = fs.readFileSync(new URL("../../../ui/src/components/accounting/AccountingPanel.tsx", import.meta.url), "utf8");
 const migration = fs.readFileSync(new URL("../../../../supabase/migrations/20260919_accounting_core.sql", import.meta.url), "utf8");
@@ -16,7 +17,9 @@ assert.match(source, /buildTrialBalance/);
 assert.match(source, /buildGeneralLedger/);
 assert.match(source, /Journal is not balanced/);
 assert.match(source, /Reversal of/);
-assert.match(source, /enqueueOutbox\("journal_entries"/);
+assert.match(source, /remoteUpsertJournalEntry\(cloneEntry\(entry\)\)/);
+assert.match(remote, /enqueueOutbox\("journal_entries"/);
+assert.match(remote, /enqueueOutbox\("journal_entry_lines"/);
 assert.match(ui, /Chart of Accounts/);
 assert.match(ui, /Trial Balance/);
 assert.match(ui, /General Ledger/);

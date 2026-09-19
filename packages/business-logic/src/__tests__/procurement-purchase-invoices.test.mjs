@@ -26,7 +26,7 @@ assert.match(remote, /enqueueOutbox\("purchase_invoices"/);
 assert.match(syncAdapter, /case "purchase_invoices"/);
 assert.match(syncAdapter, /case "purchase_invoice_lines"/);
 assert.match(syncAdapter, /"purchase_invoices", "purchase_invoice_lines"/);
-assert.match(persistence, /SNAPSHOT_VERSION = 11/);
+assert.match(persistence, /SNAPSHOT_VERSION = 12/);
 assert.match(ui, /Supplier Invoices \/ Accounts Payable/);
 assert.match(ui, /AP Aging/);
 assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.purchase_invoices/);
