@@ -108,7 +108,7 @@ export function ProcurementPanel({
           </div>
 
           <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[1.2fr_1.4fr_.55fr_.75fr_.55fr_auto]">
-            <select className={selectClass} value={draft.productId} onChange={(e) => chooseProduct(e.target.value)}>
+            <select aria-label="Purchase order product" className={selectClass} value={draft.productId} onChange={(e) => chooseProduct(e.target.value)}>
               <option value="">Product (optional)</option>
               {products.filter((p) => p.isActive).map((p) => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` · ${p.sku}` : ""}</option>)}
             </select>
