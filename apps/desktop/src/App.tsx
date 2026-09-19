@@ -31,6 +31,8 @@ const FULL_TRIAL_FEATURES: LicenseFeatures = {
   multiBranch: true, apiAccess: true,
 };
 
+function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
+
 const NAV_FEATURE: Partial<Record<NavItemId, keyof LicenseFeatures>> = {
   sales: "sales",
   products: "inventory",
@@ -77,7 +79,7 @@ export function App() {
   const [products, setProducts] = React.useState<Product[]>([]);
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [sales, setSales] = React.useState<Sale[]>([]);
-  const [salesTab, setSalesTab] = React.useState<"pos" | "history">("pos");
+  const [salesTab, setSalesTab] = React.useState<"pos" | "normal" | "history">("pos");
   const [orders, setOrders] = React.useState<ServiceOrder[]>([]);
   const [profiles, setProfiles] = React.useState<MeasurementProfile[]>([]);
   const [orderQuery, setOrderQuery] = React.useState("");
@@ -95,6 +97,11 @@ export function App() {
   const [custOpen, setCustOpen] = React.useState(false);
   const [custForm, setCustForm] = React.useState({ name: "", phone: "", whatsapp: "", email: "", address: "", birthday: "", notes: "" });
   const [productOpen, setProductOpen] = React.useState(false);
+  const [editingProductId, setEditingProductId] = React.useState<string | null>(null);
+  const [stockAdjustProduct, setStockAdjustProduct] = React.useState<Product | null>(null);
+  const [stockAdjustQty, setStockAdjustQty] = React.useState("");
+  const [labelProduct, setLabelProduct] = React.useState<Product | null>(null);
+  const [labelCopies, setLabelCopies] = React.useState("1");
   const [productForm, setProductForm] = React.useState({ name:"", sku:"", barcode:"", categoryId:"", brand:"", size:"", color:"", fabric:"", unit:"pcs", costPrice:"", sellingPrice:"", discount:"0", taxRate:"0", stockQuantity:"", minimumStock:"0", supplierId:"", imageUrl:"", notes:"", hasVariants:false });
   const [categoryOpen, setCategoryOpen] = React.useState(false);
   const [categoryForm, setCategoryForm] = React.useState({ name:"", description:"" });
@@ -109,9 +116,9 @@ export function App() {
   const [purchaseOpen, setPurchaseOpen] = React.useState(false);
   const [staffOpen, setStaffOpen] = React.useState(false);
   const [moduleError, setModuleError] = React.useState<string | null>(null);
-  const [expenseForm, setExpenseForm] = React.useState({ date:"", categoryId:"", amount:"", paymentMethod:"cash" as PaymentMethod, description:"", reference:"", receiptUrl:"", staffId:"", orderId:"" });
-  const [purchaseForm, setPurchaseForm] = React.useState({ date:"", supplierId:"", description:"", amount:"", paidAmount:"", paymentMethod:"cash" as PaymentMethod, kind:"general" as "general"|"order_specific", orderId:"", notes:"" });
-  const [staffForm, setStaffForm] = React.useState({ name:"", phone:"", email:"", role:"staff" as RoleName, salary:"", joiningDate:"", status:"active" as "active"|"inactive"|"on_leave", notes:"" });
+  const [expenseForm, setExpenseForm] = React.useState({ date:todayLocal(), categoryId:"", amount:"", paymentMethod:"cash" as PaymentMethod, description:"", reference:"", receiptUrl:"", staffId:"", orderId:"" });
+  const [purchaseForm, setPurchaseForm] = React.useState({ date:todayLocal(), supplierId:"", description:"", amount:"", paidAmount:"", paymentMethod:"cash" as PaymentMethod, kind:"general" as "general"|"order_specific", orderId:"", notes:"" });
+  const [staffForm, setStaffForm] = React.useState({ name:"", phone:"", email:"", role:"staff" as RoleName, salary:"", joiningDate:todayLocal(), status:"active" as "active"|"inactive"|"on_leave", notes:"" });
   const autoBackupInFlight = React.useRef(false);
 
   const refreshAll = React.useCallback(() => {
