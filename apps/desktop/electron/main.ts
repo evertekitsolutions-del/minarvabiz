@@ -19,6 +19,44 @@ function timestamp() { return new Date().toISOString().replace(/[:.]/g, "-"); }
 function isTrustedRenderer(event: Electron.IpcMainInvokeEvent): boolean { const url = event.senderFrame?.url || ""; if (app.isPackaged) return url.startsWith("file://"); return url.startsWith("http://localhost:") || url.startsWith("http://127.0.0.1:") || url.startsWith("file://"); }
 function requireTrustedRenderer(event: Electron.IpcMainInvokeEvent) { if (!isTrustedRenderer(event)) throw new Error("Unauthorized IPC sender"); }
 
+async function printHtmlDocument(input: {
+  html: string;
+  deviceName?: string | null;
+  paper?: "a4" | "thermal";
+  thermalWidthMm?: number;
+}): Promise<{ ok: boolean; error?: string }> {
+  const html = String(input?.html || "");
+  if (!html || html.length > 2_000_000) return { ok: false, error: "Print document is empty or too large" };
+  const paper = input?.paper === "thermal" ? "thermal" : "a4";
+  const thermalWidthMm = input?.thermalWidthMm === 58 ? 58 : 80;
+  const win = new BrowserWindow({
+    show: false,
+    width: paper === "thermal" ? 460 : 900,
+    height: 900,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
+  });
+  try {
+    await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    const pageSize: Electron.WebContentsPrintOptions["pageSize"] =
+      paper === "a4" ? "A4" : { width: thermalWidthMm * 1000, height: 297000 };
+    return await new Promise((resolve) => {
+      win.webContents.print({
+        silent: true,
+        printBackground: true,
+        deviceName: input.deviceName || undefined,
+        margins: { marginType: "none" },
+        pageSize,
+      }, (success, failureReason) => {
+        resolve(success ? { ok: true } : { ok: false, error: failureReason || "Printer rejected the job" });
+      });
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  } finally {
+    if (!win.isDestroyed()) win.destroy();
+  }
+}
+
 type TrialRegistration = { email: string; phone: string; organizationName: string; address: string };
 type StoredTrial = TrialRegistration & { activationId: string; deviceId: string; activatedAt: string; trialExpiresAt: string; lastSeenAt: string; synced: boolean };
 
@@ -76,4 +114,19 @@ ipcMain.handle("backup:chooseDestination", async (event) => { requireTrustedRend
 ipcMain.handle("backup:createAutomatic", (event) => { requireTrustedRenderer(event); try { const result = createLocalBackup("automatic"); if (!result) return { ok: false, error: "SQLite database does not exist or is invalid" }; return { ok: true, ...result, filename: path.basename(result.path) }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; } });
 ipcMain.handle("backup:pruneAutomatic", (event, retention?: number) => { requireTrustedRenderer(event); const safeRetention = Number.isFinite(retention) ? Math.max(1, Math.min(365, Math.floor(retention as number))) : 14; pruneAutomaticBackups(safeRetention); return true; });
 ipcMain.handle("backup:restoreFromFile", async (event) => { requireTrustedRenderer(event); const result = await dialog.showOpenDialog({ title: "Restore Minarva Biz Backup", properties: ["openFile"], filters: [{ name: "Minarva Biz SQLite Backup", extensions: ["db"] }] }); if (result.canceled || !result.filePaths[0]) return { ok: false, cancelled: true }; const source = result.filePaths[0]; const validationError = sqliteValidationError(source); if (validationError) return { ok: false, error: `Selected file is not a valid Minarva Biz SQLite backup: ${validationError}` }; const target = sqlitePath(), temp = `${target}.restore-${process.pid}-${Date.now()}`, rollback = `${target}.rollback-${process.pid}-${Date.now()}`; let targetMoved = false; try { const pre = createLocalBackup("automatic"); copySqlite(source, temp); const stagedError = sqliteValidationError(temp); if (stagedError) { fs.unlinkSync(temp); return { ok: false, error: `Restore staging file failed SQLite validation: ${stagedError}` }; } if (fs.existsSync(target)) { fs.renameSync(target, rollback); targetMoved = true; } fs.renameSync(temp, target); const restoredError = sqliteValidationError(target); if (restoredError) throw new Error(`Restored database failed SQLite validation: ${restoredError}`); if (targetMoved) { try { fs.unlinkSync(rollback); } catch {} } return { ok: true, source, preRestoreBackup: pre?.path ?? null }; } catch (e) { try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch {} try { if (fs.existsSync(target) && targetMoved) fs.unlinkSync(target); } catch {} try { if (targetMoved && fs.existsSync(rollback)) { fs.renameSync(rollback, target); } } catch {} return { ok: false, error: `Restore failed and the previous database was restored when possible: ${e instanceof Error ? e.message : String(e)}` }; } });
+ipcMain.handle("printer:list", async (event) => {
+  requireTrustedRenderer(event);
+  const printers = await event.sender.getPrintersAsync();
+  return printers.map((printer) => ({
+    name: printer.name,
+    displayName: printer.displayName || printer.name,
+    description: printer.description || "",
+    status: printer.status,
+    isDefault: Boolean(printer.isDefault),
+  }));
+});
+ipcMain.handle("printer:printHtml", async (event, input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal"; thermalWidthMm?: number }) => {
+  requireTrustedRenderer(event);
+  return printHtmlDocument(input);
+});
 ipcMain.handle("app:relaunch", (event) => { requireTrustedRenderer(event); app.relaunch(); app.exit(0); return true; });

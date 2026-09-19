@@ -10,6 +10,7 @@ import type {
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { applyStockMovement } from "./inventory";
 import { buildDayEndReport, type DayEndReport } from "./reports";
+import { calculatePeriodSummary } from "./profit";
 import * as mainStore from "./store";
 import * as phase5Store from "./phase5-store";
 import * as ordersStore from "./orders-store";
@@ -184,12 +185,43 @@ export function inspectBackup(id: UUID): { ok: boolean; summary?: Record<string,
 export function salesReport(from?: string, to?: string): SalesReportRow[] {
   const sales = mainStore.listSales(), orders = ordersStore.listOrders(), laundry = phase5Store.listLaundryOrders(), expenses = phase5Store.listExpenses();
   const inRange = (iso: string) => (!from || iso >= from) && (!to || iso <= to);
-  const productSales = sales.filter((s) => inRange(s.saleDate)).reduce((a, s) => a + s.total, 0);
-  const serviceRevenue = orders.filter((o) => inRange(o.orderDate) && o.status !== "cancelled").reduce((a, o) => a + o.price, 0);
-  const laundryRevenue = laundry.filter((l) => inRange(l.createdAt) && l.status !== "cancelled").reduce((a, l) => a + l.totalCustomerCharge, 0);
-  const expTotal = expenses.filter((e) => inRange(e.date)).reduce((a, e) => a + e.amount, 0);
-  const totalRevenue = productSales + serviceRevenue + laundryRevenue;
-  return [{ label: "Period", productSales, serviceRevenue, laundryRevenue, totalRevenue, expenses: expTotal, netProfit: totalRevenue - expTotal }];
+
+  const periodSales = sales.filter((s) => inRange(s.saleDate) && s.status !== "cancelled");
+  const periodOrders = orders.filter((o) => inRange(o.orderDate) && o.status !== "cancelled");
+  const periodLaundry = laundry.filter((l) => inRange(l.createdAt) && l.status !== "cancelled");
+  const periodExpenses = expenses.filter((e) => inRange(e.date));
+  const periodIncentives = phase6Store.listIncentivePayouts().filter((p) => inRange(p.calculatedAt));
+
+  const productSales = periodSales.reduce((a, s) => a + s.total, 0);
+  const inventoryCogs = periodSales.reduce((a, s) => a + s.items.reduce((sum, item) => sum + item.quantity * item.costPrice, 0), 0);
+  const serviceRevenue = periodOrders.reduce((a, o) => a + o.price, 0);
+  const laundryRevenue = periodLaundry.reduce((a, l) => a + l.totalCustomerCharge, 0);
+  const orderMaterialCosts = periodOrders.reduce((a, o) => a + o.externalMaterialCost, 0)
+    + periodLaundry.reduce((a, l) => a + l.totalSupplierCost, 0);
+  const orderSpecificExpenses = periodOrders.reduce((a, o) => a + o.orderExpensesTotal, 0)
+    + periodExpenses.filter((e) => Boolean(e.orderId)).reduce((a, e) => a + e.amount, 0);
+  const generalExpenses = periodExpenses.filter((e) => !e.orderId).reduce((a, e) => a + e.amount, 0);
+  const staffIncentives = periodIncentives.reduce((a, p) => a + p.amount, 0);
+
+  const summary = calculatePeriodSummary({
+    productSalesRevenue: productSales,
+    serviceRevenue: serviceRevenue + laundryRevenue,
+    inventoryCostOfGoods: inventoryCogs,
+    orderMaterialCosts,
+    orderSpecificExpenses,
+    generalExpenses,
+    staffIncentives,
+  });
+  const expensesTotal = summary.totalCostOfGoods + summary.totalOperatingExpenses;
+  return [{
+    label: "Period",
+    productSales,
+    serviceRevenue,
+    laundryRevenue,
+    totalRevenue: summary.totalRevenue,
+    expenses: expensesTotal,
+    netProfit: summary.netProfit,
+  }];
 }
 
 export function dayEndReport(): DayEndReport {

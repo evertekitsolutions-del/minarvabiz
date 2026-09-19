@@ -11,8 +11,10 @@ import {
 
 export default function ReportsPage() {
   const [tick, setTick] = React.useState(0);
+  const [from, setFrom] = React.useState("");
+  const [to, setTo] = React.useState("");
   const [closes, setCloses] = React.useState(() => listDayEndCloses());
-  const salesRows = React.useMemo(() => phase7Store.salesReport(), [tick]);
+  const salesRows = React.useMemo(() => phase7Store.salesReport(from || undefined, to ? `${to}T23:59:59.999Z` : undefined), [tick, from, to]);
   const dayEnd = React.useMemo(() => phase7Store.dayEndReport(), [tick]);
   const stock = React.useMemo(() => phase7Store.stockReport(), [tick]);
   const outstanding = React.useMemo(() => phase7Store.outstandingPaymentsReport(), [tick]);
@@ -73,6 +75,10 @@ export default function ReportsPage() {
         outstanding={outstanding}
         onRefresh={() => setTick((t) => t + 1)}
         onExportCsv={exportCsv}
+        from={from}
+        to={to}
+        onFromChange={setFrom}
+        onToChange={setTo}
       />
       <DayEndClosePanel
         closes={closes.map((c) => ({

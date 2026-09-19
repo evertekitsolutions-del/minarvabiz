@@ -287,6 +287,8 @@ CREATE TABLE IF NOT EXISTS suppliers (
   name TEXT NOT NULL,
   company TEXT,
   phone TEXT,
+  email TEXT,
+  address TEXT,
   category TEXT,
   opening_balance REAL NOT NULL DEFAULT 0,
   outstanding_balance REAL NOT NULL DEFAULT 0,
@@ -297,6 +299,10 @@ CREATE TABLE IF NOT EXISTS suppliers (
   branch_id TEXT,
   org_id TEXT
 );
+
+-- Safe upgrades for existing customer databases. Duplicate-column errors are ignored by the SQLite bootstrap.
+ALTER TABLE suppliers ADD COLUMN email TEXT;
+ALTER TABLE suppliers ADD COLUMN address TEXT;
 
 CREATE TABLE IF NOT EXISTS staff_members (
   id TEXT PRIMARY KEY,
@@ -354,4 +360,4 @@ CREATE TABLE IF NOT EXISTS sale_returns (
 );
 `;
 
-export const SQLITE_SCHEMA_VERSION = 5;
+export const SQLITE_SCHEMA_VERSION = 6;

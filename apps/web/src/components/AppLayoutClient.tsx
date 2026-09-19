@@ -10,6 +10,7 @@ import {
   getSessionUser,
   getSessionToken,
   phase6Store,
+  phase9Store,
 } from "@minarvabiz/business-logic";
 import { hydrateStoresFromSupabase } from "@/lib/data-source";
 import { SetupBanner } from "@/components/SetupBanner";
@@ -68,11 +69,22 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
       setCurrentRole(u.role as Parameters<typeof setCurrentRole>[0]);
     }
     void hydrateStoresFromSupabase(token).then((r) => {
-      if (r.ok) console.info("[minarvabiz]", r.message, r.counts);
-      else console.warn("[minarvabiz] Supabase hydration failed:", r.message);
+      if (r.ok) {
+        console.info("[minarvabiz]", r.message, r.counts);
+        phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
+      } else {
+        console.warn("[minarvabiz] Supabase hydration failed:", r.message);
+        phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining, syncError: r.message });
+      }
       refreshNotificationCount();
     });
+    phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
     refreshNotificationCount();
+    const notificationTimer = window.setInterval(() => {
+      phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
+      refreshNotificationCount();
+    }, 60000);
+    return () => window.clearInterval(notificationTimer);
   }, [refreshNotificationCount]);
   const activeNav = pathToNav[pathname] ?? "dashboard";
 

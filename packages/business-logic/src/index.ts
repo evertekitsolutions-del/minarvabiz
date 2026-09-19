@@ -71,3 +71,5 @@ export * from "./variants";
 export * from "./auto-backup";
 export * from "./quality-control-types";
 export * from "./quality-control";
+
+export * from "./print-settings";

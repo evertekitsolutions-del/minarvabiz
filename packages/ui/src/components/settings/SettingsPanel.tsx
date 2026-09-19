@@ -6,9 +6,11 @@ export interface SettingsPanelProps {
   profile: { shopName: string; address: string; phone: string; email: string; gstin: string; receiptFooter: string; currency: string };
   tax: { enableGst: boolean; defaultRatePercent: number };
   backup: { enabled: boolean; intervalHours: number; retentionCount: number; destinationPath: string };
+  printing: { defaultInvoicePaper: "a4" | "thermal"; thermalWidthMm: 58 | 80; a4PrinterName: string; thermalPrinterName: string; silentDesktopPrint: boolean };
   onSaveProfile: (patch: Partial<SettingsPanelProps["profile"]>) => void;
   onSaveTax: (patch: Partial<SettingsPanelProps["tax"]>) => void;
   onSaveBackup: (patch: Partial<SettingsPanelProps["backup"]>) => void;
+  onSavePrinting: (patch: Partial<SettingsPanelProps["printing"]>) => void;
 }
 
 type ThemeId = "light" | "midnight" | "ocean" | "emerald" | "violet";
@@ -41,22 +43,27 @@ type DesktopDiagnosticsApi = {
   listBackups: () => Promise<Array<{ createdAt: string; sizeBytes: number; kind: "manual" | "automatic"; verified: boolean }>>;
   chooseBackupDirectory: () => Promise<string | null>;
   getLicenseState: () => Promise<{ status: string; plan: string | null; edition: string | null; daysRemaining: number | null; graceDaysRemaining: number | null; reason?: string }>;
+  listPrinters?: () => Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>;
 };
 
 function getDiagnosticsApi(): DesktopDiagnosticsApi | null {
   return (window as unknown as { minarvaDesktop?: DesktopDiagnosticsApi }).minarvaDesktop ?? null;
 }
 
-export function SettingsPanel({ profile, tax, backup, onSaveProfile, onSaveTax, onSaveBackup }: SettingsPanelProps) {
+export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, onSaveTax, onSaveBackup, onSavePrinting }: SettingsPanelProps) {
   const [draftProfile, setDraftProfile] = React.useState(profile);
   const [draftTax, setDraftTax] = React.useState(tax);
   const [draftBackup, setDraftBackup] = React.useState(backup);
+  const [draftPrinting, setDraftPrinting] = React.useState(printing);
+  const [printers, setPrinters] = React.useState<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>([]);
   const [theme, setTheme] = React.useState<ThemeId>(readTheme);
   const [diagnosticState, setDiagnosticState] = React.useState<"idle" | "working" | "done" | "error">("idle");
   const [diagnosticMessage, setDiagnosticMessage] = React.useState("");
   React.useEffect(() => setDraftProfile(profile), [profile]);
   React.useEffect(() => setDraftTax(tax), [tax]);
   React.useEffect(() => setDraftBackup(backup), [backup]);
+  React.useEffect(() => setDraftPrinting(printing), [printing]);
+  React.useEffect(() => { const api = getDiagnosticsApi(); if (!api?.listPrinters) return; void api.listPrinters().then(setPrinters).catch(() => setPrinters([])); }, []);
   React.useEffect(() => applyTheme(theme), [theme]);
 
   function selectTheme(next: ThemeId) {
@@ -159,6 +166,18 @@ export function SettingsPanel({ profile, tax, backup, onSaveProfile, onSaveTax, 
       <FormField label="GST enabled"><select className={selectClass} value={draftTax.enableGst ? "yes" : "no"} onChange={e => setDraftTax({ ...draftTax, enableGst: e.target.value === "yes" })}><option value="yes">Enabled</option><option value="no">Disabled</option></select></FormField>
       <FormField label="Default GST rate (%)"><input className={inputClass} type="number" min="0" max="100" step="0.01" value={draftTax.defaultRatePercent} onChange={e => setDraftTax({ ...draftTax, defaultRatePercent: Number(e.target.value) || 0 })} /></FormField>
     </div><div className="mt-5 flex justify-end"><Button onClick={() => onSaveTax(draftTax)}>Save tax settings</Button></div></section>
+    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div><h3 className="text-lg font-semibold text-slate-900">Printer settings</h3><p className="mt-1 text-sm text-slate-500">Choose default invoice paper and, in the Windows app, bind A4 and thermal printers for direct printing.</p></div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <FormField label="Default invoice paper"><select className={selectClass} value={draftPrinting.defaultInvoicePaper} onChange={e => setDraftPrinting({ ...draftPrinting, defaultInvoicePaper: e.target.value as "a4" | "thermal" })}><option value="a4">A4</option><option value="thermal">Thermal</option></select></FormField>
+        <FormField label="Thermal receipt width"><select className={selectClass} value={draftPrinting.thermalWidthMm} onChange={e => setDraftPrinting({ ...draftPrinting, thermalWidthMm: Number(e.target.value) === 58 ? 58 : 80 })}><option value={80}>80 mm</option><option value={58}>58 mm</option></select></FormField>
+        <FormField label="A4 printer"><select className={selectClass} value={draftPrinting.a4PrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, a4PrinterName: e.target.value })}><option value="">Use system print dialog/default printer</option>{printers.map(p => <option key={`a4-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
+        <FormField label="Thermal printer"><select className={selectClass} value={draftPrinting.thermalPrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, thermalPrinterName: e.target.value })}><option value="">Use system print dialog/default printer</option>{printers.map(p => <option key={`th-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
+        <FormField label="Windows direct print"><select className={selectClass} value={draftPrinting.silentDesktopPrint ? "yes" : "no"} onChange={e => setDraftPrinting({ ...draftPrinting, silentDesktopPrint: e.target.value === "yes" })}><option value="no">Show print dialog</option><option value="yes">Direct print to selected printer</option></select></FormField>
+      </div>
+      <div className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">{printers.length ? `${printers.length} Windows printer(s) detected.` : "Printer discovery is available in the Windows desktop edition. Web browsers use their normal print dialog."}</div>
+      <div className="mt-5 flex justify-end"><Button onClick={() => onSavePrinting(draftPrinting)}>Save printer settings</Button></div>
+    </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-lg font-semibold text-slate-900">Automatic backup</h3><div className="mt-4 grid gap-4 md:grid-cols-3">
       <FormField label="Automatic backup"><select className={selectClass} value={draftBackup.enabled ? "yes" : "no"} onChange={e => setDraftBackup({ ...draftBackup, enabled: e.target.value === "yes" })}><option value="yes">Enabled</option><option value="no">Disabled</option></select></FormField>
       <FormField label="Interval (hours)"><input className={inputClass} type="number" min="1" value={draftBackup.intervalHours} onChange={e => setDraftBackup({ ...draftBackup, intervalHours: Math.max(1, Number(e.target.value) || 24) })} /></FormField>

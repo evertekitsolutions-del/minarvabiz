@@ -12,6 +12,22 @@ type ReportTab = "sales" | "dayend" | "stock" | "outstanding";
 
 function csvCell(value: unknown) { return `"${String(value ?? "").replace(/"/g, '""')}"`; }
 function downloadFile(name: string, text: string, type: string) { const blob = new Blob([text], { type }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
+function xmlEscape(value: unknown) { return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+function spreadsheetXml(sheetName: string, headers: string[], rows: Array<Array<string | number>>) {
+  const cell = (value: string | number) => `<Cell><Data ss:Type="${typeof value === "number" && Number.isFinite(value) ? "Number" : "String"}">${xmlEscape(value)}</Data></Cell>`;
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <Styles><Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/></Style></Styles>
+ <Worksheet ss:Name="${xmlEscape(sheetName.slice(0,31))}"><Table>
+  <Row ss:StyleID="Header">${headers.map((h) => cell(h)).join("")}</Row>
+  ${rows.map((row) => `<Row>${row.map((value) => cell(value)).join("")}</Row>`).join("")}
+ </Table></Worksheet>
+</Workbook>`;
+}
 function pdfEscape(text: string) { return text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)"); }
 function downloadPdf(name: string, title: string, lines: string[]) {
   const visible = [title, ...lines].slice(0, 48);
@@ -36,7 +52,7 @@ function downloadPdf(name: string, title: string, lines: string[]) {
   downloadFile(name, pdf, "application/pdf");
 }
 
-export function ReportsPanel({ salesRows, sales, dayEnd, stock, outstanding, onExportCsv, onRefresh }: { salesRows?:SalesReportRow[]; sales?:SalesReportRow[]; dayEnd:DayEndView; stock:Array<StockRow>; outstanding:Array<{id:string;name:string;phone?:string|null;outstanding:number}>; onExportCsv?:(kind:ReportTab)=>void; onRefresh?:()=>void }) {
+export function ReportsPanel({ salesRows, sales, dayEnd, stock, outstanding, onExportCsv, onRefresh, from, to, onFromChange, onToChange }: { salesRows?:SalesReportRow[]; sales?:SalesReportRow[]; dayEnd:DayEndView; stock:Array<StockRow>; outstanding:Array<{id:string;name:string;phone?:string|null;outstanding:number}>; onExportCsv?:(kind:ReportTab)=>void; onRefresh?:()=>void; from?:string; to?:string; onFromChange?:(value:string)=>void; onToChange?:(value:string)=>void }) {
   const [tab,setTab]=React.useState<ReportTab>("sales");
   const rows=salesRows??sales??[];
   const exportCurrent = () => {
@@ -46,12 +62,22 @@ export function ReportsPanel({ salesRows, sales, dayEnd, stock, outstanding, onE
     if (tab === "outstanding") downloadFile("minarva-outstanding-report.csv", ["Customer,Phone,Outstanding", ...outstanding.map(r => [r.name,r.phone,r.outstanding].map(csvCell).join(","))].join("\n"), "text/csv;charset=utf-8");
     if (tab === "dayend") downloadFile("minarva-dayend-report.csv", ["Metric,Amount", `Total sales,${dayEnd.totalSales}`, `Service revenue,${dayEnd.serviceRevenue}`, `Cost of goods,${dayEnd.costOfGoods}`, `Gross profit,${dayEnd.grossProfit}`, `Total expenses,${dayEnd.totalExpenses}`, `Net profit,${dayEnd.netProfit}`, `Cash received,${dayEnd.cashReceived}`, `Card / UPI,${dayEnd.cardPayments}`, `Other payments,${dayEnd.otherPayments}`, `Outstanding,${dayEnd.outstandingAmount}`].map((x,i)=>i===0?x:x).join("\n"), "text/csv;charset=utf-8");
   };
+  const excelData = () => {
+    if (tab === "sales") return { name: "Sales", headers: ["Period","Products","Services","Laundry","Revenue","Expenses","Net Profit"], rows: rows.map(r => [r.label,r.productSales,r.serviceRevenue,r.laundryRevenue,r.totalRevenue,r.expenses,r.netProfit] as Array<string|number>) };
+    if (tab === "stock") return { name: "Inventory", headers: ["Product","SKU","Stock","Minimum","Value","Low Stock"], rows: stock.map(r => [r.name,r.sku || "",r.stock,r.min,r.value,r.low ? "Yes" : "No"] as Array<string|number>) };
+    if (tab === "outstanding") return { name: "Outstanding", headers: ["Customer","Phone","Outstanding"], rows: outstanding.map(r => [r.name,r.phone || "",r.outstanding] as Array<string|number>) };
+    return { name: "Day End", headers: ["Metric","Amount"], rows: [["Total sales",dayEnd.totalSales],["Service revenue",dayEnd.serviceRevenue],["Cost of goods",dayEnd.costOfGoods],["Gross profit",dayEnd.grossProfit],["Total expenses",dayEnd.totalExpenses],["Net profit",dayEnd.netProfit],["Cash received",dayEnd.cashReceived],["Card / UPI",dayEnd.cardPayments],["Other payments",dayEnd.otherPayments],["Outstanding",dayEnd.outstandingAmount]] as Array<Array<string|number>> };
+  };
+  const exportExcel = () => {
+    const data = excelData();
+    downloadFile(`minarva-${tab}-report.xls`, spreadsheetXml(data.name, data.headers, data.rows), "application/vnd.ms-excel;charset=utf-8");
+  };
   const pdfLines: string[] = [];
   if (tab === "sales") rows.forEach(r => pdfLines.push(`${r.label} | Revenue ${formatMoney(r.totalRevenue)} | Expenses ${formatMoney(r.expenses)} | Net ${formatMoney(r.netProfit)}`));
   if (tab === "stock") stock.forEach(r => pdfLines.push(`${r.name} | ${r.stock}/${r.min} | ${formatMoney(r.value)}`));
   if (tab === "outstanding") outstanding.forEach(r => pdfLines.push(`${r.name} | ${r.phone || ""} | ${formatMoney(r.outstanding)}`));
   if (tab === "dayend") [["Total sales",dayEnd.totalSales],["Service revenue",dayEnd.serviceRevenue],["Cost of goods",dayEnd.costOfGoods],["Gross profit",dayEnd.grossProfit],["Total expenses",dayEnd.totalExpenses],["Net profit",dayEnd.netProfit],["Cash received",dayEnd.cashReceived],["Card / UPI",dayEnd.cardPayments],["Other payments",dayEnd.otherPayments],["Outstanding",dayEnd.outstandingAmount]].forEach(([label,value]) => pdfLines.push(`${label}: ${formatMoney(value as number)}`));
-  return <div className="space-y-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-xl font-semibold text-slate-900">Reports & Analytics</h2><p className="text-sm text-slate-500">Sales, profitability, inventory and outstanding reports</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={onRefresh}>Refresh</Button><Button variant="outline" onClick={exportCurrent}>Export CSV</Button><Button variant="outline" onClick={() => window.print()}>Print</Button><Button onClick={() => downloadPdf(`minarva-${tab}-report.pdf`, `Minarva Biz — ${tab.toUpperCase()} report`, pdfLines)}>Download PDF</Button></div></div><div className="flex flex-wrap gap-2 print:hidden">{(["sales","dayend","stock","outstanding"] as ReportTab[]).map(t=><Button key={t} size="sm" variant={tab===t?"primary":"outline"} onClick={()=>setTab(t)}>{t==="dayend"?"Day-end":t==="outstanding"?"Outstanding":t.charAt(0).toUpperCase()+t.slice(1)}</Button>)}</div>
+  return <div className="space-y-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-xl font-semibold text-slate-900">Reports & Analytics</h2><p className="text-sm text-slate-500">Sales, profitability, inventory and outstanding reports</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={onRefresh}>Refresh</Button><Button variant="outline" onClick={exportCurrent}>Export CSV</Button><Button variant="outline" onClick={exportExcel}>Export Excel</Button><Button variant="outline" onClick={() => window.print()}>Print</Button><Button onClick={() => downloadPdf(`minarva-${tab}-report.pdf`, `Minarva Biz — ${tab.toUpperCase()} report`, pdfLines)}>Download PDF</Button></div></div>{(onFromChange || onToChange) && <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-3 print:hidden"><label className="text-xs font-medium text-slate-600">From<input type="date" className="mt-1 block h-9 rounded-lg border border-slate-200 px-3 text-sm" value={from||""} onChange={e=>onFromChange?.(e.target.value)}/></label><label className="text-xs font-medium text-slate-600">To<input type="date" className="mt-1 block h-9 rounded-lg border border-slate-200 px-3 text-sm" value={to||""} onChange={e=>onToChange?.(e.target.value)}/></label><span className="pb-2 text-xs text-slate-400">Date range applies to period sales/profit reporting.</span></div>}<div className="flex flex-wrap gap-2 print:hidden">{(["sales","dayend","stock","outstanding"] as ReportTab[]).map(t=><Button key={t} size="sm" variant={tab===t?"primary":"outline"} onClick={()=>setTab(t)}>{t==="dayend"?"Day-end":t==="outstanding"?"Outstanding":t.charAt(0).toUpperCase()+t.slice(1)}</Button>)}</div>
     {tab==="sales"&&<Card><CardHeader><CardTitle className="text-sm font-semibold">Sales summary</CardTitle></CardHeader><CardContent className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-slate-400"><th>Period</th><th>Products</th><th>Services</th><th>Laundry</th><th>Revenue</th><th>Expenses</th><th>Net profit</th></tr></thead><tbody>{rows.map(r=><tr key={r.label} className="border-b border-slate-50"><td className="py-2 font-medium">{r.label}</td><td>{formatMoney(r.productSales)}</td><td>{formatMoney(r.serviceRevenue)}</td><td>{formatMoney(r.laundryRevenue)}</td><td>{formatMoney(r.totalRevenue)}</td><td>{formatMoney(r.expenses)}</td><td className="font-semibold">{formatMoney(r.netProfit)}</td></tr>)}</tbody></table></CardContent></Card>}
     {tab==="dayend"&&<div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{[["Total sales",dayEnd.totalSales],["Service revenue",dayEnd.serviceRevenue],["Cost of goods",dayEnd.costOfGoods],["Gross profit",dayEnd.grossProfit],["Total expenses",dayEnd.totalExpenses],["Net profit",dayEnd.netProfit],["Cash received",dayEnd.cashReceived],["Card / UPI",dayEnd.cardPayments],["Other payments",dayEnd.otherPayments],["Outstanding",dayEnd.outstandingAmount]].map(([label,val])=><Card key={String(label)}><CardContent className="p-4"><div className="text-xs text-slate-500">{label}</div><div className="text-lg font-bold text-slate-900">{formatMoney(val as number)}</div></CardContent></Card>)}</div>}
     {tab==="stock"&&<Card><CardContent className="overflow-x-auto p-4"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-slate-400"><th>Product</th><th>SKU</th><th>Stock</th><th>Min</th><th>Value</th></tr></thead><tbody>{stock.map(r=><tr key={r.id} className="border-b border-slate-50"><td className="py-2 font-medium">{r.name}</td><td>{r.sku||"—"}</td><td>{r.stock}</td><td>{r.min}</td><td>{formatMoney(r.value)}</td></tr>)}</tbody></table></CardContent></Card>}
