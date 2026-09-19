@@ -16,7 +16,7 @@ import {
   type UnitOfWork,
 } from "@minarvabiz/database";
 import { store, ordersStore, phase5Store, phase6Store, warehouseStore, procurementStore, registerRemoteWriter, getRuntimeMode } from "@minarvabiz/business-logic";
-import type { Category, Expense, LaundryOrder, Payment, Purchase, PurchaseOrder, PurchaseOrderLine, StaffMember, Supplier, Warehouse, WarehouseLocation, WarehouseStockPosition, WarehouseTransfer } from "@minarvabiz/types";
+import type { Category, Expense, GoodsReceipt, GoodsReceiptLine, LaundryOrder, Payment, Purchase, PurchaseOrder, PurchaseOrderLine, StaffMember, Supplier, Warehouse, WarehouseLocation, WarehouseStockPosition, WarehouseTransfer } from "@minarvabiz/types";
 
 let uowPromise: Promise<UnitOfWork> | null = null;
 let uowAccessToken: string | null = null;
@@ -191,6 +191,39 @@ function mapPurchaseOrder(row: Record<string, unknown>, lines: PurchaseOrderLine
   };
 }
 
+
+function mapGoodsReceiptLine(row: Record<string, unknown>): GoodsReceiptLine {
+  return {
+    id: String(row.id),
+    goodsReceiptId: String(row.goods_receipt_id),
+    purchaseOrderLineId: String(row.purchase_order_line_id),
+    productId: (row.product_id as string) ?? null,
+    description: String(row.description || ""),
+    receivedQuantity: Number(row.received_quantity || 0),
+    unitCost: Number(row.unit_cost || 0),
+    lineTotal: Number(row.line_total || 0),
+  };
+}
+
+function mapGoodsReceipt(row: Record<string, unknown>, lines: GoodsReceiptLine[]): GoodsReceipt {
+  return {
+    id: String(row.id),
+    grnNumber: String(row.grn_number || row.id),
+    purchaseOrderId: String(row.purchase_order_id),
+    poNumber: String(row.po_number || ""),
+    supplierId: String(row.supplier_id),
+    supplierName: (row.supplier_name as string) ?? null,
+    receiptDate: String(row.receipt_date || new Date().toISOString().slice(0, 10)),
+    lines,
+    subtotal: Number(row.subtotal || 0),
+    notes: (row.notes as string) ?? null,
+    createdAt: String(row.created_at || new Date().toISOString()),
+    branchId: (row.branch_id as string) ?? null,
+    createdBy: (row.created_by as string) ?? null,
+    version: Number(row.version || 1),
+  };
+}
+
 export async function hydrateStoresFromSupabase(accessToken: string | null = null): Promise<{ ok: boolean; message: string; counts?: Record<string, number> }> {
   if (!isSupabaseConfigured()) return { ok: false, message: "Supabase is not configured for online production." };
   const cfg = configFromEnv();
@@ -201,7 +234,7 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
   const db = await getUnitOfWork(accessToken);
   try {
     const [customers, products, sales, orders] = await Promise.all([db.customers.list(), db.products.list(), db.sales.list(), db.orders.list()]);
-    const [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, warehousesRes, warehouseLocationsRes, warehouseStockRes, warehouseTransfersRes, purchaseOrdersRes, purchaseOrderLinesRes] = await Promise.all([
+    const [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, warehousesRes, warehouseLocationsRes, warehouseStockRes, warehouseTransfersRes, purchaseOrdersRes, purchaseOrderLinesRes, goodsReceiptsRes, goodsReceiptLinesRes] = await Promise.all([
       pgSelect<Record<string, unknown>>(cfg, "categories", "select=*&deleted_at=is.null&order=name.asc"),
       pgSelect<Record<string, unknown>>(cfg, "expenses", "select=*&deleted_at=is.null&order=date.desc"),
       pgSelect<Record<string, unknown>>(cfg, "purchases", "select=*&deleted_at=is.null&order=date.desc"),
@@ -215,8 +248,10 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
       pgSelect<Record<string, unknown>>(cfg, "warehouse_transfers", "select=*&order=created_at.desc"),
       pgSelect<Record<string, unknown>>(cfg, "purchase_orders", "select=*&deleted_at=is.null&order=created_at.desc"),
       pgSelect<Record<string, unknown>>(cfg, "purchase_order_lines", "select=*&order=created_at.asc"),
+      pgSelect<Record<string, unknown>>(cfg, "goods_receipts", "select=*&order=created_at.desc"),
+      pgSelect<Record<string, unknown>>(cfg, "goods_receipt_lines", "select=*&order=created_at.asc"),
     ]);
-    for (const result of [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, warehousesRes, warehouseLocationsRes, warehouseStockRes, warehouseTransfersRes, purchaseOrdersRes, purchaseOrderLinesRes]) if (result.error) throw new Error(result.error.message);
+    for (const result of [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, warehousesRes, warehouseLocationsRes, warehouseStockRes, warehouseTransfersRes, purchaseOrdersRes, purchaseOrderLinesRes, goodsReceiptsRes, goodsReceiptLinesRes]) if (result.error) throw new Error(result.error.message);
     store.hydrateCore({ customers, products, categories: (categoriesRes.data || []).map(mapCategory), sales, payments: (paymentsRes.data || []).map(mapPayment) });
     ordersStore.hydrateOrders({ orders });
     phase5Store.hydratePhase5({ expenses: (expensesRes.data || []).map(mapExpense), purchases: (purchasesRes.data || []).map(mapPurchase), suppliers: (suppliersRes.data || []).map(mapSupplier), laundryOrders: (laundryRes.data || []).map(mapLaundry) });
@@ -228,9 +263,13 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
       transfers: (warehouseTransfersRes.data || []).map(mapWarehouseTransfer),
     });
     const poLines = (purchaseOrderLinesRes.data || []).map(mapPurchaseOrderLine);
+    const grnLines = (goodsReceiptLinesRes.data || []).map(mapGoodsReceiptLine);
     procurementStore.hydrateProcurementState({
       purchaseOrders: (purchaseOrdersRes.data || []).map((row) =>
         mapPurchaseOrder(row, poLines.filter((line) => line.purchaseOrderId === String(row.id)))
+      ),
+      goodsReceipts: (goodsReceiptsRes.data || []).map((row) =>
+        mapGoodsReceipt(row, grnLines.filter((line) => line.goodsReceiptId === String(row.id)))
       ),
     });
 
@@ -367,8 +406,46 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
           }
         }
       },
+      upsertGoodsReceipt: async (receipt) => {
+        const row = {
+          branch_id: receipt.branchId ?? null,
+          grn_number: receipt.grnNumber,
+          purchase_order_id: receipt.purchaseOrderId,
+          po_number: receipt.poNumber,
+          supplier_id: receipt.supplierId,
+          supplier_name: receipt.supplierName ?? null,
+          receipt_date: String(receipt.receiptDate).slice(0, 10),
+          subtotal: receipt.subtotal,
+          notes: receipt.notes ?? null,
+          created_at: receipt.createdAt,
+          created_by: receipt.createdBy ?? null,
+          version: receipt.version,
+        };
+        const updated = await pgUpdate<Record<string, unknown>>(cfg, "goods_receipts", `id=eq.${receipt.id}`, row);
+        if (updated.error || !updated.data?.length) {
+          const inserted = await pgInsert<Record<string, unknown>>(cfg, "goods_receipts", { id: receipt.id, ...row });
+          if (inserted.error) throw new Error(inserted.error.message);
+        }
+        for (const line of receipt.lines) {
+          const lineRow = {
+            goods_receipt_id: receipt.id,
+            purchase_order_line_id: line.purchaseOrderLineId,
+            product_id: line.productId ?? null,
+            description: line.description,
+            received_quantity: line.receivedQuantity,
+            unit_cost: line.unitCost,
+            line_total: line.lineTotal,
+            created_at: receipt.createdAt,
+          };
+          const lineUpdated = await pgUpdate<Record<string, unknown>>(cfg, "goods_receipt_lines", `id=eq.${line.id}`, lineRow);
+          if (lineUpdated.error || !lineUpdated.data?.length) {
+            const lineInserted = await pgInsert<Record<string, unknown>>(cfg, "goods_receipt_lines", { id: line.id, ...lineRow });
+            if (lineInserted.error) throw new Error(lineInserted.error.message);
+          }
+        }
+
     });
-    return { ok: true, message: "Hydrated from Supabase", counts: { customers: customers.length, products: products.length, categories: categoriesRes.data?.length || 0, sales: sales.length, orders: orders.length, expenses: expensesRes.data?.length || 0, purchases: purchasesRes.data?.length || 0, suppliers: suppliersRes.data?.length || 0, laundry: laundryRes.data?.length || 0, staff: staffRes.data?.length || 0, payments: paymentsRes.data?.length || 0, warehouses: warehousesRes.data?.length || 0, warehouseLocations: warehouseLocationsRes.data?.length || 0, warehouseStock: warehouseStockRes.data?.length || 0, warehouseTransfers: warehouseTransfersRes.data?.length || 0, purchaseOrders: purchaseOrdersRes.data?.length || 0 } };
+    return { ok: true, message: "Hydrated from Supabase", counts: { customers: customers.length, products: products.length, categories: categoriesRes.data?.length || 0, sales: sales.length, orders: orders.length, expenses: expensesRes.data?.length || 0, purchases: purchasesRes.data?.length || 0, suppliers: suppliersRes.data?.length || 0, laundry: laundryRes.data?.length || 0, staff: staffRes.data?.length || 0, payments: paymentsRes.data?.length || 0, warehouses: warehousesRes.data?.length || 0, warehouseLocations: warehouseLocationsRes.data?.length || 0, warehouseStock: warehouseStockRes.data?.length || 0, warehouseTransfers: warehouseTransfersRes.data?.length || 0, purchaseOrders: purchaseOrdersRes.data?.length || 0, goodsReceipts: goodsReceiptsRes.data?.length || 0 } };
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : String(e) }; }
 }
 
