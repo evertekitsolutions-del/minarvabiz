@@ -32,6 +32,20 @@ export interface StockTransferRecord {
 
 const stockTransfers: StockTransferRecord[] = [];
 
+export interface HeldSale {
+  id: UUID;
+  holdNumber: string;
+  customerId?: UUID | null;
+  customerName?: string | null;
+  lines: CartLine[];
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  branchId?: UUID | null;
+}
+
+const heldSales: HeldSale[] = [];
+
 if (allowDemoSeed()) {
   categories.push(
     { id: "cat-1", name: "Ornaments", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
@@ -281,6 +295,55 @@ export function transferStock(input: {
   return { transfer, errors: [] };
 }
 
+export function listHeldSales(): HeldSale[] {
+  return heldSales
+    .map((sale) => ({ ...sale, lines: sale.lines.map((line) => ({ ...line })) }))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export function holdSale(input: {
+  customerId?: UUID | null;
+  lines: CartLine[];
+  notes?: string | null;
+}): { heldSale: HeldSale | null; errors: string[] } {
+  assertPermission("sales.create");
+  const errors = validateCart(input.lines, { allowNegativeStock: false });
+  if (!input.lines.length) errors.push("Add at least one item before holding the sale");
+  if (errors.length) return { heldSale: null, errors };
+
+  const customer = input.customerId ? getCustomer(input.customerId) : undefined;
+  const id = generateId();
+  const now = nowISO();
+  const heldSale: HeldSale = {
+    id,
+    holdNumber: `HOLD-${now.slice(11, 19).replace(/:/g, "")}-${id.slice(0, 5).toUpperCase()}`,
+    customerId: input.customerId ?? null,
+    customerName: customer?.name ?? null,
+    lines: input.lines.map((line) => ({ ...line })),
+    notes: input.notes ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  heldSales.unshift(heldSale);
+  touchPersistence();
+  auditAction("sale.hold", "held_sales", heldSale.id, null, {
+    holdNumber: heldSale.holdNumber,
+    customerId: heldSale.customerId,
+    lineCount: heldSale.lines.length,
+  });
+  return { heldSale: { ...heldSale, lines: heldSale.lines.map((line) => ({ ...line })) }, errors: [] };
+}
+
+export function removeHeldSale(id: UUID): HeldSale | null {
+  assertPermission("sales.create");
+  const index = heldSales.findIndex((sale) => sale.id === id);
+  if (index < 0) return null;
+  const [removed] = heldSales.splice(index, 1);
+  touchPersistence();
+  auditAction("sale.resume", "held_sales", removed.id, { holdNumber: removed.holdNumber }, null);
+  return { ...removed, lines: removed.lines.map((line) => ({ ...line })) };
+}
+
 export function listSales(): Sale[] {
   return [...sales].filter((s) => !s.deletedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
@@ -291,10 +354,11 @@ export function getSale(id: UUID): Sale | undefined {
 
 export function createSale(input: {
   customerId?: UUID | null; lines: CartLine[]; paidAmount: number; paymentMethod: PaymentMethod;
+  paymentSplits?: Array<{ method: PaymentMethod; amount: number; reference?: string | null }>;
   notes?: string | null; allowNegativeStock?: boolean; createdBy?: UUID | null;
   /** Internal non-cash settlement such as exchange credit. No Payment row is emitted for this amount. */
   creditAmount?: number;
-}): { sale: Sale; payment: Payment | null; errors: string[] } {
+}): { sale: Sale; payment: Payment | null; payments: Payment[]; errors: string[] } {
   assertPermission("sales.create");
   const errors = validateCart(input.lines, { allowNegativeStock: input.allowNegativeStock });
   if (!input.allowNegativeStock) {
@@ -304,13 +368,23 @@ export function createSale(input: {
       else if (line.quantity > live.stockQuantity) errors.push(`${live.name}: insufficient stock (available ${live.stockQuantity})`);
     }
   }
-  if (errors.length) return { sale: null as unknown as Sale, payment: null, errors };
+  if (errors.length) return { sale: null as unknown as Sale, payment: null, payments: [], errors };
 
   const totals = calculateCartTotals(input.lines);
   const requestedCredit = round2(Math.max(0, input.creditAmount ?? 0));
   const creditApplied = round2(Math.min(requestedCredit, totals.grandTotal));
   const remainingAfterCredit = round2(Math.max(0, totals.grandTotal - creditApplied));
-  const actualPayment = round2(Math.min(Math.max(0, input.paidAmount), remainingAfterCredit));
+  const requestedSplits = (input.paymentSplits?.length
+    ? input.paymentSplits
+    : [{ method: input.paymentMethod, amount: input.paidAmount }])
+    .map((split) => ({
+      method: split.method,
+      amount: round2(Math.max(0, Number(split.amount) || 0)),
+      reference: split.reference ?? null,
+    }))
+    .filter((split) => split.amount > 0);
+  const tendered = round2(requestedSplits.reduce((sum, split) => sum + split.amount, 0));
+  const actualPayment = round2(Math.min(tendered, remainingAfterCredit));
   const allocation = allocatePayment(totals.grandTotal, creditApplied + actualPayment);
   const invoiceNumber = nextInvoiceNumber(lastInvoice);
   lastInvoice = invoiceNumber;
@@ -344,22 +418,35 @@ export function createSale(input: {
   sales.push(sale);
   touchPersistence();
 
-  let payment: Payment | null = null;
-  if (actualPayment > 0) {
-    payment = {
-      id: generateId(), amount: actualPayment, method: input.paymentMethod,
+  const salePayments: Payment[] = [];
+  let paymentRemaining = actualPayment;
+  for (const split of requestedSplits) {
+    if (paymentRemaining <= 0) break;
+    const amount = round2(Math.min(split.amount, paymentRemaining));
+    if (amount <= 0) continue;
+    const payment: Payment = {
+      id: generateId(), amount, method: split.method,
       referenceType: "sale", referenceId: saleId, customerId: input.customerId ?? null,
+      notes: split.reference || null,
       paidAt: nowISO(), createdAt: nowISO(), version: 1,
     };
     payments.push(payment);
-    touchPersistence();
+    salePayments.push(payment);
+    paymentRemaining = round2(paymentRemaining - amount);
   }
+  if (salePayments.length) touchPersistence();
 
   void remoteCreateSale(sale);
   enqueueOutbox("sales", sale.id, "insert", sale);
-  if (payment) enqueueOutbox("payments", payment.id, "insert", payment);
-  auditAction("sale.create", "sales", sale.id, null, { total: sale.total, invoice: sale.invoiceNumber, actualPayment, creditApplied });
-  return { sale, payment, errors: [] };
+  for (const payment of salePayments) void remoteCreatePayment(payment);
+  auditAction("sale.create", "sales", sale.id, null, {
+    total: sale.total,
+    invoice: sale.invoiceNumber,
+    actualPayment,
+    creditApplied,
+    paymentSplits: salePayments.map((p) => ({ method: p.method, amount: p.amount })),
+  });
+  return { sale, payment: salePayments[0] ?? null, payments: salePayments, errors: [] };
 }
 
 export function listPayments(): Payment[] {
@@ -407,7 +494,7 @@ function round2(n: number) {
 }
 
 export function hydrateCore(data: {
-  customers?: Customer[]; products?: Product[]; categories?: Category[]; sales?: Sale[]; payments?: Payment[]; stockTransfers?: StockTransferRecord[];
+  customers?: Customer[]; products?: Product[]; categories?: Category[]; sales?: Sale[]; payments?: Payment[]; stockTransfers?: StockTransferRecord[]; heldSales?: HeldSale[];
 }) {
   if (data.categories) { categories.length = 0; categories.push(...data.categories); }
   if (data.customers) { customers.length = 0; customers.push(...data.customers); }
@@ -415,6 +502,10 @@ export function hydrateCore(data: {
   if (data.sales) { sales.length = 0; sales.push(...data.sales); }
   if (data.payments) { payments.length = 0; payments.push(...data.payments); }
   if (data.stockTransfers) { stockTransfers.length = 0; stockTransfers.push(...data.stockTransfers); }
+  if (data.heldSales) {
+    heldSales.length = 0;
+    heldSales.push(...data.heldSales.map((sale) => ({ ...sale, lines: sale.lines.map((line) => ({ ...line })) })));
+  }
 }
 
 export function recordCustomerPayment(input: {
