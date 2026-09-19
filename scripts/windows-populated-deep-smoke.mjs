@@ -82,6 +82,25 @@ async function setField(ws, dialogName, labelText, value) {
   if (!result.ok) throw new Error(`SET_FIELD ${dialogName}/${labelText} failed: ${raw}`);
 }
 
+async function selectDialogFieldByText(ws, dialogName, labelText, optionText) {
+  const raw = await evalIn(ws, `(()=>{const dialogs=[...document.querySelectorAll('[role="dialog"]')];const d=dialogs.find(x=>(x.getAttribute('aria-label')||'').toLowerCase().includes(${JSON.stringify(dialogName.toLowerCase())}));if(!d)return JSON.stringify({ok:false,error:'dialog not found'});const labels=[...d.querySelectorAll('label')];const label=labels.find(x=>(x.innerText||'').toLowerCase().includes(${JSON.stringify(labelText.toLowerCase())}));const el=label?.querySelector('select');if(!el)return JSON.stringify({ok:false,error:'select not found',labels:labels.map(x=>(x.innerText||'').trim())});const option=[...el.options].find(o=>(o.textContent||'').toLowerCase().includes(${JSON.stringify(optionText.toLowerCase())}));if(!option)return JSON.stringify({ok:false,error:'option not found',options:[...el.options].map(o=>o.textContent)});el.value=option.value;el.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true,value:el.value,text:option.textContent});})()`);
+  const result = JSON.parse(raw);
+  if (!result.ok) throw new Error(`SELECT_DIALOG_FIELD ${dialogName}/${labelText} -> ${optionText} failed: ${raw}`);
+}
+
+async function setMainField(ws, labelText, value) {
+  const raw = await evalIn(ws, `(()=>{const main=document.querySelector('[data-testid="app-content"]');const labels=[...(main?.querySelectorAll('label')||[])];const label=labels.find(x=>(x.innerText||'').toLowerCase().includes(${JSON.stringify(labelText.toLowerCase())}));const el=label?.querySelector('input,textarea,select');if(!el)return JSON.stringify({ok:false,labels:labels.map(x=>(x.innerText||'').trim())});const v=${JSON.stringify(value)};if(el.tagName==='SELECT'){el.value=v;el.dispatchEvent(new Event('change',{bubbles:true}));}else{const proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;setter?setter.call(el,v):el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}return JSON.stringify({ok:true,value:el.value});})()`);
+  const result = JSON.parse(raw);
+  if (!result.ok) throw new Error(`SET_MAIN_FIELD ${labelText} failed: ${raw}`);
+}
+
+async function assertMainFieldValue(ws, labelText, expected) {
+  const raw = await evalIn(ws, `(()=>{const main=document.querySelector('[data-testid="app-content"]');const labels=[...(main?.querySelectorAll('label')||[])];const label=labels.find(x=>(x.innerText||'').toLowerCase().includes(${JSON.stringify(labelText.toLowerCase())}));const el=label?.querySelector('input,textarea,select');return JSON.stringify({ok:!!el,value:el?.value||''});})()`);
+  const result = JSON.parse(raw);
+  if (!result.ok || result.value !== expected) throw new Error(`MAIN_FIELD ${labelText} expected ${expected}, got ${result.value}`);
+  console.log(`FIELD_${labelText.replace(/\s+/g,"_").toUpperCase()} PASS`);
+}
+
 async function selectFieldByText(ws, labelText, optionText) {
   const raw = await evalIn(ws, `(()=>{const main=document.querySelector('[data-testid="app-content"]');const labels=[...(main?.querySelectorAll('label')||[])];const label=labels.find(x=>(x.innerText||'').toLowerCase().includes(${JSON.stringify(labelText.toLowerCase())}));const el=label?.querySelector('select');if(!el)return JSON.stringify({ok:false,labels:labels.map(x=>(x.innerText||'').trim())});const option=[...el.options].find(o=>(o.textContent||'').toLowerCase().includes(${JSON.stringify(optionText.toLowerCase())}));if(!option)return JSON.stringify({ok:false,options:[...el.options].map(o=>o.textContent)});el.value=option.value;el.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true,value:el.value,text:option.textContent});})()`);
   const result = JSON.parse(raw);
@@ -139,6 +158,12 @@ async function main() {
     await setField(ws, "Add Product", "Minimum stock", "1");
     await click(ws, "PRODUCT_SAVE", ["save product"]);
     await assertMain(ws, "PRODUCT_SAVED", ["QA POS Product"]);
+    // Product category add button must open/save and immediately appear in the filter.
+    await click(ws, "CATEGORY_ADD", ["+ Category"]);
+    await setField(ws, "Add Product Category", "Category name", "QA Category");
+    await click(ws, "CATEGORY_SAVE", ["save category"]);
+    await assertMain(ws, "CATEGORY_SAVED", ["QA Category"]);
+
 
     // POS: select customer, add product card, complete a credit sale.
     await click(ws, "SALES", ["sales & billing"]);
@@ -156,13 +181,24 @@ async function main() {
     await click(ws, "SALES_HISTORY", ["sales history"]);
     await assertMain(ws, "SALES_HISTORY", ["Sales", "QA POS Customer"]);
 
+    // Service order creation must work from the desktop UI.
+    await click(ws, "SERVICES", ["services & orders"]);
+    await assertMain(ws, "SERVICES", ["Services & Orders", "New Order"]);
+    await click(ws, "NEW_ORDER", ["new order"]);
+    await selectDialogFieldByText(ws, "New Service Order", "Customer", "QA POS Customer");
+    await setField(ws, "New Service Order", "Price", "250");
+    await setField(ws, "New Service Order", "Advance", "50");
+    await click(ws, "CREATE_ORDER", ["create order"]);
+    await assertMain(ws, "ORDER_CREATED", ["QA POS Customer", "₹250.00"]);
+
+
     // Payment collection against the unpaid sale.
     await click(ws, "PAYMENTS", ["payments"]);
     await assertMain(ws, "PAYMENTS", ["Payments", "QA POS Customer", "90"]);
     await click(ws, "COLLECT_PAYMENT", ["collect"]);
     await setField(ws, "Collect payment", "Amount", "90");
     await click(ws, "RECORD_PAYMENT", ["record payment"]);
-    await assertMain(ws, "PAYMENT_RECORDED", ["Payments", "No outstanding balances"]);
+    await assertMain(ws, "PAYMENT_RECORDED", ["Payments", "QA POS Customer", "₹200.00"]);
 
     // Return/refund with stock restock.
     await click(ws, "RETURNS", ["returns & refunds"]);
@@ -175,6 +211,15 @@ async function main() {
     if (!JSON.parse(qty).ok) throw new Error("Return quantity input missing");
     await click(ws, "PROCESS_REFUND", ["process refund"]);
     await assertMain(ws, "RETURN_RECORDED", ["Returns & Refunds", "QA POS Customer"]);
+
+    // Barcode Add button must add a matching product to the POS cart.
+    await click(ws, "SALES_BARCODE", ["sales & billing"]);
+    await click(ws, "POS_TAB_BARCODE", ["pos billing"]);
+    await setByPlaceholder(ws, "Scan barcode", "QA1001");
+    await click(ws, "ADD_BARCODE", ["add barcode"]);
+    await assertMain(ws, "BARCODE_CART", ["QA POS Product", "₹100.00"]);
+    await click(ws, "CLEAR_CART", ["clear"]);
+
 
     // Expense create: default category must be real, not visually selected-only.
     await click(ws, "EXPENSES", ["expenses"]);
@@ -221,6 +266,14 @@ async function main() {
     const laundryDialog = JSON.parse(await evalIn(ws, `JSON.stringify([...document.querySelectorAll('[role="dialog"]')].map(x=>x.getAttribute('aria-label')))`));
     if (!laundryDialog.some((x) => /outsourced laundry/i.test(x || ""))) throw new Error("Outsourced laundry modal did not open");
     await click(ws, "CANCEL_LAUNDRY", ["cancel"]);
+    // Re-open and actually save an outsourced laundry ticket.
+    await click(ws, "ADD_LAUNDRY_SAVE", ["outsourced laundry"]);
+    await selectDialogFieldByText(ws, "Outsourced Laundry", "Customer", "QA POS Customer");
+    await setField(ws, "Outsourced Laundry", "Garment", "QA Shirt");
+    await selectDialogFieldByText(ws, "Outsourced Laundry", "Laundry supplier", "City Laundry Works");
+    await click(ws, "SAVE_LAUNDRY", ["save"]);
+    await assertMain(ws, "LAUNDRY_SAVED", ["1 tickets", "QA POS Customer", "QA Shirt"]);
+
 
     // Day-end action: content assertion is scoped to main, not sidebar.
     await click(ws, "DAY_END", ["day-end close"]);
@@ -237,6 +290,25 @@ async function main() {
     await click(ws, "REPORTS", ["reports & analytics"]);
     await assertMain(ws, "REPORTS", ["Reports & Analytics", "Refresh"]);
     await click(ws, "REPORT_REFRESH", ["refresh"]);
+
+    // Settings save and theme buttons must mutate state and survive navigation.
+    await click(ws, "SETTINGS", ["settings"]);
+    await assertMain(ws, "SETTINGS", ["Business Settings", "Save business profile", "Save tax settings"]);
+    await setMainField(ws, "Business name", "QA Minarva Shop");
+    await click(ws, "SAVE_PROFILE", ["save business profile"]);
+    await click(ws, "THEME_OCEAN", ["ocean"]);
+    const theme = JSON.parse(await evalIn(ws, `JSON.stringify(document.documentElement.dataset.theme||'')`));
+    if (theme !== "ocean") throw new Error(`Theme button failed; expected ocean, got ${theme}`);
+    await click(ws, "DASHBOARD_AFTER_SETTINGS", ["dashboard"]);
+    await click(ws, "SETTINGS_REOPEN", ["settings"]);
+    await assertMainFieldValue(ws, "Business name", "QA Minarva Shop");
+
+    // Automatic backup is a non-dialog desktop action and must create a verifiable file.
+    await click(ws, "BACKUP", ["backup & restore"]);
+    await assertMain(ws, "BACKUP", ["Backup & Restore", "Run automatic backup", "Create backup"]);
+    await click(ws, "RUN_AUTO_BACKUP", ["run automatic backup"], 1200);
+    await assertMain(ws, "AUTO_BACKUP_CREATED", ["Automatic backup created", "verified SQLite"]);
+
 
     // Command/global search opens and routes.
     await click(ws, "COMMAND_PALETTE", ["open command palette", "quick commands"]);

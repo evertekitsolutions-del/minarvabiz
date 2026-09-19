@@ -13,7 +13,10 @@ let publicKeyHex = "";
 
 for (let attempt = 1; attempt <= 30; attempt += 1) {
   try {
-    const response = await fetch(endpoint, { cache: "no-store" });
+    const response = await fetch(endpoint, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(attempt === 1 ? 70_000 : 15_000),
+    });
     if (response.ok) {
       const data = await response.json();
       const candidate = String(data?.publicKeyHex || "").trim().toLowerCase();
@@ -26,7 +29,7 @@ for (let attempt = 1; attempt <= 30; attempt += 1) {
     // Render free instances can be asleep or redeploying. Retry below.
   }
   console.log(`Public-key endpoint not ready (attempt ${attempt}/30).`);
-  await new Promise((resolve) => setTimeout(resolve, 10_000));
+  await new Promise((resolve) => setTimeout(resolve, 5_000));
 }
 
 if (!/^[0-9a-f]{64}$/.test(publicKeyHex)) {
