@@ -39,3 +39,24 @@ expense and assert -50 net profit before any manual journal, then -150 after a
 Next: controlled Sales/POS posting including tenders, receivables, tax and returns;
 then procurement invoice/payment posting. Do not backfill historic documents
 without an explicit cutover/reconciliation workflow.
+
+## Sales posting prerequisite — customer collections
+
+Customer collections now allocate to oldest unpaid sales first (sale date,
+creation date, then ID). Each allocation updates invoice paid amount, balance,
+status and version. Cancelled, returned, deleted and other-customer invoices are
+excluded. Remaining collection value reduces other/opening customer balance;
+it is not invented as a sale payment. Payment notes and audit entries preserve
+the invoice allocations using existing persistence fields.
+
+The shared collection path queues payment, customer and settled invoice snapshots
+before online I/O. Online uses settlement-only invoice updates, and writes are
+serialized to prevent an older request overwriting newer balances. The web page
+no longer performs a second payment insert. Failure leaves outbox work pending.
+This does not retrospectively repair old unallocated collections and does not
+yet post sales or collections to the general ledger.
+
+Regression: a 100-unit invoice paid 10 initially and collected 90 later must show
+paid 100, balance 0, completed. A subsequent full return refunds 100 and reduces
+receivables by zero. Web and installed-Windows smoke assert the rendered invoice
+amounts after collection before continuing through refunds.

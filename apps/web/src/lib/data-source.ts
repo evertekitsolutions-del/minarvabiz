@@ -433,6 +433,13 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
         if (res.error) throw new Error(res.error.message);
       },
       createSale: async (sale) => { await db.sales.create(sale); },
+      updateSaleSettlement: async (sale) => {
+        const result = await pgUpdate<Record<string, unknown>>(cfg, "sales", `id=eq.${sale.id}`, {
+          paid_amount: sale.paidAmount, balance_amount: sale.balanceAmount, status: sale.status,
+          updated_at: sale.updatedAt, version: sale.version,
+        });
+        if (result.error || !result.data?.length) throw new Error(result.error?.message || "Sale settlement could not be saved");
+      },
       createOrder: async (order) => { await db.orders.create(order); },
       updateOrder: async (id, patch) => { await db.orders.update(id, patch); },
       createPayment: async (payment) => { const res = await pgInsert<Record<string, unknown>>(cfg, "payments", { id: payment.id, amount: payment.amount, method: payment.method, reference_type: payment.referenceType, reference_id: payment.referenceId, customer_id: payment.customerId ?? null, notes: payment.notes ?? null, paid_at: payment.paidAt, created_at: payment.createdAt, created_by: payment.createdBy ?? null, branch_id: payment.branchId ?? null, device_id: payment.deviceId ?? null, version: payment.version || 1 }); if (res.error) throw new Error(res.error.message); },

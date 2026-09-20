@@ -31,6 +31,7 @@ export interface RemoteWriter {
   upsertCategory?: (c: Category) => Promise<void>;
   upsertProduct?: (p: Product) => Promise<void>;
   createSale?: (s: Sale) => Promise<void>;
+  updateSaleSettlement?: (sale: Sale) => Promise<void>;
   createOrder?: (o: ServiceOrder) => Promise<void>;
   updateOrder?: (id: string, patch: Partial<ServiceOrder>) => Promise<void>;
   createPayment?: (p: Payment) => Promise<void>;
@@ -214,4 +215,26 @@ export async function remoteCreateExpenseWithJournal(expense: Expense, accounts:
   } catch (error) {
     console.warn("[minarvabiz] expense accounting write pending in outbox", error);
   }
+}
+
+let collectionWriteQueue: Promise<void> = Promise.resolve();
+
+/** Persist collections and invoice settlements without inserting duplicate sales. */
+export async function remoteCollectCustomerPayment(payment: Payment, customer: Customer, settledSales: Sale[]) {
+  enqueueOutbox("payments", payment.id, "insert", payment);
+  enqueueOutbox("customers", customer.id, "update", customer);
+  for (const sale of settledSales) enqueueOutbox("sales", sale.id, "update", sale);
+  const target = writer;
+  const write = async () => {
+    try {
+      await target?.createPayment?.(payment);
+      for (const sale of settledSales) await target?.updateSaleSettlement?.(sale);
+      await target?.upsertCustomer?.(customer);
+    } catch (error) {
+      console.warn("[minarvabiz] customer collection pending in outbox", error);
+    }
+  };
+  // Prevent a slow earlier collection from overwriting a later settlement.
+  collectionWriteQueue = collectionWriteQueue.then(write, write);
+  await collectionWriteQueue;
 }

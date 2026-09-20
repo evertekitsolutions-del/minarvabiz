@@ -237,6 +237,11 @@ async function main() {
     await click(ws, "RECORD_PAYMENT", ["record payment"]);
     await assertMain(ws, "PAYMENT_RECORDED", ["Payments", "QA POS Customer", "₹200.00"]);
 
+    await click(ws, "SETTLED_SALES", ["sales & billing"]);
+    await click(ws, "SETTLED_HISTORY", ["sales history"]);
+    await assertMain(ws, "SETTLED_INVOICE", ["QA POS Customer", "completed"]);
+    await assertSettledInvoice(ws, "QA POS Customer");
+
     // Return/refund with stock restock.
     await click(ws, "RETURNS", ["returns & refunds"]);
     await assertMain(ws, "RETURNS", ["New Return", "New Exchange"]);
@@ -424,4 +429,11 @@ async function assertStatementProfit(ws, expected) {
   const actual = await evalIn(ws, `Number((document.querySelector('[data-testid="statement-net-profit"]')?.textContent || 'NaN').replace(/[^0-9.\\-]/g, ''))`);
   if (actual !== expected) throw new Error(`Financial statement profit mismatch: expected ${expected}, received ${actual}`);
   console.log('FINANCIAL_STATEMENT_AMOUNT PASS');
+}
+
+async function assertSettledInvoice(ws, customerName) {
+  const row = await evalIn(ws, `(()=>{const row=[...document.querySelectorAll('tbody tr')].find(r=>(r.innerText||'').includes(${JSON.stringify(customerName)}));return row ? [...row.querySelectorAll('td')].map(c=>(c.innerText||'').trim()) : null;})()`);
+  const money = (value) => Number(String(value).replace(/[^0-9.\-]/g,''));
+  if (!row || money(row[2]) !== 100 || money(row[3]) !== 100 || money(row[4]) !== 0 || row[5] !== 'completed') throw new Error('Invoice settlement mismatch: '+JSON.stringify(row));
+  console.log('CUSTOMER_COLLECTION_INVOICE_SETTLED PASS');
 }
