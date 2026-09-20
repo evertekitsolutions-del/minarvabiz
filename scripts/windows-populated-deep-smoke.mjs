@@ -215,7 +215,7 @@ async function main() {
     if (cartState.complete) throw new Error("Complete Sale remained disabled after resuming held sale");
     await click(ws, "COMPLETE_SALE", ["complete sale"]);
     await assertMain(ws, "SALE_COMPLETED", ["Sale completed"]);
-    await click(ws, "SALES_HISTORY", ["sales history"]);
+    await click(ws, "SALES_HISTORY", ["history"]);
     await assertMain(ws, "SALES_HISTORY", ["Sales", "QA POS Customer"]);
 
     // Service order creation must work from the desktop UI.
@@ -238,7 +238,7 @@ async function main() {
     await assertMain(ws, "PAYMENT_RECORDED", ["Payments", "QA POS Customer", "₹200.00"]);
 
     await click(ws, "SETTLED_SALES", ["sales & billing"]);
-    await click(ws, "SETTLED_HISTORY", ["sales history"]);
+    await click(ws, "SETTLED_HISTORY", ["history"]);
     await assertMain(ws, "SETTLED_INVOICE", ["QA POS Customer", "completed"]);
     await assertSettledInvoice(ws, "QA POS Customer");
 
