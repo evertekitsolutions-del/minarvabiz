@@ -161,14 +161,27 @@ export function setAccountActive(id: UUID, isActive: boolean): { account: Accoun
   return { account: { ...account } };
 }
 
+function validJournalDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value))
+    && new Date(value).toISOString().slice(0, 10) === value;
+}
+
+function validJournalAmount(value: number): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 100));
+}
+
 function normalizeLines(entryId: UUID, input: Array<{ accountId: UUID; debit?: number; credit?: number; memo?: string | null }>): { lines: JournalEntryLine[]; errors: string[] } {
   const lines: JournalEntryLine[] = [];
   const errors: string[] = [];
   for (const item of input) {
     const account = accounts.find((candidate) => candidate.id === item.accountId && !candidate.deletedAt && candidate.isActive);
     if (!account) { errors.push("Active account not found"); continue; }
-    const debit = r2(Math.max(0, Number(item.debit) || 0));
-    const credit = r2(Math.max(0, Number(item.credit) || 0));
+    if (![item.debit ?? 0, item.credit ?? 0].every(validJournalAmount)) {
+      errors.push("Journal amounts must be finite, non-negative and within the supported range");
+      continue;
+    }
+    const debit = r2(item.debit ?? 0);
+    const credit = r2(item.credit ?? 0);
     if ((debit > 0 && credit > 0) || (debit <= 0 && credit <= 0)) {
       errors.push(account.code + " " + account.name + ": enter either debit or credit");
       continue;
@@ -192,6 +205,7 @@ function balanceErrors(lines: JournalEntryLine[]): string[] {
   if (lines.length < 2) errors.push("A journal entry needs at least two valid lines");
   const debit = r2(lines.reduce((sum, line) => sum + line.debit, 0));
   const credit = r2(lines.reduce((sum, line) => sum + line.credit, 0));
+  if (![debit, credit].every(validJournalAmount)) errors.push("Journal totals exceed the supported range");
   if (debit <= 0 || credit <= 0) errors.push("Journal must contain both debit and credit");
   if (Math.abs(debit - credit) > 0.009) errors.push("Journal is not balanced: debit " + debit.toFixed(2) + " vs credit " + credit.toFixed(2));
   return errors;
@@ -209,16 +223,20 @@ export function createJournalEntry(input: {
   assertPermission("accounting.manage");
   const description = input.description.trim();
   if (!description) return { journalEntry: null, errors: ["Journal description is required"] };
+  const entryDate = input.entryDate ?? nowISO().slice(0, 10);
+  if (!validJournalDate(entryDate)) return { journalEntry: null, errors: ["Invalid journal date"] };
+  if (!input.lines.length) return { journalEntry: null, errors: ["Journal lines are required"] };
   const id = generateId();
   const normalized = normalizeLines(id, input.lines);
   if (normalized.errors.length) return { journalEntry: null, errors: normalized.errors };
   const now = nowISO();
   const totalDebit = r2(normalized.lines.reduce((sum, line) => sum + line.debit, 0));
   const totalCredit = r2(normalized.lines.reduce((sum, line) => sum + line.credit, 0));
+  if (![totalDebit, totalCredit].every(validJournalAmount)) return { journalEntry: null, errors: ["Journal totals exceed the supported range"] };
   const journalEntry: JournalEntry = {
     id,
     journalNumber: nextJournalNumber(),
-    entryDate: input.entryDate || now.slice(0, 10),
+    entryDate,
     description,
     referenceType: input.referenceType ?? "manual",
     referenceId: input.referenceId ?? null,
@@ -257,7 +275,13 @@ export function postJournalEntry(id: UUID): { journalEntry: JournalEntry | null;
   const entry = journals.find((candidate) => candidate.id === id);
   if (!entry) return { journalEntry: null, errors: ["Journal entry not found"] };
   if (entry.status !== "draft") return { journalEntry: null, errors: ["Only draft journals can be posted"] };
-  const errors = balanceErrors(entry.lines);
+  const errors = normalizeLines(entry.id, entry.lines).errors;
+  errors.push(...balanceErrors(entry.lines));
+  if (!validJournalDate(entry.entryDate)) errors.push("Invalid journal date");
+  if (!entry.description.trim()) errors.push("Journal description is required");
+  if (entry.lines.some(line => line.debit !== r2(line.debit) || line.credit !== r2(line.credit))
+    || entry.totalDebit !== r2(entry.lines.reduce((sum, line) => sum + line.debit, 0))
+    || entry.totalCredit !== r2(entry.lines.reduce((sum, line) => sum + line.credit, 0))) errors.push("Draft journal totals need reconciliation");
   if (errors.length) return { journalEntry: null, errors };
   const before = cloneEntry(entry);
   entry.status = "posted";
