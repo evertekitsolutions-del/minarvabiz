@@ -231,3 +231,18 @@ Physical stock is reduced once through the existing inventory movement. Supplier
 outstanding is reduced by the same validated credit, the supplier snapshot is
 queued for sync, and accounts/journal/lines use the existing automatic-posting
 outbox. Hydrated historical returns are not backfilled.
+
+
+## Opening cash posting
+
+First-time opening cash now creates the cash-register opening and its general-ledger
+opening balance together. A positive opening amount debits Cash and credits Opening
+Balance Equity on the business date. Zero opening cash may open the register without
+creating a zero-value journal.
+
+Invalid, negative, non-finite or out-of-range amounts are rejected before the
+cash-register session is created. The posting plan also validates the required
+accounts first, so an unavailable Cash or Opening Balance Equity account leaves
+the register and ledger unchanged. Repeating the setup for an already-open day is
+rejected by the existing cash-register control; historical cash sessions are not
+backfilled.

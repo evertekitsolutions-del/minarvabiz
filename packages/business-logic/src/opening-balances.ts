@@ -8,6 +8,7 @@ import { auditAction } from "./audit-actions";
 import * as mainStore from "./store";
 import * as phase5 from "./phase5-store";
 import { openCashRegister } from "./cash-register";
+import { planAutomaticPosting } from "./accounting-store";
 
 export function setOpeningCustomerBalance(customerId: UUID, amount: number): { ok: boolean; error?: string } {
   assertPermission("settings.manage");
@@ -45,8 +46,25 @@ export function setOpeningStock(productId: UUID, quantity: number): { ok: boolea
 
 export function setOpeningCash(amount: number): { ok: boolean; error?: string } {
   assertPermission("settings.manage");
-  const r = openCashRegister(amount);
+  if (!Number.isFinite(amount) || amount < 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
+    return { ok: false, error: "Opening cash must be a finite non-negative amount" };
+  }
+  const openingCash = Math.round((amount + Number.EPSILON) * 100) / 100;
+  const businessDate = new Date().toISOString().slice(0, 10);
+  const posting = planAutomaticPosting({
+    referenceType: "auto_opening_cash",
+    referenceId: "opening-cash-" + businessDate,
+    date: businessDate,
+    description: "Opening cash balance " + businessDate,
+    lines: openingCash > 0 ? [
+      { key: "cash", debit: openingCash },
+      { key: "opening_balance_equity", credit: openingCash },
+    ] : [],
+  });
+  if (posting.errors.length) return { ok: false, error: posting.errors.join("; ") };
+  const r = openCashRegister(openingCash, businessDate);
   if (r.error) return { ok: false, error: r.error };
-  auditAction("opening.cash", "cash_register", r.session!.id, null, { openingCash: amount });
+  posting.commit();
+  auditAction("opening.cash", "cash_register", r.session!.id, null, { openingCash });
   return { ok: true };
 }
