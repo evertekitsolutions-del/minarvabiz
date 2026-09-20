@@ -209,3 +209,25 @@ drafts can still be saved but cannot be posted. Posting rechecks active accounts
 amounts, dates, balanced lines and stored totals, including restored drafts.
 Rejections leave drafts and financial statements unchanged. Web and installed
 Windows smoke both reject a negative draft, then correct and post it successfully.
+
+
+## Purchase return posting
+
+New purchase returns validate finite quantity/amount, available stock, supplier
+existence and supplier outstanding before any stock, supplier or ledger mutation.
+A return cannot silently create a supplier receivable; amounts above the current
+supplier outstanding are rejected until a dedicated supplier-credit workflow is
+implemented.
+
+Returns linked to a source that already has an automatic purchase posting debit
+Accounts Payable. Older or unlinked returns debit Legacy / Unallocated Settlement
+Clearing instead, so historical AP is not invented. The balancing credit goes to
+Purchase Returns Pending Review, a contra-asset holding account. This reduces net
+assets without guessing the original inventory-versus-tax split; an accountant
+can later reclassify it to Inventory Asset, Purchase Tax Pending Review or another
+appropriate account.
+
+Physical stock is reduced once through the existing inventory movement. Supplier
+outstanding is reduced by the same validated credit, the supplier snapshot is
+queued for sync, and accounts/journal/lines use the existing automatic-posting
+outbox. Hydrated historical returns are not backfilled.
