@@ -2,6 +2,7 @@
  * Opening balances for first-time setup
  */
 import type { UUID } from "@minarvabiz/types";
+import { generateId, nowISO } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { touchPersistence } from "./autosave";
 import { auditAction } from "./audit-actions";
@@ -9,15 +10,43 @@ import * as mainStore from "./store";
 import * as phase5 from "./phase5-store";
 import { openCashRegister } from "./cash-register";
 import { planAutomaticPosting } from "./accounting-store";
+import { remoteUpsertCustomer } from "./remote-write";
 
 export function setOpeningCustomerBalance(customerId: UUID, amount: number): { ok: boolean; error?: string } {
   assertPermission("settings.manage");
+  if (!Number.isFinite(amount) || amount < 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
+    return { ok: false, error: "Opening customer balance must be a finite non-negative amount" };
+  }
   const c = mainStore.getCustomer(customerId);
   if (!c) return { ok: false, error: "Customer not found" };
-  const old = c.outstandingBalance;
-  c.outstandingBalance = amount;
-  c.updatedAt = new Date().toISOString();
-  auditAction("opening.customer_balance", "customers", customerId, { outstandingBalance: old }, { outstandingBalance: amount });
+  const old = Number(c.outstandingBalance ?? 0);
+  if (!Number.isFinite(old) || old < 0 || !Number.isSafeInteger(Math.round(old * 100))) {
+    return { ok: false, error: "Customer balance needs reconciliation" };
+  }
+  const next = Math.round((amount + Number.EPSILON) * 100) / 100;
+  const previous = Math.round((old + Number.EPSILON) * 100) / 100;
+  const delta = Math.round((next - previous + Number.EPSILON) * 100) / 100;
+  if (delta === 0) return { ok: true };
+  const absolute = Math.abs(delta);
+  const posting = planAutomaticPosting({
+    referenceType: "auto_opening_customer",
+    referenceId: "opening-customer-" + customerId + "-" + generateId(),
+    date: nowISO(),
+    description: "Opening customer balance adjustment: " + c.name,
+    lines: delta > 0 ? [
+      { key: "accounts_receivable", debit: absolute },
+      { key: "opening_balance_equity", credit: absolute },
+    ] : [
+      { key: "opening_balance_equity", debit: absolute },
+      { key: "accounts_receivable", credit: absolute },
+    ],
+  });
+  if (posting.errors.length) return { ok: false, error: posting.errors.join("; ") };
+  c.outstandingBalance = next;
+  c.updatedAt = nowISO();
+  posting.commit();
+  void remoteUpsertCustomer({ ...c });
+  auditAction("opening.customer_balance", "customers", customerId, { outstandingBalance: previous }, { outstandingBalance: next });
   touchPersistence();
   return { ok: true };
 }

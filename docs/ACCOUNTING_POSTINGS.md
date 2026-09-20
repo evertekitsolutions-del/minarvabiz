@@ -246,3 +246,18 @@ accounts first, so an unavailable Cash or Opening Balance Equity account leaves
 the register and ledger unchanged. Repeating the setup for an already-open day is
 rejected by the existing cash-register control; historical cash sessions are not
 backfilled.
+
+
+## Opening customer balance posting
+
+Setting a customer's opening outstanding balance now reconciles Accounts Receivable
+to the operational customer balance through Opening Balance Equity. Increasing the
+opening balance debits Accounts Receivable and credits Opening Balance Equity;
+reducing it posts the exact reverse delta. Setting the same value again is a no-op
+and does not create another journal.
+
+The target and existing balances must both be finite, non-negative, cent-safe
+amounts. Required posting accounts are validated before the customer is mutated.
+The updated customer snapshot and automatic journal are queued through the existing
+remote/outbox paths. Historical customer balances are not backfilled automatically;
+this posting occurs only when the opening-balance action is explicitly used.
