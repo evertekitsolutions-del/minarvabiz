@@ -122,7 +122,7 @@ export function AccountingPanel() {
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-semibold text-slate-900">Accounting & General Ledger</h2>
-        <p className="mt-1 text-sm text-slate-500">Double-entry chart of accounts, journals, trial balance and account ledgers. New sales, collections, returns, exchanges and expenses post automatically; card, UPI, online and other payments use Payment Clearing until reconciled.</p>
+        <p className="mt-1 text-sm text-slate-500">Double-entry chart of accounts, journals, trial balance and account ledgers. New sales, collections, returns, exchanges, posted supplier invoices, supplier payments and expenses post automatically; card, UPI, online and other payments use Payment Clearing until reconciled.</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -245,7 +245,7 @@ export function AccountingPanel() {
 
       {tab === "statements" && (
         <div className="space-y-4">
-          <p className="text-sm text-slate-600">Based on posted journals, including dated reversals. New sales, collections, returns, exchanges and expenses post automatically. Older documents and purchases need accounting entries. Legacy / Unallocated Settlement Clearing requires reconciliation; opening stock and bank balances must be entered before these statements are complete.</p>
+          <p className="text-sm text-slate-600">Based on posted journals, including dated reversals. New sales, collections, returns, exchanges, posted supplier invoices, supplier payments and expenses post automatically. Older documents and direct purchases need accounting entries. Purchase tax stays pending review; unclassified purchases require classification. Legacy / Unallocated Settlement Clearing requires reconciliation; opening stock and bank balances must be entered before these statements are complete.</p>
           <div className="grid gap-3 md:grid-cols-2">
             <FormField label="Profit and loss from"><input aria-label="Profit and loss from" className={inputClass} type="date" value={statementFrom} onChange={(e) => setStatementFrom(e.target.value)} /></FormField>
             <FormField label="Statement end / balance sheet as of"><input aria-label="Statement end date" className={inputClass} type="date" value={statementTo} onChange={(e) => setStatementTo(e.target.value)} /></FormField>
