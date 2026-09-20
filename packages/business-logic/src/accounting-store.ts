@@ -44,6 +44,7 @@ const SYSTEM_ACCOUNTS: Array<{ code: string; name: string; type: AccountingAccou
   { code: "1100", name: "Accounts Receivable", type: "asset", systemKey: "accounts_receivable" },
   { code: "1200", name: "Inventory Asset", type: "asset", systemKey: "inventory_asset" },
   { code: "1250", name: "Unclassified Purchases", type: "asset", systemKey: "unclassified_purchases" },
+  { code: "1260", name: "Purchase Returns Pending Review", type: "asset", systemKey: "purchase_returns_pending" },
   { code: "1310", name: "Purchase Tax Pending Review", type: "asset", systemKey: "purchase_tax_pending" },
   { code: "1300", name: "Input Tax Credit", type: "asset", systemKey: "input_tax" },
   { code: "2000", name: "Accounts Payable", type: "liability", systemKey: "accounts_payable" },
@@ -502,7 +503,7 @@ export function postExpenseJournal(expense: Expense): { journalEntry: JournalEnt
 
 export type AutomaticPostingLine = { key: string; debit?: number; credit?: number };
 export type AutomaticPostingPlan = { errors: string[]; commit: () => JournalEntry | null };
-export const AUTOMATIC_SALES_REFERENCES = ['auto_sale', 'auto_collection', 'auto_return', 'auto_exchange_refund', 'auto_purchase_invoice', 'auto_purchase_cancel', 'auto_supplier_payment', 'auto_direct_purchase'];
+export const AUTOMATIC_SALES_REFERENCES = ['auto_sale', 'auto_collection', 'auto_return', 'auto_exchange_refund', 'auto_purchase_invoice', 'auto_purchase_cancel', 'auto_supplier_payment', 'auto_direct_purchase', 'auto_purchase_return'];
 export function hasSalePosting(saleId: UUID): boolean {
   return journals.some(j => j.referenceType === 'auto_sale' && j.referenceId === saleId && j.status === 'posted');
 }
@@ -512,7 +513,7 @@ export function planAutomaticPosting(input: {
   referenceType: string; referenceId: UUID; date: string; description: string;
   branchId?: UUID | null; lines: AutomaticPostingLine[];
 }): AutomaticPostingPlan {
-  assertPermission(['auto_purchase_invoice', 'auto_purchase_cancel', 'auto_supplier_payment', 'auto_direct_purchase'].includes(input.referenceType) ? 'purchases.manage' : input.referenceType === 'auto_sale' ? 'sales.create' : input.referenceType === 'auto_collection' ? 'payments.collect' : 'returns.manage');
+  assertPermission(['auto_purchase_invoice', 'auto_purchase_cancel', 'auto_supplier_payment', 'auto_direct_purchase', 'auto_purchase_return'].includes(input.referenceType) ? 'purchases.manage' : input.referenceType === 'auto_sale' ? 'sales.create' : input.referenceType === 'auto_collection' ? 'payments.collect' : 'returns.manage');
   const fail = (message: string): AutomaticPostingPlan => ({ errors: [message], commit: () => null });
   if (!AUTOMATIC_SALES_REFERENCES.includes(input.referenceType) || !input.referenceId) return fail('Invalid automatic posting source');
   const entryDate = input.date.slice(0, 10);
