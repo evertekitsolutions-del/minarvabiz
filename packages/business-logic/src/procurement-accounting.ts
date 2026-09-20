@@ -44,6 +44,19 @@ export function planSupplierPaymentPosting(input: { id: string; amount: number; 
     ] });
 }
 
+export function planPurchaseReturnPosting(input: { id: string; purchaseId?: string | null; amount: number; createdAt: string; branchId?: string | null }): AutomaticPostingPlan {
+  if (!Number.isFinite(input.amount) || input.amount <= 0 || !Number.isSafeInteger(cents(input.amount))) {
+    return invalid('Invalid purchase return accounting amount');
+  }
+  const sourcePosted = !!input.purchaseId && !!(sourceEntry(input.purchaseId, 'auto_direct_purchase') || sourceEntry(input.purchaseId, 'auto_purchase_invoice'));
+  return planAutomaticPosting({ referenceType: 'auto_purchase_return', referenceId: input.id, date: input.createdAt,
+    branchId: input.branchId ?? null, description: 'Purchase return ' + input.id,
+    lines: [
+      { key: sourcePosted ? 'accounts_payable' : 'legacy_settlement_clearing', debit: input.amount },
+      { key: 'purchase_returns_pending', credit: input.amount },
+    ] });
+}
+
 /** Description-only purchases stay unclassified until reviewed; no stock or tax inference. */
 export function planDirectPurchasePosting(purchase: Purchase): AutomaticPostingPlan {
   if (![purchase.amount, purchase.paidAmount, purchase.balanceAmount].every(n => Number.isFinite(n) && n >= 0 && Number.isSafeInteger(cents(n)))
