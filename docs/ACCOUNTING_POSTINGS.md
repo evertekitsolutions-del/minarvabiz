@@ -60,3 +60,25 @@ Regression: a 100-unit invoice paid 10 initially and collected 90 later must sho
 paid 100, balance 0, completed. A subsequent full return refunds 100 and reduces
 receivables by zero. Web and installed-Windows smoke assert the rendered invoice
 amounts after collection before continuing through refunds.
+
+## Sales posting prerequisite — invoice-valued returns
+
+Return and exchange credit now use the original recorded `SaleItem.lineTotal`,
+which includes the line discount and tax. They do not use the caller's unit price
+or the current product price. Old snapshots without line totals fall back to the
+original invoice quantity/price/discount/tax fields.
+
+Partial returns use cumulative returned quantity and deduct prior recorded refund
+amounts in integer cents. The final return consumes the remaining line value,
+avoiding rounding loss across repeated or fractional fabric returns. Restored
+completed return history participates in the same calculation. Invalid quantities,
+duplicate selected lines, mismatched products, inconsistent invoice balances and
+unavailable invoices are rejected before mutation. Historic inconsistent returns
+are not silently rewritten; negative residual values require reconciliation.
+
+The shared Returns panel uses the same quote for its preview and shows remaining
+returnable quantities. Both Web and installed-Windows smoke now create a 100-unit
+sale with 10% discount, verify the 90-unit return preview, and submit the refund.
+Runtime tests additionally cover taxed invoices, combined discount/tax, partial
+credit invoices, zero-value lines, fractional quantities, restore and exchange
+credit/refund differences. Automatic Sales/POS GL posting remains a follow-up.

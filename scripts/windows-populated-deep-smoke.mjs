@@ -254,6 +254,25 @@ async function main() {
     await click(ws, "PROCESS_REFUND", ["process refund"]);
     await assertMain(ws, "RETURN_RECORDED", ["QA POS Customer", "New Return", "New Exchange"]);
 
+    // Discounted return uses the invoice value in both preview and mutation.
+    await click(ws, "DISCOUNT_SALES", ["sales & billing"]);
+    await click(ws, "DISCOUNT_POS", ["pos billing"]);
+    await click(ws, "DISCOUNT_PRODUCT", ["qa pos product"]);
+    await setByAriaLabel(ws, "Discount % QA POS Product", "10");
+    await setByAriaLabel(ws, "Payment amount 1", "90");
+    await click(ws, "DISCOUNT_COMPLETE", ["complete sale"]);
+    await assertMain(ws, "DISCOUNT_SALE_DONE", ["Sale completed"]);
+    await click(ws, "DISCOUNT_RETURNS", ["returns & refunds"]);
+    await click(ws, "DISCOUNT_NEW_RETURN", ["new return"]);
+    await selectDialogFieldByText(ws, "Process return", "Original sale", "₹90.00");
+    const discountQty = await evalIn(ws, `(()=>{const d=document.querySelector('[role="dialog"]');const i=d?.querySelector('input[type="number"]');if(!i)return false;Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(i,'1');i.dispatchEvent(new Event('input',{bubbles:true}));i.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`);
+    if (!discountQty) throw new Error("Discount return quantity missing");
+    await sleep(300);
+    const discountPreview = await evalIn(ws, `document.querySelector('[role="dialog"]')?.innerText || ''`);
+    if (!/Return value\s*₹90\.00/.test(discountPreview)) throw new Error("Discount return preview mismatch: " + discountPreview);
+    await click(ws, "DISCOUNT_REFUND", ["process refund"]);
+    await assertMain(ws, "DISCOUNT_REFUND_DONE", ["Return/refund completed", "₹90.00"]);
+
     // Barcode Add button must add a matching product to the POS cart.
     await click(ws, "SALES_BARCODE", ["sales & billing"]);
     await click(ws, "POS_TAB_BARCODE", ["pos billing"]);

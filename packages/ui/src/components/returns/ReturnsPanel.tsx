@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { CartLine, PaymentMethod, Product, ReturnReason, Sale, SaleReturn } from "@minarvabiz/types";
-import { calculateCartTotals } from "@minarvabiz/business-logic";
+import { calculateCartTotals, quoteSaleReturn } from "@minarvabiz/business-logic";
 import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { Modal } from "../forms/Modal";
@@ -70,6 +70,9 @@ export function ReturnsPanel({
   const [additionalPaid, setAdditionalPaid] = React.useState("");
 
   const sale = sales.find((s) => s.id === saleId);
+  const remainingQuantity = (item: Sale["items"][number]) => Math.max(0, item.quantity - returns
+    .filter(r => r.saleId === sale?.id && r.status === "completed")
+    .flatMap(r => r.items).filter(i => i.saleItemId === item.id).reduce((sum, i) => sum + i.quantity, 0));
   const selectedReturnItems = React.useMemo<ReturnItemInput[]>(() => {
     if (!sale) return [];
     return sale.items
@@ -84,10 +87,11 @@ export function ReturnsPanel({
       }));
   }, [sale, qtyMap]);
 
-  const returnValue = React.useMemo(
-    () => selectedReturnItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
-    [selectedReturnItems]
+  const returnQuote = React.useMemo(
+    () => sale ? quoteSaleReturn(sale, returns, selectedReturnItems) : null,
+    [sale, returns, selectedReturnItems]
   );
+  const returnValue = returnQuote?.totalRefund ?? 0;
   const paidCreditAvailable = Math.min(returnValue, Math.max(0, sale?.paidAmount ?? 0));
   const replacementTotals = React.useMemo(
     () => calculateCartTotals(replacementLines),
@@ -221,7 +225,7 @@ export function ReturnsPanel({
         className={mode === "exchange" ? "max-w-3xl" : "max-w-lg"}
         footer={<>
           <Button variant="outline" onClick={() => { setOpen(false); resetForm(); }}>Cancel</Button>
-          <Button onClick={submit}>{mode === "exchange" ? "Complete exchange" : "Process refund"}</Button>
+          <Button onClick={submit} disabled={!returnQuote || returnQuote.errors.length > 0}>{mode === "exchange" ? "Complete exchange" : "Process refund"}</Button>
         </>}
       >
         <div className="space-y-4">
@@ -237,17 +241,19 @@ export function ReturnsPanel({
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Items being returned</div>
               {sale.items.map((item) => (
                 <div key={item.id} className="flex items-center justify-between gap-2 text-sm">
-                  <span className="flex-1">{item.productName} (sold {item.quantity})</span>
+                  <span className="flex-1">{item.productName} (remaining {remainingQuantity(item)})</span>
                   <input
                     type="number"
                     min={0}
-                    max={item.quantity}
+                    max={remainingQuantity(item)}
+                    step="any"
                     className="h-8 w-20 rounded border border-slate-200 px-2 text-center"
                     value={qtyMap[item.id] ?? 0}
-                    onChange={(e) => setQtyMap({ ...qtyMap, [item.id]: Math.min(item.quantity, parseInt(e.target.value, 10) || 0) })}
+                    onChange={(e) => setQtyMap({ ...qtyMap, [item.id]: Math.max(0, Math.min(remainingQuantity(item), Number(e.target.value) || 0)) })}
                   />
                 </div>
               ))}
+              {selectedReturnItems.length > 0 && returnQuote?.errors.map(message => <p key={message} className="text-sm text-rose-600">{message}</p>)}
               {selectedReturnItems.length > 0 && (
                 <div className="flex justify-between border-t border-slate-100 pt-2 text-sm font-medium">
                   <span>Return value</span><span>{formatMoney(returnValue)}</span>
