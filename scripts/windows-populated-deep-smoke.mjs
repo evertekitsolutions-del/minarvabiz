@@ -320,6 +320,7 @@ async function main() {
     await setField(ws, "Add Purchase", "Paid amount", "500");
     await click(ws, "SAVE_PURCHASE", ["save purchase"]);
     await assertMain(ws, "PURCHASE_SAVED", ["1 records", "QA stock purchase"]);
+    await assertPayableLedger(ws, 0);
 
     // Procurement Step 3A: purchase order is separate from direct purchase and
     // must be explicitly approved before any later receipt/accounting step.
@@ -490,5 +491,8 @@ async function assertPayableLedger(ws, expected) {
   const row = await evalIn(ws, `(()=>{const r=[...document.querySelectorAll('tbody tr')].find(r=>r.querySelectorAll('td')[1]?.innerText.trim()==='Accounts Payable');return r?[...r.querySelectorAll('td')].map(c=>c.innerText):null;})()`);
   const credit = row ? Number(row[4].replace(/[^0-9.-]/g,'')) : 0;
   if(credit!==expected || (row && Number(row[3].replace(/[^0-9.-]/g,''))!==0)) throw new Error('AP ledger mismatch: '+JSON.stringify(row));
+  const purchaseRow = await evalIn(ws, `(()=>{const r=[...document.querySelectorAll('tbody tr')].find(r=>r.querySelectorAll('td')[1]?.innerText.trim()==='Unclassified Purchases');return r?[...r.querySelectorAll('td')].map(c=>c.innerText):null;})()`);
+  if(!purchaseRow || Number(purchaseRow[3].replace(/[^0-9.-]/g,''))!==500 || Number(purchaseRow[4].replace(/[^0-9.-]/g,''))!==0) throw new Error('Direct purchase asset ledger mismatch: '+JSON.stringify(purchaseRow));
+  console.log('DIRECT_PURCHASE_LEDGER 500 PASS');
   console.log('AP_LEDGER '+expected+' PASS'); await click(ws,'AP_PURCHASES',['purchases']);
 }

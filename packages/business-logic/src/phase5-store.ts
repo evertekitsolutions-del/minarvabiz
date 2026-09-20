@@ -1,4 +1,4 @@
-import { planSupplierPaymentPosting } from "./procurement-accounting";
+import { planDirectPurchasePosting, planSupplierPaymentPosting } from "./procurement-accounting";
 import { assertPermission } from "./permissions";
 import { enqueueOutbox } from "./outbox-bridge";
 import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase, remoteSupplierSettlement } from "./remote-write";
@@ -131,7 +131,43 @@ export function createExpense(input: { date?: string; categoryId: UUID; amount: 
   return { expense, errors: [] };
 }
 export function listPurchases(opts?:{kind?:"general"|"order_specific"}):Purchase[]{let list=purchases.filter(p=>!p.deletedAt);if(opts?.kind)list=list.filter(p=>p.kind===opts.kind);return list.sort((a,b)=>b.date.localeCompare(a.date));}
-export function createPurchase(input:{date?:string;supplierId?:UUID|null;description:string;amount:number;paymentMethod:PaymentMethod;paidAmount?:number;kind:"general"|"order_specific";orderId?:UUID|null;notes?:string|null}):{purchase:Purchase|null;errors:string[]}{assertPermission("purchases.manage");const errors:string[]=[];if(!input.description.trim())errors.push("Description required");if(input.amount<=0)errors.push("Amount must be positive");if(input.kind==="order_specific"&&!input.orderId)errors.push("Order is required for order-specific purchase");if(errors.length)return{purchase:null,errors};const bal=purchaseBalance(input.amount,input.paidAmount??0);const supplier=input.supplierId?getSupplier(input.supplierId):undefined;let orderNumber:string|null=null;if(input.orderId){const order=ordersStore.getOrder(input.orderId);if(!order)return{purchase:null,errors:["Order not found"]};orderNumber=order.orderNumber;ordersStore.addOrderExpense(input.orderId,input.description||"Order purchase",bal.amount);}const purchaseNumber=nextDocNumber(lastPurchaseNo,"PUR");lastPurchaseNo=purchaseNumber;const purchase:Purchase={id:generateId(),purchaseNumber,date:input.date||nowISO(),supplierId:input.supplierId??null,supplierName:supplier?.name??null,description:input.description,amount:bal.amount,paymentMethod:input.paymentMethod,paidAmount:bal.paidAmount,balanceAmount:bal.balanceAmount,kind:input.kind,orderId:input.orderId??null,orderNumber,notes:input.notes??null,createdAt:nowISO(),updatedAt:nowISO(),version:1};if(supplier&&bal.balanceAmount>0){supplier.outstandingBalance=r2(supplier.outstandingBalance+bal.balanceAmount);supplier.updatedAt=nowISO();}purchases.push(purchase);touchPersistence();void remoteCreatePurchase(purchase);return{purchase,errors:[]};}
+export function createPurchase(input: { date?: string; supplierId?: UUID | null; description: string; amount: number; paymentMethod: PaymentMethod; paidAmount?: number; kind: "general" | "order_specific"; orderId?: UUID | null; notes?: string | null }): { purchase: Purchase | null; errors: string[] } {
+  assertPermission("purchases.manage");
+  const errors: string[] = [];
+  if (!input.description.trim()) errors.push("Description required");
+  if (![input.amount, input.paidAmount ?? 0].every(n => Number.isFinite(n) && n >= 0 && Number.isSafeInteger(Math.round(n * 100))) || r2(input.amount) <= 0) errors.push("Invalid purchase amount");
+  if (!["general", "order_specific"].includes(input.kind)) errors.push("Invalid purchase kind");
+  if (input.kind === "order_specific" && !input.orderId) errors.push("Order is required for order-specific purchase");
+  const supplier = input.supplierId ? getSupplier(input.supplierId) : undefined;
+  if (input.supplierId && !supplier) errors.push("Supplier not found");
+  if (errors.length) return { purchase: null, errors };
+  const bal = purchaseBalance(input.amount, input.paidAmount ?? 0);
+  if (bal.balanceAmount > 0 && !supplier) return { purchase: null, errors: ["Supplier is required for unpaid purchases"] };
+  if (supplier && (!Number.isFinite(supplier.outstandingBalance) || !Number.isSafeInteger(Math.round((supplier.outstandingBalance + bal.balanceAmount) * 100)))) return { purchase: null, errors: ["Supplier balance needs reconciliation"] };
+  let orderNumber: string | null = null;
+  if (input.orderId) {
+    assertPermission("orders.manage");
+    const order = ordersStore.getOrder(input.orderId);
+    if (!order) return { purchase: null, errors: ["Order not found"] };
+    orderNumber = order.orderNumber;
+  }
+  const purchaseNumber = nextDocNumber(lastPurchaseNo, "PUR");
+  const purchase: Purchase = { id: generateId(), purchaseNumber, date: input.date || nowISO(), supplierId: input.supplierId ?? null,
+    supplierName: supplier?.name ?? null, description: input.description, amount: bal.amount, paymentMethod: input.paymentMethod,
+    paidAmount: bal.paidAmount, balanceAmount: bal.balanceAmount, kind: input.kind, orderId: input.orderId ?? null, orderNumber,
+    notes: input.notes ?? null, createdAt: nowISO(), updatedAt: nowISO(), version: 1 };
+  const posting = planDirectPurchasePosting(purchase);
+  if (posting.errors.length) return { purchase: null, errors: posting.errors };
+  if (input.orderId) ordersStore.addOrderExpense(input.orderId, input.description || "Order purchase", bal.amount);
+  lastPurchaseNo = purchaseNumber;
+  if (supplier && bal.balanceAmount > 0) { supplier.outstandingBalance = r2(supplier.outstandingBalance + bal.balanceAmount); supplier.updatedAt = nowISO(); }
+  purchases.push(purchase);
+  posting.commit();
+  touchPersistence();
+  void remoteCreatePurchase(purchase, supplier);
+  return { purchase, errors: [] };
+}
+
 function r2(n:number){return Math.round((n+Number.EPSILON)*100)/100;}
 export function hydratePhase5(data:{suppliers?:Supplier[];laundryOrders?:LaundryOrder[];expenses?:Expense[];purchases?:Purchase[];expenseCategories?:ExpenseCategory[]}){if(data.suppliers){suppliers.length=0;suppliers.push(...data.suppliers);}if(data.laundryOrders){laundryOrders.length=0;laundryOrders.push(...data.laundryOrders);}if(data.expenses){expenses.length=0;expenses.push(...data.expenses);}if(data.purchases){purchases.length=0;purchases.push(...data.purchases);}if(data.expenseCategories){expenseCategories.length=0;expenseCategories.push(...data.expenseCategories);}lastLaundryNo=maxDocumentNumber(laundryOrders.map(x=>x.orderNumber),"LDY");lastPurchaseNo=maxDocumentNumber(purchases.map(x=>x.purchaseNumber),"PUR");}
 function maxDocumentNumber(values:string[],prefix:string){let max=0;for(const value of values){const match=new RegExp(`^${prefix}-(\\d+)$`).exec(value||"");if(match)max=Math.max(max,Number(match[1]));}return max>0?`${prefix}-${String(max).padStart(4,"0")}`:null;}

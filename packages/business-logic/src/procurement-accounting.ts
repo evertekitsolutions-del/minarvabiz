@@ -1,9 +1,9 @@
-import type { PurchaseInvoice, PaymentMethod } from '@minarvabiz/types';
+import type { Purchase, PurchaseInvoice, PaymentMethod } from '@minarvabiz/types';
 import { nowISO } from '@minarvabiz/utils';
 import { getAccount, listJournalEntries, planAutomaticPosting, type AutomaticPostingPlan } from './accounting-store';
 const cents = (n: number) => Math.round((n + Number.EPSILON) * 100);
 const invalid = (message: string): AutomaticPostingPlan => ({ errors: [message], commit: () => null });
-const sourceEntry = (id: string) => listJournalEntries().find(j => j.referenceType === 'auto_purchase_invoice' && j.referenceId === id && j.status === 'posted');
+const sourceEntry = (id: string, type = 'auto_purchase_invoice') => listJournalEntries().find(j => j.referenceType === type && j.referenceId === id && j.status === 'posted');
 
 export function planPurchaseInvoicePosting(invoice: PurchaseInvoice): AutomaticPostingPlan {
   const values = [invoice.subtotal, invoice.taxAmount, invoice.total, invoice.paidAmount, invoice.balanceAmount,
@@ -35,11 +35,25 @@ export function planPurchaseInvoiceCancellation(invoice: PurchaseInvoice): Autom
 
 export function planSupplierPaymentPosting(input: { id: string; amount: number; method: PaymentMethod; date: string;
   allocations: Array<{ id: string; type: 'invoice' | 'purchase'; amount: number }> }): AutomaticPostingPlan {
-  const payable = input.allocations.filter(a => a.type === 'invoice' && sourceEntry(a.id)).reduce((sum, a) => sum + cents(a.amount), 0);
+  const payable = input.allocations.filter(a => sourceEntry(a.id, a.type === 'invoice' ? 'auto_purchase_invoice' : 'auto_direct_purchase')).reduce((sum, a) => sum + cents(a.amount), 0);
   return planAutomaticPosting({ referenceType: 'auto_supplier_payment', referenceId: input.id, date: input.date,
     description: 'Supplier payment ' + input.id, lines: [
       { key: 'accounts_payable', debit: payable / 100 },
       { key: 'legacy_settlement_clearing', debit: (cents(input.amount) - payable) / 100 },
       { key: input.method === 'cash' ? 'cash' : input.method === 'bank' ? 'bank' : 'payment_clearing', credit: input.amount },
+    ] });
+}
+
+/** Description-only purchases stay unclassified until reviewed; no stock or tax inference. */
+export function planDirectPurchasePosting(purchase: Purchase): AutomaticPostingPlan {
+  if (![purchase.amount, purchase.paidAmount, purchase.balanceAmount].every(n => Number.isFinite(n) && n >= 0 && Number.isSafeInteger(cents(n)))
+    || cents(purchase.amount) <= 0 || cents(purchase.amount) !== cents(purchase.paidAmount) + cents(purchase.balanceAmount)
+    || (purchase.balanceAmount > 0 && !purchase.supplierId)) return invalid('Invalid direct purchase accounting amounts or supplier');
+  if (!['cash', 'bank', 'card', 'upi', 'online', 'other'].includes(purchase.paymentMethod)) return invalid('Invalid payment method');
+  return planAutomaticPosting({ referenceType: 'auto_direct_purchase', referenceId: purchase.id, date: purchase.date,
+    description: 'Direct purchase ' + purchase.purchaseNumber, lines: [
+      { key: 'unclassified_purchases', debit: purchase.amount },
+      { key: purchase.paymentMethod === 'cash' ? 'cash' : purchase.paymentMethod === 'bank' ? 'bank' : 'payment_clearing', credit: purchase.paidAmount },
+      { key: 'accounts_payable', credit: purchase.balanceAmount },
     ] });
 }

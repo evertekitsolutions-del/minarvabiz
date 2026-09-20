@@ -128,10 +128,19 @@ export async function remoteCreateLaundry(o: LaundryOrder) {
   catch (e) { console.warn("[minarvabiz] remote laundry write failed", e); }
 }
 
-export async function remoteCreatePurchase(p: Purchase) {
-  enqueueOutbox("purchases", p.id, "insert", p);
-  try { await writer?.createPurchase?.(p); }
-  catch (e) { console.warn("[minarvabiz] remote purchase write failed", e); }
+export async function remoteCreatePurchase(p: Purchase, supplier?: Supplier) {
+  const purchase = { ...p }, supplierSnapshot = supplier ? { ...supplier } : undefined;
+  enqueueOutbox("purchases", purchase.id, "insert", purchase);
+  if (supplierSnapshot) enqueueOutbox("suppliers", supplierSnapshot.id, "update", supplierSnapshot);
+  const target = writer;
+  const write = async () => {
+    try {
+      await target?.createPurchase?.(purchase);
+      if (supplierSnapshot) await target?.upsertSupplier?.(supplierSnapshot);
+    } catch (e) { console.warn("[minarvabiz] remote purchase write failed", e); }
+  };
+  supplierSettlementQueue = supplierSettlementQueue.then(write, write);
+  await supplierSettlementQueue;
 }
 
 
