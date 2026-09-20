@@ -28,8 +28,10 @@ async function run(){const ws=await connect();try{
   await clickText(ws,'SALES',['sales & billing']); await waitFor(ws,['Sales & Billing','POS Billing','Current Sale','Split payment']);
   await selectMainOption(ws,'QA Web Customer'); await clickText(ws,'POS_PRODUCT',['QA Web Product']); await clickText(ws,'HOLD_SALE',['hold sale'],500); await waitFor(ws,['Held sales (1)']);
   await setMainByAriaLabel(ws,'Held sales','HOLD-'); await clickText(ws,'RESUME_SALE',['resume sale'],500); await waitFor(ws,['Resumed HOLD-','QA Web Product']);
-  await setMainByAriaLabel(ws,'Payment amount 1','40'); await clickText(ws,'ADD_PAYMENT',['+ payment']); await setMainByAriaLabel(ws,'Payment method 2','Card'); await setMainByAriaLabel(ws,'Payment amount 2','60');
+  await setMainByAriaLabel(ws,'Payment amount 1','40'); await clickText(ws,'ADD_PAYMENT',['+ payment']); await setMainByAriaLabel(ws,'Payment method 2','Card'); await setMainByAriaLabel(ws,'Payment amount 2','10');
   await clickText(ws,'COMPLETE_SALE',['complete sale'],700); await waitFor(ws,['Sale completed','INV-']);
+  await clickText(ws,'PAYMENTS',['payments']); await waitFor(ws,['Payments','QA Web Customer']); await clickText(ws,'COLLECT_CUSTOMER',['+ collect payment']); await selectDialogOption(ws,'Collect payment','Customer','QA Web Customer'); await setDialogField(ws,'Collect payment','Amount','50'); await clickDialog(ws,'Collect payment',['record payment'],600); await waitFor(ws,['Invoices:','50.00']);
+  await clickText(ws,'SETTLED_SALES',['sales & billing']); await clickText(ws,'SETTLED_HISTORY',['history']); await waitFor(ws,['QA Web Customer','completed']); await assertSettledInvoice(ws,'QA Web Customer');
   await clickText(ws,'SERVICES',['services & orders']); await waitFor(ws,['Service Orders','New Order']); await clickText(ws,'NEW_ORDER',['new order']); await selectDialogOption(ws,'New Service Order','Customer','QA Web Customer'); await setDialogField(ws,'New Service Order','Price','250'); await setDialogField(ws,'New Service Order','Advance','50'); await clickDialog(ws,'New Service Order',['create order'],700); await waitFor(ws,['QA Web Customer']);
   await clickText(ws,'EXPENSES',['expenses']); await waitFor(ws,['Expenses','Add Expense']); await clickText(ws,'ADD_EXPENSE',['add expense']); await selectDialogOption(ws,'Add Expense','Category','Other'); await setDialogField(ws,'Add Expense','Amount','50'); await setDialogField(ws,'Add Expense','Description','QA Web Expense'); await clickDialog(ws,'Add Expense',['save'],600); await waitFor(ws,['QA Web Expense']);
   await clickText(ws,'SUPPLIERS',['suppliers']); await waitFor(ws,['Suppliers','Add Supplier']); await clickText(ws,'ADD_SUPPLIER',['add supplier']); await setDialogField(ws,'Add Supplier','Name','QA Web Supplier'); await setDialogField(ws,'Add Supplier','Phone','9999902020'); await setDialogField(ws,'Add Supplier','Opening balance','100'); await clickDialog(ws,'Add Supplier',['save'],600); await waitFor(ws,['QA Web Supplier']);
@@ -61,4 +63,11 @@ async function assertStatementProfit(ws, expected) {
   const actual = await evalIn(ws, `Number((document.querySelector('[data-testid="statement-net-profit"]')?.textContent || 'NaN').replace(/[^0-9.\\-]/g, ''))`);
   if (actual !== expected) throw new Error(`Financial statement profit mismatch: expected ${expected}, received ${actual}`);
   console.log('FINANCIAL_STATEMENT_AMOUNT PASS');
+}
+
+async function assertSettledInvoice(ws, customerName) {
+  const row = await evalIn(ws, `(()=>{const row=[...document.querySelectorAll('tbody tr')].find(r=>(r.innerText||'').includes(${JSON.stringify(customerName)}));return row ? [...row.querySelectorAll('td')].map(c=>(c.innerText||'').trim()) : null;})()`);
+  const money = (value) => Number(String(value).replace(/[^0-9.\-]/g,''));
+  if (!row || money(row[2]) !== 100 || money(row[3]) !== 100 || money(row[4]) !== 0 || row[5] !== 'completed') throw new Error('Invoice settlement mismatch: '+JSON.stringify(row));
+  console.log('CUSTOMER_COLLECTION_INVOICE_SETTLED PASS');
 }

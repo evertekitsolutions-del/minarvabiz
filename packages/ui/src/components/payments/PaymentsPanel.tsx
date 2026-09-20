@@ -98,6 +98,7 @@ export function PaymentsPanel({
     },
     { key: "method", header: "Method", render: (r) => r.method },
     { key: "referenceType", header: "Ref", render: (r) => r.referenceType },
+    { key: "notes", header: "Allocation / notes", render: (r) => r.notes || "—" },
   ];
 
   return (
@@ -169,6 +170,7 @@ export function PaymentsPanel({
         }
       >
         <div className="space-y-3">
+          <p className="text-xs text-slate-500">Collections settle oldest unpaid sales first. Any remainder reduces other customer balances.</p>
           <FormField label="Customer">
             <select
               className={selectClass}

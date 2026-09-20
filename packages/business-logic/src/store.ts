@@ -9,7 +9,7 @@ import {
 } from "./sales";
 import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
-import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remoteCreateSale, remoteCreatePayment } from "./remote-write";
+import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remoteCreateSale, remoteCreatePayment, remoteCollectCustomerPayment } from "./remote-write";
 import { auditAction } from "./audit-actions";
 import { enqueueOutbox } from "./outbox-bridge";
 import { assertPermission } from "./permissions";
@@ -523,26 +523,53 @@ export function recordCustomerPayment(input: {
 }): { payment: Payment | null; customer: Customer | null; errors: string[] } {
   assertPermission("payments.collect");
   const errors: string[] = [];
-  if (input.amount <= 0) errors.push("Amount must be positive");
+  if (!Number.isFinite(input.amount) || round2(input.amount) <= 0 || !Number.isSafeInteger(Math.round(input.amount * 100))) errors.push("Amount must be positive and finite");
+  if (!["cash", "bank", "card", "upi", "online", "other"].includes(input.method)) errors.push("Invalid payment method");
   const customer = getCustomer(input.customerId);
-  if (!customer) errors.push("Customer not found");
-  if (customer && customer.outstandingBalance <= 0) errors.push("Customer has no outstanding balance");
+  if (!customer || customer.deletedAt) errors.push("Customer not found");
+  if (customer && (!Number.isFinite(customer.outstandingBalance) || customer.outstandingBalance <= 0)) errors.push("Customer has no valid outstanding balance");
   if (errors.length || !customer) return { payment: null, customer: null, errors };
 
   const applied = round2(Math.min(input.amount, customer.outstandingBalance));
   if (applied <= 0) return { payment: null, customer: null, errors: ["No outstanding balance to collect"] };
+  const eligible = sales.filter((sale) => sale.customerId === customer.id && !sale.deletedAt
+    && sale.status !== "cancelled" && sale.status !== "returned" && sale.balanceAmount > 0)
+    .sort((a, b) => a.saleDate.localeCompare(b.saleDate) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  // Build the complete allocation before changing customer, invoice or outbox state.
+  let remaining = applied;
+  const allocations: Array<{ sale: Sale; amount: number }> = [];
+  for (const sale of eligible) {
+    if (remaining <= 0) break;
+    if (![sale.total, sale.paidAmount, sale.balanceAmount].every(Number.isFinite) || sale.paidAmount < 0
+      || round2(sale.paidAmount + sale.balanceAmount) !== round2(sale.total)) {
+      return { payment: null, customer: null, errors: ["Invoice balances need reconciliation: " + sale.invoiceNumber] };
+    }
+    const amount = round2(Math.min(remaining, sale.balanceAmount));
+    allocations.push({ sale, amount });
+    remaining = round2(remaining - amount);
+  }
+  const now = nowISO();
   customer.outstandingBalance = round2(Math.max(0, customer.outstandingBalance - applied));
-  customer.updatedAt = nowISO();
-
+  customer.totalSpending = round2(customer.totalSpending + applied);
+  customer.updatedAt = now;
+  for (const { sale, amount } of allocations) {
+    sale.paidAmount = round2(sale.paidAmount + amount);
+    sale.balanceAmount = round2(Math.max(0, sale.balanceAmount - amount));
+    sale.status = sale.balanceAmount === 0 ? "completed" : "partial";
+    sale.updatedAt = now;
+    sale.version = (sale.version || 1) + 1;
+  }
+  const allocationNote = allocations.length ? "Invoices: " + allocations.map(({ sale, amount }) => sale.invoiceNumber + " " + amount.toFixed(2)).join(", ") : null;
   const payment: Payment = {
     id: generateId(), amount: applied, method: input.method, referenceType: "other", referenceId: customer.id,
-    customerId: customer.id, notes: input.notes ?? input.reference ?? null, paidAt: nowISO(), createdAt: nowISO(), version: 1,
+    customerId: customer.id, notes: [input.notes, input.reference, allocationNote, remaining > 0 ? "Other customer balance: " + remaining.toFixed(2) : null].filter(Boolean).join(" · ") || null,
+    paidAt: now, createdAt: now, version: 1,
   };
   payments.push(payment);
+  void remoteCollectCustomerPayment({ ...payment }, { ...customer }, allocations.map(({ sale }) => ({ ...sale, items: sale.items.map((item) => ({ ...item })) })));
   touchPersistence();
-  enqueueOutbox("payments", payment.id, "insert", payment);
-  enqueueOutbox("customers", customer.id, "update", customer);
-  auditAction("customer.payment", "customers", customer.id, null, { amount: applied, method: input.method });
+  auditAction("customer.payment", "customers", customer.id, null, { paymentId: payment.id, amount: applied, method: input.method,
+    allocations: allocations.map(({ sale, amount }) => ({ saleId: sale.id, invoiceNumber: sale.invoiceNumber, amount })), otherBalanceAmount: remaining });
   return { payment, customer, errors: [] };
 }
 

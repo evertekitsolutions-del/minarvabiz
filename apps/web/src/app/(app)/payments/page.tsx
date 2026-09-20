@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { PaymentsPanel } from "@minarvabiz/ui";
-import { store, phase6Store, templatePaymentDue, templatePaymentReceived, getRemoteWriter } from "@minarvabiz/business-logic";
+import { store, phase6Store, templatePaymentDue, templatePaymentReceived } from "@minarvabiz/business-logic";
 import type { Customer, Payment } from "@minarvabiz/types";
 
 export default function PaymentsPage() {
@@ -30,9 +30,6 @@ export default function PaymentsPage() {
         if (result.errors.length || !result.payment) {
           return { ok: false, error: result.errors.join("; ") || "Failed" };
         }
-        const writer = getRemoteWriter();
-        if (writer?.createPayment) void writer.createPayment(result.payment).catch((e) => console.warn("[minarvabiz] payment remote write failed", e));
-        if (result.customer && writer?.upsertCustomer) void writer.upsertCustomer(result.customer).catch((e) => console.warn("[minarvabiz] customer remote update failed", e));
         if (result.customer) {
           const msg = templatePaymentReceived(result.customer, result.payment.amount);
           phase6Store.pushNotification({ kind: "system", title: msg.title, body: msg.body, href: "/payments" });
