@@ -339,6 +339,19 @@ async function main() {
     await click(ws, "POST_GRN", ["post goods receipt"]);
     await assertMain(ws, "GRN_POSTED", ["GRN-", "received"]);
 
+    await click(ws, "CREATE_SUPPLIER_INVOICE", ["create supplier invoice"]);
+    await setField(ws, "Supplier invoice", "Supplier invoice number", "QA-AP-001");
+    await setField(ws, "Supplier invoice", "invoice quantity", "2");
+    await click(ws, "DRAFT_SUPPLIER_INVOICE", ["create draft invoice"]);
+    await clickExactInvoiceButton(ws, "Post"); await clickExactInvoiceButton(ws, "Pay");
+    await setField(ws, "Pay supplier invoice", "Amount", "20");
+    await click(ws, "PAY_SUPPLIER_INVOICE", ["record payment"]);
+    await assertSupplierInvoice(ws, 100, "partially paid");
+    await clickExactInvoiceButton(ws, "Pay");
+    await setField(ws, "Pay supplier invoice", "Amount", "100");
+    await click(ws, "FINISH_SUPPLIER_PAYMENT", ["record payment"]);
+    await assertSupplierInvoice(ws, 0, "paid");
+
     // Accounting Step 4A: create an account, post a balanced double-entry
     // journal and verify the installed app exposes the Trial Balance.
     await click(ws, "ACCOUNTING", ["accounting"]);
@@ -460,4 +473,14 @@ async function assertSettledInvoice(ws, customerName) {
   const money = (value) => Number(String(value).replace(/[^0-9.\-]/g,''));
   if (!row || money(row[2]) !== 100 || money(row[3]) !== 100 || money(row[4]) !== 0 || row[5] !== 'completed') throw new Error('Invoice settlement mismatch: '+JSON.stringify(row));
   console.log('CUSTOMER_COLLECTION_INVOICE_SETTLED PASS');
+}
+
+async function clickExactInvoiceButton(ws, label) {
+  const clicked = await evalIn(ws, `(()=>{const b=[...document.querySelectorAll('button')].find(b=>(b.innerText||'').trim()===${JSON.stringify(label)}&&!b.disabled);if(!b)return false;b.click();return true;})()`);
+  if(!clicked) throw new Error('Invoice button missing: '+label); await sleep(500);
+}
+async function assertSupplierInvoice(ws, balance, status) {
+  const text = await evalIn(ws, `(()=>{const rows=[...document.querySelectorAll('div')].map(e=>e.innerText||'').filter(t=>t.includes('Supplier ref QA-AP-001')&&t.includes('balance'));return rows.sort((a,b)=>a.length-b.length)[0]||'';})()`);
+  if(!text.includes(status)||!text.includes('balance ₹'+balance.toFixed(2))) throw new Error('Supplier invoice settlement mismatch: '+text);
+  console.log('SUPPLIER_INVOICE_SETTLED '+balance+' PASS');
 }

@@ -498,27 +498,43 @@ export function payPurchaseInvoice(input: {
   const invoice = mutableInvoice(input.purchaseInvoiceId);
   if (!invoice) return { purchaseInvoice: null, error: "Purchase invoice not found" };
   if (!["posted", "partially_paid"].includes(invoice.status)) return { purchaseInvoice: null, error: "Only posted unpaid invoices can receive payment" };
-  const amount = r2(Math.min(Math.max(0, Number(input.amount)), invoice.balanceAmount));
-  if (amount <= 0) return { purchaseInvoice: null, error: "Payment amount must be greater than zero" };
   const result = phase5Store.recordSupplierPayment({
-    supplierId: invoice.supplierId,
-    amount,
-    paymentMethod: input.paymentMethod,
-    date: input.date,
-    reference: input.reference || invoice.invoiceNumber,
-    notes: input.notes || `Supplier invoice ${invoice.invoiceNumber}`,
+    supplierId: invoice.supplierId, amount: input.amount, paymentMethod: input.paymentMethod,
+    date: input.date, reference: input.reference || invoice.invoiceNumber,
+    notes: input.notes || `Supplier invoice ${invoice.invoiceNumber}`, purchaseInvoiceId: invoice.id,
   });
   if (result.errors.length || !result.payment) return { purchaseInvoice: null, error: result.errors.join("; ") || "Unable to record supplier payment" };
-  const before = cloneInvoice(invoice);
-  invoice.paidAmount = r2(invoice.paidAmount + amount);
-  invoice.balanceAmount = r2(Math.max(0, invoice.total - invoice.paidAmount));
-  invoice.status = invoice.balanceAmount <= 0 ? "paid" : "partially_paid";
-  invoice.updatedAt = nowISO();
-  invoice.version += 1;
-  void remoteUpsertPurchaseInvoice(cloneInvoice(invoice));
-  auditAction("purchase_invoice.payment", "purchase_invoices", invoice.id, before, invoice);
-  touchPersistence();
   return { purchaseInvoice: cloneInvoice(invoice) };
+}
+
+/** Prepare all invoice balance changes before the supplier/payment mutation. */
+export function prepareSupplierInvoiceSettlements(supplierId: UUID, allocations: Array<{ id: UUID; amount: number }>) {
+  assertPermission("purchases.manage");
+  const errors: string[] = [];
+  const changes: Array<{ invoice: PurchaseInvoice; before: PurchaseInvoice; amount: number }> = [];
+  const seen = new Set<string>();
+  for (const allocation of allocations) {
+    const invoice = mutableInvoice(allocation.id);
+    if (!invoice || invoice.supplierId !== supplierId || !["posted", "partially_paid"].includes(invoice.status)
+      || seen.has(allocation.id) || !Number.isFinite(allocation.amount) || allocation.amount <= 0 || allocation.amount > invoice.balanceAmount) {
+      errors.push("Invalid supplier invoice settlement"); continue;
+    }
+    seen.add(allocation.id);
+    changes.push({ invoice, before: cloneInvoice(invoice), amount: allocation.amount });
+  }
+  let committed = false;
+  return { errors, commit: (): PurchaseInvoice[] => {
+    if (errors.length || committed) return [];
+    committed = true;
+    for (const { invoice, before, amount } of changes) {
+      invoice.paidAmount = r2(invoice.paidAmount + amount);
+      invoice.balanceAmount = r2(Math.max(0, invoice.total - invoice.paidAmount));
+      invoice.status = invoice.balanceAmount === 0 ? "paid" : "partially_paid";
+      invoice.updatedAt = nowISO(); invoice.version += 1;
+      auditAction("purchase_invoice.payment", "purchase_invoices", invoice.id, before, invoice);
+    }
+    return changes.map(({ invoice }) => cloneInvoice(invoice));
+  } };
 }
 
 export function cancelPurchaseInvoice(id: UUID): { purchaseInvoice: PurchaseInvoice | null; error?: string } {
