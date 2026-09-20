@@ -19,7 +19,7 @@ export function setOpeningCustomerBalance(customerId: UUID, amount: number): { o
   }
   const c = mainStore.getCustomer(customerId);
   if (!c) return { ok: false, error: "Customer not found" };
-  const old = Number(c.outstandingBalance || 0);
+  const old = Number(c.outstandingBalance ?? 0);
   if (!Number.isFinite(old) || old < 0 || !Number.isSafeInteger(Math.round(old * 100))) {
     return { ok: false, error: "Customer balance needs reconciliation" };
   }
