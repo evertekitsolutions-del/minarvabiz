@@ -261,3 +261,18 @@ amounts. Required posting accounts are validated before the customer is mutated.
 The updated customer snapshot and automatic journal are queued through the existing
 remote/outbox paths. Historical customer balances are not backfilled automatically;
 this posting occurs only when the opening-balance action is explicitly used.
+
+
+## Opening supplier balance posting
+
+Setting a supplier's opening outstanding balance now reconciles Accounts Payable
+to the operational supplier balance through Opening Balance Equity. Increasing the
+opening amount debits Opening Balance Equity and credits Accounts Payable; reducing
+it posts the exact reverse delta. Setting the same value again is a no-op and does
+not create another journal.
+
+The target and existing balances must both be finite, non-negative, cent-safe
+amounts. Required posting accounts are validated before the supplier is mutated.
+The updated supplier snapshot and automatic journal are queued through the existing
+remote/outbox paths. Historical supplier balances are not backfilled automatically;
+this posting occurs only when the opening-balance action is explicitly used.
