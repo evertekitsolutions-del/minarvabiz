@@ -276,3 +276,20 @@ amounts. Required posting accounts are validated before the supplier is mutated.
 The updated supplier snapshot and automatic journal are queued through the existing
 remote/outbox paths. Historical supplier balances are not backfilled automatically;
 this posting occurs only when the opening-balance action is explicitly used.
+
+
+## Opening stock valuation posting
+
+Setting opening stock now reconciles the operational product quantity to Inventory
+Asset using the product's recorded cost price. Increasing opening quantity debits
+Inventory Asset and credits Opening Balance Equity for the rounded quantity delta
+times unit cost; reducing quantity posts the exact reverse valuation. Setting the
+same quantity again is a no-op.
+
+Target/existing quantities must be finite, non-negative and safe to three decimal
+places so fractional fabric quantities remain supported. Product cost must be a
+finite, non-negative cent-safe amount. Required accounts are validated before the
+stock mutation. A zero-cost product may change quantity without creating a zero
+value journal. Historical stock is not backfilled automatically; this posting only
+occurs when the opening-stock action is explicitly used. This uses recorded product
+cost and does not introduce FIFO/weighted-average valuation in this milestone.

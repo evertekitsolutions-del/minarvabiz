@@ -92,12 +92,48 @@ export function setOpeningSupplierBalance(supplierId: UUID, amount: number): { o
 
 export function setOpeningStock(productId: UUID, quantity: number): { ok: boolean; error?: string } {
   assertPermission("inventory.adjust");
+  if (!Number.isFinite(quantity) || quantity < 0 || !Number.isSafeInteger(Math.round(quantity * 1000))) {
+    return { ok: false, error: "Opening stock quantity must be a finite non-negative quantity" };
+  }
   const p = mainStore.getProduct(productId);
   if (!p) return { ok: false, error: "Product not found" };
-  const delta = quantity - p.stockQuantity;
-  if (delta > 0) mainStore.adjustStock(productId, "stock_in", delta, "opening_balance");
-  else if (delta < 0) mainStore.adjustStock(productId, "stock_out", -delta, "opening_balance");
-  auditAction("opening.stock", "products", productId, { stock: p.stockQuantity }, { stock: quantity });
+  const previous = Number(p.stockQuantity);
+  const unitCost = Number(p.costPrice);
+  if (!Number.isFinite(previous) || previous < 0 || !Number.isSafeInteger(Math.round(previous * 1000))) {
+    return { ok: false, error: "Product stock needs reconciliation" };
+  }
+  if (!Number.isFinite(unitCost) || unitCost < 0 || !Number.isSafeInteger(Math.round(unitCost * 100))) {
+    return { ok: false, error: "Product cost needs reconciliation" };
+  }
+  const next = Math.round((quantity + Number.EPSILON) * 1000) / 1000;
+  const before = Math.round((previous + Number.EPSILON) * 1000) / 1000;
+  const delta = Math.round((next - before + Number.EPSILON) * 1000) / 1000;
+  if (delta === 0) return { ok: true };
+  const value = Math.round((Math.abs(delta) * unitCost + Number.EPSILON) * 100) / 100;
+  if (!Number.isSafeInteger(Math.round(value * 100))) {
+    return { ok: false, error: "Opening stock value is out of range" };
+  }
+  const posting = planAutomaticPosting({
+    referenceType: "auto_opening_stock",
+    referenceId: "opening-stock-" + productId + "-" + generateId(),
+    date: nowISO(),
+    description: "Opening stock adjustment: " + p.name,
+    branchId: p.branchId ?? null,
+    lines: value > 0 ? (delta > 0 ? [
+      { key: "inventory_asset", debit: value },
+      { key: "opening_balance_equity", credit: value },
+    ] : [
+      { key: "opening_balance_equity", debit: value },
+      { key: "inventory_asset", credit: value },
+    ]) : [],
+  });
+  if (posting.errors.length) return { ok: false, error: posting.errors.join("; ") };
+  const updated = delta > 0
+    ? mainStore.adjustStock(productId, "stock_in", delta, "opening_balance")
+    : mainStore.adjustStock(productId, "stock_out", -delta, "opening_balance");
+  if (!updated) return { ok: false, error: "Opening stock adjustment failed" };
+  posting.commit();
+  auditAction("opening.stock", "products", productId, { stock: before }, { stock: next, unitCost, valueDelta: delta > 0 ? value : -value });
   return { ok: true };
 }
 
