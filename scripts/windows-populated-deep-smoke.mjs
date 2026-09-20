@@ -373,6 +373,10 @@ async function main() {
     await setByAriaLabel(ws, "Journal debit 1", "100");
     await setByAriaLabel(ws, "Journal account 2", "Cash");
     await setByAriaLabel(ws, "Journal credit 2", "100");
+    await setByAriaLabel(ws, "Journal debit 1", "-100");
+    await click(ws, "REJECT_NEGATIVE_JOURNAL", ["save draft journal"]);
+    await assertMain(ws, "INVALID_JOURNAL_REJECTED", ["Journal amounts must be finite, non-negative"]);
+    await setByAriaLabel(ws, "Journal debit 1", "100");
     await click(ws, "SAVE_JOURNAL", ["save draft journal"]);
     await assertMain(ws, "JOURNAL_DRAFT", ["JV-", "draft", "QA balanced journal"]);
     await click(ws, "POST_JOURNAL", ["post"]);

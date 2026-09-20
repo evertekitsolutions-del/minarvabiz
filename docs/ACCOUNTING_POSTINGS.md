@@ -200,3 +200,12 @@ through Legacy / Unallocated Settlement Clearing. No historical backfill occurs.
 Purchase creation and supplier settlement remote writes share an ordered queue,
 with immutable snapshots and offline outbox retention. The source and journal
 writes are still separate server requests, not an atomic server transaction.
+
+## Manual journal validation
+
+Manual drafts reject negative, non-finite or out-of-range amounts, empty line
+sets, and invalid calendar dates before any journal/outbox mutation. Unbalanced
+drafts can still be saved but cannot be posted. Posting rechecks active accounts,
+amounts, dates, balanced lines and stored totals, including restored drafts.
+Rejections leave drafts and financial statements unchanged. Web and installed
+Windows smoke both reject a negative draft, then correct and post it successfully.
