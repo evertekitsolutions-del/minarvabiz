@@ -2,8 +2,8 @@
 
 The first operational posting adapter covers **new paid expenses** created through
 `phase5Store.createExpense`, shared by Online, Windows and Hybrid. Older expenses
-are not backfilled during hydration or restore. Sales, purchases, settlements and
-source expense corrections remain separate follow-up steps.
+are not backfilled during hydration or restore. Sales lifecycle postings are described below. Purchases and source expense
+corrections remain separate follow-up steps.
 
 | Expense | Debit | Credit |
 | --- | --- | --- |
@@ -36,8 +36,7 @@ ordering and network failure. Web and installed-Windows smoke create a 50-unit
 expense and assert -50 net profit before any manual journal, then -150 after a
 100-unit manual journal. Existing build, licensing and UI workflows remain gates.
 
-Next: controlled Sales/POS posting including tenders, receivables, tax and returns;
-then procurement invoice/payment posting. Do not backfill historic documents
+Next: procurement invoice/payment posting and controlled opening-balance reconciliation. Do not backfill historic documents
 without an explicit cutover/reconciliation workflow.
 
 ## Sales posting prerequisite — customer collections
@@ -54,7 +53,7 @@ before online I/O. Online uses settlement-only invoice updates, and writes are
 serialized to prevent an older request overwriting newer balances. The web page
 no longer performs a second payment insert. Failure leaves outbox work pending.
 This does not retrospectively repair old unallocated collections and does not
-yet post sales or collections to the general ledger.
+backfill prior sales or collections to the general ledger.
 
 Regression: a 100-unit invoice paid 10 initially and collected 90 later must show
 paid 100, balance 0, completed. A subsequent full return refunds 100 and reduces
@@ -81,4 +80,48 @@ returnable quantities. Both Web and installed-Windows smoke now create a 100-uni
 sale with 10% discount, verify the 90-unit return preview, and submit the refund.
 Runtime tests additionally cover taxed invoices, combined discount/tax, partial
 credit invoices, zero-value lines, fractional quantities, restore and exchange
-credit/refund differences. Automatic Sales/POS GL posting remains a follow-up.
+credit/refund differences. Automatic Sales/POS GL posting is now described below.
+
+## Automatic Sales/POS lifecycle posting
+
+New invoices now post through the shared core on Web, Windows and Hybrid. This
+includes zero-paid issued credit sales (the operational status is `draft`, but
+stock has already been issued). Held carts never post. Original sale-item cost
+and tax are used; later product price changes do not change a posted invoice.
+
+| Event | Debits | Credits |
+| --- | --- | --- |
+| New sale | Actual cash/bank/clearing receipts, receivable, exchange credit used | Net product revenue, recorded tax payable |
+| Stock issued | Cost of Goods Sold | Inventory Asset |
+| Customer collection | Cash/bank/clearing | Receivables for posted invoices; legacy/unallocated clearing for remainder |
+| Return of posted sale | Product revenue, tax payable | Paid refund (or exchange-credit liability), receivable reduction |
+| Restocked return | Inventory Asset | Cost of Goods Sold |
+| Exchange excess refund | Exchange Credit Payable | Cash/bank/clearing |
+
+Card, UPI, online and other tenders use Payment Clearing. Cash change is excluded
+from receipts. Returned goods that are not restocked retain their consumed cost.
+Tax and restocked cost reversals use cumulative integer-cent allocation so repeated
+partial returns reconcile to the original posting. Replacement invoices consume
+exchange credit as a liability; they do not invent another cash receipt.
+
+Historical invoices are not posted during hydration. Their new paid refunds debit
+Legacy / Unallocated Settlement Clearing, while new collections against historical
+or other customer balances credit it. No historical revenue, tax, COGS or receivable
+reversal is invented. This account is a reconciliation placeholder, not income.
+Opening inventory, bank/cash, receivables and clearing balances must be reconciled
+before financial statements can be treated as complete. Procurement, service and
+laundry recognition are not yet automatic.
+
+Accounting plans validate account availability and balancing before source
+mutations. Source-linked posted entries cannot be manually voided. Source replay
+is idempotent and conflicting replays are rejected. Every source posting queues
+its accounts, journal and lines synchronously; online journal writes wait for
+accounts. Network failures retain outbox work. This uses existing snapshot/SQLite
+and online schema, with no historical backfill or new schema version. Remote
+source and journal synchronization is retryable, not a server-wide transaction.
+
+Runtime tests cover actual store sale -> collection -> return, exchanges including
+excess refunds, split tenders/change, credit and free invoices, rounding, restore,
+permissions, idempotency, unavailable accounts and network failure. Web and Windows
+smoke assert 40 net profit for a 100 sale costing 60, then -50 after returns and a
+50 expense, and -150 after an additional manual 100 expense journal.

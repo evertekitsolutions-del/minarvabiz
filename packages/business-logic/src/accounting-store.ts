@@ -19,7 +19,7 @@ import { generateId, nowISO } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { auditAction } from "./audit-actions";
 import { touchPersistence } from "./autosave";
-import { remoteUpsertAccountingAccount, remoteUpsertJournalEntry, remoteCreateExpenseWithJournal } from "./remote-write";
+import { remoteUpsertAccountingAccount, remoteUpsertJournalEntry, remoteCreateExpenseWithJournal, remoteAutomaticPosting } from "./remote-write";
 
 import { calculateProfitAndLoss, calculateBalanceSheet } from "./accounting-statements";
 
@@ -39,6 +39,8 @@ const SYSTEM_ACCOUNTS: Array<{ code: string; name: string; type: AccountingAccou
   { code: "1000", name: "Cash", type: "asset", systemKey: "cash" },
   { code: "1010", name: "Bank", type: "asset", systemKey: "bank" },
   { code: "1020", name: "Payment Clearing", type: "asset", systemKey: "payment_clearing" },
+  { code: "1090", name: "Legacy / Unallocated Settlement Clearing", type: "asset", systemKey: "legacy_settlement_clearing" },
+  { code: "2200", name: "Exchange Credit Payable", type: "liability", systemKey: "exchange_credit" },
   { code: "1100", name: "Accounts Receivable", type: "asset", systemKey: "accounts_receivable" },
   { code: "1200", name: "Inventory Asset", type: "asset", systemKey: "inventory_asset" },
   { code: "1300", name: "Input Tax Credit", type: "asset", systemKey: "input_tax" },
@@ -270,7 +272,7 @@ export function voidJournalEntry(id: UUID): { original: JournalEntry | null; rev
   assertPermission("accounting.manage");
   const original = journals.find((candidate) => candidate.id === id);
   if (!original) return { original: null, reversal: null, errors: ["Journal entry not found"] };
-  if (original.referenceType === "expense") return { original: null, reversal: null, errors: ["Automatic expense journals must be corrected through their source workflow"] };
+  if (original.referenceType === "expense" || AUTOMATIC_SALES_REFERENCES.includes(original.referenceType ?? "")) return { original: null, reversal: null, errors: ["Automatic source journals must be corrected through their source workflow"] };
   if (original.status !== "posted") return { original: null, reversal: null, errors: ["Only posted journals can be voided"] };
 
   const now = nowISO();
@@ -470,4 +472,73 @@ export function postExpenseJournal(expense: Expense): { journalEntry: JournalEnt
   auditAction("accounting.expense.post", "journal_entries", entry.id, null, cloneEntry(entry));
   touchPersistence();
   return { journalEntry: cloneEntry(entry), errors: [] };
+}
+
+export type AutomaticPostingLine = { key: string; debit?: number; credit?: number };
+export type AutomaticPostingPlan = { errors: string[]; commit: () => JournalEntry | null };
+export const AUTOMATIC_SALES_REFERENCES = ['auto_sale', 'auto_collection', 'auto_return', 'auto_exchange_refund'];
+export function hasSalePosting(saleId: UUID): boolean {
+  return journals.some(j => j.referenceType === 'auto_sale' && j.referenceId === saleId && j.status === 'posted');
+}
+
+/** Validate everything before the source mutation; commit is synchronous and repeatable. */
+export function planAutomaticPosting(input: {
+  referenceType: string; referenceId: UUID; date: string; description: string;
+  branchId?: UUID | null; lines: AutomaticPostingLine[];
+}): AutomaticPostingPlan {
+  assertPermission(input.referenceType === 'auto_sale' ? 'sales.create' : input.referenceType === 'auto_collection' ? 'payments.collect' : 'returns.manage');
+  const fail = (message: string): AutomaticPostingPlan => ({ errors: [message], commit: () => null });
+  if (!AUTOMATIC_SALES_REFERENCES.includes(input.referenceType) || !input.referenceId) return fail('Invalid automatic posting source');
+  const entryDate = input.date.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(entryDate) || !Number.isFinite(Date.parse(entryDate)) || new Date(entryDate).toISOString().slice(0, 10) !== entryDate) return fail('Invalid posting date');
+  const grouped = new Map<string, { debit: number; credit: number }>();
+  for (const line of input.lines) {
+    const debit = Math.round((line.debit ?? 0) * 100), credit = Math.round((line.credit ?? 0) * 100);
+    if (![debit, credit].every(n => Number.isSafeInteger(n) && n >= 0)) return fail('Invalid automatic posting amount');
+    const previous = grouped.get(line.key) ?? { debit: 0, credit: 0 };
+    grouped.set(line.key, { debit: previous.debit + debit, credit: previous.credit + credit });
+  }
+  const amounts = [...grouped].filter(([, v]) => v.debit || v.credit).sort(([a], [b]) => a.localeCompare(b));
+  const debit = amounts.reduce((sum, [, v]) => sum + v.debit, 0), credit = amounts.reduce((sum, [, v]) => sum + v.credit, 0);
+  if (!Number.isSafeInteger(debit) || debit !== credit) return fail('Automatic posting is not balanced');
+  if (!amounts.length) return { errors: [], commit: () => null };
+  const now = nowISO();
+  const plannedAccounts: AccountingAccount[] = [];
+  for (const [key] of amounts) {
+    const template = SYSTEM_ACCOUNTS.find(a => a.systemKey === key);
+    if (!template) return fail('Unknown posting account: ' + key);
+    const account = accounts.find(a => a.systemKey === key);
+    if (account && (account.deletedAt || !account.isActive || account.type !== template.type)) return fail('Posting account unavailable: ' + template.name);
+    if (!account && accounts.some(a => a.code === template.code)) return fail('Posting account code is in use: ' + template.code);
+    plannedAccounts.push(account ?? { ...template, id: generateId(), normalBalance: normalBalance(template.type), isActive: true, createdAt: now, updatedAt: now, version: 1 });
+  }
+  const existing = journals.find(j => j.referenceType === input.referenceType && j.referenceId === input.referenceId);
+  if (existing) {
+    const matches = existing.status === 'posted' && existing.entryDate === entryDate && existing.branchId === (input.branchId ?? null)
+      && existing.lines.length === amounts.length && amounts.every(([key, value]) => existing.lines.some(l =>
+        l.accountId === plannedAccounts.find(a => a.systemKey === key)?.id && Math.round(l.debit * 100) === value.debit && Math.round(l.credit * 100) === value.credit));
+    return matches ? { errors: [], commit: () => cloneEntry(existing) } : fail('Source already has a different accounting posting');
+  }
+  let committed: JournalEntry | null = null;
+  return { errors: [], commit: () => {
+    if (committed) return cloneEntry(committed);
+    const id = generateId();
+    const entry: JournalEntry = {
+      id, journalNumber: nextJournalNumber(), entryDate, description: input.description,
+      referenceType: input.referenceType, referenceId: input.referenceId, branchId: input.branchId ?? null,
+      status: 'posted', postedAt: now, createdAt: now, updatedAt: now, version: 1,
+      totalDebit: debit / 100, totalCredit: credit / 100,
+      lines: amounts.map(([key, value]) => {
+        const planned = plannedAccounts.find(a => a.systemKey === key)!;
+        const account = accounts.find(a => a.systemKey === key) ?? planned;
+        return { id: generateId(), journalEntryId: id, accountId: account.id, accountCode: account.code, accountName: account.name, debit: value.debit / 100, credit: value.credit / 100 };
+      }),
+    };
+    for (const account of plannedAccounts) if (!accounts.some(a => a.systemKey === account.systemKey)) accounts.push(account);
+    journals.unshift(entry); committed = entry;
+    void remoteAutomaticPosting(entry.lines.map(l => ({ ...accounts.find(a => a.id === l.accountId)! })), cloneEntry(entry));
+    auditAction('accounting.source.post', 'journal_entries', entry.id, null, cloneEntry(entry));
+    touchPersistence();
+    return cloneEntry(entry);
+  } };
 }
