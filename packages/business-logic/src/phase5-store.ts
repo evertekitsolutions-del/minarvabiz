@@ -105,6 +105,7 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
   const errors:string[]=[];
   const quantity=Number(input.quantity), customerRate=Number(input.customerRate), rawSupplierRate=Number(input.supplierRate), paidInput=Number(input.paidAmount??0);
   if(!input.customerId) errors.push("Customer is required");
+  if(!["outsourced","in_house_ironing"].includes(input.mode)) errors.push("Invalid laundry mode");
   if(!Number.isFinite(quantity)||quantity<=0||!Number.isSafeInteger(Math.round(quantity*1000))) errors.push("Quantity must be positive and finite");
   if(!Number.isFinite(customerRate)||customerRate<0||!Number.isSafeInteger(Math.round(customerRate*100))) errors.push("Customer rate must be a finite non-negative amount");
   if(!Number.isFinite(rawSupplierRate)||rawSupplierRate<0||!Number.isSafeInteger(Math.round(rawSupplierRate*100))) errors.push("Supplier rate must be a finite non-negative amount");
@@ -122,7 +123,7 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
     || ![calc.totalCustomerCharge,calc.totalSupplierCost].every(v=>Number.isSafeInteger(Math.round(v*100)))) {
     return {order:null,errors:["Laundry totals are out of range"]};
   }
-  const supplier=input.supplierId?getSupplier(input.supplierId):undefined;
+  const supplier=input.mode==="outsourced"&&input.supplierId?getSupplier(input.supplierId):undefined;
   if(input.mode==="outsourced"&&!supplier) return {order:null,errors:["Supplier not found"]};
   const paid=r2(Math.min(paidInput,calc.totalCustomerCharge));
   const balance=r2(calc.totalCustomerCharge-paid);
@@ -139,7 +140,7 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
   const now=nowISO();
   const order:LaundryOrder={
     id:generateId(),orderNumber,customerId:input.customerId,customerName:customer.name,
-    garment:input.garment??null,quantity,mode:input.mode,supplierId:input.supplierId??null,
+    garment:input.garment??null,quantity,mode:input.mode,supplierId:input.mode==="outsourced"?(input.supplierId??null):null,
     supplierName:supplier?.name??null,supplierRate,customerRate,profit:calc.totalProfit,
     totalCustomerCharge:calc.totalCustomerCharge,totalSupplierCost:calc.totalSupplierCost,
     status:input.mode==="in_house_ironing"?"delivered":"pending",notes:input.notes??null,
