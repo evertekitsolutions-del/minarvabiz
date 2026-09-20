@@ -18,6 +18,7 @@ import * as ordersStore from "./orders-store";
 import * as phase6Store from "./phase6-store";
 import { enqueueOutbox } from "./outbox-bridge";
 import { touchPersistence } from "./autosave";
+import { planReturnPosting, planSalePosting, planExchangeRefundPosting } from "./sales-accounting";
 import { quoteSaleReturn } from "./return-value";
 
 const returns: SaleReturn[] = [];
@@ -69,6 +70,14 @@ export function createReturn(input: {
   const paidRefund = Math.min(totalRefund, Math.max(0, sale.paidAmount));
   const receivableReduction = Math.min(Math.max(0, totalRefund - paidRefund), Math.max(0, sale.balanceAmount));
 
+  const ret: SaleReturn = {
+    id: returnId, returnNumber: nextReturnNo(), saleId: sale.id, invoiceNumber: sale.invoiceNumber,
+    customerId: sale.customerId, customerName: sale.customerName, reason: input.reason, notes: input.notes ?? null,
+    totalRefund, refundMethod: input.refundMethod, status: "completed", resolution: input.refundMode === "credit" ? "exchange" : "refund", items: returnItems, createdAt: nowISO(), version: 1,
+  };
+  const accountingPlan = planReturnPosting(sale, ret, returns, paidRefund, receivableReduction);
+  if (accountingPlan.errors.length) return { ret: null, errors: accountingPlan.errors, paidRefund: 0, receivableReduction: 0 };
+
   for (const item of returnItems) {
     if (item.restock) {
       const p = mainStore.getProduct(item.productId);
@@ -99,12 +108,8 @@ export function createReturn(input: {
     }
   }
 
-  const ret: SaleReturn = {
-    id: returnId, returnNumber: nextReturnNo(), saleId: sale.id, invoiceNumber: sale.invoiceNumber,
-    customerId: sale.customerId, customerName: sale.customerName, reason: input.reason, notes: input.notes ?? null,
-    totalRefund, refundMethod: input.refundMethod, status: "completed", resolution: input.refundMode === "credit" ? "exchange" : "refund", items: returnItems, createdAt: nowISO(), version: 1,
-  };
   returns.push(ret);
+  accountingPlan.commit();
 
   const refundPayment = input.refundMode === "credit" ? null : mainStore.recordRefundPayment({
     returnId: ret.id,
@@ -203,6 +208,17 @@ export function createExchange(input: {
     };
   }
 
+  // Preflight replacement accounting before changing the returned invoice.
+  const replacementPreview: Sale = {
+    ...original, id: generateId(), invoiceNumber: "Exchange preview", saleDate: nowISO(),
+    total: replacementTotal, taxAmount: replacementTotals.itemsTax, paidAmount: Math.round((storeCreditApplied + additionalPaid) * 100) / 100,
+    balanceAmount: Math.round((amountDue - additionalPaid) * 100) / 100,
+    items: input.replacementLines.map(line => ({ ...line, id: generateId(), saleId: "preview", lineTotal: calculateInvoiceTotals({ items: [line] }).grandTotal })),
+  };
+  const previewPlan = planSalePosting(replacementPreview, [{ method: input.paymentMethod, amount: additionalPaid }], storeCreditApplied);
+  const excessPlan = planExchangeRefundPosting(generateId(), extraRefund, input.refundMethod);
+  if (previewPlan.errors.length || excessPlan.errors.length) return { ret: null, replacementSale: null, storeCreditApplied, extraRefund, amountDue, errors: [...previewPlan.errors, ...excessPlan.errors] };
+
   // Validation above is intentionally completed before mutating the original sale/stock.
   const returned = createReturn({
     saleId: original.id,
@@ -236,6 +252,7 @@ export function createExchange(input: {
   returned.ret.storeCreditApplied = storeCreditApplied;
   enqueueOutbox("returns", returned.ret.id, "update", returned.ret);
 
+  planExchangeRefundPosting(returned.ret.id, extraRefund, input.refundMethod).commit();
   let extraRefundPaymentId: string | null = null;
   if (extraRefund > 0) {
     const extraPayment = mainStore.recordRefundPayment({

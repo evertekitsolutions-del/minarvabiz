@@ -238,3 +238,15 @@ export async function remoteCollectCustomerPayment(payment: Payment, customer: C
   collectionWriteQueue = collectionWriteQueue.then(write, write);
   await collectionWriteQueue;
 }
+
+/** Accounts must exist before their journal lines; queue all records before I/O. */
+export async function remoteAutomaticPosting(accounts: AccountingAccount[], entry: JournalEntry) {
+  for (const account of accounts) enqueueOutbox("accounts", account.id, "update", account);
+  enqueueOutbox("journal_entries", entry.id, "update", entry);
+  for (const line of entry.lines) enqueueOutbox("journal_entry_lines", line.id, "update", line);
+  const target = writer;
+  try {
+    for (const account of accounts) await target?.upsertAccountingAccount?.(account);
+    await target?.upsertJournalEntry?.(entry);
+  } catch (error) { console.warn("[minarvabiz] automatic accounting pending in outbox", error); }
+}

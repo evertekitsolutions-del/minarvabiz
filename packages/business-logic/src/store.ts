@@ -13,6 +13,7 @@ import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remote
 import { auditAction } from "./audit-actions";
 import { enqueueOutbox } from "./outbox-bridge";
 import { assertPermission } from "./permissions";
+import { planSalePosting, planCollectionPosting } from "./sales-accounting";
 import { consumeWarehouseStock } from "./warehouse-store";
 
 const categories: Category[] = [];
@@ -408,6 +409,9 @@ export function createSale(input: {
     createdAt: nowISO(), updatedAt: nowISO(), createdBy: input.createdBy ?? null, version: 1,
   };
 
+  const accountingPlan = planSalePosting(sale, requestedSplits, creditApplied);
+  if (accountingPlan.errors.length) return { sale: null as unknown as Sale, payment: null, payments: [], errors: accountingPlan.errors };
+
   for (const line of input.lines) {
     const p = getProduct(line.productId);
     if (p) {
@@ -444,6 +448,7 @@ export function createSale(input: {
   }
   if (salePayments.length) touchPersistence();
 
+  accountingPlan.commit();
   void remoteCreateSale(sale);
   enqueueOutbox("sales", sale.id, "insert", sale);
   for (const payment of salePayments) void remoteCreatePayment(payment);
@@ -549,6 +554,14 @@ export function recordCustomerPayment(input: {
     remaining = round2(remaining - amount);
   }
   const now = nowISO();
+  const allocationNote = allocations.length ? "Invoices: " + allocations.map(({ sale, amount }) => sale.invoiceNumber + " " + amount.toFixed(2)).join(", ") : null;
+  const payment: Payment = {
+    id: generateId(), amount: applied, method: input.method, referenceType: "other", referenceId: customer.id,
+    customerId: customer.id, notes: [input.notes, input.reference, allocationNote, remaining > 0 ? "Other customer balance: " + remaining.toFixed(2) : null].filter(Boolean).join(" · ") || null,
+    paidAt: now, createdAt: now, version: 1,
+  };
+  const accountingPlan = planCollectionPosting(payment, allocations);
+  if (accountingPlan.errors.length) return { payment: null, customer: null, errors: accountingPlan.errors };
   customer.outstandingBalance = round2(Math.max(0, customer.outstandingBalance - applied));
   customer.totalSpending = round2(customer.totalSpending + applied);
   customer.updatedAt = now;
@@ -559,12 +572,7 @@ export function recordCustomerPayment(input: {
     sale.updatedAt = now;
     sale.version = (sale.version || 1) + 1;
   }
-  const allocationNote = allocations.length ? "Invoices: " + allocations.map(({ sale, amount }) => sale.invoiceNumber + " " + amount.toFixed(2)).join(", ") : null;
-  const payment: Payment = {
-    id: generateId(), amount: applied, method: input.method, referenceType: "other", referenceId: customer.id,
-    customerId: customer.id, notes: [input.notes, input.reference, allocationNote, remaining > 0 ? "Other customer balance: " + remaining.toFixed(2) : null].filter(Boolean).join(" · ") || null,
-    paidAt: now, createdAt: now, version: 1,
-  };
+  accountingPlan.commit();
   payments.push(payment);
   void remoteCollectCustomerPayment({ ...payment }, { ...customer }, allocations.map(({ sale }) => ({ ...sale, items: sale.items.map((item) => ({ ...item })) })));
   touchPersistence();

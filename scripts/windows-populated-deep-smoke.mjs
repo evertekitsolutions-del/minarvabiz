@@ -242,6 +242,11 @@ async function main() {
     await assertMain(ws, "SETTLED_INVOICE", ["QA POS Customer", "completed"]);
     await assertSettledInvoice(ws, "QA POS Customer");
 
+    await click(ws, "SALE_ACCOUNTING", ["accounting"]);
+    await click(ws, "SALE_STATEMENT", ["financial statements"]);
+    await assertMain(ws, "SALE_POSTED", ["Product Sales", "Cost of Goods Sold", "Balance sheet balanced"]);
+    await assertStatementProfit(ws, 40);
+
     // Return/refund with stock restock.
     await click(ws, "RETURNS", ["returns & refunds"]);
     await assertMain(ws, "RETURNS", ["New Return", "New Exchange"]);
