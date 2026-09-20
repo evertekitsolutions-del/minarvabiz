@@ -18,6 +18,7 @@ import * as ordersStore from "./orders-store";
 import * as phase6Store from "./phase6-store";
 import { enqueueOutbox } from "./outbox-bridge";
 import { touchPersistence } from "./autosave";
+import { quoteSaleReturn } from "./return-value";
 
 const returns: SaleReturn[] = [];
 const auditLogs: AuditLogEntry[] = [];
@@ -58,36 +59,12 @@ export function createReturn(input: {
   assertPermission("returns.manage");
   const sale = mainStore.getSale(input.saleId);
   if (!sale) return { ret: null, errors: ["Sale not found"], paidRefund: 0, receivableReduction: 0 };
-  if (input.items.length === 0) return { ret: null, errors: ["Select at least one item"], paidRefund: 0, receivableReduction: 0 };
-
-  const errors: string[] = [];
-  const requestedByItem = new Map<UUID, number>();
-  for (const item of input.items) requestedByItem.set(item.saleItemId, (requestedByItem.get(item.saleItemId) ?? 0) + item.quantity);
-
-  for (const item of input.items) {
-    const orig = sale.items.find((i) => i.id === item.saleItemId);
-    if (!orig) { errors.push(`Item ${item.productName} not on sale`); continue; }
-    if (item.productId !== orig.productId) errors.push(`${item.productName}: product mismatch`);
-    if (item.quantity <= 0) { errors.push(`${item.productName}: invalid quantity`); continue; }
-    const alreadyReturned = returns.filter((r) => r.saleId === sale.id && r.status === "completed").flatMap((r) => r.items)
-      .filter((r) => r.saleItemId === item.saleItemId).reduce((sum, r) => sum + r.quantity, 0);
-    const requested = requestedByItem.get(item.saleItemId) ?? item.quantity;
-    if (alreadyReturned + requested > orig.quantity) errors.push(`${item.productName}: return quantity exceeds remaining quantity`);
-  }
-  if (errors.length) return { ret: null, errors, paidRefund: 0, receivableReduction: 0 };
-
+  if (!["cash", "card", "upi", "bank", "online", "other"].includes(input.refundMethod)) return { ret: null, errors: ["Invalid refund method"], paidRefund: 0, receivableReduction: 0 };
+  const quote = quoteSaleReturn(sale, returns, input.items);
+  if (quote.errors.length) return { ret: null, errors: quote.errors, paidRefund: 0, receivableReduction: 0 };
   const returnId = generateId();
-  const returnItems: SaleReturnItem[] = input.items.map((item) => {
-    const orig = sale.items.find((i) => i.id === item.saleItemId)!;
-    return { id: generateId(), returnId, saleItemId: item.saleItemId, productId: orig.productId, productName: orig.productName,
-      quantity: item.quantity, unitPrice: orig.unitPrice, refundAmount: Math.round(item.quantity * orig.unitPrice * 100) / 100, restock: item.restock };
-  });
-
-  const totalRefund = Math.round(returnItems.reduce((s, i) => s + i.refundAmount, 0) * 100) / 100;
-  const availableValue = Math.round((Math.max(0, sale.paidAmount) + Math.max(0, sale.balanceAmount)) * 100) / 100;
-  if (totalRefund > availableValue) {
-    return { ret: null, errors: ["Refund exceeds the remaining paid and receivable amount on this sale"], paidRefund: 0, receivableReduction: 0 };
-  }
+  const returnItems: SaleReturnItem[] = quote.items.map(item => ({ ...item, id: generateId(), returnId }));
+  const totalRefund = quote.totalRefund;
 
   const paidRefund = Math.min(totalRefund, Math.max(0, sale.paidAmount));
   const receivableReduction = Math.min(Math.max(0, totalRefund - paidRefund), Math.max(0, sale.balanceAmount));
@@ -184,26 +161,14 @@ export function createExchange(input: {
     return { ret: null, replacementSale: null, storeCreditApplied: 0, extraRefund: 0, amountDue: 0, errors };
   }
 
-  const requestedByItem = new Map<UUID, number>();
+  const quote = quoteSaleReturn(original, returns, input.returnItems);
+  errors.push(...quote.errors);
   const restockByProduct = new Map<UUID, number>();
-  let returnValue = 0;
-  for (const item of input.returnItems) {
-    const orig = original.items.find((saleItem) => saleItem.id === item.saleItemId);
-    if (!orig) { errors.push(`${item.productName}: item is not on the original invoice`); continue; }
-    const requested = (requestedByItem.get(item.saleItemId) ?? 0) + item.quantity;
-    requestedByItem.set(item.saleItemId, requested);
-    const alreadyReturned = returns
-      .filter((r) => r.saleId === original.id && r.status === "completed")
-      .flatMap((r) => r.items)
-      .filter((r) => r.saleItemId === item.saleItemId)
-      .reduce((sum, r) => sum + r.quantity, 0);
-    if (item.quantity <= 0 || alreadyReturned + requested > orig.quantity) {
-      errors.push(`${orig.productName}: invalid exchange return quantity`);
-      continue;
-    }
-    returnValue += item.quantity * orig.unitPrice;
-    if (item.restock) restockByProduct.set(orig.productId, (restockByProduct.get(orig.productId) ?? 0) + item.quantity);
+  const returnValue = quote.totalRefund;
+  for (const item of quote.items) {
+    if (item.restock) restockByProduct.set(item.productId, (restockByProduct.get(item.productId) ?? 0) + item.quantity);
   }
+  if (!Number.isFinite(input.additionalPaidAmount) || input.additionalPaidAmount < 0) errors.push("Invalid additional payment");
 
   for (const line of input.replacementLines) {
     const live = mainStore.getProduct(line.productId);
@@ -217,7 +182,6 @@ export function createExchange(input: {
     return { ret: null, replacementSale: null, storeCreditApplied: 0, extraRefund: 0, amountDue: 0, errors };
   }
 
-  returnValue = Math.round(returnValue * 100) / 100;
   const paidCreditAvailable = Math.round(Math.min(returnValue, Math.max(0, original.paidAmount)) * 100) / 100;
   const replacementTotals = calculateInvoiceTotals({
     items: input.replacementLines.map((line) => ({

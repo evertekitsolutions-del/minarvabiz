@@ -40,6 +40,11 @@ async function run(){const ws=await connect();try{
   await clickText(ws,'STAFF',['staff management']); await waitFor(ws,['Staff Management','Add Staff']); await clickText(ws,'ADD_STAFF',['add staff']); await setDialogField(ws,'Add Staff','Name','QA Web Tailor'); await setDialogField(ws,'Add Staff','Salary','15000'); await clickDialog(ws,'Add Staff',['save'],600); await waitFor(ws,['QA Web Tailor']);
   await clickText(ws,'LAUNDRY',['laundry & ironing']); await waitFor(ws,['Laundry & Ironing','Outsourced Laundry']); await clickText(ws,'ADD_LAUNDRY',['outsourced laundry']); await selectDialogOption(ws,'Outsourced Laundry','Customer','QA Web Customer'); await setDialogField(ws,'Outsourced Laundry','Garment','QA Web Shirt'); await setDialogField(ws,'Outsourced Laundry','Customer rate','150'); await selectDialogOption(ws,'Outsourced Laundry','Laundry supplier','City Laundry Works'); await setDialogField(ws,'Outsourced Laundry','Supplier rate','100'); await clickDialog(ws,'Outsourced Laundry',['save'],600); await waitFor(ws,['QA Web Customer','QA Web Shirt']);
   await clickText(ws,'RETURNS',['returns & refunds']); await waitFor(ws,['Returns, Refunds & Exchanges','New Return','New Exchange']); await clickText(ws,'NEW_RETURN',['new return']); await selectDialogOption(ws,'Process return / refund','Original sale','QA Web Customer'); await firstDialogNumber(ws,'Process return / refund','1'); await clickDialog(ws,'Process return / refund',['process refund'],700); await waitFor(ws,['Return/refund completed']);
+  // A discounted invoice must preview and refund its actual 90-unit value.
+  await clickText(ws,'DISCOUNT_SALE',['sales & billing']); await clickText(ws,'DISCOUNT_POS',['pos billing']); await clickText(ws,'DISCOUNT_PRODUCT',['QA Web Product']);
+  await setMainByAriaLabel(ws,'Discount % QA Web Product','10'); await setMainByAriaLabel(ws,'Payment amount 1','90'); await clickText(ws,'DISCOUNT_COMPLETE',['complete sale'],700); await waitFor(ws,['Sale completed']);
+  await clickText(ws,'DISCOUNT_RETURNS',['returns & refunds']); await clickText(ws,'DISCOUNT_NEW_RETURN',['new return']); await selectDialogOption(ws,'Process return / refund','Original sale','₹90.00'); await firstDialogNumber(ws,'Process return / refund','1');
+  await assertDiscountReturnPreview(ws); await clickDialog(ws,'Process return / refund',['process refund'],700); await waitFor(ws,['Return/refund completed','₹90.00']); console.log('DISCOUNT_INVOICE_REFUND PASS');
   await clickText(ws,'ACCOUNTING',['accounting']); await waitFor(ws,['Accounting & General Ledger','Chart of Accounts']);
   await clickText(ws,'EXPENSE_STATEMENT',['financial statements']); await waitFor(ws,['Balance sheet balanced','General Expenses']); await assertStatementProfit(ws, -50);
   await clickText(ws,'ACCOUNTS_TAB',['chart of accounts']);
@@ -70,4 +75,10 @@ async function assertSettledInvoice(ws, customerName) {
   const money = (value) => Number(String(value).replace(/[^0-9.\-]/g,''));
   if (!row || money(row[2]) !== 100 || money(row[3]) !== 100 || money(row[4]) !== 0 || row[5] !== 'completed') throw new Error('Invoice settlement mismatch: '+JSON.stringify(row));
   console.log('CUSTOMER_COLLECTION_INVOICE_SETTLED PASS');
+}
+
+async function assertDiscountReturnPreview(ws) {
+  const text = await evalIn(ws, `document.querySelector('[role="dialog"]')?.innerText || ''`);
+  if (!/Return value\s*₹90\.00/.test(text)) throw new Error('Discount refund preview mismatch: '+text);
+  console.log('DISCOUNT_RETURN_PREVIEW PASS');
 }
