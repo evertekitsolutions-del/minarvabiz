@@ -10,7 +10,7 @@ import * as mainStore from "./store";
 import * as phase5 from "./phase5-store";
 import { openCashRegister } from "./cash-register";
 import { planAutomaticPosting } from "./accounting-store";
-import { remoteUpsertCustomer } from "./remote-write";
+import { remoteUpsertCustomer, remoteUpsertSupplier } from "./remote-write";
 
 export function setOpeningCustomerBalance(customerId: UUID, amount: number): { ok: boolean; error?: string } {
   assertPermission("settings.manage");
@@ -53,11 +53,39 @@ export function setOpeningCustomerBalance(customerId: UUID, amount: number): { o
 
 export function setOpeningSupplierBalance(supplierId: UUID, amount: number): { ok: boolean; error?: string } {
   assertPermission("settings.manage");
-  const s = phase5.listSuppliers().find((x) => x.id === supplierId);
+  if (!Number.isFinite(amount) || amount < 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
+    return { ok: false, error: "Opening supplier balance must be a finite non-negative amount" };
+  }
+  const s = phase5.getSupplier(supplierId);
   if (!s) return { ok: false, error: "Supplier not found" };
-  const old = s.outstandingBalance;
-  s.outstandingBalance = amount;
-  auditAction("opening.supplier_balance", "suppliers", supplierId, { outstandingBalance: old }, { outstandingBalance: amount });
+  const old = Number(s.outstandingBalance ?? 0);
+  if (!Number.isFinite(old) || old < 0 || !Number.isSafeInteger(Math.round(old * 100))) {
+    return { ok: false, error: "Supplier balance needs reconciliation" };
+  }
+  const next = Math.round((amount + Number.EPSILON) * 100) / 100;
+  const previous = Math.round((old + Number.EPSILON) * 100) / 100;
+  const delta = Math.round((next - previous + Number.EPSILON) * 100) / 100;
+  if (delta === 0) return { ok: true };
+  const absolute = Math.abs(delta);
+  const posting = planAutomaticPosting({
+    referenceType: "auto_opening_supplier",
+    referenceId: "opening-supplier-" + supplierId + "-" + generateId(),
+    date: nowISO(),
+    description: "Opening supplier balance adjustment: " + s.name,
+    lines: delta > 0 ? [
+      { key: "opening_balance_equity", debit: absolute },
+      { key: "accounts_payable", credit: absolute },
+    ] : [
+      { key: "accounts_payable", debit: absolute },
+      { key: "opening_balance_equity", credit: absolute },
+    ],
+  });
+  if (posting.errors.length) return { ok: false, error: posting.errors.join("; ") };
+  s.outstandingBalance = next;
+  s.updatedAt = nowISO();
+  posting.commit();
+  void remoteUpsertSupplier({ ...s });
+  auditAction("opening.supplier_balance", "suppliers", supplierId, { outstandingBalance: previous }, { outstandingBalance: next });
   touchPersistence();
   return { ok: true };
 }
