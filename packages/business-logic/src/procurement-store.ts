@@ -1,3 +1,4 @@
+import { planPurchaseInvoicePosting, planPurchaseInvoiceCancellation } from "./procurement-accounting";
 /**
  * Procurement workflow — Purchase Orders and Goods Receipts.
  *
@@ -472,6 +473,8 @@ export function postPurchaseInvoice(id: UUID): { purchaseInvoice: PurchaseInvoic
   if (invoice.status !== "draft") return { purchaseInvoice: null, error: "Only draft supplier invoices can be posted" };
   const supplier = phase5Store.getSupplier(invoice.supplierId);
   if (!supplier) return { purchaseInvoice: null, error: "Supplier not found" };
+  const posting = planPurchaseInvoicePosting(invoice);
+  if (posting.errors.length) return { purchaseInvoice: null, error: posting.errors.join("; ") };
   const before = cloneInvoice(invoice);
   invoice.status = invoice.balanceAmount <= 0 ? "paid" : "posted";
   invoice.postedAt = nowISO();
@@ -479,6 +482,7 @@ export function postPurchaseInvoice(id: UUID): { purchaseInvoice: PurchaseInvoic
   invoice.version += 1;
   supplier.outstandingBalance = r2(supplier.outstandingBalance + invoice.balanceAmount);
   supplier.updatedAt = nowISO();
+  posting.commit();
   void remoteUpsertPurchaseInvoice(cloneInvoice(invoice));
   void remoteUpsertSupplier(supplier);
   auditAction("purchase_invoice.post", "purchase_invoices", invoice.id, before, invoice);
@@ -546,6 +550,9 @@ export function cancelPurchaseInvoice(id: UUID): { purchaseInvoice: PurchaseInvo
     return { purchaseInvoice: null, error: "Paid supplier invoice cannot be cancelled; use a debit note in the accounting workflow" };
   }
   const supplier = phase5Store.getSupplier(invoice.supplierId);
+  if (invoice.status === "posted" && (!supplier || !Number.isFinite(supplier.outstandingBalance) || r2(supplier.outstandingBalance) < r2(invoice.balanceAmount))) return { purchaseInvoice: null, error: "Supplier balance needs reconciliation before cancellation" };
+  const reversal = planPurchaseInvoiceCancellation(invoice);
+  if (reversal.errors.length) return { purchaseInvoice: null, error: reversal.errors.join("; ") };
   const before = cloneInvoice(invoice);
   if (invoice.status === "posted" && supplier) {
     supplier.outstandingBalance = r2(Math.max(0, supplier.outstandingBalance - invoice.balanceAmount));
@@ -556,6 +563,7 @@ export function cancelPurchaseInvoice(id: UUID): { purchaseInvoice: PurchaseInvo
   invoice.cancelledAt = nowISO();
   invoice.updatedAt = nowISO();
   invoice.version += 1;
+  reversal.commit();
   void remoteUpsertPurchaseInvoice(cloneInvoice(invoice));
   auditAction("purchase_invoice.cancel", "purchase_invoices", invoice.id, before, invoice);
   touchPersistence();

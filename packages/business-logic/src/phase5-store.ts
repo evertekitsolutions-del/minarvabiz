@@ -1,3 +1,4 @@
+import { planSupplierPaymentPosting } from "./procurement-accounting";
 import { assertPermission } from "./permissions";
 import { enqueueOutbox } from "./outbox-bridge";
 import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase, remoteSupplierSettlement } from "./remote-write";
@@ -75,8 +76,11 @@ export function recordSupplierPayment(input: {
   const invoicePlan = prepareSupplierInvoiceSettlements(supplier.id, allocations.filter(a => a.type === "invoice"));
   if (invoicePlan.errors.length) return { payment: null, supplier: null, errors: invoicePlan.errors };
   const allocationNotes = allocations.length ? "Documents: " + allocations.map(a => `${a.number} ${a.amount.toFixed(2)}`).join(", ") : null;
+  const paymentId = generateId();
+  const posting = planSupplierPaymentPosting({ id: paymentId, amount: applied, method: input.paymentMethod, date, allocations });
+  if (posting.errors.length) return { payment: null, supplier: null, errors: posting.errors };
   const payment = mainStore.recordSupplierPaymentEntry({ supplierId: supplier.id, amount: applied, method: input.paymentMethod, paidAt: date,
-    reference: input.reference, notes: [input.notes, allocationNotes, remaining > 0 ? `Other supplier balance: ${remaining.toFixed(2)}` : null].filter(Boolean).join(" · "), deferRemote: true });
+    reference: input.reference, notes: [input.notes, allocationNotes, remaining > 0 ? `Other supplier balance: ${remaining.toFixed(2)}` : null].filter(Boolean).join(" · "), deferRemote: true, paymentId });
   supplier.outstandingBalance = r2(Math.max(0, supplier.outstandingBalance - applied)); supplier.updatedAt = nowISO();
   const settledInvoices = invoicePlan.commit();
   const settledPurchases: Purchase[] = [];
@@ -88,6 +92,7 @@ export function recordSupplierPayment(input: {
     settledPurchases.push({ ...purchase });
     auditAction("purchase.payment", "purchases", purchase.id, before, purchase);
   }
+  posting.commit();
   void remoteSupplierSettlement({ ...payment }, { ...supplier }, settledInvoices, settledPurchases);
   auditAction("supplier.payment.allocate", "suppliers", supplier.id, null, { paymentId: payment.id, allocations, otherBalanceAmount: remaining });
   touchPersistence();

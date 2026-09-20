@@ -109,8 +109,8 @@ Legacy / Unallocated Settlement Clearing, while new collections against historic
 or other customer balances credit it. No historical revenue, tax, COGS or receivable
 reversal is invented. This account is a reconciliation placeholder, not income.
 Opening inventory, bank/cash, receivables and clearing balances must be reconciled
-before financial statements can be treated as complete. Procurement, service and
-laundry recognition are not yet automatic.
+before financial statements can be treated as complete. Service/laundry recognition is not yet automatic; supplier invoice recognition
+is covered below.
 
 Accounting plans validate account availability and balancing before source
 mutations. Source-linked posted entries cannot be manually voided. Source replay
@@ -150,3 +150,37 @@ serialized online writes and offline failures. Web smoke creates/posts an invoic
 pays part from the invoice and settles the remainder from the supplier screen;
 Windows smoke checks partial and full invoice payments. This step does not yet
 add procurement GL postings or reconcile historical unallocated supplier payments.
+
+## Supplier invoice and payment posting
+
+Newly posted procurement invoices now debit Inventory Asset for product-linked
+lines, Unclassified Purchases for description-only lines, and Purchase Tax Pending
+Review for recorded tax; they credit Accounts Payable. Tax is not automatically
+classified as eligible statutory input credit. Unclassified purchase values need
+review into their proper expense/asset account.
+
+This step recognizes purchases at supplier-invoice posting. PO, GRN and draft
+invoice creation do not post journals. GRNs remain the only stock-quantity mutation;
+posting/cancelling an invoice does not receive/return stock again. Unbilled GRN
+accrual, valuation adjustments for goods sold before invoicing, direct-purchase
+recognition and purchase-return/debit-note accounting remain follow-ups. Financial
+statements still require these and opening-balance reconciliation before completion.
+
+New supplier payments debit AP only for allocations to invoices with an automatic
+source posting. Other/direct/legacy allocations debit Legacy / Unallocated
+Settlement Clearing instead; all credit cash, bank or Payment Clearing according
+to actual tender. Invoice-specific and general supplier-screen payments use the
+same posting path, validation, snapshot and outbox persistence.
+
+Unpaid posted invoice cancellation creates an exact inverse of its original
+journal dated on the cancellation day. Original journals remain immutable; paid
+invoices cannot be cancelled. Historical invoices with no source journal are not
+backfilled or given an invented reversal. Missing accounts, inconsistent amounts
+or supplier balances reject before source mutation. All automatic entries retain
+source IDs and are protected from manual void.
+
+Executable tests cover actual PO -> GRN -> draft -> post -> partial/full payment,
+cancellation, immutable stock quantities, tax review, permissions, account failure,
+restore, replay, legacy clearing and offline queueing. Web smoke checks AP credit
+210 -> 110 -> 0; installed Windows checks 120 -> 100 -> 0 through rendered Trial
+Balance while preserving the full existing module smoke sequence.

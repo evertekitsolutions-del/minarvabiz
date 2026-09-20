@@ -343,14 +343,14 @@ async function main() {
     await setField(ws, "Supplier invoice", "Supplier invoice number", "QA-AP-001");
     await setField(ws, "Supplier invoice", "invoice quantity", "2");
     await click(ws, "DRAFT_SUPPLIER_INVOICE", ["create draft invoice"]);
-    await clickExactInvoiceButton(ws, "Post"); await clickExactInvoiceButton(ws, "Pay");
+    await clickExactInvoiceButton(ws, "Post"); await assertPayableLedger(ws, 120); await clickExactInvoiceButton(ws, "Pay");
     await setField(ws, "Pay supplier invoice", "Amount", "20");
     await click(ws, "PAY_SUPPLIER_INVOICE", ["record payment"]);
-    await assertSupplierInvoice(ws, 100, "partially paid");
+    await assertSupplierInvoice(ws, 100, "partially paid"); await assertPayableLedger(ws, 100);
     await clickExactInvoiceButton(ws, "Pay");
     await setField(ws, "Pay supplier invoice", "Amount", "100");
     await click(ws, "FINISH_SUPPLIER_PAYMENT", ["record payment"]);
-    await assertSupplierInvoice(ws, 0, "paid");
+    await assertSupplierInvoice(ws, 0, "paid"); await assertPayableLedger(ws, 0);
 
     // Accounting Step 4A: create an account, post a balanced double-entry
     // journal and verify the installed app exposes the Trial Balance.
@@ -483,4 +483,12 @@ async function assertSupplierInvoice(ws, balance, status) {
   const text = await evalIn(ws, `(()=>{const rows=[...document.querySelectorAll('div')].map(e=>e.innerText||'').filter(t=>t.includes('Supplier ref QA-AP-001')&&t.includes('balance'));return rows.sort((a,b)=>a.length-b.length)[0]||'';})()`);
   if(!text.includes(status)||!text.includes('balance ₹'+balance.toFixed(2))) throw new Error('Supplier invoice settlement mismatch: '+text);
   console.log('SUPPLIER_INVOICE_SETTLED '+balance+' PASS');
+}
+
+async function assertPayableLedger(ws, expected) {
+  await click(ws,'AP_ACCOUNTING',['accounting']); await click(ws,'AP_TRIAL',['trial balance']);
+  const row = await evalIn(ws, `(()=>{const r=[...document.querySelectorAll('tbody tr')].find(r=>r.querySelectorAll('td')[1]?.innerText.trim()==='Accounts Payable');return r?[...r.querySelectorAll('td')].map(c=>c.innerText):null;})()`);
+  const credit = row ? Number(row[4].replace(/[^0-9.-]/g,'')) : 0;
+  if(credit!==expected || (row && Number(row[3].replace(/[^0-9.-]/g,''))!==0)) throw new Error('AP ledger mismatch: '+JSON.stringify(row));
+  console.log('AP_LEDGER '+expected+' PASS'); await click(ws,'AP_PURCHASES',['purchases']);
 }

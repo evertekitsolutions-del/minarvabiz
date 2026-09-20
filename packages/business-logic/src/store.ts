@@ -477,6 +477,7 @@ export function recordSupplierPaymentEntry(input: {
   notes?: string | null;
   /** Internal settlement coordinator queues the full document/payment group. */
   deferRemote?: boolean;
+  paymentId?: UUID;
 }): Payment {
   assertPermission("purchases.manage");
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Amount must be positive");
@@ -484,7 +485,7 @@ export function recordSupplierPaymentEntry(input: {
     ? (input.paidAt.length === 10 ? `${input.paidAt}T00:00:00.000Z` : input.paidAt)
     : nowISO();
   const payment: Payment = {
-    id: generateId(),
+    id: input.paymentId ?? generateId(),
     amount: round2(input.amount),
     method: input.method,
     referenceType: "supplier",
