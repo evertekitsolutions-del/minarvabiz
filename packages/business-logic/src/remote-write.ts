@@ -40,6 +40,7 @@ export interface RemoteWriter {
   upsertSupplier?: (s: Supplier) => Promise<void>;
   createLaundry?: (o: LaundryOrder) => Promise<void>;
   createPurchase?: (p: Purchase) => Promise<void>;
+  updatePurchaseSettlement?: (p: Purchase) => Promise<void>;
   upsertWarehouse?: (w: Warehouse) => Promise<void>;
   upsertWarehouseLocation?: (l: WarehouseLocation) => Promise<void>;
   upsertWarehouseStock?: (s: WarehouseStockPosition) => Promise<void>;
@@ -249,4 +250,24 @@ export async function remoteAutomaticPosting(accounts: AccountingAccount[], entr
     for (const account of accounts) await target?.upsertAccountingAccount?.(account);
     await target?.upsertJournalEntry?.(entry);
   } catch (error) { console.warn("[minarvabiz] automatic accounting pending in outbox", error); }
+}
+
+let supplierSettlementQueue: Promise<void> = Promise.resolve();
+/** Queue complete settlement snapshots; older online requests cannot overwrite newer balances. */
+export async function remoteSupplierSettlement(payment: Payment, supplier: Supplier, invoices: PurchaseInvoice[], purchases: Purchase[]) {
+  enqueueOutbox("payments", payment.id, "insert", payment);
+  enqueueOutbox("suppliers", supplier.id, "update", supplier);
+  for (const invoice of invoices) enqueueOutbox("purchase_invoices", invoice.id, "update", invoice);
+  for (const purchase of purchases) enqueueOutbox("purchases", purchase.id, "update", purchase);
+  const target = writer;
+  const write = async () => {
+    try {
+      await target?.createPayment?.(payment);
+      for (const invoice of invoices) await target?.upsertPurchaseInvoice?.(invoice);
+      for (const purchase of purchases) await target?.updatePurchaseSettlement?.(purchase);
+      await target?.upsertSupplier?.(supplier);
+    } catch (error) { console.warn("[minarvabiz] supplier settlement pending in outbox", error); }
+  };
+  supplierSettlementQueue = supplierSettlementQueue.then(write, write);
+  await supplierSettlementQueue;
 }

@@ -125,3 +125,28 @@ excess refunds, split tenders/change, credit and free invoices, rounding, restor
 permissions, idempotency, unavailable accounts and network failure. Web and Windows
 smoke assert 40 net profit for a 100 sale costing 60, then -50 after returns and a
 50 expense, and -150 after an additional manual 100 expense journal.
+
+## Procurement posting prerequisite — supplier settlement allocation
+
+General supplier payments allocate to oldest unpaid direct purchases and posted
+supplier invoices (document date, then ID). Draft/cancelled invoices, deleted
+purchases and other suppliers are excluded. Remaining value reduces the supplier's
+other/opening balance and is labelled in payment notes; no invoice is invented.
+Invoice-specific payments settle only that invoice and update it by the actual
+amount capped against both supplier and invoice balances. AP aging updates with
+these invoice balances, preventing later duplicate invoice payments.
+
+The complete allocation is validated before mutation. Invalid amounts, methods,
+dates, document balances and unavailable selected invoices are rejected. Payment
+notes and audits retain document allocations. Source updates are queued together
+and online writes are serialized (payment, invoices, direct-purchase settlement
+updates, supplier) so slower earlier requests do not overwrite newer balances.
+No duplicate payment/purchase inserts are added, and failures retain pending outbox
+records. This is asynchronous persistence, not a server-side atomic transaction.
+
+Runtime regressions cover partial/full FIFO, selected invoices, actual supplier
+caps, direct purchases, other balances, aging, restore, validation, permissions,
+serialized online writes and offline failures. Web smoke creates/posts an invoice,
+pays part from the invoice and settles the remainder from the supplier screen;
+Windows smoke checks partial and full invoice payments. This step does not yet
+add procurement GL postings or reconcile historical unallocated supplier payments.

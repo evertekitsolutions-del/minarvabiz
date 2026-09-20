@@ -475,9 +475,11 @@ export function recordSupplierPaymentEntry(input: {
   paidAt?: string;
   reference?: string | null;
   notes?: string | null;
+  /** Internal settlement coordinator queues the full document/payment group. */
+  deferRemote?: boolean;
 }): Payment {
   assertPermission("purchases.manage");
-  if (input.amount <= 0) throw new Error("Amount must be positive");
+  if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Amount must be positive");
   const paidAt = input.paidAt
     ? (input.paidAt.length === 10 ? `${input.paidAt}T00:00:00.000Z` : input.paidAt)
     : nowISO();
@@ -495,7 +497,7 @@ export function recordSupplierPaymentEntry(input: {
   };
   payments.push(payment);
   touchPersistence();
-  void remoteCreatePayment(payment);
+  if (!input.deferRemote) void remoteCreatePayment(payment);
   auditAction("supplier.payment", "payments", payment.id, null, {
     supplierId: input.supplierId,
     amount: payment.amount,

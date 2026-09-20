@@ -1,6 +1,6 @@
 import { assertPermission } from "./permissions";
 import { enqueueOutbox } from "./outbox-bridge";
-import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase } from "./remote-write";
+import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase, remoteSupplierSettlement } from "./remote-write";
 import type { Supplier, LaundryOrder, Expense, ExpenseCategory, Purchase, PaymentMethod, UUID } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { calculateLaundryProfit } from "./laundry";
@@ -8,6 +8,8 @@ import { purchaseBalance, nextDocNumber } from "./expenses";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
 import { postExpenseJournal } from "./accounting-store";
+import { listPurchaseInvoices, prepareSupplierInvoiceSettlements } from "./procurement-store";
+import { auditAction } from "./audit-actions";
 import { touchPersistence } from "./autosave";
 
 const suppliers: Supplier[] = [
@@ -38,33 +40,57 @@ export function listSupplierPayments(supplierId?: UUID) {
 }
 
 export function recordSupplierPayment(input: {
-  supplierId: UUID;
-  amount: number;
-  paymentMethod: PaymentMethod;
-  date?: string;
-  reference?: string | null;
-  notes?: string | null;
+  supplierId: UUID; amount: number; paymentMethod: PaymentMethod; date?: string;
+  reference?: string | null; notes?: string | null; purchaseInvoiceId?: UUID;
 }): { payment: ReturnType<typeof mainStore.recordSupplierPaymentEntry> | null; supplier: Supplier | null; errors: string[] } {
   assertPermission("purchases.manage");
   const supplier = getSupplier(input.supplierId);
   const errors: string[] = [];
+  const date = input.date || nowISO();
+  const day = date.slice(0, 10);
   if (!supplier) errors.push("Supplier not found");
-  if (input.amount <= 0) errors.push("Amount must be positive");
-  if (supplier && supplier.outstandingBalance <= 0) errors.push("Supplier has no outstanding balance");
+  if (!Number.isFinite(input.amount) || r2(input.amount) <= 0 || !Number.isSafeInteger(Math.round(input.amount * 100))) errors.push("Amount must be positive and finite");
+  if (!["cash", "bank", "card", "upi", "online", "other"].includes(input.paymentMethod)) errors.push("Invalid payment method");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(Date.parse(date)) || new Date(day).toISOString().slice(0, 10) !== day) errors.push("Invalid payment date");
+  if (supplier && (!Number.isFinite(supplier.outstandingBalance) || r2(supplier.outstandingBalance) <= 0 || !Number.isSafeInteger(Math.round(supplier.outstandingBalance * 100)))) errors.push("Supplier has no valid outstanding balance");
   if (errors.length || !supplier) return { payment: null, supplier: null, errors };
-  const applied = r2(Math.min(input.amount, supplier.outstandingBalance));
-  supplier.outstandingBalance = r2(Math.max(0, supplier.outstandingBalance - applied));
-  supplier.updatedAt = nowISO();
-  const payment = mainStore.recordSupplierPaymentEntry({
-    supplierId: supplier.id,
-    amount: applied,
-    method: input.paymentMethod,
-    paidAt: input.date,
-    reference: input.reference,
-    notes: input.notes,
-  });
+  const invoices = listPurchaseInvoices(supplier.id).filter(i => ["posted", "partially_paid"].includes(i.status) && i.balanceAmount > 0);
+  const selected = input.purchaseInvoiceId ? invoices.find(i => i.id === input.purchaseInvoiceId) : undefined;
+  if (input.purchaseInvoiceId && !selected) return { payment: null, supplier: null, errors: ["Selected supplier invoice is not payable"] };
+  const candidates = [
+    ...invoices.map(i => ({ id: i.id, type: "invoice" as const, date: i.invoiceDate, number: i.invoiceNumber, total: i.total, paid: i.paidAmount, balance: i.balanceAmount })),
+    ...purchases.filter(p => !p.deletedAt && p.supplierId === supplier.id && p.balanceAmount > 0).map(p => ({ id: p.id, type: "purchase" as const, date: p.date, number: p.purchaseNumber, total: p.amount, paid: p.paidAmount, balance: p.balanceAmount })),
+  ].filter(c => !selected || (c.type === "invoice" && c.id === selected.id))
+    .sort((a, b) => a.date.slice(0, 10).localeCompare(b.date.slice(0, 10)) || a.id.localeCompare(b.id));
+  const applied = r2(Math.min(input.amount, supplier.outstandingBalance, selected?.balanceAmount ?? Infinity));
+  let remaining = applied;
+  const allocations: Array<{ id: UUID; type: "invoice" | "purchase"; amount: number; number: string }> = [];
+  for (const candidate of candidates) {
+    if (remaining <= 0) break;
+    if (![candidate.total, candidate.paid, candidate.balance].every(n => Number.isFinite(n) && n >= 0 && Number.isSafeInteger(Math.round(n * 100)))
+      || r2(candidate.paid + candidate.balance) !== r2(candidate.total)) return { payment: null, supplier: null, errors: ["Document balances need reconciliation: " + candidate.number] };
+    const amount = r2(Math.min(candidate.balance, remaining));
+    allocations.push({ ...candidate, amount }); remaining = r2(remaining - amount);
+  }
+  const invoicePlan = prepareSupplierInvoiceSettlements(supplier.id, allocations.filter(a => a.type === "invoice"));
+  if (invoicePlan.errors.length) return { payment: null, supplier: null, errors: invoicePlan.errors };
+  const allocationNotes = allocations.length ? "Documents: " + allocations.map(a => `${a.number} ${a.amount.toFixed(2)}`).join(", ") : null;
+  const payment = mainStore.recordSupplierPaymentEntry({ supplierId: supplier.id, amount: applied, method: input.paymentMethod, paidAt: date,
+    reference: input.reference, notes: [input.notes, allocationNotes, remaining > 0 ? `Other supplier balance: ${remaining.toFixed(2)}` : null].filter(Boolean).join(" · "), deferRemote: true });
+  supplier.outstandingBalance = r2(Math.max(0, supplier.outstandingBalance - applied)); supplier.updatedAt = nowISO();
+  const settledInvoices = invoicePlan.commit();
+  const settledPurchases: Purchase[] = [];
+  for (const allocation of allocations.filter(a => a.type === "purchase")) {
+    const purchase = purchases.find(p => p.id === allocation.id)!;
+    const before = { ...purchase };
+    purchase.paidAmount = r2(purchase.paidAmount + allocation.amount); purchase.balanceAmount = r2(purchase.amount - purchase.paidAmount);
+    purchase.updatedAt = nowISO(); purchase.version = (purchase.version || 1) + 1;
+    settledPurchases.push({ ...purchase });
+    auditAction("purchase.payment", "purchases", purchase.id, before, purchase);
+  }
+  void remoteSupplierSettlement({ ...payment }, { ...supplier }, settledInvoices, settledPurchases);
+  auditAction("supplier.payment.allocate", "suppliers", supplier.id, null, { paymentId: payment.id, allocations, otherBalanceAmount: remaining });
   touchPersistence();
-  void remoteUpsertSupplier(supplier);
   return { payment, supplier, errors: [] };
 }
 export function listLaundryOrders(opts?: { mode?: "outsourced"|"in_house_ironing"; query?: string }): LaundryOrder[] { let list=laundryOrders.filter(o=>!o.deletedAt);if(opts?.mode)list=list.filter(o=>o.mode===opts.mode);if(opts?.query?.trim()){const q=opts.query.toLowerCase();list=list.filter(o=>o.orderNumber.toLowerCase().includes(q)||o.customerName?.toLowerCase().includes(q)||o.garment?.toLowerCase().includes(q));}return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
