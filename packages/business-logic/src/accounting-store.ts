@@ -478,7 +478,7 @@ export function postExpenseJournal(expense: Expense): { journalEntry: JournalEnt
 
 export type AutomaticPostingLine = { key: string; debit?: number; credit?: number };
 export type AutomaticPostingPlan = { errors: string[]; commit: () => JournalEntry | null };
-export const AUTOMATIC_SALES_REFERENCES = ['auto_sale', 'auto_collection', 'auto_return', 'auto_exchange_refund', 'auto_purchase_invoice', 'auto_purchase_cancel', 'auto_supplier_payment'];
+export const AUTOMATIC_SALES_REFERENCES = ['auto_sale', 'auto_collection', 'auto_return', 'auto_exchange_refund', 'auto_purchase_invoice', 'auto_purchase_cancel', 'auto_supplier_payment', 'auto_direct_purchase'];
 export function hasSalePosting(saleId: UUID): boolean {
   return journals.some(j => j.referenceType === 'auto_sale' && j.referenceId === saleId && j.status === 'posted');
 }
@@ -488,7 +488,7 @@ export function planAutomaticPosting(input: {
   referenceType: string; referenceId: UUID; date: string; description: string;
   branchId?: UUID | null; lines: AutomaticPostingLine[];
 }): AutomaticPostingPlan {
-  assertPermission(['auto_purchase_invoice', 'auto_purchase_cancel', 'auto_supplier_payment'].includes(input.referenceType) ? 'purchases.manage' : input.referenceType === 'auto_sale' ? 'sales.create' : input.referenceType === 'auto_collection' ? 'payments.collect' : 'returns.manage');
+  assertPermission(['auto_purchase_invoice', 'auto_purchase_cancel', 'auto_supplier_payment', 'auto_direct_purchase'].includes(input.referenceType) ? 'purchases.manage' : input.referenceType === 'auto_sale' ? 'sales.create' : input.referenceType === 'auto_collection' ? 'payments.collect' : 'returns.manage');
   const fail = (message: string): AutomaticPostingPlan => ({ errors: [message], commit: () => null });
   if (!AUTOMATIC_SALES_REFERENCES.includes(input.referenceType) || !input.referenceId) return fail('Invalid automatic posting source');
   const entryDate = input.date.slice(0, 10);

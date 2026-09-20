@@ -8,8 +8,8 @@ const sync = fs.readFileSync(new URL("../../../sync/src/supabase-adapter.ts", im
 const productionPage = fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/services/production/page.tsx", import.meta.url), "utf8");
 
 assert.match(remote, /createPurchase\?: \(p: Purchase\) => Promise<void>/);
-assert.match(remote, /export async function remoteCreatePurchase\(p: Purchase\)/);
-assert.match(phase5, /void remoteCreatePurchase\(purchase\)/);
+assert.match(remote, /export async function remoteCreatePurchase\(p: Purchase, supplier\?: Supplier\)/);
+assert.match(phase5, /void remoteCreatePurchase\(purchase, supplier\)/);
 assert.match(phase10, /export function createMaterialRoll/);
 assert.match(phase10, /export function consumeMaterialFromRoll/);
 assert.match(sync, /production_workflows/);

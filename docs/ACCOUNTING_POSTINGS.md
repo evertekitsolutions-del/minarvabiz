@@ -162,12 +162,11 @@ review into their proper expense/asset account.
 This step recognizes purchases at supplier-invoice posting. PO, GRN and draft
 invoice creation do not post journals. GRNs remain the only stock-quantity mutation;
 posting/cancelling an invoice does not receive/return stock again. Unbilled GRN
-accrual, valuation adjustments for goods sold before invoicing, direct-purchase
-recognition and purchase-return/debit-note accounting remain follow-ups. Financial
+accrual, valuation adjustments for goods sold before invoicing, purchase-return/debit-note accounting remain follow-ups. Financial
 statements still require these and opening-balance reconciliation before completion.
 
-New supplier payments debit AP only for allocations to invoices with an automatic
-source posting. Other/direct/legacy allocations debit Legacy / Unallocated
+New supplier payments debit AP only for allocations to invoices or direct purchases with an automatic
+source posting. Other/legacy allocations debit Legacy / Unallocated
 Settlement Clearing instead; all credit cash, bank or Payment Clearing according
 to actual tender. Invoice-specific and general supplier-screen payments use the
 same posting path, validation, snapshot and outbox persistence.
@@ -182,5 +181,22 @@ source IDs and are protected from manual void.
 Executable tests cover actual PO -> GRN -> draft -> post -> partial/full payment,
 cancellation, immutable stock quantities, tax review, permissions, account failure,
 restore, replay, legacy clearing and offline queueing. Web smoke checks AP credit
-210 -> 110 -> 0; installed Windows checks 120 -> 100 -> 0 through rendered Trial
+300 -> 510 -> 410 -> 0; installed Windows checks 120 -> 100 -> 0 through rendered Trial
 Balance while preserving the full existing module smoke sequence.
+
+## Direct purchase posting
+
+New direct purchases debit Unclassified Purchases for their total, credit the
+actual Cash/Bank/Payment Clearing tender for the capped paid amount, and credit
+Accounts Payable for the unpaid balance. A supplier is required for credit.
+Description-only purchases do not imply product quantities or tax eligibility;
+classification into the appropriate asset/expense account remains a review task.
+Order-specific purchases still update the existing order-cost calculation once.
+
+Posting is validated before purchase, supplier, order or outbox changes. Automatic
+source entries cannot be manually voided. Subsequent supplier payments reduce AP
+only for purchases with a matching source journal; historical purchases continue
+through Legacy / Unallocated Settlement Clearing. No historical backfill occurs.
+Purchase creation and supplier settlement remote writes share an ordered queue,
+with immutable snapshots and offline outbox retention. The source and journal
+writes are still separate server requests, not an atomic server transaction.
