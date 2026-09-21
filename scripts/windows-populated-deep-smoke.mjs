@@ -229,6 +229,12 @@ async function main() {
     await assertMain(ws, "ORDER_CREATED", ["QA POS Customer", "₹250.00"]);
     await click(ws, "BLOCK_SERVICE_CANCEL", ["cancel"]);
     await assertMain(ws, "SERVICE_CANCEL_BLOCKED", ["Refund the service-order advance before cancellation"]);
+    await setByAriaLabel(ws, "Order expense category", "Other");
+    await setByAriaLabel(ws, "Order expense payment method", "UPI");
+    await setByAriaLabel(ws, "Order expense description", "QA order expense");
+    await setByAriaLabel(ws, "Order expense amount", "25");
+    await click(ws, "ORDER_EXPENSE", ["record expense"]);
+    await assertMain(ws, "ORDER_EXPENSE_SAVED", ["QA order expense", "₹25.00"]);
 
 
     // Payment collection against the unpaid sale.
@@ -247,7 +253,7 @@ async function main() {
     await click(ws, "SALE_ACCOUNTING", ["accounting"]);
     await click(ws, "SALE_STATEMENT", ["financial statements"]);
     await assertMain(ws, "SALE_POSTED", ["Product Sales", "Cost of Goods Sold", "Balance sheet balanced"]);
-    await assertStatementProfit(ws, 290);
+    await assertStatementProfit(ws, 265);
 
     // Return/refund with stock restock.
     await click(ws, "RETURNS", ["returns & refunds"]);
@@ -361,7 +367,7 @@ async function main() {
     await assertMain(ws, "ACCOUNTING", ["Accounting & General Ledger", "Chart of Accounts"]);
     await click(ws, "EXPENSE_STATEMENT", ["financial statements"]);
     await assertMain(ws, "EXPENSE_AUTO_POSTED", ["Balance sheet balanced", "General Expenses"]);
-    await assertStatementProfit(ws, 200);
+    await assertStatementProfit(ws, 175);
     await click(ws, "ACCOUNTS_TAB", ["chart of accounts"]);
     await setMainField(ws, "Account code", "6100");
     await setMainField(ws, "Account name", "QA Expense");
@@ -388,7 +394,7 @@ async function main() {
 
     await click(ws, "FINANCIAL_STATEMENTS", ["financial statements"]);
     await assertMain(ws, "FINANCIAL_STATEMENTS", ["Profit & Loss", "Balance Sheet", "QA Expense", "Balance sheet balanced"]);
-    await assertStatementProfit(ws, 100);
+    await assertStatementProfit(ws, 75);
 
     // Staff create + row drill-down.
     await click(ws, "STAFF", ["staff management"]);
