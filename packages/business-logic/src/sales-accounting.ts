@@ -31,8 +31,14 @@ export function planSalePosting(sale: Sale, tenders: Array<{ method: PaymentMeth
     description: 'Sale ' + sale.invoiceNumber, branchId: sale.branchId, lines });
 }
 
-export function planCollectionPosting(payment: Payment, allocations: Array<{ sale: Sale; amount: number }>): AutomaticPostingPlan {
-  const receivable = allocations.filter(a => hasSalePosting(a.sale.id)).reduce((sum, a) => sum + cents(a.amount), 0) / 100;
+export function planCollectionPosting(
+  payment: Payment,
+  allocations: Array<{ sale: Sale; amount: number }>,
+  additionalPostedReceivable = 0
+): AutomaticPostingPlan {
+  if (!Number.isFinite(additionalPostedReceivable) || additionalPostedReceivable < 0) return invalid('Invalid additional receivable allocation');
+  const saleReceivable = allocations.filter(a => hasSalePosting(a.sale.id)).reduce((sum, a) => sum + cents(a.amount), 0) / 100;
+  const receivable = money(saleReceivable + additionalPostedReceivable);
   return planAutomaticPosting({ referenceType: 'auto_collection', referenceId: payment.id, date: payment.paidAt,
     description: 'Customer collection ' + (payment.notes ?? payment.id), lines: [
       { key: tenderKey(payment.method), debit: payment.amount }, { key: 'accounts_receivable', credit: receivable },
