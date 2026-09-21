@@ -24,7 +24,7 @@ outbox.hydrateOutbox([]);
 let moved=phase5.updateLaundryStatus(created.order.id,"sent");
 assert(moved.order); assert.equal(moved.order.status,"sent"); assert.equal(moved.order.version,2);
 assert.equal(accounting.listJournalEntries().length,journalCount);
-assert(outbox.listPendingOutbox().some(e=>e.aggregateType==="laundry_orders"&&e.aggregateId===created.order.id&&e.operation==="update"));
+assert(outbox.listPendingOutbox().some(e=>e.aggregateType==="laundry_orders"&&e.aggregateId===created.order.id&&e.eventType==="update"));
 
 const beforeSkip=snap();
 moved=phase5.updateLaundryStatus(created.order.id,"delivered");
