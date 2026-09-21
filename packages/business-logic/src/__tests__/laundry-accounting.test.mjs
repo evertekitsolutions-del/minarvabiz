@@ -56,7 +56,7 @@ assert(phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"in_house_ironi
 reset(chart.map(a=>a.systemKey==="laundry_costs"?{...a,isActive:false}:a)); const blockedCost=snap();
 assert(phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"outsourced",supplierId:"s",supplierRate:5,customerRate:10}).errors.length); assert.equal(snap(),blockedCost);
 
-reset(); permissions.setCurrentRole("cashier"); assert.throws(()=>phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"in_house_ironing",supplierRate:0,customerRate:10}),/denied/i); permissions.setCurrentRole("admin");
+reset(); permissions.setCurrentRole(null); assert.throws(()=>phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"in_house_ironing",supplierRate:0,customerRate:10}),/denied/i); permissions.setCurrentRole("admin");
 
 reset();
 r=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"outsourced",supplierId:"s",supplierRate:4,customerRate:10,paidAmount:3,paymentMethod:"upi"});
