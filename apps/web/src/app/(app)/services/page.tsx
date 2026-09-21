@@ -57,6 +57,7 @@ export default function ServicesOrdersPage() {
       price,
       discount: parseFloat(form.discount) || 0,
       advance: parseFloat(form.advance) || 0,
+      advancePaymentMethod: form.advancePaymentMethod,
       notes: form.notes || null,
       materialDetails: form.materialDetails || null,
       customerSuppliedMaterial: form.customerSuppliedMaterial,
