@@ -67,6 +67,14 @@ async function click(ws, name, patterns, wait = 650) {
   return out;
 }
 
+async function clickButton(ws, name, patterns, wait = 650) {
+  const raw = await evalIn(ws, `(async()=>{const pats=${JSON.stringify(patterns)};const els=[...document.querySelectorAll('button,[role="button"]')];const vis=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'&&!e.disabled};const txt=e=>((e.innerText||e.textContent||'')+' '+(e.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim();const el=els.find(e=>vis(e)&&pats.some(p=>txt(e).toLowerCase().includes(String(p).toLowerCase())));if(!el)return JSON.stringify({ok:false,available:els.filter(vis).map(txt).filter(Boolean).slice(0,180)});el.click();await new Promise(r=>setTimeout(r,${wait}));return JSON.stringify({ok:true,text:txt(el),main:(document.querySelector('[data-testid="app-content"]')?.innerText||'').slice(0,5000)});})()`);
+  const out = JSON.parse(raw);
+  console.log(`CLICK_BUTTON_${name} ${raw}`);
+  if (!out.ok) throw new Error(`Button target ${name} not found: ${JSON.stringify(out.available)}`);
+  return out;
+}
+
 async function assertMain(ws, name, patterns) {
   const raw = await evalIn(ws, `JSON.stringify((document.querySelector('[data-testid="app-content"]')?.innerText||'').slice(0,12000))`);
   const value = JSON.parse(raw);
@@ -438,11 +446,11 @@ async function main() {
     await selectDialogFieldByText(ws, "Outsourced Laundry", "Payment method", "UPI");
     await click(ws, "SAVE_LAUNDRY", ["save"]);
     await assertMain(ws, "LAUNDRY_SAVED", ["1 tickets", "QA POS Customer", "QA Shirt"]);
-    await click(ws, "LAUNDRY_MARK_SENT", ["mark sent"]);
+    await clickButton(ws, "LAUNDRY_MARK_SENT", ["mark sent"]);
     await assertMain(ws, "LAUNDRY_SENT", ["Mark Received"]);
-    await click(ws, "LAUNDRY_MARK_RECEIVED", ["mark received"]);
+    await clickButton(ws, "LAUNDRY_MARK_RECEIVED", ["mark received"]);
     await assertMain(ws, "LAUNDRY_RECEIVED", ["Mark Delivered"]);
-    await click(ws, "LAUNDRY_MARK_DELIVERED", ["mark delivered"]);
+    await clickButton(ws, "LAUNDRY_MARK_DELIVERED", ["mark delivered"]);
     await assertMain(ws, "LAUNDRY_DELIVERED", ["delivered"]);
 
 
