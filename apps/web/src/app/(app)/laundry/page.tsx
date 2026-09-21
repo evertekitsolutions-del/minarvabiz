@@ -13,6 +13,7 @@ export default function LaundryPage() {
   const [query, setQuery] = React.useState("");
   const [mode, setMode] = React.useState<"outsourced" | "in_house_ironing" | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [statusError, setStatusError] = React.useState<string | null>(null);
   const [customerOpen, setCustomerOpen] = React.useState(false);
   const [supplierOpen, setSupplierOpen] = React.useState(false);
   const [customerError, setCustomerError] = React.useState<string | null>(null);
@@ -51,6 +52,20 @@ export default function LaundryPage() {
     setMode(null);
     setError(null);
     refresh();
+  }
+
+  function handleStatusChange(order: LaundryOrder, status: LaundryOrder["status"]) {
+    try {
+      const result = phase5Store.updateLaundryStatus(order.id, status);
+      if (!result.order) {
+        setStatusError(result.error ?? "Unable to update laundry status");
+        return;
+      }
+      setStatusError(null);
+      refresh();
+    } catch (e) {
+      setStatusError(e instanceof Error ? e.message : "Unable to update laundry status");
+    }
   }
 
   function saveCustomer() {
@@ -96,11 +111,13 @@ export default function LaundryPage() {
 
   return (
     <>
+      {statusError && <p role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{statusError}</p>}
       <LaundryList
         orders={orders}
         onSearch={setQuery}
         onAddOutsourced={() => setMode("outsourced")}
         onAddIroning={() => setMode("in_house_ironing")}
+        onStatusChange={handleStatusChange}
       />
       <Modal
         open={mode !== null}
