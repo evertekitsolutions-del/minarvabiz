@@ -329,6 +329,7 @@ export function addOrderExpense(
   order.orderExpensesTotal = round2(order.orderExpensesTotal + exp.amount);
   order.updatedAt = nowISO();
   order.version += 1;
+  enqueueOutbox("orders", order.id, "update", { ...order, expenses: order.expenses.map((item) => ({ ...item })) });
   touchPersistence();
   return { order };
 }
