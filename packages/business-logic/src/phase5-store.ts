@@ -9,7 +9,7 @@ import { planLaundryPosting } from "./laundry-accounting";
 import { purchaseBalance, nextDocNumber } from "./expenses";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
-import { postExpenseJournal } from "./accounting-store";
+import { planExpenseReversal, postExpenseJournal } from "./accounting-store";
 import { listPurchaseInvoices, prepareSupplierInvoiceSettlements } from "./procurement-store";
 import { auditAction } from "./audit-actions";
 import { touchPersistence } from "./autosave";
@@ -229,9 +229,50 @@ export function createExpense(input: { date?: string; categoryId: UUID; amount: 
   expenses.push(expense);
   const posting = postExpenseJournal(expense);
   if (posting.errors.length) { expenses.pop(); return { expense: null, errors: posting.errors }; }
-  if (input.orderId) ordersStore.addOrderExpense(input.orderId, input.description || "Expense", expense.amount);
+  if (input.orderId) {
+    const linked = ordersStore.addOrderExpense(input.orderId, input.description || "Expense", expense.amount, expense.id);
+    if (!linked.order) return { expense: null, errors: [linked.error || "Unable to link order expense"] };
+  }
   touchPersistence();
   return { expense, errors: [] };
+}
+
+export function reverseExpense(id: UUID): { expense: Expense | null; errors: string[] } {
+  assertPermission("expenses.manage");
+  const expense = expenses.find((item) => item.id === id);
+  if (!expense || expense.deletedAt) return { expense: null, errors: ["Expense not found"] };
+  if (!Number.isFinite(expense.amount) || r2(expense.amount) <= 0 || !Number.isSafeInteger(Math.round(expense.amount * 100))) {
+    return { expense: null, errors: ["Expense amount needs reconciliation"] };
+  }
+  if (expense.orderId) {
+    assertPermission("orders.manage");
+    const order = ordersStore.getOrder(expense.orderId);
+    const linked = order?.expenses.find((item) => item.id === expense.id);
+    if (!order || !linked || r2(linked.amount) !== r2(expense.amount)) {
+      return { expense: null, errors: ["Order-linked expense needs source reconciliation before reversal"] };
+    }
+  }
+  const reversal = planExpenseReversal(expense);
+  if (reversal.errors.length) return { expense: null, errors: reversal.errors };
+
+  const before = { ...expense };
+  if (expense.orderId) {
+    const rolledBack = ordersStore.removeOrderExpense(expense.orderId, expense.id, expense.amount);
+    if (!rolledBack.order) return { expense: null, errors: [rolledBack.error || "Unable to reverse linked order expense"] };
+  }
+  const now = nowISO();
+  expense.deletedAt = now;
+  expense.updatedAt = now;
+  expense.version = (expense.version || 1) + 1;
+  reversal.commit();
+  enqueueOutbox("expenses", expense.id, "update", { ...expense });
+  auditAction("expense.reverse", "expenses", expense.id, before, {
+    deletedAt: expense.deletedAt,
+    version: expense.version,
+    orderId: expense.orderId ?? null,
+  });
+  touchPersistence();
+  return { expense: { ...expense }, errors: [] };
 }
 export function listPurchases(opts?:{kind?:"general"|"order_specific"}):Purchase[]{let list=purchases.filter(p=>!p.deletedAt);if(opts?.kind)list=list.filter(p=>p.kind===opts.kind);return list.sort((a,b)=>b.date.localeCompare(a.date));}
 export function createPurchase(input: { date?: string; supplierId?: UUID | null; description: string; amount: number; paymentMethod: PaymentMethod; paidAmount?: number; kind: "general" | "order_specific"; orderId?: UUID | null; notes?: string | null }): { purchase: Purchase | null; errors: string[] } {
