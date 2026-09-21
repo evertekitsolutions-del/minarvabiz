@@ -109,7 +109,7 @@ Legacy / Unallocated Settlement Clearing, while new collections against historic
 or other customer balances credit it. No historical revenue, tax, COGS or receivable
 reversal is invented. This account is a reconciliation placeholder, not income.
 Opening inventory, bank/cash, receivables and clearing balances must be reconciled
-before financial statements can be treated as complete. Service/laundry recognition is not yet automatic; supplier invoice recognition
+before financial statements can be treated as complete. Service recognition is not yet automatic; laundry recognition is covered below and supplier invoice recognition
 is covered below.
 
 Accounting plans validate account availability and balancing before source
@@ -293,3 +293,28 @@ stock mutation. A zero-cost product may change quantity without creating a zero
 value journal. Historical stock is not backfilled automatically; this posting only
 occurs when the opening-stock action is explicitly used. This uses recorded product
 cost and does not introduce FIFO/weighted-average valuation in this milestone.
+
+
+## Laundry order posting
+
+New laundry and in-house ironing orders now post from the shared core when the
+order is created. Customer receipts debit Cash, Bank or Payment Clearing according
+to the recorded tender; unpaid customer value debits Accounts Receivable; the full
+customer charge credits Laundry Revenue.
+
+For outsourced laundry, the recorded supplier cost debits Laundry Outsourcing
+Costs and credits Accounts Payable. In-house ironing forces supplier cost to zero.
+The resulting profit-and-loss effect therefore reflects laundry revenue less the
+recorded outsourced cost without inventing inventory movements.
+
+Quantity, customer/supplier rates, paid/balance amounts, customer balance and
+supplier balance are validated before source mutation. The existing UI cash
+default is preserved when no payment method is supplied. Missing customers,
+required suppliers, unavailable accounting accounts, corrupt balances and
+non-finite/out-of-range amounts reject without creating the order or journal.
+
+The source order, changed customer/supplier snapshots, accounts, journal and
+journal lines use the existing persistence/outbox paths. Automatic laundry journals
+cannot be manually voided. Hydrated historical laundry orders are not backfilled.
+Status changes, cancellations/refunds and service-order revenue recognition remain
+separate follow-up milestones.

@@ -1,10 +1,11 @@
 import { planDirectPurchasePosting, planSupplierPaymentPosting } from "./procurement-accounting";
 import { assertPermission } from "./permissions";
 import { enqueueOutbox } from "./outbox-bridge";
-import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase, remoteSupplierSettlement } from "./remote-write";
+import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase, remoteSupplierSettlement, remoteUpsertCustomer } from "./remote-write";
 import type { Supplier, LaundryOrder, Expense, ExpenseCategory, Purchase, PaymentMethod, UUID } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { calculateLaundryProfit } from "./laundry";
+import { planLaundryPosting } from "./laundry-accounting";
 import { purchaseBalance, nextDocNumber } from "./expenses";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
@@ -99,7 +100,77 @@ export function recordSupplierPayment(input: {
   return { payment, supplier, errors: [] };
 }
 export function listLaundryOrders(opts?: { mode?: "outsourced"|"in_house_ironing"; query?: string }): LaundryOrder[] { let list=laundryOrders.filter(o=>!o.deletedAt);if(opts?.mode)list=list.filter(o=>o.mode===opts.mode);if(opts?.query?.trim()){const q=opts.query.toLowerCase();list=list.filter(o=>o.orderNumber.toLowerCase().includes(q)||o.customerName?.toLowerCase().includes(q)||o.garment?.toLowerCase().includes(q));}return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
-export function createLaundryOrder(input: { customerId: UUID; garment?: string|null; quantity:number; mode:"outsourced"|"in_house_ironing"; supplierId?: UUID|null; supplierRate:number; customerRate:number; notes?:string|null; paidAmount?:number; paymentMethod?:PaymentMethod }): {order:LaundryOrder|null;errors:string[]} { assertPermission("orders.manage");const errors:string[]=[];if(!input.customerId)errors.push("Customer is required");if(input.quantity<=0)errors.push("Quantity must be positive");if(input.customerRate<0)errors.push("Customer rate cannot be negative");if(input.mode==="outsourced"&&!input.supplierId)errors.push("Supplier is required for outsourced laundry");if(errors.length)return{order:null,errors};const customer=mainStore.getCustomer(input.customerId);if(!customer)return{order:null,errors:["Customer not found"]};const supplierRate=input.mode==="in_house_ironing"?0:input.supplierRate;const calc=calculateLaundryProfit({customerRate:input.customerRate,supplierRate,quantity:input.quantity});const supplier=input.supplierId?getSupplier(input.supplierId):undefined;const paid=Math.min(input.paidAmount??0,calc.totalCustomerCharge);const balance=Math.max(0,calc.totalCustomerCharge-paid);const orderNumber=nextDocNumber(lastLaundryNo,"LDY");lastLaundryNo=orderNumber;const order:LaundryOrder={id:generateId(),orderNumber,customerId:input.customerId,customerName:customer.name,garment:input.garment??null,quantity:input.quantity,mode:input.mode,supplierId:input.supplierId??null,supplierName:supplier?.name??null,supplierRate,customerRate:input.customerRate,profit:calc.totalProfit,totalCustomerCharge:calc.totalCustomerCharge,totalSupplierCost:calc.totalSupplierCost,status:input.mode==="in_house_ironing"?"delivered":"pending",notes:input.notes??null,paidAmount:paid,balanceAmount:balance,createdAt:nowISO(),updatedAt:nowISO(),version:1};if(balance>0)customer.outstandingBalance=r2(customer.outstandingBalance+balance);if(paid>0)customer.totalSpending=r2(customer.totalSpending+paid);customer.updatedAt=nowISO();if(supplier&&calc.totalSupplierCost>0){supplier.outstandingBalance=r2(supplier.outstandingBalance+calc.totalSupplierCost);supplier.updatedAt=nowISO();}laundryOrders.push(order);touchPersistence();void remoteCreateLaundry(order);return{order,errors:[]}; }
+export function createLaundryOrder(input: { customerId: UUID; garment?: string|null; quantity:number; mode:"outsourced"|"in_house_ironing"; supplierId?: UUID|null; supplierRate:number; customerRate:number; notes?:string|null; paidAmount?:number; paymentMethod?:PaymentMethod }): {order:LaundryOrder|null;errors:string[]} {
+  assertPermission("orders.manage");
+  const errors:string[]=[];
+  const quantity=Number(input.quantity), customerRate=Number(input.customerRate), rawSupplierRate=Number(input.supplierRate), paidInput=Number(input.paidAmount??0);
+  if(!input.customerId) errors.push("Customer is required");
+  if(!["outsourced","in_house_ironing"].includes(input.mode)) errors.push("Invalid laundry mode");
+  if(!Number.isFinite(quantity)||quantity<=0||!Number.isSafeInteger(Math.round(quantity*1000))) errors.push("Quantity must be positive and finite");
+  if(!Number.isFinite(customerRate)||customerRate<0||!Number.isSafeInteger(Math.round(customerRate*100))) errors.push("Customer rate must be a finite non-negative amount");
+  if(!Number.isFinite(rawSupplierRate)||rawSupplierRate<0||!Number.isSafeInteger(Math.round(rawSupplierRate*100))) errors.push("Supplier rate must be a finite non-negative amount");
+  if(!Number.isFinite(paidInput)||paidInput<0||!Number.isSafeInteger(Math.round(paidInput*100))) errors.push("Paid amount must be a finite non-negative amount");
+  if(input.mode==="outsourced"&&!input.supplierId) errors.push("Supplier is required for outsourced laundry");
+  const paymentMethod=(input.paymentMethod??"cash") as PaymentMethod;
+  if(!["cash","bank","card","upi","online","other"].includes(paymentMethod)) errors.push("Invalid payment method");
+  if(errors.length) return {order:null,errors};
+
+  const customer=mainStore.getCustomer(input.customerId);
+  if(!customer) return {order:null,errors:["Customer not found"]};
+  const supplierRate=input.mode==="in_house_ironing"?0:rawSupplierRate;
+  const calc=calculateLaundryProfit({customerRate,supplierRate,quantity});
+  if(![calc.totalCustomerCharge,calc.totalSupplierCost,calc.totalProfit].every(Number.isFinite)
+    || ![calc.totalCustomerCharge,calc.totalSupplierCost].every(v=>Number.isSafeInteger(Math.round(v*100)))) {
+    return {order:null,errors:["Laundry totals are out of range"]};
+  }
+  const supplier=input.mode==="outsourced"&&input.supplierId?getSupplier(input.supplierId):undefined;
+  if(input.mode==="outsourced"&&!supplier) return {order:null,errors:["Supplier not found"]};
+  const paid=r2(Math.min(paidInput,calc.totalCustomerCharge));
+  const balance=r2(calc.totalCustomerCharge-paid);
+  if(!Number.isFinite(customer.outstandingBalance)||customer.outstandingBalance<0
+    || !Number.isSafeInteger(Math.round((customer.outstandingBalance+balance)*100))) {
+    return {order:null,errors:["Customer balance needs reconciliation"]};
+  }
+  if(supplier&&(!Number.isFinite(supplier.outstandingBalance)||supplier.outstandingBalance<0
+    || !Number.isSafeInteger(Math.round((supplier.outstandingBalance+calc.totalSupplierCost)*100)))) {
+    return {order:null,errors:["Supplier balance needs reconciliation"]};
+  }
+
+  const orderNumber=nextDocNumber(lastLaundryNo,"LDY");
+  const now=nowISO();
+  const order:LaundryOrder={
+    id:generateId(),orderNumber,customerId:input.customerId,customerName:customer.name,
+    garment:input.garment??null,quantity,mode:input.mode,supplierId:input.mode==="outsourced"?(input.supplierId??null):null,
+    supplierName:supplier?.name??null,supplierRate,customerRate,profit:calc.totalProfit,
+    totalCustomerCharge:calc.totalCustomerCharge,totalSupplierCost:calc.totalSupplierCost,
+    status:input.mode==="in_house_ironing"?"delivered":"pending",notes:input.notes??null,
+    paidAmount:paid,balanceAmount:balance,createdAt:now,updatedAt:now,version:1
+  };
+  const accountingPlan=planLaundryPosting(order,paymentMethod);
+  if(accountingPlan.errors.length) return {order:null,errors:accountingPlan.errors};
+
+  lastLaundryNo=orderNumber;
+  if(balance>0) customer.outstandingBalance=r2(customer.outstandingBalance+balance);
+  if(paid>0) customer.totalSpending=r2(customer.totalSpending+paid);
+  customer.updatedAt=now;
+  if(supplier&&calc.totalSupplierCost>0){
+    supplier.outstandingBalance=r2(supplier.outstandingBalance+calc.totalSupplierCost);
+    supplier.updatedAt=now;
+  }
+  laundryOrders.push(order);
+  accountingPlan.commit();
+  touchPersistence();
+  void remoteCreateLaundry({...order});
+  void remoteUpsertCustomer({...customer});
+  if(supplier) void remoteUpsertSupplier({...supplier});
+  auditAction("laundry.create","laundry_orders",order.id,null,{
+    orderNumber:order.orderNumber,customerId:order.customerId,supplierId:order.supplierId??null,
+    totalCustomerCharge:order.totalCustomerCharge,totalSupplierCost:order.totalSupplierCost,
+    paidAmount:order.paidAmount,balanceAmount:order.balanceAmount,paymentMethod
+  });
+  return {order,errors:[]};
+}
+
 export function updateLaundryStatus(id: UUID,status:LaundryOrder["status"]): LaundryOrder|null { assertPermission("orders.manage");const o=laundryOrders.find(x=>x.id===id&&!x.deletedAt);if(!o)return null;o.status=status;o.updatedAt=nowISO();o.version+=1;touchPersistence();enqueueOutbox("laundry_orders",o.id,"update",o);return o; }
 export function listExpenseCategories():ExpenseCategory[]{return[...expenseCategories];}
 export function createExpenseCategory(name:string):ExpenseCategory{assertPermission("expenses.manage");const c:ExpenseCategory={id:generateId(),name,isSystem:false,createdAt:nowISO()};expenseCategories.push(c);touchPersistence();enqueueOutbox("expense_categories",c.id,"insert",c);return c;}
