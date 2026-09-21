@@ -5,7 +5,7 @@ import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remote
 import type { Supplier, LaundryOrder, Expense, ExpenseCategory, Purchase, PaymentMethod, UUID } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { calculateLaundryProfit } from "./laundry";
-import { planLaundryPosting } from "./laundry-accounting";
+import { planLaundryCancellation, planLaundryPosting } from "./laundry-accounting";
 import { purchaseBalance, nextDocNumber } from "./expenses";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
@@ -179,6 +179,130 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
     paidAmount:order.paidAmount,balanceAmount:order.balanceAmount,paymentMethod
   });
   return {order,errors:[]};
+}
+
+export function cancelLaundryOrder(input: {
+  orderId: UUID;
+  refundPaymentMethod?: PaymentMethod;
+  supplierCostAction?: "keep" | "reverse";
+}): { order: LaundryOrder | null; errors: string[] } {
+  assertPermission("orders.manage");
+  const order = laundryOrders.find((item) => item.id === input.orderId && !item.deletedAt);
+  if (!order) return { order: null, errors: ["Laundry order not found"] };
+  if (order.status === "cancelled") return { order: null, errors: ["Laundry order is already cancelled"] };
+
+  const customer = mainStore.getCustomer(order.customerId);
+  if (!customer || !Number.isFinite(customer.outstandingBalance) || customer.outstandingBalance < order.balanceAmount
+    || !Number.isSafeInteger(Math.round(customer.outstandingBalance * 100))
+    || !Number.isFinite(customer.totalSpending) || customer.totalSpending < order.paidAmount
+    || !Number.isSafeInteger(Math.round(customer.totalSpending * 100))) {
+    return { order: null, errors: ["Customer balance needs reconciliation before laundry cancellation"] };
+  }
+
+  const sourcePayments = mainStore.listPayments().filter((payment) =>
+    payment.referenceType === "laundry"
+    && payment.referenceId === order.id
+    && payment.customerId === order.customerId
+  );
+  if (order.paidAmount > 0) {
+    if (sourcePayments.length !== 1
+      || r2(sourcePayments[0].amount) !== r2(order.paidAmount)
+      || !["cash", "bank", "card", "upi", "online", "other"].includes(sourcePayments[0].method)) {
+      return { order: null, errors: ["Laundry receipt source needs reconciliation before cancellation"] };
+    }
+    if (!input.refundPaymentMethod) {
+      return { order: null, errors: ["Refund method is required for the laundry receipt before cancellation"] };
+    }
+  } else if (sourcePayments.length) {
+    return { order: null, errors: ["Laundry receipt source needs reconciliation before cancellation"] };
+  }
+
+  const hasUnallocatedCustomerCollection = mainStore.listPayments().some((payment) =>
+    payment.customerId === order.customerId
+    && payment.referenceType === "other"
+    && payment.paidAt >= order.createdAt
+    && /Other customer balance:/i.test(payment.notes ?? "")
+  );
+  if (hasUnallocatedCustomerCollection) {
+    return { order: null, errors: ["Customer collections need allocation before laundry cancellation"] };
+  }
+
+  let supplier: Supplier | undefined;
+  if (order.totalSupplierCost > 0) {
+    if (!["keep", "reverse"].includes(input.supplierCostAction ?? "")) {
+      return { order: null, errors: ["Select how to handle the laundry supplier cost"] };
+    }
+    if (input.supplierCostAction === "reverse") {
+      if (!order.supplierId) return { order: null, errors: ["Laundry supplier source needs reconciliation"] };
+      supplier = getSupplier(order.supplierId);
+      if (!supplier || !Number.isFinite(supplier.outstandingBalance)
+        || supplier.outstandingBalance < order.totalSupplierCost
+        || !Number.isSafeInteger(Math.round(supplier.outstandingBalance * 100))) {
+        return { order: null, errors: ["Supplier balance needs reconciliation before reversing laundry cost"] };
+      }
+      const hasUnallocatedSupplierPayment = mainStore.listPayments().some((payment) =>
+        payment.referenceType === "supplier"
+        && payment.referenceId === supplier!.id
+        && payment.paidAt >= order.createdAt
+        && /Other supplier balance:/i.test(payment.notes ?? "")
+      );
+      if (hasUnallocatedSupplierPayment) {
+        return { order: null, errors: ["Supplier payments need allocation before reversing laundry cost"] };
+      }
+    }
+  }
+
+  const reversal = planLaundryCancellation(order, input.refundPaymentMethod, input.supplierCostAction);
+  if (reversal.errors.length) return { order: null, errors: reversal.errors };
+
+  const beforeOrder = { ...order };
+  const beforeCustomer = { ...customer };
+  const beforeSupplier = supplier ? { ...supplier } : null;
+  const now = nowISO();
+
+  customer.outstandingBalance = r2(customer.outstandingBalance - order.balanceAmount);
+  customer.totalSpending = r2(customer.totalSpending - order.paidAmount);
+  customer.updatedAt = now;
+
+  if (supplier && input.supplierCostAction === "reverse") {
+    supplier.outstandingBalance = r2(supplier.outstandingBalance - order.totalSupplierCost);
+    supplier.updatedAt = now;
+  }
+
+  order.status = "cancelled";
+  order.updatedAt = now;
+  order.version += 1;
+  reversal.commit();
+
+  const refundPayment = order.paidAmount > 0 && input.refundPaymentMethod
+    ? mainStore.recordLaundryRefundPaymentEntry({
+        laundryOrderId: order.id,
+        customerId: order.customerId,
+        amount: order.paidAmount,
+        method: input.refundPaymentMethod,
+        refundedAt: now,
+        orderNumber: order.orderNumber,
+      })
+    : null;
+
+  enqueueOutbox("laundry_orders", order.id, "update", { ...order });
+  void remoteUpsertCustomer({ ...customer });
+  if (supplier && input.supplierCostAction === "reverse") void remoteUpsertSupplier({ ...supplier });
+  auditAction("laundry.cancel", "laundry_orders", order.id, beforeOrder, {
+    order: { ...order },
+    refundPaymentId: refundPayment?.id ?? null,
+    refundAmount: refundPayment?.amount ?? 0,
+    refundPaymentMethod: refundPayment?.method ?? null,
+    supplierCostAction: input.supplierCostAction ?? null,
+    customerOutstandingBefore: beforeCustomer.outstandingBalance,
+    customerOutstandingAfter: customer.outstandingBalance,
+    customerSpendingBefore: beforeCustomer.totalSpending,
+    customerSpendingAfter: customer.totalSpending,
+    supplierOutstandingBefore: beforeSupplier?.outstandingBalance ?? null,
+    supplierOutstandingAfter: supplier?.outstandingBalance ?? null,
+  });
+  touchPersistence();
+  return { order: { ...order }, errors: [] };
 }
 
 export function updateLaundryStatus(
