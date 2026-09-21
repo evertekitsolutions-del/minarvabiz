@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { accountingStore } from "@minarvabiz/business-logic";
+import { accountingStore, setOpeningBank } from "@minarvabiz/business-logic";
 import type { AccountingAccountType } from "@minarvabiz/types";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
@@ -25,6 +25,7 @@ export function AccountingPanel() {
   const [tab, setTab] = React.useState<"accounts" | "journal" | "trial" | "ledger" | "statements">("accounts");
   const [message, setMessage] = React.useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [accountForm, setAccountForm] = React.useState({ code: "", name: "", type: "expense" as AccountingAccountType });
+  const [openingBankAmount, setOpeningBankAmount] = React.useState("");
   const [journalDate, setJournalDate] = React.useState(todayLocal());
   const [journalDescription, setJournalDescription] = React.useState("");
   const [journalLines, setJournalLines] = React.useState<DraftJournalLine[]>([emptyLine(), emptyLine()]);
@@ -63,6 +64,22 @@ export function AccountingPanel() {
       }
       setAccountForm({ code: "", name: "", type: "expense" });
       setMessage({ type: "ok", text: "Account " + result.account.code + " created." });
+      refresh();
+    } catch (error) {
+      setMessage({ type: "err", text: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
+  function postOpeningBank() {
+    try {
+      const amount = Number(openingBankAmount);
+      const result = setOpeningBank(amount);
+      if (!result.ok) {
+        setMessage({ type: "err", text: result.error || "Unable to post opening bank balance" });
+        return;
+      }
+      setOpeningBankAmount("");
+      setMessage({ type: "ok", text: "Opening bank balance posted." });
       refresh();
     } catch (error) {
       setMessage({ type: "err", text: error instanceof Error ? error.message : String(error) });
@@ -143,6 +160,7 @@ export function AccountingPanel() {
 
       {tab === "accounts" && (
         <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
+          <div className="space-y-4">
           <Card>
             <CardHeader><CardTitle className="text-base">Create account</CardTitle></CardHeader>
             <CardContent className="space-y-3">
@@ -160,6 +178,18 @@ export function AccountingPanel() {
               <Button className="w-full" onClick={createAccount}>Create Account</Button>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">Opening bank balance</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-slate-500">Post the bank balance that existed before Minarva Biz accounting began. This is a one-time source action and is blocked after Bank has normal ledger activity.</p>
+              <FormField label="Opening bank balance">
+                <input className={inputClass} type="number" min="0.01" step="0.01" value={openingBankAmount} onChange={(e) => setOpeningBankAmount(e.target.value)} placeholder="0.00" />
+              </FormField>
+              <Button className="w-full" onClick={postOpeningBank} disabled={!Number.isFinite(Number(openingBankAmount)) || Number(openingBankAmount) <= 0}>Post Opening Bank</Button>
+            </CardContent>
+          </Card>
+          </div>
 
           <Card>
             <CardHeader><CardTitle className="text-base">Chart of Accounts</CardTitle></CardHeader>
@@ -245,7 +275,7 @@ export function AccountingPanel() {
 
       {tab === "statements" && (
         <div className="space-y-4">
-          <p className="text-sm text-slate-600">Based on posted journals, including dated reversals. New sales, collections, returns, exchanges, posted supplier invoices, direct purchases, supplier payments and expenses post automatically. Older documents need accounting entries. Purchase tax stays pending review; unclassified purchases require classification. Legacy / Unallocated Settlement Clearing requires reconciliation; opening stock and bank balances must be entered before these statements are complete.</p>
+          <p className="text-sm text-slate-600">Based on posted journals, including dated reversals. New sales, collections, returns, exchanges, posted supplier invoices, direct purchases, supplier payments and expenses post automatically. Older documents need accounting entries. Purchase tax stays pending review; unclassified purchases require classification. Legacy / Unallocated Settlement Clearing requires reconciliation; opening stock and any pre-system bank balance must be entered before these statements are complete.</p>
           <div className="grid gap-3 md:grid-cols-2">
             <FormField label="Profit and loss from"><input aria-label="Profit and loss from" className={inputClass} type="date" value={statementFrom} onChange={(e) => setStatementFrom(e.target.value)} /></FormField>
             <FormField label="Statement end / balance sheet as of"><input aria-label="Statement end date" className={inputClass} type="date" value={statementTo} onChange={(e) => setStatementTo(e.target.value)} /></FormField>
