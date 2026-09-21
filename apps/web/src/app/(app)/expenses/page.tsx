@@ -18,6 +18,7 @@ export default function ExpensesPage() {
   const [expOpen, setExpOpen] = React.useState(false);
   const [purOpen, setPurOpen] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
 
   const [expForm, setExpForm] = React.useState({ date: todayLocal(), categoryId: "", amount: "", description: "", paymentMethod: "cash" as PaymentMethod, orderId: "" });
   const [purForm, setPurForm] = React.useState({ date: todayLocal(), description: "", amount: "", paidAmount: "", paymentMethod: "cash" as PaymentMethod, kind: "general" as "general" | "order_specific", orderId: "", supplierId: "" });
@@ -44,6 +45,20 @@ export default function ExpensesPage() {
     setExpOpen(false); setError(null); setExpForm((v) => ({ ...v, date: todayLocal(), amount: "", description: "", orderId: "" })); refresh();
   }
 
+  function reverseExpense(expense: Expense) {
+    try {
+      const result = phase5Store.reverseExpense(expense.id);
+      if (result.errors.length || !result.expense) {
+        setActionError(result.errors.join("; ") || "Unable to reverse expense");
+        return;
+      }
+      setActionError(null);
+      refresh();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Unable to reverse expense");
+    }
+  }
+
   function savePurchase() {
     const result = phase5Store.createPurchase({
       date: purForm.date,
@@ -61,11 +76,12 @@ export default function ExpensesPage() {
 
   return (
     <div className="space-y-4">
+      {actionError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{actionError}</p>}
       <div className="flex gap-2">
         <Button variant={tab === "expenses" ? "primary" : "outline"} onClick={() => setTab("expenses")}>Expenses</Button>
         <Button variant={tab === "purchases" ? "primary" : "outline"} onClick={() => setTab("purchases")}>Purchases</Button>
       </div>
-      {tab === "expenses" && <ExpenseList expenses={expenses} onAdd={() => setExpOpen(true)} />}
+      {tab === "expenses" && <ExpenseList expenses={expenses} onAdd={() => setExpOpen(true)} onReverse={reverseExpense} />}
       {tab === "purchases" && <PurchaseList purchases={purchases} onAdd={() => setPurOpen(true)} />}
 
       <Modal open={expOpen} title="Add Expense" onClose={() => setExpOpen(false)} footer={<><Button variant="outline" onClick={() => setExpOpen(false)}>Cancel</Button><Button onClick={saveExpense}>Save</Button></>}>

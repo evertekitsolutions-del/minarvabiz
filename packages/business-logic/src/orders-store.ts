@@ -351,7 +351,8 @@ export function updateOrderStatus(
 export function addOrderExpense(
   orderId: UUID,
   description: string,
-  amount: number
+  amount: number,
+  sourceExpenseId?: UUID
 ): { order: ServiceOrder | null; error?: string } {
   assertPermission("orders.manage");
   const order = getOrder(orderId);
@@ -359,8 +360,11 @@ export function addOrderExpense(
   if (!Number.isFinite(amount) || round2(amount) <= 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
     return { order: null, error: "Order expense amount must be positive and finite" };
   }
+  if (sourceExpenseId && order.expenses.some((item) => item.id === sourceExpenseId)) {
+    return { order: null, error: "Order expense source already exists" };
+  }
   const exp: OrderExpense = {
-    id: generateId(),
+    id: sourceExpenseId ?? generateId(),
     orderId,
     description,
     amount: round2(amount),
@@ -371,6 +375,33 @@ export function addOrderExpense(
   order.updatedAt = nowISO();
   order.version += 1;
   enqueueOutbox("orders", order.id, "update", { ...order, expenses: order.expenses.map((item) => ({ ...item })) });
+  touchPersistence();
+  return { order };
+}
+
+export function removeOrderExpense(
+  orderId: UUID,
+  expenseId: UUID,
+  expectedAmount: number
+): { order: ServiceOrder | null; error?: string } {
+  assertPermission("orders.manage");
+  const order = getOrder(orderId);
+  if (!order) return { order: null, error: "Order not found" };
+  const index = order.expenses.findIndex((item) => item.id === expenseId);
+  if (index < 0) return { order: null, error: "Order-linked expense needs source reconciliation" };
+  const item = order.expenses[index];
+  if (!Number.isFinite(expectedAmount) || round2(expectedAmount) <= 0 || round2(item.amount) !== round2(expectedAmount)) {
+    return { order: null, error: "Order-linked expense amount needs reconciliation" };
+  }
+  if (!Number.isFinite(order.orderExpensesTotal) || order.orderExpensesTotal < item.amount
+    || !Number.isSafeInteger(Math.round((order.orderExpensesTotal - item.amount) * 100))) {
+    return { order: null, error: "Order expense total needs reconciliation" };
+  }
+  order.expenses.splice(index, 1);
+  order.orderExpensesTotal = round2(order.orderExpensesTotal - item.amount);
+  order.updatedAt = nowISO();
+  order.version += 1;
+  enqueueOutbox("orders", order.id, "update", { ...order, expenses: order.expenses.map((entry) => ({ ...entry })) });
   touchPersistence();
   return { order };
 }

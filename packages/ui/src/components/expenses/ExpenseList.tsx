@@ -6,7 +6,8 @@ import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 
-export function ExpenseList({ expenses, categories: _categories, orders: _orders, onAdd, onCreate }: { expenses: Expense[]; categories?: ExpenseCategory[]; orders?: ServiceOrder[]; onAdd?: () => void; onCreate?: () => void }) {
+export function ExpenseList({ expenses, categories: _categories, orders: _orders, onAdd, onCreate, onReverse }: { expenses: Expense[]; categories?: ExpenseCategory[]; orders?: ServiceOrder[]; onAdd?: () => void; onCreate?: () => void; onReverse?: (expense: Expense) => void }) {
+  const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
   const columns: Column<Expense>[] = [
     { key: "date", header: "Date", render: (r) => new Date(r.date).toLocaleDateString("en-IN") },
     { key: "categoryName", header: "Category", render: (r) => r.categoryName || "—" },
@@ -14,6 +15,11 @@ export function ExpenseList({ expenses, categories: _categories, orders: _orders
     { key: "orderNumber", header: "Order", render: (r) => r.orderNumber ? <span className="text-indigo-600">{r.orderNumber}</span> : <span className="text-slate-400">General</span> },
     { key: "amount", header: "Amount", render: (r) => <span className="font-medium">{formatMoney(r.amount)}</span> },
     { key: "paymentMethod", header: "Method", render: (r) => r.paymentMethod },
+    { key: "action", header: "Action", render: (r) => {
+      if (!onReverse) return <span className="text-xs text-slate-400">—</span>;
+      if (confirmingId !== r.id) return <Button size="sm" variant="outline" onClick={() => setConfirmingId(r.id)}>Reverse</Button>;
+      return <div className="flex gap-1"><Button size="sm" variant="outline" onClick={() => { onReverse(r); setConfirmingId(null); }}>Confirm Reverse</Button><Button size="sm" variant="ghost" onClick={() => setConfirmingId(null)}>Keep</Button></div>;
+    } },
   ];
   return <div className="space-y-4"><div className="flex items-center justify-between"><div><h2 className="text-xl font-semibold text-slate-900">Expenses</h2><p className="text-sm text-slate-500">{expenses.length} records</p></div><Button onClick={onAdd ?? onCreate}>+ Add Expense</Button></div><DataTable columns={columns} rows={expenses} emptyMessage="No expenses yet"/></div>;
 }

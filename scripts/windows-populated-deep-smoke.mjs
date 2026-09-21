@@ -75,6 +75,14 @@ async function clickButton(ws, name, patterns, wait = 650) {
   return out;
 }
 
+async function clickRowButton(ws, name, rowText, buttonText, wait = 650) {
+  const raw = await evalIn(ws, `(async()=>{const row=[...document.querySelectorAll('tbody tr')].find(r=>(r.innerText||'').toLowerCase().includes(${JSON.stringify(rowText.toLowerCase())}));if(!row)return JSON.stringify({ok:false,error:'row'});const button=[...row.querySelectorAll('button,[role="button"]')].find(b=>((b.innerText||b.textContent||'')+' '+(b.getAttribute('aria-label')||'')).toLowerCase().includes(${JSON.stringify(buttonText.toLowerCase())})&&!b.disabled);if(!button)return JSON.stringify({ok:false,error:'button',available:[...row.querySelectorAll('button,[role="button"]')].map(b=>(b.innerText||b.textContent||'').trim())});button.click();await new Promise(r=>setTimeout(r,${wait}));return JSON.stringify({ok:true,text:(button.innerText||button.textContent||'').trim(),main:(document.querySelector('[data-testid="app-content"]')?.innerText||'').slice(0,5000)});})()`);
+  const out = JSON.parse(raw);
+  console.log(`ROW_BUTTON_${name} ${raw}`);
+  if (!out.ok) throw new Error(`Row button ${name} not found: ${raw}`);
+  return out;
+}
+
 async function assertMain(ws, name, patterns) {
   const raw = await evalIn(ws, `JSON.stringify((document.querySelector('[data-testid="app-content"]')?.innerText||'').slice(0,12000))`);
   const value = JSON.parse(raw);
@@ -333,6 +341,10 @@ async function main() {
     await setField(ws, "Add Expense", "Description", "QA interaction expense");
     await click(ws, "SAVE_EXPENSE", ["save expense"]);
     await assertMain(ws, "EXPENSE_SAVED", ["2 records", "QA interaction expense"]);
+    await clickRowButton(ws, "EXPENSE_REVERSE", "QA interaction expense", "Reverse");
+    await assertMain(ws, "EXPENSE_REVERSE_CONFIRM", ["Confirm Reverse"]);
+    await clickRowButton(ws, "EXPENSE_CONFIRM_REVERSE", "QA interaction expense", "Confirm Reverse");
+    await assertMain(ws, "EXPENSE_REVERSED", ["1 records", "QA order expense"]);
 
     // Supplier and purchase create.
     await click(ws, "SUPPLIERS", ["suppliers"]);
@@ -389,8 +401,8 @@ async function main() {
     await click(ws, "ACCOUNTING", ["accounting"]);
     await assertMain(ws, "ACCOUNTING", ["Accounting & General Ledger", "Chart of Accounts"]);
     await click(ws, "EXPENSE_STATEMENT", ["financial statements"]);
-    await assertMain(ws, "EXPENSE_AUTO_POSTED", ["Balance sheet balanced", "General Expenses"]);
-    await assertStatementProfit(ws, 175);
+    await assertMain(ws, "EXPENSE_AUTO_POSTED", ["Balance sheet balanced", "Order-specific Expenses"]);
+    await assertStatementProfit(ws, 225);
     await click(ws, "ACCOUNTS_TAB", ["chart of accounts"]);
     await setMainField(ws, "Account code", "6100");
     await setMainField(ws, "Account name", "QA Expense");
@@ -417,7 +429,7 @@ async function main() {
 
     await click(ws, "FINANCIAL_STATEMENTS", ["financial statements"]);
     await assertMain(ws, "FINANCIAL_STATEMENTS", ["Profit & Loss", "Balance Sheet", "QA Expense", "Balance sheet balanced"]);
-    await assertStatementProfit(ws, 75);
+    await assertStatementProfit(ws, 125);
 
     // Staff create + row drill-down.
     await click(ws, "STAFF", ["staff management"]);
