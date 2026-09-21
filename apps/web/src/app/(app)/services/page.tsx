@@ -92,9 +92,9 @@ export default function ServicesOrdersPage() {
     try { printOrderReceipt(result.order); } catch { /* blocked */ }
   }
 
-  function handleStatus(status: OrderStatus) {
+  function handleStatus(status: OrderStatus, refundPaymentMethod?: PaymentMethod) {
     if (!selected) return;
-    const res = ordersStore.updateOrderStatus(selected.id, status);
+    const res = ordersStore.updateOrderStatus(selected.id, status, { refundPaymentMethod });
     if (!res.order) {
       setStatusError(res.error ?? "Unable to update service order status");
       return;
