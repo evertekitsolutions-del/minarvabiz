@@ -1,9 +1,10 @@
 # Automatic accounting postings — Step 4C
 
-The first operational posting adapter covers **new paid expenses** created through
+The expense posting adapter covers **new paid expenses** created through
 `phase5Store.createExpense`, shared by Online, Windows and Hybrid. Older expenses
-are not backfilled during hydration or restore. Sales lifecycle postings are described below. Purchases and source expense
-corrections remain separate follow-up steps.
+are not backfilled during hydration or restore. Source-driven expense reversal is
+also supported for posted expenses that can be reconciled to their original journal.
+Sales lifecycle postings are described below.
 
 | Expense | Debit | Credit |
 | --- | --- | --- |
@@ -20,21 +21,35 @@ posts their full recorded amount without inventing tax-credit amounts.
 Each journal is posted once with `referenceType=expense` and the source expense
 ID. Repeating the same posting returns the existing journal; a conflicting replay
 is rejected. Automatic expense journals cannot be voided through the manual
-journal action. Their future corrections must keep the source record and ledger
-consistent.
+journal action.
+
+The Expenses list now uses a two-step **Reverse -> Confirm Reverse** source workflow.
+A valid reversal keeps the original journal immutable, creates an exact inverse
+`auto_expense_reverse` journal on the correction date, soft-deletes the source
+expense, increments its version and queues the changed source plus accounting
+records through the existing outbox. The reversal is itself protected from manual
+journal void. Repeating the reversal does not create another journal.
 
 Validation occurs before posting or queuing mutations. Source expense and journal
 state use the existing domain snapshot/SQLite persistence. Expense, required
 accounts, journal and lines enter the existing outbox synchronously. Online writes
 run expense -> accounts -> journal/lines; failure leaves pending outbox records.
 This is retryable asynchronous synchronization, not a cross-table server transaction.
-No schema or snapshot-version change is required.
+
+For new order-linked expenses, the linked order-cost row now reuses the parent
+Expense ID so reversal can remove the exact cost rather than guessing by amount or
+description. Historical/restored order-linked expenses whose cost row cannot be
+matched by that source ID are deliberately blocked with a reconciliation error;
+no legacy cost is guessed or silently rewritten. General historical expenses with
+no source journal are likewise blocked from reversal. No schema or snapshot-version
+change is required.
 
 Verification includes executable shared-store tests for permissions, idempotency,
-invalid inputs, payment mapping, linked-order costing, state restore, dependency
-ordering and network failure. Web and installed-Windows smoke create a 50-unit
-expense and assert -50 net profit before any manual journal, then -150 after a
-100-unit manual journal. Existing build, licensing and UI workflows remain gates.
+invalid inputs, payment mapping, linked-order costing, exact reversal, ambiguous
+historical-link guards, state restore, dependency ordering and network failure.
+Web and installed-Windows smoke create a 50-unit general expense, reverse it through
+the two-step UI, and verify downstream financial statements exclude that corrected
+expense. Existing build, licensing and UI workflows remain gates.
 
 Next: procurement invoice/payment posting and controlled opening-balance reconciliation. Do not backfill historic documents
 without an explicit cutover/reconciliation workflow.
