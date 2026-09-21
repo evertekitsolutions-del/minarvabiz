@@ -54,6 +54,7 @@ export interface CustomerReceivableItem {
   date: string;
   balance: number;
   postedReceivable: boolean;
+  sourceType: "service_order" | "laundry";
 }
 
 export interface CustomerReceivableProvider {
@@ -61,10 +62,11 @@ export interface CustomerReceivableProvider {
   apply(allocations: Array<{ item: CustomerReceivableItem; amount: number }>, now: string): void;
 }
 
-let customerReceivableProvider: CustomerReceivableProvider | null = null;
+const customerReceivableProviders = new Map<string, CustomerReceivableProvider>();
 
-export function registerCustomerReceivableProvider(provider: CustomerReceivableProvider | null) {
-  customerReceivableProvider = provider;
+export function registerCustomerReceivableProvider(key: string, provider: CustomerReceivableProvider | null) {
+  if (!provider) customerReceivableProviders.delete(key);
+  else customerReceivableProviders.set(key, provider);
 }
 
 if (allowDemoSeed()) {
@@ -721,15 +723,17 @@ export function recordCustomerPayment(input: {
   const saleCandidates = sales.filter((sale) => sale.customerId === customer.id && !sale.deletedAt
     && sale.status !== "cancelled" && sale.status !== "returned" && sale.balanceAmount > 0)
     .map((sale) => ({ kind: "sale" as const, id: sale.id, date: sale.saleDate, sale, balance: sale.balanceAmount }));
-  const externalCandidates = (customerReceivableProvider?.list(customer.id) ?? []).map((item) => ({
-    kind: "external" as const, id: item.id, date: item.date, item, balance: item.balance,
-  }));
+  const externalCandidates = [...customerReceivableProviders.entries()].flatMap(([providerKey, provider]) =>
+    provider.list(customer.id).map((item) => ({
+      kind: "external" as const, id: item.id, date: item.date, item, balance: item.balance, providerKey, provider,
+    }))
+  );
   const candidates = [...saleCandidates, ...externalCandidates]
     .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
 
   let remaining = applied;
   const allocations: Array<{ sale: Sale; amount: number }> = [];
-  const externalAllocations: Array<{ item: CustomerReceivableItem; amount: number }> = [];
+  const externalAllocations: Array<{ item: CustomerReceivableItem; amount: number; providerKey: string; provider: CustomerReceivableProvider }> = [];
   for (const candidate of candidates) {
     if (remaining <= 0) break;
     if (!Number.isFinite(candidate.balance) || candidate.balance <= 0 || !Number.isSafeInteger(Math.round(candidate.balance * 100))) {
@@ -746,17 +750,20 @@ export function recordCustomerPayment(input: {
       remaining = round2(remaining - amount);
     } else {
       const amount = round2(Math.min(remaining, candidate.item.balance));
-      externalAllocations.push({ item: candidate.item, amount });
+      externalAllocations.push({ item: candidate.item, amount, providerKey: candidate.providerKey, provider: candidate.provider });
       remaining = round2(remaining - amount);
     }
   }
 
   const now = nowISO();
   const invoiceNote = allocations.length ? "Invoices: " + allocations.map(({ sale, amount }) => sale.invoiceNumber + " " + amount.toFixed(2)).join(", ") : null;
-  const serviceNote = externalAllocations.length ? "Service orders: " + externalAllocations.map(({ item, amount }) => item.label + " " + amount.toFixed(2)).join(", ") : null;
+  const serviceAllocations = externalAllocations.filter(({ item }) => item.sourceType === "service_order");
+  const laundryAllocations = externalAllocations.filter(({ item }) => item.sourceType === "laundry");
+  const serviceNote = serviceAllocations.length ? "Service orders: " + serviceAllocations.map(({ item, amount }) => item.label + " " + amount.toFixed(2)).join(", ") : null;
+  const laundryNote = laundryAllocations.length ? "Laundry: " + laundryAllocations.map(({ item, amount }) => item.label + " " + amount.toFixed(2)).join(", ") : null;
   const payment: Payment = {
     id: generateId(), amount: applied, method: input.method, referenceType: "other", referenceId: customer.id,
-    customerId: customer.id, notes: [input.notes, input.reference, invoiceNote, serviceNote, remaining > 0 ? "Other customer balance: " + remaining.toFixed(2) : null].filter(Boolean).join(" · ") || null,
+    customerId: customer.id, notes: [input.notes, input.reference, invoiceNote, serviceNote, laundryNote, remaining > 0 ? "Other customer balance: " + remaining.toFixed(2) : null].filter(Boolean).join(" · ") || null,
     paidAt: now, createdAt: now, version: 1,
   };
   const additionalPostedReceivable = round2(externalAllocations
@@ -775,7 +782,14 @@ export function recordCustomerPayment(input: {
     sale.updatedAt = now;
     sale.version = (sale.version || 1) + 1;
   }
-  if (externalAllocations.length) customerReceivableProvider?.apply(externalAllocations, now);
+  if (externalAllocations.length) {
+    for (const [providerKey, provider] of customerReceivableProviders) {
+      const providerAllocations = externalAllocations
+        .filter((allocation) => allocation.providerKey === providerKey)
+        .map(({ item, amount }) => ({ item, amount }));
+      if (providerAllocations.length) provider.apply(providerAllocations, now);
+    }
+  }
   accountingPlan.commit();
   payments.push(payment);
   void remoteCollectCustomerPayment({ ...payment }, { ...customer }, allocations.map(({ sale }) => ({ ...sale, items: sale.items.map((item) => ({ ...item })) })));
@@ -783,7 +797,8 @@ export function recordCustomerPayment(input: {
   auditAction("customer.payment", "customers", customer.id, null, {
     paymentId: payment.id, amount: applied, method: input.method,
     allocations: allocations.map(({ sale, amount }) => ({ type: "sale", saleId: sale.id, invoiceNumber: sale.invoiceNumber, amount })),
-    serviceOrderAllocations: externalAllocations.map(({ item, amount }) => ({ type: "service_order", orderId: item.id, orderNumber: item.label, amount })),
+    serviceOrderAllocations: serviceAllocations.map(({ item, amount }) => ({ type: "service_order", orderId: item.id, orderNumber: item.label, amount })),
+    laundryAllocations: laundryAllocations.map(({ item, amount }) => ({ type: "laundry", laundryOrderId: item.id, orderNumber: item.label, amount })),
     otherBalanceAmount: remaining,
   });
   return { payment, customer, errors: [] };
