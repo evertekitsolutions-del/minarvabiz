@@ -27,7 +27,7 @@ export function OrderDetail({
 }: {
   order: ServiceOrder;
   measurementProfiles?: MeasurementProfile[];
-  onStatusChange?: (status: OrderStatus) => void;
+  onStatusChange?: (status: OrderStatus, refundPaymentMethod?: PaymentMethod) => void;
   onQualityCheck?: (input: { passed: boolean; notes: string; issues: string[] }) => void;
   expenseCategories?: ExpenseCategory[];
   onAddExpense?: (input: { description: string; amount: number; categoryId: string; paymentMethod: PaymentMethod }) => void;
@@ -37,6 +37,7 @@ export function OrderDetail({
   const [expAmt, setExpAmt] = React.useState("");
   const [expCategoryId, setExpCategoryId] = React.useState("");
   const [expPaymentMethod, setExpPaymentMethod] = React.useState<PaymentMethod>("cash");
+  const [refundPaymentMethod, setRefundPaymentMethod] = React.useState<PaymentMethod>("cash");
   const [qcNotes, setQcNotes] = React.useState("");
   const [qcIssue, setQcIssue] = React.useState("");
   const [qcIssues, setQcIssues] = React.useState<string[]>([]);
@@ -111,13 +112,38 @@ export function OrderDetail({
           );
         })}
         {order.status !== "cancelled" && order.status !== "delivered" && onStatusChange && (
-          <button
-            type="button"
-            onClick={() => onStatusChange("cancelled")}
-            className="rounded-full px-3 py-1 text-xs font-medium text-rose-600 ring-1 ring-inset ring-rose-200"
-          >
-            Cancel
-          </button>
+          order.advance > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                aria-label="Service order refund payment method"
+                value={refundPaymentMethod}
+                onChange={(event) => setRefundPaymentMethod(event.target.value as PaymentMethod)}
+                className="h-8 rounded-lg border border-rose-200 bg-white px-2 text-xs text-slate-700"
+              >
+                <option value="cash">Cash refund</option>
+                <option value="bank">Bank refund</option>
+                <option value="card">Card refund</option>
+                <option value="upi">UPI refund</option>
+                <option value="online">Online refund</option>
+                <option value="other">Other refund</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => onStatusChange("cancelled", refundPaymentMethod)}
+                className="rounded-full px-3 py-1 text-xs font-medium text-rose-600 ring-1 ring-inset ring-rose-200"
+              >
+                Refund {formatMoney(order.advance)} & Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onStatusChange("cancelled")}
+              className="rounded-full px-3 py-1 text-xs font-medium text-rose-600 ring-1 ring-inset ring-rose-200"
+            >
+              Cancel
+            </button>
+          )
         )}
       </div>
 
