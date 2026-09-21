@@ -19,8 +19,9 @@ import * as mainStore from "./store";
 import { touchPersistence } from "./autosave";
 import { remoteCreateOrder, remoteUpsertCustomer } from "./remote-write";
 import { queueOrderStatusMessage } from "./customer-communication";
-import { planServiceOrderPosting } from "./service-order-accounting";
+import { planServiceOrderCancellation, planServiceOrderPosting } from "./service-order-accounting";
 import { auditAction } from "./audit-actions";
+import { enqueueOutbox } from "./outbox-bridge";
 
 const measurements: MeasurementProfile[] = [];
 const orders: ServiceOrder[] = [];
@@ -251,6 +252,53 @@ export function updateOrderStatus(
   if (!canTransition(order.status, status)) {
     return { order: null, error: `Cannot change status from ${order.status} to ${status}` };
   }
+
+  if (status === "cancelled") {
+    if (!Number.isFinite(order.advance) || !Number.isFinite(order.balance) || order.advance < 0 || order.balance < 0
+      || !Number.isSafeInteger(Math.round(order.advance * 100)) || !Number.isSafeInteger(Math.round(order.balance * 100))) {
+      return { order: null, error: "Service order balances need reconciliation" };
+    }
+    if (round2(order.advance) > 0) {
+      return { order: null, error: "Refund the service-order advance before cancellation" };
+    }
+    const customer = mainStore.getCustomer(order.customerId);
+    if (!customer || !Number.isFinite(customer.outstandingBalance) || customer.outstandingBalance < order.balance
+      || !Number.isSafeInteger(Math.round(customer.outstandingBalance * 100))) {
+      return { order: null, error: "Customer balance needs reconciliation before cancellation" };
+    }
+    const hasUnallocatedCollection = mainStore.listPayments().some((payment) =>
+      payment.customerId === order.customerId
+      && payment.referenceType === "other"
+      && payment.paidAt >= order.createdAt
+      && /Other customer balance:/i.test(payment.notes ?? "")
+    );
+    if (hasUnallocatedCollection) {
+      return { order: null, error: "Customer collections need allocation before service-order cancellation" };
+    }
+    const reversal = planServiceOrderCancellation(order);
+    if (reversal.errors.length) return { order: null, error: reversal.errors.join("; ") };
+
+    const beforeOrder = { ...order };
+    const beforeCustomer = { ...customer };
+    const now = nowISO();
+    customer.outstandingBalance = round2(customer.outstandingBalance - order.balance);
+    customer.updatedAt = now;
+    order.status = "cancelled";
+    order.updatedAt = now;
+    order.version += 1;
+    reversal.commit();
+    enqueueOutbox("orders", order.id, "update", { ...order });
+    void remoteUpsertCustomer({ ...customer });
+    auditAction("service_order.cancel", "orders", order.id, beforeOrder, {
+      order: { ...order },
+      customerBefore: beforeCustomer.outstandingBalance,
+      customerAfter: customer.outstandingBalance,
+    });
+    touchPersistence();
+    queueOrderStatusMessage(order, customer);
+    return { order };
+  }
+
   order.status = status;
   order.updatedAt = nowISO();
   order.version += 1;

@@ -341,3 +341,24 @@ This milestone recognizes service revenue only. It does not yet invent accountin
 for estimated external material cost, T-shirt printing cost, later order expenses,
 status transitions, cancellations/refunds or a selectable advance tender; those
 remain separate source-driven follow-up workflows.
+
+
+## Service order cancellation posting
+
+The existing Service Order **Cancel** action now uses a source correction instead
+of changing status alone. For an automatically posted order with no advance, the
+system creates an exact inverse of the original `auto_service_order` journal,
+reduces the customer's outstanding balance by the still-recorded order balance,
+and only then marks the order cancelled. The original journal remains immutable.
+
+Cancellation is intentionally blocked when the order has an advance, because the
+current service-order UI has no explicit refund tender/workflow and the system must
+not invent a cash refund. It is also blocked for historical orders with no source
+journal, unavailable posting accounts, insufficient/corrupt customer balances, or
+when a post-order customer collection contains an unallocated "Other customer
+balance" amount. Those cases require allocation/refund/reconciliation first.
+
+Successful cancellation queues the changed order and customer plus reversal
+accounts/journal records through the existing outbox paths. Other service-order
+status transitions remain operational status changes only and create no accounting
+journal. No historical cancellation backfill is performed.
