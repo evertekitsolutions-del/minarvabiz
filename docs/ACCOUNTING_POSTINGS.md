@@ -365,24 +365,30 @@ or service order continues to use the existing `Other customer balance` path.
 
 ## Service order cancellation posting
 
-The existing Service Order **Cancel** action now uses a source correction instead
-of changing status alone. For an automatically posted order with no advance, the
-system creates an exact inverse of the original `auto_service_order` journal,
-reduces the customer's outstanding balance by the still-recorded order balance,
-and only then marks the order cancelled. The original journal remains immutable.
+The Service Order **Cancel** action uses a source correction instead of changing
+status alone. If any amount has been paid, the shared Web/Windows detail view requires
+an explicit refund tender (Cash, Bank, Card, UPI, Online or Other) and shows the
+full paid-to-date amount before cancellation. The refund amount is retained as a
+Payment source with `referenceType=refund` linked to the service order.
 
-Cancellation is intentionally blocked when the order has an advance, because there
-is still no explicit service-advance refund action/workflow. The recorded original
-advance tender is preserved in its Payment source, but cancellation must not invent
-a refund transaction. It is also blocked for historical orders with no source
-journal, unavailable posting accounts, insufficient/corrupt customer balances, or
-when a post-order customer collection contains an unallocated "Other customer
-balance" amount. Those cases require allocation/refund/reconciliation first.
+The cancellation journal reverses the current economic position: Service Revenue is
+debited for the order net price, Accounts Receivable is credited for the still-unpaid
+balance, and the selected refund tender is credited for the paid-to-date amount.
+This covers both the original advance and later customer collections without
+pretending that the refund used the same tender as every earlier receipt. The
+customer outstanding balance is reduced by the unpaid amount and total spending is
+reduced by the refunded amount.
 
-Successful cancellation queues the changed order and customer plus reversal
-accounts/journal records through the existing outbox paths. Other service-order
-status transitions remain operational status changes only and create no accounting
-journal. No historical cancellation backfill is performed.
+Cancellation remains blocked for historical orders with no source journal,
+insufficient/corrupt customer balances, invalid or missing refund tender, or when a
+post-order customer collection still contains an unallocated "Other customer
+balance" amount. Zero-paid orders continue through the same cancellation path
+without creating a refund Payment row.
+
+Successful cancellation queues the changed order, customer, refund Payment when
+applicable, and reversal accounting records through the existing hybrid outbox.
+Other service-order status transitions remain operational status changes only and
+create no accounting journal. No historical cancellation backfill is performed.
 
 
 ## Service order detail expense source

@@ -228,8 +228,7 @@ async function main() {
     await selectDialogFieldByText(ws, "New Service Order", "Advance payment method", "UPI");
     await click(ws, "CREATE_ORDER", ["create order"]);
     await assertMain(ws, "ORDER_CREATED", ["QA POS Customer", "₹250.00"]);
-    await click(ws, "BLOCK_SERVICE_CANCEL", ["cancel"]);
-    await assertMain(ws, "SERVICE_CANCEL_BLOCKED", ["Refund the service-order advance before cancellation"]);
+    await assertMain(ws, "SERVICE_REFUND_CANCEL_AVAILABLE", ["Refund ₹50.00 & Cancel", "Cash refund"]);
     await setByAriaLabel(ws, "Order expense category", "Other");
     await setByAriaLabel(ws, "Order expense payment method", "UPI");
     await setByAriaLabel(ws, "Order expense description", "QA order expense");

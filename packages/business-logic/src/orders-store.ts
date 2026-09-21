@@ -259,7 +259,8 @@ export function createOrder(input: {
 
 export function updateOrderStatus(
   id: UUID,
-  status: OrderStatus
+  status: OrderStatus,
+  options?: { refundPaymentMethod?: PaymentMethod }
 ): { order: ServiceOrder | null; error?: string } {
   assertPermission("orders.manage");
   const order = getOrder(id);
@@ -269,16 +270,23 @@ export function updateOrderStatus(
   }
 
   if (status === "cancelled") {
-    if (!Number.isFinite(order.advance) || !Number.isFinite(order.balance) || order.advance < 0 || order.balance < 0
-      || !Number.isSafeInteger(Math.round(order.advance * 100)) || !Number.isSafeInteger(Math.round(order.balance * 100))) {
+    if (!Number.isFinite(order.advance) || !Number.isFinite(order.balance) || !Number.isFinite(order.price)
+      || order.advance < 0 || order.balance < 0 || order.price < 0
+      || !Number.isSafeInteger(Math.round(order.advance * 100))
+      || !Number.isSafeInteger(Math.round(order.balance * 100))
+      || !Number.isSafeInteger(Math.round(order.price * 100))
+      || round2(order.advance + order.balance) !== round2(order.price)) {
       return { order: null, error: "Service order balances need reconciliation" };
     }
-    if (round2(order.advance) > 0) {
-      return { order: null, error: "Refund the service-order advance before cancellation" };
+    const refundPaymentMethod = options?.refundPaymentMethod;
+    if (round2(order.advance) > 0 && !refundPaymentMethod) {
+      return { order: null, error: "Refund method is required for the service-order advance before cancellation" };
     }
     const customer = mainStore.getCustomer(order.customerId);
     if (!customer || !Number.isFinite(customer.outstandingBalance) || customer.outstandingBalance < order.balance
-      || !Number.isSafeInteger(Math.round(customer.outstandingBalance * 100))) {
+      || !Number.isSafeInteger(Math.round(customer.outstandingBalance * 100))
+      || !Number.isFinite(customer.totalSpending) || customer.totalSpending < order.advance
+      || !Number.isSafeInteger(Math.round(customer.totalSpending * 100))) {
       return { order: null, error: "Customer balance needs reconciliation before cancellation" };
     }
     const hasUnallocatedCollection = mainStore.listPayments().some((payment) =>
@@ -290,24 +298,39 @@ export function updateOrderStatus(
     if (hasUnallocatedCollection) {
       return { order: null, error: "Customer collections need allocation before service-order cancellation" };
     }
-    const reversal = planServiceOrderCancellation(order);
+    const reversal = planServiceOrderCancellation(order, refundPaymentMethod);
     if (reversal.errors.length) return { order: null, error: reversal.errors.join("; ") };
 
     const beforeOrder = { ...order };
     const beforeCustomer = { ...customer };
     const now = nowISO();
     customer.outstandingBalance = round2(customer.outstandingBalance - order.balance);
+    customer.totalSpending = round2(customer.totalSpending - order.advance);
     customer.updatedAt = now;
     order.status = "cancelled";
     order.updatedAt = now;
     order.version += 1;
     reversal.commit();
+    const refundPayment = order.advance > 0 && refundPaymentMethod
+      ? mainStore.recordOrderRefundPaymentEntry({
+          orderId: order.id,
+          customerId: order.customerId,
+          amount: order.advance,
+          method: refundPaymentMethod,
+          refundedAt: now,
+        })
+      : null;
     enqueueOutbox("orders", order.id, "update", { ...order });
     void remoteUpsertCustomer({ ...customer });
     auditAction("service_order.cancel", "orders", order.id, beforeOrder, {
       order: { ...order },
-      customerBefore: beforeCustomer.outstandingBalance,
-      customerAfter: customer.outstandingBalance,
+      refundPaymentId: refundPayment?.id ?? null,
+      refundAmount: refundPayment?.amount ?? 0,
+      refundPaymentMethod: refundPayment?.method ?? null,
+      customerOutstandingBefore: beforeCustomer.outstandingBalance,
+      customerOutstandingAfter: customer.outstandingBalance,
+      customerSpendingBefore: beforeCustomer.totalSpending,
+      customerSpendingAfter: customer.totalSpending,
     });
     touchPersistence();
     queueOrderStatusMessage(order, customer);
