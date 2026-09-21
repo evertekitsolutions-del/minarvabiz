@@ -171,7 +171,39 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
   return {order,errors:[]};
 }
 
-export function updateLaundryStatus(id: UUID,status:LaundryOrder["status"]): LaundryOrder|null { assertPermission("orders.manage");const o=laundryOrders.find(x=>x.id===id&&!x.deletedAt);if(!o)return null;o.status=status;o.updatedAt=nowISO();o.version+=1;touchPersistence();enqueueOutbox("laundry_orders",o.id,"update",o);return o; }
+export function updateLaundryStatus(
+  id: UUID,
+  status: LaundryOrder["status"]
+): { order: LaundryOrder | null; error?: string } {
+  assertPermission("orders.manage");
+  const order = laundryOrders.find((item) => item.id === id && !item.deletedAt);
+  if (!order) return { order: null, error: "Laundry order not found" };
+  if (status === "cancelled") {
+    return { order: null, error: "Laundry cancellation requires a separate refund/reconciliation workflow" };
+  }
+  if (order.mode === "in_house_ironing") {
+    return { order: null, error: "In-house ironing is completed at creation" };
+  }
+  const next: Partial<Record<LaundryOrder["status"], LaundryOrder["status"]>> = {
+    pending: "sent",
+    sent: "received",
+    received: "delivered",
+  };
+  if (next[order.status] !== status) {
+    return { order: null, error: `Cannot change laundry status from ${order.status} to ${status}` };
+  }
+  const before = { status: order.status, updatedAt: order.updatedAt, version: order.version };
+  order.status = status;
+  order.updatedAt = nowISO();
+  order.version += 1;
+  touchPersistence();
+  enqueueOutbox("laundry_orders", order.id, "update", { ...order });
+  auditAction("laundry.status", "laundry_orders", order.id, before, {
+    status: order.status,
+    version: order.version,
+  });
+  return { order };
+}
 export function listExpenseCategories():ExpenseCategory[]{return[...expenseCategories];}
 export function createExpenseCategory(name:string):ExpenseCategory{assertPermission("expenses.manage");const c:ExpenseCategory={id:generateId(),name,isSystem:false,createdAt:nowISO()};expenseCategories.push(c);touchPersistence();enqueueOutbox("expense_categories",c.id,"insert",c);return c;}
 export function listExpenses(opts?:{orderId?:UUID}):Expense[]{let list=expenses.filter(e=>!e.deletedAt);if(opts?.orderId)list=list.filter(e=>e.orderId===opts.orderId);return list.sort((a,b)=>b.date.localeCompare(a.date));}

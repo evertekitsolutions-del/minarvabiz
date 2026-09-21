@@ -318,8 +318,14 @@ non-finite/out-of-range amounts reject without creating the order or journal.
 The source order, changed customer/supplier snapshots, accounts, journal and
 journal lines use the existing persistence/outbox paths. Automatic laundry journals
 cannot be manually voided. Hydrated historical laundry orders are not backfilled.
-Laundry status changes and cancellations/refunds remain separate follow-up
-milestones. Service-order revenue recognition is covered in the sections below.
+
+Outsourced laundry now has a guarded operational lifecycle:
+`pending -> sent -> received -> delivered`. These status transitions only update
+the source ticket/version and outbox/audit state; they do not create or alter
+financial journals. In-house ironing remains delivered at creation. Laundry
+cancellation is intentionally rejected by the status API until a separate
+customer-refund and supplier-cost reconciliation workflow defines the financial
+effect. Service-order revenue recognition is covered in the sections below.
 
 
 ## Service order posting
