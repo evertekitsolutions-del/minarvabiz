@@ -308,16 +308,18 @@ The resulting profit-and-loss effect therefore reflects laundry revenue less the
 recorded outsourced cost without inventing inventory movements.
 
 Quantity, customer/supplier rates, paid/balance amounts, customer balance and
-supplier balance are validated before source mutation. The existing UI cash
-default is preserved when no payment method is supplied. Missing customers,
+supplier balance are validated before source mutation. The shared Web/Windows
+laundry form now captures the actual receipt tender (Cash, Bank, Card, UPI,
+Online or Other) and passes it to the same core posting path. Non-UI callers that
+omit a payment method still retain the core Cash default. Missing customers,
 required suppliers, unavailable accounting accounts, corrupt balances and
 non-finite/out-of-range amounts reject without creating the order or journal.
 
 The source order, changed customer/supplier snapshots, accounts, journal and
 journal lines use the existing persistence/outbox paths. Automatic laundry journals
 cannot be manually voided. Hydrated historical laundry orders are not backfilled.
-Status changes, cancellations/refunds and service-order revenue recognition remain
-separate follow-up milestones.
+Laundry status changes and cancellations/refunds remain separate follow-up
+milestones. Service-order revenue recognition is covered in the sections below.
 
 
 ## Service order posting

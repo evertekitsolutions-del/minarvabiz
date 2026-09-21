@@ -60,7 +60,7 @@ reset(); permissions.setCurrentRole(null); assert.throws(()=>phase5.createLaundr
 
 reset();
 r=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"outsourced",supplierId:"s",supplierRate:4,customerRate:10,paidAmount:3,paymentMethod:"upi"});
-assert.equal(r.errors.length,0);
+assert.equal(r.errors.length,0); assert.equal(bal("payment_clearing"),3); assert.equal(bal("cash"),0);
 for(const type of ["laundry_orders","customers","suppliers","accounts","journal_entries","journal_entry_lines"]) assert(outbox.listPendingOutbox().some(e=>e.aggregateType===type),type);
 
 reset();
