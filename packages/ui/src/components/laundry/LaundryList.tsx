@@ -6,7 +6,7 @@ import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 
-export function LaundryList({ orders, onAddOutsourced, onAddIroning, onCreate, onSearch, onSelect, onStatusChange }: { orders: LaundryOrder[]; onAddOutsourced?: () => void; onAddIroning?: () => void; onCreate?: (mode: "outsourced" | "in_house_ironing") => void; onSearch?: (q: string) => void; onSelect?: (o: LaundryOrder) => void; onStatusChange?: (order: LaundryOrder, status: LaundryOrder["status"]) => void }) {
+export function LaundryList({ orders, onAddOutsourced, onAddIroning, onCreate, onSearch, onSelect, onStatusChange, onCancel }: { orders: LaundryOrder[]; onAddOutsourced?: () => void; onAddIroning?: () => void; onCreate?: (mode: "outsourced" | "in_house_ironing") => void; onSearch?: (q: string) => void; onSelect?: (o: LaundryOrder) => void; onStatusChange?: (order: LaundryOrder, status: LaundryOrder["status"]) => void; onCancel?: (order: LaundryOrder) => void }) {
   const [q, setQ] = React.useState("");
   const columns: Column<LaundryOrder>[] = [
     { key: "orderNumber", header: "Order", render: (r) => <span className="font-medium">{r.orderNumber}</span> },
@@ -18,11 +18,16 @@ export function LaundryList({ orders, onAddOutsourced, onAddIroning, onCreate, o
     { key: "profit", header: "Profit", render: (r) => <span className="font-medium text-emerald-600">{formatMoney(r.profit)}</span> },
     { key: "status", header: "Status", render: (r) => <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs capitalize">{r.status}</span> },
     { key: "action", header: "Action", render: (r) => {
-      if (r.mode !== "outsourced" || !onStatusChange) return <span className="text-xs text-slate-400">—</span>;
-      const next = r.status === "pending" ? "sent" : r.status === "sent" ? "received" : r.status === "received" ? "delivered" : null;
-      if (!next) return <span className="text-xs text-slate-400">—</span>;
-      const label = next === "sent" ? "Mark Sent" : next === "received" ? "Mark Received" : "Mark Delivered";
-      return <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onStatusChange(r, next); }}>{label}</Button>;
+      if (r.status === "cancelled") return <span className="text-xs text-slate-400">—</span>;
+      const next = r.mode === "outsourced"
+        ? (r.status === "pending" ? "sent" : r.status === "sent" ? "received" : r.status === "received" ? "delivered" : null)
+        : null;
+      const label = next === "sent" ? "Mark Sent" : next === "received" ? "Mark Received" : next === "delivered" ? "Mark Delivered" : null;
+      if (!label && !onCancel) return <span className="text-xs text-slate-400">—</span>;
+      return <div className="flex flex-wrap gap-1">
+        {label && onStatusChange && <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); onStatusChange(r, next!); }}>{label}</Button>}
+        {onCancel && <Button size="sm" variant="danger" onClick={(e) => { e.stopPropagation(); onCancel(r); }}>Cancel Ticket</Button>}
+      </div>;
     } },
   ];
   const ironing = onAddIroning ?? (() => onCreate?.("in_house_ironing"));
