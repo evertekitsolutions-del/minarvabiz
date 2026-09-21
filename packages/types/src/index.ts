@@ -159,7 +159,7 @@ export interface Payment {
   id: UUID;
   amount: number;
   method: PaymentMethod;
-  referenceType: "sale" | "order" | "expense" | "supplier" | "refund" | "other";
+  referenceType: "sale" | "order" | "laundry" | "expense" | "supplier" | "refund" | "other";
   referenceId: UUID;
   customerId?: UUID | null;
   notes?: string | null;
