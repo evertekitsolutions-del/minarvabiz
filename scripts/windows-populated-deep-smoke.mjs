@@ -236,6 +236,21 @@ async function main() {
     await click(ws, "ORDER_EXPENSE", ["record expense"]);
     await assertMain(ws, "ORDER_EXPENSE_SAVED", ["QA order expense", "₹25.00"]);
 
+    // Exercise the explicit paid-order refund cancellation from the installed Windows UI.
+    await click(ws, "REFUND_ORDER_NEW", ["new order"]);
+    await selectDialogFieldByText(ws, "New Service Order", "Customer", "QA POS Customer");
+    await setField(ws, "New Service Order", "Price", "120");
+    await setField(ws, "New Service Order", "Advance", "30");
+    await selectDialogFieldByText(ws, "New Service Order", "Advance payment method", "Bank");
+    await click(ws, "REFUND_ORDER_CREATE", ["create order"]);
+    await assertMain(ws, "REFUND_CANCEL_AVAILABLE", ["Refund ₹30.00 & Cancel", "Cash refund"]);
+    await setByAriaLabel(ws, "Service order refund payment method", "Bank");
+    await click(ws, "REFUND_CANCEL_SERVICE", ["refund ₹30.00 & cancel"]);
+    const refundCancelState = JSON.parse(await evalIn(ws, `JSON.stringify({button:[...document.querySelectorAll('button')].some(b=>(b.innerText||'').includes('Refund ₹30.00 & Cancel')),main:(document.querySelector('[data-testid="app-content"]')?.innerText||'').slice(0,5000)})`));
+    if (refundCancelState.button) throw new Error("Service-order refund cancel action remained available after cancellation");
+    await click(ws, "REFUND_VERIFY_PAYMENTS", ["payments"]);
+    await assertMain(ws, "REFUND_PAYMENT_SOURCE", ["Service order cancellation refund", "₹30.00", "bank"]);
+
 
     // Payment collection against the unpaid sale.
     await click(ws, "PAYMENTS", ["payments"]);
