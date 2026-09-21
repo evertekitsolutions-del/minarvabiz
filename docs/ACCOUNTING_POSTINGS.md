@@ -345,9 +345,23 @@ orders are not backfilled and do not receive synthetic advance Payment rows.
 
 Estimated external material cost and T-shirt printing cost remain planning/profit
 inputs rather than invented actual expenses. Later real order expenses and guarded
-zero-advance cancellation are covered below; balance-collection allocation and
-advance refund/cancellation remain separate source-driven workflows.
+cancellation are covered below; advance refund/cancellation remains a separate
+source-driven workflow.
 
+## Service order balance collection
+
+The normal customer **Collect Payment** flow now allocates FIFO across both retail
+invoice receivables and open service-order balances for the same customer. A
+collection allocated to a service order increases the order's paid/advance amount,
+reduces its balance, queues the changed order for hybrid persistence and records the
+order allocation in the collection audit metadata.
+
+For service orders created by the current accounting engine, the collection debits
+the selected tender account and credits Accounts Receivable. Hydrated historical
+service orders that have no source `auto_service_order` journal are still collectible,
+but their amount is routed to Legacy Settlement Clearing instead of inventing a
+historical receivable. Any residual customer balance that cannot be tied to an invoice
+or service order continues to use the existing `Other customer balance` path.
 
 ## Service order cancellation posting
 

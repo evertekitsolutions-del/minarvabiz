@@ -44,10 +44,23 @@ reset(chart,100,0);
 created=orders.createOrder({customerId:"c",serviceType:"ladies_tailoring",price:100,advance:0});
 assert.equal(created.errors.length,0);
 const paid=store.recordCustomerPayment({customerId:"c",amount:20,method:"cash"});
-assert.equal(paid.errors.length,0); assert.match(paid.payment.notes,/Other customer balance:/);
+assert.equal(paid.errors.length,0); assert.match(paid.payment.notes,/Service orders:/);
+assert.equal(created.order.advance,20); assert.equal(created.order.balance,80);
 const collectionSnap=snap();
 cancelled=orders.updateOrderStatus(created.order.id,"cancelled");
-assert.equal(cancelled.order,null); assert.match(cancelled.error,/collections need allocation/i); assert.equal(snap(),collectionSnap);
+assert.equal(cancelled.order,null); assert.match(cancelled.error,/refund.*advance/i); assert.equal(snap(),collectionSnap);
+
+// Preserve the reconciliation guard for imported/pre-existing unallocated collections.
+reset();
+created=orders.createOrder({customerId:"c",serviceType:"ladies_tailoring",price:100,advance:0});
+assert.equal(created.errors.length,0);
+store.hydrateCore({payments:[{
+  id:"legacy-unallocated",amount:20,method:"cash",referenceType:"other",referenceId:"c",customerId:"c",
+  notes:"Other customer balance: 20.00",paidAt:created.order.createdAt,createdAt:created.order.createdAt,version:1
+}]});
+const unallocatedSnap=snap();
+cancelled=orders.updateOrderStatus(created.order.id,"cancelled");
+assert.equal(cancelled.order,null); assert.match(cancelled.error,/collections need allocation/i); assert.equal(snap(),unallocatedSnap);
 
 reset();
 orders.hydrateOrders({orders:[{id:"old",orderNumber:"ORD-OLD",customerId:"c",customerName:"Cancel Customer",orderDate:"2026-01-01",serviceType:"ladies_tailoring",status:"pending",customerSuppliedMaterial:false,shopSuppliedMaterial:true,price:100,discount:0,advance:0,balance:100,externalMaterialCost:0,orderExpensesTotal:0,quantity:1,unitPrice:100,bulkDiscount:0,tshirt:null,expenses:[],createdAt:"2026-01-01",updatedAt:"2026-01-01",version:1}],measurements:[]});

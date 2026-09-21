@@ -19,7 +19,7 @@ import * as mainStore from "./store";
 import { touchPersistence } from "./autosave";
 import { remoteCreateOrder, remoteUpsertCustomer } from "./remote-write";
 import { queueOrderStatusMessage } from "./customer-communication";
-import { planServiceOrderCancellation, planServiceOrderPosting } from "./service-order-accounting";
+import { hasServiceOrderPosting, planServiceOrderCancellation, planServiceOrderPosting } from "./service-order-accounting";
 import { auditAction } from "./audit-actions";
 import { enqueueOutbox } from "./outbox-bridge";
 
@@ -372,6 +372,44 @@ export function getOrderProfit(orderId: UUID) {
 function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
+
+mainStore.registerCustomerReceivableProvider({
+  list(customerId) {
+    return orders
+      .filter((order) => !order.deletedAt && order.customerId === customerId && order.status !== "cancelled" && order.balance > 0)
+      .map((order) => ({
+        id: order.id,
+        label: order.orderNumber,
+        date: order.orderDate,
+        balance: order.balance,
+        postedReceivable: hasServiceOrderPosting(order.id),
+      }));
+  },
+  apply(allocations, now) {
+    for (const { item, amount } of allocations) {
+      const order = getOrder(item.id);
+      if (!order || order.status === "cancelled") throw new Error("Service order collection target is no longer available");
+      if (!Number.isFinite(order.advance) || !Number.isFinite(order.balance) || amount <= 0 || amount > order.balance
+        || !Number.isSafeInteger(Math.round((order.advance + amount) * 100))
+        || !Number.isSafeInteger(Math.round((order.balance - amount) * 100))) {
+        throw new Error("Service order balances need reconciliation");
+      }
+      const before = { advance: order.advance, balance: order.balance, version: order.version };
+      order.advance = round2(order.advance + amount);
+      order.balance = round2(order.balance - amount);
+      order.updatedAt = now;
+      order.version += 1;
+      enqueueOutbox("orders", order.id, "update", { ...order, expenses: order.expenses.map((expense) => ({ ...expense })) });
+      void remoteCreateOrder({ ...order, expenses: order.expenses.map((expense) => ({ ...expense })) });
+      auditAction("service_order.collection", "orders", order.id, before, {
+        advance: order.advance,
+        balance: order.balance,
+        amount,
+      });
+    }
+    touchPersistence();
+  },
+});
 
 (function seed() {
   if (!isDemoMode()) return;

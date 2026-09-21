@@ -48,6 +48,25 @@ export interface HeldSale {
 
 const heldSales: HeldSale[] = [];
 
+export interface CustomerReceivableItem {
+  id: UUID;
+  label: string;
+  date: string;
+  balance: number;
+  postedReceivable: boolean;
+}
+
+export interface CustomerReceivableProvider {
+  list(customerId: UUID): CustomerReceivableItem[];
+  apply(allocations: Array<{ item: CustomerReceivableItem; amount: number }>, now: string): void;
+}
+
+let customerReceivableProvider: CustomerReceivableProvider | null = null;
+
+export function registerCustomerReceivableProvider(provider: CustomerReceivableProvider | null) {
+  customerReceivableProvider = provider;
+}
+
 if (allowDemoSeed()) {
   categories.push(
     { id: "cat-1", name: "Ornaments", isActive: true, createdAt: nowISO(), updatedAt: nowISO() },
@@ -579,31 +598,54 @@ export function recordCustomerPayment(input: {
 
   const applied = round2(Math.min(input.amount, customer.outstandingBalance));
   if (applied <= 0) return { payment: null, customer: null, errors: ["No outstanding balance to collect"] };
-  const eligible = sales.filter((sale) => sale.customerId === customer.id && !sale.deletedAt
+
+  const saleCandidates = sales.filter((sale) => sale.customerId === customer.id && !sale.deletedAt
     && sale.status !== "cancelled" && sale.status !== "returned" && sale.balanceAmount > 0)
-    .sort((a, b) => a.saleDate.localeCompare(b.saleDate) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
-  // Build the complete allocation before changing customer, invoice or outbox state.
+    .map((sale) => ({ kind: "sale" as const, id: sale.id, date: sale.saleDate, sale, balance: sale.balanceAmount }));
+  const externalCandidates = (customerReceivableProvider?.list(customer.id) ?? []).map((item) => ({
+    kind: "external" as const, id: item.id, date: item.date, item, balance: item.balance,
+  }));
+  const candidates = [...saleCandidates, ...externalCandidates]
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+
   let remaining = applied;
   const allocations: Array<{ sale: Sale; amount: number }> = [];
-  for (const sale of eligible) {
+  const externalAllocations: Array<{ item: CustomerReceivableItem; amount: number }> = [];
+  for (const candidate of candidates) {
     if (remaining <= 0) break;
-    if (![sale.total, sale.paidAmount, sale.balanceAmount].every(Number.isFinite) || sale.paidAmount < 0
-      || round2(sale.paidAmount + sale.balanceAmount) !== round2(sale.total)) {
-      return { payment: null, customer: null, errors: ["Invoice balances need reconciliation: " + sale.invoiceNumber] };
+    if (!Number.isFinite(candidate.balance) || candidate.balance <= 0 || !Number.isSafeInteger(Math.round(candidate.balance * 100))) {
+      return { payment: null, customer: null, errors: ["Customer receivable balances need reconciliation: " + candidate.id] };
     }
-    const amount = round2(Math.min(remaining, sale.balanceAmount));
-    allocations.push({ sale, amount });
-    remaining = round2(remaining - amount);
+    if (candidate.kind === "sale") {
+      const sale = candidate.sale;
+      if (![sale.total, sale.paidAmount, sale.balanceAmount].every(Number.isFinite) || sale.paidAmount < 0
+        || round2(sale.paidAmount + sale.balanceAmount) !== round2(sale.total)) {
+        return { payment: null, customer: null, errors: ["Invoice balances need reconciliation: " + sale.invoiceNumber] };
+      }
+      const amount = round2(Math.min(remaining, sale.balanceAmount));
+      allocations.push({ sale, amount });
+      remaining = round2(remaining - amount);
+    } else {
+      const amount = round2(Math.min(remaining, candidate.item.balance));
+      externalAllocations.push({ item: candidate.item, amount });
+      remaining = round2(remaining - amount);
+    }
   }
+
   const now = nowISO();
-  const allocationNote = allocations.length ? "Invoices: " + allocations.map(({ sale, amount }) => sale.invoiceNumber + " " + amount.toFixed(2)).join(", ") : null;
+  const invoiceNote = allocations.length ? "Invoices: " + allocations.map(({ sale, amount }) => sale.invoiceNumber + " " + amount.toFixed(2)).join(", ") : null;
+  const serviceNote = externalAllocations.length ? "Service orders: " + externalAllocations.map(({ item, amount }) => item.label + " " + amount.toFixed(2)).join(", ") : null;
   const payment: Payment = {
     id: generateId(), amount: applied, method: input.method, referenceType: "other", referenceId: customer.id,
-    customerId: customer.id, notes: [input.notes, input.reference, allocationNote, remaining > 0 ? "Other customer balance: " + remaining.toFixed(2) : null].filter(Boolean).join(" · ") || null,
+    customerId: customer.id, notes: [input.notes, input.reference, invoiceNote, serviceNote, remaining > 0 ? "Other customer balance: " + remaining.toFixed(2) : null].filter(Boolean).join(" · ") || null,
     paidAt: now, createdAt: now, version: 1,
   };
-  const accountingPlan = planCollectionPosting(payment, allocations);
+  const additionalPostedReceivable = round2(externalAllocations
+    .filter(({ item }) => item.postedReceivable)
+    .reduce((sum, { amount }) => sum + amount, 0));
+  const accountingPlan = planCollectionPosting(payment, allocations, additionalPostedReceivable);
   if (accountingPlan.errors.length) return { payment: null, customer: null, errors: accountingPlan.errors };
+
   customer.outstandingBalance = round2(Math.max(0, customer.outstandingBalance - applied));
   customer.totalSpending = round2(customer.totalSpending + applied);
   customer.updatedAt = now;
@@ -614,12 +656,17 @@ export function recordCustomerPayment(input: {
     sale.updatedAt = now;
     sale.version = (sale.version || 1) + 1;
   }
+  if (externalAllocations.length) customerReceivableProvider?.apply(externalAllocations, now);
   accountingPlan.commit();
   payments.push(payment);
   void remoteCollectCustomerPayment({ ...payment }, { ...customer }, allocations.map(({ sale }) => ({ ...sale, items: sale.items.map((item) => ({ ...item })) })));
   touchPersistence();
-  auditAction("customer.payment", "customers", customer.id, null, { paymentId: payment.id, amount: applied, method: input.method,
-    allocations: allocations.map(({ sale, amount }) => ({ saleId: sale.id, invoiceNumber: sale.invoiceNumber, amount })), otherBalanceAmount: remaining });
+  auditAction("customer.payment", "customers", customer.id, null, {
+    paymentId: payment.id, amount: applied, method: input.method,
+    allocations: allocations.map(({ sale, amount }) => ({ type: "sale", saleId: sale.id, invoiceNumber: sale.invoiceNumber, amount })),
+    serviceOrderAllocations: externalAllocations.map(({ item, amount }) => ({ type: "service_order", orderId: item.id, orderNumber: item.label, amount })),
+    otherBalanceAmount: remaining,
+  });
   return { payment, customer, errors: [] };
 }
 
