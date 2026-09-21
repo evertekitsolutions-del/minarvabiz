@@ -8,6 +8,12 @@ function tenderKey(method: PaymentMethod): string {
   return method === "cash" ? "cash" : method === "bank" ? "bank" : "payment_clearing";
 }
 
+export function hasLaundryPosting(orderId: string): boolean {
+  return listJournalEntries().some((entry) =>
+    entry.referenceType === "auto_laundry" && entry.referenceId === orderId && entry.status === "posted"
+  );
+}
+
 export function planLaundryPosting(order: LaundryOrder, paymentMethod: PaymentMethod): AutomaticPostingPlan {
   const values = [
     order.quantity, order.customerRate, order.supplierRate, order.totalCustomerCharge,
