@@ -488,6 +488,20 @@ mainStore.registerCustomerReceivableProvider("laundry", {
         sourceType: "laundry" as const,
       }));
   },
+  validate(allocations) {
+    for (const { item, amount } of allocations) {
+      const order = laundryOrders.find((candidate) => candidate.id === item.id && !candidate.deletedAt);
+      if (!order || order.status === "cancelled") return "Laundry collection target is no longer available";
+      if (![order.totalCustomerCharge, order.paidAmount, order.balanceAmount, amount].every(Number.isFinite)
+        || order.paidAmount < 0 || order.balanceAmount <= 0 || amount <= 0 || amount > order.balanceAmount
+        || r2(order.paidAmount + order.balanceAmount) !== r2(order.totalCustomerCharge)
+        || !Number.isSafeInteger(Math.round((order.paidAmount + amount) * 100))
+        || !Number.isSafeInteger(Math.round((order.balanceAmount - amount) * 100))) {
+        return "Laundry balances need reconciliation";
+      }
+    }
+    return null;
+  },
   apply(allocations, now) {
     for (const { item, amount } of allocations) {
       const order = laundryOrders.find((candidate) => candidate.id === item.id && !candidate.deletedAt);
