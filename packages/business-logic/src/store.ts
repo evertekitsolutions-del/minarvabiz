@@ -59,6 +59,7 @@ export interface CustomerReceivableItem {
 
 export interface CustomerReceivableProvider {
   list(customerId: UUID): CustomerReceivableItem[];
+  validate(allocations: Array<{ item: CustomerReceivableItem; amount: number }>): string | null;
   apply(allocations: Array<{ item: CustomerReceivableItem; amount: number }>, now: string): void;
 }
 
@@ -725,7 +726,7 @@ export function recordCustomerPayment(input: {
     .map((sale) => ({ kind: "sale" as const, id: sale.id, date: sale.saleDate, sale, balance: sale.balanceAmount }));
   const externalCandidates = [...customerReceivableProviders.entries()].flatMap(([providerKey, provider]) =>
     provider.list(customer.id).map((item) => ({
-      kind: "external" as const, id: item.id, date: item.date, item, balance: item.balance, providerKey, provider,
+      kind: "external" as const, id: item.id, date: item.date, item, balance: item.balance, providerKey,
     }))
   );
   const candidates = [...saleCandidates, ...externalCandidates]
@@ -733,7 +734,7 @@ export function recordCustomerPayment(input: {
 
   let remaining = applied;
   const allocations: Array<{ sale: Sale; amount: number }> = [];
-  const externalAllocations: Array<{ item: CustomerReceivableItem; amount: number; providerKey: string; provider: CustomerReceivableProvider }> = [];
+  const externalAllocations: Array<{ item: CustomerReceivableItem; amount: number; providerKey: string }> = [];
   for (const candidate of candidates) {
     if (remaining <= 0) break;
     if (!Number.isFinite(candidate.balance) || candidate.balance <= 0 || !Number.isSafeInteger(Math.round(candidate.balance * 100))) {
@@ -750,7 +751,7 @@ export function recordCustomerPayment(input: {
       remaining = round2(remaining - amount);
     } else {
       const amount = round2(Math.min(remaining, candidate.item.balance));
-      externalAllocations.push({ item: candidate.item, amount, providerKey: candidate.providerKey, provider: candidate.provider });
+      externalAllocations.push({ item: candidate.item, amount, providerKey: candidate.providerKey });
       remaining = round2(remaining - amount);
     }
   }
@@ -761,6 +762,15 @@ export function recordCustomerPayment(input: {
   const laundryAllocations = externalAllocations.filter(({ item }) => item.sourceType === "laundry");
   const serviceNote = serviceAllocations.length ? "Service orders: " + serviceAllocations.map(({ item, amount }) => item.label + " " + amount.toFixed(2)).join(", ") : null;
   const laundryNote = laundryAllocations.length ? "Laundry: " + laundryAllocations.map(({ item, amount }) => item.label + " " + amount.toFixed(2)).join(", ") : null;
+  for (const [providerKey, provider] of customerReceivableProviders) {
+    const providerAllocations = externalAllocations
+      .filter((allocation) => allocation.providerKey === providerKey)
+      .map(({ item, amount }) => ({ item, amount }));
+    if (!providerAllocations.length) continue;
+    const validationError = provider.validate(providerAllocations);
+    if (validationError) return { payment: null, customer: null, errors: [validationError] };
+  }
+
   const payment: Payment = {
     id: generateId(), amount: applied, method: input.method, referenceType: "other", referenceId: customer.id,
     customerId: customer.id, notes: [input.notes, input.reference, invoiceNote, serviceNote, laundryNote, remaining > 0 ? "Other customer balance: " + remaining.toFixed(2) : null].filter(Boolean).join(" · ") || null,
