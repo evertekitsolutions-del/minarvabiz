@@ -57,6 +57,30 @@ assert(current); assert.equal(current.balanceAmount,0); assert.equal(current.pai
 assert.equal(store.getCustomer("c").outstandingBalance,0);
 assert.equal(bal("accounts_receivable"),0); assert(accounting.buildBalanceSheet().balanced);
 
+reset();
+const safeService=orders.createOrder({customerId:"c",serviceType:"ladies_tailoring",price:40,advance:0});
+assert.equal(safeService.errors.length,0); assert(safeService.order);
+store.hydrateCore({customers:[customer(70,0)],products:[],sales:[],payments:[]});
+phase5.hydratePhase5({suppliers:[{...supplier}],laundryOrders:[{
+  id:"bad-laundry",orderNumber:"LDY-BAD-1",customerId:"c",customerName:"Collection Customer",garment:null,quantity:1,mode:"in_house_ironing",
+  supplierId:null,supplierName:null,supplierRate:0,customerRate:30,profit:30,totalCustomerCharge:30,totalSupplierCost:0,status:"delivered",
+  notes:null,paidAmount:10,balanceAmount:30,createdAt:"2099-01-01T00:00:00.000Z",updatedAt:"2099-01-01T00:00:00.000Z",version:1
+}],expenses:[],purchases:[]});
+const beforePreflight=JSON.stringify({
+  customer:store.getCustomer("c"),
+  service:orders.getOrder(safeService.order.id),
+  laundry:phase5.listLaundryOrders(),
+  payments:store.listPayments(),
+});
+const rejected=store.recordCustomerPayment({customerId:"c",amount:70,method:"cash"});
+assert(rejected.errors.length); assert.match(rejected.errors.join(";"),/laundry balances need reconciliation/i);
+assert.equal(JSON.stringify({
+  customer:store.getCustomer("c"),
+  service:orders.getOrder(safeService.order.id),
+  laundry:phase5.listLaundryOrders(),
+  payments:store.listPayments(),
+}),beforePreflight);
+
 reset(80,0);
 phase5.hydratePhase5({suppliers:[{...supplier}],laundryOrders:[{
   id:"old",orderNumber:"LDY-OLD-1",customerId:"c",customerName:"Collection Customer",garment:null,quantity:1,mode:"in_house_ironing",
