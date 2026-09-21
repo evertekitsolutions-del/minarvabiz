@@ -7,7 +7,7 @@ import { assertPermission } from "./permissions";
 
 import type {
   ServiceOrder, MeasurementProfile, MeasurementFields, ServiceType,
-  OrderStatus, OrderExpense, TshirtDetails, UUID,
+  OrderStatus, OrderExpense, PaymentMethod, TshirtDetails, UUID,
 } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import {
@@ -109,6 +109,7 @@ export function createOrder(input: {
   price: number;
   discount?: number;
   advance?: number;
+  advancePaymentMethod?: PaymentMethod;
   notes?: string | null;
   materialDetails?: string | null;
   customerSuppliedMaterial?: boolean;
@@ -142,6 +143,10 @@ export function createOrder(input: {
     if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))) {
       errors.push(label + " must be a finite non-negative amount");
     }
+  }
+  const advancePaymentMethod = input.advancePaymentMethod ?? "cash";
+  if (!["cash", "bank", "card", "upi", "online", "other"].includes(advancePaymentMethod)) {
+    errors.push("Invalid service order advance payment method");
   }
   if (input.unitPrice != null && (!Number.isFinite(input.unitPrice) || input.unitPrice < 0 || !Number.isSafeInteger(Math.round(input.unitPrice * 100)))) {
     errors.push("Unit price must be a finite non-negative amount");
@@ -218,7 +223,7 @@ export function createOrder(input: {
     createdBy: input.createdBy ?? null,
     version: 1,
   };
-  const posting = planServiceOrderPosting(order);
+  const posting = planServiceOrderPosting(order, advancePaymentMethod);
   if (posting.errors.length) return { order: null, errors: posting.errors };
 
   lastOrderNo = orderNumber;
@@ -230,6 +235,15 @@ export function createOrder(input: {
   posting.commit();
   touchPersistence();
   void remoteCreateOrder({ ...order });
+  if (pricing.advance > 0) {
+    mainStore.recordOrderAdvancePaymentEntry({
+      orderId: order.id,
+      customerId: order.customerId,
+      amount: pricing.advance,
+      method: advancePaymentMethod,
+      paidAt: order.orderDate,
+    });
+  }
   void remoteUpsertCustomer({ ...customer });
   auditAction("service_order.create", "orders", order.id, null, {
     orderNumber: order.orderNumber,
@@ -238,6 +252,7 @@ export function createOrder(input: {
     price: order.price,
     advance: order.advance,
     balance: order.balance,
+    advancePaymentMethod,
   });
   return { order, errors: [] };
 }

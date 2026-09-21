@@ -468,6 +468,45 @@ export function listPayments(): Payment[] {
   return [...payments].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+export function recordOrderAdvancePaymentEntry(input: {
+  orderId: UUID;
+  customerId: UUID;
+  amount: number;
+  method: PaymentMethod;
+  paidAt?: string;
+}): Payment {
+  assertPermission("orders.manage");
+  if (!Number.isFinite(input.amount) || round2(input.amount) <= 0 || !Number.isSafeInteger(Math.round(input.amount * 100))) {
+    throw new Error("Service order advance must be positive and finite");
+  }
+  if (!["cash", "bank", "card", "upi", "online", "other"].includes(input.method)) {
+    throw new Error("Invalid service order advance payment method");
+  }
+  const now = input.paidAt ?? nowISO();
+  const payment: Payment = {
+    id: generateId(),
+    amount: round2(input.amount),
+    method: input.method,
+    referenceType: "order",
+    referenceId: input.orderId,
+    customerId: input.customerId,
+    notes: "Service order advance",
+    paidAt: now,
+    createdAt: nowISO(),
+    version: 1,
+  };
+  payments.push(payment);
+  touchPersistence();
+  void remoteCreatePayment(payment);
+  auditAction("service_order.advance_payment", "payments", payment.id, null, {
+    orderId: input.orderId,
+    customerId: input.customerId,
+    amount: payment.amount,
+    method: payment.method,
+  });
+  return payment;
+}
+
 export function recordSupplierPaymentEntry(input: {
   supplierId: UUID;
   amount: number;

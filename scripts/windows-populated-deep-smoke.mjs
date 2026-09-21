@@ -225,6 +225,7 @@ async function main() {
     await selectDialogFieldByText(ws, "New Service Order", "Customer", "QA POS Customer");
     await setField(ws, "New Service Order", "Price", "250");
     await setField(ws, "New Service Order", "Advance", "50");
+    await selectDialogFieldByText(ws, "New Service Order", "Advance payment method", "UPI");
     await click(ws, "CREATE_ORDER", ["create order"]);
     await assertMain(ws, "ORDER_CREATED", ["QA POS Customer", "₹250.00"]);
     await click(ws, "BLOCK_SERVICE_CANCEL", ["cancel"]);

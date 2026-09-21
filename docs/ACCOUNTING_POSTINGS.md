@@ -325,9 +325,12 @@ milestones. Service-order revenue recognition is covered in the sections below.
 ## Service order posting
 
 New tailoring, alteration, wedding, wholesale, uniform and T-shirt service orders
-now post when the order is created. The current service-order UI does not expose a
-payment-method selector, so the recorded advance is treated as Cash; the unpaid
-balance debits Accounts Receivable and the net order price credits Service Revenue.
+now post when the order is created. The shared Web/Windows order form captures the
+advance tender: Cash debits Cash, Bank debits Bank, and Card/UPI/Online/Other debit
+Payment Clearing. The unpaid balance debits Accounts Receivable and the net order
+price credits Service Revenue. When an advance is greater than zero, the same tender
+is also retained as a linked Payment source with `referenceType=order`; non-UI
+callers that omit the tender keep the backward-compatible Cash default.
 
 The order's price, discount, advance, quantity and other pricing inputs must be
 finite and in range. Calculated price, advance and balance are validated again
@@ -335,14 +338,15 @@ before posting, and the customer outstanding/total-spending state must be
 reconcilable before any source mutation. Required accounting accounts are also
 validated first.
 
-The created order, changed customer snapshot, accounts, journal and journal lines
-use the existing persistence/outbox paths. Automatic service-order journals cannot
-be manually voided. Hydrated historical orders are not backfilled automatically.
+The created order, linked advance Payment when applicable, changed customer snapshot,
+accounts, journal and journal lines use the existing persistence/outbox paths.
+Automatic service-order journals cannot be manually voided. Hydrated historical
+orders are not backfilled and do not receive synthetic advance Payment rows.
 
-This milestone recognizes service revenue only. It does not yet invent accounting
-for estimated external material cost, T-shirt printing cost, later order expenses,
-status transitions, cancellations/refunds or a selectable advance tender; those
-remain separate source-driven follow-up workflows.
+Estimated external material cost and T-shirt printing cost remain planning/profit
+inputs rather than invented actual expenses. Later real order expenses and guarded
+zero-advance cancellation are covered below; balance-collection allocation and
+advance refund/cancellation remain separate source-driven workflows.
 
 
 ## Service order cancellation posting
@@ -353,9 +357,10 @@ system creates an exact inverse of the original `auto_service_order` journal,
 reduces the customer's outstanding balance by the still-recorded order balance,
 and only then marks the order cancelled. The original journal remains immutable.
 
-Cancellation is intentionally blocked when the order has an advance, because the
-current service-order UI has no explicit refund tender/workflow and the system must
-not invent a cash refund. It is also blocked for historical orders with no source
+Cancellation is intentionally blocked when the order has an advance, because there
+is still no explicit service-advance refund action/workflow. The recorded original
+advance tender is preserved in its Payment source, but cancellation must not invent
+a refund transaction. It is also blocked for historical orders with no source
 journal, unavailable posting accounts, insufficient/corrupt customer balances, or
 when a post-order customer collection contains an unallocated "Other customer
 balance" amount. Those cases require allocation/refund/reconciliation first.
