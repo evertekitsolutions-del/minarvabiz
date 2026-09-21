@@ -109,7 +109,7 @@ Legacy / Unallocated Settlement Clearing, while new collections against historic
 or other customer balances credit it. No historical revenue, tax, COGS or receivable
 reversal is invented. This account is a reconciliation placeholder, not income.
 Opening inventory, bank/cash, receivables and clearing balances must be reconciled
-before financial statements can be treated as complete. Service recognition is not yet automatic; laundry recognition is covered below and supplier invoice recognition
+before financial statements can be treated as complete. Service-order and laundry recognition are covered below; supplier invoice recognition
 is covered below.
 
 Accounting plans validate account availability and balancing before source
@@ -318,3 +318,26 @@ journal lines use the existing persistence/outbox paths. Automatic laundry journ
 cannot be manually voided. Hydrated historical laundry orders are not backfilled.
 Status changes, cancellations/refunds and service-order revenue recognition remain
 separate follow-up milestones.
+
+
+## Service order posting
+
+New tailoring, alteration, wedding, wholesale, uniform and T-shirt service orders
+now post when the order is created. The current service-order UI does not expose a
+payment-method selector, so the recorded advance is treated as Cash; the unpaid
+balance debits Accounts Receivable and the net order price credits Service Revenue.
+
+The order's price, discount, advance, quantity and other pricing inputs must be
+finite and in range. Calculated price, advance and balance are validated again
+before posting, and the customer outstanding/total-spending state must be
+reconcilable before any source mutation. Required accounting accounts are also
+validated first.
+
+The created order, changed customer snapshot, accounts, journal and journal lines
+use the existing persistence/outbox paths. Automatic service-order journals cannot
+be manually voided. Hydrated historical orders are not backfilled automatically.
+
+This milestone recognizes service revenue only. It does not yet invent accounting
+for estimated external material cost, T-shirt printing cost, later order expenses,
+status transitions, cancellations/refunds or a selectable advance tender; those
+remain separate source-driven follow-up workflows.
