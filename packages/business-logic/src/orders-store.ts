@@ -427,7 +427,7 @@ function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-mainStore.registerCustomerReceivableProvider({
+mainStore.registerCustomerReceivableProvider("service_orders", {
   list(customerId) {
     return orders
       .filter((order) => !order.deletedAt && order.customerId === customerId && order.status !== "cancelled" && order.balance > 0)
@@ -437,6 +437,7 @@ mainStore.registerCustomerReceivableProvider({
         date: order.orderDate,
         balance: order.balance,
         postedReceivable: hasServiceOrderPosting(order.id),
+        sourceType: "service_order" as const,
       }));
   },
   apply(allocations, now) {
