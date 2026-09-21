@@ -440,6 +440,18 @@ mainStore.registerCustomerReceivableProvider("service_orders", {
         sourceType: "service_order" as const,
       }));
   },
+  validate(allocations) {
+    for (const { item, amount } of allocations) {
+      const order = getOrder(item.id);
+      if (!order || order.status === "cancelled") return "Service order collection target is no longer available";
+      if (!Number.isFinite(order.advance) || !Number.isFinite(order.balance) || amount <= 0 || amount > order.balance
+        || !Number.isSafeInteger(Math.round((order.advance + amount) * 100))
+        || !Number.isSafeInteger(Math.round((order.balance - amount) * 100))) {
+        return "Service order balances need reconciliation";
+      }
+    }
+    return null;
+  },
   apply(allocations, now) {
     for (const { item, amount } of allocations) {
       const order = getOrder(item.id);
