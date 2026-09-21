@@ -116,21 +116,25 @@ export default function ServicesOrdersPage() {
 
   function handleExpense(input: { description: string; amount: number; categoryId: string; paymentMethod: PaymentMethod }) {
     if (!selected) return;
-    const res = phase5Store.createExpense({
-      categoryId: input.categoryId,
-      amount: input.amount,
-      paymentMethod: input.paymentMethod,
-      description: input.description || null,
-      orderId: selected.id,
-    });
-    if (res.errors.length || !res.expense) {
-      setStatusError(res.errors.join("; ") || "Unable to record order expense");
-      return;
+    try {
+      const res = phase5Store.createExpense({
+        categoryId: input.categoryId,
+        amount: input.amount,
+        paymentMethod: input.paymentMethod,
+        description: input.description || null,
+        orderId: selected.id,
+      });
+      if (res.errors.length || !res.expense) {
+        setStatusError(res.errors.join("; ") || "Unable to record order expense");
+        return;
+      }
+      const updated = ordersStore.getOrder(selected.id);
+      if (updated) setSelected({ ...updated, expenses: [...updated.expenses] });
+      setStatusError(null);
+      refresh();
+    } catch (error) {
+      setStatusError(error instanceof Error ? error.message : "Unable to record order expense");
     }
-    const updated = ordersStore.getOrder(selected.id);
-    if (updated) setSelected({ ...updated, expenses: [...updated.expenses] });
-    setStatusError(null);
-    refresh();
   }
 
   return (
