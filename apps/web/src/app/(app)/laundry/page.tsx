@@ -3,7 +3,7 @@
 import * as React from "react";
 import { LaundryList, LaundryForm, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
 import { store, phase5Store, assertLimit } from "@minarvabiz/business-logic";
-import type { LaundryOrder, Customer, Supplier } from "@minarvabiz/types";
+import type { LaundryOrder, Customer, PaymentMethod, Supplier } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
 export default function LaundryPage() {
@@ -36,13 +36,13 @@ export default function LaundryPage() {
     supplierRate: number;
     customerRate: number;
     paidAmount: number;
+    paymentMethod: PaymentMethod;
     notes: string;
   }) {
     if (!mode) return;
     const result = phase5Store.createLaundryOrder({
       ...data,
       mode,
-      paymentMethod: "cash",
     });
     if (result.errors.length) {
       setError(result.errors.join("; "));
