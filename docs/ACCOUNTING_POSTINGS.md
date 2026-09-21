@@ -362,3 +362,23 @@ Successful cancellation queues the changed order and customer plus reversal
 accounts/journal records through the existing outbox paths. Other service-order
 status transitions remain operational status changes only and create no accounting
 journal. No historical cancellation backfill is performed.
+
+
+## Service order detail expense source
+
+The Service Order detail **Order-specific expense** action now creates a real Expense
+source document instead of only changing the order profit helper. The operator must
+select an expense category and the actual payment method (Cash, Bank, Card, UPI,
+Online or Other), then enter the amount and optional description.
+
+The existing expense accounting engine is reused: the source expense debits
+Order-specific Expenses and credits Cash, Bank or Payment Clearing according to
+the selected tender. Only after the source and journal validate does the linked
+service order receive the matching order-expense cost. The linked order update is
+also queued in the hybrid outbox so online/offline editions converge on the same
+order cost.
+
+Invalid, non-finite, non-positive or sub-cent direct order-expense amounts are
+rejected without mutating the order. Existing Expenses-page order linking uses the
+same accounting path; this milestone removes the detail-page accounting bypass
+rather than introducing a second posting model.

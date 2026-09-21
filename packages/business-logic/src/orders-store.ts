@@ -318,6 +318,9 @@ export function addOrderExpense(
   assertPermission("orders.manage");
   const order = getOrder(orderId);
   if (!order) return { order: null, error: "Order not found" };
+  if (!Number.isFinite(amount) || round2(amount) <= 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
+    return { order: null, error: "Order expense amount must be positive and finite" };
+  }
   const exp: OrderExpense = {
     id: generateId(),
     orderId,
@@ -329,6 +332,7 @@ export function addOrderExpense(
   order.orderExpensesTotal = round2(order.orderExpensesTotal + exp.amount);
   order.updatedAt = nowISO();
   order.version += 1;
+  enqueueOutbox("orders", order.id, "update", { ...order, expenses: order.expenses.map((item) => ({ ...item })) });
   touchPersistence();
   return { order };
 }

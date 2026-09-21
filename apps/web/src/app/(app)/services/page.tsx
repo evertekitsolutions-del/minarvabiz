@@ -6,15 +6,16 @@ import {
   OrderList, OrderForm, emptyOrderForm, OrderDetail, Modal,
   type OrderFormValues,
 } from "@minarvabiz/ui";
-import { store, ordersStore, printOrderReceipt, phase6Store, templateFromOrderReady } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, printOrderReceipt, phase6Store, templateFromOrderReady } from "@minarvabiz/business-logic";
 import type {
-  ServiceOrder, Customer, MeasurementProfile, ServiceType, OrderStatus,
+  ServiceOrder, Customer, ExpenseCategory, MeasurementProfile, PaymentMethod, ServiceType, OrderStatus,
 } from "@minarvabiz/types";
 
 export default function ServicesOrdersPage() {
   const [orders, setOrders] = React.useState<ServiceOrder[]>([]);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [profiles, setProfiles] = React.useState<MeasurementProfile[]>([]);
+  const [expenseCategories, setExpenseCategories] = React.useState<ExpenseCategory[]>([]);
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<OrderStatus | null>(null);
   const [serviceType, setServiceType] = React.useState<ServiceType | null>(null);
@@ -26,6 +27,7 @@ export default function ServicesOrdersPage() {
 
   const refresh = React.useCallback(() => {
     setCustomers(store.listCustomers());
+    setExpenseCategories(phase5Store.listExpenseCategories());
     setOrders(ordersStore.listOrders({
       query: query || undefined,
       status: status ?? undefined,
@@ -112,12 +114,26 @@ export default function ServicesOrdersPage() {
     }
   }
 
-  function handleExpense(description: string, amount: number) {
-    if (!selected || !description || amount <= 0) return;
-    const res = ordersStore.addOrderExpense(selected.id, description, amount);
-    if (res.order) {
-      setSelected({ ...res.order });
+  function handleExpense(input: { description: string; amount: number; categoryId: string; paymentMethod: PaymentMethod }) {
+    if (!selected) return;
+    try {
+      const res = phase5Store.createExpense({
+        categoryId: input.categoryId,
+        amount: input.amount,
+        paymentMethod: input.paymentMethod,
+        description: input.description || null,
+        orderId: selected.id,
+      });
+      if (res.errors.length || !res.expense) {
+        setStatusError(res.errors.join("; ") || "Unable to record order expense");
+        return;
+      }
+      const updated = ordersStore.getOrder(selected.id);
+      if (updated) setSelected({ ...updated, expenses: [...updated.expenses] });
+      setStatusError(null);
       refresh();
+    } catch (error) {
+      setStatusError(error instanceof Error ? error.message : "Unable to record order expense");
     }
   }
 
@@ -147,6 +163,7 @@ export default function ServicesOrdersPage() {
           {statusError && <p role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{statusError}</p>}
           <OrderDetail
           order={selected}
+          expenseCategories={expenseCategories}
           onStatusChange={handleStatus}
           onAddExpense={handleExpense}
           onClose={() => { setSelected(null); setStatusError(null); }}

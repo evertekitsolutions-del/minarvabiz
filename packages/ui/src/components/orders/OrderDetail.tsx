@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { MeasurementProfile, ServiceOrder, OrderStatus } from "@minarvabiz/types";
+import type { ExpenseCategory, MeasurementProfile, PaymentMethod, ServiceOrder, OrderStatus } from "@minarvabiz/types";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
@@ -21,6 +21,7 @@ export function OrderDetail({
   measurementProfiles,
   onStatusChange,
   onQualityCheck,
+  expenseCategories = [],
   onAddExpense,
   onClose,
 }: {
@@ -28,11 +29,14 @@ export function OrderDetail({
   measurementProfiles?: MeasurementProfile[];
   onStatusChange?: (status: OrderStatus) => void;
   onQualityCheck?: (input: { passed: boolean; notes: string; issues: string[] }) => void;
-  onAddExpense?: (description: string, amount: number) => void;
+  expenseCategories?: ExpenseCategory[];
+  onAddExpense?: (input: { description: string; amount: number; categoryId: string; paymentMethod: PaymentMethod }) => void;
   onClose?: () => void;
 }) {
   const [expDesc, setExpDesc] = React.useState("");
   const [expAmt, setExpAmt] = React.useState("");
+  const [expCategoryId, setExpCategoryId] = React.useState("");
+  const [expPaymentMethod, setExpPaymentMethod] = React.useState<PaymentMethod>("cash");
   const [qcNotes, setQcNotes] = React.useState("");
   const [qcIssue, setQcIssue] = React.useState("");
   const [qcIssues, setQcIssues] = React.useState<string[]>([]);
@@ -259,10 +263,30 @@ export function OrderDetail({
                 <span>{formatMoney(e.amount)}</span>
               </div>
             ))}
-            <div className="flex gap-2 pt-2">
-              <input className="h-9 flex-1 rounded-lg border border-slate-200 px-3 text-sm" placeholder="Description" value={expDesc} onChange={(e) => setExpDesc(e.target.value)} />
-              <input className="h-9 w-28 rounded-lg border border-slate-200 px-3 text-sm" type="number" placeholder="Amount" value={expAmt} onChange={(e) => setExpAmt(e.target.value)} />
-              <Button size="sm" onClick={() => { onAddExpense(expDesc, parseFloat(expAmt) || 0); setExpDesc(""); setExpAmt(""); }}>Add</Button>
+            <div className="grid gap-2 pt-2 sm:grid-cols-2">
+              <select aria-label="Order expense category" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" value={expCategoryId} onChange={(e) => setExpCategoryId(e.target.value)}>
+                <option value="">Select category</option>
+                {expenseCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+              </select>
+              <select aria-label="Order expense payment method" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" value={expPaymentMethod} onChange={(e) => setExpPaymentMethod(e.target.value as PaymentMethod)}>
+                <option value="cash">Cash</option>
+                <option value="bank">Bank</option>
+                <option value="card">Card</option>
+                <option value="upi">UPI</option>
+                <option value="online">Online</option>
+                <option value="other">Other</option>
+              </select>
+              <input aria-label="Order expense description" className="h-9 rounded-lg border border-slate-200 px-3 text-sm" placeholder="Description" value={expDesc} onChange={(e) => setExpDesc(e.target.value)} />
+              <div className="flex gap-2">
+                <input aria-label="Order expense amount" className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm" type="number" min="0" step="0.01" placeholder="Amount" value={expAmt} onChange={(e) => setExpAmt(e.target.value)} />
+                <Button size="sm" disabled={!expCategoryId || !(parseFloat(expAmt) > 0)} onClick={() => {
+                  const amount = parseFloat(expAmt);
+                  if (!expCategoryId || !(amount > 0)) return;
+                  onAddExpense({ description: expDesc, amount, categoryId: expCategoryId, paymentMethod: expPaymentMethod });
+                  setExpDesc("");
+                  setExpAmt("");
+                }}>Record Expense</Button>
+              </div>
             </div>
           </CardContent>
         </Card>
