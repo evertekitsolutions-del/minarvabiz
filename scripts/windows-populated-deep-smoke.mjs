@@ -245,7 +245,7 @@ async function main() {
     await click(ws, "SALE_ACCOUNTING", ["accounting"]);
     await click(ws, "SALE_STATEMENT", ["financial statements"]);
     await assertMain(ws, "SALE_POSTED", ["Product Sales", "Cost of Goods Sold", "Balance sheet balanced"]);
-    await assertStatementProfit(ws, 40);
+    await assertStatementProfit(ws, 290);
 
     // Return/refund with stock restock.
     await click(ws, "RETURNS", ["returns & refunds"]);
@@ -359,7 +359,7 @@ async function main() {
     await assertMain(ws, "ACCOUNTING", ["Accounting & General Ledger", "Chart of Accounts"]);
     await click(ws, "EXPENSE_STATEMENT", ["financial statements"]);
     await assertMain(ws, "EXPENSE_AUTO_POSTED", ["Balance sheet balanced", "General Expenses"]);
-    await assertStatementProfit(ws, -50);
+    await assertStatementProfit(ws, 200);
     await click(ws, "ACCOUNTS_TAB", ["chart of accounts"]);
     await setMainField(ws, "Account code", "6100");
     await setMainField(ws, "Account name", "QA Expense");
@@ -386,7 +386,7 @@ async function main() {
 
     await click(ws, "FINANCIAL_STATEMENTS", ["financial statements"]);
     await assertMain(ws, "FINANCIAL_STATEMENTS", ["Profit & Loss", "Balance Sheet", "QA Expense", "Balance sheet balanced"]);
-    await assertStatementProfit(ws, -150);
+    await assertStatementProfit(ws, 100);
 
     // Staff create + row drill-down.
     await click(ws, "STAFF", ["staff management"]);

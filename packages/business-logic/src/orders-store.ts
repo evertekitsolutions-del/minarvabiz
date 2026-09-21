@@ -17,8 +17,10 @@ import { createMeasurementRevision, latestMeasurementRevision, measurementRevisi
 import "./quality-control-types";
 import * as mainStore from "./store";
 import { touchPersistence } from "./autosave";
-import { remoteCreateOrder } from "./remote-write";
+import { remoteCreateOrder, remoteUpsertCustomer } from "./remote-write";
 import { queueOrderStatusMessage } from "./customer-communication";
+import { planServiceOrderPosting } from "./service-order-accounting";
+import { auditAction } from "./audit-actions";
 
 const measurements: MeasurementProfile[] = [];
 const orders: ServiceOrder[] = [];
@@ -128,6 +130,32 @@ export function createOrder(input: {
     deliveryDate: input.deliveryDate,
     tshirt: input.tshirt,
   });
+  const moneyInputs = [
+    ["Price", input.price],
+    ["Discount", input.discount ?? 0],
+    ["Advance", input.advance ?? 0],
+    ["External material cost", input.externalMaterialCost ?? 0],
+    ["Bulk discount", input.bulkDiscount ?? 0],
+  ] as const;
+  for (const [label, value] of moneyInputs) {
+    if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))) {
+      errors.push(label + " must be a finite non-negative amount");
+    }
+  }
+  if (input.unitPrice != null && (!Number.isFinite(input.unitPrice) || input.unitPrice < 0 || !Number.isSafeInteger(Math.round(input.unitPrice * 100)))) {
+    errors.push("Unit price must be a finite non-negative amount");
+  }
+  if (input.quantity != null && (!Number.isFinite(input.quantity) || input.quantity <= 0 || !Number.isSafeInteger(Math.round(input.quantity * 1000)))) {
+    errors.push("Quantity must be positive and finite");
+  }
+  if (input.tshirt) {
+    if (!Number.isFinite(input.tshirt.quantity) || input.tshirt.quantity <= 0 || !Number.isSafeInteger(Math.round(input.tshirt.quantity * 1000))) {
+      errors.push("T-shirt quantity must be positive and finite");
+    }
+    for (const [label, value] of [["T-shirt printing cost", input.tshirt.printingCost], ["T-shirt customer price", input.tshirt.customerPrice]] as const) {
+      if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))) errors.push(label + " must be a finite non-negative amount");
+    }
+  }
   if (errors.length) return { order: null, errors };
 
   const customer = mainStore.getCustomer(input.customerId);
@@ -144,16 +172,25 @@ export function createOrder(input: {
     externalMaterialCost: input.externalMaterialCost,
     tshirt: input.tshirt,
   });
+  const pricingValues = [pricing.netPrice, pricing.discount, pricing.advance, pricing.balance, pricing.externalMaterialCost, pricing.orderExpensesTotal];
+  if (pricingValues.some((value) => !Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100)))) {
+    return { order: null, errors: ["Service order totals are out of range"] };
+  }
+  if (!Number.isFinite(customer.outstandingBalance) || customer.outstandingBalance < 0
+    || !Number.isSafeInteger(Math.round((customer.outstandingBalance + pricing.balance) * 100))
+    || !Number.isFinite(customer.totalSpending) || customer.totalSpending < 0
+    || !Number.isSafeInteger(Math.round((customer.totalSpending + pricing.advance) * 100))) {
+    return { order: null, errors: ["Customer balance needs reconciliation"] };
+  }
 
   const orderNumber = nextOrderNumber(lastOrderNo);
-  lastOrderNo = orderNumber;
-
+  const now = nowISO();
   const order: ServiceOrder = {
     id: generateId(),
     orderNumber,
     customerId: input.customerId,
     customerName: customer.name,
-    orderDate: nowISO(),
+    orderDate: now,
     deliveryDate: input.deliveryDate ?? null,
     serviceType: input.serviceType,
     status: "pending",
@@ -175,23 +212,32 @@ export function createOrder(input: {
     bulkDiscount: input.bulkDiscount ?? 0,
     tshirt: input.tshirt ?? null,
     expenses: [],
-    createdAt: nowISO(),
-    updatedAt: nowISO(),
+    createdAt: now,
+    updatedAt: now,
     createdBy: input.createdBy ?? null,
     version: 1,
   };
+  const posting = planServiceOrderPosting(order);
+  if (posting.errors.length) return { order: null, errors: posting.errors };
 
-  if (pricing.balance > 0) {
-    customer.outstandingBalance = round2(customer.outstandingBalance + pricing.balance);
-  }
-  if (pricing.advance > 0) {
-    customer.totalSpending = round2(customer.totalSpending + pricing.advance);
-  }
-  customer.updatedAt = nowISO();
+  lastOrderNo = orderNumber;
+  if (pricing.balance > 0) customer.outstandingBalance = round2(customer.outstandingBalance + pricing.balance);
+  if (pricing.advance > 0) customer.totalSpending = round2(customer.totalSpending + pricing.advance);
+  customer.updatedAt = now;
 
   orders.push(order);
+  posting.commit();
   touchPersistence();
-  void remoteCreateOrder(order);
+  void remoteCreateOrder({ ...order });
+  void remoteUpsertCustomer({ ...customer });
+  auditAction("service_order.create", "orders", order.id, null, {
+    orderNumber: order.orderNumber,
+    customerId: order.customerId,
+    serviceType: order.serviceType,
+    price: order.price,
+    advance: order.advance,
+    balance: order.balance,
+  });
   return { order, errors: [] };
 }
 
