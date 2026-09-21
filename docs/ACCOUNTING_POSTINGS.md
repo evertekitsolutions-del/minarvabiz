@@ -125,8 +125,9 @@ Historical invoices are not posted during hydration. Their new paid refunds debi
 Legacy / Unallocated Settlement Clearing, while new collections against historical
 or other customer balances credit it. No historical revenue, tax, COGS or receivable
 reversal is invented. This account is a reconciliation placeholder, not income.
-Opening inventory, bank/cash, receivables and clearing balances must be reconciled
-before financial statements can be treated as complete. Service-order and laundry recognition are covered below; supplier invoice recognition
+Opening inventory, cash, bank and receivables now have explicit source actions.
+Payment Clearing and any other cutover differences must still be reconciled before
+financial statements can be treated as complete. Service-order and laundry recognition are covered below; supplier invoice recognition
 is covered below.
 
 Accounting plans validate account availability and balancing before source
@@ -263,6 +264,28 @@ accounts first, so an unavailable Cash or Opening Balance Equity account leaves
 the register and ledger unchanged. Repeating the setup for an already-open day is
 rejected by the existing cash-register control; historical cash sessions are not
 backfilled.
+
+
+## Opening bank posting
+
+The Accounting screen exposes an explicit one-time **Opening bank balance** action
+for cash already held in the business bank account before Minarva Biz accounting
+begins. A valid positive amount debits Bank and credits Opening Balance Equity using
+the protected `auto_opening_bank` source journal. The action is not a historical
+backfill and does not infer a balance from transactions.
+
+The opening-bank source is intentionally conservative. It is rejected after any
+normal posted journal has already touched the Bank account, and it is rejected if
+an opening-bank source was posted previously. In those cases the operator must use
+a reconciliation/correction workflow instead of silently changing the cutover
+balance. Invalid/non-finite amounts, unavailable Bank/Opening Balance Equity
+accounts and insufficient permissions reject without mutation. The posted
+accounts/journal/lines use the existing outbox and automatic journals cannot be
+manually voided.
+
+Web and installed-Windows smoke post a 500-unit opening bank balance before normal
+bank activity and verify the Bank row in Trial Balance. No schema migration or
+historical source reconstruction is performed.
 
 
 ## Opening customer balance posting
