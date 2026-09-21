@@ -1,5 +1,5 @@
 import type { LaundryOrder, PaymentMethod } from "@minarvabiz/types";
-import { planAutomaticPosting, type AutomaticPostingPlan } from "./accounting-store";
+import { listJournalEntries, planAutomaticPosting, type AutomaticPostingPlan } from "./accounting-store";
 
 const cents = (n: number) => Math.round((n + Number.EPSILON) * 100);
 const invalid = (message: string): AutomaticPostingPlan => ({ errors: [message], commit: () => null });
@@ -48,5 +48,55 @@ export function planLaundryPosting(order: LaundryOrder, paymentMethod: PaymentMe
       { key: "laundry_costs", debit: order.totalSupplierCost },
       { key: "accounts_payable", credit: order.totalSupplierCost },
     ],
+  });
+}
+
+
+export function planLaundryCancellation(
+  order: LaundryOrder,
+  refundPaymentMethod?: PaymentMethod,
+  supplierCostAction?: "keep" | "reverse"
+): AutomaticPostingPlan {
+  const original = listJournalEntries().find((entry) =>
+    entry.referenceType === "auto_laundry" && entry.referenceId === order.id && entry.status === "posted"
+  );
+  if (!original) return invalid("Laundry order needs accounting reconciliation before cancellation");
+  const values = [
+    order.customerRate, order.supplierRate, order.totalCustomerCharge,
+    order.totalSupplierCost, order.paidAmount, order.balanceAmount,
+  ];
+  if (values.some((value) => !Number.isFinite(value) || value < 0 || !Number.isSafeInteger(cents(value)))
+    || cents(order.totalCustomerCharge) !== cents(order.paidAmount) + cents(order.balanceAmount)) {
+    return invalid("Laundry balances need reconciliation before cancellation");
+  }
+  if (order.paidAmount > 0 && (!refundPaymentMethod
+    || !["cash", "bank", "card", "upi", "online", "other"].includes(refundPaymentMethod))) {
+    return invalid("Select a valid laundry refund payment method");
+  }
+  if (order.totalSupplierCost > 0 && !["keep", "reverse"].includes(supplierCostAction ?? "")) {
+    return invalid("Select how to handle the laundry supplier cost");
+  }
+
+  const lines: Array<{ key: string; debit?: number; credit?: number }> = [
+    { key: "laundry_revenue", debit: order.totalCustomerCharge },
+    { key: "accounts_receivable", credit: order.balanceAmount },
+  ];
+  if (order.paidAmount > 0 && refundPaymentMethod) {
+    lines.push({ key: tenderKey(refundPaymentMethod), credit: order.paidAmount });
+  }
+  if (order.totalSupplierCost > 0 && supplierCostAction === "reverse") {
+    lines.push(
+      { key: "accounts_payable", debit: order.totalSupplierCost },
+      { key: "laundry_costs", credit: order.totalSupplierCost },
+    );
+  }
+
+  return planAutomaticPosting({
+    referenceType: "auto_laundry_cancel",
+    referenceId: order.id,
+    date: new Date().toISOString(),
+    branchId: order.branchId ?? null,
+    description: "Cancel laundry order " + order.orderNumber,
+    lines,
   });
 }
