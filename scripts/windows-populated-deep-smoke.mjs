@@ -401,7 +401,7 @@ async function main() {
     await click(ws, "ACCOUNTING", ["accounting"]);
     await assertMain(ws, "ACCOUNTING", ["Accounting & General Ledger", "Chart of Accounts"]);
     await click(ws, "EXPENSE_STATEMENT", ["financial statements"]);
-    await assertMain(ws, "EXPENSE_AUTO_POSTED", ["Balance sheet balanced", "General Expenses"]);
+    await assertMain(ws, "EXPENSE_AUTO_POSTED", ["Balance sheet balanced", "Order-specific Expenses"]);
     await assertStatementProfit(ws, 225);
     await click(ws, "ACCOUNTS_TAB", ["chart of accounts"]);
     await setMainField(ws, "Account code", "6100");
