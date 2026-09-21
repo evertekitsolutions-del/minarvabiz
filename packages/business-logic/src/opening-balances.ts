@@ -9,7 +9,7 @@ import { auditAction } from "./audit-actions";
 import * as mainStore from "./store";
 import * as phase5 from "./phase5-store";
 import { openCashRegister } from "./cash-register";
-import { planAutomaticPosting } from "./accounting-store";
+import { getSystemAccount, listJournalEntries, planAutomaticPosting } from "./accounting-store";
 import { remoteUpsertCustomer, remoteUpsertSupplier } from "./remote-write";
 
 export function setOpeningCustomerBalance(customerId: UUID, amount: number): { ok: boolean; error?: string } {
@@ -134,6 +134,47 @@ export function setOpeningStock(productId: UUID, quantity: number): { ok: boolea
   if (!updated) return { ok: false, error: "Opening stock adjustment failed" };
   posting.commit();
   auditAction("opening.stock", "products", productId, { stock: before }, { stock: next, unitCost, valueDelta: delta > 0 ? value : -value });
+  return { ok: true };
+}
+
+export function setOpeningBank(amount: number): { ok: boolean; error?: string } {
+  assertPermission("settings.manage");
+  if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
+    return { ok: false, error: "Opening bank balance must be a positive finite amount" };
+  }
+  const existingOpening = listJournalEntries().find((entry) =>
+    entry.referenceType === "auto_opening_bank" && entry.referenceId === "opening-bank"
+  );
+  if (existingOpening) return { ok: false, error: "Opening bank balance has already been posted" };
+
+  const bank = getSystemAccount("bank");
+  if (bank) {
+    const hasBankActivity = listJournalEntries().some((entry) =>
+      entry.status === "posted"
+      && entry.lines.some((line) => line.accountId === bank.id && (line.debit > 0 || line.credit > 0))
+    );
+    if (hasBankActivity) {
+      return { ok: false, error: "Bank already has accounting activity; reconcile it before posting an opening balance" };
+    }
+  }
+
+  const openingBank = Math.round((amount + Number.EPSILON) * 100) / 100;
+  const businessDate = new Date().toISOString().slice(0, 10);
+  const posting = planAutomaticPosting({
+    referenceType: "auto_opening_bank",
+    referenceId: "opening-bank",
+    date: businessDate,
+    description: "Opening bank balance " + businessDate,
+    lines: [
+      { key: "bank", debit: openingBank },
+      { key: "opening_balance_equity", credit: openingBank },
+    ],
+  });
+  if (posting.errors.length) return { ok: false, error: posting.errors.join("; ") };
+  const journal = posting.commit();
+  if (!journal) return { ok: false, error: "Opening bank posting did not create a journal" };
+  auditAction("opening.bank", "journal_entries", journal.id, null, { openingBank, businessDate });
+  touchPersistence();
   return { ok: true };
 }
 
