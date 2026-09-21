@@ -112,6 +112,14 @@ async function selectDialogFieldByText(ws, dialogName, labelText, optionText) {
   if (!result.ok) throw new Error(`SELECT_DIALOG_FIELD ${dialogName}/${labelText} -> ${optionText} failed: ${raw}`);
 }
 
+async function clickDialogButton(ws, name, dialogName, buttonText, wait = 650) {
+  const raw = await evalIn(ws, `(async()=>{const dialogs=[...document.querySelectorAll('[role="dialog"]')];const d=dialogs.find(x=>(x.getAttribute('aria-label')||'').toLowerCase().includes(${JSON.stringify(dialogName.toLowerCase())}));if(!d)return JSON.stringify({ok:false,error:'dialog not found'});const button=[...d.querySelectorAll('button,[role="button"]')].find(b=>((b.innerText||b.textContent||'')+' '+(b.getAttribute('aria-label')||'')).toLowerCase().includes(${JSON.stringify(buttonText.toLowerCase())})&&!b.disabled);if(!button)return JSON.stringify({ok:false,error:'button not found',buttons:[...d.querySelectorAll('button,[role="button"]')].map(b=>(b.innerText||b.textContent||'').trim())});button.click();await new Promise(r=>setTimeout(r,${wait}));return JSON.stringify({ok:true,text:(button.innerText||button.textContent||'').trim()});})()`);
+  const out = JSON.parse(raw);
+  console.log(`DIALOG_BUTTON_${name} ${raw}`);
+  if (!out.ok) throw new Error(`Dialog button ${name} not found: ${raw}`);
+  return out;
+}
+
 async function setMainField(ws, labelText, value) {
   const raw = await evalIn(ws, `(()=>{const main=document.querySelector('[data-testid="app-content"]');const labels=[...(main?.querySelectorAll('label')||[])];const label=labels.find(x=>(x.innerText||'').toLowerCase().includes(${JSON.stringify(labelText.toLowerCase())}));const el=label?.querySelector('input,textarea,select');if(!el)return JSON.stringify({ok:false,labels:labels.map(x=>(x.innerText||'').trim())});const v=${JSON.stringify(value)};if(el.tagName==='SELECT'){el.value=v;el.dispatchEvent(new Event('change',{bubbles:true}));}else{const proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;setter?setter.call(el,v):el.value=v;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}return JSON.stringify({ok:true,value:el.value});})()`);
   const result = JSON.parse(raw);
@@ -466,6 +474,15 @@ async function main() {
     await assertMain(ws, "LAUNDRY_DELIVERED", ["delivered"]);
     await click(ws, "LAUNDRY_VERIFY_PAYMENT", ["payments"]);
     await assertMain(ws, "LAUNDRY_PAYMENT_SOURCE", ["Laundry receipt:", "laundry", "upi", "₹50.00"]);
+    await click(ws, "LAUNDRY_CANCEL_RETURN", ["laundry & ironing"]);
+    await assertMain(ws, "LAUNDRY_CANCEL_LIST", ["Laundry & Ironing", "QA Shirt"]);
+    await clickButton(ws, "LAUNDRY_CANCEL_OPEN", ["cancel ticket"]);
+    await selectDialogFieldByText(ws, "Cancel laundry ticket", "Laundry refund payment method", "UPI");
+    await selectDialogFieldByText(ws, "Cancel laundry ticket", "Supplier cost handling", "Reverse supplier payable / cost");
+    await clickDialogButton(ws, "LAUNDRY_CANCEL_CONFIRM", "Cancel laundry ticket", "Cancel Ticket");
+    await assertMain(ws, "LAUNDRY_CANCELLED", ["cancelled"]);
+    await click(ws, "LAUNDRY_REFUND_VERIFY", ["payments"]);
+    await assertMain(ws, "LAUNDRY_REFUND_SOURCE", ["Laundry cancellation refund:", "refund", "upi", "₹50.00"]);
 
 
     // Day-end action: content assertion is scoped to main, not sidebar.
