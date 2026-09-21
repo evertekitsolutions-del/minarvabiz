@@ -227,6 +227,8 @@ async function main() {
     await setField(ws, "New Service Order", "Advance", "50");
     await click(ws, "CREATE_ORDER", ["create order"]);
     await assertMain(ws, "ORDER_CREATED", ["QA POS Customer", "₹250.00"]);
+    await click(ws, "BLOCK_SERVICE_CANCEL", ["cancel"]);
+    await assertMain(ws, "SERVICE_CANCEL_BLOCKED", ["Refund the service-order advance before cancellation"]);
 
 
     // Payment collection against the unpaid sale.
