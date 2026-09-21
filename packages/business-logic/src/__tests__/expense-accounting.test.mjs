@@ -60,6 +60,14 @@ const orderExpense = expenses.createExpense({ ...input, orderId: 'order-test', a
 assert.deepEqual(orderExpense.errors, []);
 assert.equal(find(orderExpense.expense).lines[0].accountId, accounting.getSystemAccount('order_expenses').id);
 assert.equal(orders.getOrder('order-test').orderExpensesTotal, 25);
+assert(outbox.listPendingOutbox().some((event) => event.aggregateType === 'orders' && event.aggregateId === 'order-test'));
+const orderCostBeforeInvalid = orders.getOrder('order-test').orderExpensesTotal;
+for (const invalidAmount of [NaN, Infinity, -1, 0, 0.001, 1e30]) {
+  const rejected = orders.addOrderExpense('order-test', 'Invalid direct order expense', invalidAmount);
+  assert.equal(rejected.order, null);
+  assert.match(rejected.error, /positive and finite/i);
+}
+assert.equal(orders.getOrder('order-test').orderExpensesTotal, orderCostBeforeInvalid);
 // Restore old chart without the new clearing account; first use adds it once.
 const state = accounting.exportAccountingState();
 accounting.hydrateAccountingState({ ...state, accounts: state.accounts.filter((a) => a.systemKey !== 'payment_clearing') });
