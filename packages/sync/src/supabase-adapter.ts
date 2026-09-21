@@ -13,6 +13,22 @@ export interface PgClient {
 
 function remoteRow(table: string, aggregateId: UUID, payload: Record<string, unknown>): Record<string, unknown> {
   switch (table) {
+    case "payments":
+      return {
+        id: aggregateId,
+        amount: payload.amount ?? 0,
+        method: payload.method,
+        reference_type: payload.referenceType,
+        reference_id: payload.referenceId,
+        customer_id: payload.customerId ?? null,
+        notes: payload.notes ?? null,
+        paid_at: payload.paidAt ?? new Date().toISOString(),
+        created_at: payload.createdAt ?? new Date().toISOString(),
+        created_by: payload.createdBy ?? null,
+        branch_id: payload.branchId ?? null,
+        device_id: payload.deviceId ?? null,
+        version: payload.version ?? 1,
+      };
     case "expenses":
       return {
         id: aggregateId,

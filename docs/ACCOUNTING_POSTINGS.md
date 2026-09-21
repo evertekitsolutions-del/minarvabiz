@@ -324,15 +324,21 @@ recorded outsourced cost without inventing inventory movements.
 
 Quantity, customer/supplier rates, paid/balance amounts, customer balance and
 supplier balance are validated before source mutation. The shared Web/Windows
-laundry form now captures the actual receipt tender (Cash, Bank, Card, UPI,
+laundry form captures the actual receipt tender (Cash, Bank, Card, UPI,
 Online or Other) and passes it to the same core posting path. Non-UI callers that
 omit a payment method still retain the core Cash default. Missing customers,
 required suppliers, unavailable accounting accounts, corrupt balances and
 non-finite/out-of-range amounts reject without creating the order or journal.
 
-The source order, changed customer/supplier snapshots, accounts, journal and
-journal lines use the existing persistence/outbox paths. Automatic laundry journals
-cannot be manually voided. Hydrated historical laundry orders are not backfilled.
+Every positive paid-now amount is also retained as a linked Payment source with
+`referenceType=laundry`, the laundry-order ID, customer ID, exact tender and a
+`Laundry receipt: <order number>` note. Zero-paid tickets do not create synthetic
+Payment rows. The source order, linked Payment when applicable, changed
+customer/supplier snapshots, accounts, journal and journal lines use the existing
+persistence/outbox paths. Payment outbox rows are normalized to the Supabase
+payments schema for Hybrid synchronization. Automatic laundry journals cannot be
+manually voided. Hydrated historical laundry orders are not backfilled and are not
+given invented Payment rows.
 
 Outsourced laundry now has a guarded operational lifecycle:
 `pending -> sent -> received -> delivered`. These status transitions only update
