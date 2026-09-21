@@ -427,7 +427,7 @@ function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-mainStore.registerCustomerReceivableProvider({
+mainStore.registerCustomerReceivableProvider("service_orders", {
   list(customerId) {
     return orders
       .filter((order) => !order.deletedAt && order.customerId === customerId && order.status !== "cancelled" && order.balance > 0)
@@ -437,7 +437,20 @@ mainStore.registerCustomerReceivableProvider({
         date: order.orderDate,
         balance: order.balance,
         postedReceivable: hasServiceOrderPosting(order.id),
+        sourceType: "service_order" as const,
       }));
+  },
+  validate(allocations) {
+    for (const { item, amount } of allocations) {
+      const order = getOrder(item.id);
+      if (!order || order.status === "cancelled") return "Service order collection target is no longer available";
+      if (!Number.isFinite(order.advance) || !Number.isFinite(order.balance) || amount <= 0 || amount > order.balance
+        || !Number.isSafeInteger(Math.round((order.advance + amount) * 100))
+        || !Number.isSafeInteger(Math.round((order.balance - amount) * 100))) {
+        return "Service order balances need reconciliation";
+      }
+    }
+    return null;
   },
   apply(allocations, now) {
     for (const { item, amount } of allocations) {

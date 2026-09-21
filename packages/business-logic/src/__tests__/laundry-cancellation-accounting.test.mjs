@@ -62,15 +62,20 @@ assert(created.order);
 const c=store.getCustomer("c"); store.hydrateCore({customers:[{...c}],products:[],sales:[],payments:[]});
 before=snap();
 cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,refundPaymentMethod:"cash"});
-assert.equal(cancelled.order,null); assert.match(cancelled.errors.join(";"),/receipt source needs reconciliation/i); assert.equal(snap(),before);
+assert.equal(cancelled.order,null); assert.match(cancelled.errors.join(";"),/receipt.*sources? need reconciliation/i); assert.equal(snap(),before);
 
 reset(20,0);
 created=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"in_house_ironing",supplierRate:0,customerRate:10,paidAmount:0});
 assert(created.order);
 const collected=store.recordCustomerPayment({customerId:"c",amount:1,method:"cash"}); assert.equal(collected.errors.length,0);
+let collectedOrder=phase5.listLaundryOrders().find((item)=>item.id===created.order.id);
+assert(collectedOrder); assert.equal(collectedOrder.paidAmount,1); assert.equal(collectedOrder.balanceAmount,9); assert.match(collected.payment.notes,/Laundry:/);
 before=snap();
 cancelled=phase5.cancelLaundryOrder({orderId:created.order.id});
-assert.equal(cancelled.order,null); assert.match(cancelled.errors.join(";"),/collections need allocation/i); assert.equal(snap(),before);
+assert.equal(cancelled.order,null); assert.match(cancelled.errors.join(";"),/refund method is required/i); assert.equal(snap(),before);
+cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,refundPaymentMethod:"cash"});
+assert.equal(cancelled.errors.length,0); assert.equal(cancelled.order?.status,"cancelled");
+assert.equal(store.getCustomer("c").outstandingBalance,20); assert.equal(store.getCustomer("c").totalSpending,0);
 
 reset(0,10);
 created=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"outsourced",supplierId:"s",supplierRate:4,customerRate:10,paidAmount:0});

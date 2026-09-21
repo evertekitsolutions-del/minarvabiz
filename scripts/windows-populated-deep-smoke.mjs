@@ -474,15 +474,21 @@ async function main() {
     await assertMain(ws, "LAUNDRY_DELIVERED", ["delivered"]);
     await click(ws, "LAUNDRY_VERIFY_PAYMENT", ["payments"]);
     await assertMain(ws, "LAUNDRY_PAYMENT_SOURCE", ["Laundry receipt:", "laundry", "upi", "₹50.00"]);
+    await click(ws, "LAUNDRY_COLLECT", ["collect"]);
+    await setField(ws, "Collect payment", "Amount", "300");
+    await selectDialogFieldByText(ws, "Collect payment", "Method", "UPI");
+    await click(ws, "LAUNDRY_RECORD_COLLECTION", ["record payment"]);
+    await assertMain(ws, "LAUNDRY_COLLECTION_ALLOCATED", ["Service orders:", "Laundry:", "100.00"]);
     await click(ws, "LAUNDRY_CANCEL_RETURN", ["laundry & ironing"]);
     await assertMain(ws, "LAUNDRY_CANCEL_LIST", ["Laundry & Ironing", "QA Shirt"]);
     await clickButton(ws, "LAUNDRY_CANCEL_OPEN", ["cancel ticket"]);
+    await assertMain(ws, "LAUNDRY_CANCEL_PAID_TO_DATE", ["₹150.00"]);
     await selectDialogFieldByText(ws, "Cancel laundry ticket", "Laundry refund payment method", "UPI");
     await selectDialogFieldByText(ws, "Cancel laundry ticket", "Supplier cost handling", "Reverse supplier payable / cost");
     await clickDialogButton(ws, "LAUNDRY_CANCEL_CONFIRM", "Cancel laundry ticket", "Cancel Ticket");
     await assertMain(ws, "LAUNDRY_CANCELLED", ["cancelled"]);
     await click(ws, "LAUNDRY_REFUND_VERIFY", ["payments"]);
-    await assertMain(ws, "LAUNDRY_REFUND_SOURCE", ["Laundry cancellation refund:", "refund", "upi", "₹50.00"]);
+    await assertMain(ws, "LAUNDRY_REFUND_SOURCE", ["Laundry cancellation refund:", "refund", "upi", "₹150.00"]);
 
 
     // Day-end action: content assertion is scoped to main, not sidebar.

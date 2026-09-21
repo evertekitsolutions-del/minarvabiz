@@ -5,7 +5,7 @@ import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remote
 import type { Supplier, LaundryOrder, Expense, ExpenseCategory, Purchase, PaymentMethod, UUID } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { calculateLaundryProfit } from "./laundry";
-import { planLaundryCancellation, planLaundryPosting } from "./laundry-accounting";
+import { hasLaundryPosting, planLaundryCancellation, planLaundryPosting } from "./laundry-accounting";
 import { purchaseBalance, nextDocNumber } from "./expenses";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
@@ -204,17 +204,26 @@ export function cancelLaundryOrder(input: {
     && payment.referenceId === order.id
     && payment.customerId === order.customerId
   );
-  if (order.paidAmount > 0) {
-    if (sourcePayments.length !== 1
-      || r2(sourcePayments[0].amount) !== r2(order.paidAmount)
-      || !["cash", "bank", "card", "upi", "online", "other"].includes(sourcePayments[0].method)) {
-      return { order: null, errors: ["Laundry receipt source needs reconciliation before cancellation"] };
-    }
-    if (!input.refundPaymentMethod) {
-      return { order: null, errors: ["Refund method is required for the laundry receipt before cancellation"] };
-    }
-  } else if (sourcePayments.length) {
+  if (sourcePayments.length > 1 || sourcePayments.some((payment) =>
+    !Number.isFinite(payment.amount) || payment.amount <= 0
+    || !Number.isSafeInteger(Math.round(payment.amount * 100))
+    || !["cash", "bank", "card", "upi", "online", "other"].includes(payment.method)
+  )) {
     return { order: null, errors: ["Laundry receipt source needs reconciliation before cancellation"] };
+  }
+  const initialReceiptAmount = r2(sourcePayments.reduce((sum, payment) => sum + payment.amount, 0));
+  let allocatedCollectionAmount = 0;
+  for (const payment of mainStore.listPayments()) {
+    if (payment.customerId !== order.customerId || payment.referenceType !== "other" || payment.paidAt < order.createdAt) continue;
+    const allocation = laundryAllocationFromPayment(payment.notes ?? "", order.orderNumber);
+    if (allocation == null) return { order: null, errors: ["Laundry collection source needs reconciliation before cancellation"] };
+    allocatedCollectionAmount = r2(allocatedCollectionAmount + allocation);
+  }
+  if (r2(initialReceiptAmount + allocatedCollectionAmount) !== r2(order.paidAmount)) {
+    return { order: null, errors: ["Laundry receipt and collection sources need reconciliation before cancellation"] };
+  }
+  if (order.paidAmount > 0 && !input.refundPaymentMethod) {
+    return { order: null, errors: ["Refund method is required for the laundry paid-to-date amount before cancellation"] };
   }
 
   const hasUnallocatedCustomerCollection = mainStore.listPayments().some((payment) =>
@@ -447,5 +456,78 @@ export function createPurchase(input: { date?: string; supplierId?: UUID | null;
 }
 
 function r2(n:number){return Math.round((n+Number.EPSILON)*100)/100;}
+
+function laundryAllocationFromPayment(notes: string, orderNumber: string): number | null {
+  const segment = notes.split(" · ").find((part) => part.startsWith("Laundry: "));
+  if (!segment) return 0;
+  const entries = segment.slice("Laundry: ".length).split(", ").filter(Boolean);
+  let total = 0;
+  for (const entry of entries) {
+    const splitAt = entry.lastIndexOf(" ");
+    if (splitAt <= 0) return null;
+    const label = entry.slice(0, splitAt);
+    const rawAmount = entry.slice(splitAt + 1);
+    if (!/^\d+\.\d{2}$/.test(rawAmount)) return null;
+    const amount = Number(rawAmount);
+    if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(Math.round(amount * 100))) return null;
+    if (label === orderNumber) total = r2(total + amount);
+  }
+  return total;
+}
+
+mainStore.registerCustomerReceivableProvider("laundry", {
+  list(customerId) {
+    return laundryOrders
+      .filter((order) => !order.deletedAt && order.customerId === customerId && order.status !== "cancelled" && order.balanceAmount > 0)
+      .map((order) => ({
+        id: order.id,
+        label: order.orderNumber,
+        date: order.createdAt,
+        balance: order.balanceAmount,
+        postedReceivable: hasLaundryPosting(order.id),
+        sourceType: "laundry" as const,
+      }));
+  },
+  validate(allocations) {
+    for (const { item, amount } of allocations) {
+      const order = laundryOrders.find((candidate) => candidate.id === item.id && !candidate.deletedAt);
+      if (!order || order.status === "cancelled") return "Laundry collection target is no longer available";
+      if (![order.totalCustomerCharge, order.paidAmount, order.balanceAmount, amount].every(Number.isFinite)
+        || order.paidAmount < 0 || order.balanceAmount <= 0 || amount <= 0 || amount > order.balanceAmount
+        || r2(order.paidAmount + order.balanceAmount) !== r2(order.totalCustomerCharge)
+        || !Number.isSafeInteger(Math.round((order.paidAmount + amount) * 100))
+        || !Number.isSafeInteger(Math.round((order.balanceAmount - amount) * 100))) {
+        return "Laundry balances need reconciliation";
+      }
+    }
+    return null;
+  },
+  apply(allocations, now) {
+    for (const { item, amount } of allocations) {
+      const order = laundryOrders.find((candidate) => candidate.id === item.id && !candidate.deletedAt);
+      if (!order || order.status === "cancelled") throw new Error("Laundry collection target is no longer available");
+      if (![order.totalCustomerCharge, order.paidAmount, order.balanceAmount, amount].every(Number.isFinite)
+        || order.paidAmount < 0 || order.balanceAmount <= 0 || amount <= 0 || amount > order.balanceAmount
+        || r2(order.paidAmount + order.balanceAmount) !== r2(order.totalCustomerCharge)
+        || !Number.isSafeInteger(Math.round((order.paidAmount + amount) * 100))
+        || !Number.isSafeInteger(Math.round((order.balanceAmount - amount) * 100))) {
+        throw new Error("Laundry balances need reconciliation");
+      }
+      const before = { paidAmount: order.paidAmount, balanceAmount: order.balanceAmount, version: order.version };
+      order.paidAmount = r2(order.paidAmount + amount);
+      order.balanceAmount = r2(order.balanceAmount - amount);
+      order.updatedAt = now;
+      order.version += 1;
+      enqueueOutbox("laundry_orders", order.id, "update", { ...order });
+      auditAction("laundry.collection", "laundry_orders", order.id, before, {
+        paidAmount: order.paidAmount,
+        balanceAmount: order.balanceAmount,
+        amount,
+      });
+    }
+    touchPersistence();
+  },
+});
+
 export function hydratePhase5(data:{suppliers?:Supplier[];laundryOrders?:LaundryOrder[];expenses?:Expense[];purchases?:Purchase[];expenseCategories?:ExpenseCategory[]}){if(data.suppliers){suppliers.length=0;suppliers.push(...data.suppliers);}if(data.laundryOrders){laundryOrders.length=0;laundryOrders.push(...data.laundryOrders);}if(data.expenses){expenses.length=0;expenses.push(...data.expenses);}if(data.purchases){purchases.length=0;purchases.push(...data.purchases);}if(data.expenseCategories){expenseCategories.length=0;expenseCategories.push(...data.expenseCategories);}lastLaundryNo=maxDocumentNumber(laundryOrders.map(x=>x.orderNumber),"LDY");lastPurchaseNo=maxDocumentNumber(purchases.map(x=>x.purchaseNumber),"PUR");}
 function maxDocumentNumber(values:string[],prefix:string){let max=0;for(const value of values){const match=new RegExp(`^${prefix}-(\\d+)$`).exec(value||"");if(match)max=Math.max(max,Number(match[1]));}return max>0?`${prefix}-${String(max).padStart(4,"0")}`:null;}
