@@ -217,6 +217,15 @@ async function main() {
     await click(ws, "CREATE_LOCATION", ["create location"]);
     await assertMain(ws, "WAREHOUSE_LOCATION_CREATED", ["Location created", "Locations", "1", "RCV-01"]);
 
+    // Opening bank is an explicit one-time cutover action and must be recorded before normal bank activity.
+    await click(ws, "OPENING_BANK_ACCOUNTING", ["accounting"]);
+    await assertMain(ws, "OPENING_BANK_CARD", ["Accounting & General Ledger", "Opening bank balance"]);
+    await setMainField(ws, "Opening bank balance", "500");
+    await click(ws, "POST_OPENING_BANK", ["post opening bank"]);
+    await assertMain(ws, "OPENING_BANK_POSTED", ["Opening bank balance posted."]);
+    await click(ws, "OPENING_BANK_TRIAL", ["trial balance"]);
+    await assertMain(ws, "OPENING_BANK_TRIAL", ["Trial Balance", "Bank", "₹500.00"]);
+
     // POS: select customer, add product card, complete a credit sale.
     await click(ws, "SALES", ["sales & billing"]);
     await assertMain(ws, "POS", ["POS Billing", "Current Sale", "QA POS Product"]);
