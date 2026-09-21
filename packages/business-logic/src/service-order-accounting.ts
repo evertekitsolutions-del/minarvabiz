@@ -8,6 +8,10 @@ function tenderKey(method: PaymentMethod): string {
   return method === "cash" ? "cash" : method === "bank" ? "bank" : "payment_clearing";
 }
 
+export function hasServiceOrderPosting(orderId: string): boolean {
+  return listJournalEntries().some((entry) => entry.referenceType === "auto_service_order" && entry.referenceId === orderId && entry.status === "posted");
+}
+
 export function planServiceOrderPosting(order: ServiceOrder, advancePaymentMethod: PaymentMethod = "cash"): AutomaticPostingPlan {
   const values = [order.price, order.advance, order.balance];
   if (values.some((value) => !Number.isFinite(value) || value < 0 || !Number.isSafeInteger(cents(value)))
