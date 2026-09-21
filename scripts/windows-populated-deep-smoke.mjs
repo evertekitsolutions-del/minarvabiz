@@ -464,6 +464,8 @@ async function main() {
     await assertMain(ws, "LAUNDRY_RECEIVED", ["Mark Delivered"]);
     await clickButton(ws, "LAUNDRY_MARK_DELIVERED", ["mark delivered"]);
     await assertMain(ws, "LAUNDRY_DELIVERED", ["delivered"]);
+    await click(ws, "LAUNDRY_VERIFY_PAYMENT", ["payments"]);
+    await assertMain(ws, "LAUNDRY_PAYMENT_SOURCE", ["Laundry receipt:", "laundry", "upi", "₹50.00"]);
 
 
     // Day-end action: content assertion is scoped to main, not sidebar.
