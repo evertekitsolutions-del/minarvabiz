@@ -438,6 +438,12 @@ async function main() {
     await selectDialogFieldByText(ws, "Outsourced Laundry", "Payment method", "UPI");
     await click(ws, "SAVE_LAUNDRY", ["save"]);
     await assertMain(ws, "LAUNDRY_SAVED", ["1 tickets", "QA POS Customer", "QA Shirt"]);
+    await click(ws, "LAUNDRY_MARK_SENT", ["mark sent"]);
+    await assertMain(ws, "LAUNDRY_SENT", ["Mark Received"]);
+    await click(ws, "LAUNDRY_MARK_RECEIVED", ["mark received"]);
+    await assertMain(ws, "LAUNDRY_RECEIVED", ["Mark Delivered"]);
+    await click(ws, "LAUNDRY_MARK_DELIVERED", ["mark delivered"]);
+    await assertMain(ws, "LAUNDRY_DELIVERED", ["delivered"]);
 
 
     // Day-end action: content assertion is scoped to main, not sidebar.
