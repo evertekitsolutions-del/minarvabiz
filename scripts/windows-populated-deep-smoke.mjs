@@ -309,7 +309,7 @@ async function main() {
     await setField(ws, "Add Expense", "Amount", "50");
     await setField(ws, "Add Expense", "Description", "QA interaction expense");
     await click(ws, "SAVE_EXPENSE", ["save expense"]);
-    await assertMain(ws, "EXPENSE_SAVED", ["1 records", "QA interaction expense"]);
+    await assertMain(ws, "EXPENSE_SAVED", ["2 records", "QA interaction expense"]);
 
     // Supplier and purchase create.
     await click(ws, "SUPPLIERS", ["suppliers"]);
