@@ -340,13 +340,38 @@ payments schema for Hybrid synchronization. Automatic laundry journals cannot be
 manually voided. Hydrated historical laundry orders are not backfilled and are not
 given invented Payment rows.
 
-Outsourced laundry now has a guarded operational lifecycle:
+Outsourced laundry has a guarded operational lifecycle:
 `pending -> sent -> received -> delivered`. These status transitions only update
 the source ticket/version and outbox/audit state; they do not create or alter
-financial journals. In-house ironing remains delivered at creation. Laundry
-cancellation is intentionally rejected by the status API until a separate
-customer-refund and supplier-cost reconciliation workflow defines the financial
-effect. Service-order revenue recognition is covered in the sections below.
+financial journals. In-house ironing remains delivered at creation. Directly
+setting status to `cancelled` is still rejected; cancellation must use the explicit
+source workflow below.
+
+Laundry cancellation requires an auditable original `auto_laundry` journal and,
+when paid-now is positive, exactly one matching `referenceType=laundry` receipt
+Payment. The operator selects the actual customer refund tender. The cancellation
+journal debits Laundry Revenue for the original customer charge, credits Accounts
+Receivable for the unpaid balance, and credits Cash/Bank/Payment Clearing for the
+refund. A separate `referenceType=refund` Payment with a
+`Laundry cancellation refund: <order number>` note records the refund source.
+
+For outsourced tickets with supplier cost, the operator must explicitly choose one
+of two economic outcomes: **Keep supplier payable / cost** when the supplier is
+still owed, or **Reverse supplier payable / cost** when the supplier waived/is not
+owed. Only the second option debits Accounts Payable, credits Laundry Outsourcing
+Costs and reduces the supplier outstanding balance. The first leaves the original
+supplier cost and payable intact, so a cancelled customer job can correctly retain
+a supplier loss/cost.
+
+Cancellation is blocked rather than guessed when the customer has a later
+unallocated "Other customer balance" collection, when supplier-cost reversal has a
+later unallocated "Other supplier balance" payment, when balances are corrupt, or
+when historical orders lack their source journal/receipt Payment. Successful
+cancellation updates the source ticket, customer and (when reversed) supplier,
+queues the refund Payment and accounting records through existing persistence/
+outbox paths, and protects both automatic journals from manual void. No historical
+cancellation/refund backfill is performed. Service-order revenue recognition is
+covered in the sections below.
 
 
 ## Service order posting

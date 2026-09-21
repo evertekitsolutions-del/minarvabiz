@@ -566,6 +566,46 @@ export function recordLaundryPaymentEntry(input: {
   return payment;
 }
 
+export function recordLaundryRefundPaymentEntry(input: {
+  laundryOrderId: UUID;
+  customerId: UUID;
+  amount: number;
+  method: PaymentMethod;
+  refundedAt?: string;
+  orderNumber?: string | null;
+}): Payment {
+  assertPermission("orders.manage");
+  if (!Number.isFinite(input.amount) || round2(input.amount) <= 0 || !Number.isSafeInteger(Math.round(input.amount * 100))) {
+    throw new Error("Laundry refund must be positive and finite");
+  }
+  if (!["cash", "bank", "card", "upi", "online", "other"].includes(input.method)) {
+    throw new Error("Invalid laundry refund payment method");
+  }
+  const now = input.refundedAt ?? nowISO();
+  const payment: Payment = {
+    id: generateId(),
+    amount: round2(input.amount),
+    method: input.method,
+    referenceType: "refund",
+    referenceId: input.laundryOrderId,
+    customerId: input.customerId,
+    notes: input.orderNumber ? "Laundry cancellation refund: " + input.orderNumber : "Laundry cancellation refund",
+    paidAt: now,
+    createdAt: nowISO(),
+    version: 1,
+  };
+  payments.push(payment);
+  touchPersistence();
+  void remoteCreatePayment(payment);
+  auditAction("laundry.refund_payment", "payments", payment.id, null, {
+    laundryOrderId: input.laundryOrderId,
+    customerId: input.customerId,
+    amount: payment.amount,
+    method: payment.method,
+  });
+  return payment;
+}
+
 export function recordOrderRefundPaymentEntry(input: {
   orderId: UUID;
   customerId: UUID;

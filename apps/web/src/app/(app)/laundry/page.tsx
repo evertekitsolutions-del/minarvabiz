@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { LaundryList, LaundryForm, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
+import { LaundryList, LaundryForm, LaundryCancellationForm, Modal, Button, FormField, inputClass, selectClass, type LaundryCancellationValues } from "@minarvabiz/ui";
 import { store, phase5Store, assertLimit } from "@minarvabiz/business-logic";
 import type { LaundryOrder, Customer, PaymentMethod, Supplier } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
@@ -14,6 +14,8 @@ export default function LaundryPage() {
   const [mode, setMode] = React.useState<"outsourced" | "in_house_ironing" | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [statusError, setStatusError] = React.useState<string | null>(null);
+  const [cancelOrder, setCancelOrder] = React.useState<LaundryOrder | null>(null);
+  const [cancelError, setCancelError] = React.useState<string | null>(null);
   const [customerOpen, setCustomerOpen] = React.useState(false);
   const [supplierOpen, setSupplierOpen] = React.useState(false);
   const [customerError, setCustomerError] = React.useState<string | null>(null);
@@ -68,6 +70,27 @@ export default function LaundryPage() {
     }
   }
 
+  function handleCancelLaundry(values: LaundryCancellationValues) {
+    if (!cancelOrder) return;
+    try {
+      const result = phase5Store.cancelLaundryOrder({
+        orderId: cancelOrder.id,
+        refundPaymentMethod: values.refundPaymentMethod,
+        supplierCostAction: values.supplierCostAction,
+      });
+      if (result.errors.length || !result.order) {
+        setCancelError(result.errors.join("; ") || "Unable to cancel laundry ticket");
+        return;
+      }
+      setCancelError(null);
+      setCancelOrder(null);
+      setStatusError(null);
+      refresh();
+    } catch (e) {
+      setCancelError(e instanceof Error ? e.message : "Unable to cancel laundry ticket");
+    }
+  }
+
   function saveCustomer() {
     const limit = assertLimit("customers");
     if (!limit.allowed) { setCustomerError(limit.reason ?? "Customer limit reached"); return; }
@@ -118,6 +141,7 @@ export default function LaundryPage() {
         onAddOutsourced={() => setMode("outsourced")}
         onAddIroning={() => setMode("in_house_ironing")}
         onStatusChange={handleStatusChange}
+        onCancel={(order) => { setCancelError(null); setCancelOrder(order); }}
       />
       <Modal
         open={mode !== null}
@@ -135,6 +159,21 @@ export default function LaundryPage() {
             onAddCustomer={() => { setCustomerError(null); setCustomerOpen(true); }}
             onAddSupplier={() => { setSupplierError(null); setSupplierOpen(true); }}
             error={error}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={cancelOrder !== null}
+        title="Cancel laundry ticket"
+        onClose={() => { setCancelOrder(null); setCancelError(null); }}
+      >
+        {cancelOrder && (
+          <LaundryCancellationForm
+            order={cancelOrder}
+            error={cancelError}
+            onSubmit={handleCancelLaundry}
+            onCancel={() => { setCancelOrder(null); setCancelError(null); }}
           />
         )}
       </Modal>
