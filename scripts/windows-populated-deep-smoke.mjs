@@ -419,6 +419,8 @@ async function main() {
     await selectDialogFieldByText(ws, "Outsourced Laundry", "Customer", "QA POS Customer");
     await setField(ws, "Outsourced Laundry", "Garment", "QA Shirt");
     await selectDialogFieldByText(ws, "Outsourced Laundry", "Laundry supplier", "City Laundry Works");
+    await setField(ws, "Outsourced Laundry", "Paid now", "50");
+    await selectDialogFieldByText(ws, "Outsourced Laundry", "Payment method", "UPI");
     await click(ws, "SAVE_LAUNDRY", ["save"]);
     await assertMain(ws, "LAUNDRY_SAVED", ["1 tickets", "QA POS Customer", "QA Shirt"]);
 
