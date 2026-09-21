@@ -159,6 +159,16 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
   }
   laundryOrders.push(order);
   accountingPlan.commit();
+  if (paid > 0) {
+    mainStore.recordLaundryPaymentEntry({
+      laundryOrderId: order.id,
+      customerId: order.customerId,
+      amount: paid,
+      method: paymentMethod,
+      paidAt: order.createdAt,
+      orderNumber: order.orderNumber,
+    });
+  }
   touchPersistence();
   void remoteCreateLaundry({...order});
   void remoteUpsertCustomer({...customer});
