@@ -56,12 +56,14 @@ without an explicit cutover/reconciliation workflow.
 
 ## Sales posting prerequisite — customer collections
 
-Customer collections now allocate to oldest unpaid sales first (sale date,
-creation date, then ID). Each allocation updates invoice paid amount, balance,
-status and version. Cancelled, returned, deleted and other-customer invoices are
-excluded. Remaining collection value reduces other/opening customer balance;
-it is not invented as a sale payment. Payment notes and audit entries preserve
-the invoice allocations using existing persistence fields.
+Customer collections allocate FIFO across registered receivable sources for the
+same customer: unpaid retail invoices, service orders and laundry tickets are
+ordered by source date then ID. Invoice allocations update paid amount, balance,
+status and version; service-order allocations update advance/balance; laundry
+allocations update paidAmount/balanceAmount. Cancelled/returned/deleted sources are
+excluded. Remaining collection value reduces other/opening customer balance; it is
+not invented as a sale/service/laundry payment. Payment notes and audit entries
+preserve the source allocations using existing persistence fields.
 
 The shared collection path queues payment, customer and settled invoice snapshots
 before online I/O. Online uses settlement-only invoice updates, and writes are
@@ -347,12 +349,17 @@ financial journals. In-house ironing remains delivered at creation. Directly
 setting status to `cancelled` is still rejected; cancellation must use the explicit
 source workflow below.
 
-Laundry cancellation requires an auditable original `auto_laundry` journal and,
-when paid-now is positive, exactly one matching `referenceType=laundry` receipt
-Payment. The operator selects the actual customer refund tender. The cancellation
-journal debits Laundry Revenue for the original customer charge, credits Accounts
-Receivable for the unpaid balance, and credits Cash/Bank/Payment Clearing for the
-refund. A separate `referenceType=refund` Payment with a
+Laundry cancellation requires an auditable original `auto_laundry` journal.
+Paid-to-date is reconciled from the original linked `referenceType=laundry`
+paid-now Payment plus later normal customer collections whose generated
+`Laundry: <order number> <amount>` allocation segments target the ticket. Those
+sources must sum exactly to the ticket paidAmount; otherwise cancellation is
+blocked for reconciliation. No duplicate Payment row is created for a later
+collection, so day-end tender totals are not double-counted. The operator selects
+the actual customer refund tender. The cancellation journal debits Laundry Revenue
+for the original customer charge, credits Accounts Receivable for the unpaid
+balance, and credits Cash/Bank/Payment Clearing for the full paid-to-date refund.
+A separate `referenceType=refund` Payment with a
 `Laundry cancellation refund: <order number>` note records the refund source.
 
 For outsourced tickets with supplier cost, the operator must explicitly choose one
@@ -402,18 +409,20 @@ source-driven workflow.
 
 ## Service order balance collection
 
-The normal customer **Collect Payment** flow now allocates FIFO across both retail
-invoice receivables and open service-order balances for the same customer. A
-collection allocated to a service order increases the order's paid/advance amount,
-reduces its balance, queues the changed order for hybrid persistence and records the
-order allocation in the collection audit metadata.
+The normal customer **Collect Payment** flow uses a named multi-provider receivable
+registry. Service-order and laundry providers coexist with retail invoice
+receivables instead of one provider overwriting another. A collection allocated to
+a service order increases the order's paid/advance amount and reduces its balance;
+a collection allocated to laundry increases paidAmount and reduces balanceAmount.
+Changed source records are queued for hybrid persistence and the collection audit
+metadata records each allocation type.
 
 For service orders created by the current accounting engine, the collection debits
 the selected tender account and credits Accounts Receivable. Hydrated historical
 service orders that have no source `auto_service_order` journal are still collectible,
 but their amount is routed to Legacy Settlement Clearing instead of inventing a
 historical receivable. Any residual customer balance that cannot be tied to an invoice
-or service order continues to use the existing `Other customer balance` path.
+service order or laundry ticket continues to use the existing `Other customer balance` path.
 
 ## Service order cancellation posting
 
