@@ -15,13 +15,15 @@ function reset(accounts=chart,customerBalance=0,supplierBalance=0){
   outbox.hydrateOutbox([]);
 }
 const bal=key=>{const a=accounting.getSystemAccount(key);const row=accounting.buildTrialBalance().find(r=>r.accountId===a?.id);return Math.round(((row?.debit??0)-(row?.credit??0))*100)/100;};
-const snap=()=>JSON.stringify({customer:store.getCustomer("c"),supplier:phase5.getSupplier("s"),orders:phase5.listLaundryOrders(),accounting:accounting.exportAccountingState(),outbox:outbox.exportOutbox()});
+const snap=()=>JSON.stringify({customer:store.getCustomer("c"),supplier:phase5.getSupplier("s"),orders:phase5.listLaundryOrders(),payments:store.listPayments(),accounting:accounting.exportAccountingState(),outbox:outbox.exportOutbox()});
 
 reset();
 let r=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"in_house_ironing",supplierRate:999,customerRate:100,paidAmount:40,paymentMethod:"cash"});
 assert.equal(r.errors.length,0); assert(r.order); assert.equal(r.order.totalSupplierCost,0); assert.equal(r.order.supplierId,null);
 assert.equal(store.getCustomer("c").outstandingBalance,60); assert.equal(store.getCustomer("c").totalSpending,40);
 assert.equal(bal("cash"),40); assert.equal(bal("accounts_receivable"),60); assert.equal(bal("laundry_revenue"),-100); assert.equal(bal("laundry_costs"),0); assert.equal(bal("accounts_payable"),0);
+let payment=store.listPayments().find(x=>x.referenceType==="laundry"&&x.referenceId===r.order.id);
+assert(payment); assert.equal(payment.amount,40); assert.equal(payment.method,"cash"); assert.equal(payment.customerId,"c"); assert.match(payment.notes,/Laundry receipt/);
 assert.equal(accounting.buildProfitAndLoss().netProfit,100); assert(accounting.buildBalanceSheet().balanced);
 let j=accounting.listJournalEntries().find(x=>x.referenceType==="auto_laundry"); assert(j); assert(accounting.voidJournalEntry(j.id).errors.length);
 
@@ -30,11 +32,15 @@ r=phase5.createLaundryOrder({customerId:"c",quantity:2,mode:"outsourced",supplie
 assert.equal(r.errors.length,0); assert(r.order);
 assert.equal(store.getCustomer("c").outstandingBalance,150); assert.equal(store.getCustomer("c").totalSpending,50); assert.equal(phase5.getSupplier("s").outstandingBalance,120);
 assert.equal(bal("bank"),50); assert.equal(bal("accounts_receivable"),150); assert.equal(bal("laundry_revenue"),-200); assert.equal(bal("laundry_costs"),120); assert.equal(bal("accounts_payable"),-120);
+payment=store.listPayments().find(x=>x.referenceType==="laundry"&&x.referenceId===r.order.id);
+assert(payment); assert.equal(payment.amount,50); assert.equal(payment.method,"bank");
 assert.equal(accounting.buildProfitAndLoss().netProfit,80); assert(accounting.buildBalanceSheet().balanced);
 
 reset();
 r=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"in_house_ironing",supplierRate:0,customerRate:25,paidAmount:25});
 assert.equal(r.errors.length,0); assert.equal(bal("cash"),25);
+payment=store.listPayments().find(x=>x.referenceType==="laundry"&&x.referenceId===r.order.id);
+assert(payment); assert.equal(payment.method,"cash");
 
 reset(); const before=snap();
 for(const patch of [
@@ -61,9 +67,11 @@ reset(); permissions.setCurrentRole(null); assert.throws(()=>phase5.createLaundr
 reset();
 r=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"outsourced",supplierId:"s",supplierRate:4,customerRate:10,paidAmount:3,paymentMethod:"upi"});
 assert.equal(r.errors.length,0); assert.equal(bal("payment_clearing"),3); assert.equal(bal("cash"),0);
-for(const type of ["laundry_orders","customers","suppliers","accounts","journal_entries","journal_entry_lines"]) assert(outbox.listPendingOutbox().some(e=>e.aggregateType===type),type);
+payment=store.listPayments().find(x=>x.referenceType==="laundry"&&x.referenceId===r.order.id);
+assert(payment); assert.equal(payment.amount,3); assert.equal(payment.method,"upi");
+for(const type of ["laundry_orders","customers","suppliers","payments","accounts","journal_entries","journal_entry_lines"]) assert(outbox.listPendingOutbox().some(e=>e.aggregateType===type),type);
 
 reset();
 phase5.hydratePhase5({suppliers:[supplier(5)],laundryOrders:[{id:"old",orderNumber:"LDY-202601-0001",customerId:"c",customerName:"Laundry Customer",quantity:1,mode:"outsourced",supplierId:"s",supplierName:"Laundry Supplier",supplierRate:5,customerRate:10,profit:5,totalCustomerCharge:10,totalSupplierCost:5,status:"pending",paidAmount:0,balanceAmount:10,createdAt:"2026-01-01",updatedAt:"2026-01-01",version:1}],expenses:[],purchases:[]});
-assert.equal(accounting.listJournalEntries().length,0);
-console.log("Laundry accounting: revenue/AR/receipts, outsource cost/AP, validation, immutable automatic journals, permissions, outbox and no historical backfill PASS");
+assert.equal(accounting.listJournalEntries().length,0); assert.equal(store.listPayments().length,0);
+console.log("Laundry accounting: revenue/AR/receipts, linked payment sources, outsource cost/AP, validation, immutable automatic journals, permissions, outbox and no historical backfill PASS");
