@@ -22,6 +22,7 @@ export default function ServicesOrdersPage() {
   const [form, setForm] = React.useState<OrderFormValues>(emptyOrderForm());
   const [error, setError] = React.useState<string | null>(null);
   const [selected, setSelected] = React.useState<ServiceOrder | null>(null);
+  const [statusError, setStatusError] = React.useState<string | null>(null);
 
   const refresh = React.useCallback(() => {
     setCustomers(store.listCustomers());
@@ -91,6 +92,11 @@ export default function ServicesOrdersPage() {
   function handleStatus(status: OrderStatus) {
     if (!selected) return;
     const res = ordersStore.updateOrderStatus(selected.id, status);
+    if (!res.order) {
+      setStatusError(res.error ?? "Unable to update service order status");
+      return;
+    }
+    setStatusError(null);
     if (res.order) {
       setSelected(res.order);
       if (status === "ready_to_deliver") {
@@ -137,12 +143,15 @@ export default function ServicesOrdersPage() {
         />
       )}
       {selected && (
-        <OrderDetail
+        <>
+          {statusError && <p role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{statusError}</p>}
+          <OrderDetail
           order={selected}
           onStatusChange={handleStatus}
           onAddExpense={handleExpense}
-          onClose={() => setSelected(null)}
+          onClose={() => { setSelected(null); setStatusError(null); }}
         />
+        </>
       )}
       <Modal
         open={createOpen}
