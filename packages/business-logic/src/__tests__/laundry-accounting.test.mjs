@@ -42,6 +42,10 @@ assert.equal(r.errors.length,0); assert.equal(bal("cash"),25);
 payment=store.listPayments().find(x=>x.referenceType==="laundry"&&x.referenceId===r.order.id);
 assert(payment); assert.equal(payment.method,"cash");
 
+reset();
+r=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"in_house_ironing",supplierRate:0,customerRate:10,paidAmount:0,paymentMethod:"bank"});
+assert.equal(r.errors.length,0); assert(r.order); assert.equal(store.listPayments().length,0);
+
 reset(); const before=snap();
 for(const patch of [
   {quantity:NaN},{quantity:0},{quantity:Infinity},{customerRate:NaN},{customerRate:-1},{supplierRate:Infinity},{paidAmount:NaN},{paidAmount:-1}
