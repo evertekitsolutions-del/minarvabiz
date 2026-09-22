@@ -26,8 +26,8 @@ export function WarehousePanel() {
   const transfers = warehouseStore.listWarehouseTransfers();
   const totalsByProduct = Object.fromEntries(products.map((p) => [p.id, p.stockQuantity]));
   const summaries = warehouseStore.warehouseStockSummary(totalsByProduct)
-    .filter((row) => row.total > 0 || row.allocated > 0)
-    .sort((a, b) => b.allocated - a.allocated);
+    .filter((row) => row.total > 0 || row.allocated > 0 || row.inTransit > 0)
+    .sort((a, b) => (b.allocated + b.inTransit) - (a.allocated + a.inTransit));
 
   const productName = (id: string) => products.find((p) => p.id === id)?.name || id;
   const warehouseName = (id: string) => warehouses.find((w) => w.id === id)?.name || id;
@@ -154,9 +154,9 @@ export function WarehousePanel() {
       <Card>
         <CardHeader><CardTitle className="text-sm font-semibold">Stock allocation summary</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto p-0">
-          <table className="min-w-[760px] w-full text-sm">
-            <thead className="bg-slate-50 text-xs text-slate-500"><tr><th className="px-4 py-2 text-left">Product</th><th className="px-4 py-2 text-right">Product stock</th><th className="px-4 py-2 text-right">Allocated</th><th className="px-4 py-2 text-right">Reserved</th><th className="px-4 py-2 text-right">Available allocated</th><th className="px-4 py-2 text-right">Unallocated</th></tr></thead>
-            <tbody>{summaries.length ? summaries.map((row) => <tr key={row.productId} className="border-t border-slate-100"><td className="px-4 py-2 font-medium">{productName(row.productId)}</td><td className="px-4 py-2 text-right">{qty(row.total)}</td><td className="px-4 py-2 text-right">{qty(row.allocated)}</td><td className="px-4 py-2 text-right">{qty(row.reserved)}</td><td className="px-4 py-2 text-right">{qty(row.availableAllocated)}</td><td className="px-4 py-2 text-right">{qty(row.unallocated)}</td></tr>) : <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">No stock to display</td></tr>}</tbody>
+          <table className="min-w-[860px] w-full text-sm">
+            <thead className="bg-slate-50 text-xs text-slate-500"><tr><th className="px-4 py-2 text-left">Product</th><th className="px-4 py-2 text-right">Product stock</th><th className="px-4 py-2 text-right">Allocated</th><th className="px-4 py-2 text-right">Reserved</th><th className="px-4 py-2 text-right">In transit</th><th className="px-4 py-2 text-right">Available allocated</th><th className="px-4 py-2 text-right">Unallocated</th></tr></thead>
+            <tbody>{summaries.length ? summaries.map((row) => <tr key={row.productId} className="border-t border-slate-100"><td className="px-4 py-2 font-medium">{productName(row.productId)}</td><td className="px-4 py-2 text-right">{qty(row.total)}</td><td className="px-4 py-2 text-right">{qty(row.allocated)}</td><td className="px-4 py-2 text-right">{qty(row.reserved)}</td><td className="px-4 py-2 text-right">{qty(row.inTransit)}</td><td className="px-4 py-2 text-right">{qty(row.availableAllocated)}</td><td className="px-4 py-2 text-right">{qty(row.unallocated)}</td></tr>) : <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">No stock to display</td></tr>}</tbody>
           </table>
         </CardContent>
       </Card>

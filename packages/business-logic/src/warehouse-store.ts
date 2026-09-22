@@ -470,21 +470,31 @@ export function warehouseStockSummary(productTotalById: Record<string, number>) 
   const positions = listWarehouseStock();
   const allocatedByProduct = new Map<string, number>();
   const reservedByProduct = new Map<string, number>();
+  const inTransitByProduct = new Map<string, number>();
   for (const position of positions) {
     allocatedByProduct.set(position.productId, (allocatedByProduct.get(position.productId) ?? 0) + position.onHand);
     reservedByProduct.set(position.productId, (reservedByProduct.get(position.productId) ?? 0) + position.reserved);
   }
-  return [...new Set([...Object.keys(productTotalById), ...allocatedByProduct.keys()])].map((productId) => {
+  for (const transfer of transfers) {
+    if (transfer.status !== "in_transit") continue;
+    inTransitByProduct.set(
+      transfer.productId,
+      (inTransitByProduct.get(transfer.productId) ?? 0) + transfer.quantity
+    );
+  }
+  return [...new Set([...Object.keys(productTotalById), ...allocatedByProduct.keys(), ...inTransitByProduct.keys()])].map((productId) => {
     const total = roundQty(productTotalById[productId] ?? 0);
     const allocated = roundQty(allocatedByProduct.get(productId) ?? 0);
     const reserved = roundQty(reservedByProduct.get(productId) ?? 0);
+    const inTransit = roundQty(inTransitByProduct.get(productId) ?? 0);
     return {
       productId,
       total,
       allocated,
       reserved,
+      inTransit,
       availableAllocated: roundQty(Math.max(0, allocated - reserved)),
-      unallocated: roundQty(Math.max(0, total - allocated)),
+      unallocated: roundQty(Math.max(0, total - allocated - inTransit)),
     };
   });
 }
