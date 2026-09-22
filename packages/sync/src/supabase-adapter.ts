@@ -367,6 +367,25 @@ function matchQuery(table: string, aggregateId: UUID): string {
   return table === "production_workflows" ? `order_id=eq.${aggregateId}` : `id=eq.${aggregateId}`;
 }
 
+function pullCursorColumn(table: string): string {
+  switch (table) {
+    case "inventory_transactions":
+    case "payments":
+    case "order_expenses":
+    case "audit_logs":
+    case "goods_receipts":
+    case "goods_receipt_lines":
+      return "created_at";
+    default:
+      return "updated_at";
+  }
+}
+
+function pullQuery(table: string, since: string): string {
+  const cursor = pullCursorColumn(table);
+  return `select=*&${cursor}=gt.${encodeURIComponent(since)}&order=${cursor}.asc`;
+}
+
 export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): CloudAdapter {
   return {
     async push(events: OutboxEvent[]) {
@@ -414,7 +433,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
     async pull(since: string, _deviceId: UUID) {
       const tables = [
         "branches", "customers", "categories", "products", "inventory_transactions",
-        "sales", "sale_items", "payments", "measurement_profiles", "orders",
+        "sales", "payments", "measurement_profiles", "orders",
         "order_expenses", "laundry_orders", "expenses", "purchases", "suppliers",
         "staff_members", "sale_returns", "audit_logs",
         "production_workflows", "production_stage_events", "material_rolls", "material_consumptions",
@@ -424,25 +443,54 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         "accounts", "journal_entries", "journal_entry_lines",
       ];
       const records: Array<{ tableName: string; record: VersionedRecord }> = [];
+      const pulledSales = new Map<string, string>();
+
       for (const table of tables) {
-        const q = `select=*&updated_at=gt.${encodeURIComponent(since)}&order=updated_at.asc`;
-        const res = await client.select(table, q);
+        const cursor = pullCursorColumn(table);
+        const res = await client.select(table, pullQuery(table, since));
         if (res.data) {
           for (const row of res.data) {
             const recordId = table === "production_workflows" ? String(row.order_id) : String(row.id);
+            const updatedAt = String(row[cursor] || row.updated_at || row.changed_at || row.created_at || since);
             records.push({
               tableName: table,
               record: {
                 ...row,
                 id: recordId,
                 version: Number(row.version || 1),
-                updatedAt: String(row.updated_at || row.changed_at || row.created_at || since),
+                updatedAt,
                 deletedAt: (row.deleted_at as string) || null,
+              } as VersionedRecord,
+            });
+            if (table === "sales") pulledSales.set(recordId, updatedAt);
+          }
+        }
+      }
+
+      // sale_items are immutable children and the core schema has no timestamp column.
+      // Pull them only for sales that were pulled in this cycle and inherit the parent
+      // sale timestamp for conflict ordering instead of issuing an invalid updated_at query.
+      if (pulledSales.size > 0) {
+        const saleIds = [...pulledSales.keys()];
+        const q = `select=*&sale_id=in.(${saleIds.map(encodeURIComponent).join(",")})`;
+        const res = await client.select("sale_items", q);
+        if (res.data) {
+          for (const row of res.data) {
+            const saleId = String(row.sale_id);
+            records.push({
+              tableName: "sale_items",
+              record: {
+                ...row,
+                id: String(row.id),
+                version: Number(row.version || 1),
+                updatedAt: pulledSales.get(saleId) || since,
+                deletedAt: null,
               } as VersionedRecord,
             });
           }
         }
       }
+
       return { records, serverTime: new Date().toISOString() };
     },
   };
