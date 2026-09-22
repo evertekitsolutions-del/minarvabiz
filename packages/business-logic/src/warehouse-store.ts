@@ -203,16 +203,16 @@ export function createWarehouseLocation(input: {
 }
 
 /**
- * Allocate already-existing Product.stockQuantity to a physical location.
- * This does not increase product stock; it only says where existing stock sits.
+ * Validate a physical-location allocation without mutating WMS state.
+ * Procurement uses this before posting a GRN so an invalid allocation cannot
+ * leave PO received quantities or Product.stockQuantity partially updated.
  */
-export function allocateExistingStock(input: {
+export function validateExistingStockAllocation(input: {
   productId: UUID;
   locationId: UUID;
   quantity: number;
   productTotalStock: number;
-}): { position: WarehouseStockPosition | null; errors: string[] } {
-  assertPermission("inventory.adjust");
+}): string[] {
   const errors: string[] = [];
   const location = activeLocation(input.locationId);
   const qty = roundQty(input.quantity);
@@ -224,6 +224,23 @@ export function allocateExistingStock(input: {
   if (alreadyAllocated + qty > roundQty(Math.max(0, input.productTotalStock))) {
     errors.push(`Allocation exceeds product stock. Unallocated quantity: ${roundQty(Math.max(0, input.productTotalStock - alreadyAllocated))}`);
   }
+  return errors;
+}
+
+/**
+ * Allocate already-existing Product.stockQuantity to a physical location.
+ * This does not increase product stock; it only says where existing stock sits.
+ */
+export function allocateExistingStock(input: {
+  productId: UUID;
+  locationId: UUID;
+  quantity: number;
+  productTotalStock: number;
+}): { position: WarehouseStockPosition | null; errors: string[] } {
+  assertPermission("inventory.adjust");
+  const errors = validateExistingStockAllocation(input);
+  const location = activeLocation(input.locationId);
+  const qty = roundQty(input.quantity);
   if (errors.length || !location) return { position: null, errors };
 
   const position = getOrCreatePosition(location.id, input.productId);

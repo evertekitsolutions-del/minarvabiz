@@ -261,6 +261,17 @@ export function receivePurchaseOrder(input: {
           continue;
         }
       }
+      const product = mainStore.getProduct(poLine.productId);
+      const allocationErrors = warehouseStore.validateExistingStockAllocation({
+        productId: poLine.productId,
+        locationId: warehouseLocationId,
+        quantity,
+        productTotalStock: r3((product?.stockQuantity ?? 0) + quantity),
+      });
+      if (allocationErrors.length) {
+        errors.push(`${poLine.description}: warehouse allocation failed — ${allocationErrors.join("; ")}`);
+        continue;
+      }
     }
     receiptLines.push({
       id: generateId(),
