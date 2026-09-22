@@ -1,16 +1,35 @@
 # Release readiness — Minarva Biz 1.0.4
 
-## Verified main baseline
+## Current main code baseline
 
-- Main commit audited: `4c8599db659dfa6798697ee530536072c23af8f9`
-- Product version: `1.0.4`
+- Main commit verified after PR #56: `e281c146c6eb27ff3a4828b95d793b1787db8b7b`
+- Latest merged milestone: PR #56 — schema-safe Hybrid cloud pull cursors
+- Product version remains: `1.0.4`
+- Merged-main Vercel status: PASS
+
+The PR #56 head commit `43d470c3c62b99521b50ba76310a30665525b22d` passed the full automated gate set before merge:
+
+- CI: run `35688221560` — PASS
+- Licensing Smoke: run `35688221567` — PASS
+- Windows Feature Click Smoke: run `35688221574` — PASS
+- Windows Deep Installed Smoke: run `35688221558` — PASS
+
+These results validate the change set that was merged into the current main baseline. Physical customer-PC UAT remains a separate owner gate.
+
+## Last packaged Windows delivery artifact
+
+The last explicitly recorded final installer artifact predates the current main code baseline:
+
+- Packaged-code baseline: `4c8599db659dfa6798697ee530536072c23af8f9`
 - Windows installer: `MinarvaBiz-Setup-1.0.4.exe`
 - Installer SHA-256: `40ae5ee6546e3c9d6ad5a419127fdf961fecbf86027bb482b720a60dfb2f297b`
 - Final installer artifact: `minarvabiz-windows-installer-final` (artifact ID `10561709928`)
 
+Do not represent that older installer binary as an exact build of current main. Repackage from current main before shipping the later merged accounting, service/laundry, and Hybrid-sync changes to a customer.
+
 ## Automated release gates — PASS
 
-Latest verified runs on the audited main commit:
+The recorded final-installer baseline passed:
 
 - CI: run `35380365555` — PASS
 - Licensing Smoke: run `35380365569` — PASS
