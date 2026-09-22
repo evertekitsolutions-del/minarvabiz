@@ -171,6 +171,9 @@ jobs:
           node packages/database/src/__tests__/sqlite-backup.test.mjs
           node packages/database/src/__tests__/desktop-sqlite-flow.test.mjs
       - run: pnpm --filter @minarvabiz/business-logic typecheck
+      - run: pnpm --filter @minarvabiz/sync typecheck
+      - name: Run Supabase pull cursor regression
+        run: node packages/sync/src/__tests__/supabase-pull-cursors.test.mjs
       - name: Run complete business logic test suite
         shell: bash
         run: |
