@@ -305,7 +305,7 @@ export function createWarehouseTransfer(input: {
   if (!source) errors.push("Source location not found");
   if (!destination) errors.push("Destination location not found");
   if (source && destination && source.id === destination.id) errors.push("Source and destination must be different");
-  if (qty <= 0) errors.push("Quantity must be greater than zero");
+  if (!Number.isFinite(qty) || qty <= 0) errors.push("Quantity must be a finite number greater than zero");
   const sourcePosition = source ? positionFor(source.id, input.productId) : undefined;
   if (!sourcePosition || sourcePosition.onHand - sourcePosition.reserved < qty) {
     errors.push("Insufficient available stock at source location");
