@@ -19,3 +19,7 @@ The desktop edition supports manual and automatic SQLite backups, integrity veri
 ## Online / Hybrid
 
 Online uses Supabase PostgreSQL. Hybrid keeps SQLite as the desktop primary store and uses the outbox/conflict-resolution architecture for cloud synchronization.
+
+### Hybrid cloud pull cursors
+
+Supabase pull uses the timestamp column that actually exists for each source table. Mutable rows use `updated_at`; append-only core rows such as payments, inventory transactions, order expenses, audit logs and goods receipts use `created_at`. `sale_items` has no timestamp in the core schema, so it is pulled only for sales returned in the same cycle and inherits the parent sale timestamp for conflict ordering. This avoids invalid `updated_at` filters silently skipping valid cloud rows without inventing schema fields or historical timestamps.
