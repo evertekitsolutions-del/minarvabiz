@@ -93,7 +93,7 @@ assert(updateConfigWriter.includes("MINARVA_UPDATE_MANIFEST_URL") && updateConfi
 assert(updater.includes("verifyManifestSignature") && updater.includes("createPublicKey") && updater.includes("verify(null"), "Secure updater manifest signature verification is missing");
 assert(updater.includes('createHash("sha256")') && updater.includes("Installer SHA-256 verification failed"), "Secure updater installer hash verification is missing");
 assert(updater.includes("500 * 1024 * 1024") && updater.includes("AbortSignal.timeout"), "Secure updater download guards are incomplete");
-assert(desktopSource.includes('ipcMain.handle("update:install"') && desktopSource.includes('createLocalBackup("automatic")') && desktopSource.includes("isValidSqliteFile(backup.path)"), "Updater must require a verified pre-update SQLite backup");
+assert(desktopSource.includes('ipcMain.handle("update:install"') && desktopSource.includes('createLocalBackup("automatic")') && desktopSource.includes("minarvaSqliteValidationError(backup.path)"), "Updater must require a verified Minarva Biz pre-update SQLite backup");
 assert(preloadSource.includes("checkForUpdates") && preloadSource.includes("downloadUpdate") && preloadSource.includes("installUpdate"), "Updater IPC preload bridge is incomplete");
 assert(settingsPanel.includes("Software updates") && settingsPanel.includes("Updates are never forced"), "Customer-facing secure updater controls are missing");
 assert(desktopPackage.scripts?.["prepare:update"]?.includes("write-update-config.mjs") && desktopPackage.scripts?.["build:electron"]?.includes("prepare:update"), "Updater config generation is missing from desktop build");
