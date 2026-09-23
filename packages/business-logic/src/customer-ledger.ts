@@ -4,6 +4,7 @@
 import type { LedgerEntry, UUID } from "@minarvabiz/types";
 import { generateId } from "@minarvabiz/utils";
 import * as mainStore from "./store";
+import { escapeHtml } from "./html";
 
 export interface CustomerStatement {
   customerId: UUID;
@@ -91,14 +92,14 @@ export function buildCustomerStatementHtml(stmt: CustomerStatement): string {
   const rows = stmt.entries
     .map(
       (e) =>
-        `<tr><td>${e.createdAt.slice(0, 10)}</td><td>${e.entryType}</td><td>${e.notes || ""}</td><td>${e.debit}</td><td>${e.credit}</td><td>${e.balanceAfter}</td></tr>`
+        `<tr><td>${escapeHtml(e.createdAt.slice(0, 10))}</td><td>${escapeHtml(e.entryType)}</td><td>${escapeHtml(e.notes || "")}</td><td>${e.debit}</td><td>${e.credit}</td><td>${e.balanceAfter}</td></tr>`
     )
     .join("");
-  return `<!DOCTYPE html><html><head><title>Statement ${stmt.customerName}</title>
+  return `<!DOCTYPE html><html><head><title>Statement ${escapeHtml(stmt.customerName)}</title>
 <style>body{font-family:system-ui;padding:16px}table{width:100%;border-collapse:collapse;font-size:13px}
 td,th{border-bottom:1px solid #e2e8f0;padding:6px;text-align:left}</style></head>
 <body><h1>Customer Statement</h1>
-<p>${stmt.customerName}</p>
+<p>${escapeHtml(stmt.customerName)}</p>
 <p>Sales: ${stmt.totalSales} · Paid: ${stmt.totalPaid} · Outstanding: ${stmt.outstanding} · Advance: ${stmt.advanceBalance}</p>
 <table><thead><tr><th>Date</th><th>Type</th><th>Ref</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
 <tbody>${rows}</tbody></table>

@@ -9,6 +9,7 @@ import * as ordersStore from "./orders-store";
 import { formatMoney } from "@minarvabiz/utils";
 import { getShopProfile } from "./shop-profile";
 import { auditAction } from "./audit-actions";
+import { escapeHtml } from "./html";
 
 export type DeliveryFilter = "all" | "due_today" | "overdue" | "ready" | "delivered";
 
@@ -81,7 +82,7 @@ export function buildDeliveryChallan(orders: ServiceOrder[]): string {
 export function printDeliveryChallan(orders: ServiceOrder[]): void {
   if (typeof window === "undefined") return;
   const text = buildDeliveryChallan(orders);
-  const html = `<!DOCTYPE html><html><body><pre>${text.replace(/</g, "&lt;")}</pre>
+  const html = `<!DOCTYPE html><html><body><pre>${escapeHtml(text)}</pre>
 <script>window.onload=function(){window.print();}</script></body></html>`;
   const w = window.open("", "_blank", "width=480,height=640");
   if (!w) return;

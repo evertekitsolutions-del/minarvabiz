@@ -8,6 +8,7 @@ import { touchPersistence } from "./autosave";
 import { enqueueOutbox } from "./outbox-bridge";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
+import { escapeHtml } from "./html";
 
 const quotations: Quotation[] = [];
 let lastQuo = 0;
@@ -178,14 +179,14 @@ export function buildQuotationHtml(q: Quotation): string {
   const rows = q.lines
     .map(
       (l) =>
-        `<tr><td>${l.description}</td><td>${l.quantity}</td><td>${l.unitPrice}</td><td>${l.lineTotal}</td></tr>`
+        `<tr><td>${escapeHtml(l.description)}</td><td>${l.quantity}</td><td>${l.unitPrice}</td><td>${l.lineTotal}</td></tr>`
     )
     .join("");
-  return `<!DOCTYPE html><html><head><title>${q.quotationNumber}</title>
+  return `<!DOCTYPE html><html><head><title>${escapeHtml(q.quotationNumber)}</title>
 <style>body{font-family:system-ui;padding:16px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #e2e8f0;padding:6px;text-align:left}</style></head>
-<body><h1>Quotation ${q.quotationNumber}</h1>
-<p>Customer: ${q.customerName || ""} · Status: ${q.status}</p>
-<p>Valid until: ${q.validUntil || "—"}</p>
+<body><h1>Quotation ${escapeHtml(q.quotationNumber)}</h1>
+<p>Customer: ${escapeHtml(q.customerName || "")} · Status: ${escapeHtml(q.status)}</p>
+<p>Valid until: ${escapeHtml(q.validUntil || "—")}</p>
 <table><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
 <tbody>${rows}</tbody></table>
 <p>Material: ${q.materialCharges} · Labour: ${q.labourCharges}</p>

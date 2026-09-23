@@ -7,6 +7,7 @@ import { formatMoney } from "@minarvabiz/utils";
 import { getShopProfile } from "./shop-profile";
 import { getTaxConfig } from "./tax-config";
 import { getPrintSettings } from "./print-settings";
+import { escapeHtml } from "./html";
 
 export function buildSaleInvoiceHtml(sale: Sale, opts?: { paper?: "a4" | "thermal"; autoPrint?: boolean }): string {
   const shop = getShopProfile();
@@ -155,10 +156,3 @@ export function printOrderInvoice(order: ServiceOrder, paper?: "a4" | "thermal")
   w.document.close();
 }
 
-function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}

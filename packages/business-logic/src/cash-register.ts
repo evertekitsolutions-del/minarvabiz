@@ -8,6 +8,7 @@ import { touchPersistence } from "./autosave";
 import * as mainStore from "./store";
 import * as phase5 from "./phase5-store";
 import { getDayEndClose, closeBusinessDay } from "./day-end";
+import { escapeHtml } from "./html";
 
 const sessions: CashRegisterSession[] = [];
 
@@ -109,9 +110,9 @@ export function closeCashRegister(actualClosing: number, closedBy?: string, busi
 }
 
 export function buildCashCloseHtml(s: CashRegisterSession): string {
-  return `<!DOCTYPE html><html><head><title>Cash close ${s.businessDate}</title>
+  return `<!DOCTYPE html><html><head><title>Cash close ${escapeHtml(s.businessDate)}</title>
 <style>body{font-family:system-ui;padding:16px}table{border-collapse:collapse}td{padding:6px 12px}</style></head>
-<body><h1>Cash register — ${s.businessDate}</h1>
+<body><h1>Cash register — ${escapeHtml(s.businessDate)}</h1>
 <table>
 <tr><td>Opening cash</td><td>${s.openingCash}</td></tr>
 <tr><td>Cash received</td><td>${s.cashReceived}</td></tr>
@@ -120,7 +121,7 @@ export function buildCashCloseHtml(s: CashRegisterSession): string {
 <tr><td><strong>Expected closing</strong></td><td>${s.expectedClosing}</td></tr>
 <tr><td>Actual closing</td><td>${s.actualClosing ?? "—"}</td></tr>
 <tr><td>Difference</td><td>${s.difference ?? "—"}</td></tr>
-<tr><td>Closed by</td><td>${s.closedBy || "—"} at ${s.closedAt || "—"}</td></tr>
+<tr><td>Closed by</td><td>${escapeHtml(s.closedBy || "—")} at ${escapeHtml(s.closedAt || "—")}</td></tr>
 </table>
 <script>window.onload=function(){window.print()}</script></body></html>`;
 }
