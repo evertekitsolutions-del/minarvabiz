@@ -153,7 +153,7 @@ export function createCustomer(input: {
   const c: Customer = {
     id: generateId(), name: input.name, phone: input.phone ?? null, whatsapp: input.whatsapp ?? null,
     email: input.email || null, address: input.address ?? null, birthday: input.birthday ?? null, notes: input.notes ?? null,
-    outstandingBalance: 0, totalSpending: 0, createdAt: nowISO(), updatedAt: nowISO(),
+    outstandingBalance: 0, totalSpending: 0, createdAt: nowISO(), updatedAt: nowISO(), version: 1,
   };
   customers.push(c);
   touchPersistence();
@@ -165,7 +165,7 @@ export function updateCustomer(id: UUID, patch: Partial<Customer>): Customer | n
   assertPermission("customers.manage");
   const c = getCustomer(id);
   if (!c) return null;
-  Object.assign(c, patch, { updatedAt: nowISO() });
+  Object.assign(c, patch, { updatedAt: nowISO(), version: (c.version ?? 1) + 1 });
   touchPersistence();
   void remoteUpsertCustomer(c);
   return c;
