@@ -1,7 +1,8 @@
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
 import * as ed from "@noble/ed25519";
 import { issueLicense } from "../issuer";
-import { verifyLicenseToken, bytesToHex } from "../token";
+import { verifyLicenseToken, signLicense, bytesToHex } from "../token";
 import { validateLicenseLocally } from "../validate";
 
 async function main() {
@@ -45,7 +46,50 @@ async function main() {
   const tamperedToken = `${body.slice(0, -1)}${replacement}.${signature}`;
   assert.equal(await verifyLicenseToken(tamperedToken, publicKeyHex), null);
 
-  console.log("Licensing smoke PASS: Ed25519 issuance, signature verification, wrong-key rejection, device binding, and tamper rejection exercised.");
+  const now = Date.now();
+  const day = 86400000;
+  const expiredPayload = {
+    ...issued.payload,
+    issuedAt: new Date(now - 30 * day).toISOString(),
+    expiresAt: new Date(now - day).toISOString(),
+  };
+  const expiredToken = await signLicense(expiredPayload, privateKeyHex);
+  const grace = await validateLicenseLocally(expiredToken, publicKeyHex, deviceId, {
+    graceDays: 7,
+    lastOnlineValidation: new Date(now - 20 * day).toISOString(),
+  });
+  assert.equal(grace.valid, true);
+  assert.equal(grace.inGrace, true);
+  assert.equal(grace.daysRemaining, 0);
+  assert.ok((grace.graceDaysRemaining ?? 0) >= 5, "Post-expiry grace should not be shortened by a stale pre-expiry validation");
+
+  const graceWrongDevice = await validateLicenseLocally(expiredToken, publicKeyHex, otherDeviceId, {
+    graceDays: 7,
+    lastOnlineValidation: new Date(now - 20 * day).toISOString(),
+  });
+  assert.equal(graceWrongDevice.valid, false);
+  assert.equal(graceWrongDevice.reason, "Device not activated for this license");
+
+  const longExpiredPayload = {
+    ...expiredPayload,
+    expiresAt: new Date(now - 10 * day).toISOString(),
+  };
+  const longExpiredToken = await signLicense(longExpiredPayload, privateKeyHex);
+  const ended = await validateLicenseLocally(longExpiredToken, publicKeyHex, deviceId, {
+    graceDays: 7,
+    lastOnlineValidation: new Date(now - 20 * day).toISOString(),
+  });
+  assert.equal(ended.valid, false);
+  assert.equal(ended.reason, "License expired and grace period ended");
+
+  const sharedLifecycle = fs.readFileSync(new URL("../activation.ts", import.meta.url), "utf8");
+  assert.match(sharedLifecycle, /status: inGrace \? "grace"/);
+  assert.match(sharedLifecycle, /graceDaysRemaining: inGrace \? result\.graceDaysRemaining/);
+
+  const desktopLicense = fs.readFileSync(new URL("../../../../apps/desktop/electron/license.ts", import.meta.url), "utf8");
+  assert.match(desktopLicense, /Math\.max\(expires, lastOnline\)/);
+
+  console.log("Licensing smoke PASS: Ed25519 issuance, signature verification, device binding, tamper rejection, and post-expiry grace semantics exercised.");
 }
 
 main().catch((error) => {

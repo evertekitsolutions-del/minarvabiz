@@ -202,13 +202,15 @@ export async function evaluateStoredLicense(
 
 function evaluateState(result: ValidationResult): LicenseState {
   if (result.valid && result.payload) {
+    const inGrace = result.inGrace === true;
     return {
-      status: result.payload.plan === "trial" ? "trial" : "active",
+      status: inGrace ? "grace" : result.payload.plan === "trial" ? "trial" : "active",
       plan: result.payload.plan,
       edition: result.payload.edition,
       features: result.features,
-      daysRemaining: result.daysRemaining ?? null,
-      graceDaysRemaining: null,
+      daysRemaining: inGrace ? 0 : result.daysRemaining ?? null,
+      graceDaysRemaining: inGrace ? result.graceDaysRemaining ?? null : null,
+      reason: inGrace ? result.reason : undefined,
       payload: result.payload,
       stored,
     };
