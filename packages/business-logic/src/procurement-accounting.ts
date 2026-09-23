@@ -10,7 +10,8 @@ export function supplierOpeningPayableBalance(supplierId: string): number {
   let netCents = 0;
   for (const entry of listJournalEntries()) {
     if (entry.referenceType !== 'auto_opening_supplier' || entry.status !== 'posted') continue;
-    if (entry.referenceId !== supplierId && entry.referenceId !== `opening-supplier-create-${supplierId}` && !entry.referenceId.startsWith(prefix)) continue;
+    const referenceId = entry.referenceId ?? '';
+    if (referenceId !== supplierId && referenceId !== `opening-supplier-create-${supplierId}` && !referenceId.startsWith(prefix)) continue;
     for (const line of entry.lines) {
       if (getAccount(line.accountId)?.systemKey !== 'accounts_payable') continue;
       netCents += cents(line.credit) - cents(line.debit);
