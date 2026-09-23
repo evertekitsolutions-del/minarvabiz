@@ -7,26 +7,30 @@
 4. Never claim tests/build/runtime verification without evidence.
 5. Keep this file aligned with the current delivery state and one clear next owner step.
 
-## Latest continuation audit — 2026-09-19
-- PR #7 merged into main as `4d5f2a81156590486fa7375fa8f8d945aaa744f6`.
-- Verified that exact code commit after merge:
-  - [CI 35422776241](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35422776241) — PASS
-  - [Licensing Smoke 35422776261](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35422776261) — PASS
-  - [Windows Feature Click Smoke 35422776173](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35422776173) — PASS
-  - [Windows Deep Installed Smoke 35422776302](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35422776302) — PASS
-- Both Windows jobs installed on attempt 1 (exit 0), launched the installed app, and logged `WINDOWS_INTERACTION_AUDIT PASS`.
-- Explicitly verified POS customer + creation/save, barcode empty -> added -> cleared cart state, sale completion, customer/product/category/order/payment/return/expense/supplier/purchase/staff/laundry/day-end/report/settings and automatic-backup interactions.
-- The previous main installer access violation now has one bounded retry for that exact exit code plus hash/attempt diagnostics. These successful runs did not exercise retry; they do not prove the intermittent NSIS fault eliminated.
-- Latest production-key installer: [minarvabiz-windows-installer-final](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35422776302/artifacts/10578415750), artifact ID `10578415750`, contains `MinarvaBiz-Setup-1.0.4.exe`.
-- Artifact ZIP digest: `sha256:d4ab0ccee55c1e46c264450c15915020c9a46e600bdd040519b096505ae7ae3a` (this is NOT the installer EXE hash).
-- This checkpoint update changes documentation only; automated evidence above belongs to the exact code commit named above.
-- Next owner step: use this main installer on the intended Windows PC for real commercial/offline license activation, restart/grace, printer output, and manual backup/restore UAT. Investigate any reported regression from that evidence; do not repeat already-passed automated fixes.
+## Latest continuation audit — 2026-09-23
+- PR #81 merged into main as `1de0f3b198ff369efc06c530efc5afa8eef81835`.
+- Verified that exact merged-main code baseline with main-push workflows:
+  - [CI 35886528870](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35886528870) — PASS (#864)
+  - [Licensing Smoke 35886528896](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35886528896) — PASS (#331)
+  - [Windows Feature Click Smoke 35886528903](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35886528903) — PASS (#256)
+  - [Windows Deep Installed Smoke 35886528950](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35886528950) — PASS (#264)
+- Final production-key Windows artifact from Deep Smoke #264:
+  - `minarvabiz-windows-installer-final`
+  - artifact ID `10763560386`
+  - archive digest `sha256:7d6c574c7da064ab0fcc3d4b78602527b77329224b8415dda01618fcc37e8654`
+  - retention expiry: 2026-10-23 16:11:44 UTC
+- GitHub Vercel commit status for the frozen baseline is PASS.
+- PR #81 closes the last known planned code milestone: product opening stock now posts through accounting with validation/permission/preflight/rollback coverage.
+- Final release freeze is now the active milestone. No feature hunting or speculative additions are planned.
+- PRs #15/#17/#22 remain stale/superseded and must not be merged.
+- This freeze/documentation update must not alter runtime behavior. The frozen code baseline remains `1de0f3b198ff369efc06c530efc5afa8eef81835`.
+- Next owner step after freeze evidence is merged: physical/production UAT on the intended Windows PC. Only a reproducible UAT blocker should reopen code work.
 
 ## Repository
 - `evertekitsolutions-del/minarvabiz`
 - Branch: `main`
 - Product version: **1.0.4**
-- Latest audited code main before this documentation update: `4d5f2a81156590486fa7375fa8f8d945aaa744f6`
+- Latest audited code main before this documentation update: `1de0f3b198ff369efc06c530efc5afa8eef81835`
 
 ## Current architecture
 - Online: Next.js + authenticated Supabase/PostgREST
