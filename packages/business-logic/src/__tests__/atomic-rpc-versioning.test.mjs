@@ -29,6 +29,10 @@ assert.match(migration, /FOR UPDATE/);
 assert.match(migration, /ERRCODE = '40001'/);
 assert.match(migration, /version = version \+ 1/);
 assert.match(migration, /org_id = v_org_id/);
+assert.match(migration, /Branch is outside the current organization/);
+assert.match(migration, /\(SELECT auth\.uid\(\)\)/);
+assert.match(migration, /v_product_branch/);
+assert.doesNotMatch(migration, /COALESCE\(p_branch_id, v_product_branch\)/);
 assert.match(migration, /REVOKE ALL ON FUNCTION public\.create_sale[\s\S]*FROM PUBLIC, anon/);
 assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.create_sale[\s\S]*TO authenticated/);
 
