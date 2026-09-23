@@ -43,6 +43,19 @@ assert.equal(balance("opening_balance_equity"), 300.75);
 assert.equal(accounting.listJournalEntries().filter((entry) => entry.referenceType === "auto_opening_supplier").length, 1);
 assert.ok(accounting.buildBalanceSheet().balanced);
 
+const payment = suppliers.recordSupplierPayment({
+  supplierId: supplier.id,
+  amount: 300.75,
+  paymentMethod: "cash",
+  date: "2026-09-23",
+});
+assert.deepEqual(payment.errors, []);
+assert.equal(payment.supplier.outstandingBalance, 0);
+assert.equal(balance("accounts_payable"), 0);
+assert.equal(balance("legacy_settlement_clearing"), 0);
+assert.equal(balance("cash"), -300.75);
+assert.ok(accounting.buildBalanceSheet().balanced);
+
 reset();
 const zero = suppliers.createSupplier({ name: "Zero Vendor", openingBalance: 0 });
 assert.equal(zero.outstandingBalance, 0);
