@@ -453,7 +453,10 @@ export function consumeWarehouseStock(
   quantity: number,
   branchId?: UUID | null
 ): { allocatedConsumed: number; unallocatedQuantity: number } {
-  let remaining = roundQty(Math.max(0, quantity));
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return { allocatedConsumed: 0, unallocatedQuantity: 0 };
+  }
+  let remaining = roundQty(quantity);
   if (remaining <= 0) return { allocatedConsumed: 0, unallocatedQuantity: 0 };
   const eligible = stock
     .filter((position) => {
