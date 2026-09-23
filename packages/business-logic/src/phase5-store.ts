@@ -9,7 +9,7 @@ import { hasLaundryPosting, planLaundryCancellation, planLaundryPosting } from "
 import { purchaseBalance, nextDocNumber } from "./expenses";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
-import { planExpenseReversal, postExpenseJournal } from "./accounting-store";
+import { planAutomaticPosting, planExpenseReversal, postExpenseJournal } from "./accounting-store";
 import { listPurchaseInvoices, prepareSupplierInvoiceSettlements } from "./procurement-store";
 import { auditAction } from "./audit-actions";
 import { touchPersistence } from "./autosave";
@@ -33,7 +33,51 @@ let lastPurchaseNo: string | null = null;
 
 export function listSuppliers(query?: string): Supplier[] { let list = suppliers.filter((s) => !s.deletedAt); if (query?.trim()) { const q = query.toLowerCase(); list = list.filter((s) => s.name.toLowerCase().includes(q) || s.company?.toLowerCase().includes(q) || s.phone?.includes(q)); } return list.sort((a,b)=>a.name.localeCompare(b.name)); }
 export function getSupplier(id: UUID): Supplier | undefined { return suppliers.find((s) => s.id === id && !s.deletedAt); }
-export function createSupplier(input: { name: string; company?: string | null; phone?: string | null; email?: string | null; address?: string | null; category?: string | null; notes?: string | null; openingBalance?: number; }): Supplier { assertPermission("purchases.manage"); const s: Supplier={id:generateId(),name:input.name,company:input.company??null,phone:input.phone??null,email:input.email??null,address:input.address??null,category:input.category??null,openingBalance:input.openingBalance??0,outstandingBalance:input.openingBalance??0,notes:input.notes??null,createdAt:nowISO(),updatedAt:nowISO()}; suppliers.push(s);touchPersistence();void remoteCreateSupplier(s);return s; }
+export function createSupplier(input: { name: string; company?: string | null; phone?: string | null; email?: string | null; address?: string | null; category?: string | null; notes?: string | null; openingBalance?: number; }): Supplier {
+  assertPermission("purchases.manage");
+  const rawOpeningBalance = input.openingBalance ?? 0;
+  if (!Number.isFinite(rawOpeningBalance) || rawOpeningBalance < 0 || !Number.isSafeInteger(Math.round(rawOpeningBalance * 100))) {
+    throw new Error("Opening supplier balance must be a finite non-negative amount");
+  }
+  const openingBalance = r2(rawOpeningBalance);
+  const id = generateId();
+  const posting = openingBalance > 0
+    ? planAutomaticPosting({
+        referenceType: "auto_opening_supplier",
+        referenceId: "opening-supplier-create-" + id,
+        date: nowISO(),
+        description: "Opening supplier balance: " + input.name,
+        lines: [
+          { key: "opening_balance_equity", debit: openingBalance },
+          { key: "accounts_payable", credit: openingBalance },
+        ],
+      })
+    : null;
+  if (posting?.errors.length) throw new Error(posting.errors.join("; "));
+
+  const s: Supplier = {
+    id,
+    name: input.name,
+    company: input.company ?? null,
+    phone: input.phone ?? null,
+    email: input.email ?? null,
+    address: input.address ?? null,
+    category: input.category ?? null,
+    openingBalance,
+    outstandingBalance: openingBalance,
+    notes: input.notes ?? null,
+    createdAt: nowISO(),
+    updatedAt: nowISO(),
+  };
+  suppliers.push(s);
+  if (posting && !posting.commit()) {
+    suppliers.splice(suppliers.findIndex((supplier) => supplier.id === s.id), 1);
+    throw new Error("Opening supplier balance posting failed");
+  }
+  touchPersistence();
+  void remoteCreateSupplier(s);
+  return s;
+}
 
 export function listSupplierPayments(supplierId?: UUID) {
   return mainStore.listPayments()
