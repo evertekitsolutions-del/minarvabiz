@@ -123,10 +123,12 @@ export function createPurchaseOrder(input: {
     const description = (item.description || product?.name || "").trim();
     const quantity = Number(item.quantity);
     const unitCost = item.unitCost == null ? Number(product?.costPrice || 0) : Number(item.unitCost);
-    const taxRate = Math.max(0, Number(item.taxRate || 0));
+    const rawTaxRate = item.taxRate == null ? 0 : Number(item.taxRate);
+    const taxRate = Math.max(0, rawTaxRate);
     if (!description) errors.push("Every line needs a description or product");
     if (!Number.isFinite(quantity) || quantity <= 0) errors.push(`${description || "Line"}: quantity must be greater than zero`);
     if (!Number.isFinite(unitCost) || unitCost < 0) errors.push(`${description || "Line"}: unit cost cannot be negative`);
+    if (!Number.isFinite(rawTaxRate)) errors.push(`${description || "Line"}: tax rate must be a finite number`);
     const base = r2(Math.max(0, quantity) * Math.max(0, unitCost));
     const taxAmount = r2(base * taxRate / 100);
     normalized.push({
@@ -423,8 +425,10 @@ export function createPurchaseInvoice(input: {
     if (!Number.isFinite(quantity) || quantity <= 0) { errors.push(`${poLine.description}: invoice quantity must be greater than zero`); continue; }
     if (quantity > available) { errors.push(`${poLine.description}: cannot invoice ${quantity}; only ${available} received and uninvoiced`); continue; }
     const unitCost = r2(item.unitCost == null ? poLine.unitCost : Number(item.unitCost));
-    const taxRate = r2(item.taxRate == null ? poLine.taxRate : Math.max(0, Number(item.taxRate)));
+    const rawTaxRate = item.taxRate == null ? poLine.taxRate : Number(item.taxRate);
     if (!Number.isFinite(unitCost) || unitCost < 0) { errors.push(`${poLine.description}: unit cost cannot be negative`); continue; }
+    if (!Number.isFinite(rawTaxRate)) { errors.push(`${poLine.description}: tax rate must be a finite number`); continue; }
+    const taxRate = r2(Math.max(0, rawTaxRate));
     const lineSubtotal = r2(quantity * unitCost);
     const taxAmount = r2(lineSubtotal * taxRate / 100);
     lines.push({
