@@ -27,6 +27,7 @@ DECLARE
   v_existing_invoice TEXT;
   v_row_count INTEGER;
   v_org_id UUID;
+  v_branch_id UUID;
   v_allowed BOOLEAN;
 BEGIN
   IF (SELECT auth.uid()) IS NULL THEN
@@ -68,6 +69,13 @@ BEGIN
   END IF;
 
   v_customer_id := NULLIF(p_sale->>'customer_id', '')::UUID;
+  v_branch_id := NULLIF(p_sale->>'branch_id', '')::UUID;
+  IF v_branch_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.branches
+    WHERE id = v_branch_id AND org_id = v_org_id AND deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'Branch is outside the current organization' USING ERRCODE = '42501';
+  END IF;
 
   INSERT INTO public.sales (
     id, invoice_number, customer_id, customer_name, sale_date,
@@ -87,9 +95,9 @@ BEGIN
     NULLIF(p_sale->>'notes', ''),
     COALESCE(NULLIF(p_sale->>'created_at', '')::TIMESTAMPTZ, now()),
     COALESCE(NULLIF(p_sale->>'updated_at', '')::TIMESTAMPTZ, now()),
-    NULLIF(p_sale->>'branch_id', '')::UUID,
+    v_branch_id,
     NULLIF(p_sale->>'device_id', '')::UUID,
-    NULLIF(p_sale->>'created_by', '')::UUID,
+    (SELECT auth.uid()),
     COALESCE(NULLIF(p_sale->>'version', '')::INTEGER, 1),
     v_org_id
   );
@@ -161,8 +169,8 @@ BEGIN
       v_sale_id,
       'Atomic sale stock movement',
       COALESCE(NULLIF(p_sale->>'created_at', '')::TIMESTAMPTZ, now()),
-      NULLIF(p_sale->>'created_by', '')::UUID,
-      COALESCE(NULLIF(p_sale->>'branch_id', '')::UUID, v_product_branch),
+      (SELECT auth.uid()),
+      COALESCE(v_branch_id, v_product_branch),
       NULLIF(p_sale->>'device_id', '')::UUID,
       v_org_id
     );
@@ -201,13 +209,13 @@ BEGIN
       (v_payment->>'amount')::NUMERIC,
       v_payment->>'method',
       COALESCE(NULLIF(v_payment->>'reference_type', ''), 'sale'),
-      COALESCE(NULLIF(v_payment->>'reference_id', '')::UUID, v_sale_id),
-      NULLIF(v_payment->>'customer_id', '')::UUID,
+      v_sale_id,
+      v_customer_id,
       NULLIF(v_payment->>'notes', ''),
       COALESCE(NULLIF(v_payment->>'paid_at', '')::TIMESTAMPTZ, now()),
       COALESCE(NULLIF(v_payment->>'created_at', '')::TIMESTAMPTZ, now()),
-      NULLIF(v_payment->>'created_by', '')::UUID,
-      NULLIF(v_payment->>'branch_id', '')::UUID,
+      (SELECT auth.uid()),
+      v_branch_id,
       NULLIF(v_payment->>'device_id', '')::UUID,
       COALESCE(NULLIF(v_payment->>'version', '')::INTEGER, 1),
       v_org_id
@@ -237,6 +245,7 @@ DECLARE
   v_expected_version INTEGER;
   v_row_count INTEGER;
   v_org_id UUID;
+  v_branch_id UUID;
   v_allowed BOOLEAN;
 BEGIN
   IF (SELECT auth.uid()) IS NULL THEN
@@ -256,6 +265,13 @@ BEGIN
   v_payment_id := NULLIF(p_payment->>'id', '')::UUID;
   v_customer_id := NULLIF(p_payment->>'customer_id', '')::UUID;
   v_amount := COALESCE(NULLIF(p_payment->>'amount', '')::NUMERIC, 0);
+  v_branch_id := NULLIF(p_payment->>'branch_id', '')::UUID;
+  IF v_branch_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.branches
+    WHERE id = v_branch_id AND org_id = v_org_id AND deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'Branch is outside the current organization' USING ERRCODE = '42501';
+  END IF;
   IF v_payment_id IS NULL OR v_amount <= 0 THEN
     RAISE EXCEPTION 'Payment id and positive amount are required' USING ERRCODE = '22023';
   END IF;
@@ -308,8 +324,8 @@ BEGIN
     NULLIF(p_payment->>'notes', ''),
     COALESCE(NULLIF(p_payment->>'paid_at', '')::TIMESTAMPTZ, now()),
     COALESCE(NULLIF(p_payment->>'created_at', '')::TIMESTAMPTZ, now()),
-    NULLIF(p_payment->>'created_by', '')::UUID,
-    NULLIF(p_payment->>'branch_id', '')::UUID,
+    (SELECT auth.uid()),
+    v_branch_id,
     NULLIF(p_payment->>'device_id', '')::UUID,
     COALESCE(NULLIF(p_payment->>'version', '')::INTEGER, 1),
     v_org_id
@@ -427,7 +443,7 @@ BEGIN
     p_notes,
     now(),
     (SELECT auth.uid()),
-    COALESCE(p_branch_id, v_product_branch),
+    v_product_branch,
     p_device_id,
     v_org_id
   );
