@@ -60,6 +60,23 @@ function nextInvoiceNumber(): string {
   return `PINV-${year}-${String(invoiceSequence).padStart(5, "0")}`;
 }
 
+function inferDocumentSequence(numbers: string[]): number {
+  let max = 0;
+  for (const number of numbers) {
+    const match = /(\d+)$/.exec(number);
+    if (!match) continue;
+    const sequence = Number.parseInt(match[1] ?? "", 10);
+    if (Number.isSafeInteger(sequence) && sequence > max) max = sequence;
+  }
+  return max;
+}
+
+function explicitSequence(value: number | undefined): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(0, Math.floor(value))
+    : 0;
+}
+
 function cloneOrder(order: PurchaseOrder): PurchaseOrder {
   return { ...order, lines: order.lines.map((line) => ({ ...line })) };
 }
@@ -641,29 +658,34 @@ export function hydrateProcurementState(input: {
   if (input.purchaseOrders) {
     purchaseOrders.length = 0;
     purchaseOrders.push(...input.purchaseOrders.map(cloneOrder));
+    poSequence = Math.max(
+      explicitSequence(input.poSequence),
+      inferDocumentSequence(input.purchaseOrders.map((po) => po.poNumber))
+    );
+  } else if (typeof input.poSequence === "number" && Number.isFinite(input.poSequence)) {
+    poSequence = explicitSequence(input.poSequence);
   }
+
   if (input.goodsReceipts) {
     goodsReceipts.length = 0;
     goodsReceipts.push(...input.goodsReceipts.map(cloneReceipt));
+    grnSequence = Math.max(
+      explicitSequence(input.grnSequence),
+      inferDocumentSequence(input.goodsReceipts.map((receipt) => receipt.grnNumber))
+    );
+  } else if (typeof input.grnSequence === "number" && Number.isFinite(input.grnSequence)) {
+    grnSequence = explicitSequence(input.grnSequence);
   }
+
   if (input.purchaseInvoices) {
     purchaseInvoices.length = 0;
     purchaseInvoices.push(...input.purchaseInvoices.map(cloneInvoice));
-  }
-  if (typeof input.poSequence === "number") {
-    poSequence = input.poSequence;
-  } else if (input.purchaseOrders?.length) {
-    poSequence = Math.max(0, ...input.purchaseOrders.map((po) => Number(/(\d+)$/.exec(po.poNumber)?.[1] || 0)));
-  }
-  if (typeof input.grnSequence === "number") {
-    grnSequence = input.grnSequence;
-  } else if (input.goodsReceipts?.length) {
-    grnSequence = Math.max(0, ...input.goodsReceipts.map((receipt) => Number(/(\d+)$/.exec(receipt.grnNumber)?.[1] || 0)));
-  }
-  if (typeof input.invoiceSequence === "number") {
-    invoiceSequence = input.invoiceSequence;
-  } else if (input.purchaseInvoices?.length) {
-    invoiceSequence = Math.max(0, ...input.purchaseInvoices.map((invoice) => Number(/(\d+)$/.exec(invoice.invoiceNumber)?.[1] || 0)));
+    invoiceSequence = Math.max(
+      explicitSequence(input.invoiceSequence),
+      inferDocumentSequence(input.purchaseInvoices.map((invoice) => invoice.invoiceNumber))
+    );
+  } else if (typeof input.invoiceSequence === "number" && Number.isFinite(input.invoiceSequence)) {
+    invoiceSequence = explicitSequence(input.invoiceSequence);
   }
 }
 
