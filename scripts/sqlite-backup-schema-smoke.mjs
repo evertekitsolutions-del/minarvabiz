@@ -9,7 +9,18 @@ const initSqlJs = desktopRequire("sql.js/dist/sql-asm.js");
 const {
   minarvaBackupSchemaError,
   REQUIRED_MINARVA_BACKUP_TABLES,
+  MAX_SUPPORTED_MINARVA_BACKUP_SCHEMA_VERSION,
 } = desktopRequire("./electron/dist/sqlite-backup-validation.js");
+
+const ddlSource = fs.readFileSync(new URL("../packages/database/src/sql/sqlite-ddl.ts", import.meta.url), "utf8");
+const schemaVersionMatch = /export const SQLITE_SCHEMA_VERSION = (\d+);/.exec(ddlSource);
+assert.ok(schemaVersionMatch, "SQLITE_SCHEMA_VERSION must remain discoverable by backup validation smoke");
+const databaseSchemaVersion = Number(schemaVersionMatch[1]);
+assert.equal(
+  MAX_SUPPORTED_MINARVA_BACKUP_SCHEMA_VERSION,
+  databaseSchemaVersion,
+  "Desktop backup validator maximum schema version must match @minarvabiz/database"
+);
 
 const SQL = await initSqlJs({});
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "minarva-schema-restore-"));
@@ -32,7 +43,7 @@ try {
       else if (table === "domain_kv") db.run("CREATE TABLE domain_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)");
       else db.run(`CREATE TABLE ${table} (id TEXT PRIMARY KEY)`);
     }
-    db.run("INSERT INTO meta(key, value) VALUES ('schema_version', '6')");
+    db.run(`INSERT INTO meta(key, value) VALUES ('schema_version', '${databaseSchemaVersion}')`);
   });
   assert.equal(await minarvaBackupSchemaError(valid), null);
 
@@ -56,7 +67,21 @@ try {
     /schema version metadata is missing or invalid/
   );
 
-  console.log("SQLite backup schema smoke PASS: Minarva Biz backups accepted; foreign/malformed-schema SQLite files rejected.");
+  const futureVersion = path.join(dir, "future-version.db");
+  writeDatabase(futureVersion, (db) => {
+    for (const table of REQUIRED_MINARVA_BACKUP_TABLES) {
+      if (table === "meta") db.run("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+      else if (table === "domain_kv") db.run("CREATE TABLE domain_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)");
+      else db.run(`CREATE TABLE ${table} (id TEXT PRIMARY KEY)`);
+    }
+    db.run(`INSERT INTO meta(key, value) VALUES ('schema_version', '${databaseSchemaVersion + 1}')`);
+  });
+  assert.match(
+    String(await minarvaBackupSchemaError(futureVersion)),
+    /newer than this app supports/
+  );
+
+  console.log("SQLite backup schema smoke PASS: supported Minarva Biz backups accepted; foreign, malformed, and future-schema SQLite files rejected.");
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });
 }
