@@ -14,6 +14,7 @@ import {
   pgSelect,
   pgInsert,
   pgUpdate,
+  pgRpc,
   type SupabaseConfig,
 } from "../client/postgrest";
 import {
@@ -144,44 +145,47 @@ function createSaleRepo(cfg: SupabaseConfig): SaleRepository {
       return mapSale(res.data[0], (itemsRes.data || []).map(mapSaleItem));
     },
     async create(sale) {
-      const saleRow = {
-        id: sale.id, invoice_number: sale.invoiceNumber, customer_id: sale.customerId, customer_name: sale.customerName,
-        sale_date: sale.saleDate, subtotal: sale.subtotal, discount_amount: sale.discountAmount,
-        tax_amount: sale.taxAmount, total: sale.total, paid_amount: sale.paidAmount,
-        balance_amount: sale.balanceAmount, status: sale.status, notes: sale.notes,
-        created_at: sale.createdAt, updated_at: sale.updatedAt, version: sale.version || 1,
-      };
-      const res = await pgInsert<Record<string, unknown>>(cfg, "sales", saleRow);
-      if (res.error) throw new Error(res.error.message);
-      if (sale.items?.length) {
-        const itemRows = sale.items.map((i) => ({
-          id: i.id, sale_id: sale.id, product_id: i.productId, product_name: i.productName,
-          sku: i.sku, quantity: i.quantity, unit_price: i.unitPrice, cost_price: i.costPrice,
-          discount_percent: i.discountPercent, tax_rate: i.taxRate, line_total: i.lineTotal,
-        }));
-        await pgInsert(cfg, "sale_items", itemRows);
-        for (const i of sale.items) {
-          const prod = await pgSelect<Record<string, unknown>>(cfg, "products", `select=*&id=eq.${i.productId}`);
-          if (prod.data?.[0]) {
-            const current = Number(prod.data[0].stock_quantity || 0);
-            const next = current - i.quantity;
-            await pgUpdate(cfg, "products", `id=eq.${i.productId}`, { stock_quantity: next, updated_at: nowISO() });
-            await pgInsert(cfg, "inventory_transactions", {
-              id: generateId(), product_id: i.productId, movement_type: "sale", quantity: i.quantity,
-              balance_after: next, reference_type: "sale", reference_id: sale.id, created_at: nowISO(),
-            });
-          }
-        }
+      if (sale.paidAmount > 0) {
+        throw new Error("Paid online sales must use the atomic sale writer so payment and stock commit together");
       }
-      if (sale.customerId && sale.balanceAmount > 0) {
-        const cust = await pgSelect<Record<string, unknown>>(cfg, "customers", `select=*&id=eq.${sale.customerId}`);
-        if (cust.data?.[0]) {
-          const bal = Number(cust.data[0].outstanding_balance || 0) + sale.balanceAmount;
-          const spend = Number(cust.data[0].total_spending || 0) + sale.paidAmount;
-          await pgUpdate(cfg, "customers", `id=eq.${sale.customerId}`, { outstanding_balance: bal, total_spending: spend, updated_at: nowISO() });
-        }
-      }
-      // Payment is persisted by the business-logic payment writer so its selected method is retained.
+      const result = await pgRpc<Record<string, unknown>>(cfg, "create_sale", {
+        p_sale: {
+          id: sale.id,
+          invoice_number: sale.invoiceNumber,
+          customer_id: sale.customerId ?? null,
+          customer_name: sale.customerName ?? null,
+          sale_date: sale.saleDate,
+          subtotal: sale.subtotal,
+          discount_amount: sale.discountAmount,
+          tax_amount: sale.taxAmount,
+          total: sale.total,
+          paid_amount: sale.paidAmount,
+          balance_amount: sale.balanceAmount,
+          status: sale.status,
+          notes: sale.notes ?? null,
+          created_at: sale.createdAt,
+          updated_at: sale.updatedAt,
+          branch_id: sale.branchId ?? null,
+          device_id: sale.deviceId ?? null,
+          created_by: sale.createdBy ?? null,
+          version: sale.version,
+          items: (sale.items || []).map((i) => ({
+            id: i.id,
+            product_id: i.productId,
+            product_name: i.productName,
+            sku: i.sku ?? null,
+            quantity: i.quantity,
+            unit_price: i.unitPrice,
+            cost_price: i.costPrice,
+            discount_percent: i.discountPercent,
+            tax_rate: i.taxRate,
+            line_total: i.lineTotal,
+          })),
+        },
+        p_payments: [],
+        p_allow_negative_stock: false,
+      });
+      if (result.error) throw new Error(result.error.message);
       return sale;
     },
   };
