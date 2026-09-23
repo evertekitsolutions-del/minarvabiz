@@ -103,6 +103,28 @@ export async function pgUpdate<T>(
   }
 }
 
+export async function pgRpc<T>(
+  cfg: SupabaseConfig,
+  functionName: string,
+  args: Record<string, unknown>
+): Promise<PgResult<T>> {
+  try {
+    const res = await fetch(`${restBase(cfg)}/rpc/${functionName}`, {
+      method: "POST",
+      headers: headers(cfg),
+      body: JSON.stringify(args),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      return { data: null, error: { message: body || res.statusText, code: String(res.status) } };
+    }
+    const data = (await res.json()) as T;
+    return { data, error: null };
+  } catch (e) {
+    return { data: null, error: { message: e instanceof Error ? e.message : String(e) } };
+  }
+}
+
 export async function pgDelete(
   cfg: SupabaseConfig,
   table: string,
