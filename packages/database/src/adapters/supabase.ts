@@ -27,6 +27,19 @@ import { generateId, nowISO } from "@minarvabiz/utils";
 export type { SupabaseConfig };
 export { configFromEnv as supabaseConfigFromEnv, isSupabaseConfigured };
 
+
+function optimisticMatch(id: string, version: number | undefined, label: string): string {
+  if (!Number.isInteger(version) || Number(version) < 2) {
+    throw new Error(`${label} update requires an incremented version`);
+  }
+  return `id=eq.${id}&version=eq.${Number(version) - 1}`;
+}
+
+function assertUpdated<T>(data: T[] | null, label: string): T | null {
+  if (!data?.length) throw new Error(`${label} version conflict`);
+  return data[0] ?? null;
+}
+
 function createCustomerRepo(cfg: SupabaseConfig): CustomerRepository {
   return {
     async list(query) {
@@ -55,9 +68,10 @@ function createCustomerRepo(cfg: SupabaseConfig): CustomerRepository {
       return mapCustomer(res.data[0]);
     },
     async update(id, patch) {
-      const res = await pgUpdate<Record<string, unknown>>(cfg, "customers", `id=eq.${id}`, customerToRow(patch));
-      if (res.error || !res.data?.[0]) return null;
-      return mapCustomer(res.data[0]);
+      const res = await pgUpdate<Record<string, unknown>>(cfg, "customers", optimisticMatch(id, patch.version, "Customer"), customerToRow(patch));
+      if (res.error) throw new Error(res.error.message);
+      const row = assertUpdated(res.data, "Customer");
+      return row ? mapCustomer(row) : null;
     },
   };
 }
@@ -103,9 +117,10 @@ function createProductRepo(cfg: SupabaseConfig): ProductRepository {
       return mapProduct(res.data[0]);
     },
     async update(id, patch) {
-      const res = await pgUpdate<Record<string, unknown>>(cfg, "products", `id=eq.${id}`, productToRow(patch));
-      if (res.error || !res.data?.[0]) return null;
-      return mapProduct(res.data[0]);
+      const res = await pgUpdate<Record<string, unknown>>(cfg, "products", optimisticMatch(id, patch.version, "Product"), productToRow(patch));
+      if (res.error) throw new Error(res.error.message);
+      const row = assertUpdated(res.data, "Product");
+      return row ? mapProduct(row) : null;
     },
   };
 }
@@ -244,9 +259,11 @@ function createOrderRepo(cfg: SupabaseConfig): OrderRepository {
       if (patch.measurements !== undefined) row.measurements_json = patch.measurements;
       if (patch.measurementProfileId !== undefined) row.measurement_profile_id = patch.measurementProfileId;
       if (patch.tshirt !== undefined) row.tshirt_json = patch.tshirt;
-      const res = await pgUpdate<Record<string, unknown>>(cfg, "orders", `id=eq.${id}`, row);
-      if (res.error || !res.data?.[0]) return null;
-      return mapOrder(res.data[0]);
+      if (patch.version !== undefined) row.version = patch.version;
+      const res = await pgUpdate<Record<string, unknown>>(cfg, "orders", optimisticMatch(id, patch.version, "Order"), row);
+      if (res.error) throw new Error(res.error.message);
+      const updated = assertUpdated(res.data, "Order");
+      return updated ? mapOrder(updated) : null;
     },
   };
 }
