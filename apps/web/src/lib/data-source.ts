@@ -450,16 +450,22 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
 
     registerRemoteWriter({
       upsertCustomer: async (customer) => {
-        const existing = await db.customers.get(customer.id);
-        if (existing) { await db.customers.update(customer.id, customer); return; }
-        const res = await pgInsert<Record<string, unknown>>(cfg, "customers", {
-          id: customer.id, name: customer.name, phone: customer.phone ?? null, whatsapp: customer.whatsapp ?? null,
-          email: customer.email ?? null, address: customer.address ?? null, birthday: customer.birthday ?? null,
-          notes: customer.notes ?? null, outstanding_balance: customer.outstandingBalance ?? 0,
-          total_spending: customer.totalSpending ?? 0, created_at: customer.createdAt, updated_at: customer.updatedAt,
+        const row = {
+          name: customer.name,
+          phone: customer.phone ?? null,
+          whatsapp: customer.whatsapp ?? null,
+          email: customer.email ?? null,
+          address: customer.address ?? null,
+          birthday: customer.birthday ?? null,
+          notes: customer.notes ?? null,
+          outstanding_balance: customer.outstandingBalance ?? 0,
+          total_spending: customer.totalSpending ?? 0,
+          created_at: customer.createdAt,
+          updated_at: customer.updatedAt,
+          deleted_at: customer.deletedAt ?? null,
           branch_id: customer.branchId ?? null,
-        });
-        if (res.error) throw new Error(res.error.message);
+        };
+        await optimisticVersionUpsert(cfg, "customers", customer.id, customer.version || 1, row, "Customer");
       },
       upsertCategory: async (category) => {
         const found = await pgSelect<Record<string, unknown>>(cfg, "categories", `select=id&id=eq.${category.id}&limit=1`);
