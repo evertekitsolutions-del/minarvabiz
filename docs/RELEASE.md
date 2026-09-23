@@ -31,16 +31,16 @@ The digest above is GitHub's artifact-archive digest. It is not being represente
 
 ## Automated release gates — PASS
 
-The recorded final-installer baseline passed:
+The current-main packaged baseline passed:
 
-- CI: run `35380365555` — PASS
-- Licensing Smoke: run `35380365569` — PASS
-- Windows Feature Click Smoke: run `35380365428` — PASS
-- Windows Deep Installed Smoke: run `35380365482` — PASS
+- CI #837: run `35841909601` — PASS
+- Licensing Smoke #304: run `35841909577` — PASS
+- Windows Feature Click Smoke #229: run `35841909652` — PASS
+- Windows Deep Installed Smoke #237: run `35841909653` — PASS
 
-The Windows deep smoke built the NSIS installer, verified the production public verification key was bundled without private-key material, installed the app on a clean Windows runner, launched the installed executable, activated the 30-day trial, exercised representative populated UI flows, and uploaded the final installer.
+Windows Deep Installed Smoke #237 built the NSIS installer, verified the production public verification key was bundled without private-key material, clean-installed the app, launched the installed executable, exercised installed UI/licensing flows, and uploaded the final installer artifact.
 
-The feature-click smoke exercised the installed app through Chromium DevTools Protocol and verified the previously missing desktop modules/callbacks including Day-end Close, Payments, Returns, Suppliers, Staff Details, Audit Log, Customer Profile, Global Search/Command Palette, Notifications mark-all-read, and Reports refresh.
+Windows Feature Click Smoke #229 exercised the installed desktop app through Chromium DevTools Protocol and passed the feature-level click workflow.
 
 ## Licensing deployment
 
