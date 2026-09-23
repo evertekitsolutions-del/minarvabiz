@@ -6,6 +6,7 @@
 import type { Product } from "@minarvabiz/types";
 import { getShopProfile } from "./shop-profile";
 import { formatMoney } from "@minarvabiz/utils";
+import { escapeHtml } from "./html";
 
 const L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
 const G = ["0100111","0110011","0011011","0100001","0011101","0111001","0000101","0010001","0001001","0010111"];
@@ -45,17 +46,17 @@ function ean13Bits(code: string): string {
 }
 
 function barcodeSvg(code: string): string {
-  if (!isValidEan13(code)) return `<div class="code">${escape(code)}</div>`;
+  if (!isValidEan13(code)) return `<div class="code">${escapeHtml(code)}</div>`;
   const bits = ean13Bits(code);
   const quiet = 9;
   const total = bits.length + quiet * 2;
   const bars = [...bits].map((bit, index) => bit === "1"
     ? `<rect x="${index + quiet}" y="0" width="1" height="34"/>`
     : "").join("");
-  return `<svg class="barcode-svg" viewBox="0 0 ${total} 44" role="img" aria-label="EAN-13 ${escape(code)}" xmlns="http://www.w3.org/2000/svg">
+  return `<svg class="barcode-svg" viewBox="0 0 ${total} 44" role="img" aria-label="EAN-13 ${escapeHtml(code)}" xmlns="http://www.w3.org/2000/svg">
     <rect width="${total}" height="44" fill="white"/>
     <g fill="black">${bars}</g>
-    <text x="${total / 2}" y="42" text-anchor="middle" font-size="7" font-family="Arial, sans-serif" letter-spacing="1">${escape(code)}</text>
+    <text x="${total / 2}" y="42" text-anchor="middle" font-size="7" font-family="Arial, sans-serif" letter-spacing="1">${escapeHtml(code)}</text>
   </svg>`;
 }
 
@@ -69,10 +70,10 @@ export function buildBarcodeLabelHtml(
   const blocks = Array.from({ length: copies })
     .map(() => `
   <div class="label">
-    <div class="shop">${escape(shop.shopName || "Minarva Biz")}</div>
-    <div class="name">${escape(product.name)}</div>
-    <div class="meta">${escape([categoryName, product.size, product.color, product.brand].filter(Boolean).join(" · "))}</div>
-    <div class="sku">${product.sku ? "SKU: " + escape(product.sku) : ""}</div>
+    <div class="shop">${escapeHtml(shop.shopName || "Minarva Biz")}</div>
+    <div class="name">${escapeHtml(product.name)}</div>
+    <div class="meta">${escapeHtml([categoryName, product.size, product.color, product.brand].filter(Boolean).join(" · "))}</div>
+    <div class="sku">${product.sku ? "SKU: " + escapeHtml(product.sku) : ""}</div>
     <div class="barcode">${product.barcode ? barcodeSvg(product.barcode) : '<span class="missing">No barcode</span>'}</div>
     <div class="price">${formatMoney(product.sellingPrice)}</div>
   </div>`)
@@ -100,9 +101,6 @@ export function printBarcodeLabels(product: Product, copies = 1, categoryName?: 
   w.document.close();
 }
 
-function escape(s: string) {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 export function printProductLabels(products: Product[], copies = 1) {
   for (const p of products) printBarcodeLabels(p, copies);
