@@ -27,6 +27,8 @@ assert.match(migration, /'sales','sale_items','payments','cash_register_sessions
 assert.match(appLayout, /process\.env\.NODE_ENV === "production"/);
 assert.match(appLayout, /process\.env\.NEXT_PUBLIC_REQUIRE_AUTH !== "false"/);
 assert.match(appLayout, /<AuthGate requireAuth=\{requireAuthByDefault\}>/);
+assert.match(appLayout, /const runtimeMode = getRuntimeMode\(\)/);
+assert.match(appLayout, /if \(runtimeMode !== "demo"\) \{/);
 assert.doesNotMatch(
   appLayout,
   /<AuthGate requireAuth=\{process\.env\.NEXT_PUBLIC_REQUIRE_AUTH === "true"\}>/
