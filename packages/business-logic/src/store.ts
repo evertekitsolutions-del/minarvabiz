@@ -14,6 +14,7 @@ import { auditAction } from "./audit-actions";
 import { enqueueOutbox } from "./outbox-bridge";
 import { assertPermission } from "./permissions";
 import { planSalePosting, planCollectionPosting } from "./sales-accounting";
+import { planAutomaticPosting } from "./accounting-store";
 import { consumeWarehouseStock } from "./warehouse-store";
 
 const categories: Category[] = [];
@@ -201,13 +202,52 @@ function assertFiniteProductNumerics(input: Partial<Product>): void {
 export function createProduct(input: Omit<Product, "id" | "createdAt" | "updatedAt" | "deletedAt" | "version">): Product {
   assertPermission("products.manage");
   assertFiniteProductNumerics(input);
+
+  const openingStock = Number(input.stockQuantity ?? 0);
+  if (openingStock < 0 || !Number.isSafeInteger(Math.round(openingStock * 1000))) {
+    throw new Error("Opening stock quantity must be a finite non-negative quantity");
+  }
+
+  const unitCost = Number(input.costPrice ?? 0);
+  if (openingStock > 0 && (unitCost < 0 || !Number.isSafeInteger(Math.round(unitCost * 100)))) {
+    throw new Error("Product cost must be a finite non-negative amount for opening stock");
+  }
+
+  const id = generateId();
+  const createdAt = nowISO();
+  const openingValue = Math.round((openingStock * unitCost + Number.EPSILON) * 100) / 100;
+  if (openingStock > 0 && !Number.isSafeInteger(Math.round(openingValue * 100))) {
+    throw new Error("Opening stock value is out of range");
+  }
+
+  const posting = openingValue > 0
+    ? planAutomaticPosting({
+        referenceType: "auto_opening_stock",
+        referenceId: "opening-stock-" + id + "-create",
+        date: createdAt,
+        description: "Opening stock: " + input.name,
+        branchId: input.branchId ?? null,
+        lines: [
+          { key: "inventory_asset", debit: openingValue },
+          { key: "opening_balance_equity", credit: openingValue },
+        ],
+      })
+    : null;
+  if (posting?.errors.length) throw new Error(posting.errors.join("; "));
+
   const p: Product = {
     parentProductId: (input as Product).parentProductId ?? null,
     hasVariants: (input as Product).hasVariants ?? false,
     fabric: (input as Product).fabric ?? null,
-    ...input, id: generateId(), createdAt: nowISO(), updatedAt: nowISO(),
+    ...input, stockQuantity: openingStock, id, createdAt, updatedAt: createdAt,
   };
   products.push(p);
+
+  if (posting && !posting.commit()) {
+    products.splice(products.findIndex((product) => product.id === p.id), 1);
+    throw new Error("Opening stock accounting posting failed");
+  }
+
   touchPersistence();
   void remoteUpsertProduct(p);
   return p;
