@@ -63,6 +63,13 @@ async function main() {
   assert.equal(grace.daysRemaining, 0);
   assert.ok((grace.graceDaysRemaining ?? 0) >= 5, "Post-expiry grace should not be shortened by a stale pre-expiry validation");
 
+  const graceWrongDevice = await validateLicenseLocally(expiredToken, publicKeyHex, otherDeviceId, {
+    graceDays: 7,
+    lastOnlineValidation: new Date(now - 20 * day).toISOString(),
+  });
+  assert.equal(graceWrongDevice.valid, false);
+  assert.equal(graceWrongDevice.reason, "Device not activated for this license");
+
   const longExpiredPayload = {
     ...expiredPayload,
     expiresAt: new Date(now - 10 * day).toISOString(),
