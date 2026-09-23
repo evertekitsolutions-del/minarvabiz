@@ -13,6 +13,7 @@ export default function SuppliersPage() {
   const [paymentOpen, setPaymentOpen] = React.useState(false);
   const [paymentSupplier, setPaymentSupplier] = React.useState<Supplier | null>(null);
   const [paymentError, setPaymentError] = React.useState<string | null>(null);
+  const [supplierError, setSupplierError] = React.useState<string | null>(null);
   const [paymentForm, setPaymentForm] = React.useState({ date: todayLocal(), amount: "", paymentMethod: "cash" as PaymentMethod, reference: "", notes: "" });
   const [form, setForm] = React.useState({
     name: "", company: "", phone: "", email: "", address: "", category: "materials", openingBalance: "", notes: "",
@@ -25,11 +26,17 @@ export default function SuppliersPage() {
   React.useEffect(() => { refresh(); }, [refresh]);
 
   function save() {
-    if (!form.name.trim()) return;
-    phase5Store.createSupplier({ ...form, openingBalance: parseFloat(form.openingBalance) || 0 });
-    setOpen(false);
-    setForm({ name: "", company: "", phone: "", email: "", address: "", category: "materials", openingBalance: "", notes: "" });
-    refresh();
+    if (!form.name.trim()) { setSupplierError("Supplier name is required"); return; }
+    const openingBalance = form.openingBalance.trim() ? Number(form.openingBalance) : 0;
+    try {
+      phase5Store.createSupplier({ ...form, openingBalance });
+      setOpen(false);
+      setSupplierError(null);
+      setForm({ name: "", company: "", phone: "", email: "", address: "", category: "materials", openingBalance: "", notes: "" });
+      refresh();
+    } catch (error) {
+      setSupplierError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   function openPayment(supplier: Supplier) {
@@ -48,9 +55,9 @@ export default function SuppliersPage() {
 
   return (
     <>
-      <SupplierList suppliers={list} onAdd={() => setOpen(true)} onSearch={(q) => refresh(q)} onPay={openPayment} />
-      <Modal open={open} title="Add Supplier" onClose={() => setOpen(false)}
-        footer={<><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+      <SupplierList suppliers={list} onAdd={() => { setSupplierError(null); setOpen(true); }} onSearch={(q) => refresh(q)} onPay={openPayment} />
+      <Modal open={open} title="Add Supplier" onClose={() => { setOpen(false); setSupplierError(null); }}
+        footer={<><Button variant="outline" onClick={() => { setOpen(false); setSupplierError(null); }}>Cancel</Button>
           <Button onClick={save}>Save</Button></>}>
         <div className="space-y-3">
           <FormField label="Name *">
@@ -77,10 +84,12 @@ export default function SuppliersPage() {
           </FormField>
           <FormField label="Opening balance">
             <input className={inputClass} type="number" min="0" step="0.01" value={form.openingBalance} onChange={(e) => setForm({ ...form, openingBalance: e.target.value })} />
+            <p className="mt-1 text-xs text-slate-500">Non-zero opening balances are posted to Accounts Payable and Opening Balance Equity.</p>
           </FormField>
           <FormField label="Notes">
             <textarea className={inputClass + " h-auto py-2"} rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </FormField>
+          {supplierError && <p className="text-sm text-rose-600">{supplierError}</p>}
         </div>
       </Modal>
       <Modal open={paymentOpen} title="Record Supplier Payment" onClose={() => setPaymentOpen(false)} footer={<><Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button><Button onClick={savePayment}>Record Payment</Button></>}>
