@@ -79,9 +79,18 @@ export default function ProductsPage() {
       isActive: true,
     });
     if (!parsed.success) { setError(parsed.error.errors[0]?.message ?? "Invalid input"); return; }
-    if (editingId) store.updateProduct(editingId, parsed.data as Partial<Product>);
-    else store.createProduct(parsed.data as Parameters<typeof store.createProduct>[0]);
-    setOpen(false); setError(null); resetForm(); refresh();
+    try {
+      if (editingId) {
+        const patch: Partial<Product> = { ...parsed.data };
+        delete patch.stockQuantity;
+        store.updateProduct(editingId, patch);
+      } else {
+        store.createProduct(parsed.data as Parameters<typeof store.createProduct>[0]);
+      }
+      setOpen(false); setError(null); resetForm(); refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   function adjustStock() {
@@ -166,8 +175,8 @@ export default function ProductsPage() {
           <FormField label="Selling price">
             <input className={inputClass} type="number" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} />
           </FormField>
-          <FormField label="Stock qty">
-            <input className={inputClass} type="number" value={form.stockQuantity} onChange={(e) => setForm({ ...form, stockQuantity: e.target.value })} />
+          <FormField label={editingId ? "Stock qty (use Adjust Stock)" : "Opening stock"}>
+            <input className={inputClass} type="number" value={form.stockQuantity} disabled={!!editingId} onChange={(e) => setForm({ ...form, stockQuantity: e.target.value })} />
           </FormField>
           <FormField label="Min stock">
             <input className={inputClass} type="number" value={form.minimumStock} onChange={(e) => setForm({ ...form, minimumStock: e.target.value })} />

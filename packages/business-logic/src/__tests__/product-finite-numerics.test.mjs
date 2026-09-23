@@ -79,9 +79,9 @@ for (const field of ["costPrice", "sellingPrice", "discount", "taxRate", "stockQ
   }
 }
 
-const finiteUpdate = store.updateProduct(created.id, { costPrice: -1, stockQuantity: -2, taxRate: -5 });
+const finiteUpdate = store.updateProduct(created.id, { costPrice: -1, taxRate: -5 });
 assert.equal(finiteUpdate.costPrice, -1);
-assert.equal(finiteUpdate.stockQuantity, -2);
+assert.equal(finiteUpdate.stockQuantity, 3);
 assert.equal(finiteUpdate.taxRate, -5);
 
 console.log("Product master finite-numeric mutation tests passed");

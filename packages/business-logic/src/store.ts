@@ -218,6 +218,9 @@ export function updateProduct(id: UUID, patch: Partial<Product>): Product | null
   assertFiniteProductNumerics(patch);
   const p = getProduct(id);
   if (!p) return null;
+  if (patch.stockQuantity != null && patch.stockQuantity !== p.stockQuantity) {
+    throw new Error("Product stock quantity must be changed through inventory adjustment");
+  }
   const before = { ...p };
   Object.assign(p, patch, { updatedAt: nowISO(), version: (p.version ?? 1) + 1 });
   touchPersistence();
