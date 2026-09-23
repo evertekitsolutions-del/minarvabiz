@@ -231,8 +231,22 @@ export async function authSignUp(
   }
 }
 
+function defaultSupabaseEnv(): Record<string, string | undefined> {
+  if (typeof process === "undefined") return {};
+
+  // Keep NEXT_PUBLIC_* references static so Next.js can inline them into browser
+  // bundles. Passing process.env as an object prevents that build-time rewrite.
+  return {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  };
+}
+
 export function isSupabaseConfigured(
-  env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {}
+  env: Record<string, string | undefined> = defaultSupabaseEnv()
 ): boolean {
   const url = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL || "";
   const key = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || "";
@@ -243,7 +257,7 @@ export function isSupabaseConfigured(
 }
 
 export function configFromEnv(
-  env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {}
+  env: Record<string, string | undefined> = defaultSupabaseEnv()
 ): SupabaseConfig | null {
   if (!isSupabaseConfigured(env)) return null;
   return {
