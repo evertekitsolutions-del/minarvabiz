@@ -474,10 +474,8 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
         if (res.error) throw new Error(res.error.message);
       },
       upsertProduct: async (product) => {
-        const existing = await db.products.get(product.id);
-        if (existing) { await db.products.update(product.id, product); return; }
-        const res = await pgInsert<Record<string, unknown>>(cfg, "products", {
-          id: product.id, name: product.name, sku: product.sku ?? null, barcode: product.barcode ?? null,
+        const row = {
+          name: product.name, sku: product.sku ?? null, barcode: product.barcode ?? null,
           category_id: product.categoryId ?? null, brand: product.brand ?? null, size: product.size ?? null,
           color: product.color ?? null, fabric: product.fabric ?? null, parent_product_id: product.parentProductId ?? null,
           has_variants: product.hasVariants ?? false, unit: product.unit ?? "pcs", cost_price: product.costPrice ?? 0,
@@ -485,17 +483,114 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
           stock_quantity: product.stockQuantity ?? 0, minimum_stock: product.minimumStock ?? 0,
           supplier_id: product.supplierId ?? null, image_url: product.imageUrl ?? null, notes: product.notes ?? null,
           is_active: product.isActive !== false, created_at: product.createdAt, updated_at: product.updatedAt,
-          branch_id: product.branchId ?? null, version: product.version || 1,
-        });
-        if (res.error) throw new Error(res.error.message);
+          deleted_at: product.deletedAt ?? null, branch_id: product.branchId ?? null,
+        };
+        await optimisticVersionUpsert(cfg, "products", product.id, product.version || 1, row, "Product");
       },
-      createSale: async (sale) => { await db.sales.create(sale); },
-      updateSaleSettlement: async (sale) => {
-        const result = await pgUpdate<Record<string, unknown>>(cfg, "sales", `id=eq.${sale.id}`, {
-          paid_amount: sale.paidAmount, balance_amount: sale.balanceAmount, status: sale.status,
-          updated_at: sale.updatedAt, version: sale.version,
+      createSale: async (sale, salePayments, allowNegativeStock) => {
+        const result = await pgRpc<Record<string, unknown>>(cfg, "create_sale", {
+          p_sale: {
+            id: sale.id,
+            invoice_number: sale.invoiceNumber,
+            customer_id: sale.customerId ?? null,
+            customer_name: sale.customerName ?? null,
+            sale_date: sale.saleDate,
+            subtotal: sale.subtotal,
+            discount_amount: sale.discountAmount,
+            tax_amount: sale.taxAmount,
+            total: sale.total,
+            paid_amount: sale.paidAmount,
+            balance_amount: sale.balanceAmount,
+            status: sale.status,
+            notes: sale.notes ?? null,
+            created_at: sale.createdAt,
+            updated_at: sale.updatedAt,
+            branch_id: sale.branchId ?? null,
+            device_id: sale.deviceId ?? null,
+            created_by: sale.createdBy ?? null,
+            version: sale.version,
+            items: sale.items.map((item) => ({
+              id: item.id,
+              product_id: item.productId,
+              product_name: item.productName,
+              sku: item.sku ?? null,
+              quantity: item.quantity,
+              unit_price: item.unitPrice,
+              cost_price: item.costPrice,
+              discount_percent: item.discountPercent,
+              tax_rate: item.taxRate,
+              line_total: item.lineTotal,
+            })),
+          },
+          p_payments: salePayments.map((payment) => ({
+            id: payment.id,
+            amount: payment.amount,
+            method: payment.method,
+            reference_type: payment.referenceType,
+            reference_id: payment.referenceId,
+            customer_id: payment.customerId ?? null,
+            notes: payment.notes ?? null,
+            paid_at: payment.paidAt,
+            created_at: payment.createdAt,
+            created_by: payment.createdBy ?? null,
+            branch_id: payment.branchId ?? null,
+            device_id: payment.deviceId ?? null,
+            version: payment.version,
+          })),
+          p_allow_negative_stock: allowNegativeStock,
         });
-        if (result.error || !result.data?.length) throw new Error(result.error?.message || "Sale settlement could not be saved");
+        if (result.error) throw new Error(result.error.message);
+      },
+      recordCustomerPayment: async (payment, settledSales) => {
+        const result = await pgRpc<Record<string, unknown>>(cfg, "record_payment", {
+          p_payment: {
+            id: payment.id,
+            amount: payment.amount,
+            method: payment.method,
+            reference_type: payment.referenceType,
+            reference_id: payment.referenceId,
+            customer_id: payment.customerId ?? null,
+            notes: payment.notes ?? null,
+            paid_at: payment.paidAt,
+            created_at: payment.createdAt,
+            created_by: payment.createdBy ?? null,
+            branch_id: payment.branchId ?? null,
+            device_id: payment.deviceId ?? null,
+            version: payment.version,
+          },
+          p_sale_settlements: settledSales.map((sale) => ({
+            id: sale.id,
+            paid_amount: sale.paidAmount,
+            balance_amount: sale.balanceAmount,
+            status: sale.status,
+            updated_at: sale.updatedAt,
+            version: sale.version,
+          })),
+        });
+        if (result.error) throw new Error(result.error.message);
+      },
+      adjustStock: async (product, movementType, quantity, notes) => {
+        const newVersion = product.version || 1;
+        const result = await pgRpc<Record<string, unknown>>(cfg, "adjust_stock", {
+          p_product_id: product.id,
+          p_movement_type: movementType,
+          p_quantity: quantity,
+          p_expected_version: newVersion - 1,
+          p_reference_type: "inventory_adjustment",
+          p_reference_id: null,
+          p_notes: notes ?? null,
+          p_branch_id: product.branchId ?? null,
+          p_device_id: null,
+        });
+        if (result.error) throw new Error(result.error.message);
+      },
+      updateSaleSettlement: async (sale) => {
+        await optimisticVersionUpdate(cfg, "sales", sale.id, sale.version, {
+          paid_amount: sale.paidAmount,
+          balance_amount: sale.balanceAmount,
+          status: sale.status,
+          updated_at: sale.updatedAt,
+        }, "Sale settlement");
       },
       createOrder: async (order) => { await db.orders.create(order); },
       updateOrder: async (id, patch) => { await db.orders.update(id, patch); },
@@ -511,8 +606,11 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
       },
       createLaundry: async (laundry) => { const res = await pgInsert<Record<string, unknown>>(cfg, "laundry_orders", { id: laundry.id, order_number: laundry.orderNumber, customer_id: laundry.customerId, customer_name: laundry.customerName ?? null, supplier_id: laundry.supplierId ?? null, supplier_name: laundry.supplierName ?? null, garment: laundry.garment ?? "Laundry", quantity: laundry.quantity ?? 1, mode: laundry.mode, customer_rate: laundry.customerRate ?? 0, supplier_rate: laundry.supplierRate ?? 0, total_customer_charge: laundry.totalCustomerCharge ?? 0, total_supplier_cost: laundry.totalSupplierCost ?? 0, status: laundry.status ?? "pending", notes: laundry.notes ?? null, paid_amount: laundry.paidAmount ?? 0, balance_amount: laundry.balanceAmount ?? 0, created_at: laundry.createdAt, updated_at: laundry.updatedAt, branch_id: laundry.branchId ?? null, device_id: laundry.deviceId ?? null, version: laundry.version || 1 }); if (res.error) throw new Error(res.error.message); },
       updatePurchaseSettlement: async (purchase) => {
-        const res = await pgUpdate<Record<string, unknown>>(cfg, "purchases", `id=eq.${purchase.id}`, { paid: purchase.paidAmount, balance: purchase.balanceAmount, updated_at: purchase.updatedAt, version: purchase.version });
-        if (res.error || !res.data?.length) throw new Error(res.error?.message || "Purchase settlement update failed");
+        await optimisticVersionUpdate(cfg, "purchases", purchase.id, purchase.version, {
+          paid: purchase.paidAmount,
+          balance: purchase.balanceAmount,
+          updated_at: purchase.updatedAt,
+        }, "Purchase settlement");
       },
       createPurchase: async (purchase) => { const res = await pgInsert<Record<string, unknown>>(cfg, "purchases", { id: purchase.id, supplier_id: purchase.supplierId ?? null, doc_number: purchase.purchaseNumber, kind: purchase.kind, order_id: purchase.orderId ?? null, total: purchase.amount, paid: purchase.paidAmount, balance: purchase.balanceAmount, payment_method: purchase.paymentMethod, date: String(purchase.date).slice(0, 10), notes: purchase.notes ?? purchase.description ?? null, created_at: purchase.createdAt, updated_at: purchase.updatedAt, branch_id: purchase.branchId ?? null, device_id: purchase.deviceId ?? null, version: purchase.version || 1 }); if (res.error) throw new Error(res.error.message); },
       upsertWarehouse: async (warehouse) => {
