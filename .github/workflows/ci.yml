@@ -200,6 +200,8 @@ jobs:
           compgen -G 'apps/desktop/dist/assets/*.css' > /dev/null
           for file in apps/desktop/dist/assets/*.js apps/desktop/dist/assets/*.css; do test -s "$file"; done
       - run: pnpm --filter @minarvabiz/desktop build:electron
+      - name: Run backup restore schema smoke
+        run: node scripts/sqlite-backup-schema-smoke.mjs
 
   windows-package:
     runs-on: windows-latest
