@@ -5,6 +5,21 @@ const cents = (n: number) => Math.round((n + Number.EPSILON) * 100);
 const invalid = (message: string): AutomaticPostingPlan => ({ errors: [message], commit: () => null });
 const sourceEntry = (id: string, type = 'auto_purchase_invoice') => listJournalEntries().find(j => j.referenceType === type && j.referenceId === id && j.status === 'posted');
 
+export function supplierOpeningPayableBalance(supplierId: string): number {
+  const prefix = `opening-supplier-${supplierId}-`;
+  let netCents = 0;
+  for (const entry of listJournalEntries()) {
+    if (entry.referenceType !== 'auto_opening_supplier' || entry.status !== 'posted') continue;
+    const referenceId = entry.referenceId ?? '';
+    if (referenceId !== supplierId && referenceId !== `opening-supplier-create-${supplierId}` && !referenceId.startsWith(prefix)) continue;
+    for (const line of entry.lines) {
+      if (getAccount(line.accountId)?.systemKey !== 'accounts_payable') continue;
+      netCents += cents(line.credit) - cents(line.debit);
+    }
+  }
+  return Math.max(0, netCents) / 100;
+}
+
 export function planPurchaseInvoicePosting(invoice: PurchaseInvoice): AutomaticPostingPlan {
   const values = [invoice.subtotal, invoice.taxAmount, invoice.total, invoice.paidAmount, invoice.balanceAmount,
     ...invoice.lines.flatMap(l => [l.invoicedQuantity, l.unitCost, l.taxRate, l.lineSubtotal, l.taxAmount, l.lineTotal])];
@@ -34,12 +49,20 @@ export function planPurchaseInvoiceCancellation(invoice: PurchaseInvoice): Autom
 }
 
 export function planSupplierPaymentPosting(input: { id: string; amount: number; method: PaymentMethod; date: string;
-  allocations: Array<{ id: string; type: 'invoice' | 'purchase'; amount: number }> }): AutomaticPostingPlan {
-  const payable = input.allocations.filter(a => sourceEntry(a.id, a.type === 'invoice' ? 'auto_purchase_invoice' : 'auto_direct_purchase')).reduce((sum, a) => sum + cents(a.amount), 0);
+  allocations: Array<{ id: string; type: 'invoice' | 'purchase'; amount: number }>; openingAmount?: number }): AutomaticPostingPlan {
+  const documentPayable = input.allocations
+    .filter(a => sourceEntry(a.id, a.type === 'invoice' ? 'auto_purchase_invoice' : 'auto_direct_purchase'))
+    .reduce((sum, a) => sum + cents(a.amount), 0);
+  const openingPayable = cents(input.openingAmount ?? 0);
+  const total = cents(input.amount);
+  if (![documentPayable, openingPayable, total].every(Number.isSafeInteger) || openingPayable < 0 || documentPayable + openingPayable > total) {
+    return invalid('Invalid supplier payment accounting allocation');
+  }
+  const payable = documentPayable + openingPayable;
   return planAutomaticPosting({ referenceType: 'auto_supplier_payment', referenceId: input.id, date: input.date,
     description: 'Supplier payment ' + input.id, lines: [
       { key: 'accounts_payable', debit: payable / 100 },
-      { key: 'legacy_settlement_clearing', debit: (cents(input.amount) - payable) / 100 },
+      { key: 'legacy_settlement_clearing', debit: (total - payable) / 100 },
       { key: input.method === 'cash' ? 'cash' : input.method === 'bank' ? 'bank' : 'payment_clearing', credit: input.amount },
     ] });
 }

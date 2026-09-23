@@ -1,4 +1,4 @@
-import { planDirectPurchasePosting, planSupplierPaymentPosting } from "./procurement-accounting";
+import { planDirectPurchasePosting, planSupplierPaymentPosting, supplierOpeningPayableBalance } from "./procurement-accounting";
 import { assertPermission } from "./permissions";
 import { enqueueOutbox } from "./outbox-bridge";
 import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase, remoteSupplierSettlement, remoteUpsertCustomer } from "./remote-write";
@@ -9,7 +9,7 @@ import { hasLaundryPosting, planLaundryCancellation, planLaundryPosting } from "
 import { purchaseBalance, nextDocNumber } from "./expenses";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
-import { planExpenseReversal, postExpenseJournal } from "./accounting-store";
+import { planAutomaticPosting, planExpenseReversal, postExpenseJournal } from "./accounting-store";
 import { listPurchaseInvoices, prepareSupplierInvoiceSettlements } from "./procurement-store";
 import { auditAction } from "./audit-actions";
 import { touchPersistence } from "./autosave";
@@ -33,7 +33,51 @@ let lastPurchaseNo: string | null = null;
 
 export function listSuppliers(query?: string): Supplier[] { let list = suppliers.filter((s) => !s.deletedAt); if (query?.trim()) { const q = query.toLowerCase(); list = list.filter((s) => s.name.toLowerCase().includes(q) || s.company?.toLowerCase().includes(q) || s.phone?.includes(q)); } return list.sort((a,b)=>a.name.localeCompare(b.name)); }
 export function getSupplier(id: UUID): Supplier | undefined { return suppliers.find((s) => s.id === id && !s.deletedAt); }
-export function createSupplier(input: { name: string; company?: string | null; phone?: string | null; email?: string | null; address?: string | null; category?: string | null; notes?: string | null; openingBalance?: number; }): Supplier { assertPermission("purchases.manage"); const s: Supplier={id:generateId(),name:input.name,company:input.company??null,phone:input.phone??null,email:input.email??null,address:input.address??null,category:input.category??null,openingBalance:input.openingBalance??0,outstandingBalance:input.openingBalance??0,notes:input.notes??null,createdAt:nowISO(),updatedAt:nowISO()}; suppliers.push(s);touchPersistence();void remoteCreateSupplier(s);return s; }
+export function createSupplier(input: { name: string; company?: string | null; phone?: string | null; email?: string | null; address?: string | null; category?: string | null; notes?: string | null; openingBalance?: number; }): Supplier {
+  assertPermission("purchases.manage");
+  const rawOpeningBalance = input.openingBalance ?? 0;
+  if (!Number.isFinite(rawOpeningBalance) || rawOpeningBalance < 0 || !Number.isSafeInteger(Math.round(rawOpeningBalance * 100))) {
+    throw new Error("Opening supplier balance must be a finite non-negative amount");
+  }
+  const openingBalance = r2(rawOpeningBalance);
+  const id = generateId();
+  const posting = openingBalance > 0
+    ? planAutomaticPosting({
+        referenceType: "auto_opening_supplier",
+        referenceId: "opening-supplier-" + id + "-create",
+        date: nowISO(),
+        description: "Opening supplier balance: " + input.name,
+        lines: [
+          { key: "opening_balance_equity", debit: openingBalance },
+          { key: "accounts_payable", credit: openingBalance },
+        ],
+      })
+    : null;
+  if (posting?.errors.length) throw new Error(posting.errors.join("; "));
+
+  const s: Supplier = {
+    id,
+    name: input.name,
+    company: input.company ?? null,
+    phone: input.phone ?? null,
+    email: input.email ?? null,
+    address: input.address ?? null,
+    category: input.category ?? null,
+    openingBalance,
+    outstandingBalance: openingBalance,
+    notes: input.notes ?? null,
+    createdAt: nowISO(),
+    updatedAt: nowISO(),
+  };
+  suppliers.push(s);
+  if (posting && !posting.commit()) {
+    suppliers.splice(suppliers.findIndex((supplier) => supplier.id === s.id), 1);
+    throw new Error("Opening supplier balance posting failed");
+  }
+  touchPersistence();
+  void remoteCreateSupplier(s);
+  return s;
+}
 
 export function listSupplierPayments(supplierId?: UUID) {
   return mainStore.listPayments()
@@ -59,10 +103,11 @@ export function recordSupplierPayment(input: {
   const invoices = listPurchaseInvoices(supplier.id).filter(i => ["posted", "partially_paid"].includes(i.status) && i.balanceAmount > 0);
   const selected = input.purchaseInvoiceId ? invoices.find(i => i.id === input.purchaseInvoiceId) : undefined;
   if (input.purchaseInvoiceId && !selected) return { payment: null, supplier: null, errors: ["Selected supplier invoice is not payable"] };
-  const candidates = [
+  const allCandidates = [
     ...invoices.map(i => ({ id: i.id, type: "invoice" as const, date: i.invoiceDate, number: i.invoiceNumber, total: i.total, paid: i.paidAmount, balance: i.balanceAmount })),
     ...purchases.filter(p => !p.deletedAt && p.supplierId === supplier.id && p.balanceAmount > 0).map(p => ({ id: p.id, type: "purchase" as const, date: p.date, number: p.purchaseNumber, total: p.amount, paid: p.paidAmount, balance: p.balanceAmount })),
-  ].filter(c => !selected || (c.type === "invoice" && c.id === selected.id))
+  ];
+  const candidates = allCandidates.filter(c => !selected || (c.type === "invoice" && c.id === selected.id))
     .sort((a, b) => a.date.slice(0, 10).localeCompare(b.date.slice(0, 10)) || a.id.localeCompare(b.id));
   const applied = r2(Math.min(input.amount, supplier.outstandingBalance, selected?.balanceAmount ?? Infinity));
   let remaining = applied;
@@ -76,9 +121,19 @@ export function recordSupplierPayment(input: {
   }
   const invoicePlan = prepareSupplierInvoiceSettlements(supplier.id, allocations.filter(a => a.type === "invoice"));
   if (invoicePlan.errors.length) return { payment: null, supplier: null, errors: invoicePlan.errors };
+  let openingApplied = 0;
+  if (remaining > 0) {
+    const documentOutstanding = r2(allCandidates.reduce((sum, candidate) => sum + candidate.balance, 0));
+    const otherOutstanding = r2(Math.max(0, supplier.outstandingBalance - documentOutstanding));
+    const postedOpeningOutstanding = r2(Math.min(otherOutstanding, supplierOpeningPayableBalance(supplier.id)));
+    const legacyOutstanding = r2(Math.max(0, otherOutstanding - postedOpeningOutstanding));
+    const otherApplied = r2(remaining);
+    const legacyApplied = r2(Math.min(otherApplied, legacyOutstanding));
+    openingApplied = r2(Math.max(0, otherApplied - legacyApplied));
+  }
   const allocationNotes = allocations.length ? "Documents: " + allocations.map(a => `${a.number} ${a.amount.toFixed(2)}`).join(", ") : null;
   const paymentId = generateId();
-  const posting = planSupplierPaymentPosting({ id: paymentId, amount: applied, method: input.paymentMethod, date, allocations });
+  const posting = planSupplierPaymentPosting({ id: paymentId, amount: applied, method: input.paymentMethod, date, allocations, openingAmount: openingApplied });
   if (posting.errors.length) return { payment: null, supplier: null, errors: posting.errors };
   const payment = mainStore.recordSupplierPaymentEntry({ supplierId: supplier.id, amount: applied, method: input.paymentMethod, paidAt: date,
     reference: input.reference, notes: [input.notes, allocationNotes, remaining > 0 ? `Other supplier balance: ${remaining.toFixed(2)}` : null].filter(Boolean).join(" · "), deferRemote: true, paymentId });
