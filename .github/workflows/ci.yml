@@ -21,7 +21,17 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
-      - run: pnpm --filter @minarvabiz/web build
+      - name: Build web with public Supabase env
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-supabase.example
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-public-anon-key
+        run: pnpm --filter @minarvabiz/web build
+      - name: Verify public Supabase env is bundled
+        shell: bash
+        run: |
+          set -e
+          grep -RIlF 'https://ci-supabase.example' apps/web/.next/static/chunks >/dev/null
+          grep -RIlF 'ci-public-anon-key' apps/web/.next/static/chunks >/dev/null
 
 
   web-ui-smoke:
