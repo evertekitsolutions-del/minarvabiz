@@ -81,6 +81,17 @@ function nextTransferNumber(): string {
   return `WTR-${day}-${String(transferSequence).padStart(4, "0")}`;
 }
 
+function inferTransferSequence(items: WarehouseTransfer[]): number {
+  let max = 0;
+  for (const transfer of items) {
+    const match = /^WTR-\d{8}-(\d+)$/.exec(transfer.transferNumber);
+    if (!match) continue;
+    const sequence = Number.parseInt(match[1] ?? "", 10);
+    if (Number.isSafeInteger(sequence) && sequence > max) max = sequence;
+  }
+  return max;
+}
+
 export function listWarehouses(includeInactive = false): Warehouse[] {
   return warehouses
     .filter((w) => !w.deletedAt && (includeInactive || w.isActive))
@@ -521,8 +532,14 @@ export function hydrateWarehouseState(input: {
   if (input.transfers) {
     transfers.length = 0;
     transfers.push(...input.transfers);
+    const explicitSequence =
+      typeof input.transferSequence === "number" && Number.isFinite(input.transferSequence)
+        ? Math.max(0, Math.floor(input.transferSequence))
+        : 0;
+    transferSequence = Math.max(explicitSequence, inferTransferSequence(transfers));
+  } else if (typeof input.transferSequence === "number" && Number.isFinite(input.transferSequence)) {
+    transferSequence = Math.max(0, Math.floor(input.transferSequence));
   }
-  if (typeof input.transferSequence === "number") transferSequence = input.transferSequence;
 }
 
 export function exportWarehouseState() {
