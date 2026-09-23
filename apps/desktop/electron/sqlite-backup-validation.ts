@@ -25,6 +25,8 @@ export const REQUIRED_MINARVA_BACKUP_TABLES = [
   "payments",
 ] as const;
 
+export const MAX_SUPPORTED_MINARVA_BACKUP_SCHEMA_VERSION = 6;
+
 function firstValue(results: SqlJsResult[]): unknown {
   return results[0]?.values?.[0]?.[0];
 }
@@ -54,6 +56,9 @@ export async function minarvaBackupSchemaError(file: string): Promise<string | n
     const version = Number(firstValue(db.exec("SELECT value FROM meta WHERE key='schema_version' LIMIT 1")));
     if (!Number.isSafeInteger(version) || version < 1) {
       return "Minarva Biz schema version metadata is missing or invalid";
+    }
+    if (version > MAX_SUPPORTED_MINARVA_BACKUP_SCHEMA_VERSION) {
+      return `Minarva Biz backup schema version ${version} is newer than this app supports (maximum ${MAX_SUPPORTED_MINARVA_BACKUP_SCHEMA_VERSION})`;
     }
 
     return null;
