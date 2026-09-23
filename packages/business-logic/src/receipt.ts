@@ -6,6 +6,7 @@ import type { Sale, ServiceOrder } from "@minarvabiz/types";
 import { formatMoney } from "@minarvabiz/utils";
 import { getShopProfile } from "./shop-profile";
 import { SERVICE_TYPE_LABELS } from "./orders";
+import { escapeHtml } from "./html";
 
 export function buildSaleReceiptText(
   sale: Sale,
@@ -49,11 +50,8 @@ export function buildSaleReceiptHtml(
   opts?: { shopName?: string; address?: string; phone?: string }
 ): string {
   const text = buildSaleReceiptText(sale, opts);
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  return `<!DOCTYPE html><html><head><title>${sale.invoiceNumber}</title>
+  const escaped = escapeHtml(text);
+  return `<!DOCTYPE html><html><head><title>${escapeHtml(sale.invoiceNumber)}</title>
 <style>
   body { font-family: ui-monospace, monospace; font-size: 12px; padding: 16px; }
   pre { white-space: pre-wrap; }
@@ -102,11 +100,8 @@ export function buildOrderReceiptText(order: ServiceOrder): string {
 export function printOrderReceipt(order: ServiceOrder): void {
   if (typeof window === "undefined") return;
   const text = buildOrderReceiptText(order);
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  const html = `<!DOCTYPE html><html><head><title>${order.orderNumber}</title>
+  const escaped = escapeHtml(text);
+  const html = `<!DOCTYPE html><html><head><title>${escapeHtml(order.orderNumber)}</title>
 <style>body{font-family:ui-monospace,monospace;font-size:12px;padding:16px}pre{white-space:pre-wrap}@media print{body{padding:0}}</style>
 </head><body><pre>${escaped}</pre><script>window.onload=function(){window.print();}</script></body></html>`;
   const w = window.open("", "_blank", "width=400,height=600");
