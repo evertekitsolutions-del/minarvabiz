@@ -15,6 +15,7 @@ export function mapCustomer(row: Record<string, unknown>): Customer {
     updatedAt: String(row.updated_at || new Date().toISOString()),
     deletedAt: (row.deleted_at as string) ?? null,
     branchId: (row.branch_id as UUID) ?? null,
+    version: Number(row.version || 1),
   };
 }
 
@@ -31,6 +32,7 @@ export function customerToRow(c: Partial<Customer>): Record<string, unknown> {
   if (c.totalSpending !== undefined) row.total_spending = c.totalSpending;
   if (c.deletedAt !== undefined) row.deleted_at = c.deletedAt;
   if (c.branchId !== undefined) row.branch_id = c.branchId;
+  if (c.version !== undefined) row.version = c.version;
   row.updated_at = new Date().toISOString();
   return row;
 }

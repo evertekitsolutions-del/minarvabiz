@@ -37,6 +37,7 @@ export interface Customer {
   notes?: string | null; outstandingBalance: number; totalSpending: number;
   createdAt: ISODateString; updatedAt: ISODateString; deletedAt?: ISODateString | null;
   branchId?: UUID | null;
+  version?: number;
 }
 
 export interface Product {

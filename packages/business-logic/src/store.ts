@@ -9,7 +9,7 @@ import {
 } from "./sales";
 import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
-import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remoteCreateSale, remoteCreatePayment, remoteCollectCustomerPayment } from "./remote-write";
+import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remoteCreateSale, remoteCreatePayment, remoteCollectCustomerPayment, remoteAdjustStock } from "./remote-write";
 import { auditAction } from "./audit-actions";
 import { enqueueOutbox } from "./outbox-bridge";
 import { assertPermission } from "./permissions";
@@ -153,7 +153,7 @@ export function createCustomer(input: {
   const c: Customer = {
     id: generateId(), name: input.name, phone: input.phone ?? null, whatsapp: input.whatsapp ?? null,
     email: input.email || null, address: input.address ?? null, birthday: input.birthday ?? null, notes: input.notes ?? null,
-    outstandingBalance: 0, totalSpending: 0, createdAt: nowISO(), updatedAt: nowISO(),
+    outstandingBalance: 0, totalSpending: 0, createdAt: nowISO(), updatedAt: nowISO(), version: 1,
   };
   customers.push(c);
   touchPersistence();
@@ -165,7 +165,7 @@ export function updateCustomer(id: UUID, patch: Partial<Customer>): Customer | n
   assertPermission("customers.manage");
   const c = getCustomer(id);
   if (!c) return null;
-  Object.assign(c, patch, { updatedAt: nowISO() });
+  Object.assign(c, patch, { updatedAt: nowISO(), version: (c.version ?? 1) + 1 });
   touchPersistence();
   void remoteUpsertCustomer(c);
   return c;
@@ -297,7 +297,7 @@ export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "a
   }
   p.stockQuantity = applyStockMovement(p.stockQuantity, type, quantity);
   touchProduct(p);
-  void remoteUpsertProduct(p);
+  void remoteAdjustStock({ ...p }, type, quantity, notes);
   auditAction("inventory.adjust", "products", p.id, { stockQuantity: before }, { stockQuantity: p.stockQuantity, type, quantity, notes: notes ?? null });
   return p;
 }
@@ -503,6 +503,7 @@ export function createSale(input: {
     customer.totalSpending = round2(customer.totalSpending + allocation.paidAmount);
     if (allocation.balanceAmount > 0) customer.outstandingBalance = round2(customer.outstandingBalance + allocation.balanceAmount);
     customer.updatedAt = nowISO();
+    customer.version = (customer.version ?? 1) + 1;
   }
 
   sales.push(sale);
@@ -527,9 +528,7 @@ export function createSale(input: {
   if (salePayments.length) touchPersistence();
 
   accountingPlan.commit();
-  void remoteCreateSale(sale);
-  enqueueOutbox("sales", sale.id, "insert", sale);
-  for (const payment of salePayments) void remoteCreatePayment(payment);
+  void remoteCreateSale(sale, salePayments, Boolean(input.allowNegativeStock));
   auditAction("sale.create", "sales", sale.id, null, {
     total: sale.total,
     invoice: sale.invoiceNumber,
@@ -841,6 +840,7 @@ export function recordCustomerPayment(input: {
   customer.outstandingBalance = round2(Math.max(0, customer.outstandingBalance - applied));
   customer.totalSpending = round2(customer.totalSpending + applied);
   customer.updatedAt = now;
+  customer.version = (customer.version ?? 1) + 1;
   for (const { sale, amount } of allocations) {
     sale.paidAmount = round2(sale.paidAmount + amount);
     sale.balanceAmount = round2(Math.max(0, sale.balanceAmount - amount));

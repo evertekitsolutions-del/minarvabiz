@@ -30,7 +30,9 @@ export interface RemoteWriter {
   upsertCustomer?: (c: Customer) => Promise<void>;
   upsertCategory?: (c: Category) => Promise<void>;
   upsertProduct?: (p: Product) => Promise<void>;
-  createSale?: (s: Sale) => Promise<void>;
+  createSale?: (s: Sale, payments: Payment[], allowNegativeStock: boolean) => Promise<void>;
+  recordCustomerPayment?: (payment: Payment, settledSales: Sale[]) => Promise<void>;
+  adjustStock?: (product: Product, movementType: "stock_in" | "stock_out" | "adjustment", quantity: number, notes?: string | null) => Promise<void>;
   updateSaleSettlement?: (sale: Sale) => Promise<void>;
   createOrder?: (o: ServiceOrder) => Promise<void>;
   updateOrder?: (id: string, patch: Partial<ServiceOrder>) => Promise<void>;
@@ -80,10 +82,22 @@ export async function remoteUpsertProduct(p: Product) {
   catch (e) { console.warn("[minarvabiz] remote product write failed", e); }
 }
 
-export async function remoteCreateSale(s: Sale) {
+export async function remoteCreateSale(s: Sale, payments: Payment[] = [], allowNegativeStock = false) {
   enqueueOutbox("sales", s.id, "insert", s);
-  try { await writer?.createSale?.(s); }
-  catch (e) { console.warn("[minarvabiz] remote sale write failed", e); }
+  for (const payment of payments) enqueueOutbox("payments", payment.id, "insert", payment);
+  try { await writer?.createSale?.(s, payments, allowNegativeStock); }
+  catch (e) { console.warn("[minarvabiz] atomic remote sale write failed", e); }
+}
+
+export async function remoteAdjustStock(
+  product: Product,
+  movementType: "stock_in" | "stock_out" | "adjustment",
+  quantity: number,
+  notes?: string | null
+) {
+  enqueueOutbox("products", product.id, "update", product);
+  try { await writer?.adjustStock?.(product, movementType, quantity, notes); }
+  catch (e) { console.warn("[minarvabiz] atomic remote stock adjustment failed", e); }
 }
 
 export async function remoteCreateOrder(o: ServiceOrder) {
@@ -237,9 +251,13 @@ export async function remoteCollectCustomerPayment(payment: Payment, customer: C
   const target = writer;
   const write = async () => {
     try {
-      await target?.createPayment?.(payment);
-      for (const sale of settledSales) await target?.updateSaleSettlement?.(sale);
-      await target?.upsertCustomer?.(customer);
+      if (target?.recordCustomerPayment) {
+        await target.recordCustomerPayment(payment, settledSales);
+      } else {
+        await target?.createPayment?.(payment);
+        for (const sale of settledSales) await target?.updateSaleSettlement?.(sale);
+        await target?.upsertCustomer?.(customer);
+      }
     } catch (error) {
       console.warn("[minarvabiz] customer collection pending in outbox", error);
     }
