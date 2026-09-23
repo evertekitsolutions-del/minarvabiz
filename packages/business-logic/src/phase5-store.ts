@@ -1,4 +1,4 @@
-import { planDirectPurchasePosting, planSupplierPaymentPosting } from "./procurement-accounting";
+import { planDirectPurchasePosting, planSupplierPaymentPosting, supplierOpeningPayableBalance } from "./procurement-accounting";
 import { assertPermission } from "./permissions";
 import { enqueueOutbox } from "./outbox-bridge";
 import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase, remoteSupplierSettlement, remoteUpsertCustomer } from "./remote-write";
@@ -44,7 +44,7 @@ export function createSupplier(input: { name: string; company?: string | null; p
   const posting = openingBalance > 0
     ? planAutomaticPosting({
         referenceType: "auto_opening_supplier",
-        referenceId: "opening-supplier-create-" + id,
+        referenceId: "opening-supplier-" + id + "-create",
         date: nowISO(),
         description: "Opening supplier balance: " + input.name,
         lines: [
@@ -103,10 +103,11 @@ export function recordSupplierPayment(input: {
   const invoices = listPurchaseInvoices(supplier.id).filter(i => ["posted", "partially_paid"].includes(i.status) && i.balanceAmount > 0);
   const selected = input.purchaseInvoiceId ? invoices.find(i => i.id === input.purchaseInvoiceId) : undefined;
   if (input.purchaseInvoiceId && !selected) return { payment: null, supplier: null, errors: ["Selected supplier invoice is not payable"] };
-  const candidates = [
+  const allCandidates = [
     ...invoices.map(i => ({ id: i.id, type: "invoice" as const, date: i.invoiceDate, number: i.invoiceNumber, total: i.total, paid: i.paidAmount, balance: i.balanceAmount })),
     ...purchases.filter(p => !p.deletedAt && p.supplierId === supplier.id && p.balanceAmount > 0).map(p => ({ id: p.id, type: "purchase" as const, date: p.date, number: p.purchaseNumber, total: p.amount, paid: p.paidAmount, balance: p.balanceAmount })),
-  ].filter(c => !selected || (c.type === "invoice" && c.id === selected.id))
+  ];
+  const candidates = allCandidates.filter(c => !selected || (c.type === "invoice" && c.id === selected.id))
     .sort((a, b) => a.date.slice(0, 10).localeCompare(b.date.slice(0, 10)) || a.id.localeCompare(b.id));
   const applied = r2(Math.min(input.amount, supplier.outstandingBalance, selected?.balanceAmount ?? Infinity));
   let remaining = applied;
@@ -120,9 +121,16 @@ export function recordSupplierPayment(input: {
   }
   const invoicePlan = prepareSupplierInvoiceSettlements(supplier.id, allocations.filter(a => a.type === "invoice"));
   if (invoicePlan.errors.length) return { payment: null, supplier: null, errors: invoicePlan.errors };
+  const documentOutstanding = r2(allCandidates.reduce((sum, candidate) => sum + candidate.balance, 0));
+  const otherOutstanding = r2(Math.max(0, supplier.outstandingBalance - documentOutstanding));
+  const postedOpeningOutstanding = r2(Math.min(otherOutstanding, supplierOpeningPayableBalance(supplier.id)));
+  const legacyOutstanding = r2(Math.max(0, otherOutstanding - postedOpeningOutstanding));
+  const otherApplied = r2(Math.max(0, remaining));
+  const legacyApplied = r2(Math.min(otherApplied, legacyOutstanding));
+  const openingApplied = r2(Math.max(0, otherApplied - legacyApplied));
   const allocationNotes = allocations.length ? "Documents: " + allocations.map(a => `${a.number} ${a.amount.toFixed(2)}`).join(", ") : null;
   const paymentId = generateId();
-  const posting = planSupplierPaymentPosting({ id: paymentId, amount: applied, method: input.paymentMethod, date, allocations });
+  const posting = planSupplierPaymentPosting({ id: paymentId, amount: applied, method: input.paymentMethod, date, allocations, openingAmount: openingApplied });
   if (posting.errors.length) return { payment: null, supplier: null, errors: posting.errors };
   const payment = mainStore.recordSupplierPaymentEntry({ supplierId: supplier.id, amount: applied, method: input.paymentMethod, paidAt: date,
     reference: input.reference, notes: [input.notes, allocationNotes, remaining > 0 ? `Other supplier balance: ${remaining.toFixed(2)}` : null].filter(Boolean).join(" · "), deferRemote: true, paymentId });
