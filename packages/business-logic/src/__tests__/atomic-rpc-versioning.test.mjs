@@ -21,10 +21,14 @@ const supabaseAdapter = fs.readFileSync(
 for (const fn of ["create_sale", "record_payment", "adjust_stock"]) {
   assert.match(migration, new RegExp("FUNCTION public\\." + fn + "\\("));
 }
-assert.match(migration, /SECURITY INVOKER/g);
+assert.match(migration, /SECURITY DEFINER/g);
+assert.match(migration, /private\.current_user_org_id\(\)/);
+assert.match(migration, /role = ANY \(ARRAY\['super_admin','admin','manager','cashier'\]::TEXT\[\]\)/);
+assert.match(migration, /Role is not allowed to adjust stock/);
 assert.match(migration, /FOR UPDATE/);
 assert.match(migration, /ERRCODE = '40001'/);
 assert.match(migration, /version = version \+ 1/);
+assert.match(migration, /org_id = v_org_id/);
 assert.match(migration, /REVOKE ALL ON FUNCTION public\.create_sale[\s\S]*FROM PUBLIC, anon/);
 assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.create_sale[\s\S]*TO authenticated/);
 
