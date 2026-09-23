@@ -503,6 +503,7 @@ export function createSale(input: {
     customer.totalSpending = round2(customer.totalSpending + allocation.paidAmount);
     if (allocation.balanceAmount > 0) customer.outstandingBalance = round2(customer.outstandingBalance + allocation.balanceAmount);
     customer.updatedAt = nowISO();
+    customer.version = (customer.version ?? 1) + 1;
   }
 
   sales.push(sale);
@@ -839,6 +840,7 @@ export function recordCustomerPayment(input: {
   customer.outstandingBalance = round2(Math.max(0, customer.outstandingBalance - applied));
   customer.totalSpending = round2(customer.totalSpending + applied);
   customer.updatedAt = now;
+  customer.version = (customer.version ?? 1) + 1;
   for (const { sale, amount } of allocations) {
     sale.paidAmount = round2(sale.paidAmount + amount);
     sale.balanceAmount = round2(Math.max(0, sale.balanceAmount - amount));
