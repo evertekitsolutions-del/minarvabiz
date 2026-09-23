@@ -44,6 +44,7 @@ type DesktopDiagnosticsApi = {
   chooseBackupDirectory: () => Promise<string | null>;
   getLicenseState: () => Promise<{ status: string; plan: string | null; edition: string | null; daysRemaining: number | null; graceDaysRemaining: number | null; reason?: string }>;
   listPrinters?: () => Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>;
+  printHtml?: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal"; thermalWidthMm?: number }) => Promise<{ ok: boolean; error?: string }>;
   checkForUpdates?: () => Promise<{ status: "disabled" | "up_to_date" | "available" | "error"; currentVersion: string; version?: string; publishedAt?: string; notes?: string; error?: string }>;
   downloadUpdate?: () => Promise<{ ok: boolean; version?: string; installerPath?: string; error?: string }>;
   installUpdate?: () => Promise<{ ok: boolean; version?: string; backupPath?: string; error?: string }>;
@@ -65,6 +66,8 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
   const [updateState, setUpdateState] = React.useState<"idle" | "checking" | "available" | "downloading" | "ready" | "up_to_date" | "disabled" | "error">("idle");
   const [updateVersion, setUpdateVersion] = React.useState("");
   const [updateMessage, setUpdateMessage] = React.useState("");
+  const [printTestState, setPrintTestState] = React.useState<"idle" | "working" | "done" | "error">("idle");
+  const [printTestMessage, setPrintTestMessage] = React.useState("");
   React.useEffect(() => setDraftProfile(profile), [profile]);
   React.useEffect(() => setDraftTax(tax), [tax]);
   React.useEffect(() => setDraftBackup(backup), [backup]);
@@ -124,6 +127,40 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
   }
 
   async function chooseBackupLocation() { const api = getDiagnosticsApi(); if (!api) return; try { const selected = await api.chooseBackupDirectory(); if (selected) { setDraftBackup((prev) => ({ ...prev, destinationPath: selected })); onSaveBackup({ destinationPath: selected }); } } catch (error) { setDiagnosticState("error"); setDiagnosticMessage(error instanceof Error ? error.message : "Unable to choose backup folder."); } }
+
+  async function testSelectedPrinter() {
+    const api = getDiagnosticsApi();
+    if (!api?.printHtml) {
+      setPrintTestState("error");
+      setPrintTestMessage("Printer testing is available only in the Windows desktop edition.");
+      return;
+    }
+    const paper = draftPrinting.defaultInvoicePaper;
+    const deviceName = paper === "thermal" ? draftPrinting.thermalPrinterName : draftPrinting.a4PrinterName;
+    if (!deviceName) {
+      setPrintTestState("error");
+      setPrintTestMessage(`Select a ${paper === "thermal" ? "thermal" : "A4"} printer before running a test print.`);
+      return;
+    }
+    setPrintTestState("working");
+    setPrintTestMessage("Sending test page to the selected printer…");
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Minarva Biz Printer Test</title>
+<style>body{font-family:system-ui,sans-serif;padding:18px}h1{font-size:18px;margin:0 0 8px}p{font-size:12px;margin:4px 0}</style>
+</head><body><h1>Minarva Biz Printer Test</h1><p>Printer: ${deviceName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p><p>Paper: ${paper === "thermal" ? `${draftPrinting.thermalWidthMm} mm thermal` : "A4"}</p><p>${new Date().toLocaleString()}</p></body></html>`;
+    try {
+      const result = await api.printHtml({ html, deviceName, paper, thermalWidthMm: draftPrinting.thermalWidthMm });
+      if (!result.ok) {
+        setPrintTestState("error");
+        setPrintTestMessage(result.error || "The printer rejected the test page.");
+        return;
+      }
+      setPrintTestState("done");
+      setPrintTestMessage(`Test page sent successfully to ${deviceName}.`);
+    } catch (error) {
+      setPrintTestState("error");
+      setPrintTestMessage(error instanceof Error ? error.message : "Unable to print the test page.");
+    }
+  }
 
   async function exportDiagnostics() {
     const api = getDiagnosticsApi();
@@ -228,7 +265,11 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
         <FormField label="Windows direct print"><select className={selectClass} value={draftPrinting.silentDesktopPrint ? "yes" : "no"} onChange={e => setDraftPrinting({ ...draftPrinting, silentDesktopPrint: e.target.value === "yes" })}><option value="no">Show print dialog</option><option value="yes">Direct print to selected printer</option></select></FormField>
       </div>
       <div className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">{printers.length ? `${printers.length} Windows printer(s) detected.` : "Printer discovery is available in the Windows desktop edition. Web browsers use their normal print dialog."}</div>
-      <div className="mt-5 flex justify-end"><Button onClick={() => onSavePrinting(draftPrinting)}>Save printer settings</Button></div>
+      {printTestMessage && <p className={`mt-3 text-sm ${printTestState === "error" ? "text-red-600" : printTestState === "done" ? "text-emerald-600" : "text-slate-600"}`}>{printTestMessage}</p>}
+      <div className="mt-5 flex flex-wrap justify-end gap-2">
+        <Button type="button" variant="outline" onClick={testSelectedPrinter} disabled={printTestState === "working"}>{printTestState === "working" ? "Printing test…" : "Test selected printer"}</Button>
+        <Button onClick={() => onSavePrinting(draftPrinting)}>Save printer settings</Button>
+      </div>
     </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-lg font-semibold text-slate-900">Automatic backup</h3><div className="mt-4 grid gap-4 md:grid-cols-3">
       <FormField label="Automatic backup"><select className={selectClass} value={draftBackup.enabled ? "yes" : "no"} onChange={e => setDraftBackup({ ...draftBackup, enabled: e.target.value === "yes" })}><option value="yes">Enabled</option><option value="no">Disabled</option></select></FormField>
