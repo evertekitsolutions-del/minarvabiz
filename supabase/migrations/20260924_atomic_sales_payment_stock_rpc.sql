@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION public.create_sale(
 )
 RETURNS JSONB
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
@@ -26,9 +26,21 @@ DECLARE
   v_balance NUMERIC(14,2);
   v_existing_invoice TEXT;
   v_row_count INTEGER;
+  v_org_id UUID;
+  v_allowed BOOLEAN;
 BEGIN
   IF (SELECT auth.uid()) IS NULL THEN
     RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
+  END IF;
+  v_org_id := private.current_user_org_id();
+  SELECT EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE org_id = v_org_id
+      AND user_id = (SELECT auth.uid())
+      AND role = ANY (ARRAY['super_admin','admin','manager','cashier']::TEXT[])
+  ) INTO v_allowed;
+  IF NOT v_allowed THEN
+    RAISE EXCEPTION 'Role is not allowed to create sales' USING ERRCODE = '42501';
   END IF;
 
   v_sale_id := NULLIF(p_sale->>'id', '')::UUID;
@@ -45,7 +57,8 @@ BEGIN
 
   SELECT invoice_number INTO v_existing_invoice
   FROM public.sales
-  WHERE id = v_sale_id;
+  WHERE id = v_sale_id
+    AND org_id = v_org_id;
 
   IF FOUND THEN
     IF v_existing_invoice = p_sale->>'invoice_number' THEN
@@ -59,7 +72,7 @@ BEGIN
   INSERT INTO public.sales (
     id, invoice_number, customer_id, customer_name, sale_date,
     subtotal, discount_amount, tax_amount, total, paid_amount, balance_amount,
-    status, notes, created_at, updated_at, branch_id, device_id, created_by, version
+    status, notes, created_at, updated_at, branch_id, device_id, created_by, version, org_id
   ) VALUES (
     v_sale_id,
     p_sale->>'invoice_number',
@@ -77,7 +90,8 @@ BEGIN
     NULLIF(p_sale->>'branch_id', '')::UUID,
     NULLIF(p_sale->>'device_id', '')::UUID,
     NULLIF(p_sale->>'created_by', '')::UUID,
-    COALESCE(NULLIF(p_sale->>'version', '')::INTEGER, 1)
+    COALESCE(NULLIF(p_sale->>'version', '')::INTEGER, 1),
+    v_org_id
   );
 
   IF jsonb_typeof(COALESCE(p_sale->'items', '[]'::JSONB)) <> 'array' THEN
@@ -97,6 +111,7 @@ BEGIN
       INTO v_stock, v_product_branch
     FROM public.products
     WHERE id = v_product_id
+      AND org_id = v_org_id
       AND deleted_at IS NULL
     FOR UPDATE;
 
@@ -112,11 +127,12 @@ BEGIN
     SET stock_quantity = v_new_stock,
         updated_at = COALESCE(NULLIF(p_sale->>'updated_at', '')::TIMESTAMPTZ, now()),
         version = version + 1
-    WHERE id = v_product_id;
+    WHERE id = v_product_id
+      AND org_id = v_org_id;
 
     INSERT INTO public.sale_items (
       id, sale_id, product_id, product_name, sku, quantity,
-      unit_price, cost_price, discount_percent, tax_rate, line_total
+      unit_price, cost_price, discount_percent, tax_rate, line_total, org_id
     ) VALUES (
       NULLIF(v_item->>'id', '')::UUID,
       v_sale_id,
@@ -128,12 +144,13 @@ BEGIN
       COALESCE(NULLIF(v_item->>'cost_price', '')::NUMERIC, 0),
       COALESCE(NULLIF(v_item->>'discount_percent', '')::NUMERIC, 0),
       COALESCE(NULLIF(v_item->>'tax_rate', '')::NUMERIC, 0),
-      COALESCE(NULLIF(v_item->>'line_total', '')::NUMERIC, 0)
+      COALESCE(NULLIF(v_item->>'line_total', '')::NUMERIC, 0),
+      v_org_id
     );
 
     INSERT INTO public.inventory_transactions (
       id, product_id, movement_type, quantity, balance_after,
-      reference_type, reference_id, notes, created_at, created_by, branch_id, device_id
+      reference_type, reference_id, notes, created_at, created_by, branch_id, device_id, org_id
     ) VALUES (
       gen_random_uuid(),
       v_product_id,
@@ -146,7 +163,8 @@ BEGIN
       COALESCE(NULLIF(p_sale->>'created_at', '')::TIMESTAMPTZ, now()),
       NULLIF(p_sale->>'created_by', '')::UUID,
       COALESCE(NULLIF(p_sale->>'branch_id', '')::UUID, v_product_branch),
-      NULLIF(p_sale->>'device_id', '')::UUID
+      NULLIF(p_sale->>'device_id', '')::UUID,
+      v_org_id
     );
   END LOOP;
 
@@ -157,6 +175,7 @@ BEGIN
         updated_at = COALESCE(NULLIF(p_sale->>'updated_at', '')::TIMESTAMPTZ, now()),
         version = version + 1
     WHERE id = v_customer_id
+      AND org_id = v_org_id
       AND deleted_at IS NULL;
     GET DIAGNOSTICS v_row_count = ROW_COUNT;
     IF v_row_count <> 1 THEN
@@ -176,7 +195,7 @@ BEGIN
     END IF;
     INSERT INTO public.payments (
       id, amount, method, reference_type, reference_id, customer_id, notes,
-      paid_at, created_at, created_by, branch_id, device_id, version
+      paid_at, created_at, created_by, branch_id, device_id, version, org_id
     ) VALUES (
       NULLIF(v_payment->>'id', '')::UUID,
       (v_payment->>'amount')::NUMERIC,
@@ -190,7 +209,8 @@ BEGIN
       NULLIF(v_payment->>'created_by', '')::UUID,
       NULLIF(v_payment->>'branch_id', '')::UUID,
       NULLIF(v_payment->>'device_id', '')::UUID,
-      COALESCE(NULLIF(v_payment->>'version', '')::INTEGER, 1)
+      COALESCE(NULLIF(v_payment->>'version', '')::INTEGER, 1),
+      v_org_id
     );
   END LOOP;
 
@@ -204,7 +224,7 @@ CREATE OR REPLACE FUNCTION public.record_payment(
 )
 RETURNS JSONB
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
@@ -216,9 +236,21 @@ DECLARE
   v_new_version INTEGER;
   v_expected_version INTEGER;
   v_row_count INTEGER;
+  v_org_id UUID;
+  v_allowed BOOLEAN;
 BEGIN
   IF (SELECT auth.uid()) IS NULL THEN
     RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
+  END IF;
+  v_org_id := private.current_user_org_id();
+  SELECT EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE org_id = v_org_id
+      AND user_id = (SELECT auth.uid())
+      AND role = ANY (ARRAY['super_admin','admin','manager','cashier']::TEXT[])
+  ) INTO v_allowed;
+  IF NOT v_allowed THEN
+    RAISE EXCEPTION 'Role is not allowed to record payments' USING ERRCODE = '42501';
   END IF;
 
   v_payment_id := NULLIF(p_payment->>'id', '')::UUID;
@@ -228,7 +260,7 @@ BEGIN
     RAISE EXCEPTION 'Payment id and positive amount are required' USING ERRCODE = '22023';
   END IF;
 
-  IF EXISTS (SELECT 1 FROM public.payments WHERE id = v_payment_id) THEN
+  IF EXISTS (SELECT 1 FROM public.payments WHERE id = v_payment_id AND org_id = v_org_id) THEN
     RETURN jsonb_build_object('payment_id', v_payment_id, 'idempotent', true);
   END IF;
 
@@ -253,6 +285,7 @@ BEGIN
         updated_at = COALESCE(NULLIF(v_settlement->>'updated_at', '')::TIMESTAMPTZ, now()),
         version = v_new_version
     WHERE id = v_sale_id
+      AND org_id = v_org_id
       AND version = v_expected_version
       AND deleted_at IS NULL;
 
@@ -264,7 +297,7 @@ BEGIN
 
   INSERT INTO public.payments (
     id, amount, method, reference_type, reference_id, customer_id, notes,
-    paid_at, created_at, created_by, branch_id, device_id, version
+    paid_at, created_at, created_by, branch_id, device_id, version, org_id
   ) VALUES (
     v_payment_id,
     v_amount,
@@ -278,7 +311,8 @@ BEGIN
     NULLIF(p_payment->>'created_by', '')::UUID,
     NULLIF(p_payment->>'branch_id', '')::UUID,
     NULLIF(p_payment->>'device_id', '')::UUID,
-    COALESCE(NULLIF(p_payment->>'version', '')::INTEGER, 1)
+    COALESCE(NULLIF(p_payment->>'version', '')::INTEGER, 1),
+    v_org_id
   );
 
   IF v_customer_id IS NOT NULL THEN
@@ -288,6 +322,7 @@ BEGIN
         updated_at = COALESCE(NULLIF(p_payment->>'paid_at', '')::TIMESTAMPTZ, now()),
         version = version + 1
     WHERE id = v_customer_id
+      AND org_id = v_org_id
       AND deleted_at IS NULL;
     GET DIAGNOSTICS v_row_count = ROW_COUNT;
     IF v_row_count <> 1 THEN
@@ -312,7 +347,7 @@ CREATE OR REPLACE FUNCTION public.adjust_stock(
 )
 RETURNS JSONB
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
@@ -321,9 +356,21 @@ DECLARE
   v_new NUMERIC(14,3);
   v_delta NUMERIC(14,3);
   v_product_branch UUID;
+  v_org_id UUID;
+  v_allowed BOOLEAN;
 BEGIN
   IF (SELECT auth.uid()) IS NULL THEN
     RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
+  END IF;
+  v_org_id := private.current_user_org_id();
+  SELECT EXISTS (
+    SELECT 1 FROM public.organization_members
+    WHERE org_id = v_org_id
+      AND user_id = (SELECT auth.uid())
+      AND role = ANY (ARRAY['super_admin','admin','manager']::TEXT[])
+  ) INTO v_allowed;
+  IF NOT v_allowed THEN
+    RAISE EXCEPTION 'Role is not allowed to adjust stock' USING ERRCODE = '42501';
   END IF;
   IF p_quantity IS NULL OR p_quantity = 0 OR p_expected_version < 1 THEN
     RAISE EXCEPTION 'Non-zero quantity and expected version are required' USING ERRCODE = '22023';
@@ -333,6 +380,7 @@ BEGIN
     INTO v_current, v_current_version, v_product_branch
   FROM public.products
   WHERE id = p_product_id
+    AND org_id = v_org_id
     AND deleted_at IS NULL
   FOR UPDATE;
 
@@ -362,11 +410,12 @@ BEGIN
       updated_at = now(),
       version = v_current_version + 1
   WHERE id = p_product_id
+    AND org_id = v_org_id
     AND version = p_expected_version;
 
   INSERT INTO public.inventory_transactions (
     id, product_id, movement_type, quantity, balance_after,
-    reference_type, reference_id, notes, created_at, created_by, branch_id, device_id
+    reference_type, reference_id, notes, created_at, created_by, branch_id, device_id, org_id
   ) VALUES (
     gen_random_uuid(),
     p_product_id,
@@ -379,7 +428,8 @@ BEGIN
     now(),
     (SELECT auth.uid()),
     COALESCE(p_branch_id, v_product_branch),
-    p_device_id
+    p_device_id,
+    v_org_id
   );
 
   RETURN jsonb_build_object(
