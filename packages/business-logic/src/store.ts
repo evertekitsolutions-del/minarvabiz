@@ -233,6 +233,7 @@ export function deleteProduct(id: UUID): Product | null {
 
 export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "adjustment", quantity: number, notes?: string | null): Product | null {
   assertPermission("inventory.adjust");
+  if (!Number.isFinite(quantity)) return null;
   const p = getProduct(productId);
   if (!p) return null;
   const before = p.stockQuantity;
