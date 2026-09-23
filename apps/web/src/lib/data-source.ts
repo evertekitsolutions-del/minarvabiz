@@ -614,32 +614,20 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
       },
       createPurchase: async (purchase) => { const res = await pgInsert<Record<string, unknown>>(cfg, "purchases", { id: purchase.id, supplier_id: purchase.supplierId ?? null, doc_number: purchase.purchaseNumber, kind: purchase.kind, order_id: purchase.orderId ?? null, total: purchase.amount, paid: purchase.paidAmount, balance: purchase.balanceAmount, payment_method: purchase.paymentMethod, date: String(purchase.date).slice(0, 10), notes: purchase.notes ?? purchase.description ?? null, created_at: purchase.createdAt, updated_at: purchase.updatedAt, branch_id: purchase.branchId ?? null, device_id: purchase.deviceId ?? null, version: purchase.version || 1 }); if (res.error) throw new Error(res.error.message); },
       upsertWarehouse: async (warehouse) => {
-        const row = { branch_id: warehouse.branchId ?? null, name: warehouse.name, code: warehouse.code, is_default: warehouse.isDefault, is_active: warehouse.isActive, created_at: warehouse.createdAt, updated_at: warehouse.updatedAt, deleted_at: warehouse.deletedAt ?? null, version: warehouse.version };
-        const updated = await pgUpdate<Record<string, unknown>>(cfg, "warehouses", `id=eq.${warehouse.id}`, row);
-        if (!updated.error && updated.data?.length) return;
-        const inserted = await pgInsert<Record<string, unknown>>(cfg, "warehouses", { id: warehouse.id, ...row });
-        if (inserted.error) throw new Error(inserted.error.message);
+        const row = { branch_id: warehouse.branchId ?? null, name: warehouse.name, code: warehouse.code, is_default: warehouse.isDefault, is_active: warehouse.isActive, created_at: warehouse.createdAt, updated_at: warehouse.updatedAt, deleted_at: warehouse.deletedAt ?? null };
+        await optimisticVersionUpsert(cfg, "warehouses", warehouse.id, warehouse.version, row, "Warehouse");
       },
       upsertWarehouseLocation: async (location) => {
-        const row = { warehouse_id: location.warehouseId, code: location.code, name: location.name, type: location.type, is_active: location.isActive, created_at: location.createdAt, updated_at: location.updatedAt, deleted_at: location.deletedAt ?? null, version: location.version };
-        const updated = await pgUpdate<Record<string, unknown>>(cfg, "warehouse_locations", `id=eq.${location.id}`, row);
-        if (!updated.error && updated.data?.length) return;
-        const inserted = await pgInsert<Record<string, unknown>>(cfg, "warehouse_locations", { id: location.id, ...row });
-        if (inserted.error) throw new Error(inserted.error.message);
+        const row = { warehouse_id: location.warehouseId, code: location.code, name: location.name, type: location.type, is_active: location.isActive, created_at: location.createdAt, updated_at: location.updatedAt, deleted_at: location.deletedAt ?? null };
+        await optimisticVersionUpsert(cfg, "warehouse_locations", location.id, location.version, row, "Warehouse location");
       },
       upsertWarehouseStock: async (position) => {
-        const row = { warehouse_id: position.warehouseId, location_id: position.locationId, product_id: position.productId, on_hand: position.onHand, reserved: position.reserved, updated_at: position.updatedAt, version: position.version };
-        const updated = await pgUpdate<Record<string, unknown>>(cfg, "warehouse_stock", `id=eq.${position.id}`, row);
-        if (!updated.error && updated.data?.length) return;
-        const inserted = await pgInsert<Record<string, unknown>>(cfg, "warehouse_stock", { id: position.id, ...row });
-        if (inserted.error) throw new Error(inserted.error.message);
+        const row = { warehouse_id: position.warehouseId, location_id: position.locationId, product_id: position.productId, on_hand: position.onHand, reserved: position.reserved, updated_at: position.updatedAt };
+        await optimisticVersionUpsert(cfg, "warehouse_stock", position.id, position.version, row, "Warehouse stock");
       },
       upsertWarehouseTransfer: async (transfer) => {
-        const row = { transfer_number: transfer.transferNumber, product_id: transfer.productId, source_warehouse_id: transfer.sourceWarehouseId, source_location_id: transfer.sourceLocationId, destination_warehouse_id: transfer.destinationWarehouseId, destination_location_id: transfer.destinationLocationId, quantity: transfer.quantity, status: transfer.status, notes: transfer.notes ?? null, created_at: transfer.createdAt, updated_at: transfer.updatedAt, approved_at: transfer.approvedAt ?? null, dispatched_at: transfer.dispatchedAt ?? null, received_at: transfer.receivedAt ?? null, cancelled_at: transfer.cancelledAt ?? null, created_by: transfer.createdBy ?? null, version: transfer.version };
-        const updated = await pgUpdate<Record<string, unknown>>(cfg, "warehouse_transfers", `id=eq.${transfer.id}`, row);
-        if (!updated.error && updated.data?.length) return;
-        const inserted = await pgInsert<Record<string, unknown>>(cfg, "warehouse_transfers", { id: transfer.id, ...row });
-        if (inserted.error) throw new Error(inserted.error.message);
+        const row = { transfer_number: transfer.transferNumber, product_id: transfer.productId, source_warehouse_id: transfer.sourceWarehouseId, source_location_id: transfer.sourceLocationId, destination_warehouse_id: transfer.destinationWarehouseId, destination_location_id: transfer.destinationLocationId, quantity: transfer.quantity, status: transfer.status, notes: transfer.notes ?? null, created_at: transfer.createdAt, updated_at: transfer.updatedAt, approved_at: transfer.approvedAt ?? null, dispatched_at: transfer.dispatchedAt ?? null, received_at: transfer.receivedAt ?? null, cancelled_at: transfer.cancelledAt ?? null, created_by: transfer.createdBy ?? null };
+        await optimisticVersionUpsert(cfg, "warehouse_transfers", transfer.id, transfer.version, row, "Warehouse transfer");
       },
       upsertPurchaseOrder: async (purchaseOrder) => {
         const row = {
