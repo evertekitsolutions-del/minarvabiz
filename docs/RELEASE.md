@@ -2,30 +2,32 @@
 
 ## Current main code baseline
 
-- Main commit verified after PR #56: `e281c146c6eb27ff3a4828b95d793b1787db8b7b`
-- Latest merged milestone: PR #56 — schema-safe Hybrid cloud pull cursors
+- Main commit: `1f511bc1971a39dfa106e094614cc2c95b8759f1`
+- Latest merged milestone: PR #71 — reject non-finite WMS stock consumption quantities
 - Product version remains: `1.0.4`
 - Merged-main Vercel status: PASS
 
-The PR #56 head commit `43d470c3c62b99521b50ba76310a30665525b22d` passed the full automated gate set before merge:
+The **main-push** workflow set for `1f511bc1971a39dfa106e094614cc2c95b8759f1` passed:
 
-- CI: run `35688221560` — PASS
-- Licensing Smoke: run `35688221567` — PASS
-- Windows Feature Click Smoke: run `35688221574` — PASS
-- Windows Deep Installed Smoke: run `35688221558` — PASS
+- CI #837: run `35841909601` — PASS
+- Licensing Smoke #304: run `35841909577` — PASS
+- Windows Feature Click Smoke #229: run `35841909652` — PASS
+- Windows Deep Installed Smoke #237: run `35841909653` — PASS
 
-These results validate the change set that was merged into the current main baseline. Physical customer-PC UAT remains a separate owner gate.
+These runs validate the merged main commit itself, not only a pull-request head. Physical customer-PC UAT remains a separate owner gate.
 
-## Last packaged Windows delivery artifact
+## Current-main Windows installer artifact
 
-The last explicitly recorded final installer artifact predates the current main code baseline:
+Windows Deep Installed Smoke #237 packaged the current main commit and uploaded:
 
-- Packaged-code baseline: `4c8599db659dfa6798697ee530536072c23af8f9`
-- Windows installer: `MinarvaBiz-Setup-1.0.4.exe`
-- Installer SHA-256: `40ae5ee6546e3c9d6ad5a419127fdf961fecbf86027bb482b720a60dfb2f297b`
-- Final installer artifact: `minarvabiz-windows-installer-final` (artifact ID `10561709928`)
+- Packaged-code baseline: `1f511bc1971a39dfa106e094614cc2c95b8759f1`
+- Product version: `1.0.4`
+- Final installer artifact: `minarvabiz-windows-installer-final`
+- Artifact ID: `10741597173`
+- GitHub artifact digest: `sha256:2f3276cd036a6f51a6f3276605fdaea17ab5071cb5bb232890e4adba8fdc3ff7`
+- Artifact retention expiry: 2026-10-23
 
-Do not represent that older installer binary as an exact build of current main. Repackage from current main before shipping the later merged accounting, service/laundry, and Hybrid-sync changes to a customer.
+The digest above is GitHub's artifact-archive digest. It is not being represented as the inner `.exe` file hash. Before long-term customer delivery, preserve the chosen installer outside the temporary Actions retention window and record the executable SHA-256 separately if required.
 
 ## Automated release gates — PASS
 
