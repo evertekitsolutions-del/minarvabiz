@@ -6,7 +6,8 @@ import { PLAN_LIMITS } from "./limits";
 
 export interface ValidationResult {
   valid: boolean; payload: LicensePayload | null; reason?: string;
-  daysRemaining?: number | null; features: LicenseFeatures | null;
+  daysRemaining?: number | null; graceDaysRemaining?: number | null;
+  inGrace?: boolean; features: LicenseFeatures | null;
 }
 
 export async function validateLicenseLocally(
@@ -18,14 +19,26 @@ export async function validateLicenseLocally(
   if (payload.product !== "minarvabiz") return { valid: false, payload, reason: "Wrong product", features: null };
   if (payload.expiresAt && isExpired(payload.expiresAt)) {
     const graceDays = options?.graceDays ?? PLAN_LIMITS[payload.plan].graceDays;
-    if (graceDays > 0 && options?.lastOnlineValidation) {
-      const last = new Date(options.lastOnlineValidation).getTime();
-      if (Date.now() - last > graceDays * 86400000) {
-        return { valid: false, payload, reason: "License expired and grace period ended", daysRemaining: 0, features: null };
-      }
-    } else {
-      return { valid: false, payload, reason: "License expired", daysRemaining: 0, features: null };
+    const expires = new Date(payload.expiresAt).getTime();
+    const lastOnline = options?.lastOnlineValidation ? new Date(options.lastOnlineValidation).getTime() : NaN;
+    const graceAnchor = Number.isFinite(lastOnline) ? Math.max(expires, lastOnline) : NaN;
+    const graceUntil = Number.isFinite(graceAnchor) ? graceAnchor + graceDays * 86400000 : NaN;
+    const now = Date.now();
+    if (graceDays > 0 && Number.isFinite(graceUntil) && now <= graceUntil) {
+      return {
+        valid: true,
+        payload,
+        reason: "License expired — grace period active",
+        daysRemaining: 0,
+        graceDaysRemaining: Math.max(0, Math.ceil((graceUntil - now) / 86400000)),
+        inGrace: true,
+        features: payload.features,
+      };
     }
+    if (graceDays > 0 && options?.lastOnlineValidation) {
+      return { valid: false, payload, reason: "License expired and grace period ended", daysRemaining: 0, graceDaysRemaining: 0, features: null };
+    }
+    return { valid: false, payload, reason: "License expired", daysRemaining: 0, graceDaysRemaining: 0, features: null };
   }
   if (currentFingerprintHash && payload.deviceBindings.length > 0 && !payload.deviceBindings.includes(currentFingerprintHash)) {
     return { valid: false, payload, reason: "Device not activated for this license", features: null };
