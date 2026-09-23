@@ -72,25 +72,28 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
     bootstrapFromLocalStorage();
     const u = getSessionUser();
     const token = getSessionToken();
+    const runtimeMode = getRuntimeMode();
     if (u) {
       setUserName(u.fullName || u.email);
       setCurrentRole(u.role as Parameters<typeof setCurrentRole>[0]);
-    } else if (getRuntimeMode() === "demo") {
+    } else if (runtimeMode === "demo") {
       // Explicit demo mode is a non-production QA/demo environment. Give it an
       // admin role so the visible demo controls can execute real domain mutations.
       setUserName("Demo Admin");
       setCurrentRole("admin");
     }
-    void hydrateStoresFromSupabase(token).then((r) => {
-      if (r.ok) {
-        console.info("[minarvabiz]", r.message, r.counts);
-        phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
-      } else {
-        console.warn("[minarvabiz] Supabase hydration failed:", r.message);
-        phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining, syncError: r.message });
-      }
-      refreshNotificationCount();
-    });
+    if (runtimeMode !== "demo") {
+      void hydrateStoresFromSupabase(token).then((r) => {
+        if (r.ok) {
+          console.info("[minarvabiz]", r.message, r.counts);
+          phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
+        } else {
+          console.warn("[minarvabiz] Supabase hydration failed:", r.message);
+          phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining, syncError: r.message });
+        }
+        refreshNotificationCount();
+      });
+    }
     phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
     refreshNotificationCount();
     const notificationTimer = window.setInterval(() => {
