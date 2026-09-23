@@ -220,17 +220,17 @@ export function createProduct(input: Omit<Product, "id" | "createdAt" | "updated
     throw new Error("Opening stock value is out of range");
   }
 
-  const posting = openingValue > 0
+  const posting = openingStock > 0
     ? planAutomaticPosting({
         referenceType: "auto_opening_stock",
         referenceId: "opening-stock-" + id + "-create",
         date: createdAt,
         description: "Opening stock: " + input.name,
         branchId: input.branchId ?? null,
-        lines: [
+        lines: openingValue > 0 ? [
           { key: "inventory_asset", debit: openingValue },
           { key: "opening_balance_equity", credit: openingValue },
-        ],
+        ] : [],
       })
     : null;
   if (posting?.errors.length) throw new Error(posting.errors.join("; "));
@@ -243,7 +243,8 @@ export function createProduct(input: Omit<Product, "id" | "createdAt" | "updated
   };
   products.push(p);
 
-  if (posting && !posting.commit()) {
+  const openingJournal = posting?.commit() ?? null;
+  if (openingValue > 0 && !openingJournal) {
     products.splice(products.findIndex((product) => product.id === p.id), 1);
     throw new Error("Opening stock accounting posting failed");
   }
