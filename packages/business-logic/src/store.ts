@@ -9,7 +9,7 @@ import {
 } from "./sales";
 import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
-import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remoteCreateSale, remoteCreatePayment, remoteCollectCustomerPayment } from "./remote-write";
+import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remoteCreateSale, remoteCreatePayment, remoteCollectCustomerPayment, remoteAdjustStock } from "./remote-write";
 import { auditAction } from "./audit-actions";
 import { enqueueOutbox } from "./outbox-bridge";
 import { assertPermission } from "./permissions";
@@ -297,7 +297,7 @@ export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "a
   }
   p.stockQuantity = applyStockMovement(p.stockQuantity, type, quantity);
   touchProduct(p);
-  void remoteUpsertProduct(p);
+  void remoteAdjustStock({ ...p }, type, quantity, notes);
   auditAction("inventory.adjust", "products", p.id, { stockQuantity: before }, { stockQuantity: p.stockQuantity, type, quantity, notes: notes ?? null });
   return p;
 }
@@ -527,9 +527,7 @@ export function createSale(input: {
   if (salePayments.length) touchPersistence();
 
   accountingPlan.commit();
-  void remoteCreateSale(sale);
-  enqueueOutbox("sales", sale.id, "insert", sale);
-  for (const payment of salePayments) void remoteCreatePayment(payment);
+  void remoteCreateSale(sale, salePayments, Boolean(input.allowNegativeStock));
   auditAction("sale.create", "sales", sale.id, null, {
     total: sale.total,
     invoice: sale.invoiceNumber,
