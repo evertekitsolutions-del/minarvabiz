@@ -16,6 +16,11 @@ import {
 import { hydrateStoresFromSupabase } from "@/lib/data-source";
 import { SetupBanner } from "@/components/SetupBanner";
 
+const requireAuthByDefault =
+  process.env.NODE_ENV === "production"
+    ? process.env.NEXT_PUBLIC_REQUIRE_AUTH !== "false"
+    : process.env.NEXT_PUBLIC_REQUIRE_AUTH === "true";
+
 const pathToNav: Record<string, NavItemId> = {
   "/dashboard": "dashboard",
   "/sales": "sales",
@@ -97,7 +102,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const activeNav = pathToNav[pathname] ?? "dashboard";
 
   return (
-    <AuthGate requireAuth={process.env.NEXT_PUBLIC_REQUIRE_AUTH === "true"}>
+    <AuthGate requireAuth={requireAuthByDefault}>
       <ToastProvider>
         <ErrorBoundary>
           {searchOpen && searchResults.length > 0 && (
