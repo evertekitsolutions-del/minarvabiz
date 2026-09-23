@@ -1,70 +1,94 @@
 # Release readiness — Minarva Biz 1.0.4
 
-## Current main code baseline
+## Final release freeze
 
-- Main commit: `1f511bc1971a39dfa106e094614cc2c95b8759f1`
-- Latest merged milestone: PR #71 — reject non-finite WMS stock consumption quantities
-- Product version remains: `1.0.4`
-- Merged-main Vercel status: PASS
-
-The **main-push** workflow set for `1f511bc1971a39dfa106e094614cc2c95b8759f1` passed:
-
-- CI #837: run `35841909601` — PASS
-- Licensing Smoke #304: run `35841909577` — PASS
-- Windows Feature Click Smoke #229: run `35841909652` — PASS
-- Windows Deep Installed Smoke #237: run `35841909653` — PASS
-
-These runs validate the merged main commit itself, not only a pull-request head. Physical customer-PC UAT remains a separate owner gate.
-
-## Current-main Windows installer artifact
-
-Windows Deep Installed Smoke #237 packaged the current main commit and uploaded:
-
-- Packaged-code baseline: `1f511bc1971a39dfa106e094614cc2c95b8759f1`
+- Frozen runtime/code baseline: `1de0f3b198ff369efc06c530efc5afa8eef81835`
+- Latest merged runtime milestone: PR #81 — Post product opening stock through accounting
 - Product version: `1.0.4`
-- Final installer artifact: `minarvabiz-windows-installer-final`
-- Artifact ID: `10741597173`
-- GitHub artifact digest: `sha256:2f3276cd036a6f51a6f3276605fdaea17ab5071cb5bb232890e4adba8fdc3ff7`
-- Artifact retention expiry: 2026-10-23
+- GitHub-reported Vercel commit status on the frozen baseline: **PASS**
+- Feature hunting is closed for this release candidate. Further code changes require a reproducible release blocker found by testing.
+- PRs #15, #17 and #22 are stale/superseded and must not be merged.
 
-The digest above is GitHub's artifact-archive digest. It is not being represented as the inner `.exe` file hash. Before long-term customer delivery, preserve the chosen installer outside the temporary Actions retention window and record the executable SHA-256 separately if required.
+The release-freeze documentation may advance `main` after the code baseline above, but it must not change runtime behavior. The code baseline named above remains the frozen customer-delivery candidate unless UAT finds a blocker.
 
-## Automated release gates — PASS
+## Frozen-main automated evidence — PASS
 
-The current-main packaged baseline passed:
+The **main-push** workflows for `1de0f3b198ff369efc06c530efc5afa8eef81835` all completed successfully:
 
-- CI #837: run `35841909601` — PASS
-- Licensing Smoke #304: run `35841909577` — PASS
-- Windows Feature Click Smoke #229: run `35841909652` — PASS
-- Windows Deep Installed Smoke #237: run `35841909653` — PASS
+- CI #864: run `35886528870` — PASS
+- Licensing Smoke #331: run `35886528896` — PASS
+- Windows Feature Click Smoke #256: run `35886528903` — PASS
+- Windows Deep Installed Smoke #264: run `35886528950` — PASS
 
-Windows Deep Installed Smoke #237 built the NSIS installer, verified the production public verification key was bundled without private-key material, clean-installed the app, launched the installed executable, exercised installed UI/licensing flows, and uploaded the final installer artifact.
+These runs validate the merged main code baseline itself, not only the PR head.
 
-Windows Feature Click Smoke #229 exercised the installed desktop app through Chromium DevTools Protocol and passed the feature-level click workflow.
+## Final Windows installer evidence
+
+Windows Deep Installed Smoke #264 packaged the frozen main baseline and uploaded the final installer artifact:
+
+- Packaged-code baseline: `1de0f3b198ff369efc06c530efc5afa8eef81835`
+- Product version: `1.0.4`
+- Artifact: `minarvabiz-windows-installer-final`
+- Artifact ID: `10763560386`
+- Artifact size: `100429256` bytes
+- GitHub artifact digest: `sha256:7d6c574c7da064ab0fcc3d4b78602527b77329224b8415dda01618fcc37e8654`
+- Artifact created: 2026-09-23 16:11:48 UTC
+- Artifact retention expiry: 2026-10-23 16:11:44 UTC
+
+The digest above is GitHub's artifact-archive digest, not an independently recorded inner installer `.exe` SHA-256. Preserve the chosen customer-delivery installer outside the temporary Actions retention window and record the executable SHA-256 at delivery time if required.
+
+## What the automated gates cover
+
+Windows Deep Installed Smoke #264 built the NSIS installer, installed the application, launched the installed executable, exercised installed UI/licensing paths and uploaded the final installer artifact.
+
+Windows Feature Click Smoke #256 exercised the installed desktop application through the feature-level click workflow.
+
+CI #864 and Licensing Smoke #331 validate the repository build/test path and commercial licensing path for the frozen baseline.
+
+## Accounting completion included in the freeze
+
+PR #81 completed the last known planned code milestone before freeze:
+
+- Non-zero product opening stock is posted through accounting at product creation.
+- Positive opening value posts Inventory Asset debit / Opening Balance Equity credit.
+- Invalid or out-of-range opening stock/cost values are rejected.
+- Permission and posting-account preflight occurs before durable product mutation.
+- Failed positive-value posting rolls back the product mutation.
+- Zero stock and zero-value opening stock do not create an accounting journal.
+
+No additional code milestone is planned unless testing finds a real blocker.
 
 ## Licensing deployment
 
-The production license-admin service is hosted on Render. The desktop build fetches the production public key from the license-admin public-key endpoint and uses the Render HTTPS base URL for online activation/validation/deactivation.
+The production license-admin service remains the server-side signing/activation boundary. Desktop builds contain only public verification material; private signing material is not bundled into the client.
 
-Production private signing material remains server-side. The commercial build refuses a missing/invalid public key and refuses the repository fallback key.
+Commercial activation/validation/deactivation, offline license handling and licensing smoke coverage are part of the existing release path.
 
-## Supabase production state
+## Supabase / online-hybrid state
 
-The live Minarva Biz Supabase project is healthy and RLS security advisor currently reports no security findings. The database contains the licensing/trial schema and tenant-aware business schema.
+Repository migrations contain the tenant-aware business schema, licensing/trial schema, accounting additions and later operational/WMS migrations accumulated through the current development cycle.
 
-A final tenant-policy alignment migration is kept in the repository so a fresh deployment reaches the same hardened RLS/default behavior as production.
+Production-environment correctness still requires real Auth/tenant UAT with representative data. Automated source/build evidence does not replace that external validation.
 
-## Remaining owner/UAT gates
+## Remaining owner / physical UAT gates
 
-Repository automation does **not** replace these physical/environment checks:
+The following are intentionally **not** additional feature-development milestones:
 
-- Issue one real commercial test license and perform online activation on the target Windows PC.
-- Test offline `.lic` activation, deactivation and PC replacement.
-- Verify restart persistence and a manual backup/restore drill on the actual customer PC.
+- Install the frozen 1.0.4 installer on the intended Windows/customer test PC.
+- Issue one real commercial test license and verify online activation.
+- Verify offline `.lic` activation, restart/grace behavior, deactivation and PC replacement.
+- Perform a restart-persistence test and manual backup/restore drill.
 - Verify real printer/thermal-printer output where required.
-- Online/hybrid production still needs an actual Supabase Auth user and tenant-isolation UAT with representative data.
-- Windows code signing is not configured; unsigned builds can show Windows SmartScreen/Unknown Publisher warnings.
+- For online/hybrid use, test Supabase Auth and tenant isolation with representative data.
+- Record any genuine regression with reproducible evidence; only such a blocker reopens code work.
+- Windows code signing remains a delivery/operations consideration; unsigned builds can show SmartScreen/Unknown Publisher warnings.
+
+## Vercel verification note
+
+GitHub reports the Vercel commit status for the frozen baseline as `success` with deployment target `4rX4gtVENVj9yCun5J4kQrywAZtF`.
+
+Direct Vercel connected-app inspection was unavailable at the freeze checkpoint because the connected team scope required re-authentication. This does not change the GitHub-reported successful deployment status; it only limits direct Vercel-account inspection from this checkpoint.
 
 ## Version policy
 
-`1.0.4` remains the customer-delivery candidate because no public GitHub release has been published yet. If a customer receives a different binary after 1.0.4 is formally released, increment the product version before distributing it.
+`1.0.4` remains the customer-delivery candidate. Do not add features after this freeze under the same candidate baseline. If a blocker requires a runtime change after customer/public release, increment the product version as appropriate before distributing the changed binary.
