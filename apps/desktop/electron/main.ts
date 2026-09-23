@@ -38,6 +38,13 @@ async function printHtmlDocument(input: {
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
   });
   try {
+    const deviceName = String(input?.deviceName || "").trim();
+    if (deviceName) {
+      const printers = await win.webContents.getPrintersAsync();
+      if (!printers.some((printer) => printer.name === deviceName)) {
+        return { ok: false, error: `Configured printer was not found: ${deviceName}` };
+      }
+    }
     await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
     const pageSize: Electron.WebContentsPrintOptions["pageSize"] =
       paper === "a4" ? "A4" : { width: thermalWidthMm * 1000, height: 297000 };
@@ -45,7 +52,7 @@ async function printHtmlDocument(input: {
       win.webContents.print({
         silent: true,
         printBackground: true,
-        deviceName: input.deviceName || undefined,
+        deviceName: deviceName || undefined,
         margins: { marginType: "none" },
         pageSize,
       }, (success, failureReason) => {
