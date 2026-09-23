@@ -189,8 +189,18 @@ export function getProductByBarcode(barcode: string): Product | undefined {
   return products.find((p) => p.barcode === barcode && !p.deletedAt && p.isActive);
 }
 
+function assertFiniteProductNumerics(input: Partial<Product>): void {
+  for (const field of ["costPrice", "sellingPrice", "discount", "taxRate", "stockQuantity", "minimumStock"] as const) {
+    const value = input[field];
+    if (value != null && !Number.isFinite(value)) {
+      throw new Error(`Product ${field} must be a finite number`);
+    }
+  }
+}
+
 export function createProduct(input: Omit<Product, "id" | "createdAt" | "updatedAt" | "deletedAt" | "version">): Product {
   assertPermission("products.manage");
+  assertFiniteProductNumerics(input);
   const p: Product = {
     parentProductId: (input as Product).parentProductId ?? null,
     hasVariants: (input as Product).hasVariants ?? false,
@@ -205,6 +215,7 @@ export function createProduct(input: Omit<Product, "id" | "createdAt" | "updated
 
 export function updateProduct(id: UUID, patch: Partial<Product>): Product | null {
   assertPermission("products.manage");
+  assertFiniteProductNumerics(patch);
   const p = getProduct(id);
   if (!p) return null;
   const before = { ...p };
