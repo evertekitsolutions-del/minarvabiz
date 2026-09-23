@@ -273,7 +273,7 @@ export function reserveWarehouseStock(input: {
   const qty = roundQty(input.quantity);
   const errors: string[] = [];
   if (!position) errors.push("Stock position not found");
-  if (qty <= 0) errors.push("Quantity must be greater than zero");
+  if (!Number.isFinite(qty) || qty <= 0) errors.push("Quantity must be a finite number greater than zero");
   if (position && position.onHand - position.reserved < qty) errors.push("Not enough available stock");
   if (errors.length || !position) return { position: null, errors };
   const before = { ...position };
@@ -292,8 +292,10 @@ export function releaseWarehouseReservation(input: {
   assertPermission("inventory.adjust");
   const position = positionFor(input.locationId, input.productId);
   if (!position) return null;
+  const qty = roundQty(input.quantity);
+  if (!Number.isFinite(qty) || qty <= 0) return { ...position };
   const before = { ...position };
-  position.reserved = roundQty(Math.max(0, position.reserved - Math.max(0, input.quantity)));
+  position.reserved = roundQty(Math.max(0, position.reserved - qty));
   persistStockPosition(position);
   auditAction("warehouse.stock.release", "warehouse_stock", position.id, before, position);
   touchPersistence();
