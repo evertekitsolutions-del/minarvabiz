@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const main = fs.readFileSync(new URL("../../../../apps/desktop/electron/main.ts", import.meta.url), "utf8");
-const settings = fs.readFileSync(new URL("../../ui/src/components/settings/SettingsPanel.tsx", import.meta.url), "utf8");
+const settings = fs.readFileSync(new URL("../../../ui/src/components/settings/SettingsPanel.tsx", import.meta.url), "utf8");
 
 const printStart = main.indexOf("async function printHtmlDocument");
 const trialStart = main.indexOf("type TrialRegistration", printStart);
