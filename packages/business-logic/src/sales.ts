@@ -149,6 +149,8 @@ export function validateCart(lines: CartLine[], options?: { allowNegativeStock?:
   for (const line of lines) {
     if (!Number.isFinite(line.quantity) || line.quantity <= 0) errors.push(`${line.productName}: quantity must be positive`);
     if (!Number.isFinite(line.unitPrice) || line.unitPrice < 0) errors.push(`${line.productName}: price cannot be negative`);
+    if (!Number.isFinite(line.discountPercent)) errors.push(`${line.productName}: discount must be a finite number`);
+    if (!Number.isFinite(line.taxRate)) errors.push(`${line.productName}: tax rate must be a finite number`);
     if (!options?.allowNegativeStock && line.quantity > line.stockQuantity) {
       errors.push(`${line.productName}: insufficient stock (available ${line.stockQuantity})`);
     }
