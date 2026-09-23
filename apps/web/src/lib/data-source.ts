@@ -651,11 +651,8 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
           created_by: purchaseOrder.createdBy ?? null,
           version: purchaseOrder.version,
         };
-        const updated = await pgUpdate<Record<string, unknown>>(cfg, "purchase_orders", `id=eq.${purchaseOrder.id}`, row);
-        if (updated.error || !updated.data?.length) {
-          const inserted = await pgInsert<Record<string, unknown>>(cfg, "purchase_orders", { id: purchaseOrder.id, ...row });
-          if (inserted.error) throw new Error(inserted.error.message);
-        }
+        const { version: _purchaseOrderVersion, ...purchaseOrderRow } = row;
+        await optimisticVersionUpsert(cfg, "purchase_orders", purchaseOrder.id, purchaseOrder.version, purchaseOrderRow, "Purchase order");
         for (const line of purchaseOrder.lines) {
           const lineRow = {
             purchase_order_id: purchaseOrder.id,
@@ -671,11 +668,15 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
             updated_at: purchaseOrder.updatedAt,
             version: purchaseOrder.version,
           };
-          const lineUpdated = await pgUpdate<Record<string, unknown>>(cfg, "purchase_order_lines", `id=eq.${line.id}`, lineRow);
-          if (lineUpdated.error || !lineUpdated.data?.length) {
-            const lineInserted = await pgInsert<Record<string, unknown>>(cfg, "purchase_order_lines", { id: line.id, ...lineRow, created_at: purchaseOrder.createdAt });
-            if (lineInserted.error) throw new Error(lineInserted.error.message);
-          }
+          const { version: _lineVersion, ...purchaseOrderLineRow } = lineRow;
+          await optimisticVersionUpsert(
+            cfg,
+            "purchase_order_lines",
+            line.id,
+            purchaseOrder.version,
+            { ...purchaseOrderLineRow, created_at: purchaseOrder.createdAt },
+            "Purchase order line"
+          );
         }
       },
       upsertGoodsReceipt: async (receipt) => {
@@ -693,11 +694,8 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
           created_by: receipt.createdBy ?? null,
           version: receipt.version,
         };
-        const updated = await pgUpdate<Record<string, unknown>>(cfg, "goods_receipts", `id=eq.${receipt.id}`, row);
-        if (updated.error || !updated.data?.length) {
-          const inserted = await pgInsert<Record<string, unknown>>(cfg, "goods_receipts", { id: receipt.id, ...row });
-          if (inserted.error) throw new Error(inserted.error.message);
-        }
+        const { version: _receiptVersion, ...receiptRow } = row;
+        await optimisticVersionUpsert(cfg, "goods_receipts", receipt.id, receipt.version, receiptRow, "Goods receipt");
         for (const line of receipt.lines) {
           const lineRow = {
             goods_receipt_id: receipt.id,
@@ -742,11 +740,8 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
           created_by: invoice.createdBy ?? null,
           version: invoice.version,
         };
-        const updated = await pgUpdate<Record<string, unknown>>(cfg, "purchase_invoices", `id=eq.${invoice.id}`, row);
-        if (updated.error || !updated.data?.length) {
-          const inserted = await pgInsert<Record<string, unknown>>(cfg, "purchase_invoices", { id: invoice.id, ...row });
-          if (inserted.error) throw new Error(inserted.error.message);
-        }
+        const { version: _invoiceVersion, ...invoiceRow } = row;
+        await optimisticVersionUpsert(cfg, "purchase_invoices", invoice.id, invoice.version, invoiceRow, "Purchase invoice");
         for (const line of invoice.lines) {
           const lineRow = {
             purchase_invoice_id: invoice.id,
@@ -762,11 +757,15 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
             updated_at: invoice.updatedAt,
             version: invoice.version,
           };
-          const lineUpdated = await pgUpdate<Record<string, unknown>>(cfg, "purchase_invoice_lines", `id=eq.${line.id}`, lineRow);
-          if (lineUpdated.error || !lineUpdated.data?.length) {
-            const lineInserted = await pgInsert<Record<string, unknown>>(cfg, "purchase_invoice_lines", { id: line.id, ...lineRow, created_at: invoice.createdAt });
-            if (lineInserted.error) throw new Error(lineInserted.error.message);
-          }
+          const { version: _invoiceLineVersion, ...purchaseInvoiceLineRow } = lineRow;
+          await optimisticVersionUpsert(
+            cfg,
+            "purchase_invoice_lines",
+            line.id,
+            invoice.version,
+            { ...purchaseInvoiceLineRow, created_at: invoice.createdAt },
+            "Purchase invoice line"
+          );
         }
       },
       upsertAccountingAccount: async (account) => {
@@ -784,11 +783,8 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
           deleted_at: account.deletedAt ?? null,
           version: account.version,
         };
-        const updated = await pgUpdate<Record<string, unknown>>(cfg, "accounts", `id=eq.${account.id}`, row);
-        if (updated.error || !updated.data?.length) {
-          const inserted = await pgInsert<Record<string, unknown>>(cfg, "accounts", { id: account.id, ...row });
-          if (inserted.error) throw new Error(inserted.error.message);
-        }
+        const { version: _accountVersion, ...accountRow } = row;
+        await optimisticVersionUpsert(cfg, "accounts", account.id, account.version, accountRow, "Accounting account");
       },
       upsertJournalEntry: async (entry) => {
         const row = {
@@ -809,11 +805,8 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
           updated_at: entry.updatedAt,
           version: entry.version,
         };
-        const updated = await pgUpdate<Record<string, unknown>>(cfg, "journal_entries", `id=eq.${entry.id}`, row);
-        if (updated.error || !updated.data?.length) {
-          const inserted = await pgInsert<Record<string, unknown>>(cfg, "journal_entries", { id: entry.id, ...row });
-          if (inserted.error) throw new Error(inserted.error.message);
-        }
+        const { version: _entryVersion, ...journalRow } = row;
+        await optimisticVersionUpsert(cfg, "journal_entries", entry.id, entry.version, journalRow, "Journal entry");
         for (const line of entry.lines) {
           const lineRow = {
             journal_entry_id: entry.id,
@@ -851,11 +844,8 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
         deleted_at: account.deletedAt ?? null,
         version: account.version,
       };
-      const updated = await pgUpdate<Record<string, unknown>>(cfg, "accounts", `id=eq.${account.id}`, row);
-      if (updated.error || !updated.data?.length) {
-        const inserted = await pgInsert<Record<string, unknown>>(cfg, "accounts", { id: account.id, ...row });
-        if (inserted.error) throw new Error(inserted.error.message);
-      }
+      const { version: _bootstrapAccountVersion, ...bootstrapAccountRow } = row;
+      await optimisticVersionUpsert(cfg, "accounts", account.id, account.version, bootstrapAccountRow, "Accounting account bootstrap");
     }
     return { ok: true, message: "Hydrated from Supabase", counts: { customers: customers.length, products: products.length, categories: categoriesRes.data?.length || 0, sales: sales.length, orders: orders.length, expenses: expensesRes.data?.length || 0, purchases: purchasesRes.data?.length || 0, suppliers: suppliersRes.data?.length || 0, laundry: laundryRes.data?.length || 0, staff: staffRes.data?.length || 0, payments: paymentsRes.data?.length || 0, warehouses: warehousesRes.data?.length || 0, warehouseLocations: warehouseLocationsRes.data?.length || 0, warehouseStock: warehouseStockRes.data?.length || 0, warehouseTransfers: warehouseTransfersRes.data?.length || 0, purchaseOrders: purchaseOrdersRes.data?.length || 0, goodsReceipts: goodsReceiptsRes.data?.length || 0, purchaseInvoices: purchaseInvoicesRes.data?.length || 0, accounts: accountingStore.listAccounts().length, journals: journalEntriesRes.data?.length || 0 } };
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : String(e) }; }
