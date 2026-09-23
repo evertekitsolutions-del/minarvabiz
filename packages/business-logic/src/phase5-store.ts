@@ -121,13 +121,16 @@ export function recordSupplierPayment(input: {
   }
   const invoicePlan = prepareSupplierInvoiceSettlements(supplier.id, allocations.filter(a => a.type === "invoice"));
   if (invoicePlan.errors.length) return { payment: null, supplier: null, errors: invoicePlan.errors };
-  const documentOutstanding = r2(allCandidates.reduce((sum, candidate) => sum + candidate.balance, 0));
-  const otherOutstanding = r2(Math.max(0, supplier.outstandingBalance - documentOutstanding));
-  const postedOpeningOutstanding = r2(Math.min(otherOutstanding, supplierOpeningPayableBalance(supplier.id)));
-  const legacyOutstanding = r2(Math.max(0, otherOutstanding - postedOpeningOutstanding));
-  const otherApplied = r2(Math.max(0, remaining));
-  const legacyApplied = r2(Math.min(otherApplied, legacyOutstanding));
-  const openingApplied = r2(Math.max(0, otherApplied - legacyApplied));
+  let openingApplied = 0;
+  if (remaining > 0) {
+    const documentOutstanding = r2(allCandidates.reduce((sum, candidate) => sum + candidate.balance, 0));
+    const otherOutstanding = r2(Math.max(0, supplier.outstandingBalance - documentOutstanding));
+    const postedOpeningOutstanding = r2(Math.min(otherOutstanding, supplierOpeningPayableBalance(supplier.id)));
+    const legacyOutstanding = r2(Math.max(0, otherOutstanding - postedOpeningOutstanding));
+    const otherApplied = r2(remaining);
+    const legacyApplied = r2(Math.min(otherApplied, legacyOutstanding));
+    openingApplied = r2(Math.max(0, otherApplied - legacyApplied));
+  }
   const allocationNotes = allocations.length ? "Documents: " + allocations.map(a => `${a.number} ${a.amount.toFixed(2)}`).join(", ") : null;
   const paymentId = generateId();
   const posting = planSupplierPaymentPosting({ id: paymentId, amount: applied, method: input.paymentMethod, date, allocations, openingAmount: openingApplied });
