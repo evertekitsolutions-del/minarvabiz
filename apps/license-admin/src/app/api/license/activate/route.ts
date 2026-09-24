@@ -31,6 +31,15 @@ async function readBody(request: Request): Promise<Record<string, unknown> | nul
 
 export async function POST(request: Request) {
   try {
+    const contentType = request.headers.get("content-type") || "";
+    if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
+      return NextResponse.json({ ok: false, code: "UNSUPPORTED_MEDIA_TYPE" }, { status: 415 });
+    }
+    const declaredLength = Number(request.headers.get("content-length") || 0);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+      return NextResponse.json({ ok: false, code: "REQUEST_TOO_LARGE" }, { status: 413 });
+    }
+
     const body = await readBody(request);
     if (!body) return NextResponse.json({ ok: false, code: "INVALID_REQUEST" }, { status: 400 });
 
