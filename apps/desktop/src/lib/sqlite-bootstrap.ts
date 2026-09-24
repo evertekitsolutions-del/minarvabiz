@@ -86,7 +86,7 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
     setRuntimeMode("production");
 
     const api = typeof window !== "undefined" ? window.minarvaDesktop : undefined;
-    if (!api?.getSqlitePath || !api.readSqliteBinary || !api.writeSqliteBinary) {
+    if (!api?.readSqliteBinary || !api.writeSqliteBinary) {
       throw new Error(
         "Electron SQLite IPC missing. Offline production requires the Minarva Biz desktop shell."
       );
@@ -95,7 +95,7 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
     const deviceId = (await api.getDeviceId?.()) || "desktop-win";
     setOutboxDeviceId(deviceId);
 
-    const dbPath = await api.getSqlitePath();
+    const dbPath = "minarvabiz.db";
     const existing = await api.readSqliteBinary();
     const bytes: Uint8Array | null =
       existing == null
@@ -139,11 +139,10 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
     initError = null;
 
     try {
-      if (shouldRunAutoBackup() && api.backupSqlite) {
-        const dest = `${dbPath}.bak-${Date.now()}`;
-        void api.backupSqlite(dest).then((ok: boolean) => {
-          if (ok) recordBackupSuccess(dest, "auto");
-          else recordBackupFailure("Auto backup returned false");
+      if (shouldRunAutoBackup() && api.createAutomaticBackup) {
+        void api.createAutomaticBackup().then((result) => {
+          if (result.ok && result.path) recordBackupSuccess(result.path, "auto", result.sizeBytes);
+          else if (!result.cancelled) recordBackupFailure(result.error || "Automatic backup returned no verified file");
         });
       }
     } catch (e) {

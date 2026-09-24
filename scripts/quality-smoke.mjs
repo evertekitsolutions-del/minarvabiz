@@ -41,6 +41,9 @@ const activationRoute = read("apps/license-admin/src/app/api/license/activate/ro
 const trialRoute = read("apps/license-admin/src/app/api/trial/register/route.ts");
 const activationMigration = read("supabase/migrations/20260911_license_activation_atomicity.sql");
 const settingsPanel = read("packages/ui/src/components/settings/SettingsPanel.tsx");
+const trialGateSource = read("packages/ui/src/components/licensing/TrialGate.tsx");
+const windowsInstalledSmoke = read("scripts/windows-installed-deep-smoke.mjs");
+const windowsPopulatedSmoke = read("scripts/windows-populated-deep-smoke.mjs");
 const nav = read("packages/ui/src/lib/nav.ts");
 
 assert(!desktopSource.includes("minarvabiz-db.json"), "Legacy JSON database reference exists in desktop source");
@@ -50,6 +53,16 @@ assert(mainSource.includes("MINARVA_EXTERNAL_URL_HOSTS") && mainSource.includes(
 assert(mainSource.includes('win.webContents.on("will-navigate"') && mainSource.includes("openAllowedExternalUrl(url)"), "Renderer navigation must be blocked or explicitly externalized through the allowlist");
 assert(mainSource.includes("registerDesktopLicenseIpc(getDeviceId, requireTrustedRenderer)"), "License IPC must use the centralized trusted-renderer guard");
 assert(!desktopLicenseSource.includes("isTrustedLicenseSender") && desktopLicenseSource.includes("requireTrustedRenderer(event)"), "License IPC must not maintain a weaker duplicate sender-validation policy");
+assert(!preloadSource.includes('getPath: (name: string)') && !preloadSource.includes('getSqlitePath:') && !preloadSource.includes('getTrialDeviceId:') && !preloadSource.includes('backupSqlite:'), "Preload bridge re-exposed removed filesystem/device capabilities");
+assert(!mainSource.includes('ipcMain.handle("app:getPath"') && !mainSource.includes('ipcMain.handle("db:sqlitePath"') && !mainSource.includes('ipcMain.handle("db:backupSqlite"') && !mainSource.includes('ipcMain.handle("app:getTrialDeviceId"'), "Removed privileged IPC channels returned");
+assert(mainSource.includes("MAX_SQLITE_IPC_BYTES") && preloadSource.includes("MAX_SQLITE_IPC_BYTES") && mainSource.includes("data.byteLength > MAX_SQLITE_IPC_BYTES"), "SQLite IPC payload bounds are missing");
+assert(mainSource.includes("MAX_TRIAL_EMAIL_CHARS") && mainSource.includes("MAX_TRIAL_ADDRESS_CHARS"), "Trial IPC field bounds are missing");
+assert(mainSource.includes("MAX_BACKUP_ID_CHARS") && mainSource.includes("Backup identifier is invalid"), "Backup export identifier validation is missing");
+assert(mainSource.includes("MAX_PRINT_HTML_CHARS") && mainSource.includes("MAX_PRINTER_DEVICE_CHARS"), "Printer IPC bounds are missing");
+assert(desktopLicenseSource.includes("MAX_LICENSE_TOKEN_CHARS") && desktopLicenseSource.includes("MAX_LICENSE_PACKAGE_CHARS"), "License IPC payload bounds are missing");
+assert(sqliteBootstrap.includes('const dbPath = "minarvabiz.db"') && sqliteBootstrap.includes("api.createAutomaticBackup") && !sqliteBootstrap.includes("api.getSqlitePath") && !sqliteBootstrap.includes("api.backupSqlite"), "SQLite bootstrap still depends on renderer filesystem-path capabilities");
+assert(trialGateSource.includes("MAX_LICENSE_PACKAGE_BYTES") && trialGateSource.includes("file.size > MAX_LICENSE_PACKAGE_BYTES") && trialGateSource.includes("maxLength={MAX_LICENSE_TOKEN_CHARS}"), "License/trial UI input caps are missing");
+assert(!windowsInstalledSmoke.includes("getTrialDeviceId") && !windowsPopulatedSmoke.includes("getTrialDeviceId"), "Windows smoke tests still depend on removed trial-device bridge");
 assert(!desktopSource.includes('db:read"') && !desktopSource.includes('db:write"'), "Legacy db:read/db:write IPC returned");
 assert(preloadSource.includes("writeSqliteBinary"), "SQLite binary write bridge is missing");
 assert(sqliteBootstrap.includes("persistDomainToSqlite(): Promise<boolean>"), "SQLite persistence must be awaitable");

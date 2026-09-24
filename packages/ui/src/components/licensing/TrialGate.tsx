@@ -1,5 +1,8 @@
 import * as React from "react";
 
+const MAX_LICENSE_TOKEN_CHARS = 64 * 1024;
+const MAX_LICENSE_PACKAGE_BYTES = 256 * 1024;
+
 export type TrialRegistration = {
   email: string;
   phone: string;
@@ -80,6 +83,10 @@ export function TrialGate({ state, onActivate }: Props) {
     setLicenseError(null);
     setLicenseBusy(true);
     try {
+      if (file.size > MAX_LICENSE_PACKAGE_BYTES) {
+        setLicenseError("The selected .lic activation file is too large.");
+        return;
+      }
       if (!file.name.toLowerCase().endsWith(".lic")) {
         setLicenseError("Please select a Minarva Biz .lic activation file.");
         return;
@@ -108,6 +115,7 @@ export function TrialGate({ state, onActivate }: Props) {
         className="mt-4 w-full rounded-lg border border-slate-300 p-3 font-mono text-xs"
         placeholder="Paste license token here…"
         value={licenseToken}
+        maxLength={MAX_LICENSE_TOKEN_CHARS}
         onChange={(e) => setLicenseToken(e.target.value)}
       />
       <div className="mt-3 flex flex-col gap-3 sm:flex-row">
@@ -239,19 +247,19 @@ export function TrialGate({ state, onActivate }: Props) {
         <form className="space-y-4" onSubmit={submit}>
           <label className="block text-sm font-medium text-slate-700">
             Email address
-            <input type="email" required autoComplete="email" className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <input type="email" required maxLength={254} autoComplete="email" className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </label>
           <label className="block text-sm font-medium text-slate-700">
             Phone number
-            <input type="tel" required autoComplete="tel" className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <input type="tel" required maxLength={50} autoComplete="tel" className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           </label>
           <label className="block text-sm font-medium text-slate-700">
             Organization / business name
-            <input required className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" value={form.organizationName} onChange={(e) => setForm({ ...form, organizationName: e.target.value })} />
+            <input required maxLength={200} className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3" value={form.organizationName} onChange={(e) => setForm({ ...form, organizationName: e.target.value })} />
           </label>
           <label className="block text-sm font-medium text-slate-700">
             Business address
-            <textarea required rows={3} className="mt-1 w-full rounded-lg border border-slate-300 p-3" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+            <textarea required rows={3} maxLength={2000} className="mt-1 w-full rounded-lg border border-slate-300 p-3" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
           </label>
           {error && <div className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
           <button disabled={busy} className="h-11 w-full rounded-lg bg-blue-600 px-4 font-semibold text-white disabled:opacity-60">

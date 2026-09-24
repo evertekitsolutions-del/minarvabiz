@@ -5,6 +5,10 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 
+const MAX_SQLITE_IPC_BYTES = 256 * 1024 * 1024;
+const MAX_LICENSE_TOKEN_CHARS = 64 * 1024;
+const MAX_LICENSE_PACKAGE_CHARS = 256 * 1024;
+
 export type TrialRegistration = {
   email: string;
   phone: string;
@@ -33,24 +37,33 @@ export type DesktopLicenseState = {
   activationId?: string;
 };
 
+function invalidLicenseState(reason: string): DesktopLicenseState {
+  return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason };
+}
+
 contextBridge.exposeInMainWorld("minarvaDesktop", {
   getVersion: () => ipcRenderer.invoke("app:getVersion"),
-  getPath: (name: string) => ipcRenderer.invoke("app:getPath", name),
   platform: process.platform,
-  getSqlitePath: () => ipcRenderer.invoke("db:getSqlitePath") as Promise<string>,
   getDeviceId: () => ipcRenderer.invoke("app:getDeviceId") as Promise<string>,
-  getTrialDeviceId: () => ipcRenderer.invoke("app:getTrialDeviceId") as Promise<string>,
   getTrialState: () => ipcRenderer.invoke("trial:getState") as Promise<TrialState>,
   activateTrial: (registration: TrialRegistration) => ipcRenderer.invoke("trial:activate", registration) as Promise<{ ok: boolean; error?: string; state?: TrialState }>,
   markTrialSynced: () => ipcRenderer.invoke("trial:markSynced") as Promise<boolean>,
   getLicenseState: () => ipcRenderer.invoke("license:getState") as Promise<DesktopLicenseState>,
-  activateLicenseToken: (token: string) => ipcRenderer.invoke("license:activateToken", token) as Promise<DesktopLicenseState>,
-  activateLicensePackage: (content: string) => ipcRenderer.invoke("license:activatePackage", content) as Promise<DesktopLicenseState>,
+  activateLicenseToken: (token: string) => {
+    if (typeof token !== "string" || token.length > MAX_LICENSE_TOKEN_CHARS) return Promise.resolve(invalidLicenseState("License token is too large"));
+    return ipcRenderer.invoke("license:activateToken", token) as Promise<DesktopLicenseState>;
+  },
+  activateLicensePackage: (content: string) => {
+    if (typeof content !== "string" || content.length > MAX_LICENSE_PACKAGE_CHARS) return Promise.resolve(invalidLicenseState("Offline license package is too large"));
+    return ipcRenderer.invoke("license:activatePackage", content) as Promise<DesktopLicenseState>;
+  },
   deactivateLicense: () => ipcRenderer.invoke("license:deactivate") as Promise<boolean>,
   readSqliteBinary: () => ipcRenderer.invoke("db:readBinary") as Promise<Uint8Array | null>,
-  writeSqliteBinary: (data: Uint8Array) => ipcRenderer.invoke("db:writeBinary", data) as Promise<boolean>,
+  writeSqliteBinary: (data: Uint8Array) => {
+    if (!(data instanceof Uint8Array) || data.byteLength === 0 || data.byteLength > MAX_SQLITE_IPC_BYTES) return Promise.resolve(false);
+    return ipcRenderer.invoke("db:writeBinary", data) as Promise<boolean>;
+  },
   sqliteExists: () => ipcRenderer.invoke("db:exists") as Promise<boolean>,
-  backupSqlite: (dest: string) => ipcRenderer.invoke("db:backupSqlite", dest) as Promise<boolean>,
   listBackups: () => ipcRenderer.invoke("backup:list") as Promise<NativeBackupMeta[]>,
   createManualBackup: () => ipcRenderer.invoke("backup:createManual") as Promise<NativeBackupResult>,
   exportBackup: (id: string) => ipcRenderer.invoke("backup:export", id) as Promise<NativeBackupResult>,
@@ -83,11 +96,8 @@ export type UpdateDownloadResult = { ok: boolean; version?: string; installerPat
 
 export type MinarvaDesktopApi = {
   getVersion: () => Promise<string>;
-  getPath: (name: string) => Promise<string | null>;
   platform: NodeJS.Platform;
-  getSqlitePath: () => Promise<string>;
   getDeviceId?: () => Promise<string>;
-  getTrialDeviceId?: () => Promise<string>;
   getTrialState: () => Promise<TrialState>;
   activateTrial: (registration: TrialRegistration) => Promise<{ ok: boolean; error?: string; state?: TrialState }>;
   markTrialSynced: () => Promise<boolean>;
@@ -98,7 +108,6 @@ export type MinarvaDesktopApi = {
   readSqliteBinary: () => Promise<Uint8Array | null>;
   writeSqliteBinary: (data: Uint8Array) => Promise<boolean>;
   sqliteExists: () => Promise<boolean>;
-  backupSqlite: (dest: string) => Promise<boolean>;
   listBackups: () => Promise<NativeBackupMeta[]>;
   createManualBackup: () => Promise<NativeBackupResult>;
   exportBackup: (id: string) => Promise<NativeBackupResult>;

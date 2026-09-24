@@ -10,6 +10,14 @@ import { minarvaBackupSchemaError } from "./sqlite-backup-validation";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 const runtimeSmoke = process.env.MINARVA_RUNTIME_SMOKE === "1";
+const MAX_SQLITE_IPC_BYTES = 256 * 1024 * 1024;
+const MAX_TRIAL_EMAIL_CHARS = 254;
+const MAX_TRIAL_PHONE_CHARS = 50;
+const MAX_TRIAL_ORG_CHARS = 200;
+const MAX_TRIAL_ADDRESS_CHARS = 2000;
+const MAX_BACKUP_ID_CHARS = 255;
+const MAX_PRINT_HTML_CHARS = 2_000_000;
+const MAX_PRINTER_DEVICE_CHARS = 256;
 function deviceIdPath() { return path.join(app.getPath("userData"), "device-id"); }
 function trialStatePath() { return path.join(app.getPath("userData"), "trial-state.bin"); }
 function sqlitePath() { return path.join(app.getPath("userData"), "minarvabiz.db"); }
@@ -66,7 +74,9 @@ async function printHtmlDocument(input: {
   thermalWidthMm?: number;
 }): Promise<{ ok: boolean; error?: string }> {
   const html = String(input?.html || "");
-  if (!html || html.length > 2_000_000) return { ok: false, error: "Print document is empty or too large" };
+  if (!html || html.length > MAX_PRINT_HTML_CHARS) return { ok: false, error: "Print document is empty or too large" };
+  const deviceName = String(input?.deviceName || "").trim();
+  if (deviceName.length > MAX_PRINTER_DEVICE_CHARS) return { ok: false, error: "Printer name is too long" };
   const paper = input?.paper === "thermal" ? "thermal" : "a4";
   const thermalWidthMm = input?.thermalWidthMm === 58 ? 58 : 80;
   const win = new BrowserWindow({
@@ -76,7 +86,6 @@ async function printHtmlDocument(input: {
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
   });
   try {
-    const deviceName = String(input?.deviceName || "").trim();
     if (deviceName) {
       const printers = await win.webContents.getPrintersAsync();
       if (!printers.some((printer) => printer.name === deviceName)) {
@@ -153,7 +162,7 @@ function createWindow() {
     runtimeSmokeLog("did-finish-load");
     if (runtimeSmoke) {
       try {
-        const bridgeReady = await win.webContents.executeJavaScript("Boolean(window.minarvaDesktop && typeof window.minarvaDesktop.getSqlitePath === 'function')", true);
+        const bridgeReady = await win.webContents.executeJavaScript("Boolean(window.minarvaDesktop && typeof window.minarvaDesktop.getVersion === 'function')", true);
         runtimeSmokeLog(`bridge-ready=${bridgeReady}`);
         await verifyRendererReady(win);
       } catch (error) {
@@ -195,21 +204,67 @@ app.whenReady().then(() => { Menu.setApplicationMenu(null); runtimeSmokeLog(`app
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 
 ipcMain.handle("app:getVersion", (event) => { requireTrustedRenderer(event); return app.getVersion(); });
-ipcMain.handle("app:getPath", (event, name: string) => { requireTrustedRenderer(event); const allowed = ["userData", "documents", "desktop", "temp"] as const; if ((allowed as readonly string[]).includes(name)) return app.getPath(name as (typeof allowed)[number]); return null; });
-ipcMain.handle("db:sqlitePath", (event) => { requireTrustedRenderer(event); return sqlitePath(); });
-ipcMain.handle("db:backupSqlite", (event, destPath: string) => { requireTrustedRenderer(event); const src = sqlitePath(); if (!fs.existsSync(src)) return false; const resolved = path.resolve(destPath); const allowedRoots = [path.resolve(app.getPath("userData")), path.resolve(app.getPath("documents")), path.resolve(app.getPath("desktop"))]; if (!allowedRoots.some((root) => resolved === root || resolved.startsWith(`${root}${path.sep}`))) throw new Error("Backup destination is outside an allowed user folder"); copySqlite(src, resolved); return true; });
 ipcMain.handle("db:getSqlitePath", (event) => { requireTrustedRenderer(event); return sqlitePath(); });
 ipcMain.handle("app:getDeviceId", (event) => { requireTrustedRenderer(event); return getDeviceId(); });
-ipcMain.handle("app:getTrialDeviceId", (event) => { requireTrustedRenderer(event); return getTrialDeviceId(); });
 ipcMain.handle("db:readBinary", (event) => { requireTrustedRenderer(event); try { return fs.existsSync(sqlitePath()) ? fs.readFileSync(sqlitePath()) : null; } catch { return null; } });
-ipcMain.handle("db:writeBinary", (event, data: Uint8Array | Buffer | number[]) => { requireTrustedRenderer(event); const file = sqlitePath(), temp = `${file}.restore-${process.pid}-${Date.now()}`; fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(temp, Buffer.from(data)); if (!isValidSqliteFile(temp)) { fs.unlinkSync(temp); return false; } fs.renameSync(temp, file); return true; });
+ipcMain.handle("db:writeBinary", (event, data: unknown) => {
+  requireTrustedRenderer(event);
+  if (!(data instanceof Uint8Array) || data.byteLength === 0 || data.byteLength > MAX_SQLITE_IPC_BYTES) return false;
+  const file = sqlitePath(), temp = `${file}.restore-${process.pid}-${Date.now()}`;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(temp, Buffer.from(data));
+  if (!isValidSqliteFile(temp)) { fs.unlinkSync(temp); return false; }
+  fs.renameSync(temp, file);
+  return true;
+});
 ipcMain.handle("db:exists", (event) => { requireTrustedRenderer(event); return fs.existsSync(sqlitePath()); });
 ipcMain.handle("trial:getState", async (event) => { requireTrustedRenderer(event); const license = await getDesktopLicenseState(getDeviceId()); if (license.status === "active" || license.status === "grace") return { activated: true, status: "active", daysRemaining: license.daysRemaining ?? 0, trialStartedAt: null, trialExpiresAt: null, registration: null, synced: true }; return trialSnapshot(); });
-ipcMain.handle("trial:activate", (event, registration: TrialRegistration) => { requireTrustedRenderer(event); const email = String(registration?.email || "").trim().toLowerCase(), phone = String(registration?.phone || "").trim(), organizationName = String(registration?.organizationName || "").trim(), address = String(registration?.address || "").trim(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^[0-9+() .-]{6,50}$/.test(phone) || !organizationName || !address) return { ok: false, error: "Email, phone number, organization name, and address are required." }; if (readTrial()) return { ok: false, error: "This installation has already activated its trial." }; const started = new Date(), expires = new Date(started.getTime() + 30 * 86400000), value: StoredTrial = { email, phone, organizationName, address, activationId: randomUUID(), deviceId: getTrialDeviceId(), activatedAt: started.toISOString(), trialExpiresAt: expires.toISOString(), lastSeenAt: started.toISOString(), synced: false }; try { writeTrial(value); return { ok: true, state: trialSnapshot() }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; } });
+ipcMain.handle("trial:activate", (event, registration: unknown) => {
+  requireTrustedRenderer(event);
+  const input = registration && typeof registration === "object" ? registration as Partial<TrialRegistration> : {};
+  const email = String(input.email || "").trim().toLowerCase();
+  const phone = String(input.phone || "").trim();
+  const organizationName = String(input.organizationName || "").trim();
+  const address = String(input.address || "").trim();
+  if (
+    email.length > MAX_TRIAL_EMAIL_CHARS ||
+    phone.length > MAX_TRIAL_PHONE_CHARS ||
+    organizationName.length > MAX_TRIAL_ORG_CHARS ||
+    address.length > MAX_TRIAL_ADDRESS_CHARS
+  ) return { ok: false, error: "Trial registration fields are too long." };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^[0-9+() .-]{6,50}$/.test(phone) || !organizationName || !address) {
+    return { ok: false, error: "Email, phone number, organization name, and address are required." };
+  }
+  if (readTrial()) return { ok: false, error: "This installation has already activated its trial." };
+  const started = new Date(), expires = new Date(started.getTime() + 30 * 86400000);
+  const value: StoredTrial = { email, phone, organizationName, address, activationId: randomUUID(), deviceId: getTrialDeviceId(), activatedAt: started.toISOString(), trialExpiresAt: expires.toISOString(), lastSeenAt: started.toISOString(), synced: false };
+  try { writeTrial(value); return { ok: true, state: trialSnapshot() }; }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+});
 ipcMain.handle("trial:markSynced", (event) => { requireTrustedRenderer(event); const trial = readTrial(); if (!trial) return false; try { writeTrial({ ...trial, synced: true }); return true; } catch { return false; } });
 ipcMain.handle("backup:list", async (event) => { requireTrustedRenderer(event); fs.mkdirSync(backupDir(), { recursive: true }); const filenames = fs.readdirSync(backupDir()).filter((f) => f.endsWith(".db")); const items = await Promise.all(filenames.map(async (filename) => { const full = path.join(backupDir(), filename), stat = fs.statSync(full), validationError = await minarvaSqliteValidationError(full), kind = filename.includes("-automatic-") ? "automatic" : "manual"; return { id: filename, filename, createdAt: stat.mtime.toISOString(), sizeBytes: stat.size, kind, verified: validationError === null, location: "local" }; })); return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)); });
 ipcMain.handle("backup:createManual", async (event) => { requireTrustedRenderer(event); const source = sqlitePath(); if (!fs.existsSync(source)) return { ok: false, error: "SQLite database is missing or invalid" }; const sourceError = await minarvaSqliteValidationError(source); if (sourceError) return { ok: false, error: `Minarva Biz database failed backup validation: ${sourceError}` }; const result = await dialog.showSaveDialog({ title: "Save Minarva Biz Backup", defaultPath: path.join(app.getPath("documents"), `minarvabiz-backup-${timestamp()}.db`), filters: [{ name: "Minarva Biz SQLite Backup", extensions: ["db"] }] }); if (result.canceled || !result.filePath) return { ok: false, cancelled: true }; try { const sizeBytes = copySqlite(source, result.filePath); const validationError = await minarvaSqliteValidationError(result.filePath); if (validationError) { try { fs.unlinkSync(result.filePath); } catch {} return { ok: false, error: `Created backup failed Minarva Biz validation: ${validationError}` }; } return { ok: true, path: result.filePath, sizeBytes, filename: path.basename(result.filePath) }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; } });
-ipcMain.handle("backup:export", async (event, id: string) => { requireTrustedRenderer(event); const source = path.join(backupDir(), path.basename(id)); if (!fs.existsSync(source)) return { ok: false, error: "Backup file is missing or invalid" }; const sourceError = await minarvaSqliteValidationError(source); if (sourceError) return { ok: false, error: `Backup file failed Minarva Biz validation: ${sourceError}` }; const result = await dialog.showSaveDialog({ title: "Export Minarva Biz Backup", defaultPath: path.join(app.getPath("documents"), path.basename(source)), filters: [{ name: "Minarva Biz SQLite Backup", extensions: ["db"] }] }); if (result.canceled || !result.filePath) return { ok: false, cancelled: true }; try { const sizeBytes = copySqlite(source, result.filePath); const validationError = await minarvaSqliteValidationError(result.filePath); if (validationError) { try { fs.unlinkSync(result.filePath); } catch {} return { ok: false, error: `Exported backup failed Minarva Biz validation: ${validationError}` }; } return { ok: true, path: result.filePath, sizeBytes, filename: path.basename(result.filePath) }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; } });
+ipcMain.handle("backup:export", async (event, id: unknown) => {
+  requireTrustedRenderer(event);
+  const cleanId = typeof id === "string" ? id : "";
+  if (!cleanId || cleanId.length > MAX_BACKUP_ID_CHARS || cleanId !== path.basename(cleanId) || !/^[A-Za-z0-9._-]+\.db$/i.test(cleanId)) {
+    return { ok: false, error: "Backup identifier is invalid" };
+  }
+  const source = path.join(backupDir(), cleanId);
+  if (!fs.existsSync(source)) return { ok: false, error: "Backup file is missing or invalid" };
+  const sourceError = await minarvaSqliteValidationError(source);
+  if (sourceError) return { ok: false, error: `Backup file failed Minarva Biz validation: ${sourceError}` };
+  const result = await dialog.showSaveDialog({ title: "Export Minarva Biz Backup", defaultPath: path.join(app.getPath("documents"), cleanId), filters: [{ name: "Minarva Biz SQLite Backup", extensions: ["db"] }] });
+  if (result.canceled || !result.filePath) return { ok: false, cancelled: true };
+  try {
+    const sizeBytes = copySqlite(source, result.filePath);
+    const validationError = await minarvaSqliteValidationError(result.filePath);
+    if (validationError) { try { fs.unlinkSync(result.filePath); } catch {} return { ok: false, error: `Exported backup failed Minarva Biz validation: ${validationError}` }; }
+    return { ok: true, path: result.filePath, sizeBytes, filename: path.basename(result.filePath) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+});
 ipcMain.handle("backup:chooseDestination", async (event) => { requireTrustedRenderer(event); const result = await dialog.showOpenDialog({ title: "Choose automatic backup folder", properties: ["openDirectory", "createDirectory"] }); if (result.canceled || !result.filePaths[0]) return null; const selected = path.resolve(result.filePaths[0]); fs.mkdirSync(selected, { recursive: true }); fs.writeFileSync(backupDestinationConfigPath(), selected, "utf8"); return selected; });
 ipcMain.handle("backup:createAutomatic", async (event) => { requireTrustedRenderer(event); try { const result = createLocalBackup("automatic"); if (!result) return { ok: false, error: "SQLite database does not exist or is invalid" }; const validationError = await minarvaSqliteValidationError(result.path); if (validationError) { try { fs.unlinkSync(result.path); } catch {} return { ok: false, error: `Automatic backup failed Minarva Biz validation: ${validationError}` }; } return { ok: true, ...result, filename: path.basename(result.path) }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; } });
 ipcMain.handle("backup:pruneAutomatic", (event, retention?: number) => { requireTrustedRenderer(event); const safeRetention = Number.isFinite(retention) ? Math.max(1, Math.min(365, Math.floor(retention as number))) : 14; pruneAutomaticBackups(safeRetention); return true; });
