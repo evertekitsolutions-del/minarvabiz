@@ -178,7 +178,10 @@ jobs:
           grep -Fq 'base: "./"' apps/desktop/vite.config.ts
           grep -Fq 'contextIsolation: true' apps/desktop/electron/main.ts
           grep -Fq 'nodeIntegration: false' apps/desktop/electron/main.ts
-          grep -Fq 'sandbox: false' apps/desktop/electron/main.ts
+          grep -Fq 'sandbox: true' apps/desktop/electron/main.ts
+          grep -Fq 'MINARVA_EXTERNAL_URL_HOSTS' apps/desktop/electron/main.ts
+          grep -Fq 'will-navigate' apps/desktop/electron/main.ts
+          grep -Fq 'event.sender.mainFrame' apps/desktop/electron/main.ts
           grep -Fq 'webSecurity: true' apps/desktop/electron/main.ts
           grep -Fq 'Menu.setApplicationMenu(null)' apps/desktop/electron/main.ts
           grep -Fq 'minarvabiz.ui.theme' packages/ui/src/components/settings/SettingsPanel.tsx
