@@ -2,7 +2,7 @@
  * Report aggregation — pure helpers over raw metrics.
  */
 
-import { roundMoney } from "@minarvabiz/utils";
+import { addMinorUnits, fromMinorUnits, toMinorUnits } from "@minarvabiz/utils";
 import type { SalesReportRow } from "@minarvabiz/types";
 import { calculatePeriodSummary } from "./profit";
 
@@ -36,9 +36,13 @@ export interface DayEndReport {
 }
 
 export function buildDayEndReport(input: DayEndInput): DayEndReport {
+  const serviceRevenueMinor = addMinorUnits(
+    toMinorUnits(input.serviceRevenue),
+    toMinorUnits(input.laundryRevenue),
+  );
   const summary = calculatePeriodSummary({
     productSalesRevenue: input.productSales,
-    serviceRevenue: input.serviceRevenue + input.laundryRevenue,
+    serviceRevenue: fromMinorUnits(serviceRevenueMinor),
     inventoryCostOfGoods: input.costOfGoods,
     orderMaterialCosts: input.orderMaterialCosts,
     orderSpecificExpenses: input.orderSpecificExpenses,
@@ -47,41 +51,48 @@ export function buildDayEndReport(input: DayEndInput): DayEndReport {
   });
 
   return {
-    totalSales: roundMoney(input.productSales + input.serviceRevenue + input.laundryRevenue),
+    totalSales: fromMinorUnits(addMinorUnits(toMinorUnits(input.productSales), serviceRevenueMinor)),
     totalExpenses: summary.totalOperatingExpenses,
     costOfGoods: summary.totalCostOfGoods,
-    serviceRevenue: roundMoney(input.serviceRevenue + input.laundryRevenue),
-    serviceExpenses: roundMoney(input.orderSpecificExpenses),
+    serviceRevenue: fromMinorUnits(serviceRevenueMinor),
+    serviceExpenses: fromMinorUnits(toMinorUnits(input.orderSpecificExpenses)),
     grossProfit: summary.grossProfit,
     netProfit: summary.netProfit,
-    cashReceived: roundMoney(input.cashReceived),
-    cardPayments: roundMoney(input.cardPayments),
-    otherPayments: roundMoney(input.otherPayments),
-    outstandingAmount: roundMoney(input.outstandingAmount),
+    cashReceived: fromMinorUnits(toMinorUnits(input.cashReceived)),
+    cardPayments: fromMinorUnits(toMinorUnits(input.cardPayments)),
+    otherPayments: fromMinorUnits(toMinorUnits(input.otherPayments)),
+    outstandingAmount: fromMinorUnits(toMinorUnits(input.outstandingAmount)),
   };
 }
 
 export function sumSalesReportRows(rows: SalesReportRow[]): SalesReportRow {
-  return rows.reduce(
-    (acc, r) => ({
-      label: "Total",
-      productSales: roundMoney(acc.productSales + r.productSales),
-      serviceRevenue: roundMoney(acc.serviceRevenue + r.serviceRevenue),
-      laundryRevenue: roundMoney(acc.laundryRevenue + r.laundryRevenue),
-      totalRevenue: roundMoney(acc.totalRevenue + r.totalRevenue),
-      expenses: roundMoney(acc.expenses + r.expenses),
-      netProfit: roundMoney(acc.netProfit + r.netProfit),
+  const totals = rows.reduce(
+    (acc, row) => ({
+      productSales: addMinorUnits(acc.productSales, toMinorUnits(row.productSales)),
+      serviceRevenue: addMinorUnits(acc.serviceRevenue, toMinorUnits(row.serviceRevenue)),
+      laundryRevenue: addMinorUnits(acc.laundryRevenue, toMinorUnits(row.laundryRevenue)),
+      totalRevenue: addMinorUnits(acc.totalRevenue, toMinorUnits(row.totalRevenue)),
+      expenses: addMinorUnits(acc.expenses, toMinorUnits(row.expenses)),
+      netProfit: addMinorUnits(acc.netProfit, toMinorUnits(row.netProfit)),
     }),
     {
-      label: "Total",
       productSales: 0,
       serviceRevenue: 0,
       laundryRevenue: 0,
       totalRevenue: 0,
       expenses: 0,
       netProfit: 0,
-    }
+    },
   );
+  return {
+    label: "Total",
+    productSales: fromMinorUnits(totals.productSales),
+    serviceRevenue: fromMinorUnits(totals.serviceRevenue),
+    laundryRevenue: fromMinorUnits(totals.laundryRevenue),
+    totalRevenue: fromMinorUnits(totals.totalRevenue),
+    expenses: fromMinorUnits(totals.expenses),
+    netProfit: fromMinorUnits(totals.netProfit),
+  };
 }
 
 export function toCsv(headers: string[], rows: string[][]): string {
