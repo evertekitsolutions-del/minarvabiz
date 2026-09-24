@@ -45,9 +45,13 @@ assert.match(audit, /actor_role: claims\.identity\.role/);
 assert.match(audit, /session_id: claims\.sessionId/);
 
 const panel = await readFile(new URL("../apps/license-admin/src/app/AdminPanel.tsx", import.meta.url), "utf8");
-assert.match(panel, /role: "viewer" \| "operator" \| "admin"/);
-assert.match(panel, /canIssue/);
-assert.match(panel, /canManageStatus/);
+const panelTypes = await readFile(new URL("../apps/license-admin/src/app/admin-panel/types.ts", import.meta.url), "utf8");
+const panelModel = await readFile(new URL("../apps/license-admin/src/app/admin-panel/model.ts", import.meta.url), "utf8");
+assert.match(panelTypes, /type AdminRole = "viewer" \| "operator" \| "admin"/);
+assert.match(panelModel, /canIssueLicense/);
+assert.match(panelModel, /canManageLicenseStatus/);
+assert.match(panel, /const canIssue = canIssueLicense\(identity\.role\)/);
+assert.match(panel, /const canManageStatus = canManageLicenseStatus\(identity\.role\)/);
 
 const migration = await readFile(new URL("../supabase/migrations/20260924_license_admin_rbac_audit.sql", import.meta.url), "utf8");
 assert.match(migration, /DEFAULT 'viewer'/);
