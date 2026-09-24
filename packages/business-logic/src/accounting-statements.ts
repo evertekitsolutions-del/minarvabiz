@@ -1,4 +1,5 @@
 import type { AccountingAccount, JournalEntry } from "@minarvabiz/types";
+import { addMinorUnits, fromMinorUnits, subtractMinorUnits, toMinorUnits } from "@minarvabiz/utils";
 
 export interface StatementRow {
   accountId: string;
@@ -26,8 +27,16 @@ function balances(accounts: AccountingAccount[], journals: JournalEntry[], from?
     if ((from && entry.entryDate < from) || (to && entry.entryDate > to)) continue;
     for (const line of entry.lines) {
       if (!known.has(line.accountId)) throw new Error("Statement contains an unknown account; restore or sync the chart of accounts");
-      if (!Number.isFinite(line.debit) || !Number.isFinite(line.credit)) throw new Error("Statement contains an invalid journal amount");
-      totals.set(line.accountId, (totals.get(line.accountId) || 0) + Math.round(line.debit * 100) - Math.round(line.credit * 100));
+      let debitMinor: number;
+      let creditMinor: number;
+      try {
+        debitMinor = toMinorUnits(line.debit);
+        creditMinor = toMinorUnits(line.credit);
+      } catch {
+        throw new Error("Statement contains an invalid journal amount");
+      }
+      const netMinor = subtractMinorUnits(debitMinor, creditMinor);
+      totals.set(line.accountId, addMinorUnits(totals.get(line.accountId) || 0, netMinor));
     }
   }
   return totals;
@@ -36,20 +45,28 @@ function balances(accounts: AccountingAccount[], journals: JournalEntry[], from?
 function rows(accounts: AccountingAccount[], totals: Map<string, number>, type: AccountingAccount["type"]): StatementRow[] {
   const sign = type === "asset" || type === "expense" ? 1 : -1;
   // Include inactive accounts: disabling an account must not erase its history.
-  return accounts.filter((a) => a.type === type).map((a) => ({
-    accountId: a.id, code: a.code, name: a.name, amount: sign * (totals.get(a.id) || 0) / 100,
-  })).filter((row) => row.amount !== 0).sort((a, b) => a.code.localeCompare(b.code));
+  return accounts.filter((a) => a.type === type).map((a) => {
+    const amountMinor = sign * (totals.get(a.id) || 0);
+    return { accountId: a.id, code: a.code, name: a.name, amount: fromMinorUnits(amountMinor) };
+  }).filter((row) => row.amount !== 0).sort((a, b) => a.code.localeCompare(b.code));
 }
-const sum = (items: StatementRow[]) => items.reduce((total, row) => total + Math.round(row.amount * 100), 0) / 100;
-const round = (value: number) => Math.round(value * 100) / 100;
+
+const sumMinor = (items: StatementRow[]) =>
+  items.reduce((total, row) => addMinorUnits(total, toMinorUnits(row.amount)), 0);
 
 export function calculateProfitAndLoss(accounts: AccountingAccount[], journals: JournalEntry[], from?: string, to?: string) {
   const totals = balances(accounts, journals, from, to);
   const income = rows(accounts, totals, "income");
   const expenses = rows(accounts, totals, "expense");
-  const totalIncome = sum(income);
-  const totalExpenses = sum(expenses);
-  return { income, expenses, totalIncome, totalExpenses, netProfit: round(totalIncome - totalExpenses) };
+  const totalIncomeMinor = sumMinor(income);
+  const totalExpensesMinor = sumMinor(expenses);
+  return {
+    income,
+    expenses,
+    totalIncome: fromMinorUnits(totalIncomeMinor),
+    totalExpenses: fromMinorUnits(totalExpensesMinor),
+    netProfit: fromMinorUnits(subtractMinorUnits(totalIncomeMinor, totalExpensesMinor)),
+  };
 }
 
 export function calculateBalanceSheet(accounts: AccountingAccount[], journals: JournalEntry[], asOf?: string) {
@@ -57,12 +74,29 @@ export function calculateBalanceSheet(accounts: AccountingAccount[], journals: J
   const assets = rows(accounts, totals, "asset");
   const liabilities = rows(accounts, totals, "liability");
   const equity = rows(accounts, totals, "equity");
-  const totalAssets = sum(assets);
-  const totalLiabilities = sum(liabilities);
-  const recordedEquity = sum(equity);
-  const unclosedEarnings = round(sum(rows(accounts, totals, "income")) - sum(rows(accounts, totals, "expense")));
-  const totalEquity = round(recordedEquity + unclosedEarnings);
-  const liabilitiesAndEquity = round(totalLiabilities + totalEquity);
-  const difference = round(totalAssets - liabilitiesAndEquity);
-  return { assets, liabilities, equity, totalAssets, totalLiabilities, recordedEquity, unclosedEarnings, totalEquity, liabilitiesAndEquity, difference, balanced: difference === 0 };
+
+  const totalAssetsMinor = sumMinor(assets);
+  const totalLiabilitiesMinor = sumMinor(liabilities);
+  const recordedEquityMinor = sumMinor(equity);
+  const unclosedEarningsMinor = subtractMinorUnits(
+    sumMinor(rows(accounts, totals, "income")),
+    sumMinor(rows(accounts, totals, "expense"))
+  );
+  const totalEquityMinor = addMinorUnits(recordedEquityMinor, unclosedEarningsMinor);
+  const liabilitiesAndEquityMinor = addMinorUnits(totalLiabilitiesMinor, totalEquityMinor);
+  const differenceMinor = subtractMinorUnits(totalAssetsMinor, liabilitiesAndEquityMinor);
+
+  return {
+    assets,
+    liabilities,
+    equity,
+    totalAssets: fromMinorUnits(totalAssetsMinor),
+    totalLiabilities: fromMinorUnits(totalLiabilitiesMinor),
+    recordedEquity: fromMinorUnits(recordedEquityMinor),
+    unclosedEarnings: fromMinorUnits(unclosedEarningsMinor),
+    totalEquity: fromMinorUnits(totalEquityMinor),
+    liabilitiesAndEquity: fromMinorUnits(liabilitiesAndEquityMinor),
+    difference: fromMinorUnits(differenceMinor),
+    balanced: differenceMinor === 0,
+  };
 }

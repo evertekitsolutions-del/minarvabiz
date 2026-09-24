@@ -15,7 +15,15 @@ import type {
   TrialBalanceRow,
   UUID,
 } from "@minarvabiz/types";
-import { generateId, nowISO } from "@minarvabiz/utils";
+import {
+  addMinorUnits,
+  formatMinorUnits,
+  fromMinorUnits,
+  generateId,
+  nowISO,
+  subtractMinorUnits,
+  toMinorUnits,
+} from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { auditAction } from "./audit-actions";
 import { touchPersistence } from "./autosave";
@@ -27,8 +35,12 @@ const accounts: AccountingAccount[] = [];
 const journals: JournalEntry[] = [];
 let journalSequence = 0;
 
-function r2(value: number): number {
-  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+function normalizedMoney(value: number): number {
+  return fromMinorUnits(toMinorUnits(value));
+}
+
+function sumMinor(values: number[]): number {
+  return values.reduce((total, value) => addMinorUnits(total, toMinorUnits(value)), 0);
 }
 
 function normalBalance(type: AccountingAccountType): "debit" | "credit" {
@@ -169,7 +181,12 @@ function validJournalDate(value: string): boolean {
 }
 
 function validJournalAmount(value: number): boolean {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && Number.isSafeInteger(Math.round(value * 100));
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return false;
+  try {
+    return toMinorUnits(value) >= 0;
+  } catch {
+    return false;
+  }
 }
 
 function normalizeLines(entryId: UUID, input: Array<{ accountId: UUID; debit?: number; credit?: number; memo?: string | null }>): { lines: JournalEntryLine[]; errors: string[] } {
@@ -182,8 +199,8 @@ function normalizeLines(entryId: UUID, input: Array<{ accountId: UUID; debit?: n
       errors.push("Journal amounts must be finite, non-negative and within the supported range");
       continue;
     }
-    const debit = r2(item.debit ?? 0);
-    const credit = r2(item.credit ?? 0);
+    const debit = normalizedMoney(item.debit ?? 0);
+    const credit = normalizedMoney(item.credit ?? 0);
     if ((debit > 0 && credit > 0) || (debit <= 0 && credit <= 0)) {
       errors.push(account.code + " " + account.name + ": enter either debit or credit");
       continue;
@@ -205,11 +222,19 @@ function normalizeLines(entryId: UUID, input: Array<{ accountId: UUID; debit?: n
 function balanceErrors(lines: JournalEntryLine[]): string[] {
   const errors: string[] = [];
   if (lines.length < 2) errors.push("A journal entry needs at least two valid lines");
-  const debit = r2(lines.reduce((sum, line) => sum + line.debit, 0));
-  const credit = r2(lines.reduce((sum, line) => sum + line.credit, 0));
-  if (![debit, credit].every(validJournalAmount)) errors.push("Journal totals exceed the supported range");
-  if (debit <= 0 || credit <= 0) errors.push("Journal must contain both debit and credit");
-  if (Math.abs(debit - credit) > 0.009) errors.push("Journal is not balanced: debit " + debit.toFixed(2) + " vs credit " + credit.toFixed(2));
+  try {
+    const debitMinor = sumMinor(lines.map((line) => line.debit));
+    const creditMinor = sumMinor(lines.map((line) => line.credit));
+    if (debitMinor <= 0 || creditMinor <= 0) errors.push("Journal must contain both debit and credit");
+    if (debitMinor !== creditMinor) {
+      errors.push(
+        "Journal is not balanced: debit " + formatMinorUnits(debitMinor) +
+        " vs credit " + formatMinorUnits(creditMinor)
+      );
+    }
+  } catch {
+    errors.push("Journal totals exceed the supported range");
+  }
   return errors;
 }
 
@@ -232,9 +257,14 @@ export function createJournalEntry(input: {
   const normalized = normalizeLines(id, input.lines);
   if (normalized.errors.length) return { journalEntry: null, errors: normalized.errors };
   const now = nowISO();
-  const totalDebit = r2(normalized.lines.reduce((sum, line) => sum + line.debit, 0));
-  const totalCredit = r2(normalized.lines.reduce((sum, line) => sum + line.credit, 0));
-  if (![totalDebit, totalCredit].every(validJournalAmount)) return { journalEntry: null, errors: ["Journal totals exceed the supported range"] };
+  let totalDebit: number;
+  let totalCredit: number;
+  try {
+    totalDebit = fromMinorUnits(sumMinor(normalized.lines.map((line) => line.debit)));
+    totalCredit = fromMinorUnits(sumMinor(normalized.lines.map((line) => line.credit)));
+  } catch {
+    return { journalEntry: null, errors: ["Journal totals exceed the supported range"] };
+  }
   const journalEntry: JournalEntry = {
     id,
     journalNumber: nextJournalNumber(),
@@ -281,9 +311,20 @@ export function postJournalEntry(id: UUID): { journalEntry: JournalEntry | null;
   errors.push(...balanceErrors(entry.lines));
   if (!validJournalDate(entry.entryDate)) errors.push("Invalid journal date");
   if (!entry.description.trim()) errors.push("Journal description is required");
-  if (entry.lines.some(line => line.debit !== r2(line.debit) || line.credit !== r2(line.credit))
-    || entry.totalDebit !== r2(entry.lines.reduce((sum, line) => sum + line.debit, 0))
-    || entry.totalCredit !== r2(entry.lines.reduce((sum, line) => sum + line.credit, 0))) errors.push("Draft journal totals need reconciliation");
+  try {
+    const debitMinor = sumMinor(entry.lines.map((line) => line.debit));
+    const creditMinor = sumMinor(entry.lines.map((line) => line.credit));
+    const linesCanonical = entry.lines.every(
+      (line) => line.debit === normalizedMoney(line.debit) && line.credit === normalizedMoney(line.credit)
+    );
+    if (
+      !linesCanonical ||
+      toMinorUnits(entry.totalDebit) !== debitMinor ||
+      toMinorUnits(entry.totalCredit) !== creditMinor
+    ) errors.push("Draft journal totals need reconciliation");
+  } catch {
+    errors.push("Draft journal totals need reconciliation");
+  }
   if (errors.length) return { journalEntry: null, errors };
   const before = cloneEntry(entry);
   entry.status = "posted";
@@ -359,25 +400,25 @@ function reportableEntries(asOf?: string): JournalEntry[] {
 }
 
 export function buildTrialBalance(asOf?: string): TrialBalanceRow[] {
-  const totals = new Map<string, { debit: number; credit: number }>();
+  const totals = new Map<string, { debitMinor: number; creditMinor: number }>();
   for (const entry of reportableEntries(asOf)) {
     for (const line of entry.lines) {
-      const row = totals.get(line.accountId) || { debit: 0, credit: 0 };
-      row.debit = r2(row.debit + line.debit);
-      row.credit = r2(row.credit + line.credit);
+      const row = totals.get(line.accountId) || { debitMinor: 0, creditMinor: 0 };
+      row.debitMinor = addMinorUnits(row.debitMinor, toMinorUnits(line.debit));
+      row.creditMinor = addMinorUnits(row.creditMinor, toMinorUnits(line.credit));
       totals.set(line.accountId, row);
     }
   }
   return listAccounts(true).map((account) => {
-    const total = totals.get(account.id) || { debit: 0, credit: 0 };
-    const net = r2(total.debit - total.credit);
+    const total = totals.get(account.id) || { debitMinor: 0, creditMinor: 0 };
+    const netMinor = subtractMinorUnits(total.debitMinor, total.creditMinor);
     return {
       accountId: account.id,
       code: account.code,
       name: account.name,
       type: account.type,
-      debit: net >= 0 ? net : 0,
-      credit: net < 0 ? Math.abs(net) : 0,
+      debit: netMinor >= 0 ? fromMinorUnits(netMinor) : 0,
+      credit: netMinor < 0 ? fromMinorUnits(-netMinor) : 0,
     };
   }).filter((row) => row.debit !== 0 || row.credit !== 0);
 }
@@ -386,12 +427,16 @@ export function buildGeneralLedger(accountId: UUID, from?: string, to?: string):
   const account = accounts.find((candidate) => candidate.id === accountId && !candidate.deletedAt);
   if (!account) return [];
   const all = reportableEntries(to).sort((a, b) => a.entryDate.localeCompare(b.entryDate) || a.createdAt.localeCompare(b.createdAt));
-  let running = 0;
+  let runningMinor = 0;
   const rows: GeneralLedgerRow[] = [];
   for (const entry of all) {
     for (const line of entry.lines.filter((candidate) => candidate.accountId === accountId)) {
-      const signed = account.normalBalance === "debit" ? line.debit - line.credit : line.credit - line.debit;
-      running = r2(running + signed);
+      const debitMinor = toMinorUnits(line.debit);
+      const creditMinor = toMinorUnits(line.credit);
+      const signedMinor = account.normalBalance === "debit"
+        ? subtractMinorUnits(debitMinor, creditMinor)
+        : subtractMinorUnits(creditMinor, debitMinor);
+      runningMinor = addMinorUnits(runningMinor, signedMinor);
       if (!from || entry.entryDate >= from) {
         rows.push({
           journalEntryId: entry.id,
@@ -400,7 +445,7 @@ export function buildGeneralLedger(accountId: UUID, from?: string, to?: string):
           description: entry.description,
           debit: line.debit,
           credit: line.credit,
-          runningBalance: running,
+          runningBalance: fromMinorUnits(runningMinor),
           status: entry.status,
         });
       }
@@ -447,9 +492,14 @@ export function buildBalanceSheet(asOf?: string) {
 /** Post a newly created paid expense once, under expense permissions. */
 export function postExpenseJournal(expense: Expense): { journalEntry: JournalEntry | null; errors: string[] } {
   assertPermission("expenses.manage");
-  const amount = r2(expense.amount);
+  let amount: number;
+  try {
+    amount = normalizedMoney(expense.amount);
+  } catch {
+    return { journalEntry: null, errors: ["Expense requires a valid ID and positive finite amount"] };
+  }
   const entryDate = String(expense.date).slice(0, 10);
-  if (!expense.id || expense.deletedAt || !Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
+  if (!expense.id || expense.deletedAt || amount <= 0) {
     return { journalEntry: null, errors: ["Expense requires a valid ID and positive finite amount"] };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(entryDate) || !Number.isFinite(Date.parse(entryDate)) || new Date(entryDate).toISOString().slice(0, 10) !== entryDate) {
@@ -544,8 +594,14 @@ export function planAutomaticPosting(input: {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(entryDate) || !Number.isFinite(Date.parse(entryDate)) || new Date(entryDate).toISOString().slice(0, 10) !== entryDate) return fail('Invalid posting date');
   const grouped = new Map<string, { debit: number; credit: number }>();
   for (const line of input.lines) {
-    const debit = Math.round((line.debit ?? 0) * 100), credit = Math.round((line.credit ?? 0) * 100);
-    if (![debit, credit].every(n => Number.isSafeInteger(n) && n >= 0)) return fail('Invalid automatic posting amount');
+    let debit: number, credit: number;
+    try {
+      debit = toMinorUnits(line.debit ?? 0);
+      credit = toMinorUnits(line.credit ?? 0);
+    } catch {
+      return fail('Invalid automatic posting amount');
+    }
+    if (debit < 0 || credit < 0) return fail('Invalid automatic posting amount');
     const previous = grouped.get(line.key) ?? { debit: 0, credit: 0 };
     grouped.set(line.key, { debit: previous.debit + debit, credit: previous.credit + credit });
   }
@@ -567,7 +623,9 @@ export function planAutomaticPosting(input: {
   if (existing) {
     const matches = existing.status === 'posted' && existing.entryDate === entryDate && existing.branchId === (input.branchId ?? null)
       && existing.lines.length === amounts.length && amounts.every(([key, value]) => existing.lines.some(l =>
-        l.accountId === plannedAccounts.find(a => a.systemKey === key)?.id && Math.round(l.debit * 100) === value.debit && Math.round(l.credit * 100) === value.credit));
+        l.accountId === plannedAccounts.find(a => a.systemKey === key)?.id &&
+        toMinorUnits(l.debit) === value.debit &&
+        toMinorUnits(l.credit) === value.credit));
     return matches ? { errors: [], commit: () => cloneEntry(existing) } : fail('Source already has a different accounting posting');
   }
   let committed: JournalEntry | null = null;
@@ -578,11 +636,19 @@ export function planAutomaticPosting(input: {
       id, journalNumber: nextJournalNumber(), entryDate, description: input.description,
       referenceType: input.referenceType, referenceId: input.referenceId, branchId: input.branchId ?? null,
       status: 'posted', postedAt: now, createdAt: now, updatedAt: now, version: 1,
-      totalDebit: debit / 100, totalCredit: credit / 100,
+      totalDebit: fromMinorUnits(debit), totalCredit: fromMinorUnits(credit),
       lines: amounts.map(([key, value]) => {
         const planned = plannedAccounts.find(a => a.systemKey === key)!;
         const account = accounts.find(a => a.systemKey === key) ?? planned;
-        return { id: generateId(), journalEntryId: id, accountId: account.id, accountCode: account.code, accountName: account.name, debit: value.debit / 100, credit: value.credit / 100 };
+        return {
+          id: generateId(),
+          journalEntryId: id,
+          accountId: account.id,
+          accountCode: account.code,
+          accountName: account.name,
+          debit: fromMinorUnits(value.debit),
+          credit: fromMinorUnits(value.credit),
+        };
       }),
     };
     for (const account of plannedAccounts) if (!accounts.some(a => a.systemKey === account.systemKey)) accounts.push(account);
