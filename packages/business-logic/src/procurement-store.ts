@@ -28,6 +28,7 @@ import {
   subtractMinorUnits,
   toMinorUnits,
   toPercentBasisPoints,
+  toQuantityMilli,
 } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { touchPersistence } from "./autosave";
@@ -45,7 +46,7 @@ let grnSequence = 0;
 let invoiceSequence = 0;
 
 function r3(n: number): number {
-  return Math.round((Number(n) + Number.EPSILON) * 1000) / 1000;
+  return toQuantityMilli(Number(n)) / 1000;
 }
 
 function nextPoNumber(): string {
