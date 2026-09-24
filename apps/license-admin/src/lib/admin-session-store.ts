@@ -106,7 +106,7 @@ export async function revokeRegisteredAdminSession(
   sessionId: string,
   reason = "logout",
 ): Promise<boolean> {
-  if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(String(sessionId || ""))) return false;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(sessionId || ""))) return false;
   const result = await adminDbFetch(
     `/license_admin_sessions?id=eq.${encodeURIComponent(sessionId)}&revoked_at=is.null`,
     {
