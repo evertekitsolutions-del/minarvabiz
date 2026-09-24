@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@minarvabiz/ui";
-import { createCommercialLicense, createOfflineActivationPackage, loginAdmin, loginEmergencyAdmin, logoutAdmin, setLicenseStatus } from "./actions";
+import { beginAdminMfaEnrollment, cancelAdminMfa, createCommercialLicense, createOfflineActivationPackage, loginAdmin, loginEmergencyAdmin, logoutAdmin, setLicenseStatus, verifyAdminMfa } from "./actions";
 import type { LicensePlan, Edition, LicenseFeatures } from "@minarvabiz/types";
 
 const PLANS: LicensePlan[] = ["trial", "basic", "professional", "business", "enterprise"];
@@ -33,10 +33,48 @@ export default function AdminPanel({ identity, initialLicenses }: { identity: Ad
   const [expiresAt, setExpiresAt] = React.useState(""); const [activationLimit, setActivationLimit] = React.useState("");
   const [features, setFeatures] = React.useState<LicenseFeatures>(() => defaultFeatures("professional"));
   const [offlineLicenseId, setOfflineLicenseId] = React.useState(""); const [offlineDeviceId, setOfflineDeviceId] = React.useState("");
-  const [lastToken, setLastToken] = React.useState<string | null>(null); const [message, setMessage] = React.useState<string | null>(null); const [busy, setBusy] = React.useState(false);
+  const [lastToken, setLastToken] = React.useState<string | null>(null); const [message, setMessage] = React.useState<string | null>(null); const [busy, setBusy] = React.useState(false);\n  const [authStage, setAuthStage] = React.useState<"password" | "enroll" | "mfa">("password"); const [mfaCode, setMfaCode] = React.useState(""); const [mfaSecret, setMfaSecret] = React.useState(""); const [mfaQrCode, setMfaQrCode] = React.useState("");
   React.useEffect(() => { setFeatures(defaultFeatures(plan)); }, [plan]);
 
-  async function login() { setBusy(true); setMessage(null); const result = await loginAdmin(email, password); setBusy(false); if (!result.ok) { setMessage(result.error || "Login failed"); return; } setEmail(""); setPassword(""); router.refresh(); }
+  async function login() {
+    setBusy(true); setMessage(null);
+    const result = await loginAdmin(email, password);
+    setBusy(false);
+    if (!result.ok) { setMessage(result.error || "Login failed"); return; }
+    setPassword("");
+    setMfaCode("");
+    setMfaSecret("");
+    setMfaQrCode("");
+    if (result.next === "enroll") {
+      setAuthStage("enroll");
+      setMessage("MFA is required. Set up an authenticator before continuing.");
+      return;
+    }
+    setAuthStage("mfa");
+    setMessage("MFA is required. Enter the code from your authenticator.");
+  }
+  async function beginMfaEnrollment() {
+    setBusy(true); setMessage(null);
+    const result = await beginAdminMfaEnrollment();
+    setBusy(false);
+    if (!result.ok) { setMessage(result.error || "MFA setup failed"); return; }
+    setMfaSecret(result.secret || "");
+    setMfaQrCode(result.qrCode || "");
+    setAuthStage("mfa");
+    setMessage("Authenticator setup started. Add the account, then enter the current code.");
+  }
+  async function verifyMfa() {
+    setBusy(true); setMessage(null);
+    const result = await verifyAdminMfa(mfaCode);
+    setBusy(false);
+    if (!result.ok) { setMessage(result.error || "MFA verification failed"); return; }
+    setEmail(""); setPassword(""); setMfaCode(""); setMfaSecret(""); setMfaQrCode(""); setAuthStage("password");
+    router.refresh();
+  }
+  async function resetMfa() {
+    await cancelAdminMfa();
+    setAuthStage("password"); setMfaCode(""); setMfaSecret(""); setMfaQrCode(""); setMessage(null);
+  }
   async function emergencyLogin() { setBusy(true); setMessage(null); const result = await loginEmergencyAdmin(emergencyPassword); setBusy(false); if (!result.ok) { setMessage(result.error || "Emergency login failed"); return; } setEmergencyPassword(""); router.refresh(); }
   async function issue() {
     if (!customerName.trim()) { setMessage("Customer name is required."); return; }
@@ -59,19 +97,42 @@ export default function AdminPanel({ identity, initialLicenses }: { identity: Ad
       <Card className="mx-auto mt-16 max-w-md">
         <CardHeader><CardTitle>Minarva Biz — License Admin</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-slate-500">Sign in with your named administrator account.</p>
-          <input type="email" autoComplete="username" maxLength={254} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" placeholder="Administrator email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input type="password" autoComplete="current-password" maxLength={2048} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void login(); }} />
-          {message && <p className="text-sm text-rose-600">{message}</p>}
-          <Button disabled={busy || !email.trim() || !password} onClick={() => void login()}>{busy ? "Signing in…" : "Sign in"}</Button>
-          <details className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <summary className="cursor-pointer text-xs font-medium text-slate-600">Emergency break-glass access</summary>
-            <div className="mt-3 space-y-3">
-              <p className="text-xs text-slate-500">Shared-secret access is disabled by default and requires a named emergency actor on the server.</p>
-              <input type="password" autoComplete="off" maxLength={2048} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm" placeholder="Emergency admin credential" value={emergencyPassword} onChange={(e) => setEmergencyPassword(e.target.value)} />
-              <Button variant="outline" disabled={busy || !emergencyPassword} onClick={() => void emergencyLogin()}>{busy ? "Checking…" : "Emergency sign in"}</Button>
+          {authStage === "password" && <>
+            <p className="text-sm text-slate-500">Sign in with your named administrator account. MFA is required for named administrators.</p>
+            <input type="email" autoComplete="username" maxLength={254} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" placeholder="Administrator email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input type="password" autoComplete="current-password" maxLength={2048} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void login(); }} />
+            {message && <p className="text-sm text-rose-600">{message}</p>}
+            <Button disabled={busy || !email.trim() || !password} onClick={() => void login()}>{busy ? "Signing in…" : "Sign in"}</Button>
+            <details className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <summary className="cursor-pointer text-xs font-medium text-slate-600">Emergency break-glass access</summary>
+              <div className="mt-3 space-y-3">
+                <p className="text-xs text-slate-500">Shared-secret access is disabled by default, requires a named emergency actor, and creates only a short revocable session.</p>
+                <input type="password" autoComplete="off" maxLength={2048} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm" placeholder="Emergency admin credential" value={emergencyPassword} onChange={(e) => setEmergencyPassword(e.target.value)} />
+                <Button variant="outline" disabled={busy || !emergencyPassword} onClick={() => void emergencyLogin()}>{busy ? "Checking…" : "Emergency sign in"}</Button>
+              </div>
+            </details>
+          </>}
+          {authStage === "enroll" && <>
+            <p className="text-sm font-medium text-slate-800">MFA is required.</p>
+            <p className="text-sm text-slate-500">No verified authenticator is registered for this administrator. Set up a TOTP authenticator before continuing.</p>
+            {message && <p className="text-sm text-rose-600">{message}</p>}
+            <div className="flex gap-2">
+              <Button disabled={busy} onClick={() => void beginMfaEnrollment()}>{busy ? "Preparing…" : "Set up authenticator"}</Button>
+              <Button variant="outline" disabled={busy} onClick={() => void resetMfa()}>Cancel</Button>
             </div>
-          </details>
+          </>}
+          {authStage === "mfa" && <>
+            <p className="text-sm font-medium text-slate-800">MFA is required.</p>
+            <p className="text-sm text-slate-500">Enter the current time-based code from your authenticator app.</p>
+            {mfaQrCode.startsWith("data:image/") && <img src={mfaQrCode} alt="Authenticator enrollment QR code" className="mx-auto max-h-56 max-w-56 rounded-lg border border-slate-200 bg-white p-2" />}
+            {mfaSecret && <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-xs text-slate-500">Manual authenticator secret</p><code className="mt-1 block break-all text-xs text-slate-800">{mfaSecret}</code></div>}
+            <input inputMode="numeric" autoComplete="one-time-code" maxLength={10} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" placeholder="Authenticator code" value={mfaCode} onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 10))} onKeyDown={(e) => { if (e.key === "Enter" && mfaCode.length >= 6) void verifyMfa(); }} />
+            {message && <p className="text-sm text-rose-600">{message}</p>}
+            <div className="flex gap-2">
+              <Button disabled={busy || mfaCode.length < 6} onClick={() => void verifyMfa()}>{busy ? "Verifying…" : "Verify & sign in"}</Button>
+              <Button variant="outline" disabled={busy} onClick={() => void resetMfa()}>Cancel</Button>
+            </div>
+          </>}
         </CardContent>
       </Card>
     </main>
