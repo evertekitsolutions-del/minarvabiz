@@ -18,7 +18,9 @@ for (const file of criticalDesktopFiles) assert(exists(file), `Missing critical 
 
 const desktopSource = criticalDesktopFiles.map(read).join("\n");
 const appSource = read("apps/desktop/src/App.tsx");
+const mainSource = read("apps/desktop/electron/main.ts");
 const preloadSource = read("apps/desktop/electron/preload.ts");
+const desktopLicenseSource = read("apps/desktop/electron/license.ts");
 const sqliteBootstrap = read("apps/desktop/src/lib/sqlite-bootstrap.ts");
 const persistence = read("packages/business-logic/src/persistence.ts");
 const phase10 = read("packages/business-logic/src/phase10-operations-store.ts");
@@ -42,6 +44,12 @@ const settingsPanel = read("packages/ui/src/components/settings/SettingsPanel.ts
 const nav = read("packages/ui/src/lib/nav.ts");
 
 assert(!desktopSource.includes("minarvabiz-db.json"), "Legacy JSON database reference exists in desktop source");
+assert(mainSource.includes("sandbox: true") && !mainSource.includes("sandbox: false"), "Primary Electron renderer sandbox must be enabled");
+assert(mainSource.includes("frame === event.sender.mainFrame") && mainSource.includes("isTrustedRendererUrl(frame.url)"), "Privileged IPC must require the trusted top-level renderer frame");
+assert(mainSource.includes("MINARVA_EXTERNAL_URL_HOSTS") && mainSource.includes('url.protocol !== "https:"'), "External URL launches must fail closed behind an HTTPS host allowlist");
+assert(mainSource.includes('win.webContents.on("will-navigate"') && mainSource.includes("openAllowedExternalUrl(url)"), "Renderer navigation must be blocked or explicitly externalized through the allowlist");
+assert(mainSource.includes("registerDesktopLicenseIpc(getDeviceId, requireTrustedRenderer)"), "License IPC must use the centralized trusted-renderer guard");
+assert(!desktopLicenseSource.includes("isTrustedLicenseSender") && desktopLicenseSource.includes("requireTrustedRenderer(event)"), "License IPC must not maintain a weaker duplicate sender-validation policy");
 assert(!desktopSource.includes('db:read"') && !desktopSource.includes('db:write"'), "Legacy db:read/db:write IPC returned");
 assert(preloadSource.includes("writeSqliteBinary"), "SQLite binary write bridge is missing");
 assert(sqliteBootstrap.includes("persistDomainToSqlite(): Promise<boolean>"), "SQLite persistence must be awaitable");
