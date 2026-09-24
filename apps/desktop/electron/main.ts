@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain, shell, safeStorage } from "electron";
+import { app, BrowserWindow, Menu, dialog, ipcMain, shell, safeStorage, session } from "electron";
 import * as path from "path";
 import * as fs from "fs";
 import { createHash, randomUUID } from "crypto";
@@ -67,6 +67,56 @@ function openAllowedExternalUrl(rawUrl: string) {
   void shell.openExternal(rawUrl).catch((error) => runtimeSmokeLog(`external-url-open-failed url=${rawUrl} error=${error instanceof Error ? error.message : String(error)}`));
 }
 
+function isDevServerRequest(url: URL): boolean {
+  if (!isDev) return false;
+  try {
+    const expected = new URL(configuredDevServerUrl());
+    if (url.host !== expected.host) return false;
+    const websocketProtocol = expected.protocol === "https:" ? "wss:" : "ws:";
+    return url.protocol === expected.protocol || url.protocol === websocketProtocol;
+  } catch {
+    return false;
+  }
+}
+function isAllowedSessionRequest(rawUrl: string, resourceType: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    if (["file:", "data:", "blob:", "about:"].includes(url.protocol)) return true;
+    if (isDevServerRequest(url)) return true;
+    if (resourceType === "xhr") {
+      if (url.protocol === "https:") return true;
+      if (isDev && url.protocol === "http:") return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+function configureDesktopSession() {
+  const desktopSession = session.defaultSession;
+  desktopSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    runtimeSmokeLog(`permission-request-denied permission=${permission}`);
+    callback(false);
+  });
+  desktopSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
+    runtimeSmokeLog(`permission-check-denied permission=${permission} origin=${requestingOrigin || "unknown"}`);
+    return false;
+  });
+  desktopSession.setDevicePermissionHandler((details) => {
+    runtimeSmokeLog(`device-permission-denied type=${details.deviceType} origin=${details.origin || "unknown"}`);
+    return false;
+  });
+  desktopSession.setDisplayMediaRequestHandler((_request, callback) => {
+    runtimeSmokeLog("display-media-request-denied");
+    callback({});
+  });
+  desktopSession.webRequest.onBeforeRequest((details, callback) => {
+    const allowed = isAllowedSessionRequest(details.url, details.resourceType);
+    if (!allowed) runtimeSmokeLog(`remote-resource-blocked type=${details.resourceType} url=${details.url}`);
+    callback({ cancel: !allowed });
+  });
+}
+
 async function printHtmlDocument(input: {
   html: string;
   deviceName?: string | null;
@@ -83,8 +133,10 @@ async function printHtmlDocument(input: {
     show: false,
     width: paper === "thermal" ? 460 : 900,
     height: 900,
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, webviewTag: false, allowRunningInsecureContent: false, javascript: false },
   });
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  win.webContents.on("will-navigate", (event) => event.preventDefault());
   try {
     if (deviceName) {
       const printers = await win.webContents.getPrintersAsync();
@@ -155,6 +207,8 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
+      webviewTag: false,
+      allowRunningInsecureContent: false,
     },
   });
   runtimeSmokeLog(`window-created preload=${path.join(__dirname, "preload.js")} appPath=${app.getAppPath()} userData=${app.getPath("userData")} sandbox=true`);
@@ -174,6 +228,10 @@ function createWindow() {
   win.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => runtimeSmokeLog(`did-fail-load code=${errorCode} description=${errorDescription} url=${validatedURL}`));
   win.webContents.on("render-process-gone", (_event, details) => runtimeSmokeLog(`render-process-gone reason=${details.reason} exitCode=${details.exitCode}`));
   win.webContents.on("console-message", (_event, level, message, line, sourceId) => runtimeSmokeLog(`console level=${level} message=${message} line=${line} source=${sourceId}`));
+  win.webContents.on("will-attach-webview", (event) => {
+    event.preventDefault();
+    runtimeSmokeLog("webview-attachment-blocked");
+  });
   win.webContents.on("will-navigate", (event, url) => {
     if (isTrustedRendererUrl(url)) return;
     event.preventDefault();
@@ -200,11 +258,10 @@ function createLocalBackup(kind: "manual" | "automatic") { const source = sqlite
 function pruneAutomaticBackups(retention = 14) { const targetDir = backupDestinationDir(); fs.mkdirSync(targetDir, { recursive: true }); const files = fs.readdirSync(targetDir).filter((f) => f.startsWith("minarvabiz-automatic-") && f.endsWith(".db")).map((name) => ({ name, time: fs.statSync(path.join(targetDir, name)).mtimeMs })).sort((a, b) => b.time - a.time); for (const item of files.slice(retention)) { try { fs.unlinkSync(path.join(backupDestinationDir(), item.name)); } catch {} } }
 
 app.disableHardwareAcceleration();
-app.whenReady().then(() => { Menu.setApplicationMenu(null); runtimeSmokeLog(`app-ready platform=${process.platform} version=${app.getVersion()} userData=${app.getPath("userData")}`); process.env.MINARVA_SQLITE_PATH = sqlitePath(); process.env.MINARVA_MODE = process.env.MINARVA_MODE || "production"; fs.mkdirSync(app.getPath("userData"), { recursive: true }); registerDesktopLicenseIpc(getDeviceId, requireTrustedRenderer); createWindow(); app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); }); });
+app.whenReady().then(() => { Menu.setApplicationMenu(null); runtimeSmokeLog(`app-ready platform=${process.platform} version=${app.getVersion()} userData=${app.getPath("userData")}`); process.env.MINARVA_SQLITE_PATH = sqlitePath(); process.env.MINARVA_MODE = process.env.MINARVA_MODE || "production"; fs.mkdirSync(app.getPath("userData"), { recursive: true }); configureDesktopSession(); registerDesktopLicenseIpc(getDeviceId, requireTrustedRenderer); createWindow(); app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); }); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 
 ipcMain.handle("app:getVersion", (event) => { requireTrustedRenderer(event); return app.getVersion(); });
-ipcMain.handle("db:getSqlitePath", (event) => { requireTrustedRenderer(event); return sqlitePath(); });
 ipcMain.handle("app:getDeviceId", (event) => { requireTrustedRenderer(event); return getDeviceId(); });
 ipcMain.handle("db:readBinary", (event) => { requireTrustedRenderer(event); try { return fs.existsSync(sqlitePath()) ? fs.readFileSync(sqlitePath()) : null; } catch { return null; } });
 ipcMain.handle("db:writeBinary", (event, data: unknown) => {

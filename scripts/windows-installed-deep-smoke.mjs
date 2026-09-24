@@ -67,6 +67,32 @@ async function main() {
   await waitForRendererReady();
   console.log('RENDERER_READY PASS');
 
+  const securityBoundary = await cdpEval(ws, `(async()=>{
+    const csp=document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content')||'';
+    const remoteImage=await new Promise((resolve)=>{
+      const image=new Image();
+      let settled=false;
+      const finish=(value)=>{if(settled)return;settled=true;resolve(value);};
+      image.onload=()=>finish('allowed');
+      image.onerror=()=>finish('blocked');
+      image.src='https://example.com/favicon.ico?minarva-session-probe='+Date.now();
+      setTimeout(()=>finish('timeout'),3000);
+    });
+    const popup=window.open('https://example.com/minarva-popup-probe','_blank');
+    await new Promise((resolve)=>setTimeout(resolve,100));
+    const popupOpened=Boolean(popup&&!popup.closed);
+    try{popup?.close();}catch{}
+    return JSON.stringify({csp,remoteImage,popupOpened});
+  })()`);
+  console.log(`SECURITY_BOUNDARY ${securityBoundary}`);
+  const security = JSON.parse(securityBoundary);
+  if (!security.csp.includes("default-src 'self'") || !security.csp.includes("object-src 'none'") || !security.csp.includes("frame-src 'none'")) {
+    throw new Error('Desktop CSP is missing required deny directives.');
+  }
+  if (security.remoteImage !== 'blocked') throw new Error(`Remote image was not blocked: ${security.remoteImage}`);
+  if (security.popupOpened) throw new Error('Remote popup was not denied.');
+  console.log('SECURITY_BOUNDARY PASS');
+
   const desktopApi = await cdpEval(ws, `(async()=>{const api=window.minarvaDesktop; if(!api) throw new Error('minarvaDesktop bridge missing'); const device=await api.getDeviceId?.(); const trial=await api.getTrialState(); return JSON.stringify({device,trial})})()`);
   console.log(`DEVICE_TRIAL_BEFORE ${desktopApi}`);
   const before = JSON.parse(desktopApi);
