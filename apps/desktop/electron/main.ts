@@ -102,6 +102,14 @@ function configureDesktopSession() {
     runtimeSmokeLog(`permission-check-denied permission=${permission} origin=${requestingOrigin || "unknown"}`);
     return false;
   });
+  desktopSession.setDevicePermissionHandler((details) => {
+    runtimeSmokeLog(`device-permission-denied type=${details.deviceType} origin=${details.origin || "unknown"}`);
+    return false;
+  });
+  desktopSession.setDisplayMediaRequestHandler((_request, callback) => {
+    runtimeSmokeLog("display-media-request-denied");
+    callback(null);
+  });
   desktopSession.webRequest.onBeforeRequest((details, callback) => {
     const allowed = isAllowedSessionRequest(details.url, details.resourceType);
     if (!allowed) runtimeSmokeLog(`remote-resource-blocked type=${details.resourceType} url=${details.url}`);
