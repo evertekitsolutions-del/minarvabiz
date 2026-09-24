@@ -18,7 +18,17 @@ import type {
   SupplierPayableAging,
   UUID,
 } from "@minarvabiz/types";
-import { generateId, nowISO } from "@minarvabiz/utils";
+import {
+  addMinorUnits,
+  fromMinorUnits,
+  generateId,
+  multiplyMinorByQuantity,
+  nowISO,
+  percentOfMinor,
+  subtractMinorUnits,
+  toMinorUnits,
+  toPercentBasisPoints,
+} from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { touchPersistence } from "./autosave";
 import { auditAction } from "./audit-actions";
@@ -33,10 +43,6 @@ const purchaseInvoices: PurchaseInvoice[] = [];
 let poSequence = 0;
 let grnSequence = 0;
 let invoiceSequence = 0;
-
-function r2(n: number): number {
-  return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
-}
 
 function r3(n: number): number {
   return Math.round((Number(n) + Number.EPSILON) * 1000) / 1000;
@@ -141,13 +147,16 @@ export function createPurchaseOrder(input: {
     const quantity = Number(item.quantity);
     const unitCost = item.unitCost == null ? Number(product?.costPrice || 0) : Number(item.unitCost);
     const rawTaxRate = item.taxRate == null ? 0 : Number(item.taxRate);
-    const taxRate = Math.max(0, rawTaxRate);
+    const taxRate = toPercentBasisPoints(Math.max(0, rawTaxRate)) / 100;
     if (!description) errors.push("Every line needs a description or product");
     if (!Number.isFinite(quantity) || quantity <= 0) errors.push(`${description || "Line"}: quantity must be greater than zero`);
     if (!Number.isFinite(unitCost) || unitCost < 0) errors.push(`${description || "Line"}: unit cost cannot be negative`);
     if (!Number.isFinite(rawTaxRate)) errors.push(`${description || "Line"}: tax rate must be a finite number`);
-    const base = r2(Math.max(0, quantity) * Math.max(0, unitCost));
-    const taxAmount = r2(base * taxRate / 100);
+    const unitCostMinor = toMinorUnits(Math.max(0, unitCost));
+    const baseMinor = multiplyMinorByQuantity(unitCostMinor, Math.max(0, quantity));
+    const taxMinor = percentOfMinor(baseMinor, taxRate);
+    const base = fromMinorUnits(baseMinor);
+    const taxAmount = fromMinorUnits(taxMinor);
     normalized.push({
       id: generateId(),
       purchaseOrderId: "",
@@ -155,19 +164,21 @@ export function createPurchaseOrder(input: {
       description,
       orderedQuantity: r3(quantity),
       receivedQuantity: 0,
-      unitCost: r2(unitCost),
-      taxRate: r2(taxRate),
+      unitCost: fromMinorUnits(toMinorUnits(unitCost)),
+      taxRate,
       lineSubtotal: base,
       taxAmount,
-      lineTotal: r2(base + taxAmount),
+      lineTotal: fromMinorUnits(addMinorUnits(baseMinor, taxMinor)),
     });
   }
   if (errors.length || !supplier) return { purchaseOrder: null, errors };
 
   const id = generateId();
   normalized.forEach((line) => { line.purchaseOrderId = id; });
-  const subtotal = r2(normalized.reduce((sum, line) => sum + line.lineSubtotal, 0));
-  const taxAmount = r2(normalized.reduce((sum, line) => sum + line.taxAmount, 0));
+  const subtotalMinor = addMinorUnits(...normalized.map((line) => toMinorUnits(line.lineSubtotal)));
+  const taxMinor = addMinorUnits(...normalized.map((line) => toMinorUnits(line.taxAmount)));
+  const subtotal = fromMinorUnits(subtotalMinor);
+  const taxAmount = fromMinorUnits(taxMinor);
   const now = nowISO();
   const purchaseOrder: PurchaseOrder = {
     id,
@@ -180,7 +191,7 @@ export function createPurchaseOrder(input: {
     lines: normalized,
     subtotal,
     taxAmount,
-    total: r2(subtotal + taxAmount),
+    total: fromMinorUnits(addMinorUnits(subtotalMinor, taxMinor)),
     notes: input.notes ?? null,
     createdAt: now,
     updatedAt: now,
@@ -301,7 +312,7 @@ export function receivePurchaseOrder(input: {
       description: poLine.description,
       receivedQuantity: quantity,
       unitCost: poLine.unitCost,
-      lineTotal: r2(quantity * poLine.unitCost),
+      lineTotal: fromMinorUnits(multiplyMinorByQuantity(toMinorUnits(poLine.unitCost), quantity)),
     });
   }
   if (errors.length || !receiptLines.length) {
@@ -346,7 +357,7 @@ export function receivePurchaseOrder(input: {
     supplierName: po.supplierName ?? null,
     receiptDate: input.receiptDate || now.slice(0, 10),
     lines: receiptLines,
-    subtotal: r2(receiptLines.reduce((sum, line) => sum + line.lineTotal, 0)),
+    subtotal: fromMinorUnits(addMinorUnits(...receiptLines.map((line) => toMinorUnits(line.lineTotal)))),
     notes: input.notes ?? null,
     createdAt: now,
     branchId: po.branchId ?? null,
@@ -441,13 +452,15 @@ export function createPurchaseInvoice(input: {
     const quantity = r3(Number(item.quantity));
     if (!Number.isFinite(quantity) || quantity <= 0) { errors.push(`${poLine.description}: invoice quantity must be greater than zero`); continue; }
     if (quantity > available) { errors.push(`${poLine.description}: cannot invoice ${quantity}; only ${available} received and uninvoiced`); continue; }
-    const unitCost = r2(item.unitCost == null ? poLine.unitCost : Number(item.unitCost));
+    const unitCost = fromMinorUnits(toMinorUnits(item.unitCost == null ? poLine.unitCost : Number(item.unitCost)));
     const rawTaxRate = item.taxRate == null ? poLine.taxRate : Number(item.taxRate);
     if (!Number.isFinite(unitCost) || unitCost < 0) { errors.push(`${poLine.description}: unit cost cannot be negative`); continue; }
     if (!Number.isFinite(rawTaxRate)) { errors.push(`${poLine.description}: tax rate must be a finite number`); continue; }
-    const taxRate = r2(Math.max(0, rawTaxRate));
-    const lineSubtotal = r2(quantity * unitCost);
-    const taxAmount = r2(lineSubtotal * taxRate / 100);
+    const taxRate = toPercentBasisPoints(Math.max(0, rawTaxRate)) / 100;
+    const lineSubtotalMinor = multiplyMinorByQuantity(toMinorUnits(unitCost), quantity);
+    const taxAmountMinor = percentOfMinor(lineSubtotalMinor, taxRate);
+    const lineSubtotal = fromMinorUnits(lineSubtotalMinor);
+    const taxAmount = fromMinorUnits(taxAmountMinor);
     lines.push({
       id: generateId(),
       purchaseInvoiceId: invoiceId,
@@ -459,13 +472,15 @@ export function createPurchaseInvoice(input: {
       taxRate,
       lineSubtotal,
       taxAmount,
-      lineTotal: r2(lineSubtotal + taxAmount),
+      lineTotal: fromMinorUnits(addMinorUnits(lineSubtotalMinor, taxAmountMinor)),
     });
   }
   if (errors.length || !lines.length) return { purchaseInvoice: null, errors: errors.length ? errors : ["Nothing to invoice"] };
 
-  const subtotal = r2(lines.reduce((sum, line) => sum + line.lineSubtotal, 0));
-  const taxAmount = r2(lines.reduce((sum, line) => sum + line.taxAmount, 0));
+  const subtotalMinor = addMinorUnits(...lines.map((line) => toMinorUnits(line.lineSubtotal)));
+  const taxMinor = addMinorUnits(...lines.map((line) => toMinorUnits(line.taxAmount)));
+  const subtotal = fromMinorUnits(subtotalMinor);
+  const taxAmount = fromMinorUnits(taxMinor);
   const now = nowISO();
   const purchaseInvoice: PurchaseInvoice = {
     id: invoiceId,
@@ -481,9 +496,9 @@ export function createPurchaseInvoice(input: {
     lines,
     subtotal,
     taxAmount,
-    total: r2(subtotal + taxAmount),
+    total: fromMinorUnits(addMinorUnits(subtotalMinor, taxMinor)),
     paidAmount: 0,
-    balanceAmount: r2(subtotal + taxAmount),
+    balanceAmount: fromMinorUnits(addMinorUnits(subtotalMinor, taxMinor)),
     notes: input.notes ?? null,
     createdAt: now,
     updatedAt: now,
@@ -512,7 +527,10 @@ export function postPurchaseInvoice(id: UUID): { purchaseInvoice: PurchaseInvoic
   invoice.postedAt = nowISO();
   invoice.updatedAt = nowISO();
   invoice.version += 1;
-  supplier.outstandingBalance = r2(supplier.outstandingBalance + invoice.balanceAmount);
+  supplier.outstandingBalance = fromMinorUnits(addMinorUnits(
+    toMinorUnits(supplier.outstandingBalance),
+    toMinorUnits(invoice.balanceAmount)
+  ));
   supplier.updatedAt = nowISO();
   posting.commit();
   void remoteUpsertPurchaseInvoice(cloneInvoice(invoice));
@@ -563,8 +581,10 @@ export function prepareSupplierInvoiceSettlements(supplierId: UUID, allocations:
     if (errors.length || committed) return [];
     committed = true;
     for (const { invoice, before, amount } of changes) {
-      invoice.paidAmount = r2(invoice.paidAmount + amount);
-      invoice.balanceAmount = r2(Math.max(0, invoice.total - invoice.paidAmount));
+      const paidMinor = addMinorUnits(toMinorUnits(invoice.paidAmount), toMinorUnits(amount));
+      const totalMinor = toMinorUnits(invoice.total);
+      invoice.paidAmount = fromMinorUnits(paidMinor);
+      invoice.balanceAmount = fromMinorUnits(Math.max(0, subtractMinorUnits(totalMinor, paidMinor)));
       invoice.status = invoice.balanceAmount === 0 ? "paid" : "partially_paid";
       invoice.updatedAt = nowISO(); invoice.version += 1;
       auditAction("purchase_invoice.payment", "purchase_invoices", invoice.id, before, invoice);
@@ -582,12 +602,15 @@ export function cancelPurchaseInvoice(id: UUID): { purchaseInvoice: PurchaseInvo
     return { purchaseInvoice: null, error: "Paid supplier invoice cannot be cancelled; use a debit note in the accounting workflow" };
   }
   const supplier = phase5Store.getSupplier(invoice.supplierId);
-  if (invoice.status === "posted" && (!supplier || !Number.isFinite(supplier.outstandingBalance) || r2(supplier.outstandingBalance) < r2(invoice.balanceAmount))) return { purchaseInvoice: null, error: "Supplier balance needs reconciliation before cancellation" };
+  if (invoice.status === "posted" && (!supplier || !Number.isFinite(supplier.outstandingBalance) || toMinorUnits(supplier.outstandingBalance) < toMinorUnits(invoice.balanceAmount))) return { purchaseInvoice: null, error: "Supplier balance needs reconciliation before cancellation" };
   const reversal = planPurchaseInvoiceCancellation(invoice);
   if (reversal.errors.length) return { purchaseInvoice: null, error: reversal.errors.join("; ") };
   const before = cloneInvoice(invoice);
   if (invoice.status === "posted" && supplier) {
-    supplier.outstandingBalance = r2(Math.max(0, supplier.outstandingBalance - invoice.balanceAmount));
+    supplier.outstandingBalance = fromMinorUnits(Math.max(
+      0,
+      subtractMinorUnits(toMinorUnits(supplier.outstandingBalance), toMinorUnits(invoice.balanceAmount))
+    ));
     supplier.updatedAt = nowISO();
     void remoteUpsertSupplier(supplier);
   }
@@ -614,13 +637,13 @@ export function buildSupplierPayableAging(asOfDate = new Date().toISOString().sl
       supplierName: invoice.supplierName || invoice.supplierId,
       current: 0, days1to30: 0, days31to60: 0, days61to90: 0, days90plus: 0, totalOutstanding: 0,
     };
-    const amount = r2(invoice.balanceAmount);
-    if (overdueDays <= 0) row.current = r2(row.current + amount);
-    else if (overdueDays <= 30) row.days1to30 = r2(row.days1to30 + amount);
-    else if (overdueDays <= 60) row.days31to60 = r2(row.days31to60 + amount);
-    else if (overdueDays <= 90) row.days61to90 = r2(row.days61to90 + amount);
-    else row.days90plus = r2(row.days90plus + amount);
-    row.totalOutstanding = r2(row.totalOutstanding + amount);
+    const amountMinor = toMinorUnits(invoice.balanceAmount);
+    if (overdueDays <= 0) row.current = fromMinorUnits(addMinorUnits(toMinorUnits(row.current), amountMinor));
+    else if (overdueDays <= 30) row.days1to30 = fromMinorUnits(addMinorUnits(toMinorUnits(row.days1to30), amountMinor));
+    else if (overdueDays <= 60) row.days31to60 = fromMinorUnits(addMinorUnits(toMinorUnits(row.days31to60), amountMinor));
+    else if (overdueDays <= 90) row.days61to90 = fromMinorUnits(addMinorUnits(toMinorUnits(row.days61to90), amountMinor));
+    else row.days90plus = fromMinorUnits(addMinorUnits(toMinorUnits(row.days90plus), amountMinor));
+    row.totalOutstanding = fromMinorUnits(addMinorUnits(toMinorUnits(row.totalOutstanding), amountMinor));
     bySupplier.set(invoice.supplierId, row);
   }
   return [...bySupplier.values()].sort((a, b) => b.totalOutstanding - a.totalOutstanding);
