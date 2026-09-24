@@ -3,7 +3,16 @@ import { allowDemoSeed } from "./runtime-mode";
 import type {
   Customer, Product, Category, Sale, SaleItem, Payment, CartLine, UUID, PaymentMethod, InventoryTransaction,
 } from "@minarvabiz/types";
-import { generateId, nowISO } from "@minarvabiz/utils";
+import {
+  addMinorUnits,
+  formatMinorUnits,
+  fromMinorUnits,
+  generateId,
+  nowISO,
+  subtractMinorUnits,
+  toMinorUnits,
+  type MoneyMinor,
+} from "@minarvabiz/utils";
 import {
   calculateCartTotals, cartLineToSaleItem, allocatePayment, validateCart, nextInvoiceNumber, validateTender,
 } from "./sales";
@@ -454,24 +463,34 @@ export function createSale(input: {
   if (errors.length) return { sale: null as unknown as Sale, payment: null, payments: [], errors };
 
   const totals = calculateCartTotals(input.lines);
-  const requestedCredit = round2(Math.max(0, input.creditAmount ?? 0));
-  const creditApplied = round2(Math.min(requestedCredit, totals.grandTotal));
-  const remainingAfterCredit = round2(Math.max(0, totals.grandTotal - creditApplied));
+  const grandTotalMinor = toMinorUnits(totals.grandTotal);
+  const requestedCreditMinor = Math.max(0, toMinorUnits(input.creditAmount ?? 0));
+  const creditAppliedMinor = Math.min(requestedCreditMinor, grandTotalMinor);
+  const remainingAfterCreditMinor = Math.max(0, subtractMinorUnits(grandTotalMinor, creditAppliedMinor));
   const requestedSplits = (input.paymentSplits?.length
     ? input.paymentSplits
     : [{ method: input.paymentMethod, amount: input.paidAmount }])
-    .map((split) => ({
-      method: split.method,
-      amount: round2(Number(split.amount) || 0),
-      reference: split.reference ?? null,
-    }))
-    .filter((split) => split.amount !== 0);
-  const tender = validateTender(remainingAfterCredit, requestedSplits);
+    .map((split) => {
+      const amountMinor = toMinorUnits(Number(split.amount) || 0);
+      return {
+        method: split.method,
+        amount: fromMinorUnits(amountMinor),
+        amountMinor,
+        reference: split.reference ?? null,
+      };
+    })
+    .filter((split) => split.amountMinor !== 0);
+  const tender = validateTender(fromMinorUnits(remainingAfterCreditMinor), requestedSplits);
   if (tender.errors.length) {
     return { sale: null as unknown as Sale, payment: null, payments: [], errors: tender.errors };
   }
-  const actualPayment = tender.collectible;
-  const allocation = allocatePayment(totals.grandTotal, creditApplied + actualPayment);
+  const actualPaymentMinor = toMinorUnits(tender.collectible);
+  const actualPayment = fromMinorUnits(actualPaymentMinor);
+  const creditApplied = fromMinorUnits(creditAppliedMinor);
+  const allocation = allocatePayment(
+    totals.grandTotal,
+    fromMinorUnits(addMinorUnits(creditAppliedMinor, actualPaymentMinor))
+  );
   const invoiceNumber = nextInvoiceNumber(lastInvoice);
   lastInvoice = invoiceNumber;
   const saleId = generateId();
@@ -482,7 +501,7 @@ export function createSale(input: {
     saleDate: nowISO(), subtotal: totals.itemsSubtotal, discountAmount: totals.itemsDiscount, taxAmount: totals.itemsTax,
     total: allocation.total, paidAmount: allocation.paidAmount, balanceAmount: allocation.balanceAmount,
     status: allocation.status === "draft" ? "draft" : allocation.status,
-    notes: [input.notes, creditApplied > 0 ? `Exchange/store credit applied: ${creditApplied.toFixed(2)}` : null].filter(Boolean).join(" · ") || null,
+    notes: [input.notes, creditAppliedMinor > 0 ? `Exchange/store credit applied: ${formatMinorUnits(creditAppliedMinor)}` : null].filter(Boolean).join(" · ") || null,
     items,
     createdAt: nowISO(), updatedAt: nowISO(), createdBy: input.createdBy ?? null, version: 1,
   };
@@ -500,8 +519,14 @@ export function createSale(input: {
   }
 
   if (customer) {
-    customer.totalSpending = round2(customer.totalSpending + allocation.paidAmount);
-    if (allocation.balanceAmount > 0) customer.outstandingBalance = round2(customer.outstandingBalance + allocation.balanceAmount);
+    customer.totalSpending = fromMinorUnits(
+      addMinorUnits(toMinorUnits(customer.totalSpending), toMinorUnits(allocation.paidAmount))
+    );
+    if (allocation.balanceAmount > 0) {
+      customer.outstandingBalance = fromMinorUnits(
+        addMinorUnits(toMinorUnits(customer.outstandingBalance), toMinorUnits(allocation.balanceAmount))
+      );
+    }
     customer.updatedAt = nowISO();
     customer.version = (customer.version ?? 1) + 1;
   }
@@ -510,11 +535,12 @@ export function createSale(input: {
   touchPersistence();
 
   const salePayments: Payment[] = [];
-  let paymentRemaining = actualPayment;
+  let paymentRemainingMinor: MoneyMinor = actualPaymentMinor;
   for (const split of requestedSplits) {
-    if (paymentRemaining <= 0) break;
-    const amount = round2(Math.min(split.amount, paymentRemaining));
-    if (amount <= 0) continue;
+    if (paymentRemainingMinor <= 0) break;
+    const amountMinor = Math.min(split.amountMinor, paymentRemainingMinor);
+    if (amountMinor <= 0) continue;
+    const amount = fromMinorUnits(amountMinor);
     const payment: Payment = {
       id: generateId(), amount, method: split.method,
       referenceType: "sale", referenceId: saleId, customerId: input.customerId ?? null,
@@ -523,7 +549,7 @@ export function createSale(input: {
     };
     payments.push(payment);
     salePayments.push(payment);
-    paymentRemaining = round2(paymentRemaining - amount);
+    paymentRemainingMinor = subtractMinorUnits(paymentRemainingMinor, amountMinor);
   }
   if (salePayments.length) touchPersistence();
 
