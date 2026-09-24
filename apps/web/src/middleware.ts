@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { buildMinarvaNonceCsp } from "@minarvabiz/utils/security-headers";
 
 function isPlaceholder(value: string): boolean {
   const normalized = value.toLowerCase();
@@ -41,30 +42,16 @@ function connectSources(): string[] {
   return Array.from(new Set(sources));
 }
 
-function buildContentSecurityPolicy(nonce: string): string {
-  const developmentScriptPolicy = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
-  const directives = [
-    "default-src 'self'",
-    "script-src 'self' 'nonce-" + nonce + "' 'strict-dynamic'" + developmentScriptPolicy,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https:",
-    "font-src 'self' data:",
-    "connect-src " + connectSources().join(" "),
-    "worker-src 'self' blob:",
-    "manifest-src 'self'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-  ];
-
-  if (process.env.NODE_ENV === "production") directives.push("upgrade-insecure-requests");
-  return directives.join("; ");
-}
-
 export function middleware(request: NextRequest) {
   const nonce = createNonce();
-  const contentSecurityPolicy = buildContentSecurityPolicy(nonce);
+  const contentSecurityPolicy = buildMinarvaNonceCsp({
+    nonce,
+    environment: process.env.NODE_ENV,
+    connectSources: connectSources(),
+    imageSources: ["https:"],
+    workerSources: ["'self'", "blob:"],
+    manifestSources: ["'self'"],
+  });
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
