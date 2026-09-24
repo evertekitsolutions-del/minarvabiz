@@ -11,20 +11,90 @@ export function formatMoney(amount: number, currency = "INR", locale = "en-IN"):
   return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
 }
 
+export const MONEY_MINOR_FACTOR = 100;
+export const QUANTITY_MILLI_FACTOR = 1000;
+export const PERCENT_BASIS_FACTOR = 100;
+
+export type MoneyMinor = number;
+export type QuantityMilli = number;
+export type PercentBasisPoints = number;
+
+function safeInteger(value: number, label: string): number {
+  if (!Number.isSafeInteger(value)) throw new Error(`${label} exceeds the safe integer range`);
+  return Object.is(value, -0) ? 0 : value;
+}
+
+function roundIntegerDivision(numerator: number, denominator: number): number {
+  if (!Number.isSafeInteger(numerator) || !Number.isSafeInteger(denominator) || denominator <= 0) {
+    throw new Error("Invalid integer division");
+  }
+  if (numerator >= 0) return safeInteger(Math.floor((numerator + Math.floor(denominator / 2)) / denominator), "Rounded value");
+  return -safeInteger(Math.floor((-numerator + Math.floor(denominator / 2)) / denominator), "Rounded value");
+}
+
+export function toMinorUnits(amount: number): MoneyMinor {
+  if (!Number.isFinite(amount)) throw new Error("Money amount must be finite");
+  return safeInteger(Math.round(amount * MONEY_MINOR_FACTOR), "Money amount");
+}
+
+export function fromMinorUnits(amountMinor: MoneyMinor): number {
+  safeInteger(amountMinor, "Money minor amount");
+  return amountMinor / MONEY_MINOR_FACTOR;
+}
+
+export function toQuantityMilli(quantity: number): QuantityMilli {
+  if (!Number.isFinite(quantity)) throw new Error("Quantity must be finite");
+  return safeInteger(Math.round(quantity * QUANTITY_MILLI_FACTOR), "Quantity");
+}
+
+export function toPercentBasisPoints(percent: number): PercentBasisPoints {
+  if (!Number.isFinite(percent)) throw new Error("Percent must be finite");
+  return safeInteger(Math.round(percent * PERCENT_BASIS_FACTOR), "Percent");
+}
+
+export function addMinorUnits(...amounts: MoneyMinor[]): MoneyMinor {
+  let total = 0;
+  for (const amount of amounts) {
+    safeInteger(amount, "Money minor amount");
+    total = safeInteger(total + amount, "Money total");
+  }
+  return total;
+}
+
+export function subtractMinorUnits(a: MoneyMinor, b: MoneyMinor): MoneyMinor {
+  safeInteger(a, "Money minor amount");
+  safeInteger(b, "Money minor amount");
+  return safeInteger(a - b, "Money difference");
+}
+
+export function multiplyMinorByQuantity(amountMinor: MoneyMinor, quantity: number): MoneyMinor {
+  safeInteger(amountMinor, "Money minor amount");
+  const quantityMilli = toQuantityMilli(quantity);
+  const numerator = safeInteger(amountMinor * quantityMilli, "Money quantity product");
+  return safeInteger(roundIntegerDivision(numerator, QUANTITY_MILLI_FACTOR), "Money quantity result");
+}
+
+export function percentOfMinor(amountMinor: MoneyMinor, percent: number): MoneyMinor {
+  safeInteger(amountMinor, "Money minor amount");
+  const basisPoints = toPercentBasisPoints(percent);
+  const numerator = safeInteger(amountMinor * basisPoints, "Money percent product");
+  return safeInteger(roundIntegerDivision(numerator, 100 * PERCENT_BASIS_FACTOR), "Money percent result");
+}
+
 export function roundMoney(amount: number): number {
-  return Math.round((amount + Number.EPSILON) * 100) / 100;
+  return fromMinorUnits(toMinorUnits(amount));
 }
 
 export function addMoney(...amounts: number[]): number {
-  return roundMoney(amounts.reduce((s, a) => s + a, 0));
+  return fromMinorUnits(addMinorUnits(...amounts.map(toMinorUnits)));
 }
 
 export function subtractMoney(a: number, b: number): number {
-  return roundMoney(a - b);
+  return fromMinorUnits(subtractMinorUnits(toMinorUnits(a), toMinorUnits(b)));
 }
 
 export function percentOf(amount: number, percent: number): number {
-  return roundMoney((amount * percent) / 100);
+  return fromMinorUnits(percentOfMinor(toMinorUnits(amount), percent));
 }
 
 export function nowISO(): string { return new Date().toISOString(); }
