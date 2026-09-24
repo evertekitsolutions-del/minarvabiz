@@ -108,21 +108,30 @@ export interface TenderValidation {
  * supporting normal cash-change workflows.
  */
 export function validateTender(total: number, splits: TenderSplit[]): TenderValidation {
-  const payableMinor = toMinorUnits(Math.max(0, total));
-  const normalized = splits
-    .map((split) => ({
-      method: split.method,
-      amountMinor: toMinorUnits(Number(split.amount) || 0),
-      reference: split.reference ?? null,
-    }))
-    .filter((split) => split.amountMinor !== 0);
-
   const errors: string[] = [];
-  for (const split of normalized) {
+  let payableMinor: MoneyMinor;
+  try {
+    payableMinor = toMinorUnits(Math.max(0, total));
+  } catch {
+    return { tendered: 0, collectible: 0, balanceDue: 0, changeDue: 0, cashTendered: 0, errors: ["Payable amount is invalid"] };
+  }
+
+  const normalized: Array<{ method: PaymentMethod; amountMinor: MoneyMinor; reference: string | null }> = [];
+  for (const split of splits) {
+    try {
+      const amountMinor = toMinorUnits(Number(split.amount) || 0);
+      normalized.push({ method: split.method, amountMinor, reference: split.reference ?? null });
+    } catch {
+      errors.push(`${split.method}: payment amount must be finite and within range`);
+    }
+  }
+
+  const nonZero = normalized.filter((split) => split.amountMinor !== 0);
+  for (const split of nonZero) {
     if (split.amountMinor < 0) errors.push(`${split.method}: payment amount cannot be negative`);
   }
 
-  const positive = normalized.filter((split) => split.amountMinor > 0);
+  const positive = nonZero.filter((split) => split.amountMinor > 0);
   const tenderedMinor = addMinorUnits(...positive.map((split) => split.amountMinor));
   const cashTenderedMinor = addMinorUnits(
     ...positive.filter((split) => split.method === "cash").map((split) => split.amountMinor)
