@@ -22,7 +22,12 @@ CREATE TABLE IF NOT EXISTS public.license_admin_sessions (
     OR
     (source = 'emergency' AND auth_method = 'emergency' AND auth_user_id IS NULL)
   ),
-  CONSTRAINT license_admin_sessions_expiry CHECK (expires_at > created_at)
+  CONSTRAINT license_admin_sessions_expiry CHECK (expires_at > created_at),
+  CONSTRAINT license_admin_sessions_max_duration CHECK (
+    (source = 'supabase' AND expires_at <= created_at + interval '1 hour')
+    OR
+    (source = 'emergency' AND expires_at <= created_at + interval '15 minutes')
+  )
 );
 
 CREATE INDEX IF NOT EXISTS idx_license_admin_sessions_actor_active
