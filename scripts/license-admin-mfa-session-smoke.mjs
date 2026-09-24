@@ -49,7 +49,7 @@ try {
 
   const namedAdmin = await readFile(new URL("../apps/license-admin/src/lib/named-admin.ts", import.meta.url), "utf8");
   assert.match(namedAdmin, /authFetch<MfaEnrollResponse>/);
-  assert.match(namedAdmin, /"\\/factors"/);
+  assert.ok(namedAdmin.includes('"/factors"'));
   assert.match(namedAdmin, /\/challenge/);
   assert.match(namedAdmin, /\/verify/);
   assert.match(namedAdmin, /aal2/);
@@ -79,6 +79,8 @@ try {
   );
   assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.license_admin_sessions/);
   assert.match(migration, /revoked_at TIMESTAMPTZ/);
+  assert.match(migration, /license_admin_sessions_max_duration/);
+  assert.match(migration, /interval '15 minutes'/);
   assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
   assert.match(migration, /REVOKE ALL[\s\S]*anon, authenticated/);
   assert.match(migration, /GRANT SELECT, INSERT, UPDATE, DELETE[\s\S]*TO service_role/);
