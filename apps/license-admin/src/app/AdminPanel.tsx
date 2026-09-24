@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@minarvabiz/ui";
-import { createCommercialLicense, createOfflineActivationPackage, loginAdmin, logoutAdmin, setLicenseStatus } from "./actions";
+import { createCommercialLicense, createOfflineActivationPackage, loginAdmin, loginEmergencyAdmin, logoutAdmin, setLicenseStatus } from "./actions";
 import type { LicensePlan, Edition, LicenseFeatures } from "@minarvabiz/types";
 
 const PLANS: LicensePlan[] = ["trial", "basic", "professional", "business", "enterprise"];
@@ -14,6 +14,7 @@ const FEATURE_LABELS: Record<keyof LicenseFeatures, string> = {
   cloudSync: "Cloud sync", multiUser: "Multi-user", multiBranch: "Multi-branch", apiAccess: "API access",
 };
 type LicenseRow = any;
+type AdminIdentityView = { id: string; email: string; displayName: string; source: "supabase" | "emergency" };
 
 function defaultFeatures(plan: LicensePlan): LicenseFeatures {
   const full: LicenseFeatures = { sales:true, customers:true, inventory:true, tailoring:true, orders:true, laundry:true, reports:true, staff:true, advancedReports:true, cloudSync:true, multiUser:true, multiBranch:true, apiAccess:true };
@@ -25,9 +26,9 @@ function defaultFeatures(plan: LicensePlan): LicenseFeatures {
   return Object.fromEntries((Object.keys(full) as (keyof LicenseFeatures)[]).map((key) => [key, Boolean(plans[plan][key])])) as LicenseFeatures;
 }
 
-export default function AdminPanel({ authenticated, initialLicenses }: { authenticated: boolean; initialLicenses: LicenseRow[] }) {
+export default function AdminPanel({ identity, initialLicenses }: { identity: AdminIdentityView | null; initialLicenses: LicenseRow[] }) {
   const router = useRouter();
-  const [password, setPassword] = React.useState(""); const [customerName, setCustomerName] = React.useState("");
+  const [email, setEmail] = React.useState(""); const [password, setPassword] = React.useState(""); const [emergencyPassword, setEmergencyPassword] = React.useState(""); const [customerName, setCustomerName] = React.useState("");
   const [plan, setPlan] = React.useState<LicensePlan>("professional"); const [edition, setEdition] = React.useState<Edition>("hybrid");
   const [expiresAt, setExpiresAt] = React.useState(""); const [activationLimit, setActivationLimit] = React.useState("");
   const [features, setFeatures] = React.useState<LicenseFeatures>(() => defaultFeatures("professional"));
@@ -35,7 +36,8 @@ export default function AdminPanel({ authenticated, initialLicenses }: { authent
   const [lastToken, setLastToken] = React.useState<string | null>(null); const [message, setMessage] = React.useState<string | null>(null); const [busy, setBusy] = React.useState(false);
   React.useEffect(() => { setFeatures(defaultFeatures(plan)); }, [plan]);
 
-  async function login() { setBusy(true); setMessage(null); const result = await loginAdmin(password); setBusy(false); if (!result.ok) { setMessage(result.error || "Login failed"); return; } setPassword(""); router.refresh(); }
+  async function login() { setBusy(true); setMessage(null); const result = await loginAdmin(email, password); setBusy(false); if (!result.ok) { setMessage(result.error || "Login failed"); return; } setEmail(""); setPassword(""); router.refresh(); }
+  async function emergencyLogin() { setBusy(true); setMessage(null); const result = await loginEmergencyAdmin(emergencyPassword); setBusy(false); if (!result.ok) { setMessage(result.error || "Emergency login failed"); return; } setEmergencyPassword(""); router.refresh(); }
   async function issue() {
     if (!customerName.trim()) { setMessage("Customer name is required."); return; }
     setBusy(true); setMessage(null);
@@ -52,11 +54,32 @@ export default function AdminPanel({ authenticated, initialLicenses }: { authent
     setMessage(`Offline activation package created for activation ${result.activationId}. Copy the .lic file to the target Windows PC.`); router.refresh();
   }
 
-  if (!authenticated) return <main className="min-h-screen bg-slate-50 p-6 md:p-10"><Card className="mx-auto mt-20 max-w-md"><CardHeader><CardTitle>Minarva Biz — License Admin Emergency Access</CardTitle></CardHeader><CardContent className="space-y-4"><p className="text-sm text-slate-500">Shared-secret access is break-glass only and is disabled unless explicitly enabled on the admin server.</p><input type="password" autoComplete="current-password" className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" placeholder="Emergency admin credential" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void login(); }} />{message && <p className="text-sm text-rose-600">{message}</p>}<Button disabled={busy || !password} onClick={() => void login()}>{busy ? "Signing in…" : "Sign in"}</Button></CardContent></Card></main>;
+  if (!identity) return (
+    <main className="min-h-screen bg-slate-50 p-6 md:p-10">
+      <Card className="mx-auto mt-16 max-w-md">
+        <CardHeader><CardTitle>Minarva Biz — License Admin</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-slate-500">Sign in with your named administrator account.</p>
+          <input type="email" autoComplete="username" maxLength={254} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" placeholder="Administrator email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <input type="password" autoComplete="current-password" maxLength={2048} className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void login(); }} />
+          {message && <p className="text-sm text-rose-600">{message}</p>}
+          <Button disabled={busy || !email.trim() || !password} onClick={() => void login()}>{busy ? "Signing in…" : "Sign in"}</Button>
+          <details className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <summary className="cursor-pointer text-xs font-medium text-slate-600">Emergency break-glass access</summary>
+            <div className="mt-3 space-y-3">
+              <p className="text-xs text-slate-500">Shared-secret access is disabled by default and requires a named emergency actor on the server.</p>
+              <input type="password" autoComplete="off" maxLength={2048} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm" placeholder="Emergency admin credential" value={emergencyPassword} onChange={(e) => setEmergencyPassword(e.target.value)} />
+              <Button variant="outline" disabled={busy || !emergencyPassword} onClick={() => void emergencyLogin()}>{busy ? "Checking…" : "Emergency sign in"}</Button>
+            </div>
+          </details>
+        </CardContent>
+      </Card>
+    </main>
+  );
 
   const availableKeys = (Object.keys(features) as (keyof LicenseFeatures)[]).filter((key) => features[key]);
   return <main className="min-h-screen bg-slate-50 p-6 md:p-10"><div className="mx-auto max-w-6xl space-y-6">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold text-slate-900">Minarva Biz — License Admin</h1><p className="mt-1 text-sm text-slate-500">Create, activate, control and revoke commercial licenses. Shared-secret sessions are intended only for emergency administration.</p></div><Button variant="outline" onClick={async () => { await logoutAdmin(); router.refresh(); }}>Sign out</Button></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold text-slate-900">Minarva Biz — License Admin</h1><p className="mt-1 text-sm text-slate-500">Signed in as <b>{identity.displayName}</b> · {identity.email}{identity.source === "emergency" ? " · emergency session" : ""}</p></div><Button variant="outline" onClick={async () => { await logoutAdmin(); router.refresh(); }}>Sign out</Button></div>
     <div className="grid gap-6 md:grid-cols-2">
       <Card><CardHeader><CardTitle className="text-base">Create customer license</CardTitle></CardHeader><CardContent className="space-y-3">
         <input className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" placeholder="Customer / organization name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} />
