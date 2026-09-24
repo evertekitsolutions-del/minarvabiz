@@ -137,8 +137,36 @@ jobs:
           grep -Fq 'X-Content-Type-Options' apps/license-admin/next.config.ts
           grep -Fq 'X-Frame-Options' apps/license-admin/next.config.ts
           grep -Fq 'Strict-Transport-Security' apps/license-admin/next.config.ts
-          grep -Fq 'Content-Security-Policy' apps/license-admin/next.config.ts
+          test -f apps/license-admin/src/middleware.ts
+          ! grep -Fq 'Content-Security-Policy' apps/license-admin/next.config.ts
+          grep -Fq 'Content-Security-Policy' apps/license-admin/src/middleware.ts
+          if grep -E "script-src[^;[:cntrl:]]*'unsafe-inline'" apps/license-admin/src/middleware.ts; then
+            echo "license-admin script-src must not contain unsafe-inline."
+            exit 1
+          fi
+          node scripts/license-admin-csp-smoke.mjs
       - run: pnpm --filter @minarvabiz/license-admin build
+      - name: Start license-admin production server
+        shell: bash
+        run: |
+          set -e
+          nohup pnpm --filter @minarvabiz/license-admin start > /tmp/minarva-license-admin.log 2>&1 &
+          echo $! > /tmp/minarva-license-admin.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3001/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/minarva-license-admin.log || true
+          exit 1
+      - name: Verify production nonce CSP runtime
+        env:
+          LICENSE_ADMIN_BASE_URL: http://127.0.0.1:3001/
+        run: node scripts/license-admin-csp-smoke.mjs
+      - name: Capture license-admin diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          cat /tmp/minarva-license-admin.log || true
 
   desktop:
     runs-on: ubuntu-latest
