@@ -1,4 +1,3 @@
-import { isAdminRole, type AdminRole } from "./admin-rbac";
 import {
   createCipheriv,
   createDecipheriv,
@@ -19,6 +18,7 @@ export const MIN_EMERGENCY_ADMIN_SECRET_LENGTH = 32;
 export const MAX_PREVIOUS_SECRET_GRACE_MS = 24 * 60 * 60 * 1000;
 
 export type AdminIdentitySource = "supabase" | "emergency";
+export type AdminRole = "viewer" | "operator" | "admin";
 export type AdminIdentity = {
   id: string;
   email: string;
@@ -53,6 +53,10 @@ function validUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function isAdminIdentityRole(value: unknown): value is AdminRole {
+  return value === "viewer" || value === "operator" || value === "admin";
+}
+
 function normalizeIdentity(identity: AdminIdentity): AdminIdentity | null {
   const id = String(identity?.id || "").trim();
   const email = normalizeEmail(identity?.email || "");
@@ -63,7 +67,7 @@ function normalizeIdentity(identity: AdminIdentity): AdminIdentity | null {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return null;
   if (!displayName || displayName.length > 120) return null;
   if (source !== "supabase" && source !== "emergency") return null;
-  if (!isAdminRole(role)) return null;
+  if (!isAdminIdentityRole(role)) return null;
   if (source === "emergency" && role !== "admin") return null;
   return { id, email, displayName, source, role };
 }
