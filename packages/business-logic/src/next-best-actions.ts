@@ -3,6 +3,8 @@
  * factual layer beneath a future AI assistant.
  */
 
+import { formatMoney, fromMinorUnits, toMinorUnits } from "@minarvabiz/utils";
+
 export type ActionPriority = "urgent" | "high" | "normal" | "low";
 export type ActionKind = "production" | "inventory" | "customer" | "payments" | "staff" | "backup";
 
@@ -54,7 +56,17 @@ export function generateNextBestActions(input: NextBestActionInput): NextBestAct
   const followUp = count(input.followUpCustomers);
   if (followUp) add({ id: "customer-followup", kind: "customer", priority: "normal", title: "Work the follow-up queue", reason: `${followUp} customer follow-up opportunities are available.`, score: 64 });
   const outstanding = count(input.outstandingAmount);
-  if (outstanding > 0) add({ id: "payments-outstanding", kind: "payments", priority: "high", title: "Collect outstanding balances", reason: `Outstanding customer balance is ₹${Math.round(outstanding).toLocaleString("en-IN")}.`, score: 86 });
+  if (outstanding > 0) {
+    const outstandingMoney = fromMinorUnits(toMinorUnits(outstanding));
+    add({
+      id: "payments-outstanding",
+      kind: "payments",
+      priority: "high",
+      title: "Collect outstanding balances",
+      reason: `Outstanding customer balance is ${formatMoney(outstandingMoney, "INR")}.`,
+      score: 86,
+    });
+  }
   const overloaded = count(input.overloadedStaff);
   if (overloaded) add({ id: "staff-overload", kind: "staff", priority: "high", title: "Rebalance staff workload", reason: `${overloaded} staff member${overloaded === 1 ? " is" : "s are"} currently overloaded.`, score: 80 });
   const backupAge = count(input.backupAgeDays);
