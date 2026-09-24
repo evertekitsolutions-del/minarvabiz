@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { buildNonceCsp, createCspNonce } from "@minarvabiz/security-headers";
 
 function isPlaceholder(value: string): boolean {
   const normalized = value.toLowerCase();
@@ -8,10 +9,6 @@ function isPlaceholder(value: string): boolean {
     normalized.includes("your-anon") ||
     normalized.includes("change-me")
   );
-}
-
-function createNonce(): string {
-  return Buffer.from(crypto.randomUUID(), "utf8").toString("base64");
 }
 
 function connectSources(): string[] {
@@ -41,30 +38,17 @@ function connectSources(): string[] {
   return Array.from(new Set(sources));
 }
 
-function buildContentSecurityPolicy(nonce: string): string {
-  const developmentScriptPolicy = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
-  const directives = [
-    "default-src 'self'",
-    "script-src 'self' 'nonce-" + nonce + "' 'strict-dynamic'" + developmentScriptPolicy,
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https:",
-    "font-src 'self' data:",
-    "connect-src " + connectSources().join(" "),
-    "worker-src 'self' blob:",
-    "manifest-src 'self'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-  ];
-
-  if (process.env.NODE_ENV === "production") directives.push("upgrade-insecure-requests");
-  return directives.join("; ");
-}
-
 export function middleware(request: NextRequest) {
-  const nonce = createNonce();
-  const contentSecurityPolicy = buildContentSecurityPolicy(nonce);
+  const nonce = createCspNonce();
+  const contentSecurityPolicy = buildNonceCsp({
+    nonce,
+    development: process.env.NODE_ENV === "development",
+    production: process.env.NODE_ENV === "production",
+    connectSources: connectSources(),
+    imageSources: ["'self'", "data:", "blob:", "https:"],
+    workerSources: ["'self'", "blob:"],
+    manifestSources: ["'self'"],
+  });
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
