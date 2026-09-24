@@ -27,8 +27,14 @@ function balances(accounts: AccountingAccount[], journals: JournalEntry[], from?
     if ((from && entry.entryDate < from) || (to && entry.entryDate > to)) continue;
     for (const line of entry.lines) {
       if (!known.has(line.accountId)) throw new Error("Statement contains an unknown account; restore or sync the chart of accounts");
-      const debitMinor = toMinorUnits(line.debit);
-      const creditMinor = toMinorUnits(line.credit);
+      let debitMinor: number;
+      let creditMinor: number;
+      try {
+        debitMinor = toMinorUnits(line.debit);
+        creditMinor = toMinorUnits(line.credit);
+      } catch {
+        throw new Error("Statement contains an invalid journal amount");
+      }
       const netMinor = subtractMinorUnits(debitMinor, creditMinor);
       totals.set(line.accountId, addMinorUnits(totals.get(line.accountId) || 0, netMinor));
     }
