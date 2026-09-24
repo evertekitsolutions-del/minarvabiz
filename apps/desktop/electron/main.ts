@@ -3,6 +3,7 @@ import * as path from "path";
 import * as fs from "fs";
 import { createHash, randomUUID } from "crypto";
 import { execFileSync, spawn } from "child_process";
+import { pathToFileURL } from "url";
 import { registerDesktopLicenseIpc, getDesktopLicenseState } from "./license";
 import { checkForSecureUpdate, downloadVerifiedUpdate, getDownloadedVerifiedUpdate } from "./updater";
 import { minarvaBackupSchemaError } from "./sqlite-backup-validation";
@@ -18,8 +19,45 @@ function configuredBackupDir(): string | null { try { const value = fs.readFileS
 function backupDestinationDir() { const configured = configuredBackupDir(); if (configured) return configured; if (process.platform === "win32" && fs.existsSync("D:/")) return path.join("D:\\", "Minarva Biz Backups"); return backupDir(); }
 function runtimeSmokeLog(message: string) { if (!runtimeSmoke) return; try { fs.mkdirSync(app.getPath("userData"), { recursive: true }); fs.appendFileSync(path.join(app.getPath("userData"), "runtime-smoke.log"), `${new Date().toISOString()} ${message}\n`, "utf8"); } catch {} }
 function timestamp() { return new Date().toISOString().replace(/[:.]/g, "-"); }
-function isTrustedRenderer(event: Electron.IpcMainInvokeEvent): boolean { const url = event.senderFrame?.url || ""; if (app.isPackaged) return url.startsWith("file://"); return url.startsWith("http://localhost:") || url.startsWith("http://127.0.0.1:") || url.startsWith("file://"); }
+function configuredDevServerUrl() { return process.env.VITE_DEV_SERVER_URL || "http://localhost:5173"; }
+function isTrustedRendererUrl(rawUrl: string): boolean {
+  try {
+    const actual = new URL(rawUrl);
+    if (app.isPackaged) {
+      actual.hash = "";
+      actual.search = "";
+      return actual.href === pathToFileURL(path.join(app.getAppPath(), "dist", "index.html")).href;
+    }
+    const expected = new URL(configuredDevServerUrl());
+    return actual.protocol === expected.protocol && actual.host === expected.host;
+  } catch {
+    return false;
+  }
+}
+function isTrustedRenderer(event: Electron.IpcMainInvokeEvent): boolean {
+  const frame = event.senderFrame;
+  return Boolean(frame && frame === event.sender.mainFrame && isTrustedRendererUrl(frame.url));
+}
 function requireTrustedRenderer(event: Electron.IpcMainInvokeEvent) { if (!isTrustedRenderer(event)) throw new Error("Unauthorized IPC sender"); }
+function allowedExternalHosts(): Set<string> {
+  return new Set(String(process.env.MINARVA_EXTERNAL_URL_HOSTS || "").split(",").map((host) => host.trim().toLowerCase()).filter(Boolean));
+}
+function isAllowedExternalUrl(rawUrl: string): boolean {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== "https:") return false;
+    return allowedExternalHosts().has(url.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+function openAllowedExternalUrl(rawUrl: string) {
+  if (!isAllowedExternalUrl(rawUrl)) {
+    runtimeSmokeLog(`external-url-blocked url=${rawUrl}`);
+    return;
+  }
+  void shell.openExternal(rawUrl).catch((error) => runtimeSmokeLog(`external-url-open-failed url=${rawUrl} error=${error instanceof Error ? error.message : String(error)}`));
+}
 
 async function printHtmlDocument(input: {
   html: string;
@@ -92,7 +130,59 @@ async function verifyRendererReady(win: BrowserWindow) {
   }
   runtimeSmokeLog("renderer-ui-ready=false timeout");
 }
-function createWindow() { const win = new BrowserWindow({ width: 1280, height: 800, minWidth: 1024, minHeight: 640, title: "Minarva Biz", icon: path.join(app.getAppPath(), "dist", "minarva-biz-icon.svg"), show: false, autoHideMenuBar: true, webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, nodeIntegration: false, sandbox: false, webSecurity: true } }); runtimeSmokeLog(`window-created preload=${path.join(__dirname, "preload.js")} appPath=${app.getAppPath()} userData=${app.getPath("userData")} sandbox=false`); win.webContents.on("did-finish-load", async () => { runtimeSmokeLog("did-finish-load"); if (runtimeSmoke) { try { const bridgeReady = await win.webContents.executeJavaScript("Boolean(window.minarvaDesktop && typeof window.minarvaDesktop.getSqlitePath === 'function')", true); runtimeSmokeLog(`bridge-ready=${bridgeReady}`); await verifyRendererReady(win); } catch (error) { runtimeSmokeLog(`bridge-ready=false error=${error instanceof Error ? error.message : String(error)}`); } } }); win.webContents.on("dom-ready", () => runtimeSmokeLog("dom-ready")); win.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => runtimeSmokeLog(`did-fail-load code=${errorCode} description=${errorDescription} url=${validatedURL}`)); win.webContents.on("render-process-gone", (_event, details) => runtimeSmokeLog(`render-process-gone reason=${details.reason} exitCode=${details.exitCode}`)); win.webContents.on("console-message", (_event, level, message, line, sourceId) => runtimeSmokeLog(`console level=${level} message=${message} line=${line} source=${sourceId}`)); win.once("ready-to-show", () => { runtimeSmokeLog(`ready-to-show bridge=${win.webContents ? "renderer-ready" : "missing"}`); win.show(); }); win.webContents.setWindowOpenHandler(({ url }: { url: string }) => { runtimeSmokeLog(`window-open-denied url=${url}`); shell.openExternal(url); return { action: "deny" }; }); if (isDev) win.loadURL(process.env.VITE_DEV_SERVER_URL || "http://localhost:5173"); else win.loadFile(path.join(app.getAppPath(), "dist", "index.html")); }
+function createWindow() {
+  const win = new BrowserWindow({
+    width: 1280,
+    height: 800,
+    minWidth: 1024,
+    minHeight: 640,
+    title: "Minarva Biz",
+    icon: path.join(app.getAppPath(), "dist", "minarva-biz-icon.svg"),
+    show: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+    },
+  });
+  runtimeSmokeLog(`window-created preload=${path.join(__dirname, "preload.js")} appPath=${app.getAppPath()} userData=${app.getPath("userData")} sandbox=true`);
+  win.webContents.on("did-finish-load", async () => {
+    runtimeSmokeLog("did-finish-load");
+    if (runtimeSmoke) {
+      try {
+        const bridgeReady = await win.webContents.executeJavaScript("Boolean(window.minarvaDesktop && typeof window.minarvaDesktop.getSqlitePath === 'function')", true);
+        runtimeSmokeLog(`bridge-ready=${bridgeReady}`);
+        await verifyRendererReady(win);
+      } catch (error) {
+        runtimeSmokeLog(`bridge-ready=false error=${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  });
+  win.webContents.on("dom-ready", () => runtimeSmokeLog("dom-ready"));
+  win.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => runtimeSmokeLog(`did-fail-load code=${errorCode} description=${errorDescription} url=${validatedURL}`));
+  win.webContents.on("render-process-gone", (_event, details) => runtimeSmokeLog(`render-process-gone reason=${details.reason} exitCode=${details.exitCode}`));
+  win.webContents.on("console-message", (_event, level, message, line, sourceId) => runtimeSmokeLog(`console level=${level} message=${message} line=${line} source=${sourceId}`));
+  win.webContents.on("will-navigate", (event, url) => {
+    if (isTrustedRendererUrl(url)) return;
+    event.preventDefault();
+    runtimeSmokeLog(`navigation-blocked url=${url}`);
+    openAllowedExternalUrl(url);
+  });
+  win.once("ready-to-show", () => {
+    runtimeSmokeLog(`ready-to-show bridge=${win.webContents ? "renderer-ready" : "missing"}`);
+    win.show();
+  });
+  win.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
+    runtimeSmokeLog(`window-open-denied url=${url}`);
+    openAllowedExternalUrl(url);
+    return { action: "deny" };
+  });
+  if (isDev) win.loadURL(configuredDevServerUrl());
+  else win.loadFile(path.join(app.getAppPath(), "dist", "index.html"));
+}
 function sqliteValidationError(file: string): string | null { try { const stat = fs.statSync(file); if (!stat.isFile() || stat.size < 100) return "SQLite file is missing or too small"; const fd = fs.openSync(file, "r"); const header = Buffer.alloc(100); fs.readSync(fd, header, 0, 100, 0); fs.closeSync(fd); const sqliteHeader = Buffer.from("SQLite format 3", "ascii"); if (!header.subarray(0, sqliteHeader.length).equals(sqliteHeader) || header[sqliteHeader.length] !== 0) return "SQLite header is invalid"; const pageSize = header.readUInt16BE(16) || 65536; if (pageSize < 512 || pageSize > 65536 || (pageSize & (pageSize - 1)) !== 0) return "SQLite page size is invalid"; if (header[20] > pageSize - 1) return "SQLite reserved-byte count is invalid"; if (header[21] !== 64 || header[22] !== 32 || header[23] !== 32) return "SQLite payload fractions are invalid"; const pageCount = header.readUInt32BE(28); if (pageCount > 0 && stat.size < pageCount * pageSize) return "SQLite file is truncated"; return null; } catch { return "SQLite file could not be read"; } }
 function isValidSqliteFile(file: string) { return sqliteValidationError(file) === null; }
 async function minarvaSqliteValidationError(file: string): Promise<string | null> { return sqliteValidationError(file) || await minarvaBackupSchemaError(file); }
@@ -101,7 +191,7 @@ function createLocalBackup(kind: "manual" | "automatic") { const source = sqlite
 function pruneAutomaticBackups(retention = 14) { const targetDir = backupDestinationDir(); fs.mkdirSync(targetDir, { recursive: true }); const files = fs.readdirSync(targetDir).filter((f) => f.startsWith("minarvabiz-automatic-") && f.endsWith(".db")).map((name) => ({ name, time: fs.statSync(path.join(targetDir, name)).mtimeMs })).sort((a, b) => b.time - a.time); for (const item of files.slice(retention)) { try { fs.unlinkSync(path.join(backupDestinationDir(), item.name)); } catch {} } }
 
 app.disableHardwareAcceleration();
-app.whenReady().then(() => { Menu.setApplicationMenu(null); runtimeSmokeLog(`app-ready platform=${process.platform} version=${app.getVersion()} userData=${app.getPath("userData")}`); process.env.MINARVA_SQLITE_PATH = sqlitePath(); process.env.MINARVA_MODE = process.env.MINARVA_MODE || "production"; fs.mkdirSync(app.getPath("userData"), { recursive: true }); registerDesktopLicenseIpc(getDeviceId); createWindow(); app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); }); });
+app.whenReady().then(() => { Menu.setApplicationMenu(null); runtimeSmokeLog(`app-ready platform=${process.platform} version=${app.getVersion()} userData=${app.getPath("userData")}`); process.env.MINARVA_SQLITE_PATH = sqlitePath(); process.env.MINARVA_MODE = process.env.MINARVA_MODE || "production"; fs.mkdirSync(app.getPath("userData"), { recursive: true }); registerDesktopLicenseIpc(getDeviceId, requireTrustedRenderer); createWindow(); app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); }); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 
 ipcMain.handle("app:getVersion", (event) => { requireTrustedRenderer(event); return app.getVersion(); });
