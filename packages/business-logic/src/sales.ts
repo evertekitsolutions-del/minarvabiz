@@ -2,7 +2,14 @@
  * Sales billing calculations — pure functions shared Online/Offline/Hybrid.
  */
 
-import { roundMoney, subtractMoney } from "@minarvabiz/utils";
+import {
+  addMinorUnits,
+  fromMinorUnits,
+  multiplyMinorByQuantity,
+  subtractMinorUnits,
+  toMinorUnits,
+  type MoneyMinor,
+} from "@minarvabiz/utils";
 import type { CartLine, SaleItem, PaymentMethod } from "@minarvabiz/types";
 import { calculateLineItem, calculateInvoiceTotals } from "@minarvabiz/billing";
 
@@ -63,17 +70,18 @@ export interface PaymentAllocation {
 }
 
 export function allocatePayment(total: number, paidAmount: number): PaymentAllocation {
-  const t = roundMoney(total);
-  const p = roundMoney(Math.max(0, paidAmount));
-  const balance = subtractMoney(t, p);
+  const totalMinor = toMinorUnits(total);
+  const paidMinor = toMinorUnits(Math.max(0, paidAmount));
+  const collectibleMinor = Math.min(paidMinor, totalMinor);
+  const balanceMinor = Math.max(0, subtractMinorUnits(totalMinor, collectibleMinor));
   let status: PaymentAllocation["status"] = "draft";
-  if (p <= 0) status = "draft";
-  else if (balance <= 0) status = "completed";
+  if (collectibleMinor <= 0) status = "draft";
+  else if (balanceMinor <= 0) status = "completed";
   else status = "partial";
   return {
-    total: t,
-    paidAmount: Math.min(p, t),
-    balanceAmount: Math.max(0, balance),
+    total: fromMinorUnits(totalMinor),
+    paidAmount: fromMinorUnits(collectibleMinor),
+    balanceAmount: fromMinorUnits(balanceMinor),
     status,
   };
 }
@@ -100,43 +108,54 @@ export interface TenderValidation {
  * supporting normal cash-change workflows.
  */
 export function validateTender(total: number, splits: TenderSplit[]): TenderValidation {
-  const payable = roundMoney(Math.max(0, total));
+  const payableMinor = toMinorUnits(Math.max(0, total));
   const normalized = splits
     .map((split) => ({
       method: split.method,
-      amount: roundMoney(Number(split.amount) || 0),
+      amountMinor: toMinorUnits(Number(split.amount) || 0),
       reference: split.reference ?? null,
     }))
-    .filter((split) => split.amount !== 0);
+    .filter((split) => split.amountMinor !== 0);
 
   const errors: string[] = [];
   for (const split of normalized) {
-    if (split.amount < 0) errors.push(`${split.method}: payment amount cannot be negative`);
+    if (split.amountMinor < 0) errors.push(`${split.method}: payment amount cannot be negative`);
   }
 
-  const positive = normalized.filter((split) => split.amount > 0);
-  const tendered = roundMoney(positive.reduce((sum, split) => sum + split.amount, 0));
-  const cashTendered = roundMoney(
-    positive.filter((split) => split.method === "cash").reduce((sum, split) => sum + split.amount, 0)
+  const positive = normalized.filter((split) => split.amountMinor > 0);
+  const tenderedMinor = addMinorUnits(...positive.map((split) => split.amountMinor));
+  const cashTenderedMinor = addMinorUnits(
+    ...positive.filter((split) => split.method === "cash").map((split) => split.amountMinor)
   );
-  const collectible = roundMoney(Math.min(payable, tendered));
-  const balanceDue = roundMoney(Math.max(0, payable - tendered));
-  const changeDue = roundMoney(Math.max(0, tendered - payable));
+  const collectibleMinor = Math.min(payableMinor, tenderedMinor);
+  const balanceDueMinor = Math.max(0, subtractMinorUnits(payableMinor, tenderedMinor));
+  const changeDueMinor = Math.max(0, subtractMinorUnits(tenderedMinor, payableMinor));
 
-  if (changeDue > 0 && cashTendered < changeDue) {
+  if (changeDueMinor > 0 && cashTenderedMinor < changeDueMinor) {
     errors.push("Overpayment must be covered by cash so the excess can be returned as change");
   }
 
-  return { tendered, collectible, balanceDue, changeDue, cashTendered, errors };
+  return {
+    tendered: fromMinorUnits(tenderedMinor),
+    collectible: fromMinorUnits(collectibleMinor),
+    balanceDue: fromMinorUnits(balanceDueMinor),
+    changeDue: fromMinorUnits(changeDueMinor),
+    cashTendered: fromMinorUnits(cashTenderedMinor),
+    errors,
+  };
 }
 
 /** Cost of goods for a sale (inventory cost) */
 export function saleCostOfGoods(items: Array<{ quantity: number; costPrice: number }>): number {
-  return roundMoney(items.reduce((s, i) => s + i.quantity * i.costPrice, 0));
+  let totalMinor: MoneyMinor = 0;
+  for (const item of items) {
+    totalMinor = addMinorUnits(totalMinor, multiplyMinorByQuantity(toMinorUnits(item.costPrice), item.quantity));
+  }
+  return fromMinorUnits(totalMinor);
 }
 
 export function saleGrossProfit(total: number, items: Array<{ quantity: number; costPrice: number }>): number {
-  return subtractMoney(total, saleCostOfGoods(items));
+  return fromMinorUnits(subtractMinorUnits(toMinorUnits(total), toMinorUnits(saleCostOfGoods(items))));
 }
 
 /**
