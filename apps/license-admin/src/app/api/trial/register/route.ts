@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { adminDbFetch } from "../../../../lib/supabase-admin";
+import { consumeRateLimit } from "../../../../lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,6 +22,17 @@ function normalizePhone(value: string) {
 function htmlEscape(value: string) {
   return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] || c);
 }
+const PUBLIC_CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Accept",
+  "Access-Control-Max-Age": "86400",
+};
+
+export function OPTIONS() {
+  return new Response(null, { status: 204, headers: PUBLIC_CORS_HEADERS });
+}
+
 async function existsBy(column: "email" | "phone" | "device_id", value: string) {
   const result = await adminDbFetch<any[]>(
     `/trial_registrations?select=id%2Cstatus%2Ctrial_started_at%2Ctrial_expires_at&${column}=eq.${encodeURIComponent(value)}&limit=1`,
@@ -56,6 +68,33 @@ export async function POST(request: Request) {
     if (!organizationName) return NextResponse.json({ ok: false, error: "Organization name is required." }, { status: 400 });
     if (!address) return NextResponse.json({ ok: false, error: "Address is required." }, { status: 400 });
     if (!DEVICE_RE.test(deviceId)) return NextResponse.json({ ok: false, error: "Device registration is required." }, { status: 400 });
+
+    const ipLimit = await consumeRateLimit(request.headers, "trial-register-ip", 10, 60 * 60);
+    if (!ipLimit.ok) {
+      return NextResponse.json(
+        { ok: false, error: "Trial registration is temporarily unavailable." },
+        { status: 503, headers: PUBLIC_CORS_HEADERS },
+      );
+    }
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        { ok: false, code: "RATE_LIMITED", error: "Too many trial registration attempts." },
+        { status: 429, headers: { ...PUBLIC_CORS_HEADERS, "Retry-After": String(ipLimit.retryAfterSeconds) } },
+      );
+    }
+    const deviceLimit = await consumeRateLimit(request.headers, "trial-register-device", 3, 24 * 60 * 60, deviceId);
+    if (!deviceLimit.ok) {
+      return NextResponse.json(
+        { ok: false, error: "Trial registration is temporarily unavailable." },
+        { status: 503, headers: PUBLIC_CORS_HEADERS },
+      );
+    }
+    if (!deviceLimit.allowed) {
+      return NextResponse.json(
+        { ok: false, code: "RATE_LIMITED", error: "Too many trial registration attempts for this device." },
+        { status: 429, headers: { ...PUBLIC_CORS_HEADERS, "Retry-After": String(deviceLimit.retryAfterSeconds) } },
+      );
+    }
 
     const existing = (await existsBy("email", email)) || (await existsBy("phone", phone)) || (await existsBy("device_id", deviceId));
     if (existing) {
@@ -146,13 +185,16 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({
-      ok: true,
-      emailQueued,
-      registrationId,
-      trialStartedAt: started.toISOString(),
-      trialExpiresAt: expires.toISOString(),
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        emailQueued,
+        registrationId,
+        trialStartedAt: started.toISOString(),
+        trialExpiresAt: expires.toISOString(),
+      },
+      { headers: PUBLIC_CORS_HEADERS },
+    );
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid trial registration request." }, { status: 400 });
   }
