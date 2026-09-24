@@ -2,7 +2,7 @@
  * Customer ledger / credit account statement
  */
 import type { LedgerEntry, UUID } from "@minarvabiz/types";
-import { generateId } from "@minarvabiz/utils";
+import { addMinorUnits, fromMinorUnits, generateId, subtractMinorUnits, toMinorUnits, type MoneyMinor } from "@minarvabiz/utils";
 import * as mainStore from "./store";
 import { escapeHtml } from "./html";
 
@@ -17,10 +17,6 @@ export interface CustomerStatement {
   entries: LedgerEntry[];
 }
 
-function round2(n: number) {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
-
 /** Build statement from live sales, payments, returns */
 export function buildCustomerStatement(customerId: UUID): CustomerStatement | null {
   const customer = mainStore.getCustomer(customerId);
@@ -29,16 +25,18 @@ export function buildCustomerStatement(customerId: UUID): CustomerStatement | nu
   const sales = mainStore.listSales().filter((s) => s.customerId === customerId);
   const payments = mainStore.listPayments().filter((p) => p.customerId === customerId);
 
-  let totalSales = 0;
-  let totalPaid = 0;
-  let totalRefund = 0;
+  let totalSalesMinor: MoneyMinor = 0;
+  let totalPaidMinor: MoneyMinor = 0;
+  const totalRefundMinor: MoneyMinor = 0;
   const entries: LedgerEntry[] = [];
-  let running = 0;
+  let runningMinor: MoneyMinor = 0;
 
   for (const s of sales) {
-    totalSales = round2(totalSales + s.total);
-    totalPaid = round2(totalPaid + s.paidAmount);
-    running = round2(running + s.total - s.paidAmount);
+    const saleTotalMinor = toMinorUnits(s.total);
+    const salePaidMinor = toMinorUnits(s.paidAmount);
+    totalSalesMinor = addMinorUnits(totalSalesMinor, saleTotalMinor);
+    totalPaidMinor = addMinorUnits(totalPaidMinor, salePaidMinor);
+    runningMinor = addMinorUnits(runningMinor, subtractMinorUnits(saleTotalMinor, salePaidMinor));
     entries.push({
       id: generateId(),
       partyType: "customer",
@@ -48,15 +46,16 @@ export function buildCustomerStatement(customerId: UUID): CustomerStatement | nu
       referenceId: s.id,
       debit: s.total,
       credit: s.paidAmount,
-      balanceAfter: running,
+      balanceAfter: fromMinorUnits(runningMinor),
       notes: s.invoiceNumber,
       createdAt: s.saleDate,
     });
   }
   for (const p of payments) {
     if (p.referenceType === "sale") continue; // already counted in sale paid
-    totalPaid = round2(totalPaid + p.amount);
-    running = round2(running - p.amount);
+    const paymentMinor = toMinorUnits(p.amount);
+    totalPaidMinor = addMinorUnits(totalPaidMinor, paymentMinor);
+    runningMinor = subtractMinorUnits(runningMinor, paymentMinor);
     entries.push({
       id: p.id,
       partyType: "customer",
@@ -66,22 +65,23 @@ export function buildCustomerStatement(customerId: UUID): CustomerStatement | nu
       referenceId: p.referenceId,
       debit: 0,
       credit: p.amount,
-      balanceAfter: running,
+      balanceAfter: fromMinorUnits(runningMinor),
       notes: p.notes || p.method,
       createdAt: p.paidAt,
     });
   }
 
   entries.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const outstanding = round2(Math.max(0, customer.outstandingBalance));
-  const advanceBalance = round2(Math.max(0, -customer.outstandingBalance));
+  const customerBalanceMinor = toMinorUnits(customer.outstandingBalance);
+  const outstanding = fromMinorUnits(Math.max(0, customerBalanceMinor));
+  const advanceBalance = fromMinorUnits(Math.max(0, -customerBalanceMinor));
 
   return {
     customerId,
     customerName: customer.name,
-    totalSales,
-    totalPaid,
-    totalRefund,
+    totalSales: fromMinorUnits(totalSalesMinor),
+    totalPaid: fromMinorUnits(totalPaidMinor),
+    totalRefund: fromMinorUnits(totalRefundMinor),
     outstanding,
     advanceBalance,
     entries,
