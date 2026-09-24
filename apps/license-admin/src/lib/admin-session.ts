@@ -18,11 +18,13 @@ export const MIN_EMERGENCY_ADMIN_SECRET_LENGTH = 32;
 export const MAX_PREVIOUS_SECRET_GRACE_MS = 24 * 60 * 60 * 1000;
 
 export type AdminIdentitySource = "supabase" | "emergency";
+export type AdminRole = "viewer" | "operator" | "admin";
 export type AdminIdentity = {
   id: string;
   email: string;
   displayName: string;
   source: AdminIdentitySource;
+  role: AdminRole;
 };
 
 export type AdminSessionClaims = {
@@ -51,16 +53,23 @@ function validUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function isAdminIdentityRole(value: unknown): value is AdminRole {
+  return value === "viewer" || value === "operator" || value === "admin";
+}
+
 function normalizeIdentity(identity: AdminIdentity): AdminIdentity | null {
   const id = String(identity?.id || "").trim();
   const email = normalizeEmail(identity?.email || "");
   const displayName = String(identity?.displayName || "").trim();
   const source = identity?.source;
+  const role = identity?.role;
   if (!id || id.length > 200) return null;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return null;
   if (!displayName || displayName.length > 120) return null;
   if (source !== "supabase" && source !== "emergency") return null;
-  return { id, email, displayName, source };
+  if (!isAdminIdentityRole(role)) return null;
+  if (source === "emergency" && role !== "admin") return null;
+  return { id, email, displayName, source, role };
 }
 
 function sessionSecret(): string {
@@ -86,7 +95,7 @@ export function emergencyAdminIdentity(): AdminIdentity | null {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return null;
   if (!displayName || displayName.length > 120) return null;
   const digest = createHash("sha256").update(email, "utf8").digest("hex").slice(0, 32);
-  return { id: `emergency:${digest}`, email, displayName, source: "emergency" };
+  return { id: `emergency:${digest}`, email, displayName, source: "emergency", role: "admin" };
 }
 
 export type EmergencyAdminCredentialMatch = "current" | "previous";
@@ -197,6 +206,16 @@ function pendingEncryptionKey(): Buffer | null {
   return secret ? createHash("sha256").update(secret, "utf8").digest() : null;
 }
 
+function decodeCanonicalBase64Url(value: string): Buffer | null {
+  if (!value || !/^[A-Za-z0-9_-]+$/.test(value)) return null;
+  try {
+    const decoded = Buffer.from(value, "base64url");
+    return decoded.toString("base64url") === value ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeMfaPendingState(state: AdminMfaPendingState): AdminMfaPendingState | null {
   const identity = normalizeIdentity(state?.identity);
   const accessToken = String(state?.accessToken || "");
@@ -240,9 +259,10 @@ export function readAdminMfaPendingToken(token: string, nowMs = Date.now()): Adm
   const key = pendingEncryptionKey();
   if (!key) return null;
   try {
-    const iv = Buffer.from(parts[2] || "", "base64url");
-    const encrypted = Buffer.from(parts[3] || "", "base64url");
-    const tag = Buffer.from(parts[4] || "", "base64url");
+    const iv = decodeCanonicalBase64Url(parts[2] || "");
+    const encrypted = decodeCanonicalBase64Url(parts[3] || "");
+    const tag = decodeCanonicalBase64Url(parts[4] || "");
+    if (!iv || !encrypted || !tag) return null;
     if (iv.length !== 12 || !encrypted.length || encrypted.length > 32768 || tag.length !== 16) return null;
     const decipher = createDecipheriv("aes-256-gcm", key, iv);
     decipher.setAAD(Buffer.from(`m1.${expiresAtMs}`, "utf8"));

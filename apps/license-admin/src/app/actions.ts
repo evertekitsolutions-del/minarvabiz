@@ -38,6 +38,8 @@ import {
   consumeRateLimit,
   recordAdminLoginFailure,
 } from "../lib/rate-limit";
+import { adminRoleAllows, type AdminPermission } from "../lib/admin-rbac";
+import { recordAdminAudit } from "../lib/admin-audit";
 
 const PLANS: LicensePlan[] = ["trial", "basic", "professional", "business", "enterprise"];
 const EDITIONS: Edition[] = ["online", "offline", "hybrid"];
@@ -54,8 +56,36 @@ async function currentAdminIdentity() {
   return (await currentAdminSession())?.identity || null;
 }
 
-async function isAdmin() {
-  return Boolean(await currentAdminIdentity());
+async function authorizeAdmin(
+  permission: AdminPermission,
+  action: string,
+  targetType?: string | null,
+  targetId?: string | null,
+  details?: Record<string, unknown>,
+  auditAttempt = true,
+) {
+  const session = await currentAdminSession();
+  if (!session) return { ok: false as const, error: "UNAUTHORIZED" };
+
+  if (!adminRoleAllows(session.identity.role, permission)) {
+    await recordAdminAudit(session, action, "denied", targetType, targetId, {
+      permission,
+      ...(details || {}),
+    });
+    return { ok: false as const, error: "FORBIDDEN" };
+  }
+
+  if (auditAttempt) {
+    const logged = await recordAdminAudit(session, action, "attempted", targetType, targetId, {
+      permission,
+      ...(details || {}),
+    });
+    if (!logged) {
+      return { ok: false as const, error: "Administrator audit logging is unavailable." };
+    }
+  }
+
+  return { ok: true as const, session };
 }
 
 async function establishAdminSession(identity: AdminIdentity, authMethod: AdminSessionAuthMethod) {
@@ -66,6 +96,20 @@ async function establishAdminSession(identity: AdminIdentity, authMethod: AdminS
     await revokeRegisteredAdminSession(registered.sessionId, "session-signing-failed");
     return { ok: false as const, error: "Admin session signing is not configured." };
   }
+  const claims = { sessionId: registered.sessionId, identity, expiresAtMs: registered.expiresAtMs };
+  const audited = await recordAdminAudit(
+    claims,
+    "admin.session.created",
+    "success",
+    "admin_session",
+    registered.sessionId,
+    { authMethod },
+  );
+  if (!audited) {
+    await revokeRegisteredAdminSession(registered.sessionId, "session-audit-failed");
+    return { ok: false as const, error: "Administrator audit logging is unavailable." };
+  }
+
   const cookieStore = await cookies();
   cookieStore.set(ADMIN_COOKIE, token, adminCookieOptions(identity.source));
   cookieStore.delete(ADMIN_MFA_COOKIE);
@@ -269,15 +313,26 @@ export async function loginEmergencyAdmin(password: string) {
 export async function logoutAdmin() {
   const cookieStore = await cookies();
   const claims = readAdminSessionToken(cookieStore.get(ADMIN_COOKIE)?.value || "");
-  if (claims) await revokeRegisteredAdminSession(claims.sessionId, "logout");
+  if (claims) {
+    await recordAdminAudit(claims, "admin.session.logout", "success", "admin_session", claims.sessionId);
+    await revokeRegisteredAdminSession(claims.sessionId, "logout");
+  }
   cookieStore.delete(ADMIN_COOKIE);
   cookieStore.delete(ADMIN_MFA_COOKIE);
   return { ok: true };
 }
 
 export async function listLicenses() {
-  const identity = await currentAdminIdentity();
-  if (!identity) return { ok: false, error: "UNAUTHORIZED", identity: null, licenses: [] as any[] };
+  const authorized = await authorizeAdmin(
+    "license.read",
+    "license.registry.read",
+    "license_registry",
+    null,
+    undefined,
+    false,
+  );
+  if (!authorized.ok) return { ok: false, error: authorized.error, identity: null, licenses: [] as any[] };
+  const identity = authorized.session.identity;
   const result = await dbFetch("/licenses?select=id%2Clicense_id%2Ccustomer_id%2Cproduct%2Cedition%2Cplan%2Cstatus%2Cissued_at%2Cexpires_at%2Cactivation_limit%2Cfeatures%2Cmetadata%2Ccreated_at%2Cupdated_at&order=created_at.desc&limit=200");
   if (!result.ok) return { ok: false, error: result.error, identity, licenses: [] as any[] };
   const licenses = Array.isArray(result.data) ? result.data : []; const ids = licenses.map((x) => x.id);
@@ -287,48 +342,232 @@ export async function listLicenses() {
 }
 
 export async function createCommercialLicense(input: { customerName: string; plan: LicensePlan; edition: Edition; expiresAt?: string | null; activationLimit?: number; featureOverrides?: Partial<LicenseFeatures> }) {
-  if (!(await isAdmin())) return { ok: false, error: "UNAUTHORIZED" };
+  const customerName = clean(input.customerName, 200);
+  const plan = input.plan;
+  const edition = input.edition;
+  if (!customerName || !PLANS.includes(plan) || !EDITIONS.includes(edition)) return { ok: false, error: "Invalid license details." };
+
+  const authorized = await authorizeAdmin(
+    "license.issue",
+    "license.issue",
+    "license",
+    null,
+    { customerName, plan, edition },
+  );
+  if (!authorized.ok) return { ok: false, error: authorized.error };
+  const session = authorized.session;
+
   try {
-    const customerName = clean(input.customerName, 200); const plan = input.plan; const edition = input.edition;
-    if (!customerName || !PLANS.includes(plan) || !EDITIONS.includes(edition)) return { ok: false, error: "Invalid license details." };
-    const expiresAt = input.expiresAt ? clean(input.expiresAt, 64) : null; if (expiresAt && !Number.isFinite(new Date(expiresAt).getTime())) return { ok: false, error: "Invalid expiry date." };
-    const requestedLimit = Number(input.activationLimit); const activationLimit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.floor(requestedLimit) : PLAN_LIMITS[plan].maxDevices;
-    const privateKey = privateKeyHex(); if (!/^[0-9a-f]{64}$/.test(privateKey)) return { ok: false, error: "LICENSE_PRIVATE_KEY is not configured on the admin server." };
+    const expiresAt = input.expiresAt ? clean(input.expiresAt, 64) : null;
+    if (expiresAt && !Number.isFinite(new Date(expiresAt).getTime())) return { ok: false, error: "Invalid expiry date." };
+    const requestedLimit = Number(input.activationLimit);
+    const activationLimit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.floor(requestedLimit) : PLAN_LIMITS[plan].maxDevices;
+    const privateKey = privateKeyHex();
+    if (!/^[0-9a-f]{64}$/.test(privateKey)) return { ok: false, error: "LICENSE_PRIVATE_KEY is not configured on the admin server." };
+
     const featureOverrides: Partial<LicenseFeatures> = {};
-    for (const key of Object.keys(PLAN_FEATURES[plan]) as (keyof LicenseFeatures)[]) { if (input.featureOverrides?.[key] === false) featureOverrides[key] = false; }
-    const issued = await issueLicense({ customerName, plan, edition, expiresAt, activationLimit, featureOverrides, privateKeyHex: privateKey }); const databaseId = randomUUID(); const tokenHash = createHash("sha256").update(issued.token, "utf8").digest("hex");
-    const inserted = await dbFetch("/licenses", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ id: databaseId, license_id: issued.payload.licenseId, customer_id: issued.payload.customerId, product: issued.payload.product, edition: issued.payload.edition, plan: issued.payload.plan, status: "active", token: issued.token, token_sha256: tokenHash, issued_at: issued.payload.issuedAt, expires_at: issued.payload.expiresAt, activation_limit: activationLimit, features: issued.payload.features, metadata: { customerName } }) });
+    for (const key of Object.keys(PLAN_FEATURES[plan]) as (keyof LicenseFeatures)[]) {
+      if (input.featureOverrides?.[key] === false) featureOverrides[key] = false;
+    }
+
+    const issued = await issueLicense({ customerName, plan, edition, expiresAt, activationLimit, featureOverrides, privateKeyHex: privateKey });
+    const databaseId = randomUUID();
+    const tokenHash = createHash("sha256").update(issued.token, "utf8").digest("hex");
+    const inserted = await dbFetch("/licenses", {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        id: databaseId,
+        license_id: issued.payload.licenseId,
+        customer_id: issued.payload.customerId,
+        product: issued.payload.product,
+        edition: issued.payload.edition,
+        plan: issued.payload.plan,
+        status: "active",
+        token: issued.token,
+        token_sha256: tokenHash,
+        issued_at: issued.payload.issuedAt,
+        expires_at: issued.payload.expiresAt,
+        activation_limit: activationLimit,
+        features: issued.payload.features,
+        metadata: { customerName },
+      }),
+    });
     if (!inserted.ok) return { ok: false, error: inserted.error };
-    await dbFetch("/license_events", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ id: randomUUID(), license_id: databaseId, event_type: "issued", actor: "license-admin", details: { customerName, plan, edition, featureOverrides } }) });
+
+    await dbFetch("/license_events", {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        id: randomUUID(),
+        license_id: databaseId,
+        event_type: "issued",
+        actor: session.identity.email,
+        details: {
+          customerName,
+          plan,
+          edition,
+          featureOverrides,
+          actorId: session.identity.id,
+          actorRole: session.identity.role,
+          sessionId: session.sessionId,
+        },
+      }),
+    });
+    await recordAdminAudit(session, "license.issue", "success", "license", issued.payload.licenseId, {
+      customerName,
+      plan,
+      edition,
+      activationLimit,
+    });
     return { ok: true, token: issued.token, license: { ...issued.payload, customerName } };
-  } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "License issuance failed." }; }
+  } catch (error) {
+    await recordAdminAudit(session, "license.issue", "error", "license", null, {
+      message: error instanceof Error ? error.message.slice(0, 500) : "License issuance failed.",
+    });
+    return { ok: false, error: error instanceof Error ? error.message : "License issuance failed." };
+  }
 }
 
 export async function createOfflineActivationPackage(input: { licenseId: string; deviceId: string }) {
-  if (!(await isAdmin())) return { ok: false, error: "UNAUTHORIZED" };
-  const licenseId = clean(input.licenseId, 200); const deviceId = clean(input.deviceId, 128).toLowerCase();
+  const licenseId = clean(input.licenseId, 200);
+  const deviceId = clean(input.deviceId, 128).toLowerCase();
   if (!licenseId || !/^[a-f0-9]{64}$/.test(deviceId)) return { ok: false, error: "A valid license ID and 64-character device ID are required." };
-  const privateKey = privateKeyHex(); if (!/^[0-9a-f]{64}$/.test(privateKey)) return { ok: false, error: "LICENSE_PRIVATE_KEY is not configured on the admin server." };
+
+  const authorized = await authorizeAdmin(
+    "license.offline_activate",
+    "license.offline_activate",
+    "license",
+    licenseId,
+    { deviceIdPrefix: deviceId.slice(0, 8) },
+  );
+  if (!authorized.ok) return { ok: false, error: authorized.error };
+  const session = authorized.session;
+
+  const privateKey = privateKeyHex();
+  if (!/^[0-9a-f]{64}$/.test(privateKey)) return { ok: false, error: "LICENSE_PRIVATE_KEY is not configured on the admin server." };
   const found = await dbFetch(`/licenses?select=id%2Clicense_id%2Ctoken%2Cstatus%2Cexpires_at%2Cactivation_limit%2Cplan&license_id=eq.${encodeURIComponent(licenseId)}&limit=1`);
-  if (!found.ok) return { ok: false, error: found.error }; const license = found.data?.[0]; if (!license) return { ok: false, error: "License not found." };
+  if (!found.ok) return { ok: false, error: found.error };
+  const license = found.data?.[0];
+  if (!license) return { ok: false, error: "License not found." };
   if (license.status !== "active") return { ok: false, error: `License is ${license.status}; offline activation is allowed only for active licenses.` };
   if (license.expires_at && new Date(license.expires_at).getTime() <= Date.now()) return { ok: false, error: "License has already expired." };
-  const activationResult = await dbFetch("/rpc/activate_license_device", { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify({ p_license_id: license.id, p_device_id: deviceId }) });
-  if (!activationResult.ok) { if (String(activationResult.error || "").includes("ACTIVATION_LIMIT_REACHED")) return { ok: false, error: "Activation limit reached. Deactivate or replace an existing device first." }; if (String(activationResult.error || "").includes("LICENSE_EXPIRED")) return { ok: false, error: "License has already expired." }; return { ok: false, error: activationResult.error || "Offline activation failed." }; }
-  const activation = Array.isArray(activationResult.data) ? activationResult.data[0] : null; const activationId = String(activation?.activation_id || ""); const activationRowId = String(activation?.activation_row_id || "");
+
+  const activationResult = await dbFetch("/rpc/activate_license_device", {
+    method: "POST",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ p_license_id: license.id, p_device_id: deviceId }),
+  });
+  if (!activationResult.ok) {
+    if (String(activationResult.error || "").includes("ACTIVATION_LIMIT_REACHED")) return { ok: false, error: "Activation limit reached. Deactivate or replace an existing device first." };
+    if (String(activationResult.error || "").includes("LICENSE_EXPIRED")) return { ok: false, error: "License has already expired." };
+    return { ok: false, error: activationResult.error || "Offline activation failed." };
+  }
+
+  const activation = Array.isArray(activationResult.data) ? activationResult.data[0] : null;
+  const activationId = String(activation?.activation_id || "");
+  const activationRowId = String(activation?.activation_row_id || "");
   if (!activationId || !/^[a-f0-9-]{36}$/i.test(activationRowId)) return { ok: false, error: "Offline activation response was invalid." };
-  const issuedAt = new Date().toISOString(); const certificate = await signActivationCertificate({ type: "minarvabiz-activation-v1", licenseId: license.license_id, activationId, deviceId, issuedAt, expiresAt: license.expires_at || null }, privateKey);
-  const packageData = { format: "minarvabiz-license-v1", product: "minarvabiz", licenseToken: license.token, activationCertificate: certificate, licenseId: license.license_id, activationId, deviceId, issuedAt, expiresAt: license.expires_at || null };
-  await dbFetch("/license_events", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ id: randomUUID(), license_id: license.id, activation_id: activationRowId, event_type: "activated", device_id: deviceId, actor: "license-admin-offline", details: { mode: "offline-package-created" } }) });
+
+  const issuedAt = new Date().toISOString();
+  const certificate = await signActivationCertificate({
+    type: "minarvabiz-activation-v1",
+    licenseId: license.license_id,
+    activationId,
+    deviceId,
+    issuedAt,
+    expiresAt: license.expires_at || null,
+  }, privateKey);
+  const packageData = {
+    format: "minarvabiz-license-v1",
+    product: "minarvabiz",
+    licenseToken: license.token,
+    activationCertificate: certificate,
+    licenseId: license.license_id,
+    activationId,
+    deviceId,
+    issuedAt,
+    expiresAt: license.expires_at || null,
+  };
+
+  await dbFetch("/license_events", {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      id: randomUUID(),
+      license_id: license.id,
+      activation_id: activationRowId,
+      event_type: "activated",
+      device_id: deviceId,
+      actor: session.identity.email,
+      details: {
+        mode: "offline-package-created",
+        actorId: session.identity.id,
+        actorRole: session.identity.role,
+        sessionId: session.sessionId,
+      },
+    }),
+  });
+  await recordAdminAudit(session, "license.offline_activate", "success", "license", licenseId, {
+    activationId,
+    deviceIdPrefix: deviceId.slice(0, 8),
+  });
   return { ok: true, filename: `MinarvaBiz-${license.license_id}-${deviceId.slice(0, 8)}.lic`, content: JSON.stringify(packageData, null, 2), activationId };
 }
 
 export async function setLicenseStatus(licenseId: string, status: "active" | "suspended" | "revoked" | "deactivated") {
-  if (!(await isAdmin())) return { ok: false, error: "UNAUTHORIZED" };
-  const found = await dbFetch(`/licenses?select=id%2Clicense_id%2Cstatus&license_id=eq.${encodeURIComponent(licenseId)}&limit=1`); if (!found.ok) return { ok: false, error: found.error }; const license = found.data?.[0]; if (!license) return { ok: false, error: "License not found." };
-  const updated = await dbFetch(`/licenses?id=eq.${encodeURIComponent(license.id)}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ status, updated_at: new Date().toISOString() }) }); if (!updated.ok) return { ok: false, error: updated.error };
-  if (status !== "active") await dbFetch(`/license_activations?license_id=eq.${encodeURIComponent(license.id)}&status=eq.active`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ status: "deactivated", deactivated_at: new Date().toISOString() }) });
+  const cleanLicenseId = clean(licenseId, 200);
+  const authorized = await authorizeAdmin(
+    "license.status_manage",
+    "license.status_change",
+    "license",
+    cleanLicenseId,
+    { requestedStatus: status },
+  );
+  if (!authorized.ok) return { ok: false, error: authorized.error };
+  const session = authorized.session;
+
+  const found = await dbFetch(`/licenses?select=id%2Clicense_id%2Cstatus&license_id=eq.${encodeURIComponent(cleanLicenseId)}&limit=1`);
+  if (!found.ok) return { ok: false, error: found.error };
+  const license = found.data?.[0];
+  if (!license) return { ok: false, error: "License not found." };
+
+  const updated = await dbFetch(`/licenses?id=eq.${encodeURIComponent(license.id)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({ status, updated_at: new Date().toISOString() }),
+  });
+  if (!updated.ok) return { ok: false, error: updated.error };
+
+  if (status !== "active") {
+    await dbFetch(`/license_activations?license_id=eq.${encodeURIComponent(license.id)}&status=eq.active`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ status: "deactivated", deactivated_at: new Date().toISOString() }),
+    });
+  }
+
   const eventType = status === "suspended" ? "suspended" : status === "revoked" ? "revoked" : status === "deactivated" ? "deactivated" : "activated";
-  await dbFetch("/license_events", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ id: randomUUID(), license_id: license.id, event_type: eventType, actor: "license-admin", details: { previousStatus: license.status, status } }) });
+  await dbFetch("/license_events", {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      id: randomUUID(),
+      license_id: license.id,
+      event_type: eventType,
+      actor: session.identity.email,
+      details: {
+        previousStatus: license.status,
+        status,
+        actorId: session.identity.id,
+        actorRole: session.identity.role,
+        sessionId: session.sessionId,
+      },
+    }),
+  });
+  await recordAdminAudit(session, "license.status_change", "success", "license", cleanLicenseId, {
+    previousStatus: license.status,
+    status,
+  });
   return { ok: true };
 }

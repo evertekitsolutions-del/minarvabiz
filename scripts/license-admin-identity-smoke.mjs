@@ -21,6 +21,7 @@ try {
     email: "admin@example.com",
     displayName: "Named Administrator",
     source: "supabase",
+    role: "admin",
   };
   const sessionId = "22222222-2222-4222-8222-222222222222";
   const expiresAtMs = now + session.adminSessionTtlSeconds("supabase") * 1000;
@@ -43,6 +44,7 @@ try {
   assert.equal(emergencyIdentity?.email, "operator@example.com");
   assert.equal(emergencyIdentity?.displayName, "Emergency Operator");
   assert.equal(emergencyIdentity?.source, "emergency");
+  assert.equal(emergencyIdentity?.role, "admin");
   assert.equal(session.adminSessionTtlSeconds("emergency"), 900);
 
   const namedAdminSource = await readFile(new URL("../apps/license-admin/src/lib/named-admin.ts", import.meta.url), "utf8");
