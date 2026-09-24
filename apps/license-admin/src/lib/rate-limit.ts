@@ -13,7 +13,9 @@ function rateLimitSecret(): string {
   return String(process.env.LICENSE_RATE_LIMIT_SECRET || "").trim();
 }
 
-function clientAddress(headers: Headers): string {
+type HeaderReader = Pick<Headers, "get">;
+
+function clientAddress(headers: HeaderReader): string {
   const forwarded = String(headers.get("x-forwarded-for") || "")
     .split(",")
     .map((value) => value.trim())
@@ -27,7 +29,7 @@ function clientAddress(headers: Headers): string {
 }
 
 export async function consumeRateLimit(
-  headers: Headers,
+  headers: HeaderReader,
   bucket: string,
   limit: number,
   windowSeconds: number,
