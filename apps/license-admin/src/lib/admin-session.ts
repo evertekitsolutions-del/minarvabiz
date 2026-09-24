@@ -206,6 +206,16 @@ function pendingEncryptionKey(): Buffer | null {
   return secret ? createHash("sha256").update(secret, "utf8").digest() : null;
 }
 
+function decodeCanonicalBase64Url(value: string): Buffer | null {
+  if (!value || !/^[A-Za-z0-9_-]+$/.test(value)) return null;
+  try {
+    const decoded = Buffer.from(value, "base64url");
+    return decoded.toString("base64url") === value ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeMfaPendingState(state: AdminMfaPendingState): AdminMfaPendingState | null {
   const identity = normalizeIdentity(state?.identity);
   const accessToken = String(state?.accessToken || "");
@@ -249,9 +259,10 @@ export function readAdminMfaPendingToken(token: string, nowMs = Date.now()): Adm
   const key = pendingEncryptionKey();
   if (!key) return null;
   try {
-    const iv = Buffer.from(parts[2] || "", "base64url");
-    const encrypted = Buffer.from(parts[3] || "", "base64url");
-    const tag = Buffer.from(parts[4] || "", "base64url");
+    const iv = decodeCanonicalBase64Url(parts[2] || "");
+    const encrypted = decodeCanonicalBase64Url(parts[3] || "");
+    const tag = decodeCanonicalBase64Url(parts[4] || "");
+    if (!iv || !encrypted || !tag) return null;
     if (iv.length !== 12 || !encrypted.length || encrypted.length > 32768 || tag.length !== 16) return null;
     const decipher = createDecipheriv("aes-256-gcm", key, iv);
     decipher.setAAD(Buffer.from(`m1.${expiresAtMs}`, "utf8"));
