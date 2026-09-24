@@ -11,6 +11,7 @@ import {
 } from '@minarvabiz/utils';
 import { hasSalePosting, planAutomaticPosting, type AutomaticPostingLine, type AutomaticPostingPlan } from './accounting-store';
 
+const cents = (n: number) => toMinorUnits(n);
 const money = (n: number) => fromMinorUnits(toMinorUnits(n));
 function tenderKey(method: PaymentMethod): string {
   return method === 'cash' ? 'cash' : method === 'bank' ? 'bank' : 'payment_clearing';
