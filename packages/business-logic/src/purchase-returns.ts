@@ -6,7 +6,7 @@
  * Purchase Returns Pending Review contra-asset until tax/cost classification is reviewed.
  */
 import type { UUID } from "@minarvabiz/types";
-import { fromMinorUnits, generateId, nowISO, subtractMinorUnits, toMinorUnits } from "@minarvabiz/utils";
+import { fromMinorUnits, generateId, nowISO, subtractMinorUnits, toMinorUnits, toQuantityMilli } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { touchPersistence } from "./autosave";
 import { enqueueOutbox } from "./outbox-bridge";
@@ -42,9 +42,11 @@ export function createPurchaseReturn(input: {
   reason?: string | null;
 }): { record: PurchaseReturn | null; error?: string } {
   assertPermission("purchases.manage");
-  if (!Number.isFinite(input.quantity) || input.quantity <= 0 || !Number.isSafeInteger(Math.round(input.quantity * 1000))) {
+  if (!Number.isFinite(input.quantity) || input.quantity <= 0) {
     return { record: null, error: "Quantity must be positive and finite" };
   }
+  try { toQuantityMilli(input.quantity); }
+  catch { return { record: null, error: "Quantity must be positive and finite" }; }
   if (!Number.isFinite(input.amount) || input.amount <= 0) {
     return { record: null, error: "Return amount must be positive and finite" };
   }
