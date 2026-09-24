@@ -48,7 +48,8 @@ try {
   assert.equal(session.readAdminMfaPendingToken(pendingToken, now + 6 * 60 * 1000), null);
 
   const namedAdmin = await readFile(new URL("../apps/license-admin/src/lib/named-admin.ts", import.meta.url), "utf8");
-  assert.match(namedAdmin, /\/auth\/v1\/factors/);
+  assert.match(namedAdmin, /authFetch<MfaEnrollResponse>/);
+  assert.match(namedAdmin, /"\\/factors"/);
   assert.match(namedAdmin, /\/challenge/);
   assert.match(namedAdmin, /\/verify/);
   assert.match(namedAdmin, /aal2/);
