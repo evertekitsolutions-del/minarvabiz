@@ -8,12 +8,17 @@ import { privateKeyHex } from "../lib/signing-key";
 import {
   ADMIN_COOKIE,
   adminCookieOptions,
-  adminPassword,
   createAdminSessionToken,
-  timingSafeStringEqual,
+  emergencyAdminCredentialStatus,
   validateAdminSessionToken,
+  verifyEmergencyAdminCredential,
 } from "../lib/admin-session";
-import { consumeRateLimit } from "../lib/rate-limit";
+import {
+  checkAdminLoginBackoff,
+  clearAdminLoginFailures,
+  consumeRateLimit,
+  recordAdminLoginFailure,
+} from "../lib/rate-limit";
 
 const PLANS: LicensePlan[] = ["trial", "basic", "professional", "business", "enterprise"];
 const EDITIONS: Edition[] = ["online", "offline", "hybrid"];
@@ -27,14 +32,37 @@ function clean(value: unknown, max = 2000) { return typeof value === "string" ? 
 
 export async function loginAdmin(password: string) {
   const requestHeaders = await headers();
+
+  const backoff = await checkAdminLoginBackoff(requestHeaders);
+  if (!backoff.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
+  if (!backoff.allowed) {
+    return { ok: false, error: `Too many sign-in attempts. Try again in ${backoff.retryAfterSeconds} seconds.` };
+  }
+
   const throttle = await consumeRateLimit(requestHeaders, "admin-login", 5, 15 * 60);
   if (!throttle.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
-  if (!throttle.allowed) return { ok: false, error: `Too many sign-in attempts. Try again in ${throttle.retryAfterSeconds} seconds.` };
+  if (!throttle.allowed) {
+    return { ok: false, error: `Too many sign-in attempts. Try again in ${throttle.retryAfterSeconds} seconds.` };
+  }
 
-  const expected = adminPassword();
+  const credentialStatus = emergencyAdminCredentialStatus();
+  if (!credentialStatus.enabled) {
+    return { ok: false, error: "Emergency shared-secret admin sign-in is disabled." };
+  }
+  if (!credentialStatus.currentConfigured) {
+    return { ok: false, error: "Emergency admin credential is not configured securely." };
+  }
+
   const supplied = String(password || "");
-  if (!expected || !supplied) return { ok: false, error: "Admin authentication is not configured." };
-  if (!timingSafeStringEqual(expected, supplied)) return { ok: false, error: "Invalid admin credential." };
+  const credentialMatch = verifyEmergencyAdminCredential(supplied);
+  if (!credentialMatch) {
+    const failure = await recordAdminLoginFailure(requestHeaders);
+    if (!failure.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
+    return { ok: false, error: `Invalid admin credential. Try again in ${failure.retryAfterSeconds} seconds.` };
+  }
+
+  const cleared = await clearAdminLoginFailures(requestHeaders);
+  if (!cleared.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
 
   const token = createAdminSessionToken();
   if (!token) return { ok: false, error: "Admin session signing is not configured." };
