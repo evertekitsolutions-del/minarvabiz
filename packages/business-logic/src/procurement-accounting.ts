@@ -1,5 +1,5 @@
 import type { Purchase, PurchaseInvoice, PaymentMethod } from '@minarvabiz/types';
-import { fromMinorUnits, multiplyMinorByQuantity, nowISO, percentOfMinor, toMinorUnits } from '@minarvabiz/utils';
+import { addMinorUnits, fromMinorUnits, multiplyMinorByQuantity, nowISO, percentOfMinor, toMinorUnits } from '@minarvabiz/utils';
 import { getAccount, listJournalEntries, planAutomaticPosting, type AutomaticPostingPlan } from './accounting-store';
 const invalid = (message: string): AutomaticPostingPlan => ({ errors: [message], commit: () => null });
 const sourceEntry = (id: string, type = 'auto_purchase_invoice') => listJournalEntries().find(j => j.referenceType === type && j.referenceId === id && j.status === 'posted');
@@ -13,7 +13,7 @@ export function supplierOpeningPayableBalance(supplierId: string): number {
     if (referenceId !== supplierId && referenceId !== `opening-supplier-create-${supplierId}` && !referenceId.startsWith(prefix)) continue;
     for (const line of entry.lines) {
       if (getAccount(line.accountId)?.systemKey !== 'accounts_payable') continue;
-      netCents += toMinorUnits(line.credit) - toMinorUnits(line.debit);
+      netCents = addMinorUnits(netCents, toMinorUnits(line.credit), -toMinorUnits(line.debit));
     }
   }
   return fromMinorUnits(Math.max(0, netCents));
@@ -31,8 +31,9 @@ export function planPurchaseInvoicePosting(invoice: PurchaseInvoice): AutomaticP
     if (line.invoicedQuantity <= 0 || subtotalMinor !== multiplyMinorByQuantity(toMinorUnits(line.unitCost), line.invoicedQuantity)
       || taxMinor !== percentOfMinor(subtotalMinor, line.taxRate)
       || toMinorUnits(line.lineTotal) !== subtotalMinor + taxMinor) return invalid('Supplier invoice line amounts are inconsistent');
-    if (line.productId) stock += subtotalMinor; else unclassified += subtotalMinor;
-    tax += taxMinor;
+    if (line.productId) stock = addMinorUnits(stock, subtotalMinor);
+    else unclassified = addMinorUnits(unclassified, subtotalMinor);
+    tax = addMinorUnits(tax, taxMinor);
   }
   if (stock + unclassified !== toMinorUnits(invoice.subtotal) || tax !== toMinorUnits(invoice.taxAmount) || stock + unclassified + tax !== toMinorUnits(invoice.total)) return invalid('Supplier invoice totals are inconsistent');
   return planAutomaticPosting({ referenceType: 'auto_purchase_invoice', referenceId: invoice.id, date: invoice.invoiceDate,
@@ -51,9 +52,9 @@ export function planPurchaseInvoiceCancellation(invoice: PurchaseInvoice): Autom
 
 export function planSupplierPaymentPosting(input: { id: string; amount: number; method: PaymentMethod; date: string;
   allocations: Array<{ id: string; type: 'invoice' | 'purchase'; amount: number }>; openingAmount?: number }): AutomaticPostingPlan {
-  const documentPayable = input.allocations
+  const documentPayable = addMinorUnits(...input.allocations
     .filter(a => sourceEntry(a.id, a.type === 'invoice' ? 'auto_purchase_invoice' : 'auto_direct_purchase'))
-    .reduce((sum, a) => sum + toMinorUnits(a.amount), 0);
+    .map(a => toMinorUnits(a.amount)));
   const openingPayable = toMinorUnits(input.openingAmount ?? 0);
   const total = toMinorUnits(input.amount);
   if (![documentPayable, openingPayable, total].every(Number.isSafeInteger) || openingPayable < 0 || documentPayable + openingPayable > total) {
