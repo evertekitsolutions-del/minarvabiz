@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { minarvaHttpSecurityHeaders } from "../packages/utils/src/security-headers.ts";
 
 const middlewareSource = await readFile(
   new URL("../apps/web/src/middleware.ts", import.meta.url),
@@ -16,11 +17,19 @@ const rootLayoutSource = await readFile(
 
 assert.ok(
   !nextConfigSource.includes("Content-Security-Policy"),
-  "Static web CSP must be removed from next.config.ts",
+  "Static web CSP must stay out of next.config.ts",
 );
+assert.ok(nextConfigSource.includes("@minarvabiz/utils/security-headers"));
+assert.ok(nextConfigSource.includes("minarvaHttpSecurityHeaders()"));
+assert.ok(middlewareSource.includes("@minarvabiz/utils/security-headers"));
+assert.ok(middlewareSource.includes("buildMinarvaNonceCsp("));
+assert.ok(!middlewareSource.includes("function buildContentSecurityPolicy"));
 assert.ok(middlewareSource.includes('requestHeaders.set("x-nonce", nonce)'));
 assert.ok(rootLayoutSource.includes('from "next/headers"'));
-assert.ok(rootLayoutSource.includes("await headers()"), "Root layout must stay request-bound for nonce propagation");
+assert.ok(
+  rootLayoutSource.includes("await headers()"),
+  "Root layout must stay request-bound for nonce propagation",
+);
 assert.ok(
   middlewareSource.includes(
     'requestHeaders.set("Content-Security-Policy", contentSecurityPolicy)',
@@ -38,20 +47,6 @@ assert.ok(
 assert.ok(
   middlewareSource.includes("wss://"),
   "Supabase realtime WSS origin must remain supported",
-);
-
-const sourceScriptLine = middlewareSource
-  .split("\n")
-  .find((line) => line.includes("script-src "));
-assert.ok(sourceScriptLine, "script-src source definition is missing");
-assert.ok(sourceScriptLine.includes("nonce-"), "script-src source definition is missing a nonce");
-assert.ok(
-  sourceScriptLine.includes("strict-dynamic"),
-  "script-src source definition is missing strict-dynamic",
-);
-assert.ok(
-  !sourceScriptLine.includes("unsafe-inline"),
-  "script-src source definition must not allow unsafe-inline",
 );
 
 function directive(csp, name) {
@@ -84,12 +79,23 @@ function nonceFromCsp(csp) {
   return scriptSrc.slice(start + marker.length, end);
 }
 
+function assertSecurityHeaders(response) {
+  for (const header of minarvaHttpSecurityHeaders()) {
+    assert.equal(
+      response.headers.get(header.key),
+      header.value,
+      "main web security header mismatch: " + header.key,
+    );
+  }
+}
+
 async function fetchDocument(url) {
   const response = await fetch(url, {
     headers: { accept: "text/html" },
     cache: "no-store",
   });
   assert.equal(response.status, 200, "main web did not return HTTP 200");
+  assertSecurityHeaders(response);
 
   const csp = response.headers.get("content-security-policy") || "";
   assert.ok(csp, "Content-Security-Policy response header is missing");
@@ -129,6 +135,6 @@ if (baseUrl) {
 
 console.log(
   baseUrl
-    ? "Main web nonce CSP static + runtime smoke PASS"
-    : "Main web nonce CSP static smoke PASS",
+    ? "Main web nonce CSP + shared security headers runtime smoke PASS"
+    : "Main web nonce CSP shared-baseline static smoke PASS",
 );
