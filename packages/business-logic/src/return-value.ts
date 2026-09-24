@@ -18,13 +18,15 @@ export function quoteSaleReturn(sale: Sale, history: SaleReturn[], selection: Re
     if (seen.has(original.id)) { errors.push(`${original.productName}: duplicate return item`); continue; }
     seen.add(original.id);
     const prior = previous.filter(i => i.saleItemId === original.id);
+    if (!Number.isFinite(selected.quantity) || selected.quantity <= 0 || !Number.isFinite(original.quantity) || original.quantity <= 0) {
+      errors.push(`${original.productName}: return quantity exceeds remaining quantity or is invalid`); continue;
+    }
     const returnedQuantityMilli = prior.reduce((sum, i) => sum + toQuantityMilli(i.quantity), 0);
     const selectedQuantityMilli = toQuantityMilli(selected.quantity);
     const originalQuantityMilli = toQuantityMilli(original.quantity);
     const cumulativeQuantityMilli = returnedQuantityMilli + selectedQuantityMilli;
     const returnedMinor = addMinorUnits(...prior.map((i) => toMinorUnits(i.refundAmount)));
-    if (!Number.isFinite(selected.quantity) || selected.quantity <= 0 || !Number.isFinite(original.quantity) || original.quantity <= 0 ||
-        returnedQuantityMilli < 0 || cumulativeQuantityMilli > originalQuantityMilli) {
+    if (returnedQuantityMilli < 0 || cumulativeQuantityMilli > originalQuantityMilli) {
       errors.push(`${original.productName}: return quantity exceeds remaining quantity or is invalid`); continue;
     }
     // Older snapshots may lack lineTotal; derive only from their original invoice fields.
