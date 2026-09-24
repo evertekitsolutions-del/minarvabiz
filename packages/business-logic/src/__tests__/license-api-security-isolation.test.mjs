@@ -106,6 +106,10 @@ assert.match(sessionMigration, /ENABLE ROW LEVEL SECURITY/);
 assert.match(sessionMigration, /REVOKE ALL ON TABLE public\.license_admin_sessions FROM PUBLIC, anon, authenticated/);
 assert.match(sessionMigration, /GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public\.license_admin_sessions TO service_role/);
 
+const sessionIndexMigration = read("supabase/migrations/20260924_license_admin_session_auth_user_index.sql");
+assert.match(sessionIndexMigration, /idx_license_admin_sessions_auth_user_id/);
+assert.match(sessionIndexMigration, /license_admin_sessions\(auth_user_id\)/);
+
 const render = read("render.yaml");
 assert.match(render, /LICENSE_SESSION_SECRET[\s\S]*generateValue: true/);
 assert.match(render, /LICENSE_RATE_LIMIT_SECRET[\s\S]*generateValue: true/);
