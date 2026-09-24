@@ -1,4 +1,5 @@
 import type { AdminIdentity } from "./admin-session";
+import { isAdminRole } from "./admin-rbac";
 import { adminDbFetch } from "./supabase-admin";
 
 export function normalizeAdminEmail(value: unknown): string {
@@ -69,6 +70,7 @@ type IdentityRow = {
   email: string;
   display_name: string;
   status: "active" | "disabled";
+  role: string;
 };
 
 export type NamedAdminAuthResult =
@@ -139,7 +141,7 @@ export async function authenticateNamedAdmin(emailInput: unknown, passwordInput:
   }
 
   const allowlist = await adminDbFetch<IdentityRow[]>(
-    `/license_admin_identities?select=auth_user_id%2Cemail%2Cdisplay_name%2Cstatus&auth_user_id=eq.${encodeURIComponent(userId)}&limit=1`,
+    `/license_admin_identities?select=auth_user_id%2Cemail%2Cdisplay_name%2Cstatus%2Crole&auth_user_id=eq.${encodeURIComponent(userId)}&limit=1`,
   );
   if (!allowlist.ok) {
     return { ok: false, error: "Administrator identity registry is unavailable.", rejected: false };
@@ -148,7 +150,7 @@ export async function authenticateNamedAdmin(emailInput: unknown, passwordInput:
   const row = Array.isArray(allowlist.data) ? allowlist.data[0] : null;
   const rowEmail = normalizeAdminEmail(row?.email || "");
   const displayName = String(row?.display_name || "").trim();
-  if (!row || row.status !== "active" || rowEmail !== authEmail || !displayName || displayName.length > 120) {
+  if (!row || row.status !== "active" || rowEmail !== authEmail || !displayName || displayName.length > 120 || !isAdminRole(row.role)) {
     return { ok: false, error: "Invalid administrator credentials.", rejected: true };
   }
 
@@ -165,6 +167,7 @@ export async function authenticateNamedAdmin(emailInput: unknown, passwordInput:
       email: authEmail,
       displayName,
       source: "supabase",
+      role: row.role,
     },
     accessToken,
     verifiedTotpFactorIds: factors,
