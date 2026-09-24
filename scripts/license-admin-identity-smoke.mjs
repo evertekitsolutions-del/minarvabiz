@@ -21,12 +21,14 @@ try {
     source: "supabase",
   };
 
-  const token = session.createAdminSessionToken(identity, now);
-  assert.match(token, /^v2\./);
-  assert.deepEqual(session.readAdminSessionToken(token, now + 1000), identity);
+  const sessionId = "22222222-2222-4222-8222-222222222222";
+  const expiresAtMs = now + session.adminSessionTtlSeconds("supabase") * 1000;
+  const token = session.createAdminSessionToken(identity, sessionId, expiresAtMs, now);
+  assert.match(token, /^v3\./);
+  assert.deepEqual(session.readAdminSessionToken(token, now + 1000), { sessionId, identity, expiresAtMs });
   assert.equal(session.validateAdminSessionToken(token, now + 1000), true);
   assert.equal(session.readAdminSessionToken(token.replace(/.$/, token.endsWith("A") ? "B" : "A"), now + 1000), null);
-  assert.equal(session.readAdminSessionToken("v1.1.legacy.signature", now), null);
+  assert.equal(session.readAdminSessionToken("v2.1.legacy.payload.signature", now), null);
 
   process.env.LICENSE_ADMIN_EMERGENCY_LOGIN_ENABLED = "true";
   process.env.LICENSE_ADMIN_EMERGENCY_ACTOR_EMAIL = "operator@example.com";
@@ -44,7 +46,9 @@ try {
   const actions = await readFile(new URL("../apps/license-admin/src/app/actions.ts", import.meta.url), "utf8");
   assert.match(actions, /loginAdmin\(email: string, password: string\)/);
   assert.match(actions, /loginEmergencyAdmin/);
-  assert.match(actions, /createAdminSessionToken\(auth\.identity\)/);
+  assert.match(actions, /verifyAdminMfa/);
+  assert.match(actions, /registerAdminSession/);
+  assert.match(actions, /validateRegisteredAdminSession/);
   assert.match(actions, /readAdminSessionToken/);
 
   const panel = await readFile(new URL("../apps/license-admin/src/app/AdminPanel.tsx", import.meta.url), "utf8");
