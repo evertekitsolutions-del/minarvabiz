@@ -40,19 +40,27 @@ assert.match(session, /randomBytes\(32\)/);
 assert.match(session, /LICENSE_SESSION_SECRET/);
 assert.match(session, /createAdminSessionToken/);
 assert.match(session, /readAdminSessionToken/);
-assert.match(session, /v2\./);
+assert.match(session, /v3\./);
+assert.match(session, /ADMIN_MFA_COOKIE/);
+assert.match(session, /createAdminMfaPendingToken/);
 assert.doesNotMatch(session, /minarvabiz-license-admin-session-v1/);
 
 const actions = read("apps/license-admin/src/app/actions.ts");
 assert.match(actions, /consumeRateLimit\(requestHeaders, "admin-login", 5, 15 \* 60, subject\)/);
-assert.match(actions, /createAdminSessionToken\(auth\.identity\)/);
-assert.match(actions, /readAdminSessionToken\(token\)/);
+assert.match(actions, /verifyAdminMfa/);
+assert.match(actions, /registerAdminSession/);
+assert.match(actions, /validateRegisteredAdminSession/);
+assert.match(actions, /revokeRegisteredAdminSession/);
 assert.match(actions, /loginEmergencyAdmin/);
 
 const namedAdmin = read("apps/license-admin/src/lib/named-admin.ts");
 assert.match(namedAdmin, /\/auth\/v1\/token\?grant_type=password/);
 assert.match(namedAdmin, /license_admin_identities/);
 assert.match(namedAdmin, /status !== "active"/);
+assert.match(namedAdmin, /\/auth\/v1.*\/factors/);
+assert.match(namedAdmin, /\/challenge/);
+assert.match(namedAdmin, /\/verify/);
+assert.match(namedAdmin, /aal2/);
 
 const activate = read("apps/license-admin/src/app/api/license/activate/route.ts");
 assert.match(activate, /"license-activate-ip", 30, 15 \* 60/);
@@ -82,6 +90,13 @@ const identityMigration = read("supabase/migrations/20260924_license_admin_named
 assert.match(identityMigration, /REFERENCES auth\.users\(id\) ON DELETE CASCADE/);
 assert.match(identityMigration, /ENABLE ROW LEVEL SECURITY/);
 assert.match(identityMigration, /GRANT SELECT ON TABLE public\.license_admin_identities TO service_role/);
+
+const adminSessionMigration = read("supabase/migrations/20260924_license_admin_mfa_sessions.sql");
+assert.match(adminSessionMigration, /CREATE TABLE IF NOT EXISTS public\.license_admin_sessions/);
+assert.match(adminSessionMigration, /revoked_at TIMESTAMPTZ/);
+assert.match(adminSessionMigration, /ENABLE ROW LEVEL SECURITY/);
+assert.match(adminSessionMigration, /REVOKE ALL[\s\S]*anon, authenticated/);
+assert.match(adminSessionMigration, /GRANT SELECT, INSERT, UPDATE, DELETE[\s\S]*TO service_role/);
 
 const render = read("render.yaml");
 assert.match(render, /LICENSE_SESSION_SECRET[\s\S]*generateValue: true/);
