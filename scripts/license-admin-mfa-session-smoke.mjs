@@ -16,6 +16,7 @@ try {
     email: "admin@example.com",
     displayName: "Named Administrator",
     source: "supabase",
+    role: "admin",
   };
   const sessionId = "22222222-2222-4222-8222-222222222222";
   const expiresAtMs = now + session.adminSessionTtlSeconds("supabase") * 1000;
