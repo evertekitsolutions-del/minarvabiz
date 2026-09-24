@@ -126,6 +126,8 @@ jobs:
         run: node --experimental-strip-types scripts/license-admin-security-smoke.mjs
       - name: Verify named administrator identities
         run: node --experimental-strip-types scripts/license-admin-identity-smoke.mjs
+      - name: Verify administrator MFA and revocable sessions
+        run: node --experimental-strip-types scripts/license-admin-mfa-session-smoke.mjs
       - name: Verify production security configuration
         shell: bash
         run: |
