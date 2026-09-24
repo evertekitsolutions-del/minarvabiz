@@ -11,7 +11,8 @@ import {
 } from '@minarvabiz/utils';
 import { hasSalePosting, planAutomaticPosting, type AutomaticPostingLine, type AutomaticPostingPlan } from './accounting-store';
 
-const cents = (n: number) => toMinorUnits(n);
+// Return proration remains on the legacy rounding path until #8B migrates returns.
+const cents = (n: number) => Math.round((n + Number.EPSILON) * 100);
 const money = (n: number) => fromMinorUnits(toMinorUnits(n));
 function tenderKey(method: PaymentMethod): string {
   return method === 'cash' ? 'cash' : method === 'bank' ? 'bank' : 'payment_clearing';
