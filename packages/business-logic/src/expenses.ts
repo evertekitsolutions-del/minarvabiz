@@ -1,15 +1,17 @@
-import { roundMoney } from "@minarvabiz/utils";
+import { fromMinorUnits, subtractMinorUnits, toMinorUnits } from "@minarvabiz/utils";
 import { calculateLaundryProfit } from "./laundry";
 
 export { calculateLaundryProfit };
 
 export function purchaseBalance(amount: number, paidAmount: number) {
-  const a = roundMoney(amount);
-  const p = roundMoney(Math.max(0, paidAmount));
+  const amountMinor = toMinorUnits(amount);
+  const paidInputMinor = Math.max(0, toMinorUnits(paidAmount));
+  const paidMinor = Math.min(paidInputMinor, amountMinor);
+  const balanceMinor = Math.max(0, subtractMinorUnits(amountMinor, paidMinor));
   return {
-    amount: a,
-    paidAmount: Math.min(p, a),
-    balanceAmount: roundMoney(Math.max(0, a - p)),
+    amount: fromMinorUnits(amountMinor),
+    paidAmount: fromMinorUnits(paidMinor),
+    balanceAmount: fromMinorUnits(balanceMinor),
   };
 }
 
