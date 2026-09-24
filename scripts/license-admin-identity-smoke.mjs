@@ -65,10 +65,11 @@ try {
   assert.match(actions, /readAdminSessionToken/);
 
   const panel = await readFile(new URL("../apps/license-admin/src/app/AdminPanel.tsx", import.meta.url), "utf8");
-  assert.match(panel, /Administrator email/);
-  assert.match(panel, /Emergency break-glass access/);
-  assert.match(panel, /MFA is required/);
-  assert.match(panel, /Authenticator code/);
+  const authCard = await readFile(new URL("../apps/license-admin/src/app/admin-panel/AdminAuthCard.tsx", import.meta.url), "utf8");
+  assert.match(authCard, /Administrator email/);
+  assert.match(authCard, /Emergency break-glass access/);
+  assert.match(authCard, /MFA is required/);
+  assert.match(authCard, /Authenticator code/);
   assert.match(panel, /identity\.displayName/);
 
   const identityMigration = await readFile(new URL("../supabase/migrations/20260924_license_admin_named_identities.sql", import.meta.url), "utf8");

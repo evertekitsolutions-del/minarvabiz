@@ -149,6 +149,8 @@ jobs:
         run: node --experimental-strip-types scripts/license-admin-mfa-session-smoke.mjs
       - name: Verify administrator RBAC and actor audit
         run: node --experimental-strip-types scripts/license-admin-rbac-audit-smoke.mjs
+      - name: Verify modular license-admin surface
+        run: node --experimental-strip-types scripts/license-admin-modular-ui-smoke.mjs
       - name: Verify production security configuration
         shell: bash
         run: |
