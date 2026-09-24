@@ -85,6 +85,13 @@ try {
   assert.match(migration, /REVOKE ALL[\s\S]*anon, authenticated/);
   assert.match(migration, /GRANT SELECT, INSERT, UPDATE, DELETE[\s\S]*TO service_role/);
 
+  const indexMigration = await readFile(
+    new URL("../supabase/migrations/20260924_license_admin_session_auth_user_index.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(indexMigration, /CREATE INDEX IF NOT EXISTS idx_license_admin_sessions_auth_user_id/);
+  assert.match(indexMigration, /ON public\.license_admin_sessions\(auth_user_id\)/);
+
   console.log("License-admin MFA/revocable-session security smoke PASS");
 } finally {
   for (const key of keys) {
