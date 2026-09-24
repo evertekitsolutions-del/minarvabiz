@@ -33,7 +33,8 @@ export default function AdminPanel({ identity, initialLicenses }: { identity: Ad
   const [expiresAt, setExpiresAt] = React.useState(""); const [activationLimit, setActivationLimit] = React.useState("");
   const [features, setFeatures] = React.useState<LicenseFeatures>(() => defaultFeatures("professional"));
   const [offlineLicenseId, setOfflineLicenseId] = React.useState(""); const [offlineDeviceId, setOfflineDeviceId] = React.useState("");
-  const [lastToken, setLastToken] = React.useState<string | null>(null); const [message, setMessage] = React.useState<string | null>(null); const [busy, setBusy] = React.useState(false);\n  const [authStage, setAuthStage] = React.useState<"password" | "enroll" | "mfa">("password"); const [mfaCode, setMfaCode] = React.useState(""); const [mfaSecret, setMfaSecret] = React.useState(""); const [mfaQrCode, setMfaQrCode] = React.useState("");
+  const [lastToken, setLastToken] = React.useState<string | null>(null); const [message, setMessage] = React.useState<string | null>(null); const [busy, setBusy] = React.useState(false);
+  const [authStage, setAuthStage] = React.useState<"password" | "enroll" | "mfa">("password"); const [mfaCode, setMfaCode] = React.useState(""); const [mfaSecret, setMfaSecret] = React.useState(""); const [mfaQrCode, setMfaQrCode] = React.useState("");
   React.useEffect(() => { setFeatures(defaultFeatures(plan)); }, [plan]);
 
   async function login() {
