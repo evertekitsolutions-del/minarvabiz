@@ -122,6 +122,20 @@ export function multiplyMinorByQuantity(amountMinor: MoneyMinor, quantity: numbe
   return multiplyDivideRounded(amountMinor, quantityMilli, QUANTITY_MILLI_FACTOR, "Money quantity result");
 }
 
+export function allocateMinorByQuantityRatio(
+  amountMinor: MoneyMinor,
+  numeratorQuantity: number,
+  denominatorQuantity: number
+): MoneyMinor {
+  const numeratorMilli = toQuantityMilli(numeratorQuantity);
+  const denominatorMilli = toQuantityMilli(denominatorQuantity);
+  if (numeratorMilli < 0 || denominatorMilli <= 0 || numeratorMilli > denominatorMilli) {
+    throw new Error("Invalid quantity ratio");
+  }
+  return multiplyDivideRounded(amountMinor, numeratorMilli, denominatorMilli, "Money ratio result");
+}
+
+
 export function percentOfMinor(amountMinor: MoneyMinor, percent: number): MoneyMinor {
   const basisPoints = toPercentBasisPoints(percent);
   return multiplyDivideRounded(amountMinor, basisPoints, 100 * PERCENT_BASIS_FACTOR, "Money percent result");
