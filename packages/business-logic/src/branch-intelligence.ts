@@ -1,5 +1,12 @@
 /** Multi-branch performance and transfer intelligence. */
 
+import {
+  divideMinorUnits,
+  fromMinorUnits,
+  subtractMinorUnits,
+  toMinorUnits,
+} from "@minarvabiz/utils";
+
 export interface BranchMetric {
   branchId: string;
   branchName: string;
@@ -27,20 +34,26 @@ function n(value: number): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+function nonNegativeMoneyMinor(value: number): number {
+  return Math.max(0, toMinorUnits(n(value)));
+}
+
 export function compareBranches(metrics: BranchMetric[]): BranchComparison[] {
   const rows = metrics.map((branch) => {
-    const revenue = Math.max(0, n(branch.revenue));
-    const grossProfit = revenue - Math.max(0, n(branch.cost));
-    const netProfit = grossProfit - Math.max(0, n(branch.expenses));
+    const revenueMinor = nonNegativeMoneyMinor(branch.revenue);
+    const costMinor = nonNegativeMoneyMinor(branch.cost);
+    const expensesMinor = nonNegativeMoneyMinor(branch.expenses);
+    const grossProfitMinor = subtractMinorUnits(revenueMinor, costMinor);
+    const netProfitMinor = subtractMinorUnits(grossProfitMinor, expensesMinor);
     return {
       branchId: branch.branchId,
       branchName: branch.branchName,
-      revenue,
-      grossProfit,
-      netProfit,
-      grossMarginPercent: revenue > 0 ? Math.round((grossProfit / revenue) * 10000) / 100 : 0,
-      averageOrderValue: branch.orders > 0 ? Math.round((revenue / branch.orders) * 100) / 100 : 0,
-      stockValue: Math.max(0, n(branch.stockValue)),
+      revenue: fromMinorUnits(revenueMinor),
+      grossProfit: fromMinorUnits(grossProfitMinor),
+      netProfit: fromMinorUnits(netProfitMinor),
+      grossMarginPercent: revenueMinor > 0 ? Math.round((grossProfitMinor / revenueMinor) * 10000) / 100 : 0,
+      averageOrderValue: branch.orders > 0 ? fromMinorUnits(divideMinorUnits(revenueMinor, branch.orders)) : 0,
+      stockValue: fromMinorUnits(nonNegativeMoneyMinor(branch.stockValue)),
       profitRank: 0,
     };
   }).sort((a, b) => b.netProfit - a.netProfit || b.revenue - a.revenue);
