@@ -10,7 +10,8 @@ export type RateLimitDecision = {
 };
 
 function rateLimitSecret(): string {
-  return String(process.env.LICENSE_RATE_LIMIT_SECRET || "").trim();
+  const value = String(process.env.LICENSE_RATE_LIMIT_SECRET || "").trim();
+  return value.length >= 32 ? value : "";
 }
 
 type HeaderReader = Pick<Headers, "get">;
