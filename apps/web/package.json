@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@minarvabiz/business-logic": "workspace:*",
+    "@minarvabiz/database": "workspace:*",
     "@minarvabiz/licensing": "workspace:*",
+    "@minarvabiz/security-headers": "workspace:*",
     "@minarvabiz/types": "workspace:*",
     "@minarvabiz/ui": "workspace:*",
     "@minarvabiz/utils": "workspace:*",
@@ -18,8 +20,7 @@
     "@supabase/supabase-js": "^2.47.10",
     "next": "^15.1.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@minarvabiz/database": "workspace:*"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
