@@ -69,10 +69,10 @@ try {
   assert.match(actions, /validateRegisteredAdminSession/);
   assert.match(actions, /revokeRegisteredAdminSession/);
 
-  const panel = await readFile(new URL("../apps/license-admin/src/app/AdminPanel.tsx", import.meta.url), "utf8");
-  assert.match(panel, /Authenticator code/);
-  assert.match(panel, /Set up authenticator/);
-  assert.match(panel, /MFA is required/);
+  const authCard = await readFile(new URL("../apps/license-admin/src/app/admin-panel/AdminAuthCard.tsx", import.meta.url), "utf8");
+  assert.match(authCard, /Authenticator code/);
+  assert.match(authCard, /Set up authenticator/);
+  assert.match(authCard, /MFA is required/);
 
   const migration = await readFile(
     new URL("../supabase/migrations/20260924_license_admin_mfa_sessions.sql", import.meta.url),
