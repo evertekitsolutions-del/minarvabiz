@@ -9,12 +9,18 @@ const nextConfigSource = await readFile(
   new URL("../apps/web/next.config.ts", import.meta.url),
   "utf8",
 );
+const rootLayoutSource = await readFile(
+  new URL("../apps/web/src/app/layout.tsx", import.meta.url),
+  "utf8",
+);
 
 assert.ok(
   !nextConfigSource.includes("Content-Security-Policy"),
   "Static web CSP must be removed from next.config.ts",
 );
 assert.ok(middlewareSource.includes('requestHeaders.set("x-nonce", nonce)'));
+assert.ok(rootLayoutSource.includes('from "next/headers"'));
+assert.ok(rootLayoutSource.includes("await headers()"), "Root layout must stay request-bound for nonce propagation");
 assert.ok(
   middlewareSource.includes(
     'requestHeaders.set("Content-Security-Policy", contentSecurityPolicy)',
