@@ -5,8 +5,32 @@ const SESSION_TTL_SECONDS = 8 * 60 * 60;
 export const MIN_EMERGENCY_ADMIN_SECRET_LENGTH = 32;
 export const MAX_PREVIOUS_SECRET_GRACE_MS = 24 * 60 * 60 * 1000;
 
+export type AdminIdentitySource = "supabase" | "emergency";
+export type AdminIdentity = {
+  id: string;
+  email: string;
+  displayName: string;
+  source: AdminIdentitySource;
+};
+
 function envSecret(name: string): string {
   return String(process.env[name] || "").trim();
+}
+
+function normalizeEmail(value: string): string {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizeIdentity(identity: AdminIdentity): AdminIdentity | null {
+  const id = String(identity?.id || "").trim();
+  const email = normalizeEmail(identity?.email || "");
+  const displayName = String(identity?.displayName || "").trim();
+  const source = identity?.source;
+  if (!id || id.length > 200) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return null;
+  if (!displayName || displayName.length > 120) return null;
+  if (source !== "supabase" && source !== "emergency") return null;
+  return { id, email, displayName, source };
 }
 
 function sessionSecret(): string {
@@ -16,6 +40,15 @@ function sessionSecret(): string {
 
 export function emergencyAdminLoginEnabled(): boolean {
   return envSecret("LICENSE_ADMIN_EMERGENCY_LOGIN_ENABLED").toLowerCase() === "true";
+}
+
+export function emergencyAdminIdentity(): AdminIdentity | null {
+  const email = normalizeEmail(envSecret("LICENSE_ADMIN_EMERGENCY_ACTOR_EMAIL"));
+  const displayName = envSecret("LICENSE_ADMIN_EMERGENCY_ACTOR_NAME");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return null;
+  if (!displayName || displayName.length > 120) return null;
+  const digest = createHash("sha256").update(email, "utf8").digest("hex").slice(0, 32);
+  return { id: `emergency:${digest}`, email, displayName, source: "emergency" };
 }
 
 export type EmergencyAdminCredentialMatch = "current" | "previous";
@@ -38,6 +71,7 @@ export function emergencyAdminCredentialStatus(nowMs = Date.now()) {
     previousConfigured,
     previousActive,
     previousValidUntil: previousActive ? new Date(previousValidUntilMs).toISOString() : null,
+    actorConfigured: Boolean(emergencyAdminIdentity()),
   };
 }
 
@@ -71,25 +105,40 @@ function sign(body: string): string {
   return createHmac("sha256", secret).update(body).digest("base64url");
 }
 
-export function createAdminSessionToken(nowMs = Date.now()): string {
-  if (!sessionSecret()) return "";
+export function createAdminSessionToken(identity: AdminIdentity, nowMs = Date.now()): string {
+  const normalized = normalizeIdentity(identity);
+  if (!normalized || !sessionSecret()) return "";
   const expiresAt = nowMs + SESSION_TTL_SECONDS * 1000;
   const nonce = randomBytes(32).toString("base64url");
-  const body = `v1.${expiresAt}.${nonce}`;
+  const payload = Buffer.from(JSON.stringify(normalized), "utf8").toString("base64url");
+  const body = `v2.${expiresAt}.${nonce}.${payload}`;
   const signature = sign(body);
   return signature ? `${body}.${signature}` : "";
 }
 
-export function validateAdminSessionToken(token: string, nowMs = Date.now()): boolean {
+export function readAdminSessionToken(token: string, nowMs = Date.now()): AdminIdentity | null {
   const parts = String(token || "").split(".");
-  if (parts.length !== 4 || parts[0] !== "v1") return false;
+  if (parts.length !== 5 || parts[0] !== "v2") return null;
   const expiresAt = Number(parts[1]);
   const nonce = parts[2] || "";
-  const suppliedSignature = parts[3] || "";
-  if (!Number.isFinite(expiresAt) || expiresAt <= nowMs || expiresAt > nowMs + SESSION_TTL_SECONDS * 1000) return false;
-  if (!/^[A-Za-z0-9_-]{40,60}$/.test(nonce)) return false;
-  const expectedSignature = sign(`v1.${expiresAt}.${nonce}`);
-  return Boolean(expectedSignature) && timingSafeStringEqual(suppliedSignature, expectedSignature);
+  const payload = parts[3] || "";
+  const suppliedSignature = parts[4] || "";
+  if (!Number.isFinite(expiresAt) || expiresAt <= nowMs || expiresAt > nowMs + SESSION_TTL_SECONDS * 1000) return null;
+  if (!/^[A-Za-z0-9_-]{40,60}$/.test(nonce)) return null;
+  if (!payload || payload.length > 2048) return null;
+  const body = `v2.${expiresAt}.${nonce}.${payload}`;
+  const expectedSignature = sign(body);
+  if (!expectedSignature || !timingSafeStringEqual(suppliedSignature, expectedSignature)) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as AdminIdentity;
+    return normalizeIdentity(parsed);
+  } catch {
+    return null;
+  }
+}
+
+export function validateAdminSessionToken(token: string, nowMs = Date.now()): boolean {
+  return Boolean(readAdminSessionToken(token, nowMs));
 }
 
 export function adminCookieOptions() {
