@@ -4,6 +4,7 @@ import {
   type AdminIdentity,
   type AdminSessionClaims,
 } from "./admin-session";
+import { isAdminRole } from "./admin-rbac";
 import { adminDbFetch } from "./supabase-admin";
 
 export type AdminSessionAuthMethod = "totp" | "emergency";
@@ -16,6 +17,7 @@ type SessionRow = {
   display_name: string;
   source: "supabase" | "emergency";
   auth_method: AdminSessionAuthMethod;
+  actor_role: string;
   expires_at: string;
   revoked_at: string | null;
 };
@@ -25,6 +27,7 @@ type IdentityRow = {
   email: string;
   display_name: string;
   status: "active" | "disabled";
+  role: string;
 };
 
 export type RegisteredAdminSession =
@@ -50,6 +53,7 @@ export async function registerAdminSession(
       display_name: identity.displayName,
       source: identity.source,
       auth_method: authMethod,
+      actor_role: identity.role,
       expires_at: new Date(expiresAtMs).toISOString(),
     }),
   });
@@ -64,7 +68,7 @@ export async function validateRegisteredAdminSession(
   nowMs = Date.now(),
 ): Promise<boolean> {
   const result = await adminDbFetch<SessionRow[]>(
-    `/license_admin_sessions?select=id%2Cactor_id%2Cauth_user_id%2Cactor_email%2Cdisplay_name%2Csource%2Cauth_method%2Cexpires_at%2Crevoked_at&id=eq.${encodeURIComponent(claims.sessionId)}&limit=1`,
+    `/license_admin_sessions?select=id%2Cactor_id%2Cauth_user_id%2Cactor_email%2Cdisplay_name%2Csource%2Cauth_method%2Cactor_role%2Cexpires_at%2Crevoked_at&id=eq.${encodeURIComponent(claims.sessionId)}&limit=1`,
   );
   if (!result.ok) return false;
   const row = Array.isArray(result.data) ? result.data[0] : null;
@@ -76,16 +80,18 @@ export async function validateRegisteredAdminSession(
     row.actor_id !== claims.identity.id ||
     row.actor_email.trim().toLowerCase() !== claims.identity.email ||
     row.display_name !== claims.identity.displayName ||
-    row.source !== claims.identity.source
+    row.source !== claims.identity.source ||
+    row.actor_role !== claims.identity.role
   ) {
     return false;
   }
+  if (!isAdminRole(row.actor_role)) return false;
   if (row.source === "supabase" && row.auth_method !== "totp") return false;
-  if (row.source === "emergency" && row.auth_method !== "emergency") return false;
+  if (row.source === "emergency" && (row.auth_method !== "emergency" || row.actor_role !== "admin")) return false;
 
   if (claims.identity.source === "supabase") {
     const identityResult = await adminDbFetch<IdentityRow[]>(
-      `/license_admin_identities?select=auth_user_id%2Cemail%2Cdisplay_name%2Cstatus&auth_user_id=eq.${encodeURIComponent(claims.identity.id)}&limit=1`,
+      `/license_admin_identities?select=auth_user_id%2Cemail%2Cdisplay_name%2Cstatus%2Crole&auth_user_id=eq.${encodeURIComponent(claims.identity.id)}&limit=1`,
     );
     if (!identityResult.ok) return false;
     const identity = Array.isArray(identityResult.data) ? identityResult.data[0] : null;
@@ -93,7 +99,9 @@ export async function validateRegisteredAdminSession(
       !identity ||
       identity.status !== "active" ||
       identity.email.trim().toLowerCase() !== claims.identity.email ||
-      identity.display_name !== claims.identity.displayName
+      identity.display_name !== claims.identity.displayName ||
+      !isAdminRole(identity.role) ||
+      identity.role !== claims.identity.role
     ) {
       return false;
     }
