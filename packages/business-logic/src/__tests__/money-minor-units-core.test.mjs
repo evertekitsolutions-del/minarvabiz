@@ -61,6 +61,10 @@ assert.equal(tender.balanceDue, 0);
 assert.equal(tender.changeDue, 0);
 assert.deepEqual(tender.errors, []);
 
+const invalidTender = sales.validateTender(10, [{ method: "cash", amount: Infinity }]);
+assert.equal(invalidTender.errors.length, 1);
+assert.equal(invalidTender.collectible, 0);
+
 const allocation = sales.allocatePayment(0.3, 0.1 + 0.2);
 assert.deepEqual(allocation, {
   total: 0.3,
