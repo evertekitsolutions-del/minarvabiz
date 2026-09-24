@@ -122,6 +122,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @minarvabiz/license-admin typecheck
+      - name: Verify emergency shared-secret controls
+        run: node --experimental-strip-types scripts/license-admin-security-smoke.mjs
       - name: Verify production security configuration
         shell: bash
         run: |
