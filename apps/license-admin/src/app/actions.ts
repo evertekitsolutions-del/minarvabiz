@@ -1,23 +1,47 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
+import { cookies, headers } from "next/headers";
+import { createHash, randomUUID } from "crypto";
 import { issueLicense, PLAN_LIMITS, signActivationCertificate, PLAN_FEATURES, type LicensePlan } from "@minarvabiz/licensing";
 import type { Edition, LicenseFeatures } from "@minarvabiz/types";
 import { privateKeyHex } from "../lib/signing-key";
+import {
+  ADMIN_COOKIE,
+  adminCookieOptions,
+  adminPassword,
+  createAdminSessionToken,
+  timingSafeStringEqual,
+  validateAdminSessionToken,
+} from "../lib/admin-session";
+import { consumeRateLimit } from "../lib/rate-limit";
 
-const COOKIE = "minarva-license-admin";
 const PLANS: LicensePlan[] = ["trial", "basic", "professional", "business", "enterprise"];
 const EDITIONS: Edition[] = ["online", "offline", "hybrid"];
-function secret() { return String(process.env.LICENSE_API_SECRET || ""); }
-function sessionToken() { const value = secret(); return value ? createHmac("sha256", value).update("minarvabiz-license-admin-session-v1").digest("hex") : ""; }
-async function isAdmin() { const token = (await cookies()).get(COOKIE)?.value || ""; const expected = sessionToken(); if (!token || !expected) return false; const a = Buffer.from(token); const b = Buffer.from(expected); return a.length === b.length && timingSafeEqual(a, b); }
+async function isAdmin() {
+  const token = (await cookies()).get(ADMIN_COOKIE)?.value || "";
+  return validateAdminSessionToken(token);
+}
 function dbConfig() { const base = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, ""); const key = String(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || ""); return base && key ? { base: `${base}/rest/v1`, key } : null; }
 async function dbFetch(path: string, init: RequestInit = {}) { const cfg = dbConfig(); if (!cfg) return { ok: false, data: null as any, error: "Supabase is not configured." }; const headers = new Headers(init.headers); headers.set("apikey", cfg.key); headers.set("content-type", "application/json"); if (cfg.key.startsWith("sb_secret_")) headers.delete("authorization"); else headers.set("authorization", `Bearer ${cfg.key}`); const response = await fetch(`${cfg.base}${path}`, { ...init, headers, cache: "no-store" }); const data = await response.json().catch(() => null); return { ok: response.ok, data, error: response.ok ? null : (data?.message || data?.error || `Database request failed (${response.status})`) }; }
 function clean(value: unknown, max = 2000) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
 
-export async function loginAdmin(password: string) { const expected = secret(); const supplied = String(password || ""); if (!expected || !supplied) return { ok: false, error: "Admin authentication is not configured." }; const a = Buffer.from(expected); const b = Buffer.from(supplied); if (a.length !== b.length || !timingSafeEqual(a, b)) return { ok: false, error: "Invalid admin credential." }; (await cookies()).set(COOKIE, sessionToken(), { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict", path: "/", maxAge: 8 * 60 * 60 }); return { ok: true }; }
-export async function logoutAdmin() { (await cookies()).delete(COOKIE); return { ok: true }; }
+export async function loginAdmin(password: string) {
+  const requestHeaders = await headers();
+  const throttle = await consumeRateLimit(requestHeaders, "admin-login", 5, 15 * 60);
+  if (!throttle.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
+  if (!throttle.allowed) return { ok: false, error: `Too many sign-in attempts. Try again in ${throttle.retryAfterSeconds} seconds.` };
+
+  const expected = adminPassword();
+  const supplied = String(password || "");
+  if (!expected || !supplied) return { ok: false, error: "Admin authentication is not configured." };
+  if (!timingSafeStringEqual(expected, supplied)) return { ok: false, error: "Invalid admin credential." };
+
+  const token = createAdminSessionToken();
+  if (!token) return { ok: false, error: "Admin session signing is not configured." };
+  (await cookies()).set(ADMIN_COOKIE, token, adminCookieOptions());
+  return { ok: true };
+}
+export async function logoutAdmin() { (await cookies()).delete(ADMIN_COOKIE); return { ok: true }; }
 
 export async function listLicenses() {
   if (!(await isAdmin())) return { ok: false, error: "UNAUTHORIZED", licenses: [] as any[] };

@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { signActivationCertificate } from "@minarvabiz/licensing";
 import { privateKeyHex } from "../../../../lib/signing-key";
 import { adminDbFetch } from "../../../../lib/supabase-admin";
+import { consumeRateLimit } from "../../../../lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -30,6 +31,15 @@ async function readBody(request: Request): Promise<Record<string, unknown> | nul
 
 export async function POST(request: Request) {
   try {
+    const contentType = request.headers.get("content-type") || "";
+    if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
+      return NextResponse.json({ ok: false, code: "UNSUPPORTED_MEDIA_TYPE" }, { status: 415 });
+    }
+    const declaredLength = Number(request.headers.get("content-length") || 0);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+      return NextResponse.json({ ok: false, code: "REQUEST_TOO_LARGE" }, { status: 413 });
+    }
+
     const body = await readBody(request);
     if (!body) return NextResponse.json({ ok: false, code: "INVALID_REQUEST" }, { status: 400 });
 
@@ -40,6 +50,22 @@ export async function POST(request: Request) {
     }
 
     const hash = createHash("sha256").update(licenseToken, "utf8").digest("hex");
+    const ipLimit = await consumeRateLimit(request.headers, "license-activate-ip", 30, 15 * 60);
+    if (!ipLimit.ok) return NextResponse.json({ ok: false, code: "RATE_LIMIT_UNAVAILABLE" }, { status: 503 });
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        { ok: false, code: "RATE_LIMITED" },
+        { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSeconds) } },
+      );
+    }
+    const deviceLimit = await consumeRateLimit(request.headers, "license-activate-device", 10, 15 * 60, deviceId);
+    if (!deviceLimit.ok) return NextResponse.json({ ok: false, code: "RATE_LIMIT_UNAVAILABLE" }, { status: 503 });
+    if (!deviceLimit.allowed) {
+      return NextResponse.json(
+        { ok: false, code: "RATE_LIMITED" },
+        { status: 429, headers: { "Retry-After": String(deviceLimit.retryAfterSeconds) } },
+      );
+    }
     const found = await adminDbFetch<any[]>(
       `/licenses?select=id%2Clicense_id%2Ccustomer_id%2Cproduct%2Cedition%2Cplan%2Cstatus%2Cexpires_at%2Cactivation_limit%2Cfeatures&token_sha256=eq.${hash}&limit=1`,
     );

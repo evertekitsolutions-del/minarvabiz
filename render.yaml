@@ -11,6 +11,10 @@ services:
         value: 24.20.0
       - key: LICENSE_API_SECRET
         sync: false
+      - key: LICENSE_SESSION_SECRET
+        generateValue: true
+      - key: LICENSE_RATE_LIMIT_SECRET
+        generateValue: true
       - key: LICENSE_PRIVATE_KEY
         generateValue: true
       - key: SUPABASE_URL
