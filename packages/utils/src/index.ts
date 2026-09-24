@@ -42,6 +42,15 @@ export function fromMinorUnits(amountMinor: MoneyMinor): number {
   return amountMinor / MONEY_MINOR_FACTOR;
 }
 
+export function formatMinorUnits(amountMinor: MoneyMinor): string {
+  safeInteger(amountMinor, "Money minor amount");
+  const negative = amountMinor < 0;
+  const absolute = Math.abs(amountMinor);
+  const whole = Math.floor(absolute / MONEY_MINOR_FACTOR);
+  const fraction = absolute % MONEY_MINOR_FACTOR;
+  return `${negative ? "-" : ""}${whole}.${String(fraction).padStart(2, "0")}`;
+}
+
 export function toQuantityMilli(quantity: number): QuantityMilli {
   if (!Number.isFinite(quantity)) throw new Error("Quantity must be finite");
   return safeInteger(Math.round(quantity * QUANTITY_MILLI_FACTOR), "Quantity");
