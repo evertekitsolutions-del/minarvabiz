@@ -10,9 +10,11 @@ import {
   adminCookieOptions,
   createAdminSessionToken,
   emergencyAdminCredentialStatus,
-  validateAdminSessionToken,
+  emergencyAdminIdentity,
+  readAdminSessionToken,
   verifyEmergencyAdminCredential,
 } from "../lib/admin-session";
+import { authenticateNamedAdmin, normalizeAdminEmail } from "../lib/named-admin";
 import {
   checkAdminLoginBackoff,
   clearAdminLoginFailures,
@@ -22,24 +24,62 @@ import {
 
 const PLANS: LicensePlan[] = ["trial", "basic", "professional", "business", "enterprise"];
 const EDITIONS: Edition[] = ["online", "offline", "hybrid"];
-async function isAdmin() {
+async function currentAdminIdentity() {
   const token = (await cookies()).get(ADMIN_COOKIE)?.value || "";
-  return validateAdminSessionToken(token);
+  return readAdminSessionToken(token);
+}
+async function isAdmin() {
+  return Boolean(await currentAdminIdentity());
 }
 function dbConfig() { const base = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, ""); const key = String(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || ""); return base && key ? { base: `${base}/rest/v1`, key } : null; }
 async function dbFetch(path: string, init: RequestInit = {}) { const cfg = dbConfig(); if (!cfg) return { ok: false, data: null as any, error: "Supabase is not configured." }; const headers = new Headers(init.headers); headers.set("apikey", cfg.key); headers.set("content-type", "application/json"); if (cfg.key.startsWith("sb_secret_")) headers.delete("authorization"); else headers.set("authorization", `Bearer ${cfg.key}`); const response = await fetch(`${cfg.base}${path}`, { ...init, headers, cache: "no-store" }); const data = await response.json().catch(() => null); return { ok: response.ok, data, error: response.ok ? null : (data?.message || data?.error || `Database request failed (${response.status})`) }; }
 function clean(value: unknown, max = 2000) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
 
-export async function loginAdmin(password: string) {
+export async function loginAdmin(email: string, password: string) {
   const requestHeaders = await headers();
+  const normalizedEmail = normalizeAdminEmail(email);
+  const subject = `named:${normalizedEmail || "invalid"}`;
 
-  const backoff = await checkAdminLoginBackoff(requestHeaders);
+  const backoff = await checkAdminLoginBackoff(requestHeaders, subject);
   if (!backoff.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
   if (!backoff.allowed) {
     return { ok: false, error: `Too many sign-in attempts. Try again in ${backoff.retryAfterSeconds} seconds.` };
   }
 
-  const throttle = await consumeRateLimit(requestHeaders, "admin-login", 5, 15 * 60);
+  const throttle = await consumeRateLimit(requestHeaders, "admin-login", 5, 15 * 60, subject);
+  if (!throttle.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
+  if (!throttle.allowed) {
+    return { ok: false, error: `Too many sign-in attempts. Try again in ${throttle.retryAfterSeconds} seconds.` };
+  }
+
+  const auth = await authenticateNamedAdmin(normalizedEmail, password);
+  if (!auth.ok) {
+    if (!auth.rejected) return { ok: false, error: auth.error };
+    const failure = await recordAdminLoginFailure(requestHeaders, subject);
+    if (!failure.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
+    return { ok: false, error: `Invalid administrator credentials. Try again in ${failure.retryAfterSeconds} seconds.` };
+  }
+
+  const cleared = await clearAdminLoginFailures(requestHeaders, subject);
+  if (!cleared.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
+
+  const token = createAdminSessionToken(auth.identity);
+  if (!token) return { ok: false, error: "Admin session signing is not configured." };
+  (await cookies()).set(ADMIN_COOKIE, token, adminCookieOptions());
+  return { ok: true };
+}
+
+export async function loginEmergencyAdmin(password: string) {
+  const requestHeaders = await headers();
+  const subject = "emergency";
+
+  const backoff = await checkAdminLoginBackoff(requestHeaders, subject);
+  if (!backoff.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
+  if (!backoff.allowed) {
+    return { ok: false, error: `Too many sign-in attempts. Try again in ${backoff.retryAfterSeconds} seconds.` };
+  }
+
+  const throttle = await consumeRateLimit(requestHeaders, "admin-emergency-login", 5, 15 * 60, subject);
   if (!throttle.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
   if (!throttle.allowed) {
     return { ok: false, error: `Too many sign-in attempts. Try again in ${throttle.retryAfterSeconds} seconds.` };
@@ -49,22 +89,24 @@ export async function loginAdmin(password: string) {
   if (!credentialStatus.enabled) {
     return { ok: false, error: "Emergency shared-secret admin sign-in is disabled." };
   }
-  if (!credentialStatus.currentConfigured) {
-    return { ok: false, error: "Emergency admin credential is not configured securely." };
+  if (!credentialStatus.currentConfigured || !credentialStatus.actorConfigured) {
+    return { ok: false, error: "Emergency admin access is not configured securely." };
   }
 
-  const supplied = String(password || "");
-  const credentialMatch = verifyEmergencyAdminCredential(supplied);
+  const credentialMatch = verifyEmergencyAdminCredential(String(password || ""));
   if (!credentialMatch) {
-    const failure = await recordAdminLoginFailure(requestHeaders);
+    const failure = await recordAdminLoginFailure(requestHeaders, subject);
     if (!failure.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
-    return { ok: false, error: `Invalid admin credential. Try again in ${failure.retryAfterSeconds} seconds.` };
+    return { ok: false, error: `Invalid emergency admin credential. Try again in ${failure.retryAfterSeconds} seconds.` };
   }
 
-  const cleared = await clearAdminLoginFailures(requestHeaders);
+  const identity = emergencyAdminIdentity();
+  if (!identity) return { ok: false, error: "Emergency admin actor identity is not configured." };
+
+  const cleared = await clearAdminLoginFailures(requestHeaders, subject);
   if (!cleared.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
 
-  const token = createAdminSessionToken();
+  const token = createAdminSessionToken(identity);
   if (!token) return { ok: false, error: "Admin session signing is not configured." };
   (await cookies()).set(ADMIN_COOKIE, token, adminCookieOptions());
   return { ok: true };
@@ -72,13 +114,14 @@ export async function loginAdmin(password: string) {
 export async function logoutAdmin() { (await cookies()).delete(ADMIN_COOKIE); return { ok: true }; }
 
 export async function listLicenses() {
-  if (!(await isAdmin())) return { ok: false, error: "UNAUTHORIZED", licenses: [] as any[] };
+  const identity = await currentAdminIdentity();
+  if (!identity) return { ok: false, error: "UNAUTHORIZED", identity: null, licenses: [] as any[] };
   const result = await dbFetch("/licenses?select=id%2Clicense_id%2Ccustomer_id%2Cproduct%2Cedition%2Cplan%2Cstatus%2Cissued_at%2Cexpires_at%2Cactivation_limit%2Cfeatures%2Cmetadata%2Ccreated_at%2Cupdated_at&order=created_at.desc&limit=200");
-  if (!result.ok) return { ok: false, error: result.error, licenses: [] as any[] };
+  if (!result.ok) return { ok: false, error: result.error, identity, licenses: [] as any[] };
   const licenses = Array.isArray(result.data) ? result.data : []; const ids = licenses.map((x) => x.id);
   const activationResult = ids.length ? await dbFetch(`/license_activations?select=license_id%2Cactivation_id%2Cdevice_id%2Cstatus%2Cactivated_at%2Cdeactivated_at%2Clast_validated_at&license_id=in.(${ids.join(",")})&order=activated_at.desc`) : { ok: true, data: [], error: null };
   const activations = Array.isArray(activationResult.data) ? activationResult.data : [];
-  return { ok: true, licenses: licenses.map((license) => ({ ...license, activations: activations.filter((a) => a.license_id === license.id).map((a) => ({ ...a, device_id: String(a.device_id).slice(0, 8) + "…" })) })) };
+  return { ok: true, identity, licenses: licenses.map((license) => ({ ...license, activations: activations.filter((a) => a.license_id === license.id).map((a) => ({ ...a, device_id: String(a.device_id).slice(0, 8) + "…" })) })) };
 }
 
 export async function createCommercialLicense(input: { customerName: string; plan: LicensePlan; edition: Edition; expiresAt?: string | null; activationLimit?: number; featureOverrides?: Partial<LicenseFeatures> }) {

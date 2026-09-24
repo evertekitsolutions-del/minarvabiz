@@ -105,8 +105,8 @@ export async function consumeRateLimit(
   };
 }
 
-export async function checkAdminLoginBackoff(headers: HeaderReader): Promise<LoginBackoffDecision> {
-  const hash = keyHash(headers, "admin-login-backoff");
+export async function checkAdminLoginBackoff(headers: HeaderReader, subject = "default"): Promise<LoginBackoffDecision> {
+  const hash = keyHash(headers, `admin-login-backoff|${String(subject || "default").slice(0, 254)}`);
   if (!hash) return loginBackoffError(300);
 
   const result = await adminDbFetch<Array<{ allowed: boolean; failure_count: number; retry_after_seconds: number }>>(
@@ -137,8 +137,8 @@ export async function checkAdminLoginBackoff(headers: HeaderReader): Promise<Log
   };
 }
 
-export async function recordAdminLoginFailure(headers: HeaderReader): Promise<LoginBackoffDecision> {
-  const hash = keyHash(headers, "admin-login-backoff");
+export async function recordAdminLoginFailure(headers: HeaderReader, subject = "default"): Promise<LoginBackoffDecision> {
+  const hash = keyHash(headers, `admin-login-backoff|${String(subject || "default").slice(0, 254)}`);
   if (!hash) return loginBackoffError(300);
 
   const result = await adminDbFetch<Array<{ allowed: boolean; failure_count: number; retry_after_seconds: number }>>(
@@ -170,8 +170,8 @@ export async function recordAdminLoginFailure(headers: HeaderReader): Promise<Lo
   };
 }
 
-export async function clearAdminLoginFailures(headers: HeaderReader): Promise<{ ok: boolean; error?: string }> {
-  const hash = keyHash(headers, "admin-login-backoff");
+export async function clearAdminLoginFailures(headers: HeaderReader, subject = "default"): Promise<{ ok: boolean; error?: string }> {
+  const hash = keyHash(headers, `admin-login-backoff|${String(subject || "default").slice(0, 254)}`);
   if (!hash) return { ok: false, error: "Login backoff is not configured." };
 
   const result = await adminDbFetch<boolean>("/rpc/clear_license_admin_login_failures", {

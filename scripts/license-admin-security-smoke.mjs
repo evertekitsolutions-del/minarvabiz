@@ -9,6 +9,8 @@ const envKeys = [
   "LICENSE_API_SECRET",
   "LICENSE_API_SECRET_PREVIOUS",
   "LICENSE_API_SECRET_PREVIOUS_VALID_UNTIL",
+  "LICENSE_ADMIN_EMERGENCY_ACTOR_EMAIL",
+  "LICENSE_ADMIN_EMERGENCY_ACTOR_NAME",
 ];
 const original = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
 const now = Date.parse("2026-09-24T12:00:00.000Z");
@@ -20,11 +22,14 @@ try {
   process.env.LICENSE_API_SECRET = current;
   process.env.LICENSE_API_SECRET_PREVIOUS = previous;
   process.env.LICENSE_API_SECRET_PREVIOUS_VALID_UNTIL = new Date(now + 30 * 60 * 1000).toISOString();
+  process.env.LICENSE_ADMIN_EMERGENCY_ACTOR_EMAIL = "operator@example.com";
+  process.env.LICENSE_ADMIN_EMERGENCY_ACTOR_NAME = "Emergency Operator";
 
   let status = session.emergencyAdminCredentialStatus(now);
   assert.equal(status.enabled, true);
   assert.equal(status.currentConfigured, true);
   assert.equal(status.previousActive, true);
+  assert.equal(status.actorConfigured, true);
   assert.equal(session.verifyEmergencyAdminCredential(current, now), "current");
   assert.equal(session.verifyEmergencyAdminCredential(previous, now), "previous");
   assert.equal(session.verifyEmergencyAdminCredential("wrong", now), null);
