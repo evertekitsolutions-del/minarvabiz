@@ -1,4 +1,9 @@
-import { roundMoney, subtractMoney } from "@minarvabiz/utils";
+import {
+  addMinorUnits,
+  fromMinorUnits,
+  subtractMinorUnits,
+  toMinorUnits,
+} from "@minarvabiz/utils";
 
 export interface OrderProfitInput { revenue: number; materialCost: number; orderSpecificExpenses: number; }
 export interface OrderProfitResult {
@@ -6,13 +11,22 @@ export interface OrderProfitResult {
   totalCost: number; grossProfit: number; profitMarginPercent: number;
 }
 export function calculateOrderProfit(input: OrderProfitInput): OrderProfitResult {
-  const revenue = roundMoney(input.revenue);
-  const materialCost = roundMoney(input.materialCost);
-  const orderSpecificExpenses = roundMoney(input.orderSpecificExpenses);
-  const totalCost = roundMoney(materialCost + orderSpecificExpenses);
-  const grossProfit = subtractMoney(revenue, totalCost);
-  const profitMarginPercent = revenue === 0 ? 0 : roundMoney((grossProfit / revenue) * 100);
-  return { revenue, materialCost, orderSpecificExpenses, totalCost, grossProfit, profitMarginPercent };
+  const revenueMinor = toMinorUnits(input.revenue);
+  const materialCostMinor = toMinorUnits(input.materialCost);
+  const orderSpecificExpensesMinor = toMinorUnits(input.orderSpecificExpenses);
+  const totalCostMinor = addMinorUnits(materialCostMinor, orderSpecificExpensesMinor);
+  const grossProfitMinor = subtractMinorUnits(revenueMinor, totalCostMinor);
+  const profitMarginPercent = revenueMinor === 0
+    ? 0
+    : Math.round((grossProfitMinor / revenueMinor) * 10000) / 100;
+  return {
+    revenue: fromMinorUnits(revenueMinor),
+    materialCost: fromMinorUnits(materialCostMinor),
+    orderSpecificExpenses: fromMinorUnits(orderSpecificExpensesMinor),
+    totalCost: fromMinorUnits(totalCostMinor),
+    grossProfit: fromMinorUnits(grossProfitMinor),
+    profitMarginPercent,
+  };
 }
 
 export interface PeriodSummaryInput {
@@ -24,10 +38,26 @@ export interface PeriodSummaryResult {
   totalOperatingExpenses: number; netProfit: number;
 }
 export function calculatePeriodSummary(input: PeriodSummaryInput): PeriodSummaryResult {
-  const totalRevenue = roundMoney(input.productSalesRevenue + input.serviceRevenue);
-  const totalCostOfGoods = roundMoney(input.inventoryCostOfGoods + input.orderMaterialCosts);
-  const grossProfit = subtractMoney(totalRevenue, totalCostOfGoods);
-  const totalOperatingExpenses = roundMoney(input.orderSpecificExpenses + input.generalExpenses + input.staffIncentives);
-  const netProfit = subtractMoney(grossProfit, totalOperatingExpenses);
-  return { totalRevenue, totalCostOfGoods, grossProfit, totalOperatingExpenses, netProfit };
+  const totalRevenueMinor = addMinorUnits(
+    toMinorUnits(input.productSalesRevenue),
+    toMinorUnits(input.serviceRevenue),
+  );
+  const totalCostOfGoodsMinor = addMinorUnits(
+    toMinorUnits(input.inventoryCostOfGoods),
+    toMinorUnits(input.orderMaterialCosts),
+  );
+  const grossProfitMinor = subtractMinorUnits(totalRevenueMinor, totalCostOfGoodsMinor);
+  const totalOperatingExpensesMinor = addMinorUnits(
+    toMinorUnits(input.orderSpecificExpenses),
+    toMinorUnits(input.generalExpenses),
+    toMinorUnits(input.staffIncentives),
+  );
+  const netProfitMinor = subtractMinorUnits(grossProfitMinor, totalOperatingExpensesMinor);
+  return {
+    totalRevenue: fromMinorUnits(totalRevenueMinor),
+    totalCostOfGoods: fromMinorUnits(totalCostOfGoodsMinor),
+    grossProfit: fromMinorUnits(grossProfitMinor),
+    totalOperatingExpenses: fromMinorUnits(totalOperatingExpensesMinor),
+    netProfit: fromMinorUnits(netProfitMinor),
+  };
 }
