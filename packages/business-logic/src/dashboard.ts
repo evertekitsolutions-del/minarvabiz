@@ -4,7 +4,14 @@
  * Ready to connect to Supabase / SQLite query results.
  */
 
-import { formatMoney, roundMoney } from "@minarvabiz/utils";
+import {
+  addMinorUnits,
+  formatMoney,
+  fromMinorUnits,
+  subtractMinorUnits,
+  toMinorUnits,
+  toPercentBasisPoints,
+} from "@minarvabiz/utils";
 import type { CurrencyCode } from "@minarvabiz/types";
 
 export interface RawDashboardMetrics {
@@ -43,7 +50,7 @@ function pctChange(today: number, yesterday: number): { label: string; positive:
   if (yesterday === 0) {
     return { label: today > 0 ? "100% vs Yesterday" : "0% vs Yesterday", positive: today >= 0 };
   }
-  const pct = roundMoney(((today - yesterday) / yesterday) * 100);
+  const pct = toPercentBasisPoints(((today - yesterday) / yesterday) * 100) / 100;
   return {
     label: `${Math.abs(pct)}% vs Yesterday`,
     positive: pct >= 0,
@@ -59,32 +66,42 @@ export function shapeDashboardStats(
   sparks?: Partial<SparkSeries>
 ) {
   const currency = raw.currency ?? "INR";
-  const money = (n: number) => formatMoney(n, currency);
+  const normalizedMoney = (n: number) => fromMinorUnits(toMinorUnits(n));
+  const money = (n: number) => formatMoney(normalizedMoney(n), currency);
 
-  const totalSalesToday = raw.productSalesToday;
-  const totalServicesToday = raw.serviceRevenueToday;
-  const laundryToday = raw.laundryRevenueToday;
+  const totalSalesToday = normalizedMoney(raw.productSalesToday);
+  const totalServicesToday = normalizedMoney(raw.serviceRevenueToday);
+  const laundryToday = normalizedMoney(raw.laundryRevenueToday);
 
   // Net operating profit: all revenue less attributable COGS/costs and expenses.
-  const totalRevenue =
-    raw.productSalesToday + raw.serviceRevenueToday + raw.laundryRevenueToday;
-  const totalCogs =
-    raw.costOfGoodsToday + raw.orderMaterialCostsToday + (raw.laundrySupplierCostToday ?? 0);
-  const grossProfit = roundMoney(totalRevenue - totalCogs);
-  const operating =
-    raw.orderSpecificExpensesToday +
-    raw.generalExpensesToday +
-    raw.staffIncentivesToday;
-  const netProfit = roundMoney(grossProfit - operating);
+  const totalRevenueMinor = addMinorUnits(
+    toMinorUnits(raw.productSalesToday),
+    toMinorUnits(raw.serviceRevenueToday),
+    toMinorUnits(raw.laundryRevenueToday),
+  );
+  const totalCogsMinor = addMinorUnits(
+    toMinorUnits(raw.costOfGoodsToday),
+    toMinorUnits(raw.orderMaterialCostsToday),
+    toMinorUnits(raw.laundrySupplierCostToday ?? 0),
+  );
+  const grossProfitMinor = subtractMinorUnits(totalRevenueMinor, totalCogsMinor);
+  const operatingMinor = addMinorUnits(
+    toMinorUnits(raw.orderSpecificExpensesToday),
+    toMinorUnits(raw.generalExpensesToday),
+    toMinorUnits(raw.staffIncentivesToday),
+  );
+  const netProfitMinor = subtractMinorUnits(grossProfitMinor, operatingMinor);
+  const netProfit = fromMinorUnits(netProfitMinor);
 
   const salesCh = pctChange(raw.productSalesToday, raw.productSalesYesterday);
   const svcCh = pctChange(raw.serviceRevenueToday, raw.serviceRevenueYesterday);
   const laundryCh = pctChange(raw.laundryRevenueToday, raw.laundryRevenueYesterday);
   // Profit change approximated from revenue trend for spark only
-  const profitYesterdayApprox =
-    raw.productSalesYesterday +
-    raw.serviceRevenueYesterday +
-    raw.laundryRevenueYesterday;
+  const profitYesterdayApprox = fromMinorUnits(addMinorUnits(
+    toMinorUnits(raw.productSalesYesterday),
+    toMinorUnits(raw.serviceRevenueYesterday),
+    toMinorUnits(raw.laundryRevenueYesterday),
+  ));
   const profitCh = pctChange(netProfit, Math.max(profitYesterdayApprox * 0.5, 1));
 
   return {
