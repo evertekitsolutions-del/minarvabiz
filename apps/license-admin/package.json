@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@minarvabiz/licensing": "workspace:*",
+    "@minarvabiz/security-headers": "workspace:*",
     "@minarvabiz/types": "workspace:*",
     "@minarvabiz/ui": "workspace:*",
     "@minarvabiz/utils": "workspace:*",
