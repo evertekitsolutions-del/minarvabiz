@@ -4,7 +4,8 @@ export const ADMIN_COOKIE = "minarva-license-admin";
 const SESSION_TTL_SECONDS = 8 * 60 * 60;
 
 function sessionSecret(): string {
-  return String(process.env.LICENSE_SESSION_SECRET || "").trim();
+  const value = String(process.env.LICENSE_SESSION_SECRET || "").trim();
+  return value.length >= 32 ? value : "";
 }
 
 export function adminPassword(): string {
