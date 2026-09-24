@@ -108,7 +108,7 @@ function configureDesktopSession() {
   });
   desktopSession.setDisplayMediaRequestHandler((_request, callback) => {
     runtimeSmokeLog("display-media-request-denied");
-    callback(null);
+    callback({});
   });
   desktopSession.webRequest.onBeforeRequest((details, callback) => {
     const allowed = isAllowedSessionRequest(details.url, details.resourceType);
