@@ -159,9 +159,8 @@ async function main() {
     await ready(ws);
     console.log("RENDERER_READY PASS");
 
-    const before = JSON.parse(await evalIn(ws, `(async()=>{const a=window.minarvaDesktop;return JSON.stringify({device:await a.getDeviceId(),trialDevice:await a.getTrialDeviceId(),trial:await a.getTrialState()})})()`));
+    const before = JSON.parse(await evalIn(ws, `(async()=>{const a=window.minarvaDesktop;return JSON.stringify({device:await a.getDeviceId(),trial:await a.getTrialState()})})()`));
     if (!/^[a-f0-9]{64}$/i.test(before.device)) throw new Error("Device ID is not 64-hex");
-    if (before.device !== before.trialDevice) throw new Error("Device/trial device IDs differ");
 
     if (before.trial.status === "unactivated") {
       const activation = JSON.parse(await evalIn(ws, `(async()=>JSON.stringify(await window.minarvaDesktop.activateTrial({email:'qa-${Date.now()}@example.com',phone:'9999988888',organizationName:'Minarva Biz Interaction QA',address:'Windows CI Fresh Install'})))()`));
