@@ -17,7 +17,8 @@ assert.equal(adminRoleAllows("admin", "license.status_manage"), true);
 const session = await readFile(new URL("../apps/license-admin/src/lib/admin-session.ts", import.meta.url), "utf8");
 assert.match(session, /role: AdminRole/);
 assert.match(session, /role: "admin"/);
-assert.match(session, /isAdminRole/);
+assert.match(session, /isAdminIdentityRole/);
+assert.doesNotMatch(session, /from \"\.\/admin-rbac\"/);
 
 const namedAdmin = await readFile(new URL("../apps/license-admin/src/lib/named-admin.ts", import.meta.url), "utf8");
 assert.match(namedAdmin, /display_name%2Cstatus%2Crole/);
