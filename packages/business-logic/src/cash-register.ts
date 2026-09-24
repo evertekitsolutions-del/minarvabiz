@@ -2,7 +2,7 @@
  * Cash register — day open / close with expected vs actual cash
  */
 import type { CashRegisterSession } from "@minarvabiz/types";
-import { generateId, nowISO } from "@minarvabiz/utils";
+import { addMinorUnits, fromMinorUnits, generateId, nowISO, subtractMinorUnits, toMinorUnits } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { touchPersistence } from "./autosave";
 import * as mainStore from "./store";
@@ -12,9 +12,6 @@ import { escapeHtml } from "./html";
 
 const sessions: CashRegisterSession[] = [];
 
-function round2(n: number) {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -40,12 +37,12 @@ export function openCashRegister(openingCash: number, businessDate?: string): {
   const session: CashRegisterSession = {
     id: generateId(),
     businessDate: date,
-    openingCash: round2(openingCash),
+    openingCash: fromMinorUnits(toMinorUnits(openingCash)),
     cashSales: 0,
     cashReceived: 0,
     cashExpenses: 0,
     cashRefunds: 0,
-    expectedClosing: round2(openingCash),
+    expectedClosing: fromMinorUnits(toMinorUnits(openingCash)),
     status: "open",
     openedAt: nowISO(),
   };
@@ -65,7 +62,8 @@ export function refreshCashSession(businessDate?: string): CashRegisterSession |
 
   // Cash received must be based on actual cash payment records, not the
   // sale's total/paidAmount, because card/UPI payments do not enter the drawer.
-  const cashReceived = round2(cashPayments.reduce((sum, p) => sum + p.amount, 0));
+  const cashReceivedMinor = addMinorUnits(...cashPayments.map((p) => toMinorUnits(p.amount)));
+  const cashReceived = fromMinorUnits(cashReceivedMinor);
 
   // cashSales is the value of sales whose recorded sale payment was cash.
   // This remains informational; expectedClosing is driven by cashReceived.
@@ -74,18 +72,27 @@ export function refreshCashSession(businessDate?: string): CashRegisterSession |
       .filter((p) => p.referenceType === "sale" && !!p.referenceId)
       .map((p) => p.referenceId as string)
   );
-  const cashSales = round2(
-    sales.filter((sale) => cashSaleIds.has(sale.id)).reduce((sum, sale) => sum + sale.total, 0)
-  );
+  const cashSales = fromMinorUnits(addMinorUnits(
+    ...sales.filter((sale) => cashSaleIds.has(sale.id)).map((sale) => toMinorUnits(sale.total))
+  ));
 
   const expenses = phase5.listExpenses().filter((e) => e.date === day);
-  const cashExpenses = round2(
-    expenses.filter((e) => (e.paymentMethod || "cash") === "cash").reduce((a, e) => a + e.amount, 0)
+  const cashExpensesMinor = addMinorUnits(
+    ...expenses.filter((e) => (e.paymentMethod || "cash") === "cash").map((e) => toMinorUnits(e.amount))
   );
+  const cashExpenses = fromMinorUnits(cashExpensesMinor);
   s.cashSales = cashSales;
   s.cashReceived = cashReceived;
   s.cashExpenses = cashExpenses;
-  s.expectedClosing = round2(s.openingCash + cashReceived - cashExpenses - (s.cashRefunds || 0));
+  s.expectedClosing = fromMinorUnits(
+    subtractMinorUnits(
+      subtractMinorUnits(
+        addMinorUnits(toMinorUnits(s.openingCash), cashReceivedMinor),
+        cashExpensesMinor
+      ),
+      toMinorUnits(s.cashRefunds || 0)
+    )
+  );
   touchPersistence();
   return { ...s };
 }
@@ -98,8 +105,8 @@ export function closeCashRegister(actualClosing: number, closedBy?: string, busi
   const s = getOpenSession(businessDate);
   if (!s) return { session: null, error: "No open register session" };
   refreshCashSession(s.businessDate);
-  s.actualClosing = round2(actualClosing);
-  s.difference = round2(actualClosing - s.expectedClosing);
+  s.actualClosing = fromMinorUnits(toMinorUnits(actualClosing));
+  s.difference = fromMinorUnits(subtractMinorUnits(toMinorUnits(actualClosing), toMinorUnits(s.expectedClosing)));
   s.closedAt = nowISO();
   s.closedBy = closedBy || "user";
   s.status = "closed";

@@ -15,6 +15,7 @@ const invoice = block("export function createPurchaseInvoice", "export function 
 
 assert.match(po, /const rawTaxRate = item\.taxRate == null \? 0 : Number\(item\.taxRate\)/);
 assert.match(po, /!Number\.isFinite\(rawTaxRate\).*tax rate must be a finite number/);
+assert.match(po, /const taxRate = toPercentBasisPoints\(Math\.max\(0, rawTaxRate\)\) \/ 100/);
 assert.ok(
   po.indexOf("!Number.isFinite(rawTaxRate)") < po.indexOf("const taxAmount"),
   "PO tax-rate validation must run before tax calculation"
@@ -22,7 +23,7 @@ assert.ok(
 
 assert.match(invoice, /const rawTaxRate = item\.taxRate == null \? poLine\.taxRate : Number\(item\.taxRate\)/);
 assert.match(invoice, /!Number\.isFinite\(rawTaxRate\).*tax rate must be a finite number/);
-assert.match(invoice, /const taxRate = r2\(Math\.max\(0, rawTaxRate\)\)/);
+assert.match(invoice, /const taxRate = toPercentBasisPoints\(Math\.max\(0, rawTaxRate\)\) \/ 100/);
 assert.ok(
   invoice.indexOf("!Number.isFinite(rawTaxRate)") < invoice.indexOf("const taxAmount"),
   "Supplier-invoice tax-rate validation must run before tax calculation"

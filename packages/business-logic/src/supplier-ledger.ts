@@ -1,4 +1,5 @@
 import type { UUID } from "@minarvabiz/types";
+import { addMinorUnits, fromMinorUnits, toMinorUnits } from "@minarvabiz/utils";
 import * as phase5 from "./phase5-store";
 import { listPurchaseReturns } from "./purchase-returns";
 
@@ -17,21 +18,21 @@ export function buildSupplierStatement(supplierId: UUID): SupplierStatement | nu
   if (!sup) return null;
   const purchases = phase5.listPurchases().filter((p) => p.supplierId === supplierId);
   const returns = listPurchaseReturns().filter((r) => r.supplierId === supplierId);
-  let totalPurchases = 0;
-  let totalPaid = 0;
+  let totalPurchasesMinor = 0;
+  let totalPaidMinor = 0;
   const lines: SupplierStatement["lines"] = [];
   for (const p of purchases) {
-    totalPurchases += p.amount;
-    totalPaid += p.paidAmount;
+    totalPurchasesMinor = addMinorUnits(totalPurchasesMinor, toMinorUnits(p.amount));
+    totalPaidMinor = addMinorUnits(totalPaidMinor, toMinorUnits(p.paidAmount));
     lines.push({ date: p.date, type: "purchase", amount: p.amount, notes: p.purchaseNumber || p.id });
   }
-  let totalReturns = 0;
+  let totalReturnsMinor = 0;
   for (const r of returns) {
-    totalReturns += r.amount;
+    totalReturnsMinor = addMinorUnits(totalReturnsMinor, toMinorUnits(r.amount));
     lines.push({ date: r.createdAt.slice(0, 10), type: "return", amount: -r.amount, notes: r.reason || "" });
   }
   for (const payment of phase5.listSupplierPayments(supplierId)) {
-    totalPaid += payment.amount;
+    totalPaidMinor = addMinorUnits(totalPaidMinor, toMinorUnits(payment.amount));
     lines.push({
       date: payment.paidAt.slice(0, 10),
       type: "payment",
@@ -43,9 +44,9 @@ export function buildSupplierStatement(supplierId: UUID): SupplierStatement | nu
   return {
     supplierId,
     supplierName: sup.name,
-    totalPurchases,
-    totalPaid,
-    totalReturns,
+    totalPurchases: fromMinorUnits(totalPurchasesMinor),
+    totalPaid: fromMinorUnits(totalPaidMinor),
+    totalReturns: fromMinorUnits(totalReturnsMinor),
     outstanding: sup.outstandingBalance,
     lines,
   };
