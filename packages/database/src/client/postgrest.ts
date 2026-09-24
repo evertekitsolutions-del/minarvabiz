@@ -58,6 +58,36 @@ export async function pgSelect<T>(
   }
 }
 
+export async function pgSelectAll<T>(
+  cfg: SupabaseConfig,
+  table: string,
+  query: string = "select=*",
+  pageSize: number = 500
+): Promise<PgResult<T[]>> {
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 1000) {
+    return { data: null, error: { message: "pageSize must be an integer between 1 and 1000" } };
+  }
+  if (/(^|&)limit=|(^|&)offset=/.test(query)) {
+    return { data: null, error: { message: "pgSelectAll query must not include limit or offset" } };
+  }
+
+  const all: T[] = [];
+  let offset = 0;
+  for (;;) {
+    const separator = query ? "&" : "";
+    const page = await pgSelect<T>(
+      cfg,
+      table,
+      `${query}${separator}limit=${pageSize}&offset=${offset}`
+    );
+    if (page.error) return { data: null, error: page.error };
+    const rows = page.data || [];
+    all.push(...rows);
+    if (rows.length < pageSize) return { data: all, error: null };
+    offset += rows.length;
+  }
+}
+
 export async function pgInsert<T>(
   cfg: SupabaseConfig,
   table: string,

@@ -12,6 +12,7 @@ import {
   configFromEnv,
   isSupabaseConfigured,
   pgSelect,
+  pgSelectAll,
   pgInsert,
   pgUpdate,
   pgRpc,
@@ -49,7 +50,7 @@ function createCustomerRepo(cfg: SupabaseConfig): CustomerRepository {
         const enc = encodeURIComponent(`%${query.trim()}%`);
         q += `&or=(name.ilike.${enc},phone.ilike.${enc})`;
       }
-      const res = await pgSelect<Record<string, unknown>>(cfg, "customers", q);
+      const res = await pgSelectAll<Record<string, unknown>>(cfg, "customers", q);
       if (res.error || !res.data) return [];
       return res.data.map(mapCustomer);
     },
@@ -85,7 +86,7 @@ function createProductRepo(cfg: SupabaseConfig): ProductRepository {
         const enc = encodeURIComponent(`%${opts.query.trim()}%`);
         q += `&or=(name.ilike.${enc},sku.ilike.${enc},barcode.ilike.${enc})`;
       }
-      const res = await pgSelect<Record<string, unknown>>(cfg, "products", q);
+      const res = await pgSelectAll<Record<string, unknown>>(cfg, "products", q);
       if (res.error || !res.data) return [];
       let list = res.data.map(mapProduct);
       if (opts?.lowStockOnly) list = list.filter((p) => p.stockQuantity <= p.minimumStock);
@@ -129,11 +130,11 @@ function createProductRepo(cfg: SupabaseConfig): ProductRepository {
 function createSaleRepo(cfg: SupabaseConfig): SaleRepository {
   return {
     async list() {
-      const res = await pgSelect<Record<string, unknown>>(cfg, "sales", "select=*&deleted_at=is.null&order=sale_date.desc");
+      const res = await pgSelectAll<Record<string, unknown>>(cfg, "sales", "select=*&deleted_at=is.null&order=sale_date.desc,id.asc");
       if (res.error || !res.data) return [];
       const sales: Sale[] = [];
       for (const row of res.data) {
-        const itemsRes = await pgSelect<Record<string, unknown>>(cfg, "sale_items", `select=*&sale_id=eq.${row.id}`);
+        const itemsRes = await pgSelectAll<Record<string, unknown>>(cfg, "sale_items", `select=*&sale_id=eq.${row.id}&order=id.asc`);
         sales.push(mapSale(row, (itemsRes.data || []).map(mapSaleItem)));
       }
       return sales;
@@ -194,7 +195,7 @@ function createSaleRepo(cfg: SupabaseConfig): SaleRepository {
 function createOrderRepo(cfg: SupabaseConfig): OrderRepository {
   return {
     async list() {
-      const res = await pgSelect<Record<string, unknown>>(cfg, "orders", "select=*&deleted_at=is.null&order=order_date.desc");
+      const res = await pgSelectAll<Record<string, unknown>>(cfg, "orders", "select=*&deleted_at=is.null&order=order_date.desc,id.asc");
       if (res.error || !res.data) return [];
       return res.data.map(mapOrder);
     },
