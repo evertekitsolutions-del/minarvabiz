@@ -20,6 +20,9 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter @minarvabiz/utils typecheck
+      - name: Verify cross-app security header baseline
+        run: node --experimental-strip-types scripts/security-header-baseline-smoke.mjs
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
       - name: Verify production build rejects missing Supabase env
         shell: bash
@@ -52,7 +55,7 @@ jobs:
             echo "main web script-src must not contain unsafe-inline."
             exit 1
           fi
-          node scripts/web-csp-smoke.mjs
+          node --experimental-strip-types scripts/web-csp-smoke.mjs
       - name: Verify public Supabase env is bundled
         shell: bash
         run: |
@@ -95,7 +98,7 @@ jobs:
       - name: Verify production main web nonce CSP runtime
         env:
           WEB_CSP_URL: http://127.0.0.1:3000/dashboard
-        run: node scripts/web-csp-smoke.mjs
+        run: node --experimental-strip-types scripts/web-csp-smoke.mjs
       - name: Launch headless Chrome
         shell: bash
         run: |
@@ -150,9 +153,8 @@ jobs:
         shell: bash
         run: |
           set -e
-          grep -Fq 'X-Content-Type-Options' apps/license-admin/next.config.ts
-          grep -Fq 'X-Frame-Options' apps/license-admin/next.config.ts
-          grep -Fq 'Strict-Transport-Security' apps/license-admin/next.config.ts
+          grep -Fq '@minarvabiz/utils/security-headers' apps/license-admin/next.config.ts
+          grep -Fq 'minarvaHttpSecurityHeaders()' apps/license-admin/next.config.ts
           test -f apps/license-admin/src/middleware.ts
           ! grep -Fq 'Content-Security-Policy' apps/license-admin/next.config.ts
           grep -Fq 'Content-Security-Policy' apps/license-admin/src/middleware.ts
@@ -160,7 +162,7 @@ jobs:
             echo "license-admin script-src must not contain unsafe-inline."
             exit 1
           fi
-          node scripts/license-admin-csp-smoke.mjs
+          node --experimental-strip-types scripts/license-admin-csp-smoke.mjs
       - run: pnpm --filter @minarvabiz/license-admin build
       - name: Start license-admin production server
         shell: bash
@@ -177,7 +179,7 @@ jobs:
       - name: Verify production nonce CSP runtime
         env:
           LICENSE_ADMIN_BASE_URL: http://127.0.0.1:3001/
-        run: node scripts/license-admin-csp-smoke.mjs
+        run: node --experimental-strip-types scripts/license-admin-csp-smoke.mjs
       - name: Capture license-admin diagnostics
         if: failure()
         shell: bash
