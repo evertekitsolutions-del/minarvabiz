@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { minarvaHttpSecurityHeaders } from "../packages/utils/src/security-headers.ts";
 
 const middlewareSource = await readFile(
   new URL("../apps/license-admin/src/middleware.ts", import.meta.url),
@@ -10,18 +11,34 @@ const nextConfigSource = await readFile(
   "utf8",
 );
 
-assert.ok(!nextConfigSource.includes("Content-Security-Policy"), "Static CSP must be removed from next.config.ts");
-assert.ok(middlewareSource.includes("requestHeaders.set(\"x-nonce\", nonce)"));
-assert.ok(middlewareSource.includes("requestHeaders.set(\"Content-Security-Policy\", contentSecurityPolicy)"));
-assert.ok(middlewareSource.includes("response.headers.set(\"Content-Security-Policy\", contentSecurityPolicy)"));
-const sourceScriptLine = middlewareSource.split("\n").find((line) => line.includes("script-src "));
-assert.ok(sourceScriptLine, "script-src source definition is missing");
-assert.ok(sourceScriptLine.includes("nonce-"), "script-src source definition is missing a nonce");
-assert.ok(sourceScriptLine.includes("strict-dynamic"), "script-src source definition is missing strict-dynamic");
-assert.ok(!sourceScriptLine.includes("unsafe-inline"), "script-src source definition must not allow unsafe-inline");
+assert.ok(
+  !nextConfigSource.includes("Content-Security-Policy"),
+  "Static CSP must stay out of next.config.ts",
+);
+assert.ok(nextConfigSource.includes("@minarvabiz/utils/security-headers"));
+assert.ok(nextConfigSource.includes("minarvaHttpSecurityHeaders()"));
+assert.ok(middlewareSource.includes("@minarvabiz/utils/security-headers"));
+assert.ok(middlewareSource.includes("buildMinarvaNonceCsp("));
+assert.ok(!middlewareSource.includes("function buildContentSecurityPolicy"));
+assert.ok(middlewareSource.includes('requestHeaders.set("x-nonce", nonce)'));
+assert.ok(
+  middlewareSource.includes(
+    'requestHeaders.set("Content-Security-Policy", contentSecurityPolicy)',
+  ),
+);
+assert.ok(
+  middlewareSource.includes(
+    'response.headers.set("Content-Security-Policy", contentSecurityPolicy)',
+  ),
+);
 
 function getDirective(csp, name) {
-  return csp.split(";").map((value) => value.trim()).find((value) => value.startsWith(name + " ")) || "";
+  return (
+    csp
+      .split(";")
+      .map((value) => value.trim())
+      .find((value) => value.startsWith(name + " ")) || ""
+  );
 }
 
 function getNonce(csp) {
@@ -38,6 +55,16 @@ function getNonce(csp) {
   return scriptSrc.slice(start + marker.length, end);
 }
 
+function assertSecurityHeaders(response) {
+  for (const header of minarvaHttpSecurityHeaders()) {
+    assert.equal(
+      response.headers.get(header.key),
+      header.value,
+      "license-admin security header mismatch: " + header.key,
+    );
+  }
+}
+
 async function fetchDocument(baseUrl) {
   const response = await fetch(baseUrl, {
     headers: { accept: "text/html" },
@@ -45,13 +72,14 @@ async function fetchDocument(baseUrl) {
     cache: "no-store",
   });
   assert.equal(response.status, 200, "license-admin did not return HTTP 200");
+  assertSecurityHeaders(response);
   const csp = response.headers.get("content-security-policy") || "";
   assert.ok(csp, "Content-Security-Policy response header is missing");
   const nonce = getNonce(csp);
   const html = await response.text();
   const scripts = html.match(/<script\b[^>]*>/gi) || [];
   assert.ok(scripts.length > 0, "No Next.js script tags were found in rendered HTML");
-  const doubleQuoted = "nonce=\"" + nonce + "\"";
+  const doubleQuoted = 'nonce="' + nonce + '"';
   const singleQuoted = "nonce='" + nonce + "'";
   for (const script of scripts) {
     assert.ok(
@@ -69,4 +97,8 @@ if (baseUrl) {
   assert.notEqual(firstNonce, secondNonce, "CSP nonce must be unique per request");
 }
 
-console.log(baseUrl ? "License-admin nonce CSP static + runtime smoke PASS" : "License-admin nonce CSP static smoke PASS");
+console.log(
+  baseUrl
+    ? "License-admin nonce CSP + shared security headers runtime smoke PASS"
+    : "License-admin nonce CSP shared-baseline static smoke PASS",
+);
