@@ -117,7 +117,7 @@ export async function listLicenses() {
   const identity = await currentAdminIdentity();
   if (!identity) return { ok: false, error: "UNAUTHORIZED", identity: null, licenses: [] as any[] };
   const result = await dbFetch("/licenses?select=id%2Clicense_id%2Ccustomer_id%2Cproduct%2Cedition%2Cplan%2Cstatus%2Cissued_at%2Cexpires_at%2Cactivation_limit%2Cfeatures%2Cmetadata%2Ccreated_at%2Cupdated_at&order=created_at.desc&limit=200");
-  if (!result.ok) return { ok: false, error: result.error, licenses: [] as any[] };
+  if (!result.ok) return { ok: false, error: result.error, identity, licenses: [] as any[] };
   const licenses = Array.isArray(result.data) ? result.data : []; const ids = licenses.map((x) => x.id);
   const activationResult = ids.length ? await dbFetch(`/license_activations?select=license_id%2Cactivation_id%2Cdevice_id%2Cstatus%2Cactivated_at%2Cdeactivated_at%2Clast_validated_at&license_id=in.(${ids.join(",")})&order=activated_at.desc`) : { ok: true, data: [], error: null };
   const activations = Array.isArray(activationResult.data) ? activationResult.data : [];
