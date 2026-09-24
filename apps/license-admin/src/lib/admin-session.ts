@@ -1,3 +1,4 @@
+import { isAdminRole, type AdminRole } from "./admin-rbac";
 import {
   createCipheriv,
   createDecipheriv,
@@ -23,6 +24,7 @@ export type AdminIdentity = {
   email: string;
   displayName: string;
   source: AdminIdentitySource;
+  role: AdminRole;
 };
 
 export type AdminSessionClaims = {
@@ -56,11 +58,14 @@ function normalizeIdentity(identity: AdminIdentity): AdminIdentity | null {
   const email = normalizeEmail(identity?.email || "");
   const displayName = String(identity?.displayName || "").trim();
   const source = identity?.source;
+  const role = identity?.role;
   if (!id || id.length > 200) return null;
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return null;
   if (!displayName || displayName.length > 120) return null;
   if (source !== "supabase" && source !== "emergency") return null;
-  return { id, email, displayName, source };
+  if (!isAdminRole(role)) return null;
+  if (source === "emergency" && role !== "admin") return null;
+  return { id, email, displayName, source, role };
 }
 
 function sessionSecret(): string {
@@ -86,7 +91,7 @@ export function emergencyAdminIdentity(): AdminIdentity | null {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return null;
   if (!displayName || displayName.length > 120) return null;
   const digest = createHash("sha256").update(email, "utf8").digest("hex").slice(0, 32);
-  return { id: `emergency:${digest}`, email, displayName, source: "emergency" };
+  return { id: `emergency:${digest}`, email, displayName, source: "emergency", role: "admin" };
 }
 
 export type EmergencyAdminCredentialMatch = "current" | "previous";
