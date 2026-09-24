@@ -13,7 +13,7 @@ import {
   phase9Store,
   getRuntimeMode,
 } from "@minarvabiz/business-logic";
-import { hydrateStoresFromSupabase } from "@/lib/data-source";
+import { hydrateStoresFromSupabase, supabaseHydrationDomainsForPath } from "@/lib/data-source";
 import { SetupBanner } from "@/components/SetupBanner";
 
 const requireAuthByDefault =
@@ -82,18 +82,6 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
       setUserName("Demo Admin");
       setCurrentRole("admin");
     }
-    if (runtimeMode !== "demo") {
-      void hydrateStoresFromSupabase(token).then((r) => {
-        if (r.ok) {
-          console.info("[minarvabiz]", r.message, r.counts);
-          phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
-        } else {
-          console.warn("[minarvabiz] Supabase hydration failed:", r.message);
-          phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining, syncError: r.message });
-        }
-        refreshNotificationCount();
-      });
-    }
     phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
     refreshNotificationCount();
     const notificationTimer = window.setInterval(() => {
@@ -102,6 +90,33 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
     }, 60000);
     return () => window.clearInterval(notificationTimer);
   }, [refreshNotificationCount]);
+
+  React.useEffect(() => {
+    if (getRuntimeMode() === "demo") return;
+    const token = getSessionToken();
+    const domains = supabaseHydrationDomainsForPath(pathname);
+    let cancelled = false;
+
+    void hydrateStoresFromSupabase(token, domains).then((r) => {
+      if (cancelled) return;
+      if (r.ok) {
+        console.info("[minarvabiz]", r.message, r.counts);
+        phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
+      } else {
+        console.warn("[minarvabiz] Supabase hydration failed:", r.message);
+        phase6Store.refreshOperationalNotifications({
+          licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining,
+          syncError: r.message,
+        });
+      }
+      refreshNotificationCount();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, refreshNotificationCount]);
+
   const activeNav = pathToNav[pathname] ?? "dashboard";
 
   return (

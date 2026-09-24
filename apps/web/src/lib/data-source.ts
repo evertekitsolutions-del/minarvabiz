@@ -384,69 +384,290 @@ function mapJournalEntry(row: Record<string, unknown>, lines: JournalEntryLine[]
   };
 }
 
-export async function hydrateStoresFromSupabase(accessToken: string | null = null): Promise<{ ok: boolean; message: string; counts?: Record<string, number> }> {
+export type SupabaseHydrationDomain =
+  | "core"
+  | "operations"
+  | "staff"
+  | "warehouse"
+  | "procurement"
+  | "accounting";
+
+const ALL_SUPABASE_HYDRATION_DOMAINS: SupabaseHydrationDomain[] = [
+  "core",
+  "operations",
+  "staff",
+  "warehouse",
+  "procurement",
+  "accounting",
+];
+
+let hydrationIdentity: string | null = null;
+const hydratedDomains = new Set<SupabaseHydrationDomain>();
+
+export function supabaseHydrationDomainsForPath(pathname: string): SupabaseHydrationDomain[] {
+  const route = String(pathname || "/dashboard").split("?")[0] || "/dashboard";
+  const domains = new Set<SupabaseHydrationDomain>(["core"]);
+  const matches = (paths: string[]) => paths.some((prefix) => route === prefix || route.startsWith(`${prefix}/`));
+
+  if (matches(["/dashboard", "/laundry", "/expenses", "/purchases", "/suppliers", "/returns", "/reports", "/day-end"])) {
+    domains.add("operations");
+  }
+  if (matches(["/dashboard", "/staff", "/staff-detail", "/services/production", "/reports"])) {
+    domains.add("staff");
+  }
+  if (matches(["/warehouse", "/stock-take", "/purchases"])) {
+    domains.add("warehouse");
+  }
+  if (matches(["/warehouse", "/purchases"])) {
+    domains.add("procurement");
+  }
+  if (matches(["/accounting", "/reports", "/day-end", "/cash-register"])) {
+    domains.add("accounting");
+  }
+
+  return ALL_SUPABASE_HYDRATION_DOMAINS.filter((domain) => domains.has(domain));
+}
+
+export async function hydrateStoresFromSupabase(
+  accessToken: string | null = null,
+  requestedDomains: SupabaseHydrationDomain[] = ALL_SUPABASE_HYDRATION_DOMAINS
+): Promise<{ ok: boolean; message: string; counts?: Record<string, number> }> {
   if (!isSupabaseConfigured()) return { ok: false, message: "Supabase is not configured for online production." };
   const cfg = configFromEnv();
   if (!cfg) return { ok: false, message: "Supabase configuration is unavailable." };
   cfg.accessToken = accessToken;
+
+  const identity = accessToken || "__anonymous__";
+  if (hydrationIdentity !== identity) {
+    hydrationIdentity = identity;
+    hydratedDomains.clear();
+  }
+
+  const requested = ALL_SUPABASE_HYDRATION_DOMAINS.filter((domain) => requestedDomains.includes(domain));
+  const domains = requested.filter((domain) => !hydratedDomains.has(domain));
+  if (domains.length === 0) {
+    return { ok: true, message: "Requested Supabase domains are already hydrated.", counts: {} };
+  }
+
   const check = await verifySupabaseConnection(cfg);
   if (!check.ok) return { ok: false, message: check.message };
   const db = await getUnitOfWork(accessToken);
+
+  const loadCore = domains.includes("core");
+  const loadOperations = domains.includes("operations");
+  const loadStaff = domains.includes("staff");
+  const loadWarehouse = domains.includes("warehouse");
+  const loadProcurement = domains.includes("procurement");
+  const loadAccounting = domains.includes("accounting");
+
   try {
-    const [customers, products, sales, orders] = await Promise.all([db.customers.list(), db.products.list(), db.sales.list(), db.orders.list()]);
-    const [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, warehousesRes, warehouseLocationsRes, warehouseStockRes, warehouseTransfersRes, purchaseOrdersRes, purchaseOrderLinesRes, goodsReceiptsRes, goodsReceiptLinesRes, purchaseInvoicesRes, purchaseInvoiceLinesRes, accountsRes, journalEntriesRes, journalLinesRes] = await Promise.all([
-      pgSelectAll<Record<string, unknown>>(cfg, "categories", "select=*&deleted_at=is.null&order=name.asc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "expenses", "select=*&deleted_at=is.null&order=date.desc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "purchases", "select=*&deleted_at=is.null&order=date.desc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "suppliers", "select=*&deleted_at=is.null&order=name.asc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "laundry_orders", "select=*&deleted_at=is.null&order=created_at.desc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "staff_members", "select=*&deleted_at=is.null&order=name.asc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "payments", "select=*&order=created_at.desc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "warehouses", "select=*&deleted_at=is.null&order=name.asc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "warehouse_locations", "select=*&deleted_at=is.null&order=code.asc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "warehouse_stock", "select=*&order=updated_at.desc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "warehouse_transfers", "select=*&order=created_at.desc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "purchase_orders", "select=*&deleted_at=is.null&order=created_at.desc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "purchase_order_lines", "select=*&order=created_at.asc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "goods_receipts", "select=*&order=created_at.desc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "goods_receipt_lines", "select=*&order=created_at.asc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "purchase_invoices", "select=*&order=created_at.desc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "purchase_invoice_lines", "select=*&order=created_at.asc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "accounts", "select=*&deleted_at=is.null&order=code.asc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "journal_entries", "select=*&order=entry_date.desc,created_at.desc,id.asc"),
-      pgSelectAll<Record<string, unknown>>(cfg, "journal_entry_lines", "select=*&order=created_at.asc,id.asc"),
-    ]);
-    for (const result of [categoriesRes, expensesRes, purchasesRes, suppliersRes, laundryRes, staffRes, paymentsRes, warehousesRes, warehouseLocationsRes, warehouseStockRes, warehouseTransfersRes, purchaseOrdersRes, purchaseOrderLinesRes, goodsReceiptsRes, goodsReceiptLinesRes, purchaseInvoicesRes, purchaseInvoiceLinesRes, accountsRes, journalEntriesRes, journalLinesRes]) if (result.error) throw new Error(result.error.message);
-    store.hydrateCore({ customers, products, categories: (categoriesRes.data || []).map(mapCategory), sales, payments: (paymentsRes.data || []).map(mapPayment) });
-    ordersStore.hydrateOrders({ orders });
-    phase5Store.hydratePhase5({ expenses: (expensesRes.data || []).map(mapExpense), purchases: (purchasesRes.data || []).map(mapPurchase), suppliers: (suppliersRes.data || []).map(mapSupplier), laundryOrders: (laundryRes.data || []).map(mapLaundry) });
-    phase6Store.hydratePhase6({ staff: (staffRes.data || []).map(mapStaff) });
-    warehouseStore.hydrateWarehouseState({
-      warehouses: (warehousesRes.data || []).map(mapWarehouse),
-      locations: (warehouseLocationsRes.data || []).map(mapWarehouseLocation),
-      stock: (warehouseStockRes.data || []).map(mapWarehouseStock),
-      transfers: (warehouseTransfersRes.data || []).map(mapWarehouseTransfer),
+    let customers = [] as Awaited<ReturnType<typeof db.customers.list>>;
+    let products = [] as Awaited<ReturnType<typeof db.products.list>>;
+    let sales = [] as Awaited<ReturnType<typeof db.sales.list>>;
+    let orders = [] as Awaited<ReturnType<typeof db.orders.list>>;
+
+    let categoriesRows: Record<string, unknown>[] = [];
+    let expensesRows: Record<string, unknown>[] = [];
+    let purchasesRows: Record<string, unknown>[] = [];
+    let suppliersRows: Record<string, unknown>[] = [];
+    let laundryRows: Record<string, unknown>[] = [];
+    let staffRows: Record<string, unknown>[] = [];
+    let paymentsRows: Record<string, unknown>[] = [];
+    let warehousesRows: Record<string, unknown>[] = [];
+    let warehouseLocationsRows: Record<string, unknown>[] = [];
+    let warehouseStockRows: Record<string, unknown>[] = [];
+    let warehouseTransfersRows: Record<string, unknown>[] = [];
+    let purchaseOrdersRows: Record<string, unknown>[] = [];
+    let purchaseOrderLinesRows: Record<string, unknown>[] = [];
+    let goodsReceiptsRows: Record<string, unknown>[] = [];
+    let goodsReceiptLinesRows: Record<string, unknown>[] = [];
+    let purchaseInvoicesRows: Record<string, unknown>[] = [];
+    let purchaseInvoiceLinesRows: Record<string, unknown>[] = [];
+    let accountsRows: Record<string, unknown>[] = [];
+    let journalEntriesRows: Record<string, unknown>[] = [];
+    let journalLinesRows: Record<string, unknown>[] = [];
+
+    if (loadCore) {
+      const [nextCustomers, nextProducts, nextSales, nextOrders, categoriesRes, paymentsRes] = await Promise.all([
+        db.customers.list(),
+        db.products.list(),
+        db.sales.list(),
+        db.orders.list(),
+        pgSelectAll<Record<string, unknown>>(cfg, "categories", "select=*&deleted_at=is.null&order=name.asc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "payments", "select=*&order=created_at.desc,id.asc"),
+      ]);
+      if (categoriesRes.error) throw new Error(categoriesRes.error.message);
+      if (paymentsRes.error) throw new Error(paymentsRes.error.message);
+      customers = nextCustomers;
+      products = nextProducts;
+      sales = nextSales;
+      orders = nextOrders;
+      categoriesRows = categoriesRes.data || [];
+      paymentsRows = paymentsRes.data || [];
+    }
+
+    if (loadOperations) {
+      const [expensesRes, purchasesRes, suppliersRes, laundryRes] = await Promise.all([
+        pgSelectAll<Record<string, unknown>>(cfg, "expenses", "select=*&deleted_at=is.null&order=date.desc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "purchases", "select=*&deleted_at=is.null&order=date.desc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "suppliers", "select=*&deleted_at=is.null&order=name.asc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "laundry_orders", "select=*&deleted_at=is.null&order=created_at.desc,id.asc"),
+      ]);
+      for (const result of [expensesRes, purchasesRes, suppliersRes, laundryRes]) {
+        if (result.error) throw new Error(result.error.message);
+      }
+      expensesRows = expensesRes.data || [];
+      purchasesRows = purchasesRes.data || [];
+      suppliersRows = suppliersRes.data || [];
+      laundryRows = laundryRes.data || [];
+    }
+
+    if (loadStaff) {
+      const staffRes = await pgSelectAll<Record<string, unknown>>(cfg, "staff_members", "select=*&deleted_at=is.null&order=name.asc,id.asc");
+      if (staffRes.error) throw new Error(staffRes.error.message);
+      staffRows = staffRes.data || [];
+    }
+
+    if (loadWarehouse) {
+      const [warehousesRes, warehouseLocationsRes, warehouseStockRes, warehouseTransfersRes] = await Promise.all([
+        pgSelectAll<Record<string, unknown>>(cfg, "warehouses", "select=*&deleted_at=is.null&order=name.asc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "warehouse_locations", "select=*&deleted_at=is.null&order=code.asc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "warehouse_stock", "select=*&order=updated_at.desc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "warehouse_transfers", "select=*&order=created_at.desc,id.asc"),
+      ]);
+      for (const result of [warehousesRes, warehouseLocationsRes, warehouseStockRes, warehouseTransfersRes]) {
+        if (result.error) throw new Error(result.error.message);
+      }
+      warehousesRows = warehousesRes.data || [];
+      warehouseLocationsRows = warehouseLocationsRes.data || [];
+      warehouseStockRows = warehouseStockRes.data || [];
+      warehouseTransfersRows = warehouseTransfersRes.data || [];
+    }
+
+    if (loadProcurement) {
+      const [purchaseOrdersRes, purchaseOrderLinesRes, goodsReceiptsRes, goodsReceiptLinesRes, purchaseInvoicesRes, purchaseInvoiceLinesRes] = await Promise.all([
+        pgSelectAll<Record<string, unknown>>(cfg, "purchase_orders", "select=*&deleted_at=is.null&order=created_at.desc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "purchase_order_lines", "select=*&order=created_at.asc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "goods_receipts", "select=*&order=created_at.desc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "goods_receipt_lines", "select=*&order=created_at.asc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "purchase_invoices", "select=*&order=created_at.desc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "purchase_invoice_lines", "select=*&order=created_at.asc,id.asc"),
+      ]);
+      for (const result of [purchaseOrdersRes, purchaseOrderLinesRes, goodsReceiptsRes, goodsReceiptLinesRes, purchaseInvoicesRes, purchaseInvoiceLinesRes]) {
+        if (result.error) throw new Error(result.error.message);
+      }
+      purchaseOrdersRows = purchaseOrdersRes.data || [];
+      purchaseOrderLinesRows = purchaseOrderLinesRes.data || [];
+      goodsReceiptsRows = goodsReceiptsRes.data || [];
+      goodsReceiptLinesRows = goodsReceiptLinesRes.data || [];
+      purchaseInvoicesRows = purchaseInvoicesRes.data || [];
+      purchaseInvoiceLinesRows = purchaseInvoiceLinesRes.data || [];
+    }
+
+    if (loadAccounting) {
+      const [accountsRes, journalEntriesRes, journalLinesRes] = await Promise.all([
+        pgSelectAll<Record<string, unknown>>(cfg, "accounts", "select=*&deleted_at=is.null&order=code.asc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "journal_entries", "select=*&order=entry_date.desc,created_at.desc,id.asc"),
+        pgSelectAll<Record<string, unknown>>(cfg, "journal_entry_lines", "select=*&order=created_at.asc,id.asc"),
+      ]);
+      for (const result of [accountsRes, journalEntriesRes, journalLinesRes]) {
+        if (result.error) throw new Error(result.error.message);
+      }
+      accountsRows = accountsRes.data || [];
+      journalEntriesRows = journalEntriesRes.data || [];
+      journalLinesRows = journalLinesRes.data || [];
+    }
+
+    if (loadCore) {
+      store.hydrateCore({
+        customers,
+        products,
+        categories: categoriesRows.map(mapCategory),
+        sales,
+        payments: paymentsRows.map(mapPayment),
+      });
+      ordersStore.hydrateOrders({ orders });
+    }
+
+    if (loadOperations) {
+      phase5Store.hydratePhase5({
+        expenses: expensesRows.map(mapExpense),
+        purchases: purchasesRows.map(mapPurchase),
+        suppliers: suppliersRows.map(mapSupplier),
+        laundryOrders: laundryRows.map(mapLaundry),
+      });
+    }
+
+    if (loadStaff) {
+      phase6Store.hydratePhase6({ staff: staffRows.map(mapStaff) });
+    }
+
+    if (loadWarehouse) {
+      warehouseStore.hydrateWarehouseState({
+        warehouses: warehousesRows.map(mapWarehouse),
+        locations: warehouseLocationsRows.map(mapWarehouseLocation),
+        stock: warehouseStockRows.map(mapWarehouseStock),
+        transfers: warehouseTransfersRows.map(mapWarehouseTransfer),
+      });
+    }
+
+    if (loadProcurement) {
+      const poLines = purchaseOrderLinesRows.map(mapPurchaseOrderLine);
+      const grnLines = goodsReceiptLinesRows.map(mapGoodsReceiptLine);
+      const invoiceLines = purchaseInvoiceLinesRows.map(mapPurchaseInvoiceLine);
+      procurementStore.hydrateProcurementState({
+        purchaseOrders: purchaseOrdersRows.map((row) =>
+          mapPurchaseOrder(row, poLines.filter((line) => line.purchaseOrderId === String(row.id)))
+        ),
+        goodsReceipts: goodsReceiptsRows.map((row) =>
+          mapGoodsReceipt(row, grnLines.filter((line) => line.goodsReceiptId === String(row.id)))
+        ),
+        purchaseInvoices: purchaseInvoicesRows.map((row) =>
+          mapPurchaseInvoice(row, invoiceLines.filter((line) => line.purchaseInvoiceId === String(row.id)))
+        ),
+      });
+    }
+
+    if (loadAccounting) {
+      const journalLines = journalLinesRows.map(mapJournalEntryLine);
+      accountingStore.hydrateAccountingState({
+        accounts: accountsRows.map(mapAccountingAccount),
+        journals: journalEntriesRows.map((row) =>
+          mapJournalEntry(row, journalLines.filter((line) => line.journalEntryId === String(row.id)))
+        ),
+      });
+    }
+
+    const counts: Record<string, number> = {};
+    if (loadCore) Object.assign(counts, {
+      customers: customers.length,
+      products: products.length,
+      categories: categoriesRows.length,
+      sales: sales.length,
+      orders: orders.length,
+      payments: paymentsRows.length,
     });
-    const poLines = (purchaseOrderLinesRes.data || []).map(mapPurchaseOrderLine);
-    const grnLines = (goodsReceiptLinesRes.data || []).map(mapGoodsReceiptLine);
-    const invoiceLines = (purchaseInvoiceLinesRes.data || []).map(mapPurchaseInvoiceLine);
-    procurementStore.hydrateProcurementState({
-      purchaseOrders: (purchaseOrdersRes.data || []).map((row) =>
-        mapPurchaseOrder(row, poLines.filter((line) => line.purchaseOrderId === String(row.id)))
-      ),
-      goodsReceipts: (goodsReceiptsRes.data || []).map((row) =>
-        mapGoodsReceipt(row, grnLines.filter((line) => line.goodsReceiptId === String(row.id)))
-      ),
-      purchaseInvoices: (purchaseInvoicesRes.data || []).map((row) =>
-        mapPurchaseInvoice(row, invoiceLines.filter((line) => line.purchaseInvoiceId === String(row.id)))
-      ),
+    if (loadOperations) Object.assign(counts, {
+      expenses: expensesRows.length,
+      purchases: purchasesRows.length,
+      suppliers: suppliersRows.length,
+      laundry: laundryRows.length,
     });
-    const journalLines = (journalLinesRes.data || []).map(mapJournalEntryLine);
-    accountingStore.hydrateAccountingState({
-      accounts: (accountsRes.data || []).map(mapAccountingAccount),
-      journals: (journalEntriesRes.data || []).map((row) =>
-        mapJournalEntry(row, journalLines.filter((line) => line.journalEntryId === String(row.id)))
-      ),
+    if (loadStaff) counts.staff = staffRows.length;
+    if (loadWarehouse) Object.assign(counts, {
+      warehouses: warehousesRows.length,
+      warehouseLocations: warehouseLocationsRows.length,
+      warehouseStock: warehouseStockRows.length,
+      warehouseTransfers: warehouseTransfersRows.length,
+    });
+    if (loadProcurement) Object.assign(counts, {
+      purchaseOrders: purchaseOrdersRows.length,
+      goodsReceipts: goodsReceiptsRows.length,
+      purchaseInvoices: purchaseInvoicesRows.length,
+    });
+    if (loadAccounting) Object.assign(counts, {
+      accounts: accountsRows.length,
+      journals: journalEntriesRows.length,
     });
 
     registerRemoteWriter({
@@ -834,9 +1055,9 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
       },
     });
 
-    // Ensure the standard tenant chart exists before journal lines can reference it.
+    // Ensure the standard tenant chart exists only when the accounting domain is requested.
     // IDs are generated per tenant, so there is no cross-organization primary-key collision.
-    for (const account of accountingStore.listAccounts()) {
+    if (loadAccounting) for (const account of accountingStore.listAccounts()) {
       const row = {
         branch_id: account.branchId ?? null,
         code: account.code,
@@ -854,7 +1075,12 @@ export async function hydrateStoresFromSupabase(accessToken: string | null = nul
       const { version: _bootstrapAccountVersion, ...bootstrapAccountRow } = row;
       await optimisticVersionUpsert(cfg, "accounts", account.id, account.version, bootstrapAccountRow, "Accounting account bootstrap");
     }
-    return { ok: true, message: "Hydrated from Supabase", counts: { customers: customers.length, products: products.length, categories: categoriesRes.data?.length || 0, sales: sales.length, orders: orders.length, expenses: expensesRes.data?.length || 0, purchases: purchasesRes.data?.length || 0, suppliers: suppliersRes.data?.length || 0, laundry: laundryRes.data?.length || 0, staff: staffRes.data?.length || 0, payments: paymentsRes.data?.length || 0, warehouses: warehousesRes.data?.length || 0, warehouseLocations: warehouseLocationsRes.data?.length || 0, warehouseStock: warehouseStockRes.data?.length || 0, warehouseTransfers: warehouseTransfersRes.data?.length || 0, purchaseOrders: purchaseOrdersRes.data?.length || 0, goodsReceipts: goodsReceiptsRes.data?.length || 0, purchaseInvoices: purchaseInvoicesRes.data?.length || 0, accounts: accountingStore.listAccounts().length, journals: journalEntriesRes.data?.length || 0 } };
+    for (const domain of domains) hydratedDomains.add(domain);
+    return {
+      ok: true,
+      message: `Hydrated Supabase domains: ${domains.join(", ")}`,
+      counts,
+    };
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : String(e) }; }
 }
 

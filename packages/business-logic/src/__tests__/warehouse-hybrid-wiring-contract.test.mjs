@@ -20,7 +20,10 @@ for (const [table, typeName, writerMethod, hydrateKey] of tables) {
   assert.match(syncAdapter, new RegExp("\\\"" + table + "\\\""));
   assert.match(webDataSource, new RegExp("pgSelectAll<Record<string, unknown>>\\(cfg, \\\"" + table + "\\\""));
   assert.match(webDataSource, new RegExp(writerMethod + ": async"));
-  assert.match(webDataSource, new RegExp(hydrateKey + ": \\("));
+  assert.match(
+    webDataSource,
+    new RegExp(hydrateKey + ": (?:\\(|[A-Za-z]+Rows\\.map)")
+  );
   assert.match(remoteWrite, new RegExp("import type \\{[\\s\\S]*" + typeName));
 }
 

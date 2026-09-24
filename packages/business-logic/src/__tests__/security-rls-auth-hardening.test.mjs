@@ -28,7 +28,11 @@ assert.match(appLayout, /process\.env\.NODE_ENV === "production"/);
 assert.match(appLayout, /process\.env\.NEXT_PUBLIC_REQUIRE_AUTH !== "false"/);
 assert.match(appLayout, /<AuthGate requireAuth=\{requireAuthByDefault\}>/);
 assert.match(appLayout, /const runtimeMode = getRuntimeMode\(\)/);
-assert.match(appLayout, /if \(runtimeMode !== "demo"\) \{/);
+assert.ok(
+  /if \(runtimeMode !== "demo"\) \{/.test(appLayout)
+  || /if \(getRuntimeMode\(\) === "demo"\) return;/.test(appLayout),
+  "demo mode must remain isolated from Supabase hydration"
+);
 assert.doesNotMatch(
   appLayout,
   /<AuthGate requireAuth=\{process\.env\.NEXT_PUBLIC_REQUIRE_AUTH === "true"\}>/
