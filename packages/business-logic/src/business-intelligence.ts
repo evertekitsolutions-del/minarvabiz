@@ -3,7 +3,13 @@
  * AI may consume these facts later, but must not replace financial arithmetic.
  */
 
-import { roundMoney } from "@minarvabiz/utils";
+import {
+  addMinorUnits,
+  divideMinorUnits,
+  fromMinorUnits,
+  subtractMinorUnits,
+  toMinorUnits,
+} from "@minarvabiz/utils";
 
 export interface BiSale {
   date: string;
@@ -43,8 +49,8 @@ export interface BusinessIntelligenceSnapshot {
   productSummaries: Array<{ productId: string; productName: string; revenue: number; grossProfit: number; marginPercent: number }>;
 }
 
-function positive(value: number): number {
-  return Number.isFinite(value) ? Math.max(0, value) : 0;
+function positiveMoneyMinor(value: number): number {
+  return Math.max(0, toMinorUnits(Number.isFinite(value) ? value : 0));
 }
 
 function dateKey(value: string): string {
@@ -69,34 +75,30 @@ export function projectCashFlow(
   const expensesByDay = new Map<string, number>();
   for (const sale of sales) {
     const day = dateKey(sale.date);
-    if (day) salesByDay.set(day, (salesByDay.get(day) ?? 0) + positive(sale.total));
+    if (day) salesByDay.set(day, addMinorUnits(salesByDay.get(day) ?? 0, positiveMoneyMinor(sale.total)));
   }
   for (const expense of expenses) {
     const day = dateKey(expense.date);
-    if (day) expensesByDay.set(day, (expensesByDay.get(day) ?? 0) + positive(expense.amount));
+    if (day) expensesByDay.set(day, addMinorUnits(expensesByDay.get(day) ?? 0, positiveMoneyMinor(expense.amount)));
   }
 
   const recentWindowStart = new Date(asOf.getTime() - 30 * 86_400_000);
-  let revenue = 0;
-  let expense = 0;
+  let revenueMinor = 0;
+  let expenseMinor = 0;
   for (let cursor = new Date(recentWindowStart); cursor <= asOf; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
     const day = cursor.toISOString().slice(0, 10);
-    revenue += salesByDay.get(day) ?? 0;
-    expense += expensesByDay.get(day) ?? 0;
+    revenueMinor = addMinorUnits(revenueMinor, salesByDay.get(day) ?? 0);
+    expenseMinor = addMinorUnits(expenseMinor, expensesByDay.get(day) ?? 0);
   }
-  const avgRevenue = revenue / 31;
-  const avgExpense = expense / 31;
+  const avgRevenueMinor = divideMinorUnits(revenueMinor, 31);
+  const avgExpenseMinor = divideMinorUnits(expenseMinor, 31);
 
-  return Array.from({ length: days }, (_, index) => {
-    const projectedSales = roundMoney(avgRevenue);
-    const projectedExpenses = roundMoney(avgExpense);
-    return {
-      date: addDays(asOf, index + 1),
-      projectedSales,
-      projectedExpenses,
-      projectedNetCash: roundMoney(projectedSales - projectedExpenses),
-    };
-  });
+  return Array.from({ length: days }, (_, index) => ({
+    date: addDays(asOf, index + 1),
+    projectedSales: fromMinorUnits(avgRevenueMinor),
+    projectedExpenses: fromMinorUnits(avgExpenseMinor),
+    projectedNetCash: fromMinorUnits(subtractMinorUnits(avgRevenueMinor, avgExpenseMinor)),
+  }));
 }
 
 export function buildBusinessIntelligence(
@@ -105,61 +107,68 @@ export function buildBusinessIntelligence(
   forecastDays = 30,
   asOf = new Date(),
 ): BusinessIntelligenceSnapshot {
-  const revenue = sales.reduce((sum, sale) => sum + positive(sale.total), 0);
-  const costOfGoods = sales.reduce((sum, sale) => sum + positive(sale.cost), 0);
-  const grossProfit = revenue - costOfGoods;
-  const grossMarginPercent = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
-  const operatingExpenses = expenses.reduce((sum, item) => sum + positive(item.amount), 0);
-  const estimatedNetProfit = grossProfit - operatingExpenses;
+  const revenueMinor = sales.reduce((sum, sale) => addMinorUnits(sum, positiveMoneyMinor(sale.total)), 0);
+  const costOfGoodsMinor = sales.reduce((sum, sale) => addMinorUnits(sum, positiveMoneyMinor(sale.cost)), 0);
+  const grossProfitMinor = subtractMinorUnits(revenueMinor, costOfGoodsMinor);
+  const grossMarginPercent = revenueMinor > 0 ? (grossProfitMinor / revenueMinor) * 100 : 0;
+  const operatingExpensesMinor = expenses.reduce((sum, item) => addMinorUnits(sum, positiveMoneyMinor(item.amount)), 0);
+  const estimatedNetProfitMinor = subtractMinorUnits(grossProfitMinor, operatingExpensesMinor);
 
   const days = Math.max(1, Math.ceil((asOf.getTime() - new Date(asOf.getTime() - 30 * 86_400_000).getTime()) / 86_400_000));
-  const branchMap = new Map<string, { revenue: number; grossProfit: number; expenses: number }>();
-  const productMap = new Map<string, { name: string; revenue: number; grossProfit: number }>();
+  const branchMap = new Map<string, { revenueMinor: number; grossProfitMinor: number; expensesMinor: number }>();
+  const productMap = new Map<string, { name: string; revenueMinor: number; grossProfitMinor: number }>();
   for (const sale of sales) {
+    const saleRevenueMinor = positiveMoneyMinor(sale.total);
+    const saleCostMinor = positiveMoneyMinor(sale.cost);
+    const saleGrossMinor = subtractMinorUnits(saleRevenueMinor, saleCostMinor);
     const branchId = sale.branchId ?? "default";
-    const branch = branchMap.get(branchId) ?? { revenue: 0, grossProfit: 0, expenses: 0 };
-    branch.revenue += positive(sale.total);
-    branch.grossProfit += positive(sale.total) - positive(sale.cost);
+    const branch = branchMap.get(branchId) ?? { revenueMinor: 0, grossProfitMinor: 0, expensesMinor: 0 };
+    branch.revenueMinor = addMinorUnits(branch.revenueMinor, saleRevenueMinor);
+    branch.grossProfitMinor = addMinorUnits(branch.grossProfitMinor, saleGrossMinor);
     branchMap.set(branchId, branch);
     if (sale.productId) {
-      const product = productMap.get(sale.productId) ?? { name: sale.productName ?? sale.productId, revenue: 0, grossProfit: 0 };
-      product.revenue += positive(sale.total);
-      product.grossProfit += positive(sale.total) - positive(sale.cost);
+      const product = productMap.get(sale.productId) ?? {
+        name: sale.productName ?? sale.productId,
+        revenueMinor: 0,
+        grossProfitMinor: 0,
+      };
+      product.revenueMinor = addMinorUnits(product.revenueMinor, saleRevenueMinor);
+      product.grossProfitMinor = addMinorUnits(product.grossProfitMinor, saleGrossMinor);
       productMap.set(sale.productId, product);
     }
   }
   for (const item of expenses) {
     const branchId = item.branchId ?? "default";
-    const branch = branchMap.get(branchId) ?? { revenue: 0, grossProfit: 0, expenses: 0 };
-    branch.expenses += positive(item.amount);
+    const branch = branchMap.get(branchId) ?? { revenueMinor: 0, grossProfitMinor: 0, expensesMinor: 0 };
+    branch.expensesMinor = addMinorUnits(branch.expensesMinor, positiveMoneyMinor(item.amount));
     branchMap.set(branchId, branch);
   }
 
   const branchSummaries = [...branchMap.entries()].map(([branchId, item]) => ({
     branchId,
-    revenue: roundMoney(item.revenue),
-    grossProfit: roundMoney(item.grossProfit),
-    expenses: roundMoney(item.expenses),
-    netProfit: roundMoney(item.grossProfit - item.expenses),
+    revenue: fromMinorUnits(item.revenueMinor),
+    grossProfit: fromMinorUnits(item.grossProfitMinor),
+    expenses: fromMinorUnits(item.expensesMinor),
+    netProfit: fromMinorUnits(subtractMinorUnits(item.grossProfitMinor, item.expensesMinor)),
   })).sort((a, b) => b.netProfit - a.netProfit);
 
   const productSummaries = [...productMap.entries()].map(([productId, item]) => ({
     productId,
     productName: item.name,
-    revenue: roundMoney(item.revenue),
-    grossProfit: roundMoney(item.grossProfit),
-    marginPercent: item.revenue > 0 ? Math.round((item.grossProfit / item.revenue) * 10000) / 100 : 0,
+    revenue: fromMinorUnits(item.revenueMinor),
+    grossProfit: fromMinorUnits(item.grossProfitMinor),
+    marginPercent: item.revenueMinor > 0 ? Math.round((item.grossProfitMinor / item.revenueMinor) * 10000) / 100 : 0,
   })).sort((a, b) => b.grossProfit - a.grossProfit);
 
   return {
-    revenue: roundMoney(revenue),
-    costOfGoods: roundMoney(costOfGoods),
-    grossProfit: roundMoney(grossProfit),
+    revenue: fromMinorUnits(revenueMinor),
+    costOfGoods: fromMinorUnits(costOfGoodsMinor),
+    grossProfit: fromMinorUnits(grossProfitMinor),
     grossMarginPercent: Math.round(grossMarginPercent * 100) / 100,
-    operatingExpenses: roundMoney(operatingExpenses),
-    estimatedNetProfit: roundMoney(estimatedNetProfit),
-    averageDailyRevenue: roundMoney(revenue / days),
-    averageDailyExpense: roundMoney(operatingExpenses / days),
+    operatingExpenses: fromMinorUnits(operatingExpensesMinor),
+    estimatedNetProfit: fromMinorUnits(estimatedNetProfitMinor),
+    averageDailyRevenue: fromMinorUnits(divideMinorUnits(revenueMinor, days)),
+    averageDailyExpense: fromMinorUnits(divideMinorUnits(operatingExpensesMinor, days)),
     cashFlowForecast: projectCashFlow(sales, expenses, forecastDays, asOf),
     branchSummaries,
     productSummaries,

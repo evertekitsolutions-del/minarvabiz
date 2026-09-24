@@ -2,6 +2,12 @@
  * Build RawDashboardMetrics from live in-memory domain stores.
  */
 
+import {
+  addMinorUnits,
+  fromMinorUnits,
+  multiplyMinorByQuantity,
+  toMinorUnits,
+} from "@minarvabiz/utils";
 import type { RawDashboardMetrics } from "./dashboard";
 import * as store from "./store";
 import * as ordersStore from "./orders-store";
@@ -23,6 +29,14 @@ function yesterdayKey(): string {
   return d.toISOString().slice(0, 10);
 }
 
+function sumMoney(values: number[]): number {
+  const totalMinor = values.reduce(
+    (sum, value) => addMinorUnits(sum, toMinorUnits(value)),
+    0,
+  );
+  return fromMinorUnits(totalMinor);
+}
+
 export function collectLiveDashboardMetrics(): RawDashboardMetrics {
   const today = todayKey();
   const yesterday = yesterdayKey();
@@ -31,39 +45,49 @@ export function collectLiveDashboardMetrics(): RawDashboardMetrics {
   const salesToday = sales.filter((s) => dayKey(s.saleDate) === today);
   const salesYest = sales.filter((s) => dayKey(s.saleDate) === yesterday);
 
-  const productSalesToday = salesToday.reduce((a, s) => a + s.total, 0);
-  const productSalesYesterday = salesYest.reduce((a, s) => a + s.total, 0);
-  const costOfGoodsToday = salesToday.reduce(
-    (a, s) => a + s.items.reduce((x, i) => x + i.quantity * i.costPrice, 0),
-    0
+  const productSalesToday = sumMoney(salesToday.map((sale) => sale.total));
+  const productSalesYesterday = sumMoney(salesYest.map((sale) => sale.total));
+  const costOfGoodsTodayMinor = salesToday.reduce(
+    (saleTotalMinor, sale) => addMinorUnits(
+      saleTotalMinor,
+      sale.items.reduce(
+        (itemTotalMinor, item) => addMinorUnits(
+          itemTotalMinor,
+          multiplyMinorByQuantity(toMinorUnits(item.costPrice), item.quantity),
+        ),
+        0,
+      ),
+    ),
+    0,
   );
+  const costOfGoodsToday = fromMinorUnits(costOfGoodsTodayMinor);
 
   const orders = ordersStore.listOrders().filter((o) => o.status !== "cancelled");
   const ordersToday = orders.filter((o) => dayKey(o.orderDate) === today);
   const ordersYest = orders.filter((o) => dayKey(o.orderDate) === yesterday);
-  const serviceRevenueToday = ordersToday.reduce((a, o) => a + o.price, 0);
-  const serviceRevenueYesterday = ordersYest.reduce((a, o) => a + o.price, 0);
-  const orderMaterialCostsToday = ordersToday.reduce((a, o) => a + o.externalMaterialCost, 0);
-  const orderSpecificExpensesToday = ordersToday.reduce((a, o) => a + o.orderExpensesTotal, 0);
+  const serviceRevenueToday = sumMoney(ordersToday.map((order) => order.price));
+  const serviceRevenueYesterday = sumMoney(ordersYest.map((order) => order.price));
+  const orderMaterialCostsToday = sumMoney(ordersToday.map((order) => order.externalMaterialCost));
+  const orderSpecificExpensesToday = sumMoney(ordersToday.map((order) => order.orderExpensesTotal));
 
   const laundry = phase5Store.listLaundryOrders().filter((l) => l.status !== "cancelled");
   const laundryToday = laundry.filter((l) => dayKey(l.createdAt) === today);
   const laundryYest = laundry.filter((l) => dayKey(l.createdAt) === yesterday);
-  const laundryRevenueToday = laundryToday.reduce((a, l) => a + l.totalCustomerCharge, 0);
-  const laundryRevenueYesterday = laundryYest.reduce((a, l) => a + l.totalCustomerCharge, 0);
-  const laundrySupplierCostToday = laundryToday.reduce((a, l) => a + l.totalSupplierCost, 0);
+  const laundryRevenueToday = sumMoney(laundryToday.map((item) => item.totalCustomerCharge));
+  const laundryRevenueYesterday = sumMoney(laundryYest.map((item) => item.totalCustomerCharge));
+  const laundrySupplierCostToday = sumMoney(laundryToday.map((item) => item.totalSupplierCost));
 
   const expenses = phase5Store.listExpenses();
   const expensesTodayList = expenses.filter((e) => dayKey(e.date) === today);
-  const generalExpensesToday = expensesTodayList
-    .filter((e) => !e.orderId)
-    .reduce((a, e) => a + e.amount, 0);
-  const expensesToday = expensesTodayList.reduce((a, e) => a + e.amount, 0);
+  const generalExpensesToday = sumMoney(expensesTodayList.filter((e) => !e.orderId).map((expense) => expense.amount));
+  const expensesToday = sumMoney(expensesTodayList.map((expense) => expense.amount));
 
-  const staffIncentivesToday = phase6Store
-    .listIncentivePayouts()
-    .filter((p) => dayKey(p.calculatedAt) === today)
-    .reduce((a, p) => a + p.amount, 0);
+  const staffIncentivesToday = sumMoney(
+    phase6Store
+      .listIncentivePayouts()
+      .filter((p) => dayKey(p.calculatedAt) === today)
+      .map((payout) => payout.amount),
+  );
 
   const pendingOrders = orders.filter((o) => o.status === "pending").length;
   const processingOrders = orders.filter((o) => o.status === "processing").length;
@@ -72,9 +96,11 @@ export function collectLiveDashboardMetrics(): RawDashboardMetrics {
 
   const products = store.listProducts();
   const lowStockCount = products.filter((p) => isLowStock(p.stockQuantity, p.minimumStock)).length;
-  const outstandingPayments = store
-    .listCustomers()
-    .reduce((a, c) => a + (c.outstandingBalance > 0 ? c.outstandingBalance : 0), 0);
+  const outstandingPayments = sumMoney(
+    store.listCustomers()
+      .map((customer) => customer.outstandingBalance)
+      .filter((amount) => amount > 0),
+  );
 
   return {
     productSalesToday,

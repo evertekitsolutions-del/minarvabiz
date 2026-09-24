@@ -117,6 +117,13 @@ export function subtractMinorUnits(a: MoneyMinor, b: MoneyMinor): MoneyMinor {
   return safeInteger(a - b, "Money difference");
 }
 
+export function divideMinorUnits(amountMinor: MoneyMinor, divisor: number): MoneyMinor {
+  safeInteger(amountMinor, "Money minor amount");
+  safeInteger(divisor, "Money divisor");
+  if (divisor <= 0) throw new Error("Money divisor must be positive");
+  return multiplyDivideRounded(amountMinor, 1, divisor, "Money division result");
+}
+
 export function multiplyMinorByQuantity(amountMinor: MoneyMinor, quantity: number): MoneyMinor {
   const quantityMilli = toQuantityMilli(quantity);
   return multiplyDivideRounded(amountMinor, quantityMilli, QUANTITY_MILLI_FACTOR, "Money quantity result");
