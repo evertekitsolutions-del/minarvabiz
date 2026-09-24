@@ -28,53 +28,15 @@ if (
   );
 }
 
-let supabaseOrigin = "";
-let supabaseWsOrigin = "";
 if (publicSupabaseUrl && !isPlaceholder(publicSupabaseUrl)) {
   try {
-    const parsed = new URL(publicSupabaseUrl);
-    supabaseOrigin = parsed.origin;
-    if (parsed.protocol === "https:") {
-      supabaseWsOrigin = `wss://${parsed.host}`;
-    } else if (parsed.protocol === "http:") {
-      supabaseWsOrigin = `ws://${parsed.host}`;
-    }
+    new URL(publicSupabaseUrl);
   } catch {
     if (process.env.NODE_ENV === "production" && !isExplicitDemo) {
       throw new Error("NEXT_PUBLIC_SUPABASE_URL must be a valid absolute URL.");
     }
   }
 }
-
-const connectSources = [
-  "'self'",
-  supabaseOrigin,
-  supabaseWsOrigin,
-  ...(process.env.NODE_ENV === "production"
-    ? []
-    : [
-        "http://localhost:*",
-        "http://127.0.0.1:*",
-        "ws://localhost:*",
-        "ws://127.0.0.1:*",
-      ]),
-].filter(Boolean);
-
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'"}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https:",
-  "font-src 'self' data:",
-  `connect-src ${connectSources.join(" ")}`,
-  "worker-src 'self' blob:",
-  "manifest-src 'self'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  ...(process.env.NODE_ENV === "production" ? ["upgrade-insecure-requests"] : []),
-].join("; ");
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["sql.js"],
@@ -93,7 +55,6 @@ const nextConfig: NextConfig = {
       {
         source: "/:path*",
         headers: [
-          { key: "Content-Security-Policy", value: contentSecurityPolicy },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

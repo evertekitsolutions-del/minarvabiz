@@ -41,6 +41,18 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://ci-supabase.example
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-public-anon-key
         run: pnpm --filter @minarvabiz/web build
+      - name: Verify main web nonce CSP source
+        shell: bash
+        run: |
+          set -e
+          test -f apps/web/src/middleware.ts
+          ! grep -Fq 'Content-Security-Policy' apps/web/next.config.ts
+          grep -Fq 'Content-Security-Policy' apps/web/src/middleware.ts
+          if grep -E "script-src[^;[:cntrl:]]*'unsafe-inline'" apps/web/src/middleware.ts; then
+            echo "main web script-src must not contain unsafe-inline."
+            exit 1
+          fi
+          node scripts/web-csp-smoke.mjs
       - name: Verify public Supabase env is bundled
         shell: bash
         run: |
@@ -80,6 +92,10 @@ jobs:
           done
           cat /tmp/minarva-web.log || true
           exit 1
+      - name: Verify production main web nonce CSP runtime
+        env:
+          WEB_CSP_URL: http://127.0.0.1:3000/dashboard
+        run: node scripts/web-csp-smoke.mjs
       - name: Launch headless Chrome
         shell: bash
         run: |
