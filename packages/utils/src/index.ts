@@ -24,17 +24,60 @@ function safeInteger(value: number, label: string): number {
   return Object.is(value, -0) ? 0 : value;
 }
 
-function roundIntegerDivision(numerator: number, denominator: number): number {
-  if (!Number.isSafeInteger(numerator) || !Number.isSafeInteger(denominator) || denominator <= 0) {
-    throw new Error("Invalid integer division");
+function bigintToSafeInteger(value: bigint, label: string): number {
+  const max = BigInt(Number.MAX_SAFE_INTEGER);
+  if (value > max || value < -max) throw new Error(`${label} exceeds the safe integer range`);
+  return Number(value);
+}
+
+function decimalToScaledInteger(value: number, scaleDigits: number, label: string): number {
+  if (!Number.isFinite(value)) throw new Error(`${label} must be finite`);
+  if (!Number.isInteger(scaleDigits) || scaleDigits < 0 || scaleDigits > 9) {
+    throw new Error("Invalid decimal scale");
   }
-  if (numerator >= 0) return safeInteger(Math.floor((numerator + Math.floor(denominator / 2)) / denominator), "Rounded value");
-  return -safeInteger(Math.floor((-numerator + Math.floor(denominator / 2)) / denominator), "Rounded value");
+
+  const negative = value < 0;
+  const raw = Math.abs(value).toString().toLowerCase();
+  const [coefficient, exponentText] = raw.split("e");
+  const exponent = exponentText ? Number(exponentText) : 0;
+  if (!Number.isInteger(exponent)) throw new Error(`${label} has an invalid exponent`);
+
+  const [whole = "0", fraction = ""] = coefficient.split(".");
+  const digits = (whole + fraction).replace(/^0+(?=\d)/, "") || "0";
+  let integer = BigInt(digits);
+  const power = exponent - fraction.length + scaleDigits;
+
+  if (power >= 0) {
+    integer *= 10n ** BigInt(power);
+  } else {
+    const divisor = 10n ** BigInt(-power);
+    const quotient = integer / divisor;
+    const remainder = integer % divisor;
+    integer = quotient + (remainder * 2n >= divisor ? 1n : 0n);
+  }
+
+  if (negative) integer = -integer;
+  return bigintToSafeInteger(integer, label);
+}
+
+function multiplyDivideRounded(a: number, b: number, denominator: number, label: string): number {
+  safeInteger(a, label);
+  safeInteger(b, label);
+  safeInteger(denominator, "Integer denominator");
+  if (denominator <= 0) throw new Error("Integer denominator must be positive");
+
+  const product = BigInt(a) * BigInt(b);
+  const negative = product < 0n;
+  const absolute = negative ? -product : product;
+  const divisor = BigInt(denominator);
+  let quotient = absolute / divisor;
+  const remainder = absolute % divisor;
+  if (remainder * 2n >= divisor) quotient += 1n;
+  return bigintToSafeInteger(negative ? -quotient : quotient, label);
 }
 
 export function toMinorUnits(amount: number): MoneyMinor {
-  if (!Number.isFinite(amount)) throw new Error("Money amount must be finite");
-  return safeInteger(Math.round(amount * MONEY_MINOR_FACTOR), "Money amount");
+  return decimalToScaledInteger(amount, 2, "Money amount");
 }
 
 export function fromMinorUnits(amountMinor: MoneyMinor): number {
@@ -52,13 +95,11 @@ export function formatMinorUnits(amountMinor: MoneyMinor): string {
 }
 
 export function toQuantityMilli(quantity: number): QuantityMilli {
-  if (!Number.isFinite(quantity)) throw new Error("Quantity must be finite");
-  return safeInteger(Math.round(quantity * QUANTITY_MILLI_FACTOR), "Quantity");
+  return decimalToScaledInteger(quantity, 3, "Quantity");
 }
 
 export function toPercentBasisPoints(percent: number): PercentBasisPoints {
-  if (!Number.isFinite(percent)) throw new Error("Percent must be finite");
-  return safeInteger(Math.round(percent * PERCENT_BASIS_FACTOR), "Percent");
+  return decimalToScaledInteger(percent, 2, "Percent");
 }
 
 export function addMinorUnits(...amounts: MoneyMinor[]): MoneyMinor {
@@ -77,17 +118,13 @@ export function subtractMinorUnits(a: MoneyMinor, b: MoneyMinor): MoneyMinor {
 }
 
 export function multiplyMinorByQuantity(amountMinor: MoneyMinor, quantity: number): MoneyMinor {
-  safeInteger(amountMinor, "Money minor amount");
   const quantityMilli = toQuantityMilli(quantity);
-  const numerator = safeInteger(amountMinor * quantityMilli, "Money quantity product");
-  return safeInteger(roundIntegerDivision(numerator, QUANTITY_MILLI_FACTOR), "Money quantity result");
+  return multiplyDivideRounded(amountMinor, quantityMilli, QUANTITY_MILLI_FACTOR, "Money quantity result");
 }
 
 export function percentOfMinor(amountMinor: MoneyMinor, percent: number): MoneyMinor {
-  safeInteger(amountMinor, "Money minor amount");
   const basisPoints = toPercentBasisPoints(percent);
-  const numerator = safeInteger(amountMinor * basisPoints, "Money percent product");
-  return safeInteger(roundIntegerDivision(numerator, 100 * PERCENT_BASIS_FACTOR), "Money percent result");
+  return multiplyDivideRounded(amountMinor, basisPoints, 100 * PERCENT_BASIS_FACTOR, "Money percent result");
 }
 
 export function roundMoney(amount: number): number {
