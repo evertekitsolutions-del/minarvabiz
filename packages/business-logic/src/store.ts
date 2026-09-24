@@ -464,26 +464,32 @@ export function createSale(input: {
 
   const totals = calculateCartTotals(input.lines);
   const grandTotalMinor = toMinorUnits(totals.grandTotal);
-  const requestedCreditMinor = Math.max(0, toMinorUnits(input.creditAmount ?? 0));
+  let requestedCreditMinor: MoneyMinor;
+  try {
+    requestedCreditMinor = Math.max(0, toMinorUnits(input.creditAmount ?? 0));
+  } catch {
+    return { sale: null as unknown as Sale, payment: null, payments: [], errors: ["Exchange/store credit must be finite and within range"] };
+  }
   const creditAppliedMinor = Math.min(requestedCreditMinor, grandTotalMinor);
   const remainingAfterCreditMinor = Math.max(0, subtractMinorUnits(grandTotalMinor, creditAppliedMinor));
-  const requestedSplits = (input.paymentSplits?.length
+  const rawSplits = (input.paymentSplits?.length
     ? input.paymentSplits
     : [{ method: input.paymentMethod, amount: input.paidAmount }])
-    .map((split) => {
-      const amountMinor = toMinorUnits(Number(split.amount) || 0);
-      return {
-        method: split.method,
-        amount: fromMinorUnits(amountMinor),
-        amountMinor,
-        reference: split.reference ?? null,
-      };
-    })
-    .filter((split) => split.amountMinor !== 0);
-  const tender = validateTender(fromMinorUnits(remainingAfterCreditMinor), requestedSplits);
+    .map((split) => ({
+      method: split.method,
+      amount: Number(split.amount) || 0,
+      reference: split.reference ?? null,
+    }));
+  const tender = validateTender(fromMinorUnits(remainingAfterCreditMinor), rawSplits);
   if (tender.errors.length) {
     return { sale: null as unknown as Sale, payment: null, payments: [], errors: tender.errors };
   }
+  const requestedSplits = rawSplits
+    .map((split) => {
+      const amountMinor = toMinorUnits(split.amount);
+      return { ...split, amount: fromMinorUnits(amountMinor), amountMinor };
+    })
+    .filter((split) => split.amountMinor !== 0);
   const actualPaymentMinor = toMinorUnits(tender.collectible);
   const actualPayment = fromMinorUnits(actualPaymentMinor);
   const creditApplied = fromMinorUnits(creditAppliedMinor);
