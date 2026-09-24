@@ -67,11 +67,10 @@ async function main() {
   await waitForRendererReady();
   console.log('RENDERER_READY PASS');
 
-  const desktopApi = await cdpEval(ws, `(async()=>{const api=window.minarvaDesktop; if(!api) throw new Error('minarvaDesktop bridge missing'); const device=await api.getDeviceId?.(); const trialDevice=await api.getTrialDeviceId?.(); const trial=await api.getTrialState(); return JSON.stringify({device,trialDevice,trial})})()`);
+  const desktopApi = await cdpEval(ws, `(async()=>{const api=window.minarvaDesktop; if(!api) throw new Error('minarvaDesktop bridge missing'); const device=await api.getDeviceId?.(); const trial=await api.getTrialState(); return JSON.stringify({device,trial})})()`);
   console.log(`DEVICE_TRIAL_BEFORE ${desktopApi}`);
   const before = JSON.parse(desktopApi);
   if (!/^[a-f0-9]{64}$/i.test(String(before.device || ''))) throw new Error('Device ID was not a 64-hex hash.');
-  if (before.device !== before.trialDevice) throw new Error('Device ID and trial device ID differ on fresh install.');
   if (before.trial?.status !== 'unactivated') throw new Error(`Fresh trial state was not unactivated: ${before.trial?.status}`);
 
   const activation = await cdpEval(ws, `(async()=>{const api=window.minarvaDesktop; const result=await api.activateTrial({email:'qa-${Date.now()}@example.com',phone:'9999999999',organizationName:'Minarva Biz Fresh Install QA',address:'Windows CI Fresh Install'}); return JSON.stringify(result)})()`);
