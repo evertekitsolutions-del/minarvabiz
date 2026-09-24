@@ -52,7 +52,7 @@ assert(mainSource.includes("sandbox: true") && !mainSource.includes("sandbox: fa
 assert(mainSource.includes("setPermissionRequestHandler") && mainSource.includes("callback(false)"), "Electron permission requests must fail closed");
 assert(mainSource.includes("setPermissionCheckHandler") && mainSource.includes("return false"), "Electron permission checks must fail closed");
 assert(mainSource.includes("setDevicePermissionHandler") && mainSource.includes("device-permission-denied"), "Electron device permissions must fail closed");
-assert(mainSource.includes("setDisplayMediaRequestHandler") && mainSource.includes("callback(null)"), "Electron display capture must fail closed");
+assert(mainSource.includes("setDisplayMediaRequestHandler") && mainSource.includes("callback({})"), "Electron display capture must fail closed");
 assert(mainSource.includes("webRequest.onBeforeRequest") && mainSource.includes('resourceType === "xhr"') && mainSource.includes('url.protocol === "https:"'), "Electron remote-content request filtering is missing");
 assert(mainSource.includes("webviewTag: false") && mainSource.includes("allowRunningInsecureContent: false"), "Electron webview/insecure-content restrictions are missing");
 assert(mainSource.includes("javascript: false") && mainSource.includes('win.webContents.setWindowOpenHandler(() => ({ action: "deny" }))'), "Print window script/popup restrictions are missing");
