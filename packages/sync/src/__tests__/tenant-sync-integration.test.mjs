@@ -29,6 +29,7 @@ class TenantAwarePgServer {
   constructor() {
     this.tables = new Map();
     this.failSelectTable = null;
+    this.failOutbox = false;
   }
 
   bucket(table) {
@@ -56,6 +57,9 @@ class TenantAwarePgServer {
     const server = this;
     return {
       async insert(table, input) {
+        if (table === "outbox_events" && server.failOutbox) {
+          return { error: "simulated remote outbox write failure" };
+        }
         const rows = Array.isArray(input) ? input : [input];
         for (const raw of rows) {
           if (raw.org_id != null && raw.org_id !== orgId) {
@@ -189,6 +193,38 @@ const deleted = await adapterA.push([deleteEvent]);
 assert.deepEqual(deleted.accepted, [deleteEvent.id], "tenant-scoped soft delete must be accepted");
 assert.ok(server.rows("customers", ORG_A)[0].deleted_at, "delete push must soft-delete the own-tenant row");
 assert.equal(server.rows("outbox_events", ORG_A).length, 3, "each accepted mutation must have one remote outbox acknowledgement");
+
+const ackRetryEvent = {
+  id: "ea000000-0000-0000-0000-000000000004",
+  aggregateType: "customers",
+  aggregateId: "ca000000-0000-0000-0000-000000000004",
+  eventType: "insert",
+  payload: {
+    id: "ca000000-0000-0000-0000-000000000004",
+    name: "Outbox retry customer",
+    version: 1,
+    updatedAt: "2026-09-25T00:02:50.000Z",
+  },
+  occurredAt: "2026-09-25T00:02:50.000Z",
+  deviceId: DEVICE_A,
+  sequence: 4,
+  status: "pending",
+  attempts: 0,
+  lastError: null,
+};
+server.failOutbox = true;
+const ackFailed = await adapterA.push([ackRetryEvent]);
+assert.deepEqual(ackFailed.accepted, []);
+assert.equal(ackFailed.rejected.length, 1);
+assert.match(ackFailed.rejected[0].error, /outbox acknowledgement failed/);
+assert.equal(server.rows("customers", ORG_A).some((row) => row.id === ackRetryEvent.aggregateId), true);
+assert.equal(server.rows("outbox_events", ORG_A).length, 3);
+
+server.failOutbox = false;
+const ackRetried = await adapterA.push([ackRetryEvent]);
+assert.deepEqual(ackRetried.accepted, [ackRetryEvent.id], "idempotent retry must recover after outbox acknowledgement failure");
+assert.deepEqual(ackRetried.rejected, []);
+assert.equal(server.rows("outbox_events", ORG_A).length, 4);
 
 assert.equal(
   localA.get("customers", "cb000000-0000-0000-0000-000000000001"),
