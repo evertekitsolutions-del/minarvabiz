@@ -396,34 +396,44 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
           const payload = typeof ev.payload === "string" ? JSON.parse(ev.payload) : ev.payload;
           const table = ev.aggregateType;
           const row = remoteRow(table, ev.aggregateId, payload as Record<string, unknown>);
+          let mutationAccepted = false;
           if (ev.eventType === "delete") {
             const r = await client.update(table, matchQuery(table, ev.aggregateId), {
               deleted_at: new Date().toISOString(),
             });
             if (r.error) rejected.push({ id: ev.id, error: r.error });
-            else accepted.push(ev.id);
+            else {
+              accepted.push(ev.id);
+              mutationAccepted = true;
+            }
           } else {
             const r = await client.insert(table, row);
             if (r.error) {
               const u = await client.update(table, matchQuery(table, ev.aggregateId), row);
               if (u.error) rejected.push({ id: ev.id, error: u.error });
-              else accepted.push(ev.id);
+              else {
+                accepted.push(ev.id);
+                mutationAccepted = true;
+              }
             } else {
               accepted.push(ev.id);
+              mutationAccepted = true;
             }
           }
-          await client.insert("outbox_events", {
-            id: ev.id,
-            aggregate_type: ev.aggregateType,
-            aggregate_id: ev.aggregateId,
-            event_type: ev.eventType,
-            payload_json: payload,
-            occurred_at: ev.occurredAt,
-            device_id: deviceId,
-            sequence: ev.sequence,
-            status: "synced",
-            attempts: 0,
-          });
+          if (mutationAccepted) {
+            await client.insert("outbox_events", {
+              id: ev.id,
+              aggregate_type: ev.aggregateType,
+              aggregate_id: ev.aggregateId,
+              event_type: ev.eventType,
+              payload_json: payload,
+              occurred_at: ev.occurredAt,
+              device_id: deviceId,
+              sequence: ev.sequence,
+              status: "synced",
+              attempts: 0,
+            });
+          }
         } catch (e) {
           rejected.push({ id: ev.id, error: e instanceof Error ? e.message : String(e) });
         }
@@ -448,6 +458,9 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
       for (const table of tables) {
         const cursor = pullCursorColumn(table);
         const res = await client.select(table, pullQuery(table, since));
+        if (res.error) {
+          throw new Error(`Supabase pull failed for ${table}: ${res.error}`);
+        }
         if (res.data) {
           for (const row of res.data) {
             const recordId = table === "production_workflows" ? String(row.order_id) : String(row.id);
@@ -474,6 +487,9 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         const saleIds = [...pulledSales.keys()];
         const q = `select=*&sale_id=in.(${saleIds.map(encodeURIComponent).join(",")})`;
         const res = await client.select("sale_items", q);
+        if (res.error) {
+          throw new Error(`Supabase pull failed for sale_items: ${res.error}`);
+        }
         if (res.data) {
           for (const row of res.data) {
             const saleId = String(row.sale_id);
