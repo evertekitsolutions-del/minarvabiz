@@ -1,7 +1,8 @@
 # Minarva Biz — Step 25 Clean-Room Final Release Audit
 
 Date: 2026-09-25  
-Product version: **1.0.4**  
+Audited product version: **1.0.4** (historical Step 25 baseline)  
+Current commercial release: **1.0.5**  
 Pre-Step-25 baseline: `fd24b61` (Step 24)
 
 ## Audit method
