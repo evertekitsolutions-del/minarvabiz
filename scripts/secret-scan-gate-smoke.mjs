@@ -12,7 +12,7 @@ assert.match(workflow, /pull_request:[\s\S]*branches:\s*\[main\]/);
 assert.match(workflow, /permissions:\s*\n\s+contents:\s+read/);
 
 assert.match(workflow, /actions\/checkout@v7[\s\S]*fetch-depth:\s*0/);
-assert.match(workflow, /github\\.com\\/zricethezav\\/gitleaks\\/v8@v8\\.30\\.1/);
+assert.match(workflow, /github\.com\/zricethezav\/gitleaks\/v8@v8\.30\.1/);
 assert.ok(workflow.includes('"$GITLEAKS" git --redact --verbose --log-opts="--all" .'));
 assert.ok(workflow.includes('"$GITLEAKS" dir --redact --verbose .'));
 assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
