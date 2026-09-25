@@ -111,6 +111,7 @@ INSERT INTO public.products(id, org_id, label) VALUES
   ('22000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002', 'B product');
 
 \i supabase/migrations/20260916_tenant_bootstrap_and_org_defaults.sql
+\i supabase/migrations/20260925_tenant_org_helper_uuid_fix.sql
 \i supabase/migrations/20260919_tenant_policy_alignment.sql
 \i supabase/migrations/20260924_security_rls_role_auth_hardening.sql
 
