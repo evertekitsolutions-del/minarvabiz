@@ -53,7 +53,7 @@ jobs:
       - name: Build web with public Supabase env
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://ci-supabase.example
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-public-anon-key
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_test_key
         run: pnpm --filter @minarvabiz/web build
       - name: Verify main web nonce CSP source
         shell: bash
@@ -72,7 +72,7 @@ jobs:
         run: |
           set -e
           grep -RIlF 'https://ci-supabase.example' apps/web/.next/static/chunks >/dev/null
-          grep -RIlF 'ci-public-anon-key' apps/web/.next/static/chunks >/dev/null
+          grep -RIlF 'sb_publishable_ci_test_key' apps/web/.next/static/chunks >/dev/null
 
 
   web-ui-smoke:
