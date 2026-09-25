@@ -396,7 +396,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
           const payload = typeof ev.payload === "string" ? JSON.parse(ev.payload) : ev.payload;
           const table = ev.aggregateType;
           const row = remoteRow(table, ev.aggregateId, payload as Record<string, unknown>);
-          const acceptedBefore = accepted.length;
+          // Remote outbox acknowledgement is written only after the domain mutation succeeds.
           if (ev.eventType === "delete") {
             const r = await client.update(table, matchQuery(table, ev.aggregateId), {
               deleted_at: new Date().toISOString(),
@@ -413,8 +413,8 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
               accepted.push(ev.id);
             }
           }
-          if (accepted.length === acceptedBefore) continue;
-          await client.insert("outbox_events", {
+          if (!accepted.includes(ev.id)) continue;
+          const outboxResult = await client.insert("outbox_events", {
             id: ev.id,
             aggregate_type: ev.aggregateType,
             aggregate_id: ev.aggregateId,
@@ -426,6 +426,11 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
             status: "synced",
             attempts: 0,
           });
+          if (outboxResult.error) {
+            const acceptedIndex = accepted.indexOf(ev.id);
+            if (acceptedIndex >= 0) accepted.splice(acceptedIndex, 1);
+            rejected.push({ id: ev.id, error: `outbox acknowledgement failed: ${outboxResult.error}` });
+          }
         } catch (e) {
           rejected.push({ id: ev.id, error: e instanceof Error ? e.message : String(e) });
         }
