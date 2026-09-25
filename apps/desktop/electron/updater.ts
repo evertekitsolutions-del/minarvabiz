@@ -51,6 +51,7 @@ function fromBase64Url(value: string) {
 
 function canonicalManifest(manifest: UpdateManifest) {
   return [
+    "minarvabiz-update-v1",
     manifest.product,
     manifest.version,
     manifest.installerUrl,
@@ -59,11 +60,23 @@ function canonicalManifest(manifest: UpdateManifest) {
   ].join("\n");
 }
 
+function isTrustedInstallerUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === "https:"
+      && url.hostname.toLowerCase() === "github.com"
+      && url.pathname.startsWith("/evertekitsolutions-del/minarvabiz/releases/download/")
+      && /\/MinarvaBiz-Setup-[0-9A-Za-z.+-]+\.exe$/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
 function validateManifest(value: unknown): UpdateManifest | null {
   const m = value as Partial<UpdateManifest>;
   if (m.product !== "minarvabiz" || !m.version || !m.installerUrl || !m.sha256 || !m.publishedAt || !m.signature) return null;
   if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(m.version)) return null;
-  if (!/^https:\/\//i.test(m.installerUrl)) return null;
+  if (!isTrustedInstallerUrl(m.installerUrl)) return null;
   if (!/^[0-9a-f]{64}$/i.test(m.sha256)) return null;
   if (!Number.isFinite(new Date(m.publishedAt).getTime())) return null;
   return m as UpdateManifest;
