@@ -24,6 +24,8 @@ jobs:
           cache: pnpm
       - name: Verify GitHub Actions hardening
         run: node scripts/github-actions-hardening-smoke.mjs
+      - name: Verify SBOM and dependency-license workflow contract
+        run: node scripts/sbom-license-workflow-smoke.mjs
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @minarvabiz/utils typecheck
       - name: Verify cross-app security header baseline
