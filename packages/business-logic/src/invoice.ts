@@ -8,6 +8,7 @@ import { getShopProfile } from "./shop-profile";
 import { getTaxConfig } from "./tax-config";
 import { getPrintSettings } from "./print-settings";
 import { escapeHtml } from "./html";
+import { tryDesktopPrintHtml } from "./desktop-print";
 
 export function buildSaleInvoiceHtml(sale: Sale, opts?: { paper?: "a4" | "thermal"; autoPrint?: boolean }): string {
   const shop = getShopProfile();
@@ -74,32 +75,11 @@ ${autoPrint ? "<script>window.onload=function(){window.print&&window.print()}</s
 </body></html>`;
 }
 
-type DesktopPrintBridge = {
-  printHtml?: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal"; thermalWidthMm?: number }) => Promise<{ ok: boolean; error?: string }>;
-};
-
-function directPrinterName(paper: "a4" | "thermal"): string {
-  const print = getPrintSettings();
-  return paper === "thermal" ? print.thermalPrinterName : print.a4PrinterName;
-}
-
-function tryDesktopDirectPrint(html: string, paper: "a4" | "thermal"): boolean {
-  if (typeof window === "undefined") return false;
-  const print = getPrintSettings();
-  const bridge = (window as unknown as { minarvaDesktop?: DesktopPrintBridge }).minarvaDesktop;
-  const deviceName = directPrinterName(paper);
-  if (!print.silentDesktopPrint || !deviceName || !bridge?.printHtml) return false;
-  void bridge.printHtml({ html, deviceName, paper, thermalWidthMm: print.thermalWidthMm }).then((result) => {
-    if (!result.ok) console.error("[minarvabiz] direct print failed:", result.error || "Unknown printer error");
-  }).catch((error) => console.error("[minarvabiz] direct print failed:", error));
-  return true;
-}
-
 export function printSaleInvoice(sale: Sale, paper?: "a4" | "thermal") {
   if (typeof window === "undefined") return;
   const selectedPaper = paper ?? getPrintSettings().defaultInvoicePaper;
   const directHtml = buildSaleInvoiceHtml(sale, { paper: selectedPaper, autoPrint: false });
-  if (tryDesktopDirectPrint(directHtml, selectedPaper)) return;
+  if (tryDesktopPrintHtml(directHtml, selectedPaper)) return;
   const html = buildSaleInvoiceHtml(sale, { paper: selectedPaper, autoPrint: true });
   const w = window.open("", "_blank", selectedPaper === "thermal" ? "width=420,height=700" : "width=800,height=900");
   if (!w) return;
@@ -148,7 +128,7 @@ export function printOrderInvoice(order: ServiceOrder, paper?: "a4" | "thermal")
   if (typeof window === "undefined") return;
   const selectedPaper = paper ?? getPrintSettings().defaultInvoicePaper;
   const directHtml = buildOrderInvoiceHtml(order, { paper: selectedPaper, autoPrint: false });
-  if (tryDesktopDirectPrint(directHtml, selectedPaper)) return;
+  if (tryDesktopPrintHtml(directHtml, selectedPaper)) return;
   const html = buildOrderInvoiceHtml(order, { paper: selectedPaper, autoPrint: true });
   const w = window.open("", "_blank", selectedPaper === "thermal" ? "width=420,height=700" : "width=900,height=900");
   if (!w) return;
