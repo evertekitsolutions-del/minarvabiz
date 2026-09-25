@@ -3,6 +3,7 @@ import fs from "node:fs";
 
 const workflow = fs.readFileSync(new URL("../.github/workflows/staging-quality.yml", import.meta.url), "utf8");
 const nextConfig = fs.readFileSync(new URL("../apps/web/next.config.ts", import.meta.url), "utf8");
+const middleware = fs.readFileSync(new URL("../apps/web/src/middleware.ts", import.meta.url), "utf8");
 const appVercel = JSON.parse(fs.readFileSync(new URL("../apps/web/vercel.json", import.meta.url), "utf8"));
 const rootVercel = JSON.parse(fs.readFileSync(new URL("../vercel.json", import.meta.url), "utf8"));
 const policy = JSON.parse(fs.readFileSync(new URL("../security/staging-quality-policy.json", import.meta.url), "utf8"));
@@ -20,6 +21,9 @@ assert.match(nextConfig, /process\.env\.VERCEL_ENV === "preview"/);
 assert.match(nextConfig, /NEXT_PUBLIC_MINARVA_MODE: "demo"/);
 assert.match(nextConfig, /NEXT_PUBLIC_REQUIRE_AUTH: "false"/);
 assert.match(nextConfig, /poweredByHeader: false/);
+assert.match(middleware, /\["GET", "HEAD", "OPTIONS"\]\.includes\(request\.method\.toUpperCase\(\)\)/);
+assert.match(middleware, /status: 405/);
+assert.match(middleware, /Allow: "GET, HEAD, OPTIONS"/);
 
 assert.equal(appVercel.git.deploymentEnabled.staging, true);
 assert.equal(rootVercel.git.deploymentEnabled.staging, true);
