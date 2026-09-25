@@ -26,7 +26,6 @@ import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerPr
 import {
   canIssueLicense,
   canManageLicenseStatus,
-  canProvisionOnlineCustomer,
   defaultFeatures,
 } from "./admin-panel/model";
 import type {
@@ -254,10 +253,9 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
     );
   }
 
-  const onlineProvisioning = useOnlineCustomerProvisioning();
+  const onlineProvisioning = useOnlineCustomerProvisioning(identity.role);
   const canIssue = canIssueLicense(identity.role);
   const canManageStatus = canManageLicenseStatus(identity.role);
-  const canProvision = canProvisionOnlineCustomer(identity.role);
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
@@ -283,10 +281,7 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <OnlineCustomerProvisionCard
-            {...onlineProvisioning}
-            canProvision={canProvision}
-          />
+          <OnlineCustomerProvisionCard {...onlineProvisioning} />
           <LicenseCreateCard
             customerName={customerName}
             plan={plan}
