@@ -5,10 +5,8 @@ const port = Number(process.env.MINARVA_MOCK_SUPABASE_PORT || 54321);
 const validToken = "valid-e2e-access-token";
 const userId = "11111111-1111-1111-1111-111111111111";
 
-function cors(req, res) {
-  const origin = String(req.headers.origin || "");
-  res.setHeader("Access-Control-Allow-Origin", origin || "*");
-  res.setHeader("Vary", "Origin");
+function cors(_req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:3000");
   res.setHeader("Access-Control-Allow-Headers", "authorization, apikey, content-type, prefer");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
 }
