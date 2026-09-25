@@ -1,7 +1,7 @@
 /**
  * Lightweight Supabase PostgREST + Auth client (fetch-based).
  * No @supabase/supabase-js dependency — works in browser and Node.
- * Uses a public client key (modern publishable key preferred; legacy anon supported); service role must stay server-side.
+ * Uses ANON key only in client; service role must stay server-side.
  */
 
 export interface SupabaseConfig {
@@ -290,7 +290,6 @@ function defaultSupabaseEnv(): Record<string, string | undefined> {
   // bundles. Passing process.env as an object prevents that build-time rewrite.
   return {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY,
@@ -302,10 +301,10 @@ export function isSupabaseConfigured(
   env: Record<string, string | undefined> = defaultSupabaseEnv()
 ): boolean {
   const url = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL || "";
-  const key = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || "";
+  const key = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || "";
   if (!url || !key) return false;
   if (url.includes("your-project")) return false;
-  if (key.includes("your-anon") || key.includes("your-publishable")) return false;
+  if (key.includes("your-anon")) return false;
   return true;
 }
 
@@ -315,8 +314,7 @@ export function configFromEnv(
   if (!isSupabaseConfigured(env)) return null;
   return {
     url: (env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL)!,
-    // Supabase publishable keys are safe for browser use and supersede legacy anon JWT keys.
-    anonKey: (env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY)!,
+    anonKey: (env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY)!,
     serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
   };
 }
