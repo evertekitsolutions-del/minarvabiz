@@ -1,0 +1,94 @@
+name: Staging Security + Performance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      staging_url:
+        description: "Optional deployed HTTPS staging URL. When omitted, only the isolated CI staging server is tested."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  ci-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MINARVA_MODE: "demo"
+      NEXT_PUBLIC_MINARVA_MODE: "demo"
+      NEXT_PUBLIC_REQUIRE_AUTH: "false"
+      STAGING_BASE_URL: "http://127.0.0.1:3010"
+      ALLOW_HTTP_LOCALHOST: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.0
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify staging quality workflow contract
+        run: node scripts/staging-quality-workflow-smoke.mjs
+      - name: Build isolated production-like staging web
+        run: pnpm --filter @minarvabiz/web build
+      - name: Start isolated staging server
+        shell: bash
+        run: |
+          set -e
+          nohup pnpm --filter @minarvabiz/web exec next start -p 3010 > /tmp/minarva-staging.log 2>&1 &
+          echo $! > /tmp/minarva-staging.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3010/login >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/minarva-staging.log || true
+          exit 1
+      - name: Security-header runtime smoke
+        run: node scripts/deployed-security-smoke.mjs
+      - name: Dynamic application security tests
+        run: node scripts/staging-dast.mjs
+      - name: Performance baseline
+        run: node scripts/performance-baseline.mjs
+      - name: Capture staging diagnostics
+        if: failure()
+        shell: bash
+        run: cat /tmp/minarva-staging.log || true
+      - name: Stop staging server
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/minarva-staging.pid ]; then kill "$(cat /tmp/minarva-staging.pid)" 2>/dev/null || true; fi
+
+  deployed-staging:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.staging_url != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      STAGING_BASE_URL: ${{ inputs.staging_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+      - name: Require deployed HTTPS staging
+        shell: bash
+        run: |
+          case "$STAGING_BASE_URL" in
+            https://*) ;;
+            *) echo "staging_url must use HTTPS"; exit 1 ;;
+          esac
+      - name: Deployed security-header smoke
+        run: node scripts/deployed-security-smoke.mjs
+      - name: Deployed staging DAST
+        run: node scripts/staging-dast.mjs
+      - name: Deployed performance baseline
+        run: node scripts/performance-baseline.mjs
