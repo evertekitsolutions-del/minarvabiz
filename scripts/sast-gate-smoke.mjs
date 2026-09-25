@@ -12,7 +12,7 @@ assert.match(workflow, /push:[\s\S]*branches:\s*\[main\]/);
 assert.match(workflow, /permissions:\s*\n\s+contents:\s+read/);
 assert.match(workflow, /semgrep==1\.162\.0/);
 assert.match(workflow, /semgrep scan/);
-assert.ok(workflow.includes("--config=p/default"));
+assert.ok(workflow.includes("--config=p/nodejs"));
 assert.match(workflow, /--error/);
 assert.match(workflow, /--metrics=off/);
 assert.match(workflow, /--exclude=node_modules/);
