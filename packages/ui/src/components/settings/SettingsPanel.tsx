@@ -6,7 +6,7 @@ export interface SettingsPanelProps {
   profile: { shopName: string; address: string; phone: string; email: string; gstin: string; receiptFooter: string; currency: string };
   tax: { enableGst: boolean; defaultRatePercent: number };
   backup: { enabled: boolean; intervalHours: number; retentionCount: number; destinationPath: string };
-  printing: { defaultInvoicePaper: "a4" | "thermal"; thermalWidthMm: 58 | 80; a4PrinterName: string; thermalPrinterName: string; silentDesktopPrint: boolean };
+  printing: { defaultInvoicePaper: "a4" | "thermal"; thermalWidthMm: 58 | 80; a4PrinterName: string; thermalPrinterName: string; labelPrinterName: string; labelWidthMm: number; labelHeightMm: number; silentDesktopPrint: boolean };
   onSaveProfile: (patch: Partial<SettingsPanelProps["profile"]>) => void;
   onSaveTax: (patch: Partial<SettingsPanelProps["tax"]>) => void;
   onSaveBackup: (patch: Partial<SettingsPanelProps["backup"]>) => void;
@@ -44,7 +44,7 @@ type DesktopDiagnosticsApi = {
   chooseBackupDirectory: () => Promise<string | null>;
   getLicenseState: () => Promise<{ status: string; plan: string | null; edition: string | null; daysRemaining: number | null; graceDaysRemaining: number | null; reason?: string }>;
   listPrinters?: () => Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>;
-  printHtml?: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal"; thermalWidthMm?: number }) => Promise<{ ok: boolean; error?: string }>;
+  printHtml?: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal" | "label"; thermalWidthMm?: number; labelWidthMm?: number; labelHeightMm?: number; silent?: boolean }) => Promise<{ ok: boolean; error?: string }>;
   checkForUpdates?: () => Promise<{ status: "disabled" | "up_to_date" | "available" | "error"; currentVersion: string; version?: string; publishedAt?: string; notes?: string; error?: string }>;
   downloadUpdate?: () => Promise<{ ok: boolean; version?: string; installerPath?: string; error?: string }>;
   installUpdate?: () => Promise<{ ok: boolean; version?: string; backupPath?: string; error?: string }>;
@@ -148,7 +148,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
 <style>body{font-family:system-ui,sans-serif;padding:18px}h1{font-size:18px;margin:0 0 8px}p{font-size:12px;margin:4px 0}</style>
 </head><body><h1>Minarva Biz Printer Test</h1><p>Printer: ${deviceName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p><p>Paper: ${paper === "thermal" ? `${draftPrinting.thermalWidthMm} mm thermal` : "A4"}</p><p>${new Date().toLocaleString()}</p></body></html>`;
     try {
-      const result = await api.printHtml({ html, deviceName, paper, thermalWidthMm: draftPrinting.thermalWidthMm });
+      const result = await api.printHtml({ html, deviceName, paper, thermalWidthMm: draftPrinting.thermalWidthMm, silent: true });
       if (!result.ok) {
         setPrintTestState("error");
         setPrintTestMessage(result.error || "The printer rejected the test page.");
@@ -159,6 +159,41 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
     } catch (error) {
       setPrintTestState("error");
       setPrintTestMessage(error instanceof Error ? error.message : "Unable to print the test page.");
+    }
+  }
+
+  async function testLabelPrinter() {
+    const api = getDiagnosticsApi();
+    if (!api?.printHtml) {
+      setPrintTestState("error");
+      setPrintTestMessage("Label printer testing is available only in the Windows desktop edition.");
+      return;
+    }
+    const deviceName = draftPrinting.labelPrinterName || draftPrinting.thermalPrinterName;
+    if (!deviceName) {
+      setPrintTestState("error");
+      setPrintTestMessage("Select a label printer (or thermal printer fallback) before running a label test.");
+      return;
+    }
+    setPrintTestState("working");
+    setPrintTestMessage("Sending barcode label test to the selected printer…");
+    const width = Math.max(20, Math.min(120, Number(draftPrinting.labelWidthMm) || 50));
+    const height = Math.max(15, Math.min(150, Number(draftPrinting.labelHeightMm) || 30));
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Minarva Biz Label Test</title>
+<style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif}.label{width:${width}mm;height:${height}mm;padding:2mm;text-align:center;overflow:hidden}.name{font-size:11px;font-weight:700}.bars{height:12mm;margin:1mm 0;background:repeating-linear-gradient(90deg,#000 0,#000 1px,#fff 1px,#fff 3px)}.code{font-size:9px;letter-spacing:1px}</style>
+</head><body><div class="label"><div class="name">Minarva Biz Label Test</div><div class="bars"></div><div class="code">2900000000000</div></div></body></html>`;
+    try {
+      const result = await api.printHtml({ html, deviceName, paper: "label", labelWidthMm: width, labelHeightMm: height, silent: true });
+      if (!result.ok) {
+        setPrintTestState("error");
+        setPrintTestMessage(result.error || "The label printer rejected the test page.");
+        return;
+      }
+      setPrintTestState("done");
+      setPrintTestMessage(`Test label sent successfully to ${deviceName}.`);
+    } catch (error) {
+      setPrintTestState("error");
+      setPrintTestMessage(error instanceof Error ? error.message : "Unable to print the label test.");
     }
   }
 
@@ -256,18 +291,24 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
       <FormField label="Default GST rate (%)"><input className={inputClass} type="number" min="0" max="100" step="0.01" value={draftTax.defaultRatePercent} onChange={e => setDraftTax({ ...draftTax, defaultRatePercent: Number(e.target.value) || 0 })} /></FormField>
     </div><div className="mt-5 flex justify-end"><Button onClick={() => onSaveTax(draftTax)}>Save tax settings</Button></div></section>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div><h3 className="text-lg font-semibold text-slate-900">Printer settings</h3><p className="mt-1 text-sm text-slate-500">Choose default invoice paper and, in the Windows app, bind A4 and thermal printers for direct printing.</p></div>
+      <div><h3 className="text-lg font-semibold text-slate-900">Printer settings</h3><p className="mt-1 text-sm text-slate-500">Choose invoice, thermal and barcode-label printers. Desktop printing uses the native Windows print bridge, so bills and labels are not blocked by popup security.</p></div>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <FormField label="Default invoice paper"><select className={selectClass} value={draftPrinting.defaultInvoicePaper} onChange={e => setDraftPrinting({ ...draftPrinting, defaultInvoicePaper: e.target.value as "a4" | "thermal" })}><option value="a4">A4</option><option value="thermal">Thermal</option></select></FormField>
         <FormField label="Thermal receipt width"><select className={selectClass} value={draftPrinting.thermalWidthMm} onChange={e => setDraftPrinting({ ...draftPrinting, thermalWidthMm: Number(e.target.value) === 58 ? 58 : 80 })}><option value={80}>80 mm</option><option value={58}>58 mm</option></select></FormField>
-        <FormField label="A4 printer"><select className={selectClass} value={draftPrinting.a4PrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, a4PrinterName: e.target.value })}><option value="">Use system print dialog/default printer</option>{printers.map(p => <option key={`a4-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
-        <FormField label="Thermal printer"><select className={selectClass} value={draftPrinting.thermalPrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, thermalPrinterName: e.target.value })}><option value="">Use system print dialog/default printer</option>{printers.map(p => <option key={`th-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
-        <FormField label="Windows direct print"><select className={selectClass} value={draftPrinting.silentDesktopPrint ? "yes" : "no"} onChange={e => setDraftPrinting({ ...draftPrinting, silentDesktopPrint: e.target.value === "yes" })}><option value="no">Show print dialog</option><option value="yes">Direct print to selected printer</option></select></FormField>
+        <FormField label="A4 printer"><select className={selectClass} value={draftPrinting.a4PrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, a4PrinterName: e.target.value })}><option value="">Use Windows print dialog/default printer</option>{printers.map(p => <option key={`a4-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
+        <FormField label="Thermal printer"><select className={selectClass} value={draftPrinting.thermalPrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, thermalPrinterName: e.target.value })}><option value="">Use Windows print dialog/default printer</option>{printers.map(p => <option key={`th-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
+        <FormField label="Barcode label printer"><select className={selectClass} value={draftPrinting.labelPrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, labelPrinterName: e.target.value })}><option value="">Use thermal printer / Windows dialog</option>{printers.map(p => <option key={`label-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Label width (mm)"><input className={inputClass} type="number" min="20" max="120" value={draftPrinting.labelWidthMm} onChange={e => setDraftPrinting({ ...draftPrinting, labelWidthMm: Math.max(20, Math.min(120, Number(e.target.value) || 50)) })} /></FormField>
+          <FormField label="Label height (mm)"><input className={inputClass} type="number" min="15" max="150" value={draftPrinting.labelHeightMm} onChange={e => setDraftPrinting({ ...draftPrinting, labelHeightMm: Math.max(15, Math.min(150, Number(e.target.value) || 30)) })} /></FormField>
+        </div>
+        <FormField label="Windows direct print"><select className={selectClass} value={draftPrinting.silentDesktopPrint ? "yes" : "no"} onChange={e => setDraftPrinting({ ...draftPrinting, silentDesktopPrint: e.target.value === "yes" })}><option value="no">Show Windows print dialog</option><option value="yes">Direct print to selected printer</option></select></FormField>
       </div>
       <div className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">{printers.length ? `${printers.length} Windows printer(s) detected.` : "Printer discovery is available in the Windows desktop edition. Web browsers use their normal print dialog."}</div>
       {printTestMessage && <p className={`mt-3 text-sm ${printTestState === "error" ? "text-red-600" : printTestState === "done" ? "text-emerald-600" : "text-slate-600"}`}>{printTestMessage}</p>}
       <div className="mt-5 flex flex-wrap justify-end gap-2">
-        <Button type="button" variant="outline" onClick={testSelectedPrinter} disabled={printTestState === "working"}>{printTestState === "working" ? "Printing test…" : "Test selected printer"}</Button>
+        <Button type="button" variant="outline" onClick={testSelectedPrinter} disabled={printTestState === "working"}>{printTestState === "working" ? "Printing test…" : "Test invoice printer"}</Button>
+        <Button type="button" variant="outline" onClick={testLabelPrinter} disabled={printTestState === "working"}>Test label printer</Button>
         <Button onClick={() => onSavePrinting(draftPrinting)}>Save printer settings</Button>
       </div>
     </section>
