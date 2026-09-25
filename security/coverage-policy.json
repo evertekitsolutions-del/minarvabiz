@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "baseBranch": "main",
-  "overallLineMinimum": 0,
+  "overallLineMinimum": 69.3,
   "changedLineMinimum": 80,
   "targetPrefixes": [
     "packages/business-logic/src/",
