@@ -136,7 +136,7 @@ async function run() {
 
     await navigate(
       ws,
-      "/reset-password?access_token=valid-e2e-access-token&refresh_token=query-secret&keep=1#access_token=hash-token&refresh_token=hash-secret&type=recovery",
+      "/reset-password?access_token=query-secret&refresh_token=query-refresh-secret&keep=1#access_token=valid-e2e-access-token&refresh_token=hash-secret&type=recovery",
     );
     await waitFor(ws, `location.pathname==="/reset-password" && !location.href.includes("access_token") && !location.href.includes("refresh_token")`, "recovery URL secret scrubbing");
     const sanitized = String(await evalIn(ws, "location.href"));
