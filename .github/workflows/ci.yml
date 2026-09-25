@@ -268,6 +268,8 @@ jobs:
           node packages/database/src/__tests__/sqlite-backup.test.mjs
           node packages/database/src/__tests__/desktop-sqlite-flow.test.mjs
       - run: pnpm --filter @minarvabiz/business-logic typecheck
+      - name: Run deterministic property/fuzz invariants
+        run: node packages/business-logic/src/__tests__/property-fuzz-invariants.test.mjs
       - run: pnpm --filter @minarvabiz/sync typecheck
       - name: Run Supabase pull cursor regression
         run: node packages/sync/src/__tests__/supabase-pull-cursors.test.mjs
