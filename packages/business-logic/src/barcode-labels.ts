@@ -7,6 +7,8 @@ import type { Product } from "@minarvabiz/types";
 import { getShopProfile } from "./shop-profile";
 import { formatMoney } from "@minarvabiz/utils";
 import { escapeHtml } from "./html";
+import { getPrintSettings } from "./print-settings";
+import { tryDesktopPrintHtml } from "./desktop-print";
 
 const L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
 const G = ["0100111","0110011","0011011","0100001","0011101","0111001","0000101","0010001","0001001","0010111"];
@@ -62,11 +64,15 @@ function barcodeSvg(code: string): string {
 
 export function buildBarcodeLabelHtml(
   product: Product,
-  opts?: { copies?: number; categoryName?: string | null }
+  opts?: { copies?: number; categoryName?: string | null; autoPrint?: boolean; labelWidthMm?: number; labelHeightMm?: number }
 ): string {
   const shop = getShopProfile();
+  const settings = getPrintSettings();
   const copies = Math.max(1, Math.min(100, opts?.copies ?? 1));
   const categoryName = opts?.categoryName ?? null;
+  const autoPrint = opts?.autoPrint !== false;
+  const labelWidthMm = Math.max(20, Math.min(120, Number(opts?.labelWidthMm ?? settings.labelWidthMm)));
+  const labelHeightMm = Math.max(15, Math.min(150, Number(opts?.labelHeightMm ?? settings.labelHeightMm)));
   const blocks = Array.from({ length: copies })
     .map(() => `
   <div class="label">
@@ -82,7 +88,7 @@ export function buildBarcodeLabelHtml(
 <style>
   *{box-sizing:border-box}
   body{font-family:system-ui,Arial,sans-serif;margin:0;color:#111}
-  .label{width:50mm;min-height:30mm;padding:2.5mm;text-align:center;border:1px dashed #ccc;page-break-after:always;overflow:hidden}
+  .label{width:${labelWidthMm}mm;height:${labelHeightMm}mm;padding:2.5mm;text-align:center;border:1px dashed #ccc;page-break-after:always;overflow:hidden}
   .shop{font-size:9px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .name{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .meta,.sku{font-size:8px;min-height:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -90,14 +96,33 @@ export function buildBarcodeLabelHtml(
   .missing{font-size:10px;color:#b91c1c}.price{font-size:12px;font-weight:800}
   @media print{.label{border:none}}
 </style></head><body>${blocks}
-<script>window.onload=function(){window.print()}</script></body></html>`;
+${autoPrint ? "<script>window.onload=function(){window.print()}</script>" : ""}</body></html>`;
 }
 
 export function printBarcodeLabels(product: Product, copies = 1, categoryName?: string | null) {
   if (typeof window === "undefined") return;
+  const settings = getPrintSettings();
+  const directHtml = buildBarcodeLabelHtml(product, {
+    copies,
+    categoryName,
+    autoPrint: false,
+    labelWidthMm: settings.labelWidthMm,
+    labelHeightMm: settings.labelHeightMm,
+  });
+  if (tryDesktopPrintHtml(directHtml, "label", {
+    labelWidthMm: settings.labelWidthMm,
+    labelHeightMm: settings.labelHeightMm,
+  })) return;
+
   const w = window.open("", "_blank", "width=500,height=700");
   if (!w) return;
-  w.document.write(buildBarcodeLabelHtml(product, { copies, categoryName }));
+  w.document.write(buildBarcodeLabelHtml(product, {
+    copies,
+    categoryName,
+    autoPrint: true,
+    labelWidthMm: settings.labelWidthMm,
+    labelHeightMm: settings.labelHeightMm,
+  }));
   w.document.close();
 }
 
