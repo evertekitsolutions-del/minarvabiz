@@ -120,18 +120,24 @@ function configureDesktopSession() {
 async function printHtmlDocument(input: {
   html: string;
   deviceName?: string | null;
-  paper?: "a4" | "thermal";
+  paper?: "a4" | "thermal" | "label";
   thermalWidthMm?: number;
+  labelWidthMm?: number;
+  labelHeightMm?: number;
+  silent?: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
   const html = String(input?.html || "");
   if (!html || html.length > MAX_PRINT_HTML_CHARS) return { ok: false, error: "Print document is empty or too large" };
   const deviceName = String(input?.deviceName || "").trim();
   if (deviceName.length > MAX_PRINTER_DEVICE_CHARS) return { ok: false, error: "Printer name is too long" };
-  const paper = input?.paper === "thermal" ? "thermal" : "a4";
+  const paper = input?.paper === "thermal" ? "thermal" : input?.paper === "label" ? "label" : "a4";
   const thermalWidthMm = input?.thermalWidthMm === 58 ? 58 : 80;
+  const labelWidthMm = Math.max(20, Math.min(120, Number(input?.labelWidthMm) || 50));
+  const labelHeightMm = Math.max(15, Math.min(150, Number(input?.labelHeightMm) || 30));
+  const silent = Boolean(input?.silent && deviceName);
   const win = new BrowserWindow({
-    show: false,
-    width: paper === "thermal" ? 460 : 900,
+    show: !silent,
+    width: paper === "a4" ? 900 : 520,
     height: 900,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, webviewTag: false, allowRunningInsecureContent: false, javascript: false },
   });
@@ -146,12 +152,16 @@ async function printHtmlDocument(input: {
     }
     await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
     const pageSize: Electron.WebContentsPrintOptions["pageSize"] =
-      paper === "a4" ? "A4" : { width: thermalWidthMm * 1000, height: 297000 };
+      paper === "a4"
+        ? "A4"
+        : paper === "label"
+          ? { width: labelWidthMm * 1000, height: labelHeightMm * 1000 }
+          : { width: thermalWidthMm * 1000, height: 297000 };
     return await new Promise((resolve) => {
       win.webContents.print({
-        silent: true,
+        silent,
         printBackground: true,
-        deviceName: deviceName || undefined,
+        deviceName: silent ? deviceName || undefined : undefined,
         margins: { marginType: "none" },
         pageSize,
       }, (success, failureReason) => {
@@ -337,7 +347,7 @@ ipcMain.handle("printer:list", async (event) => {
     isDefault: Boolean(printer.isDefault),
   }));
 });
-ipcMain.handle("printer:printHtml", async (event, input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal"; thermalWidthMm?: number }) => {
+ipcMain.handle("printer:printHtml", async (event, input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal" | "label"; thermalWidthMm?: number; labelWidthMm?: number; labelHeightMm?: number; silent?: boolean }) => {
   requireTrustedRenderer(event);
   return printHtmlDocument(input);
 });

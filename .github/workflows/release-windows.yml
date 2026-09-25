@@ -3,8 +3,8 @@ name: Release Windows
 on:
   workflow_dispatch:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -16,6 +16,7 @@ jobs:
       MINARVA_RUNTIME_SMOKE: "1"
       MINARVA_COMMERCIAL_RELEASE: "1"
       VITE_LICENSE_API_URL: "https://minarvabiz-license-admin.onrender.com"
+      MINARVA_UPDATE_MANIFEST_URL: "https://minarvabiz-license-admin.onrender.com/api/update/manifest"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
@@ -26,6 +27,12 @@ jobs:
 
       - name: Fetch production license public key
         run: node scripts/fetch-license-public-key.mjs
+
+      - name: Configure secure update verification key
+        shell: pwsh
+        run: |
+          if ("$env:MINARVA_LICENSE_PUBLIC_KEY_HEX" -notmatch '^[0-9a-fA-F]{64}$') { throw "Production public key is unavailable for secure updates." }
+          "MINARVA_UPDATE_PUBLIC_KEY_HEX=$env:MINARVA_LICENSE_PUBLIC_KEY_HEX" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Validate production licensing configuration
         shell: pwsh

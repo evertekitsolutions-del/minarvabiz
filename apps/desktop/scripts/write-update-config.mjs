@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const manifestUrl = String(process.env.MINARVA_UPDATE_MANIFEST_URL || "").trim();
-const publicKeyHex = String(process.env.MINARVA_UPDATE_PUBLIC_KEY_HEX || "")
+const publicKeyHex = String(process.env.MINARVA_UPDATE_PUBLIC_KEY_HEX || process.env.MINARVA_LICENSE_PUBLIC_KEY_HEX || "")
   .replace(/^0x/i, "")
   .replace(/\s/g, "")
   .toLowerCase();

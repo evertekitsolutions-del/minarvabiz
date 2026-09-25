@@ -72,7 +72,7 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   pruneAutomaticBackups: (retention?: number) => ipcRenderer.invoke("backup:pruneAutomatic", retention) as Promise<boolean>,
   restoreBackup: () => ipcRenderer.invoke("backup:restoreFromFile") as Promise<NativeRestoreResult>,
   listPrinters: () => ipcRenderer.invoke("printer:list") as Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>,
-  printHtml: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal"; thermalWidthMm?: number }) => ipcRenderer.invoke("printer:printHtml", input) as Promise<{ ok: boolean; error?: string }>,
+  printHtml: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal" | "label"; thermalWidthMm?: number; labelWidthMm?: number; labelHeightMm?: number; silent?: boolean }) => ipcRenderer.invoke("printer:printHtml", input) as Promise<{ ok: boolean; error?: string }>,
   checkForUpdates: () => ipcRenderer.invoke("update:check") as Promise<UpdateCheckResult>,
   downloadUpdate: () => ipcRenderer.invoke("update:download") as Promise<UpdateDownloadResult>,
   installUpdate: () => ipcRenderer.invoke("update:install") as Promise<{ ok: boolean; version?: string; backupPath?: string; error?: string }>,
@@ -116,7 +116,7 @@ export type MinarvaDesktopApi = {
   pruneAutomaticBackups: (retention?: number) => Promise<boolean>;
   restoreBackup: () => Promise<NativeRestoreResult>;
   listPrinters: () => Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>;
-  printHtml: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal"; thermalWidthMm?: number }) => Promise<{ ok: boolean; error?: string }>;
+  printHtml: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal" | "label"; thermalWidthMm?: number; labelWidthMm?: number; labelHeightMm?: number; silent?: boolean }) => Promise<{ ok: boolean; error?: string }>;
   checkForUpdates: () => Promise<UpdateCheckResult>;
   downloadUpdate: () => Promise<UpdateDownloadResult>;
   installUpdate: () => Promise<{ ok: boolean; version?: string; backupPath?: string; error?: string }>;

@@ -1,4 +1,4 @@
-import { createPrivateKey, createPublicKey } from "node:crypto";
+import { createPrivateKey, createPublicKey, sign } from "node:crypto";
 
 const ED25519_PKCS8_PREFIX = Buffer.from("302e020100300506032b657004220420", "hex");
 
@@ -29,4 +29,12 @@ export function publicKeyHex(): string {
   const privateKey = createPrivateKey({ key: pkcs8, format: "der", type: "pkcs8" });
   const spki = createPublicKey(privateKey).export({ format: "der", type: "spki" });
   return Buffer.from(spki).subarray(-32).toString("hex");
+}
+
+
+export function signTextBase64Url(message: string): string {
+  const seed = signingSeed();
+  const pkcs8 = Buffer.concat([ED25519_PKCS8_PREFIX, seed]);
+  const privateKey = createPrivateKey({ key: pkcs8, format: "der", type: "pkcs8" });
+  return sign(null, Buffer.from(message, "utf8"), privateKey).toString("base64url");
 }
