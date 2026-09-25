@@ -20,6 +20,11 @@ function isPlaceholder(value: string) {
   );
 }
 
+const publicSupabaseCompatEnv =
+  publicSupabaseKey && !isPlaceholder(publicSupabaseKey)
+    ? { NEXT_PUBLIC_SUPABASE_ANON_KEY: publicSupabaseKey }
+    : {};
+
 if (
   process.env.NODE_ENV === "production" &&
   !isExplicitDemo &&
@@ -49,8 +54,9 @@ const nextConfig: NextConfig = {
     ? {
         NEXT_PUBLIC_MINARVA_MODE: "demo",
         NEXT_PUBLIC_REQUIRE_AUTH: "false",
+        ...publicSupabaseCompatEnv,
       }
-    : {},
+    : publicSupabaseCompatEnv,
   transpilePackages: [
     "@minarvabiz/ui",
     "@minarvabiz/types",
