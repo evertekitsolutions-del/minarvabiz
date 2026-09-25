@@ -1,6 +1,6 @@
 # Minarva Biz — Customer Delivery Runbook
 
-Product version: **1.0.4**
+Product version: **1.0.5**
 
 ## 1. Build a customer installer
 
@@ -13,7 +13,7 @@ $env:MINARVA_COMMERCIAL_RELEASE="1"
 powershell -ExecutionPolicy Bypass -File .\build-windows.ps1
 ```
 
-The installer is produced as `apps/desktop/release/MinarvaBiz-Setup-1.0.4.exe` for this release. The build helper discovers the current `MinarvaBiz-Setup-*.exe`, so it does not depend on a stale hard-coded version.
+The installer is produced as `apps/desktop/release/MinarvaBiz-Setup-1.0.5.exe` for this release. The build helper discovers the current `MinarvaBiz-Setup-*.exe`, so it does not depend on a stale hard-coded version.
 
 For a clean Windows build machine, `BUILD-WINDOWS.cmd` runs the Windows build helper and installs the required Electron/Vite packaging tools.
 

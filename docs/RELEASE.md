@@ -1,8 +1,8 @@
-# Release readiness — Minarva Biz 1.0.4
+# Release readiness — Minarva Biz 1.0.5
 
 ## Step 25 final release governance
 
-Minarva Biz 1.0.4 is in the final controlled-release audit. The pre-Step-25 repository baseline is `fd24b61`; the authoritative release baseline becomes the Step 25 merge commit after all required post-merge workflows are green.
+Minarva Biz 1.0.5 is the current controlled Windows release. The pre-Step-25 repository baseline is `fd24b61`; the authoritative release baseline becomes the Step 25 merge commit after all required post-merge workflows are green.
 
 Do not reuse older freeze SHAs as the delivery baseline. A release tag must point to the approved Step 25-or-later commit and the delivered Windows installer must be preserved with its executable SHA-256.
 

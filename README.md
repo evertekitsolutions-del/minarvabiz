@@ -9,7 +9,7 @@ Built for real boutique, tailoring, and laundry shops.
 
 ## Current commercial release
 
-**Version 1.0.4** — current customer-delivery candidate. Automated Windows install/click/deep-smoke gates pass; physical customer-PC UAT remains the final delivery gate.
+**Version 1.0.5** — current customer-delivery release. Automated Windows install/click/deep-smoke gates pass; physical customer-PC UAT remains the final delivery gate.
 
 ## Editions
 
@@ -94,7 +94,7 @@ Or use the helper:
 powershell -ExecutionPolicy Bypass -File .\build-windows.ps1
 ```
 
-For the current release the installer is `apps/desktop/release/MinarvaBiz-Setup-1.0.4.exe`. The helper script is version-independent and discovers `MinarvaBiz-Setup-*.exe` automatically.
+For the current release the installer is `apps/desktop/release/MinarvaBiz-Setup-1.0.5.exe`. The helper script is version-independent and discovers `MinarvaBiz-Setup-*.exe` automatically.
 
 ## Verification commands
 
@@ -117,7 +117,7 @@ node scripts/smoke.mjs
 Required production configuration includes:
 
 - `NODE_ENV=production`
-- `APP_VERSION=1.0.4`
+- `APP_VERSION=1.0.5`
 - `APP_EDITION=online` or `hybrid`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — browser-safe anon key
