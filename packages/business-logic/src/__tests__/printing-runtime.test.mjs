@@ -1,20 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { registerHooks } from "node:module";
+import { register } from "node:module";
 
-registerHooks({
-  resolve(specifier, context, nextResolve) {
-    try {
-      return nextResolve(specifier, context);
-    } catch (error) {
-      if (specifier.startsWith(".") && !/\.[A-Za-z0-9]+$/.test(specifier)) {
-        return nextResolve(`${specifier}.ts`, context);
-      }
-      throw error;
-    }
-  },
-});
+register(new URL("../../../../scripts/ts-source-test-loader.mjs", import.meta.url));
 
 const {
   buildBarcodeLabelHtml,
