@@ -3,8 +3,10 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { provisionOnlineCustomer } from "../actions";
+import { canProvisionOnlineCustomer } from "./model";
+import type { AdminRole } from "./types";
 
-export function useOnlineCustomerProvisioning() {
+export function useOnlineCustomerProvisioning(role: AdminRole) {
   const router = useRouter();
   const [shopName, setShopName] = React.useState("");
   const [adminName, setAdminName] = React.useState("");
@@ -45,5 +47,6 @@ export function useOnlineCustomerProvisioning() {
     onAdminNameChange: setAdminName,
     onAdminEmailChange: setAdminEmail,
     onProvision: () => void provision(),
+    canProvision: canProvisionOnlineCustomer(role),
   };
 }
