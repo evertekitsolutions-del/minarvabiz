@@ -1,0 +1,36 @@
+name: Final Release Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clean-room-audit:
+    name: Clean-room final release audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.0
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Source hotspot profile and budget
+        run: node scripts/hotspot-profile.mjs --check
+      - name: Mapper extraction regression
+        run: node --experimental-strip-types scripts/web-data-source-mappers-smoke.mjs
+      - name: Web typecheck after hotspot refactor
+        run: pnpm --filter @minarvabiz/web exec tsc --noEmit
+      - name: Clean-room release governance audit
+        run: node scripts/final-release-audit.mjs
