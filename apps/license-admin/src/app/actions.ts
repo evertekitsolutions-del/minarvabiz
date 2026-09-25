@@ -136,6 +136,42 @@ async function storeAdminMfaState(state: Parameters<typeof createAdminMfaPending
 
 function dbConfig() { const base = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, ""); const key = String(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || ""); return base && key ? { base: `${base}/rest/v1`, key } : null; }
 async function dbFetch(path: string, init: RequestInit = {}) { const cfg = dbConfig(); if (!cfg) return { ok: false, data: null as any, error: "Supabase is not configured." }; const headers = new Headers(init.headers); headers.set("apikey", cfg.key); headers.set("content-type", "application/json"); if (cfg.key.startsWith("sb_secret_")) headers.delete("authorization"); else headers.set("authorization", `Bearer ${cfg.key}`); const response = await fetch(`${cfg.base}${path}`, { ...init, headers, cache: "no-store" }); const data = await response.json().catch(() => null); return { ok: response.ok, data, error: response.ok ? null : (data?.message || data?.error || `Database request failed (${response.status})`) }; }
+
+function authAdminConfig() {
+  const base = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, "");
+  const key = String(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  return base && key ? { base: `${base}/auth/v1`, key } : null;
+}
+
+async function authAdminFetch(path: string, init: RequestInit = {}) {
+  const cfg = authAdminConfig();
+  if (!cfg) return { ok: false, data: null as any, error: "Supabase Auth admin is not configured." };
+  const requestHeaders = new Headers(init.headers);
+  requestHeaders.set("apikey", cfg.key);
+  requestHeaders.set("content-type", "application/json");
+  if (cfg.key.startsWith("sb_secret_")) requestHeaders.delete("authorization");
+  else requestHeaders.set("authorization", `Bearer ${cfg.key}`);
+  try {
+    const response = await fetch(`${cfg.base}${path}`, { ...init, headers: requestHeaders, cache: "no-store" });
+    const data = await response.json().catch(() => null);
+    return {
+      ok: response.ok,
+      data,
+      error: response.ok ? null : String(data?.msg || data?.message || data?.error_description || data?.error || response.statusText || "Auth admin request failed"),
+    };
+  } catch (error) {
+    return { ok: false, data: null as any, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function onlineAppBaseUrl() {
+  return String(
+    process.env.MINARVA_ONLINE_APP_URL ||
+      process.env.NEXT_PUBLIC_MINARVA_ONLINE_APP_URL ||
+      "https://minarvabiz-steel.vercel.app",
+  ).replace(/\/$/, "");
+}
+
 function clean(value: unknown, max = 2000) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
 
 export async function loginAdmin(email: string, password: string) {
@@ -344,6 +380,107 @@ export async function listLicenses() {
   if (!activationResult.ok) return { ok: false, error: activationResult.error || "License activation lookup failed.", identity, licenses: [] as any[] };
   const activations = Array.isArray(activationResult.data) ? activationResult.data : [];
   return { ok: true, identity, licenses: licenses.map((license) => ({ ...license, activations: activations.filter((a) => a.license_id === license.id).map((a) => ({ ...a, device_id: String(a.device_id).slice(0, 8) + "…" })) })) };
+}
+
+export async function provisionOnlineCustomer(input: {
+  shopName: string;
+  adminName: string;
+  email: string;
+}) {
+  const shopName = clean(input.shopName, 200);
+  const adminName = clean(input.adminName, 200);
+  const email = clean(input.email, 320).toLowerCase();
+
+  if (!shopName || !adminName || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: "Enter a valid shop name, administrator name and email address." };
+  }
+
+  const authorized = await authorizeAdmin(
+    "customer.provision",
+    "online_customer.provision",
+    "online_customer",
+    null,
+    { shopName, email },
+  );
+  if (!authorized.ok) return { ok: false, error: authorized.error };
+  const session = authorized.session;
+
+  const redirectTo = `${onlineAppBaseUrl()}/reset-password`;
+  const invited = await authAdminFetch(
+    `/invite?redirect_to=${encodeURIComponent(redirectTo)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+        data: {
+          full_name: adminName,
+          shop_name: shopName,
+        },
+      }),
+    },
+  );
+
+  if (!invited.ok) {
+    await recordAdminAudit(session, "online_customer.provision", "error", "online_customer", null, {
+      shopName,
+      email,
+      message: String(invited.error || "Customer invitation failed").slice(0, 500),
+    });
+    return { ok: false, error: invited.error || "Customer invitation failed." };
+  }
+
+  const invitedUser = invited.data?.user || invited.data;
+  const userId = clean(invitedUser?.id, 80);
+  if (!userId) {
+    await recordAdminAudit(session, "online_customer.provision", "error", "online_customer", null, {
+      shopName,
+      email,
+      message: "Supabase invite response did not include a user ID.",
+    });
+    return { ok: false, error: "Invitation was accepted by Supabase, but the new user ID was not returned." };
+  }
+
+  const membership = await dbFetch(
+    `/organization_members?select=org_id&user_id=eq.${encodeURIComponent(userId)}&limit=1`,
+  );
+  const orgId = clean(Array.isArray(membership.data) ? membership.data[0]?.org_id : "", 80);
+  const branch = orgId
+    ? await dbFetch(
+        `/branches?select=id%2Cname%2Ccode%2Cis_headquarters&org_id=eq.${encodeURIComponent(orgId)}&is_headquarters=eq.true&limit=1`,
+      )
+    : { ok: false, data: null as any, error: "Organization membership was not created." };
+  const hasHeadquarters = Array.isArray(branch.data) && branch.data.length > 0;
+
+  if (!membership.ok || !orgId || !branch.ok || !hasHeadquarters) {
+    await recordAdminAudit(session, "online_customer.provision", "error", "online_customer", userId, {
+      shopName,
+      email,
+      userId,
+      orgId: orgId || null,
+      message: "Invitation sent, but tenant bootstrap verification failed.",
+    });
+    return {
+      ok: false,
+      partial: true,
+      error: "Invitation was sent, but tenant/bootstrap verification failed. Do not invite the same email again until this account is reviewed.",
+    };
+  }
+
+  await recordAdminAudit(session, "online_customer.provision", "success", "online_customer", userId, {
+    shopName,
+    email,
+    userId,
+    orgId,
+    redirectTo,
+  });
+
+  return {
+    ok: true,
+    email,
+    userId,
+    orgId,
+    message: `Online customer created. Invitation sent to ${email}.`,
+  };
 }
 
 export async function createCommercialLicense(input: { customerName: string; plan: LicensePlan; edition: Edition; expiresAt?: string | null; activationLimit?: number; featureOverrides?: Partial<LicenseFeatures> }) {
