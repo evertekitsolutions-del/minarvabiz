@@ -28,6 +28,8 @@ jobs:
         run: node scripts/sbom-license-workflow-smoke.mjs
       - name: Verify repository licensing and compliance declaration
         run: node scripts/compliance-declaration-smoke.mjs
+      - name: Verify coverage reporting and ratchet workflow contract
+        run: node scripts/coverage-workflow-smoke.mjs
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @minarvabiz/utils typecheck
       - name: Verify cross-app security header baseline
