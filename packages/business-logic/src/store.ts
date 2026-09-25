@@ -332,13 +332,7 @@ export function transferStock(input: {
   notes?: string | null;
 }): { transfer: StockTransferRecord | null; errors: string[] } {
   assertPermission("inventory.adjust");
-  void input;
-  return {
-    transfer: null,
-    errors: [
-      "Direct product-to-product stock transfer is disabled. Use Warehouse Management to create a controlled transfer request, then approve, dispatch and receive it.",
-    ],
-  };
+  void input; return { transfer: null, errors: ["Direct product-to-product stock transfer is disabled. Use Warehouse Management to create a controlled transfer request, then approve, dispatch and receive it."] };
 }
 
 export function listHeldSales(): HeldSale[] {
