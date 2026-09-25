@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "roots": ["apps", "packages", "scripts"],
+  "extensions": [".ts", ".tsx", ".js", ".mjs"],
+  "excludeSegments": ["node_modules", ".next", "dist", "release", "coverage"],
+  "maxFileBytes": 60000,
+  "maxFileLines": 1100,
+  "reportTop": 12
+}
