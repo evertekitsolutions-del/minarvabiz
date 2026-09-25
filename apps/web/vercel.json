@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
-  "buildCommand": "NEXT_PUBLIC_SUPABASE_URL=https://wmjgefbaliuwmaxyzxkq.supabase.co NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_5jIjE_KhGJD9k6GDkeo-Xw_riNs-BWG NEXT_PUBLIC_REQUIRE_AUTH=true NEXT_PUBLIC_MINARVA_MODE=production MINARVA_MODE=production APP_VERSION=1.0.5 APP_EDITION=online pnpm build",
+  "buildCommand": "node scripts/vercel-build.mjs",
   "installCommand": "pnpm install --frozen-lockfile --ignore-scripts",
   "outputDirectory": ".next",
   "$schema": "https://openapi.vercel.sh/vercel.json",
