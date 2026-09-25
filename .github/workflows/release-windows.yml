@@ -7,7 +7,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release-windows:
@@ -126,27 +126,3 @@ jobs:
           path: apps/desktop/release/*.exe
           if-no-files-found: error
           retention-days: 30
-
-
-      - name: Publish immutable GitHub release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $pkg = Get-Content -Raw "apps/desktop/package.json" | ConvertFrom-Json
-          $version = [string]$pkg.version
-          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Desktop version is not a stable semantic version." }
-          $tag = "v$version"
-          $installer = Get-ChildItem -Path apps/desktop/release -Filter "MinarvaBiz-Setup-$version.exe" -ErrorAction Stop | Select-Object -First 1
-          if (-not $installer) { throw "Versioned Windows installer was not found." }
-          $hash = (Get-FileHash -Path $installer.FullName -Algorithm SHA256).Hash.ToLower()
-          $checksum = "$($installer.FullName).sha256"
-          "$hash  $($installer.Name)" | Set-Content -NoNewline -Encoding ascii $checksum
-
-          gh release view $tag --repo "$env:GITHUB_REPOSITORY" *> $null
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "Release $tag already exists; preserving immutable published assets."
-            exit 0
-          }
-
-          gh release create $tag "$($installer.FullName)" "$checksum" --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "Minarva Biz $version" --notes "Stable Windows release $version. Installer SHA-256: $hash"
