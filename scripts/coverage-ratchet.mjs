@@ -99,18 +99,6 @@ for (const [file, lineNumbers] of changedLines) {
   const source = fs.existsSync(file) ? fs.readFileSync(file, "utf8").split(/\r?\n/) : [];
 
   for (const lineNumber of [...lineNumbers].sort((a, b) => a - b)) {
-    if (coverage?.has(lineNumber)) {
-      executableChanged += 1;
-      if ((coverage.get(lineNumber) ?? 0) > 0) coveredChanged += 1;
-      else uncovered.push(`${file}:${lineNumber}`);
-      continue;
-    }
-
-    if (coverage) {
-      // Node's coverage map omits non-executable source lines.
-      continue;
-    }
-
     const sourceLine = source[lineNumber - 1]?.trim() ?? "";
     if (
       !sourceLine ||
@@ -121,6 +109,18 @@ for (const [file, lineNumbers] of changedLines) {
       sourceLine === "}" ||
       sourceLine === "};"
     ) {
+      continue;
+    }
+
+    if (coverage?.has(lineNumber)) {
+      executableChanged += 1;
+      if ((coverage.get(lineNumber) ?? 0) > 0) coveredChanged += 1;
+      else uncovered.push(`${file}:${lineNumber}`);
+      continue;
+    }
+
+    if (coverage) {
+      // Node's coverage map omits non-executable source lines.
       continue;
     }
 
