@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 import { minarvaHttpSecurityHeaders } from "@minarvabiz/utils/security-headers";
 
 const publicSupabaseUrl = String(process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
-const publicSupabaseAnonKey = String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+const publicSupabaseKey = String(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
 const runtimeMode = String(
   process.env.NEXT_PUBLIC_MINARVA_MODE || process.env.MINARVA_MODE || "",
 ).trim().toLowerCase();
@@ -15,17 +15,23 @@ function isPlaceholder(value: string) {
     !normalized ||
     normalized.includes("your-project") ||
     normalized.includes("your-anon") ||
+    normalized.includes("your-publishable") ||
     normalized.includes("change-me")
   );
 }
 
+const publicSupabaseCompatEnv =
+  publicSupabaseKey && !isPlaceholder(publicSupabaseKey)
+    ? { NEXT_PUBLIC_SUPABASE_ANON_KEY: publicSupabaseKey }
+    : {};
+
 if (
   process.env.NODE_ENV === "production" &&
   !isExplicitDemo &&
-  (isPlaceholder(publicSupabaseUrl) || isPlaceholder(publicSupabaseAnonKey))
+  (isPlaceholder(publicSupabaseUrl) || isPlaceholder(publicSupabaseKey))
 ) {
   throw new Error(
-    "Production web build requires NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY. " +
+    "Production web build requires NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or legacy NEXT_PUBLIC_SUPABASE_ANON_KEY). " +
       "Configure them in the deployment environment; Minarva Biz does not fall back to hardcoded Supabase credentials.",
   );
 }
@@ -48,8 +54,9 @@ const nextConfig: NextConfig = {
     ? {
         NEXT_PUBLIC_MINARVA_MODE: "demo",
         NEXT_PUBLIC_REQUIRE_AUTH: "false",
+        ...publicSupabaseCompatEnv,
       }
-    : {},
+    : publicSupabaseCompatEnv,
   transpilePackages: [
     "@minarvabiz/ui",
     "@minarvabiz/types",

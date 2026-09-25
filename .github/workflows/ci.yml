@@ -40,7 +40,7 @@ jobs:
         run: |
           set -e
           set +e
-          output="$(env -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_SUPABASE_ANON_KEY \
+          output="$(env -u NEXT_PUBLIC_SUPABASE_URL -u NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY -u NEXT_PUBLIC_SUPABASE_ANON_KEY \
             MINARVA_MODE=production NEXT_PUBLIC_MINARVA_MODE=production \
             pnpm --filter @minarvabiz/web build 2>&1)"
           status=$?
@@ -49,11 +49,11 @@ jobs:
             echo "Production web build unexpectedly succeeded without Supabase env."
             exit 1
           fi
-          echo "$output" | grep -Fq "Production web build requires NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY"
+          echo "$output" | grep -Fq "Production web build requires NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or legacy NEXT_PUBLIC_SUPABASE_ANON_KEY)."
       - name: Build web with public Supabase env
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://ci-supabase.example
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-public-anon-key
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_test_key
         run: pnpm --filter @minarvabiz/web build
       - name: Verify main web nonce CSP source
         shell: bash
@@ -72,7 +72,7 @@ jobs:
         run: |
           set -e
           grep -RIlF 'https://ci-supabase.example' apps/web/.next/static/chunks >/dev/null
-          grep -RIlF 'ci-public-anon-key' apps/web/.next/static/chunks >/dev/null
+          grep -RIlF 'sb_publishable_ci_test_key' apps/web/.next/static/chunks >/dev/null
 
 
   web-ui-smoke:

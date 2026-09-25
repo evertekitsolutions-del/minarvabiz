@@ -17,10 +17,12 @@ const sharedSecurity = fs.readFileSync(
 assert.doesNotMatch(config, /wmjgefbaliuwmaxyzxkq/);
 assert.doesNotMatch(config, /sb_publishable_/);
 assert.match(config, /NEXT_PUBLIC_SUPABASE_URL/);
+assert.match(config, /NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY/);
 assert.match(config, /NEXT_PUBLIC_SUPABASE_ANON_KEY/);
-assert.match(
-  config,
-  /Production web build requires NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY/,
+assert.ok(
+  config.includes(
+    "Production web build requires NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or legacy NEXT_PUBLIC_SUPABASE_ANON_KEY).",
+  ),
 );
 assert.match(
   config,
