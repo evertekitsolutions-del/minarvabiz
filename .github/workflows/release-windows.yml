@@ -3,11 +3,11 @@ name: Release Windows
 on:
   workflow_dispatch:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   release-windows:
@@ -16,6 +16,7 @@ jobs:
       MINARVA_RUNTIME_SMOKE: "1"
       MINARVA_COMMERCIAL_RELEASE: "1"
       VITE_LICENSE_API_URL: "https://minarvabiz-license-admin.onrender.com"
+      MINARVA_UPDATE_MANIFEST_URL: "https://minarvabiz-license-admin.onrender.com/api/update/manifest"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
@@ -26,6 +27,104 @@ jobs:
 
       - name: Fetch production license public key
         run: node scripts/fetch-license-public-key.mjs
+
+      - name: Configure secure update verification key
+        shell: pwsh
+        run: |
+          if ("$env:MINARVA_LICENSE_PUBLIC_KEY_HEX" -notmatch '^[0-9a-fA-F]{64}
+        shell: pwsh
+        run: |
+          $key = "$env:MINARVA_LICENSE_PUBLIC_KEY_HEX".Trim()
+          $url = "$env:VITE_LICENSE_API_URL".Trim()
+          if ($key -notmatch '^[0-9a-fA-F]{64}$') { throw "MINARVA_LICENSE_PUBLIC_KEY_HEX must be exactly 64 hexadecimal characters." }
+          if (-not $url -or $url -notmatch '^https://') { throw "VITE_LICENSE_API_URL must be a non-empty HTTPS URL." }
+          Write-Host "PRODUCTION_LICENSE_KEY PASS: configured 64-hex public verification key."
+          Write-Host "LICENSE_API_URL PASS: configured HTTPS endpoint."
+
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Verify commercial fallback refusal
+        shell: pwsh
+        run: node scripts/verify-production-license-config.mjs
+
+      - name: Static production quality smoke
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "apps/desktop/build/icon.svg")) { throw "Branded desktop icon is missing." }
+          if (-not (Test-Path "apps/desktop/public/minarva-biz-icon.svg")) { throw "Branded renderer icon is missing." }
+          if (-not (Select-String -Path "apps/desktop/electron/main.ts" -Pattern 'Menu\.setApplicationMenu\(null\)' -Quiet)) { throw "Application menu removal is missing." }
+          if (-not (Select-String -Path "packages/ui/src/components/settings/SettingsPanel.tsx" -Pattern 'midnight|ocean|emerald|violet' -Quiet)) { throw "Theme configuration is missing." }
+          node scripts/quality-smoke.mjs
+      - run: pnpm --filter @minarvabiz/business-logic typecheck
+      - run: pnpm --filter @minarvabiz/ui typecheck
+      - run: pnpm --filter @minarvabiz/desktop typecheck
+      - run: pnpm --filter @minarvabiz/desktop run package:win
+
+      - name: Verify production installer
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
+          if (-not $installer) { throw "Windows installer was not produced." }
+          $hash = (Get-FileHash -Path $installer.FullName -Algorithm SHA256).Hash
+          Write-Host "Installer: $($installer.FullName)"
+          Write-Host "Installer SHA256: $hash"
+
+      - name: Installed runtime UAT smoke
+        shell: pwsh
+        run: |
+          $installRoot = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Release-UAT"
+          if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot }
+          New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
+          $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe -ErrorAction Stop | Select-Object -First 1
+          $installProc = Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
+          if ($installProc.ExitCode -ne 0) { throw "Windows installer exited with code $($installProc.ExitCode)." }
+          $exe = Join-Path $installRoot "Minarva Biz.exe"
+          if (-not (Test-Path $exe)) {
+            $exe = Get-ChildItem -Path $installRoot -Filter *.exe -Recurse -ErrorAction Stop | Where-Object { $_.Name -notlike "*Setup*.exe" } | Select-Object -First 1 | ForEach-Object FullName
+          }
+          if (-not $exe -or -not (Test-Path $exe)) { throw "Installed executable not found." }
+          $proc = Start-Process -FilePath $exe -PassThru
+          try {
+            $db = $null
+            for ($attempt = 1; $attempt -le 45 -and -not $db; $attempt++) {
+              Start-Sleep -Seconds 1
+              if ($proc.HasExited) { throw "Minarva Biz exited during production runtime smoke (exit code $($proc.ExitCode))." }
+              foreach ($root in @($env:APPDATA, $env:LOCALAPPDATA, $env:PROGRAMDATA) | Where-Object { $_ -and (Test-Path $_) }) {
+                $candidate = Get-ChildItem -Path $root -Filter "minarvabiz.db" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+                if ($candidate) { $db = $candidate; break }
+              }
+            }
+            if (-not $db) { throw "Production runtime smoke did not create minarvabiz.db." }
+            $bytes = [System.IO.File]::ReadAllBytes($db.FullName)
+            if ($bytes.Length -lt 16 -or [System.Text.Encoding]::ASCII.GetString($bytes, 0, 16) -ne "SQLite format 3`0") { throw "Invalid SQLite database at $($db.FullName)" }
+            $logs = @($env:APPDATA, $env:LOCALAPPDATA, $env:RUNNER_TEMP) | Where-Object { $_ -and (Test-Path $_) } | ForEach-Object { Get-ChildItem -Path $_ -Filter "runtime-smoke.log" -Recurse -File -ErrorAction SilentlyContinue } | Sort-Object FullName -Unique
+            if (-not ($logs | Select-String -Pattern 'bridge-ready=true')) { throw "Electron preload bridge was not confirmed in production runtime." }
+            if ($logs | Select-String -Pattern 'bridge-ready=false') { throw "Electron preload bridge reported failure in production runtime." }
+            Write-Host "Production runtime smoke PASS: process alive, SQLite valid, preload bridge confirmed."
+          } finally {
+            if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+          }
+
+      - name: Verify bundled production public key
+        shell: pwsh
+        run: |
+          $configPath = "apps/desktop/electron/license-config.ts"
+          if (-not (Test-Path $configPath)) { throw "Generated desktop license config is missing." }
+          $config = Get-Content -Raw $configPath
+          $expected = $env:MINARVA_LICENSE_PUBLIC_KEY_HEX.Trim().ToLower()
+          if ($config -notmatch [regex]::Escape($expected)) { throw "Bundled production public key does not match the configured GitHub secret." }
+          if ($config -match 'PRIVATE_KEY|LICENSE_PRIVATE_KEY|privateKey') { throw "Potential private-key content found in bundled license configuration." }
+          Write-Host "Bundled production public key verified."
+
+      - name: Upload release installer
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: minarvabiz-windows-installer
+          path: apps/desktop/release/*.exe
+          if-no-files-found: error
+          retention-days: 30
+) { throw "Production public key is unavailable for secure updates." }
+          "MINARVA_UPDATE_PUBLIC_KEY_HEX=$env:MINARVA_LICENSE_PUBLIC_KEY_HEX" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Validate production licensing configuration
         shell: pwsh
@@ -119,3 +218,27 @@ jobs:
           path: apps/desktop/release/*.exe
           if-no-files-found: error
           retention-days: 30
+
+
+      - name: Publish immutable GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $pkg = Get-Content -Raw "apps/desktop/package.json" | ConvertFrom-Json
+          $version = [string]$pkg.version
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Desktop version is not a stable semantic version." }
+          $tag = "v$version"
+          $installer = Get-ChildItem -Path apps/desktop/release -Filter "MinarvaBiz-Setup-$version.exe" -ErrorAction Stop | Select-Object -First 1
+          if (-not $installer) { throw "Versioned Windows installer was not found." }
+          $hash = (Get-FileHash -Path $installer.FullName -Algorithm SHA256).Hash.ToLower()
+          $checksum = "$($installer.FullName).sha256"
+          "$hash  $($installer.Name)" | Set-Content -NoNewline -Encoding ascii $checksum
+
+          gh release view $tag --repo "$env:GITHUB_REPOSITORY" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag already exists; preserving immutable published assets."
+            exit 0
+          }
+
+          gh release create $tag "$($installer.FullName)" "$checksum" --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "Minarva Biz $version" --notes "Stable Windows release $version. Installer SHA-256: $hash"
