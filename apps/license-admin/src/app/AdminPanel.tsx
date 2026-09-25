@@ -23,11 +23,7 @@ import { LicenseSummaryCard } from "./admin-panel/LicenseSummaryCard";
 import { OfflineActivationCard } from "./admin-panel/OfflineActivationCard";
 import { OnlineCustomerProvisionCard } from "./admin-panel/OnlineCustomerProvisionCard";
 import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerProvisioning";
-import {
-  canIssueLicense,
-  canManageLicenseStatus,
-  defaultFeatures,
-} from "./admin-panel/model";
+import { canIssueLicense, canManageLicenseStatus, defaultFeatures } from "./admin-panel/model";
 import type {
   AdminIdentityView,
   AuthStage,
@@ -41,7 +37,7 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ identity, initialLicenses }: AdminPanelProps) {
-  const router=useRouter();
+  const router = useRouter();
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
