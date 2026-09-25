@@ -154,6 +154,42 @@ assert.equal(engineA.outbox.stats().pending, 0);
 assert.equal(engineA.outbox.stats().synced, 1);
 assert.equal(server.rows("customers", ORG_A).length, 1, "queued write must reach own tenant after reconnect");
 assert.equal(server.rows("outbox_events", ORG_A).length, 1, "accepted cloud write must record synced outbox event");
+
+const updateEvent = {
+  id: "ea000000-0000-0000-0000-000000000002",
+  aggregateType: "customers",
+  aggregateId: customerA.id,
+  eventType: "update",
+  payload: { ...customerA, name: "Tenant A updated customer", version: 2, updatedAt: "2026-09-25T00:02:30.000Z" },
+  occurredAt: "2026-09-25T00:02:30.000Z",
+  deviceId: DEVICE_A,
+  sequence: 2,
+  status: "pending",
+  attempts: 0,
+  lastError: null,
+};
+const updated = await adapterA.push([updateEvent]);
+assert.deepEqual(updated.accepted, [updateEvent.id], "duplicate insert must fall back to tenant-scoped update");
+assert.equal(server.rows("customers", ORG_A)[0].name, "Tenant A updated customer");
+
+const deleteEvent = {
+  id: "ea000000-0000-0000-0000-000000000003",
+  aggregateType: "customers",
+  aggregateId: customerA.id,
+  eventType: "delete",
+  payload: { ...customerA, version: 3, updatedAt: "2026-09-25T00:02:45.000Z" },
+  occurredAt: "2026-09-25T00:02:45.000Z",
+  deviceId: DEVICE_A,
+  sequence: 3,
+  status: "pending",
+  attempts: 0,
+  lastError: null,
+};
+const deleted = await adapterA.push([deleteEvent]);
+assert.deepEqual(deleted.accepted, [deleteEvent.id], "tenant-scoped soft delete must be accepted");
+assert.ok(server.rows("customers", ORG_A)[0].deleted_at, "delete push must soft-delete the own-tenant row");
+assert.equal(server.rows("outbox_events", ORG_A).length, 3, "each accepted mutation must have one remote outbox acknowledgement");
+
 assert.equal(
   localA.get("customers", "cb000000-0000-0000-0000-000000000001"),
   null,
