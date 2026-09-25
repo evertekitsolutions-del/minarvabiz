@@ -13,6 +13,7 @@ const route = read("apps/license-admin/src/app/api/update/manifest/route.ts");
 const signing = read("apps/license-admin/src/lib/signing-key.ts");
 const deep = read(".github/workflows/windows-deep-smoke.yml");
 const release = read(".github/workflows/release-windows.yml");
+const publisher = read(".github/workflows/publish-windows-release.yml");
 const pkg = JSON.parse(read("apps/desktop/package.json"));
 
 assert.equal(pkg.version, "1.0.5");
@@ -26,7 +27,9 @@ assert.match(route, /MinarvaBiz-Setup-/);
 assert.match(signing, /signTextBase64Url/);
 assert.match(deep, /MINARVA_UPDATE_MANIFEST_URL/);
 assert.match(release, /MINARVA_UPDATE_MANIFEST_URL/);
-assert.match(release, /gh release create/);
-assert.match(release, /contents: write/);
+assert.match(release, /contents: read/);
+assert.match(publisher, /workflow_run/);
+assert.match(publisher, /contents: write/);
+assert.match(publisher, /gh release create/);
 
 console.log("Secure Windows update channel contract PASS");
