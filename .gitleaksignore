@@ -3,8 +3,9 @@
 # The hardcoded fallback is no longer present in the current tree.
 184b7f813cdbff326f42bf6eea83b05bd34bcd1d:apps/web/next.config.ts:generic-api-key:11
 
-# Triaged Supabase publishable-key false positives from the Vercel production fix.
-# sb_publishable_* is intentionally browser-public and remains protected by RLS; no secret/service-role key is ignored.
+# Supabase sb_publishable_* keys are intentionally browser-public credentials.
+# These fingerprints cover the known v1.0.5 Vercel build-config commits and current tree only.
+# Elevated sb_secret_* / service-role credentials remain fully scanned and are never allowlisted.
 529c7f23bc16bad099dfa423197bca11431faee2:apps/web/vercel.json:generic-api-key:3
 e1ad8e4c4009ac0a0f52e2d0593a2e032c184b4d:apps/web/scripts/vercel-build.mjs:generic-api-key:10
 1df5b7a2052d60498fbacd8b299e3ae42098d0f3:apps/web/scripts/vercel-build.mjs:generic-api-key:10
