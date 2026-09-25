@@ -201,6 +201,91 @@ jobs:
         run: |
           cat /tmp/minarva-license-admin.log || true
 
+  web-security-recovery-e2e:
+    needs: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_REQUIRE_AUTH: "true"
+      MINARVA_MODE: "production"
+      NEXT_PUBLIC_MINARVA_MODE: "production"
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-public-anon-key"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.0
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build authenticated production web
+        run: pnpm --filter @minarvabiz/web build
+      - name: Start deterministic Supabase auth/RLS mock
+        shell: bash
+        run: |
+          set -e
+          nohup node scripts/mock-supabase-auth-server.mjs > /tmp/minarva-mock-supabase.log 2>&1 &
+          echo $! > /tmp/minarva-mock-supabase.pid
+          for i in $(seq 1 40); do
+            if grep -Fq 'MOCK_SUPABASE_READY' /tmp/minarva-mock-supabase.log 2>/dev/null; then exit 0; fi
+            sleep 0.25
+          done
+          cat /tmp/minarva-mock-supabase.log || true
+          exit 1
+      - name: Start authenticated production web server
+        shell: bash
+        run: |
+          set -e
+          nohup pnpm --filter @minarvabiz/web exec next start -p 3000 > /tmp/minarva-web-security.log 2>&1 &
+          echo $! > /tmp/minarva-web-security.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3000/login >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/minarva-web-security.log || true
+          exit 1
+      - name: Launch headless Chrome for security E2E
+        shell: bash
+        run: |
+          set -e
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "Chrome/Chromium was not found on the GitHub runner."
+            exit 1
+          fi
+          nohup "$CHROME" --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage \
+            --remote-debugging-address=127.0.0.1 --remote-debugging-port=9224 \
+            --user-data-dir=/tmp/minarva-security-chrome http://127.0.0.1:3000/dashboard \
+            > /tmp/minarva-security-chrome.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:9224/json/list >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/minarva-security-chrome.log || true
+          exit 1
+      - name: Browser security-negative and recovery-path E2E
+        run: node scripts/web-security-recovery-e2e.mjs
+      - name: Capture browser security E2E diagnostics
+        if: always()
+        shell: bash
+        run: |
+          echo "=== Mock Supabase ==="
+          cat /tmp/minarva-mock-supabase.log || true
+          echo "=== Next.js ==="
+          cat /tmp/minarva-web-security.log || true
+          echo "=== Chrome ==="
+          cat /tmp/minarva-security-chrome.log || true
+      - name: Stop browser security E2E services
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/minarva-web-security.pid ]; then kill "$(cat /tmp/minarva-web-security.pid)" 2>/dev/null || true; fi
+          if [ -f /tmp/minarva-mock-supabase.pid ]; then kill "$(cat /tmp/minarva-mock-supabase.pid)" 2>/dev/null || true; fi
+
   desktop:
     runs-on: ubuntu-latest
     steps:
