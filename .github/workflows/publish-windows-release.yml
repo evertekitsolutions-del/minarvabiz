@@ -1,0 +1,57 @@
+name: Publish Windows Release
+
+on:
+  workflow_run:
+    workflows: ["Release Windows"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download verified Windows installer artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" --jq '.artifacts[] | select(.name=="minarvabiz-windows-installer") | .id' | head -n 1)"
+          test -n "$artifact_id"
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > release-artifact.zip
+          mkdir -p release-artifact
+          unzip -q release-artifact.zip -d release-artifact
+          installer="$(find release-artifact -type f -name 'MinarvaBiz-Setup-*.exe' | head -n 1)"
+          test -n "$installer"
+          cp "$installer" ./MinarvaBiz-Setup.exe
+          echo "INSTALLER_NAME=$(basename "$installer")" >> "$GITHUB_ENV"
+          echo "INSTALLER_PATH=$installer" >> "$GITHUB_ENV"
+
+      - name: Publish immutable stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${INSTALLER_NAME#MinarvaBiz-Setup-}"
+          version="${version%.exe}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          tag="v$version"
+          hash="$(sha256sum "$INSTALLER_PATH" | awk '{print tolower($1)}')"
+          checksum="$INSTALLER_PATH.sha256"
+          printf '%s  %s' "$hash" "$INSTALLER_NAME" > "$checksum"
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; preserving immutable published assets."
+            exit 0
+          fi
+
+          gh release create "$tag" "$INSTALLER_PATH" "$checksum"             --repo "$GITHUB_REPOSITORY"             --target "${{ github.event.workflow_run.head_sha }}"             --title "Minarva Biz $version"             --notes "Stable Windows release $version. Installer SHA-256: $hash"
