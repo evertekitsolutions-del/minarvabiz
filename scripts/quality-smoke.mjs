@@ -106,8 +106,8 @@ assert(phase10.includes('enqueueOutbox("production_workflows"') && phase10.inclu
 assert(phase10.includes("touchPersistence()"), "Phase-10 mutations must trigger persistence");
 assert(nav.includes("dashboard") && nav.includes("sales") && nav.includes("products") && nav.includes("laundry") && nav.includes("reports") && nav.includes("backup"), "Core navigation modules are missing");
 assert(workflow.includes("Guard against legacy JSON persistence") && workflow.includes("package:win") && workflow.includes("MINARVA_RUNTIME_SMOKE"), "CI desktop verification guards are incomplete");
-assert(workflow.includes("actions/checkout@v7") && workflow.includes("actions/setup-node@v7") && workflow.includes("pnpm/action-setup@v6") && workflow.includes("actions/upload-artifact@v6"), "CI action versions are incomplete");
-assert(releaseWorkflow.includes("actions/checkout@v7") && releaseWorkflow.includes("actions/setup-node@v7") && releaseWorkflow.includes("pnpm/action-setup@v6") && releaseWorkflow.includes("actions/upload-artifact@v6"), "Release action versions are incomplete");
+assert(/actions\/checkout@[0-9a-f]{40}/.test(workflow) && /actions\/setup-node@[0-9a-f]{40}/.test(workflow) && /pnpm\/action-setup@[0-9a-f]{40}/.test(workflow) && /actions\/upload-artifact@[0-9a-f]{40}/.test(workflow), "CI action SHA pins are incomplete");
+assert(/actions\/checkout@[0-9a-f]{40}/.test(releaseWorkflow) && /actions\/setup-node@[0-9a-f]{40}/.test(releaseWorkflow) && /pnpm\/action-setup@[0-9a-f]{40}/.test(releaseWorkflow) && /actions\/upload-artifact@[0-9a-f]{40}/.test(releaseWorkflow), "Release action SHA pins are incomplete");
 assert(releaseWorkflow.includes("MINARVA_RUNTIME_SMOKE") && releaseWorkflow.includes("MINARVA_LICENSE_PUBLIC_KEY_HEX"), "Release licensing/runtime verification is incomplete");
 assert(builder.includes("productName: Minarva Biz"), "Windows package must identify Minarva Biz");
 assert(activationMigration.includes("CREATE OR REPLACE FUNCTION public.activate_license_device") && activationMigration.includes("FOR UPDATE") && activationMigration.includes("activation_limit <> -1"), "Atomic activation migration is incomplete");
