@@ -7,6 +7,8 @@ import { formatMoney } from "@minarvabiz/utils";
 import { getShopProfile } from "./shop-profile";
 import { SERVICE_TYPE_LABELS } from "./orders";
 import { escapeHtml } from "./html";
+import { getPrintSettings } from "./print-settings";
+import { tryDesktopPrintHtml } from "./desktop-print";
 
 export function buildSaleReceiptText(
   sale: Sale,
@@ -47,9 +49,10 @@ export function buildSaleReceiptText(
 
 export function buildSaleReceiptHtml(
   sale: Sale,
-  opts?: { shopName?: string; address?: string; phone?: string }
+  opts?: { shopName?: string; address?: string; phone?: string; autoPrint?: boolean }
 ): string {
   const text = buildSaleReceiptText(sale, opts);
+  const autoPrint = opts?.autoPrint !== false;
   const escaped = escapeHtml(text);
   return `<!DOCTYPE html><html><head><title>${escapeHtml(sale.invoiceNumber)}</title>
 <style>
@@ -57,7 +60,7 @@ export function buildSaleReceiptHtml(
   pre { white-space: pre-wrap; }
   @media print { body { padding: 0; } }
 </style></head><body><pre>${escaped}</pre>
-<script>window.onload=function(){window.print();}</script>
+${autoPrint ? "<script>window.onload=function(){window.print();}</script>" : ""}
 </body></html>`;
 }
 
@@ -66,7 +69,10 @@ export function printSaleReceipt(
   opts?: { shopName?: string; address?: string; phone?: string }
 ): void {
   if (typeof window === "undefined") return;
-  const html = buildSaleReceiptHtml(sale, opts);
+  const paper = getPrintSettings().defaultInvoicePaper;
+  const directHtml = buildSaleReceiptHtml(sale, { ...opts, autoPrint: false });
+  if (tryDesktopPrintHtml(directHtml, paper)) return;
+  const html = buildSaleReceiptHtml(sale, { ...opts, autoPrint: true });
   const w = window.open("", "_blank", "width=400,height=600");
   if (!w) return;
   w.document.write(html);
@@ -97,13 +103,21 @@ export function buildOrderReceiptText(order: ServiceOrder): string {
   return lines.filter(Boolean).join("\n");
 }
 
-export function printOrderReceipt(order: ServiceOrder): void {
-  if (typeof window === "undefined") return;
+export function buildOrderReceiptHtml(order: ServiceOrder, opts?: { autoPrint?: boolean }): string {
   const text = buildOrderReceiptText(order);
   const escaped = escapeHtml(text);
-  const html = `<!DOCTYPE html><html><head><title>${escapeHtml(order.orderNumber)}</title>
+  const autoPrint = opts?.autoPrint !== false;
+  return `<!DOCTYPE html><html><head><title>${escapeHtml(order.orderNumber)}</title>
 <style>body{font-family:ui-monospace,monospace;font-size:12px;padding:16px}pre{white-space:pre-wrap}@media print{body{padding:0}}</style>
-</head><body><pre>${escaped}</pre><script>window.onload=function(){window.print();}</script></body></html>`;
+</head><body><pre>${escaped}</pre>${autoPrint ? "<script>window.onload=function(){window.print();}</script>" : ""}</body></html>`;
+}
+
+export function printOrderReceipt(order: ServiceOrder): void {
+  if (typeof window === "undefined") return;
+  const paper = getPrintSettings().defaultInvoicePaper;
+  const directHtml = buildOrderReceiptHtml(order, { autoPrint: false });
+  if (tryDesktopPrintHtml(directHtml, paper)) return;
+  const html = buildOrderReceiptHtml(order, { autoPrint: true });
   const w = window.open("", "_blank", "width=400,height=600");
   if (!w) return;
   w.document.write(html);
