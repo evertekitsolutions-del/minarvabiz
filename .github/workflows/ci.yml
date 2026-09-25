@@ -302,6 +302,43 @@ jobs:
       - name: Run backup restore schema smoke
         run: node scripts/sqlite-backup-schema-smoke.mjs
 
+  tenant-sync-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_PASSWORD: minarva_ci
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGPASSWORD: minarva_ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.0
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Run offline-online tenant sync integration
+        run: node packages/sync/src/__tests__/tenant-sync-integration.test.mjs
+      - name: Run real PostgreSQL RLS tenant-isolation integration
+        shell: bash
+        run: |
+          set -e
+          command -v psql
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/rls-tenant-integration.sql
+
   windows-package:
     runs-on: windows-latest
     env:

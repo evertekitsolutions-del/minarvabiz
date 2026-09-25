@@ -396,6 +396,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
           const payload = typeof ev.payload === "string" ? JSON.parse(ev.payload) : ev.payload;
           const table = ev.aggregateType;
           const row = remoteRow(table, ev.aggregateId, payload as Record<string, unknown>);
+          // Remote outbox acknowledgement is written only after the domain mutation succeeds.
           if (ev.eventType === "delete") {
             const r = await client.update(table, matchQuery(table, ev.aggregateId), {
               deleted_at: new Date().toISOString(),
@@ -412,7 +413,8 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
               accepted.push(ev.id);
             }
           }
-          await client.insert("outbox_events", {
+          if (!accepted.includes(ev.id)) continue;
+          const outboxResult = await client.insert("outbox_events", {
             id: ev.id,
             aggregate_type: ev.aggregateType,
             aggregate_id: ev.aggregateId,
@@ -424,6 +426,11 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
             status: "synced",
             attempts: 0,
           });
+          if (outboxResult.error) {
+            const acceptedIndex = accepted.indexOf(ev.id);
+            if (acceptedIndex >= 0) accepted.splice(acceptedIndex, 1);
+            rejected.push({ id: ev.id, error: `outbox acknowledgement failed: ${outboxResult.error}` });
+          }
         } catch (e) {
           rejected.push({ id: ev.id, error: e instanceof Error ? e.message : String(e) });
         }
@@ -448,6 +455,9 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
       for (const table of tables) {
         const cursor = pullCursorColumn(table);
         const res = await client.select(table, pullQuery(table, since));
+        if (res.error) {
+          throw new Error(`Supabase pull failed for ${table}: ${res.error}`);
+        }
         if (res.data) {
           for (const row of res.data) {
             const recordId = table === "production_workflows" ? String(row.order_id) : String(row.id);
@@ -474,6 +484,9 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         const saleIds = [...pulledSales.keys()];
         const q = `select=*&sale_id=in.(${saleIds.map(encodeURIComponent).join(",")})`;
         const res = await client.select("sale_items", q);
+        if (res.error) {
+          throw new Error(`Supabase pull failed for sale_items: ${res.error}`);
+        }
         if (res.data) {
           for (const row of res.data) {
             const saleId = String(row.sale_id);

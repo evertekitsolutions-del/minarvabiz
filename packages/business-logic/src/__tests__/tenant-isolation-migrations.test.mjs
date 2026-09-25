@@ -65,4 +65,16 @@ for (const group of migrations) {
   }
 }
 
+
+const tenantHelperFix = fs.readFileSync(
+  new URL("../../../../supabase/migrations/20260925_tenant_org_helper_uuid_fix.sql", import.meta.url),
+  "utf8"
+);
+assert.match(tenantHelperFix, /CREATE OR REPLACE FUNCTION private\.current_user_org_id\(\)/);
+assert.match(tenantHelperFix, /SELECT COUNT\(\*\)/);
+assert.match(tenantHelperFix, /ORDER BY org_id::text/);
+assert.match(tenantHelperFix, /LIMIT 1/);
+const tenantHelperExecutableSql = tenantHelperFix.replace(/--.*$/gm, "");
+assert.doesNotMatch(tenantHelperExecutableSql, /MIN\s*\(\s*org_id\s*\)/i);
+
 console.log("ERP tenant-isolation migration contract tests passed");
