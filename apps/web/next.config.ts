@@ -15,6 +15,7 @@ function isPlaceholder(value: string) {
     !normalized ||
     normalized.includes("your-project") ||
     normalized.includes("your-anon") ||
+    normalized.includes("your-publishable") ||
     normalized.includes("change-me")
   );
 }
