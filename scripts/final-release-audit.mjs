@@ -13,6 +13,7 @@ const requiredWorkflows = [
   "final-release-audit.yml",
   "licensing-smoke.yml",
   "release-windows.yml",
+  "publish-windows-release.yml",
   "sast.yml",
   "sbom-license.yml",
   "secret-scan.yml",
@@ -25,9 +26,21 @@ for (const workflow of requiredWorkflows) {
   const relative = path.join(".github", "workflows", workflow);
   assert.ok(exists(relative), `Missing required workflow: ${workflow}`);
   const source = read(relative);
-  assert.match(source, /^permissions:\s*\n\s+contents:\s+read/m, `${workflow}: contents must be read-only`);
-  assert.doesNotMatch(source, /permissions:\s*write-all/);
-  assert.doesNotMatch(source, /contents:\s*write/);
+  if (workflow === "publish-windows-release.yml") {
+    assert.match(source, /^permissions:\s*\n(?:\s+actions:\s+read\s*\n)?\s+contents:\s+write/m, "publisher: contents write must be explicit and narrowly scoped");
+    assert.match(source, /workflow_run:/);
+    assert.match(source, /workflows:\s*\["Release Windows"\]/);
+    assert.match(source, /workflow_run\.conclusion == 'success'/);
+    assert.match(source, /workflow_run\.event == 'push'/);
+    assert.match(source, /workflow_run\.head_branch == 'main'/);
+    assert.match(source, /gh release create/);
+    assert.doesNotMatch(source, /pull_request_target/);
+    assert.doesNotMatch(source, /permissions:\s*write-all/);
+  } else {
+    assert.match(source, /^permissions:\s*\n\s+contents:\s+read/m, `${workflow}: contents must be read-only`);
+    assert.doesNotMatch(source, /permissions:\s*write-all/);
+    assert.doesNotMatch(source, /contents:\s*write/);
+  }
 
   for (const match of source.matchAll(/uses:\s*([^\s#]+)@([^\s#]+)/g)) {
     const action = match[1];
