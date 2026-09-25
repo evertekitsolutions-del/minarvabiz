@@ -1,0 +1,72 @@
+name: Coverage Ratchet
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.0
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Verify coverage workflow contract
+        run: node scripts/coverage-workflow-smoke.mjs
+
+      - name: Install locked dependency graph
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Run core tests with Node coverage
+        shell: bash
+        run: |
+          set -e
+          rm -rf coverage
+          mkdir -p coverage
+          node --test --experimental-test-coverage \
+            --test-coverage-include="packages/business-logic/src/**/*.ts" \
+            --test-coverage-include="packages/billing/src/**/*.ts" \
+            --test-coverage-include="packages/utils/src/**/*.ts" \
+            --test-coverage-include="packages/sync/src/**/*.ts" \
+            --test-coverage-include="packages/database/src/**/*.ts" \
+            --test-coverage-exclude="**/__tests__/**" \
+            --test-reporter=spec \
+            --test-reporter=./scripts/coverage-json-reporter.mjs \
+            --test-reporter=lcov \
+            --test-reporter-destination=stdout \
+            --test-reporter-destination=coverage/coverage-summary.json \
+            --test-reporter-destination=coverage/lcov.info \
+            "packages/business-logic/src/__tests__/*.test.mjs" \
+            "packages/sync/src/__tests__/*.test.mjs" \
+            "packages/database/src/__tests__/*.test.mjs"
+
+      - name: Enforce coverage ratchet
+        env:
+          COVERAGE_BASE_REF: origin/main
+        run: node scripts/coverage-ratchet.mjs coverage/coverage-summary.json
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: minarvabiz-core-coverage
+          path: |
+            coverage/coverage-summary.json
+            coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 30
