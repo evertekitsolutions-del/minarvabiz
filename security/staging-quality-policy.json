@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "documentPaths": [
+    "/login",
+    "/dashboard",
+    "/forgot-password"
+  ],
+  "performance": {
+    "samplesPerPath": 4,
+    "warmupRequests": 1,
+    "maxP95TtfbMs": 3000,
+    "maxP95TotalMs": 8000,
+    "maxDocumentBytes": 2097152
+  },
+  "securityHeaders": {
+    "strictTransportSecurityMinAgeSeconds": 31536000,
+    "requireIncludeSubDomains": true,
+    "xFrameOptions": "DENY",
+    "xContentTypeOptions": "nosniff",
+    "referrerPolicy": "strict-origin-when-cross-origin",
+    "permissionsPolicy": "camera=(), microphone=(), geolocation=()"
+  }
+}
