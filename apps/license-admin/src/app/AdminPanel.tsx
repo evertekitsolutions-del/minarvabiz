@@ -59,13 +59,11 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
   const [features, setFeatures] = React.useState<LicenseFeatures>(() =>
     defaultFeatures("professional"),
   );
-
   const [offlineLicenseId, setOfflineLicenseId] = React.useState("");
   const [offlineDeviceId, setOfflineDeviceId] = React.useState("");
   const [lastToken, setLastToken] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
-
   React.useEffect(() => {
     setFeatures(defaultFeatures(plan));
   }, [plan]);
@@ -94,7 +92,6 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
     setAuthStage("mfa");
     setMessage("MFA is required. Enter the code from your authenticator.");
   }
-
   async function beginMfaEnrollment() {
     setBusy(true);
     setMessage(null);
@@ -110,7 +107,6 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
     setAuthStage("mfa");
     setMessage("Authenticator setup started. Add the account, then enter the current code.");
   }
-
   async function verifyMfa() {
     setBusy(true);
     setMessage(null);
@@ -254,8 +250,8 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
   }
 
   const onlineProvisioning = useOnlineCustomerProvisioning(identity.role);
-  const canIssue=canIssueLicense(identity.role);
-  const canManageStatus=canManageLicenseStatus(identity.role);
+  const canIssue = canIssueLicense(identity.role);
+  const canManageStatus = canManageLicenseStatus(identity.role);
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
