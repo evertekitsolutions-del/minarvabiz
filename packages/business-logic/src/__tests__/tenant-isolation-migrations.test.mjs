@@ -74,6 +74,7 @@ assert.match(tenantHelperFix, /CREATE OR REPLACE FUNCTION private\.current_user_
 assert.match(tenantHelperFix, /SELECT COUNT\(\*\)/);
 assert.match(tenantHelperFix, /ORDER BY org_id::text/);
 assert.match(tenantHelperFix, /LIMIT 1/);
-assert.doesNotMatch(tenantHelperFix, /MIN\s*\(\s*org_id\s*\)/i);
+const tenantHelperExecutableSql = tenantHelperFix.replace(/--.*$/gm, "");
+assert.doesNotMatch(tenantHelperExecutableSql, /MIN\s*\(\s*org_id\s*\)/i);
 
 console.log("ERP tenant-isolation migration contract tests passed");
