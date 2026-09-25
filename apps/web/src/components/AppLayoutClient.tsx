@@ -13,7 +13,7 @@ import {
   phase9Store,
   getRuntimeMode,
 } from "@minarvabiz/business-logic";
-import { hydrateStoresFromSupabase, supabaseHydrationDomainsForPath } from "@/lib/data-source";
+import { hydrateStoresFromSupabase, supabaseHydrationDomainsForPath, validateOnlineSession } from "@/lib/data-source";
 import { SetupBanner } from "@/components/SetupBanner";
 
 const requireAuthByDefault =
@@ -63,6 +63,14 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [userName, setUserName] = React.useState<string | undefined>();
   const [unreadNotifications, setUnreadNotifications] = React.useState(0);
+
+  const validateProtectedSession = React.useCallback(
+    (session: { token: string; user: { id: string } }) =>
+      getRuntimeMode() === "demo"
+        ? Promise.resolve(true)
+        : validateOnlineSession(session.token, session.user.id),
+    []
+  );
 
   const refreshNotificationCount = React.useCallback(() => {
     setUnreadNotifications(phase6Store.unreadNotificationCount());
@@ -120,7 +128,10 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const activeNav = pathToNav[pathname] ?? "dashboard";
 
   return (
-    <AuthGate requireAuth={requireAuthByDefault}>
+    <AuthGate
+      requireAuth={requireAuthByDefault}
+      validateSession={requireAuthByDefault ? validateProtectedSession : undefined}
+    >
       <ToastProvider>
         <ErrorBoundary>
           {searchOpen && searchResults.length > 0 && (

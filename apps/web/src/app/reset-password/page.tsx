@@ -6,9 +6,26 @@ import { updatePasswordFromRecovery } from "@/lib/data-source";
 
 function readRecoveryToken(): string {
   if (typeof window === "undefined") return "";
-  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  const query = new URLSearchParams(window.location.search);
-  return hash.get("access_token") || query.get("access_token") || "";
+
+  const url = new URL(window.location.href);
+  const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+  const query = new URLSearchParams(url.search);
+  const token = hash.get("access_token") || query.get("access_token") || "";
+
+  for (const key of ["access_token", "refresh_token", "provider_token", "provider_refresh_token"]) {
+    hash.delete(key);
+    query.delete(key);
+  }
+
+  const sanitizedSearch = query.toString();
+  const sanitizedHash = hash.toString();
+  const sanitized =
+    url.pathname +
+    (sanitizedSearch ? `?${sanitizedSearch}` : "") +
+    (sanitizedHash ? `#${sanitizedHash}` : "");
+  window.history.replaceState(null, "", sanitized);
+
+  return token;
 }
 
 export default function ResetPasswordPage() {

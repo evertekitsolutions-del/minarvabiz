@@ -38,32 +38,58 @@ export function AuthGate({
   children,
   requireAuth = false,
   loginPath = "/login",
+  validateSession,
 }: {
   children: React.ReactNode;
   requireAuth?: boolean;
   loginPath?: string;
+  validateSession?: (session: { token: string; user: SessionUser }) => boolean | Promise<boolean>;
 }) {
   const [ready, setReady] = React.useState(false);
   const [allowed, setAllowed] = React.useState(!requireAuth);
 
   React.useEffect(() => {
-    if (!requireAuth) {
-      setAllowed(true);
-      setReady(true);
-      return;
-    }
-    const session = getStoredSession();
-    if (session) {
-      setAllowed(true);
-      setReady(true);
-    } else {
+    let cancelled = false;
+
+    async function resolveAccess() {
+      if (!requireAuth) {
+        if (!cancelled) {
+          setAllowed(true);
+          setReady(true);
+        }
+        return;
+      }
+
+      const session = getStoredSession();
+      let valid = Boolean(session);
+      if (session && validateSession) {
+        try {
+          valid = await validateSession(session);
+        } catch {
+          valid = false;
+        }
+      }
+
+      if (cancelled) return;
+      if (valid) {
+        setAllowed(true);
+        setReady(true);
+        return;
+      }
+
+      clearStoredSession();
       setAllowed(false);
       setReady(true);
       if (typeof window !== "undefined") {
-        window.location.href = loginPath;
+        window.location.replace(loginPath);
       }
     }
-  }, [requireAuth, loginPath]);
+
+    void resolveAccess();
+    return () => {
+      cancelled = true;
+    };
+  }, [requireAuth, loginPath, validateSession]);
 
   if (!ready) {
     return (

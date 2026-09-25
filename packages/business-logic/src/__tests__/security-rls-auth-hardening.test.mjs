@@ -9,6 +9,14 @@ const appLayout = fs.readFileSync(
   new URL("../../../../apps/web/src/components/AppLayoutClient.tsx", import.meta.url),
   "utf8"
 );
+const authGate = fs.readFileSync(
+  new URL("../../../ui/src/components/auth/AuthGate.tsx", import.meta.url),
+  "utf8"
+);
+const dataSource = fs.readFileSync(
+  new URL("../../../../apps/web/src/lib/data-source.ts", import.meta.url),
+  "utf8"
+);
 
 assert.match(migration, /right\(policyname, 9\) = '_auth_all'/);
 assert.match(migration, /DROP POLICY IF EXISTS %I ON %I\.%I/);
@@ -26,7 +34,15 @@ assert.match(migration, /'sales','sale_items','payments','cash_register_sessions
 
 assert.match(appLayout, /process\.env\.NODE_ENV === "production"/);
 assert.match(appLayout, /process\.env\.NEXT_PUBLIC_REQUIRE_AUTH !== "false"/);
-assert.match(appLayout, /<AuthGate requireAuth=\{requireAuthByDefault\}>/);
+assert.match(appLayout, /<AuthGate[\s\S]*requireAuth=\{requireAuthByDefault\}[\s\S]*validateSession=\{requireAuthByDefault \? validateProtectedSession : undefined\}/);
+assert.match(appLayout, /validateOnlineSession\(session\.token, session\.user\.id\)/);
+assert.match(dataSource, /export async function validateOnlineSession\(accessToken: string, userId: string\)/);
+assert.match(dataSource, /\{ \.\.\.cfg, accessToken \}/);
+assert.match(dataSource, /"profiles"/);
+assert.match(authGate, /validateSession\?:/);
+assert.match(authGate, /valid = await validateSession\(session\)/);
+assert.match(authGate, /clearStoredSession\(\)/);
+assert.match(authGate, /window\.location\.replace\(loginPath\)/);
 assert.match(appLayout, /const runtimeMode = getRuntimeMode\(\)/);
 assert.ok(
   /if \(runtimeMode !== "demo"\) \{/.test(appLayout)

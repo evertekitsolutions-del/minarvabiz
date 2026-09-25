@@ -1084,6 +1084,17 @@ export async function hydrateStoresFromSupabase(
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : String(e) }; }
 }
 
+export async function validateOnlineSession(accessToken: string, userId: string) {
+  const cfg = configFromEnv();
+  if (!cfg || !accessToken || !userId) return false;
+  const res = await pgSelect<Record<string, unknown>>(
+    { ...cfg, accessToken },
+    "profiles",
+    `select=id&id=eq.${encodeURIComponent(userId)}&limit=1`
+  );
+  return !res.error && String(res.data?.[0]?.id || "") === userId;
+}
+
 export async function supabaseLogin(email: string, password: string) {
   const cfg = configFromEnv(); if (!cfg) return { ok: false as const, error: "Supabase not configured" };
   const res = await authSignIn(cfg, email, password); if (res.error || !res.data) return { ok: false as const, error: res.error?.message || "Login failed" };

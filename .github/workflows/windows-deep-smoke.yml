@@ -117,6 +117,25 @@ jobs:
         shell: pwsh
         run: node scripts/windows-populated-deep-smoke.mjs
 
+      - name: Electron security-negative and recovery-path E2E
+        shell: pwsh
+        run: node scripts/windows-security-recovery-smoke.mjs
+
+      - name: Verify Electron security denials reached the main-process guards
+        shell: pwsh
+        run: |
+          $roots = @($env:APPDATA, $env:LOCALAPPDATA, $env:RUNNER_TEMP) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+          $logs = @()
+          foreach ($root in $roots) {
+            $logs += Get-ChildItem -Path $root -Filter "runtime-smoke.log" -Recurse -File -ErrorAction SilentlyContinue
+          }
+          if (-not $logs) { throw "runtime-smoke.log was not found for Electron security assertions." }
+          $content = ($logs | Sort-Object FullName -Unique | Get-Content -Raw) -join "`n"
+          foreach ($needle in @("window-open-denied", "navigation-blocked", "permission-request-denied")) {
+            if ($content -notmatch [regex]::Escape($needle)) { throw "Expected Electron security guard log missing: $needle" }
+          }
+          Write-Host "Electron main-process security guard evidence PASS."
+
       - name: Cleanup app
         if: always()
         shell: pwsh
