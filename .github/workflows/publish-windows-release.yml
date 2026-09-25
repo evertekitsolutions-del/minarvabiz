@@ -55,3 +55,93 @@ jobs:
           fi
 
           gh release create "$tag" "$INSTALLER_PATH" "$checksum"             --repo "$GITHUB_REPOSITORY"             --target "${{ github.event.workflow_run.head_sha }}"             --title "Minarva Biz $version"             --notes "Stable Windows release $version. Installer SHA-256: $hash"
+
+
+      - name: Verify production signed update channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { createPublicKey, verify } = require("node:crypto");
+
+          const base = "https://minarvabiz-license-admin.onrender.com";
+          const releaseApi = "https://api.github.com/repos/evertekitsolutions-del/minarvabiz/releases/latest";
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+          function publicKeyFromRawHex(hex) {
+            if (!/^[0-9a-f]{64}$/i.test(hex)) throw new Error("invalid production public key");
+            const prefix = Buffer.from("302a300506032b6570032100", "hex");
+            return createPublicKey({ key: Buffer.concat([prefix, Buffer.from(hex, "hex")]), format: "der", type: "spki" });
+          }
+
+          async function fetchJson(url) {
+            const response = await fetch(url, {
+              headers: { accept: "application/json", "user-agent": "MinarvaBiz-Update-Channel-Smoke" },
+              cache: "no-store",
+            });
+            if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`);
+            return response.json();
+          }
+
+          async function verifyOnce() {
+            const [keyData, manifest, release] = await Promise.all([
+              fetchJson(`${base}/api/public-key`),
+              fetchJson(`${base}/api/update/manifest`),
+              fetchJson(releaseApi),
+            ]);
+
+            const rawKey = String(keyData.publicKeyHex || "").toLowerCase();
+            if (!/^[0-9a-f]{64}$/.test(rawKey)) throw new Error("production public key payload is invalid");
+
+            if (manifest.product !== "minarvabiz") throw new Error("manifest product mismatch");
+            if (!/^\d+\.\d+\.\d+$/.test(String(manifest.version || ""))) throw new Error("manifest version is invalid");
+            if (!/^[0-9a-f]{64}$/i.test(String(manifest.sha256 || ""))) throw new Error("manifest SHA-256 is invalid");
+            if (!String(manifest.installerUrl || "").startsWith("https://github.com/evertekitsolutions-del/minarvabiz/releases/download/")) {
+              throw new Error("manifest installer URL is not pinned to the trusted GitHub release path");
+            }
+            if (!Number.isFinite(new Date(manifest.publishedAt).getTime())) throw new Error("manifest publishedAt is invalid");
+
+            const expectedVersion = String(release.tag_name || "").replace(/^v/, "");
+            if (manifest.version !== expectedVersion) throw new Error(`manifest version ${manifest.version} does not match latest release ${expectedVersion}`);
+
+            const expectedAssetName = `MinarvaBiz-Setup-${expectedVersion}.exe`;
+            const asset = Array.isArray(release.assets) ? release.assets.find((item) => item.name === expectedAssetName) : null;
+            if (!asset) throw new Error("latest release installer asset is missing");
+            const releaseDigest = String(asset.digest || "").replace(/^sha256:/i, "").toLowerCase();
+            if (releaseDigest !== String(manifest.sha256).toLowerCase()) throw new Error("manifest SHA-256 does not match GitHub release digest");
+            if (String(asset.browser_download_url || "") !== manifest.installerUrl) throw new Error("manifest installer URL does not match GitHub release asset");
+
+            const canonical = [
+              "minarvabiz-update-v1",
+              manifest.product,
+              manifest.version,
+              manifest.installerUrl,
+              String(manifest.sha256).toLowerCase(),
+              manifest.publishedAt,
+            ].join("\n");
+            const signature = Buffer.from(String(manifest.signature || ""), "base64url");
+            if (!verify(null, Buffer.from(canonical, "utf8"), publicKeyFromRawHex(rawKey), signature)) {
+              throw new Error("manifest Ed25519 signature verification failed");
+            }
+
+            console.log(`PRODUCTION_UPDATE_CHANNEL PASS version=${manifest.version} sha256=${manifest.sha256}`);
+          }
+
+          (async () => {
+            let lastError;
+            for (let attempt = 1; attempt <= 30; attempt += 1) {
+              try {
+                await verifyOnce();
+                return;
+              } catch (error) {
+                lastError = error;
+                console.log(`Update channel not ready (attempt ${attempt}/30): ${error.message}`);
+                if (attempt < 30) await sleep(10_000);
+              }
+            }
+            throw lastError;
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
