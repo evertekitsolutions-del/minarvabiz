@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { register } from "node:module";
+
+register(new URL("../../../../scripts/ts-source-test-loader.mjs", import.meta.url));
 
 const printSettings = await import(new URL("../print-settings.ts", import.meta.url));
 const desktopPrint = await import(new URL("../desktop-print.ts", import.meta.url));
