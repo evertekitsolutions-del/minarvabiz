@@ -7,7 +7,16 @@
 4. Never claim tests/build/runtime verification without evidence.
 5. Keep this file aligned with the current delivery state and one clear next owner step.
 
-## Latest continuation audit — 2026-09-23
+## Current release state — 2026-09-25
+- Stable commercial release: **v1.0.5**
+- GitHub release target: `89d0268e6e48ab0c8e1d18b261235ea613e46433`
+- Release installer: `MinarvaBiz-Setup-1.0.5.exe`
+- Installer SHA-256: `ab5eb534a5a0c0a5098923f05ef68e407316975a54a75e83262d49a0b73c241b`
+- Production signed update-channel verification is present on current main `21bc53c18b86c99aed2abd3c390380f8d56587ee` (PR #136).
+- v1.0.4 references below are retained only where they document historical audit evidence; they are not the current customer-delivery version.
+- Next owner step: physical/customer-PC UAT must use **v1.0.5**.
+
+## Historical continuation audit — 2026-09-23
 - PR #81 merged into main as `1de0f3b198ff369efc06c530efc5afa8eef81835`.
 - Verified that exact merged-main code baseline with main-push workflows:
   - [CI 35886528870](https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/35886528870) — PASS (#864)
@@ -29,8 +38,8 @@
 ## Repository
 - `evertekitsolutions-del/minarvabiz`
 - Branch: `main`
-- Product version: **1.0.4**
-- Latest audited code main before this documentation update: `1de0f3b198ff369efc06c530efc5afa8eef81835`
+- Product version: **1.0.5**
+- Current main at v1.0.5 release-channel verification: `21bc53c18b86c99aed2abd3c390380f8d56587ee`
 
 ## Current architecture
 - Online: Next.js + authenticated Supabase/PostgREST
