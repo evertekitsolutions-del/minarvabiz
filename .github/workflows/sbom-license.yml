@@ -1,0 +1,59 @@
+name: SBOM + Dependency License Policy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  supply-chain-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.0
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Verify SBOM and license-policy workflow contract
+        run: node scripts/sbom-license-workflow-smoke.mjs
+
+      - name: Install locked dependency graph
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Enforce dependency-license policy
+        run: node scripts/dependency-license-policy.mjs --inventory-output artifacts/dependency-licenses.json
+
+      - name: Generate CycloneDX SBOM
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: artifacts/minarvabiz.cdx.json
+          syft-version: "v1.52.0"
+          dependency-snapshot: false
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Validate generated CycloneDX SBOM
+        run: node scripts/sbom-validate.mjs artifacts/minarvabiz.cdx.json
+
+      - name: Upload SBOM and license inventory
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: minarvabiz-sbom-license-inventory
+          path: |
+            artifacts/minarvabiz.cdx.json
+            artifacts/dependency-licenses.json
+          if-no-files-found: error
+          retention-days: 30
