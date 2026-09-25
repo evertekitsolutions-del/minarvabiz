@@ -63,7 +63,7 @@ export function WarehousePanel() {
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-semibold text-slate-900">Warehouse Management</h2>
-        <p className="mt-1 text-sm text-slate-500">Physical warehouses, bins/locations, stock allocation and controlled transfers.</p>
+        <p className="mt-1 text-sm text-slate-500">Physical warehouses, bins/locations, stock allocation and controlled transfers. Transfer lifecycle: request → approve → dispatch → receive.</p>
       </div>
 
       {message && (
@@ -130,7 +130,7 @@ export function WarehousePanel() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-sm font-semibold">Create stock transfer</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm font-semibold">Create transfer request</CardTitle></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
             <FormField label="Product"><select className={selectClass} value={transferForm.productId} onChange={(e) => setTransferForm({ ...transferForm, productId: e.target.value })}><option value="">Select product</option>{products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></FormField>
             <FormField label="Quantity"><input className={inputClass} type="number" min="0.001" step="0.001" value={transferForm.quantity} onChange={(e) => setTransferForm({ ...transferForm, quantity: e.target.value })} /></FormField>
@@ -144,9 +144,9 @@ export function WarehousePanel() {
                 destinationLocationId: transferForm.destinationLocationId,
                 quantity: Number(transferForm.quantity),
                 notes: transferForm.notes || null,
-              }), "Transfer draft created");
+              }), "Transfer request created — approval required before dispatch");
               if (ok) setTransferForm((v) => ({ ...v, quantity: "", notes: "" }));
-            }} disabled={locations.length < 2}>Create transfer</Button></div>
+            }} disabled={locations.length < 2}>Create request</Button></div>
           </CardContent>
         </Card>
       </div>
