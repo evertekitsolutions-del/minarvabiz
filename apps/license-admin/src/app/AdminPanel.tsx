@@ -41,7 +41,7 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ identity, initialLicenses }: AdminPanelProps) {
-  const router = useRouter();
+  const router=useRouter();
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -254,8 +254,8 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
   }
 
   const onlineProvisioning = useOnlineCustomerProvisioning(identity.role);
-  const canIssue = canIssueLicense(identity.role);
-  const canManageStatus = canManageLicenseStatus(identity.role);
+  const canIssue=canIssueLicense(identity.role);
+  const canManageStatus=canManageLicenseStatus(identity.role);
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
