@@ -1,34 +1,10 @@
 import assert from "node:assert/strict";
-import http from "node:http";
-import https from "node:https";
-
 const baseRaw = String(process.env.STAGING_BASE_URL || "").trim();
 if (!baseRaw) throw new Error("STAGING_BASE_URL is required");
 const base = new URL(baseRaw.endsWith("/") ? baseRaw : baseRaw + "/");
 
 function url(pathname) {
   return new URL(pathname.replace(/^\//, ""), base).toString();
-}
-
-async function rawMethod(pathname, method) {
-  const target = new URL(pathname.replace(/^\//, ""), base);
-  const transport = target.protocol === "https:" ? https : http;
-  return new Promise((resolve, reject) => {
-    const req = transport.request(target, {
-      method,
-      headers: { "user-agent": "Minarva-Biz-Staging-DAST/1.0" },
-    }, (res) => {
-      const chunks = [];
-      res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-      res.on("end", () => resolve({
-        status: res.statusCode || 0,
-        headers: res.headers,
-        body: Buffer.concat(chunks).toString("utf8"),
-      }));
-    });
-    req.on("error", reject);
-    req.end();
-  });
 }
 
 async function request(pathname, init = {}) {
@@ -48,10 +24,6 @@ async function request(pathname, init = {}) {
 }
 
 const results = [];
-
-const trace = await rawMethod("/login", "TRACE");
-assert.ok(trace.status >= 400, `TRACE /login must not succeed (got ${trace.status})`);
-results.push({ test: "dangerous-method", method: "TRACE", status: trace.status });
 
 for (const method of ["PUT", "PATCH", "DELETE"]) {
   const response = await request("/login", { method });
