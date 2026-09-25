@@ -13,6 +13,9 @@ assert.equal(adminRoleAllows("operator", "license.issue"), true);
 assert.equal(adminRoleAllows("operator", "license.offline_activate"), true);
 assert.equal(adminRoleAllows("operator", "license.status_manage"), false);
 assert.equal(adminRoleAllows("admin", "license.status_manage"), true);
+assert.equal(adminRoleAllows("viewer", "customer.provision"), false);
+assert.equal(adminRoleAllows("operator", "customer.provision"), true);
+assert.equal(adminRoleAllows("admin", "customer.provision"), true);
 
 const session = await readFile(new URL("../apps/license-admin/src/lib/admin-session.ts", import.meta.url), "utf8");
 assert.match(session, /role: AdminRole/);
