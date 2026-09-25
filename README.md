@@ -196,5 +196,13 @@ Multi-branch and API access are Enterprise features.
 
 ## License
 
-Proprietary — Evertek IT Solutions. All rights reserved.  
-Not open source. Commercial distribution under signed license only.
+Minarva Biz is proprietary commercial software owned by Evertek IT Solutions.
+Repository visibility does not grant an open-source license or redistribution
+rights.
+
+- [Proprietary software notice](LICENSE)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
+- [Repository compliance](docs/COMPLIANCE.md)
+
+Commercial product activation is separate from source-code rights; see
+[Licensing](docs/LICENSING.md).

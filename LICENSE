@@ -1,0 +1,31 @@
+MINARVA BIZ — PROPRIETARY SOFTWARE NOTICE
+
+Copyright © 2026 Evertek IT Solutions. All rights reserved.
+
+Minarva Biz source code, binaries, documentation, product-specific designs,
+configuration, and other original materials in this repository are proprietary
+to Evertek IT Solutions unless a file or component expressly states otherwise.
+
+Public visibility of this repository does not grant an open-source license or
+any permission to copy, modify, distribute, sublicense, sell, host, publish,
+or create derivative works from the proprietary Minarva Biz materials.
+
+Use, development, testing, deployment, distribution, and commercial licensing
+of Minarva Biz require authorization from Evertek IT Solutions and, where
+applicable, a separate written customer, reseller, contractor, or commercial
+license agreement. Product activation entitlements do not grant source-code
+rights.
+
+Third-party software is not relicensed by this notice. Third-party packages,
+libraries, runtimes, fonts, images, and other components remain governed by
+their respective copyright notices and license terms. See
+THIRD_PARTY_NOTICES.md and docs/COMPLIANCE.md for the repository compliance
+process and release obligations.
+
+Nothing in this notice grants rights to the Minarva Biz name, logos, branding,
+or other marks except as separately authorized in writing.
+
+To the extent permitted by applicable law, repository materials made available
+outside a separate written commercial agreement are provided without warranties.
+Any signed commercial agreement controls to the extent it conflicts with this
+repository notice.

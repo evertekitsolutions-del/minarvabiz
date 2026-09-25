@@ -26,6 +26,8 @@ jobs:
         run: node scripts/github-actions-hardening-smoke.mjs
       - name: Verify SBOM and dependency-license workflow contract
         run: node scripts/sbom-license-workflow-smoke.mjs
+      - name: Verify repository licensing and compliance declaration
+        run: node scripts/compliance-declaration-smoke.mjs
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @minarvabiz/utils typecheck
       - name: Verify cross-app security header baseline
