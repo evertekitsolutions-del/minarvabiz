@@ -23,7 +23,7 @@ jobs:
       - name: Run blocking Semgrep scan
         run: >
           semgrep scan
-          --config=p/default
+          --config=p/nodejs
           --error
           --metrics=off
           --exclude=node_modules
