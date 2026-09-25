@@ -42,6 +42,9 @@
       "@parcel/watcher",
       "sharp",
       "node-gyp"
-    ]
+    ],
+    "overrides": {
+      "postcss": "^8.5.18"
+    }
   }
 }

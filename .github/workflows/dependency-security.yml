@@ -1,0 +1,29 @@
+name: Dependency Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  production-audit:
+    name: Production Dependency Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.0
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Verify dependency security gate contract
+        run: node scripts/dependency-security-gate-smoke.mjs
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
