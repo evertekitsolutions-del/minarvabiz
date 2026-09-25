@@ -305,7 +305,7 @@ export function isSupabaseConfigured(
   const key = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || "";
   if (!url || !key) return false;
   if (url.includes("your-project")) return false;
-  if (key.includes("your-anon")) return false;
+  if (key.includes("your-anon") || key.includes("your-publishable")) return false;
   return true;
 }
 
