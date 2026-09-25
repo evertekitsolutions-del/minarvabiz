@@ -10,6 +10,7 @@ import {
   cancelAdminMfa,
   createCommercialLicense,
   createOfflineActivationPackage,
+  provisionOnlineCustomer,
   loginAdmin,
   loginEmergencyAdmin,
   logoutAdmin,
@@ -21,9 +22,11 @@ import { LicenseCreateCard } from "./admin-panel/LicenseCreateCard";
 import { LicenseRegistryCard } from "./admin-panel/LicenseRegistryCard";
 import { LicenseSummaryCard } from "./admin-panel/LicenseSummaryCard";
 import { OfflineActivationCard } from "./admin-panel/OfflineActivationCard";
+import { OnlineCustomerProvisionCard } from "./admin-panel/OnlineCustomerProvisionCard";
 import {
   canIssueLicense,
   canManageLicenseStatus,
+  canProvisionOnlineCustomer,
   defaultFeatures,
 } from "./admin-panel/model";
 import type {
@@ -48,6 +51,11 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
   const [mfaCode, setMfaCode] = React.useState("");
   const [mfaSecret, setMfaSecret] = React.useState("");
   const [mfaQrCode, setMfaQrCode] = React.useState("");
+
+  const [onlineShopName, setOnlineShopName] = React.useState("");
+  const [onlineAdminName, setOnlineAdminName] = React.useState("");
+  const [onlineAdminEmail, setOnlineAdminEmail] = React.useState("");
+  const [provisionMessage, setProvisionMessage] = React.useState<string | null>(null);
 
   const [customerName, setCustomerName] = React.useState("");
   const [plan, setPlan] = React.useState<LicensePlan>("professional");
@@ -148,6 +156,33 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
     }
 
     setEmergencyPassword("");
+    router.refresh();
+  }
+
+  async function provisionCustomer() {
+    if (!onlineShopName.trim() || !onlineAdminName.trim() || !onlineAdminEmail.trim()) {
+      setProvisionMessage("Shop name, administrator name and email are required.");
+      return;
+    }
+
+    setBusy(true);
+    setProvisionMessage(null);
+    const result = await provisionOnlineCustomer({
+      shopName: onlineShopName,
+      adminName: onlineAdminName,
+      email: onlineAdminEmail,
+    });
+    setBusy(false);
+
+    if (!result.ok) {
+      setProvisionMessage(result.error || "Online customer provisioning failed.");
+      return;
+    }
+
+    setProvisionMessage(result.message || "Online customer created and invitation sent.");
+    setOnlineShopName("");
+    setOnlineAdminName("");
+    setOnlineAdminEmail("");
     router.refresh();
   }
 
@@ -253,6 +288,7 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
 
   const canIssue = canIssueLicense(identity.role);
   const canManageStatus = canManageLicenseStatus(identity.role);
+  const canProvision = canProvisionOnlineCustomer(identity.role);
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
@@ -278,6 +314,18 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
+          <OnlineCustomerProvisionCard
+            shopName={onlineShopName}
+            adminName={onlineAdminName}
+            adminEmail={onlineAdminEmail}
+            busy={busy}
+            canProvision={canProvision}
+            message={provisionMessage}
+            onShopNameChange={setOnlineShopName}
+            onAdminNameChange={setOnlineAdminName}
+            onAdminEmailChange={setOnlineAdminEmail}
+            onProvision={() => void provisionCustomer()}
+          />
           <LicenseCreateCard
             customerName={customerName}
             plan={plan}
