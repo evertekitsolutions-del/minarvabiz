@@ -1,25 +1,40 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import {
+import { registerHooks } from "node:module";
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    try {
+      return nextResolve(specifier, context);
+    } catch (error) {
+      if (specifier.startsWith(".") && !/\.[A-Za-z0-9]+$/.test(specifier)) {
+        return nextResolve(`${specifier}.ts`, context);
+      }
+      throw error;
+    }
+  },
+});
+
+const {
   buildBarcodeLabelHtml,
   ean13CheckDigit,
   isValidEan13,
   printBarcodeLabels,
-} from "../barcode-labels.ts";
-import { tryDesktopPrintHtml } from "../desktop-print.ts";
-import { buildSaleInvoiceHtml, printSaleInvoice } from "../invoice.ts";
-import {
+} = await import("../barcode-labels.ts");
+const { tryDesktopPrintHtml } = await import("../desktop-print.ts");
+const { buildSaleInvoiceHtml, printSaleInvoice } = await import("../invoice.ts");
+const {
   getPrintSettings,
   hydratePrintSettings,
   updatePrintSettings,
-} from "../print-settings.ts";
-import {
+} = await import("../print-settings.ts");
+const {
   buildOrderReceiptHtml,
   buildSaleReceiptHtml,
   printOrderReceipt,
   printSaleReceipt,
-} from "../receipt.ts";
+} = await import("../receipt.ts");
 
 const iso = "2026-09-25T12:00:00.000Z";
 
