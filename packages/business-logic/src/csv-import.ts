@@ -2,6 +2,22 @@
 import type { Product } from "@minarvabiz/types";
 import * as store from "./store";
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export function parseProductCsv(text: string): {
   rows: Array<{ name: string; sku?: string; barcode?: string; cost?: number; price?: number; stock?: number; min?: number; unit?: string }>;
   errors: string[];
@@ -20,14 +36,15 @@ export function parseProductCsv(text: string): {
       errors.push(`Row ${i + 1}: empty name`);
       continue;
     }
+    const rowNumber = i + 1, finite = (raw: string | undefined, field: string) => { const value = raw?.trim() ?? ""; if (!value) return 0; const parsed = Number(value); if (!Number.isFinite(parsed)) { errors.push(`Row ${rowNumber}: ${field} must be a finite number`); return 0; } return parsed; };
     rows.push({
       name: cols[nameI],
       sku: idx("sku") >= 0 ? cols[idx("sku")] : undefined,
       barcode: idx("barcode") >= 0 ? cols[idx("barcode")] : undefined,
-      cost: idx("cost") >= 0 ? parseFloat(cols[idx("cost")]) || 0 : 0,
-      price: idx("price") >= 0 ? parseFloat(cols[idx("price")]) || 0 : 0,
-      stock: idx("stock") >= 0 ? parseFloat(cols[idx("stock")]) || 0 : 0,
-      min: idx("min") >= 0 ? parseFloat(cols[idx("min")]) || 0 : 0,
+      cost: idx("cost") >= 0 ? finite(cols[idx("cost")], "cost") : 0,
+      price: idx("price") >= 0 ? finite(cols[idx("price")], "price") : 0,
+      stock: idx("stock") >= 0 ? finite(cols[idx("stock")], "stock") : 0,
+      min: idx("min") >= 0 ? finite(cols[idx("min")], "min") : 0,
       unit: idx("unit") >= 0 ? cols[idx("unit")] : "pcs",
     });
   }

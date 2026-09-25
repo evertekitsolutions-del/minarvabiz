@@ -36,5 +36,10 @@ assert.match(ratchet, /coveredLinePercent/);
 assert.match(ratchet, /git/);
 assert.match(ratchet, /changedLineMinimum/);
 assert.match(ratchet, /file not exercised by coverage suite/);
+assert.ok(
+  ratchet.indexOf('const sourceLine = source[lineNumber - 1]') <
+    ratchet.indexOf('if (coverage?.has(lineNumber))'),
+  "ratchet must discard blank/comment-only diff lines before consulting coverage entries",
+);
 
 console.log("Coverage reporting + changed-code ratchet contract PASS");
