@@ -245,6 +245,20 @@ await assert.rejects(
   "pull errors must fail closed instead of silently appearing as empty tenant data",
 );
 
+server.seed("sales", ORG_A, {
+  id: "sa000000-0000-0000-0000-000000000001",
+  invoice_number: "INV-A-1",
+  version: 1,
+  updated_at: "2026-09-25T00:04:00.000Z",
+});
+server.failSelectTable = "sale_items";
+await assert.rejects(
+  () => adapterA.pull(new Date(0).toISOString(), DEVICE_A),
+  /Supabase pull failed for sale_items: simulated PostgREST\/RLS read failure/,
+  "sale child pull errors must also fail closed after parent sales are selected",
+);
+
+server.failSelectTable = "products";
 const faultEngine = new SyncEngine(
   "df000000-0000-0000-0000-000000000001",
   adapterA,
