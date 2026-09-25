@@ -156,6 +156,57 @@ for (let i = 0; i < 750; i += 1) {
     utils.addMinorUnits(utils.toMinorUnits(line.taxableAmount), utils.toMinorUnits(line.taxAmount)),
     "line total must equal taxable amount plus tax",
   );
+
+  const singleInvoice = billing.calculateInvoiceTotals({
+    items: [{
+      quantity: movement || 0.001,
+      unitPrice: unitPriceCents / 100,
+      discountPercent: discountBasis / 100,
+      taxRate: taxBasis / 100,
+    }],
+  });
+  assert.equal(
+    utils.toMinorUnits(singleInvoice.grandTotal),
+    utils.toMinorUnits(line.total),
+    "single-line invoice without global adjustments must equal its line total",
+  );
+
+  const globalDiscount = randomInt(0, 5_000) / 100;
+  const globalTax = randomInt(0, 2_500) / 100;
+  const adjustedInvoice = billing.calculateInvoiceTotals({
+    items: [{
+      quantity: movement || 0.001,
+      unitPrice: unitPriceCents / 100,
+      discountPercent: discountBasis / 100,
+      taxRate: taxBasis / 100,
+    }],
+    globalDiscountPercent: globalDiscount,
+    globalTaxRate: globalTax,
+  });
+  for (const value of Object.values(adjustedInvoice)) {
+    assert.ok(Number.isFinite(value), "invoice totals must always stay finite");
+    assert.equal(utils.toMinorUnits(value), Math.round(value * 100), "invoice totals must stay cent-canonical");
+  }
+
+  const secondMilli = randomInt(0, 25_000);
+  const secondQuantity = secondMilli / 1000;
+  const secondCostCents = randomInt(0, 250_000);
+  const valuation = inventory.inventoryValuation([
+    { productId: "a", name: "A", quantity: current, costPrice: unitPriceCents / 100 },
+    { productId: "b", name: "B", quantity: secondQuantity, costPrice: secondCostCents / 100 },
+  ]);
+  assert.equal(
+    utils.toQuantityMilli(valuation.totalUnits),
+    currentMilli + secondMilli,
+    "inventory valuation must conserve summed quantity",
+  );
+  assert.equal(
+    valuation.totalValue,
+    utils.roundMoney(current * (unitPriceCents / 100) + secondQuantity * (secondCostCents / 100)),
+    "inventory valuation must equal rounded sum of quantity x cost",
+  );
+  assert.equal(inventory.isLowStock(current, current), true);
+  assert.equal(inventory.isOutOfStock(Math.min(0, current)), true);
 }
 
 // DATE INVARIANTS THROUGH ACCOUNTING VALIDATION
