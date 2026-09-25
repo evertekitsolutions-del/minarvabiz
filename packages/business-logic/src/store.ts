@@ -312,16 +312,19 @@ export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "a
 }
 
 
-function sameTransferProduct(source: Product, destination: Product): boolean {
-  if (source.sku && destination.sku) return source.sku.trim().toLowerCase() === destination.sku.trim().toLowerCase();
-  if (source.barcode && destination.barcode) return source.barcode.trim() === destination.barcode.trim();
-  return source.name.trim().toLowerCase() === destination.name.trim().toLowerCase();
-}
-
+/**
+ * Legacy product-record transfer entry point.
+ *
+ * Product-to-product transfers predate the WMS location model and can bypass the
+ * warehouse approval/reservation/dispatch/receive lifecycle. Keep the API as a
+ * fail-closed compatibility surface for older callers and snapshots, but never
+ * mutate stock here. New transfers must use warehouseStore.createWarehouseTransfer.
+ */
 export function listStockTransfers(): StockTransferRecord[] {
   return [...stockTransfers].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+/** @deprecated Use the controlled Warehouse Management transfer workflow. */
 export function transferStock(input: {
   sourceProductId: UUID;
   destinationProductId: UUID;
@@ -329,62 +332,13 @@ export function transferStock(input: {
   notes?: string | null;
 }): { transfer: StockTransferRecord | null; errors: string[] } {
   assertPermission("inventory.adjust");
-  const source = getProduct(input.sourceProductId);
-  const destination = getProduct(input.destinationProductId);
-  const quantity = Math.abs(Number(input.quantity));
-  const errors: string[] = [];
-  if (!source) errors.push("Source product not found");
-  if (!destination) errors.push("Destination product not found");
-  if (source && destination && source.id === destination.id) errors.push("Source and destination must be different stock records");
-  if (source && destination && !sameTransferProduct(source, destination)) errors.push("Source and destination must represent the same SKU/barcode/product");
-  if (!Number.isFinite(quantity) || quantity <= 0) errors.push("Transfer quantity must be greater than zero");
-  if (source && Number.isFinite(quantity) && source.stockQuantity < quantity) errors.push(`Insufficient source stock (available ${source.stockQuantity})`);
-  if (errors.length || !source || !destination) return { transfer: null, errors };
-
-  const transferId = generateId();
-  const createdAt = nowISO();
-  const transfer: StockTransferRecord = {
-    id: transferId,
-    referenceNumber: `TRF-${createdAt.slice(0, 10).replace(/-/g, "")}-${transferId.slice(0, 6).toUpperCase()}`,
-    sourceProductId: source.id,
-    destinationProductId: destination.id,
-    sourceBranchId: source.branchId ?? null,
-    destinationBranchId: destination.branchId ?? null,
-    quantity,
-    notes: input.notes ?? null,
-    createdAt,
+  void input;
+  return {
+    transfer: null,
+    errors: [
+      "Direct product-to-product stock transfer is disabled. Use Warehouse Management to create a controlled transfer request, then approve, dispatch and receive it.",
+    ],
   };
-
-  const sourceBefore = source.stockQuantity;
-  const destinationBefore = destination.stockQuantity;
-  source.stockQuantity = applyStockMovement(source.stockQuantity, "transfer", quantity);
-  destination.stockQuantity = applyStockMovement(destination.stockQuantity, "stock_in", quantity);
-  touchProduct(source);
-  touchProduct(destination);
-  stockTransfers.unshift(transfer);
-
-  const sourceTx: InventoryTransaction = {
-    id: generateId(), productId: source.id, type: "transfer", quantity: -quantity,
-    unitCost: source.costPrice, referenceType: "stock_transfer", referenceId: transferId,
-    notes: input.notes ?? null, createdAt, branchId: source.branchId ?? null, version: 1,
-  };
-  const destinationTx: InventoryTransaction = {
-    id: generateId(), productId: destination.id, type: "transfer", quantity,
-    unitCost: destination.costPrice, referenceType: "stock_transfer", referenceId: transferId,
-    notes: input.notes ?? null, createdAt, branchId: destination.branchId ?? null, version: 1,
-  };
-
-  enqueueOutbox("products", source.id, "update", source);
-  enqueueOutbox("products", destination.id, "update", destination);
-  enqueueOutbox("inventory_transactions", sourceTx.id, "insert", sourceTx);
-  enqueueOutbox("inventory_transactions", destinationTx.id, "insert", destinationTx);
-  void remoteUpsertProduct(source);
-  void remoteUpsertProduct(destination);
-  auditAction("inventory.transfer", "inventory_transactions", transferId,
-    { sourceProductId: source.id, destinationProductId: destination.id, sourceStock: sourceBefore, destinationStock: destinationBefore },
-    { quantity, sourceStock: source.stockQuantity, destinationStock: destination.stockQuantity, sourceBranchId: source.branchId ?? null, destinationBranchId: destination.branchId ?? null });
-  touchPersistence();
-  return { transfer, errors: [] };
 }
 
 export function listHeldSales(): HeldSale[] {
