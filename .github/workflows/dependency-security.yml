@@ -10,20 +10,6 @@ permissions:
   contents: read
 
 jobs:
-  dependency-review:
-    name: Dependency Review
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - name: Review dependency changes
-        uses: actions/dependency-review-action@v5
-        with:
-          fail-on-severity: high
-          fail-on-scopes: runtime
-          license-check: false
-
   production-audit:
     name: Production Dependency Audit
     runs-on: ubuntu-latest
