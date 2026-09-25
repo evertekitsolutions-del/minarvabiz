@@ -20,7 +20,9 @@ assert.ok(
 assert.match(settings, /printHtml\?: \(input:/);
 assert.match(settings, /async function testSelectedPrinter\(\)/);
 assert.match(settings, /await api\.printHtml\(/);
-assert.match(settings, /Test selected printer/);
+assert.match(settings, /Test invoice printer/);
+assert.match(settings, /Test label printer/);
+assert.match(settings, /labelPrinterName/);
 assert.match(settings, /setPrintTestState\("error"\)/);
 assert.match(settings, /setPrintTestState\("done"\)/);
 
