@@ -40,6 +40,10 @@ import {
 } from "../lib/rate-limit";
 import { adminRoleAllows, type AdminPermission } from "../lib/admin-rbac";
 import { recordAdminAudit } from "../lib/admin-audit";
+import {
+  buildOfflineActivationPackage,
+  isLicenseStatusAction,
+} from "./action-contract";
 
 const PLANS: LicensePlan[] = ["trial", "basic", "professional", "business", "enterprise"];
 const EDITIONS: Edition[] = ["online", "offline", "hybrid"];
@@ -337,6 +341,7 @@ export async function listLicenses() {
   if (!result.ok) return { ok: false, error: result.error, identity, licenses: [] as any[] };
   const licenses = Array.isArray(result.data) ? result.data : []; const ids = licenses.map((x) => x.id);
   const activationResult = ids.length ? await dbFetch(`/license_activations?select=license_id%2Cactivation_id%2Cdevice_id%2Cstatus%2Cactivated_at%2Cdeactivated_at%2Clast_validated_at&license_id=in.(${ids.join(",")})&order=activated_at.desc`) : { ok: true, data: [], error: null };
+  if (!activationResult.ok) return { ok: false, error: activationResult.error || "License activation lookup failed.", identity, licenses: [] as any[] };
   const activations = Array.isArray(activationResult.data) ? activationResult.data : [];
   return { ok: true, identity, licenses: licenses.map((license) => ({ ...license, activations: activations.filter((a) => a.license_id === license.id).map((a) => ({ ...a, device_id: String(a.device_id).slice(0, 8) + "…" })) })) };
 }
@@ -478,9 +483,7 @@ export async function createOfflineActivationPackage(input: { licenseId: string;
     issuedAt,
     expiresAt: license.expires_at || null,
   }, privateKey);
-  const packageData = {
-    format: "minarvabiz-license-v1",
-    product: "minarvabiz",
+  const packageData = buildOfflineActivationPackage({
     licenseToken: license.token,
     activationCertificate: certificate,
     licenseId: license.license_id,
@@ -488,7 +491,7 @@ export async function createOfflineActivationPackage(input: { licenseId: string;
     deviceId,
     issuedAt,
     expiresAt: license.expires_at || null,
-  };
+  });
 
   await dbFetch("/license_events", {
     method: "POST",
@@ -515,8 +518,9 @@ export async function createOfflineActivationPackage(input: { licenseId: string;
   return { ok: true, filename: `MinarvaBiz-${license.license_id}-${deviceId.slice(0, 8)}.lic`, content: JSON.stringify(packageData, null, 2), activationId };
 }
 
-export async function setLicenseStatus(licenseId: string, status: "active" | "suspended" | "revoked" | "deactivated") {
+export async function setLicenseStatus(licenseId: string, status: unknown) {
   const cleanLicenseId = clean(licenseId, 200);
+  if (!cleanLicenseId || !isLicenseStatusAction(status)) return { ok: false, error: "Invalid license status." };
   const authorized = await authorizeAdmin(
     "license.status_manage",
     "license.status_change",
