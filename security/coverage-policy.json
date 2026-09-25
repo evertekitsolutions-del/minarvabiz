@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "baseBranch": "main",
+  "overallLineMinimum": 0,
+  "changedLineMinimum": 80,
+  "targetPrefixes": [
+    "packages/business-logic/src/",
+    "packages/billing/src/",
+    "packages/utils/src/",
+    "packages/sync/src/",
+    "packages/database/src/"
+  ],
+  "excludedPathFragments": [
+    "/__tests__/",
+    ".d.ts"
+  ]
+}
