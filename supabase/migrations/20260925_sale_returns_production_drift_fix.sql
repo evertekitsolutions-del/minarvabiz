@@ -22,6 +22,7 @@ BEFORE INSERT ON public.sale_returns
 FOR EACH ROW
 EXECUTE FUNCTION private.set_current_user_org_id();
 
+DROP POLICY IF EXISTS sale_returns_auth_all ON public.sale_returns;
 DROP POLICY IF EXISTS sale_returns_org_access ON public.sale_returns;
 DROP POLICY IF EXISTS sale_returns_org_select ON public.sale_returns;
 DROP POLICY IF EXISTS sale_returns_org_write ON public.sale_returns;
