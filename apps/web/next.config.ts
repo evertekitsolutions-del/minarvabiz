@@ -6,7 +6,8 @@ const publicSupabaseAnonKey = String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY |
 const runtimeMode = String(
   process.env.NEXT_PUBLIC_MINARVA_MODE || process.env.MINARVA_MODE || "",
 ).trim().toLowerCase();
-const isExplicitDemo = runtimeMode === "demo";
+const isVercelPreviewDemo = process.env.VERCEL_ENV === "preview" && runtimeMode === "";
+const isExplicitDemo = runtimeMode === "demo" || isVercelPreviewDemo;
 
 function isPlaceholder(value: string) {
   const normalized = value.toLowerCase();
@@ -42,6 +43,13 @@ if (publicSupabaseUrl && !isPlaceholder(publicSupabaseUrl)) {
 const nextConfig: NextConfig = {
   serverExternalPackages: ["sql.js"],
   reactStrictMode: true,
+  poweredByHeader: false,
+  env: isVercelPreviewDemo
+    ? {
+        NEXT_PUBLIC_MINARVA_MODE: "demo",
+        NEXT_PUBLIC_REQUIRE_AUTH: "false",
+      }
+    : {},
   transpilePackages: [
     "@minarvabiz/ui",
     "@minarvabiz/types",
