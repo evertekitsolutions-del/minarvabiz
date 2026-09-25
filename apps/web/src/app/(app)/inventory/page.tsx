@@ -14,9 +14,8 @@ export default function InventoryPage() {
   const [query, setQuery] = React.useState("");
   const [adjustOpen, setAdjustOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<Product | null>(null);
-  const [adjType, setAdjType] = React.useState<"stock_in" | "stock_out" | "adjustment" | "transfer">("stock_in");
+  const [adjType, setAdjType] = React.useState<"stock_in" | "stock_out" | "adjustment">("stock_in");
   const [adjQty, setAdjQty] = React.useState("1");
-  const [destinationProductId, setDestinationProductId] = React.useState("");
   const [movementError, setMovementError] = React.useState<string | null>(null);
   const [notes, setNotes] = React.useState("");
 
@@ -31,23 +30,9 @@ export default function InventoryPage() {
     if (!selected) return;
     const qty = parseFloat(adjQty) || 0;
     setMovementError(null);
-    if (adjType === "transfer") {
-      const result = store.transferStock({
-        sourceProductId: selected.id,
-        destinationProductId,
-        quantity: qty,
-        notes: notes || null,
-      });
-      if (result.errors.length) {
-        setMovementError(result.errors.join("; "));
-        return;
-      }
-    } else {
-      store.adjustStock(selected.id, adjType, qty, notes || null);
-    }
+    store.adjustStock(selected.id, adjType, qty, notes || null);
     setAdjustOpen(false);
     setSelected(null);
-    setDestinationProductId("");
     setNotes("");
     refresh();
   }
@@ -66,7 +51,7 @@ export default function InventoryPage() {
         }}
         onAdd={() => router.push("/products")}
       />
-      <p className="mt-2 text-xs text-slate-500">Click a product to adjust stock. Use Products page to add new items.</p>
+      <div className="mt-3 flex flex-wrap items-center gap-3"><p className="text-xs text-slate-500">Click a product to adjust stock. Use Products page to add new items. Transfers use the controlled warehouse workflow.</p><Button variant="outline" onClick={() => router.push("/warehouse")}>Controlled Stock Transfer</Button></div>
       <Modal
         open={adjustOpen}
         title={selected ? `Adjust stock — ${selected.name}` : "Adjust stock"}
@@ -87,22 +72,11 @@ export default function InventoryPage() {
               <option value="stock_in">Stock in</option>
               <option value="stock_out">Stock out</option>
               <option value="adjustment">Adjustment (+/−)</option>
-              <option value="transfer">Stock transfer</option>
             </select>
           </FormField>
           <FormField label="Quantity">
             <input className={inputClass} type="number" value={adjQty} onChange={(e) => setAdjQty(e.target.value)} />
           </FormField>
-          {adjType === "transfer" && (
-            <FormField label="Destination stock record">
-              <select className={selectClass} value={destinationProductId} onChange={(e) => setDestinationProductId(e.target.value)}>
-                <option value="">Select destination</option>
-                {store.listProducts().filter((p) => p.id !== selected?.id).map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}{p.sku ? ` · ${p.sku}` : ""}{p.branchId ? ` · branch ${p.branchId}` : ""}</option>
-                ))}
-              </select>
-            </FormField>
-          )}
           <FormField label="Notes">
             <input className={inputClass} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>

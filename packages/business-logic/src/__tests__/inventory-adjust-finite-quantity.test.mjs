@@ -4,7 +4,7 @@ import fs from "node:fs";
 const source = fs.readFileSync(new URL("../store.ts", import.meta.url), "utf8");
 
 const adjustStart = source.indexOf("export function adjustStock");
-const transferStart = source.indexOf("function sameTransferProduct", adjustStart);
+const transferStart = source.indexOf("export function listStockTransfers", adjustStart);
 assert.ok(adjustStart >= 0 && transferStart > adjustStart, "adjustStock must exist");
 
 const adjustBlock = source.slice(adjustStart, transferStart);
