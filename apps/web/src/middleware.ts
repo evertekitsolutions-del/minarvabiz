@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildMinarvaNonceCsp } from "@minarvabiz/utils/security-headers";
+import { buildMinarvaNonceCsp, minarvaHttpSecurityHeaders } from "@minarvabiz/utils/security-headers";
 
 function isPlaceholder(value: string): boolean {
   const normalized = value.toLowerCase();
@@ -52,6 +52,18 @@ export function middleware(request: NextRequest) {
     workerSources: ["'self'", "blob:"],
     manifestSources: ["'self'"],
   });
+
+  if (!["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase())) {
+    const response = new NextResponse("Method Not Allowed", {
+      status: 405,
+      headers: { Allow: "GET, HEAD, OPTIONS" },
+    });
+    for (const header of minarvaHttpSecurityHeaders()) {
+      response.headers.set(header.key, header.value);
+    }
+    response.headers.set("Content-Security-Policy", contentSecurityPolicy);
+    return response;
+  }
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
