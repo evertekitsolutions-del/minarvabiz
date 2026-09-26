@@ -21,7 +21,7 @@ export default function AdminPanel({identity,initialLicenses,bootstrapAvailable}
   const [password,setPassword]=React.useState("");
   const [emergencyPassword, setEmergencyPassword] = React.useState("");
   const [authStage, setAuthStage] = React.useState<AuthStage>("password");
-  const [mfaCode, setMfaCode] = React.useState("");
+  const [mfaCode,setMfaCode]=React.useState("");
   const [mfaSecret, setMfaSecret] = React.useState("");
   const [mfaQrCode, setMfaQrCode] = React.useState("");
   const [customerName, setCustomerName] = React.useState("");
