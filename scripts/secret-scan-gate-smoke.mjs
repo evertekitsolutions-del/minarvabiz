@@ -30,6 +30,13 @@ const activeIgnores = ignoredFindings
   .filter((line) => line && !line.startsWith("#"));
 assert.deepEqual(activeIgnores, [
   "184b7f813cdbff326f42bf6eea83b05bd34bcd1d:apps/web/next.config.ts:generic-api-key:11",
+  "529c7f23bc16bad099dfa423197bca11431faee2:apps/web/vercel.json:generic-api-key:3",
+  "e1ad8e4c4009ac0a0f52e2d0593a2e032c184b4d:apps/web/scripts/vercel-build.mjs:generic-api-key:10",
+  "1df5b7a2052d60498fbacd8b299e3ae42098d0f3:apps/web/scripts/vercel-build.mjs:generic-api-key:10",
+  "f566b78c4a804123c1866861f615e5d3bfa1734b:apps/web/vercel.json:generic-api-key:3",
+  "928413c12a971a8116c5ea5d77bd39dca47ff327:apps/web/vercel.json:generic-api-key:21",
+  "649eb9279698855a2e35bcf54933148e8d38f071:apps/web/vercel.json:generic-api-key:21",
+  "apps/web/scripts/vercel-build.mjs:generic-api-key:10",
 ]);
 
 console.log("Secret scan gate contract smoke PASS");

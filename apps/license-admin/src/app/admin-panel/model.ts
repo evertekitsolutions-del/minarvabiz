@@ -81,3 +81,7 @@ export function enabledFeatureLabels(license: LicenseRegistryRow): string[] {
 export function customerNameForLicense(license: LicenseRegistryRow): string {
   return license.metadata?.customerName?.trim() || "Unnamed customer";
 }
+
+export function canProvisionOnlineCustomer(role: AdminRole): boolean {
+  return role === "operator" || role === "admin";
+}

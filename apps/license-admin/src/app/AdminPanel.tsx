@@ -21,11 +21,9 @@ import { LicenseCreateCard } from "./admin-panel/LicenseCreateCard";
 import { LicenseRegistryCard } from "./admin-panel/LicenseRegistryCard";
 import { LicenseSummaryCard } from "./admin-panel/LicenseSummaryCard";
 import { OfflineActivationCard } from "./admin-panel/OfflineActivationCard";
-import {
-  canIssueLicense,
-  canManageLicenseStatus,
-  defaultFeatures,
-} from "./admin-panel/model";
+import { OnlineCustomerProvisionCard } from "./admin-panel/OnlineCustomerProvisionCard";
+import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerProvisioning";
+import { canIssueLicense, canManageLicenseStatus, defaultFeatures } from "./admin-panel/model";
 import type {
   AdminIdentityView,
   AuthStage,
@@ -57,13 +55,11 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
   const [features, setFeatures] = React.useState<LicenseFeatures>(() =>
     defaultFeatures("professional"),
   );
-
   const [offlineLicenseId, setOfflineLicenseId] = React.useState("");
   const [offlineDeviceId, setOfflineDeviceId] = React.useState("");
   const [lastToken, setLastToken] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
-
   React.useEffect(() => {
     setFeatures(defaultFeatures(plan));
   }, [plan]);
@@ -92,7 +88,6 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
     setAuthStage("mfa");
     setMessage("MFA is required. Enter the code from your authenticator.");
   }
-
   async function beginMfaEnrollment() {
     setBusy(true);
     setMessage(null);
@@ -108,7 +103,6 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
     setAuthStage("mfa");
     setMessage("Authenticator setup started. Add the account, then enter the current code.");
   }
-
   async function verifyMfa() {
     setBusy(true);
     setMessage(null);
@@ -251,6 +245,7 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
     );
   }
 
+  const onlineProvisioning = useOnlineCustomerProvisioning(identity.role);
   const canIssue = canIssueLicense(identity.role);
   const canManageStatus = canManageLicenseStatus(identity.role);
 
@@ -278,6 +273,7 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
+          <OnlineCustomerProvisionCard {...onlineProvisioning} />
           <LicenseCreateCard
             customerName={customerName}
             plan={plan}
