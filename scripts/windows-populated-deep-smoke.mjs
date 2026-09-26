@@ -403,8 +403,9 @@ async function main() {
     await click(ws, "SAVE_EXPENSE", ["save expense"]);
     await assertMain(ws, "EXPENSE_SAVED", ["2 records", "QA interaction expense"]);
     await clickRowButton(ws, "EXPENSE_REVERSE", "QA interaction expense", "Reverse");
-    await assertMain(ws, "EXPENSE_REVERSE_CONFIRM", ["Confirm Reverse"]);
-    await clickRowButton(ws, "EXPENSE_CONFIRM_REVERSE", "QA interaction expense", "Confirm Reverse");
+    await assertMain(ws, "EXPENSE_REVERSE_CONFIRM", ["Reversal reason *", "Confirm reversal"]);
+    await setField(ws, "Reverse expense", "Reversal reason", "QA correction");
+    await clickDialogButton(ws, "EXPENSE_CONFIRM_REVERSE", "Reverse expense", "Confirm reversal");
     await assertMain(ws, "EXPENSE_REVERSED", ["1 records", "QA order expense"]);
 
     // Supplier and purchase create.
