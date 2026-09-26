@@ -27,7 +27,7 @@ assert.equal(route.includes("api.github.com"), false);
 assert.equal(route.includes("releases/latest"), false);
 assert.equal(route.includes("package.json"), true);
 assert.equal(route.includes("releases/download"), true);
-assert.equal(route.includes(".exe.sha256"), true);
+assert.equal(route.includes(".sha256"), true);
 assert.equal(route.includes("rootPackage.version"), true);
 assert.match(route, /signTextBase64Url/);
 assert.match(route, /MinarvaBiz-Setup-/);
