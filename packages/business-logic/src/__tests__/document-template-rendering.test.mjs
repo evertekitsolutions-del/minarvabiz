@@ -1,11 +1,17 @@
 import assert from 'node:assert/strict';
-import { register } from 'node:module';
-register(new URL('../../../../scripts/ts-source-test-loader.mjs', import.meta.url));
-const settings = await import('../print-settings.ts');
-const render = await import('../print-document-render.ts');
-const invoice = await import('../invoice.ts');
-const quotes = await import('../quotations.ts');
-const shop = await import('../shop-profile.ts');
+import fs from "node:fs";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
+require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+}).outputText, filename);
+const settings = require('../print-settings.ts');
+const render = require('../print-document-render.ts');
+const invoice = require('../invoice.ts');
+const quotes = require('../quotations.ts');
+const shop = require('../shop-profile.ts');
 const stamp = '2026-09-26T08:00:00Z';
 const unsafe = '<img src=x onerror=alert(1)>';
 shop.updateShopProfile({ shopName: unsafe, legalName: 'Legal & Co', address: 'Street <1>', phone:'123', email:'a@example.com', website:'example.com', gstin:'32ABCDE1234F1Z5' });
