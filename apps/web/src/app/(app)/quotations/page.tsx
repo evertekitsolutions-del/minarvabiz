@@ -1,14 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { Button, Card, CardContent, FormField, inputClass, selectClass } from "@minarvabiz/ui";
+import { Button, Card, CardContent, FormField, inputClass, selectClass, PrintPreviewModal } from "@minarvabiz/ui";
 import {
   listQuotations,
   createQuotation,
   setQuotationStatus,
   convertQuotationToSale,
   convertQuotationToOrder,
-  printQuotation,
+  buildQuotationHtml,
+  printPreparedHtml,
   store,
 } from "@minarvabiz/business-logic";
 import type { QuotationStatus } from "@minarvabiz/types";
@@ -20,12 +21,31 @@ export default function QuotationsPage() {
   const [qty, setQty] = React.useState(1);
   const [price, setPrice] = React.useState(0);
   const [msg, setMsg] = React.useState<string | null>(null);
+  const [printPreview, setPrintPreview] = React.useState<{ title: string; html: string; paper: "a4" | "thermal" } | null>(null);
   const customers = store.listCustomers();
 
   const refresh = () => setList(listQuotations());
 
+  function previewQuotation(id: string, paper: "a4" | "thermal") {
+    const quotation = listQuotations().find((item) => item.id === id);
+    if (!quotation) return;
+    setPrintPreview({
+      title: `${quotation.quotationNumber} — ${paper === "a4" ? "A4" : "Thermal"} Preview`,
+      html: buildQuotationHtml(quotation, { paper, autoPrint: false }),
+      paper,
+    });
+  }
+
   return (
     <div className="space-y-6">
+      <PrintPreviewModal
+        open={Boolean(printPreview)}
+        title={printPreview?.title || "Quotation Preview"}
+        html={printPreview?.html || ""}
+        paper={printPreview?.paper || "a4"}
+        onClose={() => setPrintPreview(null)}
+        onPrint={() => { if (printPreview) printPreparedHtml(printPreview.html, printPreview.paper); }}
+      />
       <h2 className="text-xl font-semibold">Quotations / Estimates</h2>
       {msg && <p className="text-sm text-slate-600">{msg}</p>}
       <Card>
@@ -87,7 +107,8 @@ export default function QuotationsPage() {
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
-                <Button size="sm" variant="outline" onClick={() => printQuotation(q)}>Print</Button>
+                <Button size="sm" variant="outline" onClick={() => previewQuotation(q.id, "a4")}>A4 Preview</Button>
+                <Button size="sm" variant="outline" onClick={() => previewQuotation(q.id, "thermal")}>Thermal Preview</Button>
                 <Button size="sm" variant="outline" onClick={() => { const r = convertQuotationToSale(q.id); setMsg(r.error || `Sale ${r.saleId}`); refresh(); }}>→ Sale</Button>
                 <Button size="sm" variant="outline" onClick={() => { const r = convertQuotationToOrder(q.id); setMsg(r.error || `Order ${r.orderId}`); refresh(); }}>→ Order</Button>
               </div>
