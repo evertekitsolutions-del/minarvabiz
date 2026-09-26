@@ -20,6 +20,7 @@ export * from "./inventory";
 export * from "./orders";
 export * from "./expenses";
 export * from "./reports";
+export * from "./financial-reporting";
 export * as store from "./store";
 export * as ordersStore from "./orders-store";
 export * as phase5Store from "./phase5-store";
