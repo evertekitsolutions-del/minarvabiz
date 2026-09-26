@@ -540,14 +540,14 @@ async function main() {
     // Settings save and theme buttons must mutate state and survive navigation.
     await click(ws, "SETTINGS", ["settings"]);
     await assertMain(ws, "SETTINGS", ["Business Settings", "Save business profile", "Save tax settings"]);
-    await setMainField(ws, "Business name", "QA Minarva Shop");
+    await setMainField(ws, "Business / trade name", "QA Minarva Shop");
     await click(ws, "SAVE_PROFILE", ["save business profile"]);
     await click(ws, "THEME_OCEAN", ["ocean"]);
     const theme = JSON.parse(await evalIn(ws, `JSON.stringify(document.documentElement.dataset.theme||'')`));
     if (theme !== "ocean") throw new Error(`Theme button failed; expected ocean, got ${theme}`);
     await click(ws, "DASHBOARD_AFTER_SETTINGS", ["dashboard"]);
     await click(ws, "SETTINGS_REOPEN", ["settings"]);
-    await assertMainFieldValue(ws, "Business name", "QA Minarva Shop");
+    await assertMainFieldValue(ws, "Business / trade name", "QA Minarva Shop");
 
     // Automatic backup is a non-dialog desktop action and must create a verifiable file.
     await click(ws, "BACKUP", ["backup & restore"]);
