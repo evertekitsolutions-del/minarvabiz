@@ -11,7 +11,8 @@ import * as ordersStore from "./orders-store";
 import { escapeHtml } from "./html";
 import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
-import { getPrintSettings, getPrintTemplate } from "./print-settings";
+import { getPrintSettings, getPrintTemplate, getPrintTemplateById } from "./print-settings";
+import { businessHeaderHtml, customerBlockHtml, documentCss, documentFooterHtml } from "./print-document-render";
 import { tryDesktopPrintHtml } from "./desktop-print";
 import type { PrintPaper } from "./print-templates";
 
@@ -183,80 +184,54 @@ export function convertQuotationToOrder(id: UUID, serviceType: string = "ladies_
   return { orderId: result.order!.id };
 }
 
-export function buildQuotationHtml(q: Quotation, opts?: { paper?: PrintPaper; autoPrint?: boolean }): string {
-  const shop = getShopProfile();
+export function buildQuotationHtml(
+  q: Quotation,
+  opts?: { paper?: PrintPaper; autoPrint?: boolean; templateId?: string },
+): string {
   const settings = getPrintSettings();
   const paper = opts?.paper ?? settings.defaultInvoicePaper;
-  const template = getPrintTemplate("quotation", paper);
-  const autoPrint = opts?.autoPrint === true;
+  const template = (opts?.templateId ? getPrintTemplateById(opts.templateId) : null) ?? getPrintTemplate("quotation", paper);
   const width = paper === "thermal" ? `${settings.thermalWidthMm}mm` : "210mm";
-  const compact = paper === "thermal" || template.layout === "compact";
-  const address = [shop.address, shop.addressLine2, shop.district, shop.state, shop.postalCode, shop.country].filter(Boolean).join(", ");
-  const contacts = [
-    template.showPhone && shop.phone ? `Tel: ${shop.phone}` : "",
-    template.showEmail && shop.email ? shop.email : "",
-    template.showWebsite && shop.website ? shop.website : "",
-  ].filter(Boolean).join(" · ");
-  const rows = q.lines.map((line) => `
-    <tr>
-      <td>${escapeHtml(line.description)}</td>
-      <td class="r">${line.quantity}</td>
-      <td class="r nowrap">${formatMoney(line.unitPrice)}</td>
-      <td class="r nowrap">${formatMoney(line.lineTotal)}</td>
-    </tr>`).join("");
+  const autoPrint = opts?.autoPrint === true;
+  const customer = mainStore.getCustomer(q.customerId);
+  const rows = q.lines.map((line, index) => `<tr>
+    <td class="c">${index + 1}</td>
+    <td>${escapeHtml(line.description)}${template.showSku && line.productId ? `<div class="meta">Ref: ${escapeHtml(line.productId.slice(0, 8))}</div>` : ""}</td>
+    <td class="r">${line.quantity}</td>
+    <td class="r nowrap">${formatMoney(line.unitPrice)}</td>
+    <td class="r nowrap">${formatMoney(line.lineTotal)}</td>
+  </tr>`).join("");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${escapeHtml(q.quotationNumber)}</title>
-<style>
-*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#0f172a;background:#fff;font-size:${(compact?11:13)*template.fontScale}px}
-.sheet{width:100%;max-width:${width};margin:0 auto;padding:${compact?"3mm":"12mm"}}
-.brand{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:2px solid ${template.accentColor};padding-bottom:${compact?7:12}px}
-.business-name{font-size:${compact?15:22}px;font-weight:800}.legal,.muted{color:#64748b;font-size:${compact?9:11}px;line-height:1.45}
-.doc{text-align:right;min-width:${compact?100:170}px}.doc-title{font-size:${compact?13:20}px;font-weight:800;color:${template.accentColor}}
-.customer{margin:${compact?8:14}px 0;padding:${compact?6:10}px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px}
-table{width:100%;border-collapse:collapse;margin-top:${compact?7:12}px}th{background:#f8fafc;color:#334155;font-size:${compact?9:11}px}
-th,td{border-bottom:1px solid #e2e8f0;padding:${compact?"4px 2px":"7px 5px"};text-align:left}.r{text-align:right}.nowrap{white-space:nowrap}
-.totals{margin-left:auto;width:${compact?"100%":"50%"}}.grand td{font-weight:800;font-size:${compact?12:15}px;border-top:2px solid ${template.accentColor}}
-.notes,.terms{margin-top:${compact?8:14}px;color:#475569;font-size:${compact?9:11}px;white-space:pre-wrap}.signature{margin-top:32px;text-align:right;font-size:11px;color:#475569}
-.footer{margin-top:${compact?10:18}px;text-align:center;color:#64748b;font-size:${compact?9:10}px;border-top:1px solid #e2e8f0;padding-top:8px}@media print{body{padding:0}}
-</style></head><body><div class="sheet">
-<div class="brand"><div>
-<div class="business-name">${escapeHtml(shop.shopName || "Minarva Biz")}</div>
-${template.showLegalName && shop.legalName ? `<div class="legal">${escapeHtml(shop.legalName)}</div>` : ""}
-${template.subheading ? `<div class="muted">${escapeHtml(template.subheading)}</div>` : ""}
-${template.showAddress && address ? `<div class="muted">${escapeHtml(address)}</div>` : ""}
-${contacts ? `<div class="muted">${escapeHtml(contacts)}</div>` : ""}
-${template.showGstin && shop.gstin ? `<div class="muted"><strong>GSTIN:</strong> ${escapeHtml(shop.gstin)}</div>` : ""}
-</div><div class="doc">
-<div class="doc-title">${escapeHtml(template.heading || "QUOTATION")}</div>
-<div><strong>${escapeHtml(q.quotationNumber)}</strong></div>
-<div class="muted">${new Date(q.createdAt).toLocaleString("en-IN")}</div>
-<div class="muted">Valid until: ${escapeHtml(q.validUntil || "—")}</div>
-</div></div>
-${template.showCustomer ? `<div class="customer"><div class="muted">Prepared for</div><strong>${escapeHtml(q.customerName || "")}</strong><div class="muted">Status: ${escapeHtml(q.status)}</div></div>` : ""}
-<table><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead><tbody>${rows}</tbody></table>
+<style>${documentCss(template, width)}</style></head><body><div class="sheet">
+${businessHeaderHtml(template, {
+  number: q.quotationNumber,
+  date: q.createdAt,
+  fallbackTitle: "QUOTATION",
+  extraMeta: q.validUntil ? `Valid until: ${new Date(q.validUntil).toLocaleDateString("en-IN")}` : `Status: ${q.status}`,
+})}
+${customerBlockHtml(template, customer, q.customerName || "")}
+<table><thead><tr><th class="c">#</th><th>Description</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead><tbody>${rows}</tbody></table>
 <table class="totals">
 ${q.materialCharges ? `<tr><td>Material charges</td><td class="r">${formatMoney(q.materialCharges)}</td></tr>` : ""}
 ${q.labourCharges ? `<tr><td>Labour charges</td><td class="r">${formatMoney(q.labourCharges)}</td></tr>` : ""}
 <tr><td>Subtotal</td><td class="r">${formatMoney(q.subtotal)}</td></tr>
-${q.discount ? `<tr><td>Discount</td><td class="r">-${formatMoney(q.discount)}</td></tr>` : ""}
+${q.discount ? `<tr><td>Discount</td><td class="r">− ${formatMoney(q.discount)}</td></tr>` : ""}
 ${template.showTax && q.tax ? `<tr><td>GST / Tax</td><td class="r">${formatMoney(q.tax)}</td></tr>` : ""}
 <tr class="grand"><td>Total</td><td class="r">${formatMoney(q.total)}</td></tr>
 ${template.showPaymentSummary ? `<tr><td>Advance</td><td class="r">${formatMoney(q.advance)}</td></tr><tr><td>Balance</td><td class="r">${formatMoney(q.balance)}</td></tr>` : ""}
 </table>
-${template.showNotes && q.notes ? `<div class="notes"><strong>Notes:</strong> ${escapeHtml(q.notes)}</div>` : ""}
-${template.showTerms && template.termsText ? `<div class="terms"><strong>Terms:</strong> ${escapeHtml(template.termsText)}</div>` : ""}
-${template.showSignature && paper === "a4" ? `<div class="signature">For ${escapeHtml(shop.shopName || "Business")}<br/><br/><strong>Authorised Signatory</strong></div>` : ""}
-<div class="footer">${escapeHtml(template.footerText || shop.receiptFooter || "Thank you.")}</div>
+${documentFooterHtml(template, q.notes)}
 </div>${autoPrint ? "<script>window.onload=function(){window.print&&window.print()}</script>" : ""}</body></html>`;
 }
 
-export function printQuotation(q: Quotation, paper?: PrintPaper) {
+export function printQuotation(q: Quotation, paper?: PrintPaper, templateId?: string) {
   if (typeof window === "undefined") return;
   const selectedPaper = paper ?? getPrintSettings().defaultInvoicePaper;
-  const directHtml = buildQuotationHtml(q, { paper: selectedPaper, autoPrint: false });
+  const directHtml = buildQuotationHtml(q, { paper: selectedPaper, autoPrint: false, templateId });
   if (tryDesktopPrintHtml(directHtml, selectedPaper)) return;
   const w = window.open("", "_blank", selectedPaper === "thermal" ? "width=420,height=700" : "width=900,height=900");
   if (!w) return;
-  w.document.write(buildQuotationHtml(q, { paper: selectedPaper, autoPrint: true }));
+  w.document.write(buildQuotationHtml(q, { paper: selectedPaper, autoPrint: true, templateId }));
   w.document.close();
 }
 
