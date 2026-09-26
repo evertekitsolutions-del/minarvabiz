@@ -352,7 +352,7 @@ export function ProcurementPanel({
               </select>
             </label>
             <label className="text-xs font-medium text-slate-600">
-              Status
+              PO status filter
               <select className={selectClass + " mt-1"} value={poStatus} onChange={(e) => setPoStatus(e.target.value)}>
                 <option value="">All statuses</option>
                 {["draft", "approved", "partially_received", "received", "cancelled"].map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}
@@ -421,7 +421,7 @@ export function ProcurementPanel({
               </select>
             </label>
             <label className="text-xs font-medium text-slate-600">
-              Status
+              Invoice status filter
               <select className={selectClass + " mt-1"} value={invoiceStatus} onChange={(e) => setInvoiceStatus(e.target.value)}>
                 <option value="">All statuses</option>
                 {["draft", "posted", "partially_paid", "paid", "cancelled"].map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}
