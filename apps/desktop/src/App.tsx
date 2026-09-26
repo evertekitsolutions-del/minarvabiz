@@ -14,6 +14,7 @@ import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
 import { useDesktopPrintPreview } from "./components/useDesktopPrintPreview";
+import { DesktopQuotationsView } from "./components/DesktopQuotationsView";
 
 type CommercialLicenseState = {
   status: "unlicensed" | "active" | "grace" | "expired" | "invalid";
@@ -37,6 +38,7 @@ function todayLocal(): string { const d = new Date(); const off = d.getTimezoneO
 
 const NAV_FEATURE: Partial<Record<NavItemId, keyof LicenseFeatures>> = {
   sales: "sales",
+  quotations: "sales",
   products: "inventory",
   warehouse: "inventory",
   services: "orders",
@@ -242,6 +244,7 @@ export function App() {
     {view==="warehouse"&&<WarehousePanel/>}
     {view==="accounting"&&<AccountingPanel/>}
 
+    {view==="quotations"&&<DesktopQuotationsView onChanged={()=>{void persistAndRefresh();}}/>}
     {view==="sales"&&<div className="space-y-4"><div className="flex flex-wrap gap-2"><Button variant={salesTab==="pos"?"primary":"outline"} onClick={()=>setSalesTab("pos")}>POS Billing</Button><Button variant={salesTab==="normal"?"primary":"outline"} onClick={()=>setSalesTab("normal")}>Normal Billing</Button><Button variant={salesTab==="history"?"primary":"outline"} onClick={()=>setSalesTab("history")}>Sales History</Button></div>{salesTab==="pos"?<PosBilling products={store.listProducts()} customers={customers} onFindByBarcode={store.getProductByBarcode} onAddCustomer={openCustomerCreator} onAddProduct={()=>{resetProductForm();setProductOpen(true);}} heldSales={heldSales} onHoldSale={payload=>{try{const result=store.holdSale(payload);if(result.errors.length||!result.heldSale)return{success:false,errors:result.errors.length?result.errors:["Unable to hold sale"]};void persistAndRefresh();return{success:true,holdNumber:result.heldSale.holdNumber};}catch(error){return{success:false,errors:[error instanceof Error?error.message:String(error)]};}}} onRemoveHeldSale={id=>{try{store.removeHeldSale(id);void persistAndRefresh();}catch(error){setModuleError(error instanceof Error?error.message:String(error));}}} onCompleteSale={handleSale} onPrintSale={(id,paper)=>{const sale=store.getSale(id);if(sale)printPreview.openSale(sale,paper);}}/>:salesTab==="normal"?<NormalBilling products={store.listProducts()} customers={customers} onAddCustomer={openCustomerCreator} onAddProduct={()=>{resetProductForm();setProductOpen(true);}} onCompleteSale={handleSale} onPrintSale={(id,paper)=>{const sale=store.getSale(id);if(sale)printPreview.openSale(sale,paper);}}/>:<SalesList sales={sales} onPrintA4={sale=>printPreview.openSale(sale,"a4")} onPrintThermal={sale=>printPreview.openSale(sale,"thermal")}/>}</div>}
     {view==="services"&&<div className="space-y-4"><div className="flex flex-wrap items-center gap-2"><Button variant={orderView==="table"?"primary":"outline"} onClick={()=>setOrderView("table")}>Orders Table</Button><Button variant={orderView==="production"?"primary":"outline"} onClick={()=>setOrderView("production")}>Production Board</Button></div>{orderView==="production"?<ProductionBoard orders={orders} staff={staff} assignments={assignments} onSelect={setSelectedOrder} onStatusChange={handleOrderStatusChange} onAssignStaff={handleAssignStaff}/>:<OrderList orders={orders} onSearch={setOrderQuery} onFilterStatus={setOrderStatus} onFilterType={setOrderType} onAdd={()=>{setForm(emptyOrderForm());setCreateOpen(true);}} onSelect={order=>{setSelectedOrder(order);setProfiles(ordersStore.listMeasurementProfiles(order.customerId));}}/>}{selectedOrder&&<OrderDetail order={selectedOrder} measurementProfiles={profiles} expenseCategories={expenseCategories} onStatusChange={handleOrderStatusChange.bind(null,selectedOrder.id)} onQualityCheck={handleQualityCheck} onAddExpense={handleOrderDetailExpense}/>}<Modal open={createOpen} title="New Service Order" onClose={()=>setCreateOpen(false)}><OrderForm value={form} customers={customers} profiles={profiles} onChange={setForm} onLoadProfiles={customerId=>setProfiles(ordersStore.listMeasurementProfiles(customerId))} onAddCustomer={openCustomerCreator} onSubmit={handleCreateOrder} onCancel={()=>setCreateOpen(false)} error={formError}/></Modal></div>}
     {view==="laundry"&&<LaundryList orders={laundry} onAddIroning={()=>setLaundryMode("in_house_ironing")} onAddOutsourced={()=>setLaundryMode("outsourced")} onStatusChange={handleLaundryStatusChange} onCancel={order=>{setLaundryCancelError(null);setLaundryCancelOrder(order);}}/>} 
