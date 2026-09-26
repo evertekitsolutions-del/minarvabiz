@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { SyncPanel, PersistencePanel, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
+import { SyncPanel, PersistencePanel, Button, FormField, inputClass, selectClass, PrintTemplateManager } from "@minarvabiz/ui";
 import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage, getShopProfile, updateShopProfile, getPrintSettings, updatePrintSettings } from "@minarvabiz/business-logic";
 
 export default function SettingsPage() {
@@ -92,12 +92,19 @@ export default function SettingsPage() {
               <option value={80}>80 mm</option><option value={58}>58 mm</option>
             </select>
           </FormField>
+          <FormField label="Product label code">
+            <select className={selectClass} value={printing.labelCodeMode} onChange={(e) => setPrinting({ ...printing, labelCodeMode: e.target.value as "barcode" | "qr" | "both" })}>
+              <option value="both">Barcode + QR code</option><option value="barcode">Barcode only</option><option value="qr">QR code only</option>
+            </select>
+          </FormField>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => { const next = updatePrintSettings(printing); setPrinting(next); setPrintMsg("Printing defaults saved"); }}>Save printing defaults</Button>
           {printMsg && <span className="text-sm text-emerald-600">{printMsg}</span>}
         </div>
       </div>
+
+      <PrintTemplateManager />
 
       <PersistencePanel
         onExport={() => exportDomainSnapshotJson()}
