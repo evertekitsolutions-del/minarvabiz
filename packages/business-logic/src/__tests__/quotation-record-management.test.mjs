@@ -35,6 +35,9 @@ assert.equal(quotations.canArchiveQuotation(quotations.getQuotation("q-1")), tru
 const statusChange = quotations.setQuotationStatus("q-1", "sent");
 assert.equal(statusChange.error, undefined);
 assert.equal(statusChange.quotation.status, "sent");
+assert.equal(quotations.canSetQuotationStatus(statusChange.quotation, "accepted"), true);
+assert.equal(quotations.canSetQuotationStatus(statusChange.quotation, "draft"), false);
+assert.match(quotations.setQuotationStatus("q-1", "draft").error, /Invalid quotation status transition/);
 
 const edited = quotations.updateQuotation("q-1", {
   customerId: "cust-1",
