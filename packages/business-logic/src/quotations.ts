@@ -116,21 +116,10 @@ export function createQuotation(input: {
   return { quotation, errors: [] };
 }
 
-type QuotationEditInput = { customerId: UUID; lines: Array<{ kind: QuotationLine["kind"]; productId?: UUID | null; description: string; quantity: number; unitPrice: number }>; materialCharges?: number; labourCharges?: number; discount?: number; tax?: number; advance?: number; validUntil?: string | null; notes?: string | null };
-
-const QUOTATION_STATUS_TRANSITIONS: Record<QuotationStatus, QuotationStatus[]> = { draft: ["draft", "sent", "rejected", "expired"], sent: ["sent", "accepted", "rejected", "expired"], accepted: ["accepted"], rejected: ["rejected", "draft"], expired: ["expired", "draft"], converted: ["converted"] };
-export function canSetQuotationStatus(q: Quotation, status: QuotationStatus): boolean { return QUOTATION_STATUS_TRANSITIONS[q.status].includes(status); }
-export function canEditQuotation(q: Quotation): boolean { return !q.deletedAt && (q.status === "draft" || q.status === "sent"); }
-export function canArchiveQuotation(q: Quotation): boolean { return !q.deletedAt && ["draft", "sent", "rejected", "expired"].includes(q.status); }
-
-export function updateQuotation(id: UUID, input: QuotationEditInput): { quotation: Quotation | null; errors: string[] } {
-  assertPermission("sales.create");
-  const q = getQuotation(id);
-  if (!q) return { quotation: null, errors: ["Quotation not found"] };
-  if (!canEditQuotation(q)) return { quotation: null, errors: ["Only draft or sent quotations can be edited"] };
-  const customer = mainStore.getCustomer(input.customerId);
-  if (!customer) return { quotation: null, errors: ["Customer not found"] };
-  if (!input.lines.length) return { quotation: null, errors: ["Add at least one line"] };
+export const canSetQuotationStatus = (q: Quotation, status: QuotationStatus): boolean => ({ draft: ["draft", "sent", "rejected", "expired"], sent: ["sent", "accepted", "rejected", "expired"], accepted: ["accepted"], rejected: ["rejected", "draft"], expired: ["expired", "draft"], converted: ["converted"] }[q.status] as QuotationStatus[]).includes(status);
+export const canEditQuotation = (q: Quotation): boolean => !q.deletedAt && (q.status === "draft" || q.status === "sent"); export const canArchiveQuotation = (q: Quotation): boolean => !q.deletedAt && ["draft", "sent", "rejected", "expired"].includes(q.status);
+export function updateQuotation(id: UUID, input: Parameters<typeof createQuotation>[0]): { quotation: Quotation | null; errors: string[] } { assertPermission("sales.create");
+  const q = getQuotation(id); if (!q) return { quotation: null, errors: ["Quotation not found"] }; if (!canEditQuotation(q)) return { quotation: null, errors: ["Only draft or sent quotations can be edited"] }; const customer = mainStore.getCustomer(input.customerId); if (!customer) return { quotation: null, errors: ["Customer not found"] }; if (!input.lines.length) return { quotation: null, errors: ["Add at least one line"] };
   if (input.lines.some((line) => !line.description.trim() || !Number.isFinite(line.quantity) || line.quantity <= 0 || !Number.isFinite(line.unitPrice) || line.unitPrice < 0)) return { quotation: null, errors: ["Quotation lines must have a description, positive quantity and valid price"] };
   const before = structuredClone(q);
   const lines: QuotationLine[] = input.lines.map((line) => ({ id: generateId(), kind: line.kind, productId: line.productId ?? null, description: line.description.trim(), quantity: round2(line.quantity), unitPrice: round2(line.unitPrice), lineTotal: round2(line.quantity * line.unitPrice) }));
