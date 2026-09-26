@@ -1,6 +1,6 @@
 import { planDirectPurchasePosting, planSupplierPaymentPosting, supplierOpeningPayableBalance } from "./procurement-accounting";
 import { assertPermission } from "./permissions";
-import { assertBusinessDayOpen } from "./day-end";
+import { assertBusinessDayOpen } from "./business-day-state";
 import { enqueueOutbox } from "./outbox-bridge";
 import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase, remoteSupplierSettlement, remoteUpsertCustomer } from "./remote-write";
 import type { Supplier, LaundryOrder, Expense, ExpenseCategory, Purchase, PaymentMethod, UUID } from "@minarvabiz/types";
