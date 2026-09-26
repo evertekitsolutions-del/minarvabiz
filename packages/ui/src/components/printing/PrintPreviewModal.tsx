@@ -10,6 +10,7 @@ export function PrintPreviewModal({
   paper,
   onClose,
   onPrint,
+  onPaperChange,
 }: {
   open: boolean;
   title: string;
@@ -17,6 +18,7 @@ export function PrintPreviewModal({
   paper: "a4" | "thermal";
   onClose: () => void;
   onPrint?: () => void;
+  onPaperChange?: (paper: "a4" | "thermal") => void;
 }) {
   React.useEffect(() => {
     if (!open) return;
@@ -37,8 +39,12 @@ export function PrintPreviewModal({
             <h3 className="text-base font-semibold text-slate-900">{title}</h3>
             <p className="text-xs text-slate-500">{paper === "a4" ? "A4 document preview" : "Thermal document preview"}</p>
           </div>
-          <div className="flex gap-2">
-            {onPrint && <Button onClick={onPrint}>Print</Button>}
+          <div className="flex flex-wrap gap-2">
+            {onPaperChange && <>
+              <Button variant={paper === "a4" ? "primary" : "outline"} onClick={() => onPaperChange("a4")}>A4 Preview</Button>
+              <Button variant={paper === "thermal" ? "primary" : "outline"} onClick={() => onPaperChange("thermal")}>Thermal Preview</Button>
+            </>}
+            {onPrint && <Button onClick={onPrint}>Print current</Button>}
             <Button variant="outline" onClick={onClose}>Close</Button>
           </div>
         </div>
