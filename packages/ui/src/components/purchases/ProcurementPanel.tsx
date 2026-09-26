@@ -68,7 +68,7 @@ export function ProcurementPanel({
     notes?: string | null;
   }) => { success: boolean; poNumber?: string; errors?: string[] };
   onApprove: (id: string) => { success: boolean; error?: string };
-  onCancel: (id: string) => { success: boolean; error?: string };
+  onCancel: (id: string, reason: string) => { success: boolean; error?: string };
   onReceive: (payload: {
     purchaseOrderId: string;
     lines: Array<{ purchaseOrderLineId: string; quantity: number; warehouseLocationId?: string | null }>;
@@ -88,7 +88,7 @@ export function ProcurementPanel({
     amount: number;
     paymentMethod: PaymentMethod;
   }) => { success: boolean; error?: string };
-  onCancelInvoice: (id: string) => { success: boolean; error?: string };
+  onCancelInvoice: (id: string, reason: string) => { success: boolean; error?: string };
 }) {
   const [supplierId, setSupplierId] = React.useState("");
   const [expectedDate, setExpectedDate] = React.useState("");
@@ -112,10 +112,49 @@ export function ProcurementPanel({
   const [payAmount, setPayAmount] = React.useState("");
   const [payMethod, setPayMethod] = React.useState<PaymentMethod>("bank");
 
+  const [poQuery, setPoQuery] = React.useState("");
+  const [poSupplierId, setPoSupplierId] = React.useState("");
+  const [poStatus, setPoStatus] = React.useState("");
+  const [invoiceQuery, setInvoiceQuery] = React.useState("");
+  const [invoiceSupplierId, setInvoiceSupplierId] = React.useState("");
+  const [invoiceStatus, setInvoiceStatus] = React.useState("");
+  const [invoiceDateFrom, setInvoiceDateFrom] = React.useState("");
+  const [invoiceDateTo, setInvoiceDateTo] = React.useState("");
+  const [cancelPoId, setCancelPoId] = React.useState("");
+  const [cancelPoReason, setCancelPoReason] = React.useState("");
+  const [cancelInvoiceId, setCancelInvoiceId] = React.useState("");
+  const [cancelInvoiceReason, setCancelInvoiceReason] = React.useState("");
+
   const receiveOrder = purchaseOrders.find((po) => po.id === receiveOrderId) ?? null;
   const invoiceOrder = purchaseOrders.find((po) => po.id === invoiceOrderId) ?? null;
   const invoiceableLines = invoiceOrder ? getInvoiceableLines(invoiceOrder.id) : [];
   const payInvoice = purchaseInvoices.find((invoice) => invoice.id === payInvoiceId) ?? null;
+
+  const cancelPo = purchaseOrders.find((po) => po.id === cancelPoId) ?? null;
+  const cancelInvoice = purchaseInvoices.find((invoice) => invoice.id === cancelInvoiceId) ?? null;
+  const filteredPurchaseOrders = React.useMemo(() => {
+    const q = poQuery.trim().toLowerCase();
+    return purchaseOrders.filter((po) => {
+      if (poSupplierId && po.supplierId !== poSupplierId) return false;
+      if (poStatus && po.status !== poStatus) return false;
+      if (!q) return true;
+      return [po.poNumber, po.supplierName || "", po.notes || "", ...po.lines.map((line) => line.description)]
+        .some((value) => value.toLowerCase().includes(q));
+    });
+  }, [purchaseOrders, poSupplierId, poStatus, poQuery]);
+  const filteredPurchaseInvoices = React.useMemo(() => {
+    const q = invoiceQuery.trim().toLowerCase();
+    return purchaseInvoices.filter((invoice) => {
+      if (invoiceSupplierId && invoice.supplierId !== invoiceSupplierId) return false;
+      if (invoiceStatus && invoice.status !== invoiceStatus) return false;
+      const key = String(invoice.invoiceDate || "").slice(0, 10);
+      if (invoiceDateFrom && key < invoiceDateFrom) return false;
+      if (invoiceDateTo && key > invoiceDateTo) return false;
+      if (!q) return true;
+      return [invoice.invoiceNumber, invoice.supplierInvoiceNumber || "", invoice.supplierName || "", invoice.poNumber || "", invoice.notes || ""]
+        .some((value) => value.toLowerCase().includes(q));
+    });
+  }, [purchaseInvoices, invoiceSupplierId, invoiceStatus, invoiceDateFrom, invoiceDateTo, invoiceQuery]);
 
   function chooseProduct(id: string) {
     const product = products.find((p) => p.id === id);
@@ -246,7 +285,7 @@ export function ProcurementPanel({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
-            <FormField label="Supplier *">
+            <FormField label="Purchase order supplier *">
               <select className={selectClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
                 <option value="">Select supplier</option>
                 {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}{supplier.company ? ` — ${supplier.company}` : ""}</option>)}
@@ -295,10 +334,33 @@ export function ProcurementPanel({
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base font-semibold">Purchase Orders</CardTitle></CardHeader>
-        <CardContent className="space-y-2">
-          {!purchaseOrders.length && <p className="py-4 text-center text-sm text-slate-400">No purchase orders yet</p>}
-          {purchaseOrders.map((po) => {
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Purchase Orders</CardTitle>
+          <p className="text-xs text-slate-500">{filteredPurchaseOrders.length} of {purchaseOrders.length} records</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-4">
+            <label className="text-xs font-medium text-slate-600 md:col-span-2">
+              Search PO, supplier or item
+              <input className={inputClass + " mt-1"} value={poQuery} onChange={(e) => setPoQuery(e.target.value)} placeholder="Search…" />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              PO supplier filter
+              <select className={selectClass + " mt-1"} value={poSupplierId} onChange={(e) => setPoSupplierId(e.target.value)}>
+                <option value="">All suppliers</option>
+                {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Status
+              <select className={selectClass + " mt-1"} value={poStatus} onChange={(e) => setPoStatus(e.target.value)}>
+                <option value="">All statuses</option>
+                {["draft", "approved", "partially_received", "received", "cancelled"].map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}
+              </select>
+            </label>
+          </div>
+          {!filteredPurchaseOrders.length && <p className="py-4 text-center text-sm text-slate-400">No purchase orders match the selected filters</p>}
+          {filteredPurchaseOrders.map((po) => {
             const ordered = po.lines.reduce((sum, line) => sum + line.orderedQuantity, 0);
             const received = po.lines.reduce((sum, line) => sum + line.receivedQuantity, 0);
             const invoiceable = getInvoiceableLines(po.id).reduce((sum, line) => sum + line.invoiceableQuantity, 0);
@@ -313,7 +375,7 @@ export function ProcurementPanel({
                   {po.status === "draft" && <Button size="sm" onClick={() => { const r = onApprove(po.id); setMessage(r.success ? { type: "ok", text: `${po.poNumber} approved.` } : { type: "err", text: r.error || "Approval failed" }); }}>Approve</Button>}
                   {(po.status === "approved" || po.status === "partially_received") && <Button size="sm" onClick={() => openReceipt(po)}>Receive goods</Button>}
                   {invoiceable > 0 && <Button size="sm" variant="outline" onClick={() => openInvoice(po)}>Create supplier invoice</Button>}
-                  {(po.status === "draft" || po.status === "approved") && <Button size="sm" variant="outline" onClick={() => { const r = onCancel(po.id); setMessage(r.success ? { type: "ok", text: `${po.poNumber} cancelled.` } : { type: "err", text: r.error || "Cancellation failed" }); }}>Cancel</Button>}
+                  {(po.status === "draft" || po.status === "approved") && <Button size="sm" variant="outline" onClick={() => { setCancelPoId(po.id); setCancelPoReason(""); }}>Cancel</Button>}
                 </div>
               </div>
             );
@@ -345,9 +407,38 @@ export function ProcurementPanel({
           <CardTitle className="text-base font-semibold">Supplier Invoices / Accounts Payable</CardTitle>
           <p className="text-xs text-slate-500">Invoice only quantities already received by GRN. Posting creates supplier payable; it never increases stock again.</p>
         </CardHeader>
-        <CardContent className="space-y-2">
-          {!purchaseInvoices.length && <p className="py-4 text-center text-sm text-slate-400">No supplier invoices yet</p>}
-          {purchaseInvoices.map((invoice) => (
+        <CardContent className="space-y-3">
+          <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-6">
+            <label className="text-xs font-medium text-slate-600 md:col-span-2">
+              Search invoice, supplier ref or PO
+              <input className={inputClass + " mt-1"} value={invoiceQuery} onChange={(e) => setInvoiceQuery(e.target.value)} placeholder="Search…" />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Invoice supplier filter
+              <select className={selectClass + " mt-1"} value={invoiceSupplierId} onChange={(e) => setInvoiceSupplierId(e.target.value)}>
+                <option value="">All suppliers</option>
+                {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Status
+              <select className={selectClass + " mt-1"} value={invoiceStatus} onChange={(e) => setInvoiceStatus(e.target.value)}>
+                <option value="">All statuses</option>
+                {["draft", "posted", "partially_paid", "paid", "cancelled"].map((status) => <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              From
+              <input type="date" className={inputClass + " mt-1"} value={invoiceDateFrom} onChange={(e) => setInvoiceDateFrom(e.target.value)} />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              To
+              <input type="date" className={inputClass + " mt-1"} value={invoiceDateTo} onChange={(e) => setInvoiceDateTo(e.target.value)} />
+            </label>
+          </div>
+          <p className="text-xs text-slate-500">{filteredPurchaseInvoices.length} of {purchaseInvoices.length} invoices</p>
+          {!filteredPurchaseInvoices.length && <p className="py-4 text-center text-sm text-slate-400">No supplier invoices match the selected filters</p>}
+          {filteredPurchaseInvoices.map((invoice) => (
             <div key={invoice.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 p-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className="font-semibold text-slate-900">{invoice.invoiceNumber} · {invoice.supplierName || invoice.supplierId}</div>
@@ -359,7 +450,7 @@ export function ProcurementPanel({
                 <span className="text-sm font-semibold">{formatMoney(invoice.total)} · balance {formatMoney(invoice.balanceAmount)}</span>
                 {invoice.status === "draft" && <Button size="sm" onClick={() => { const r = onPostInvoice(invoice.id); setMessage(r.success ? { type: "ok", text: `${invoice.invoiceNumber} posted to AP.` } : { type: "err", text: r.error || "Posting failed" }); }}>Post</Button>}
                 {(invoice.status === "posted" || invoice.status === "partially_paid") && invoice.balanceAmount > 0 && <Button size="sm" variant="outline" onClick={() => { setPayInvoiceId(invoice.id); setPayAmount(String(invoice.balanceAmount)); }}>Pay</Button>}
-                {(invoice.status === "draft" || invoice.status === "posted") && invoice.paidAmount === 0 && <Button size="sm" variant="outline" onClick={() => { const r = onCancelInvoice(invoice.id); setMessage(r.success ? { type: "ok", text: `${invoice.invoiceNumber} cancelled.` } : { type: "err", text: r.error || "Cancellation failed" }); }}>Cancel</Button>}
+                {(invoice.status === "draft" || invoice.status === "posted") && invoice.paidAmount === 0 && <Button size="sm" variant="outline" onClick={() => { setCancelInvoiceId(invoice.id); setCancelInvoiceReason(""); }}>Cancel</Button>}
               </div>
             </div>
           ))}
@@ -383,6 +474,46 @@ export function ProcurementPanel({
           </div>
         </CardContent>
       </Card>
+
+      <Modal
+        open={Boolean(cancelPo)}
+        title={cancelPo ? `Cancel purchase order — ${cancelPo.poNumber}` : "Cancel purchase order"}
+        onClose={() => { setCancelPoId(""); setCancelPoReason(""); }}
+        footer={<>
+          <Button variant="outline" onClick={() => { setCancelPoId(""); setCancelPoReason(""); }}>Keep purchase order</Button>
+          <Button disabled={cancelPoReason.trim().length < 3} onClick={() => {
+            if (!cancelPo) return;
+            const r = onCancel(cancelPo.id, cancelPoReason.trim());
+            setMessage(r.success ? { type: "ok", text: `${cancelPo.poNumber} cancelled.` } : { type: "err", text: r.error || "Cancellation failed" });
+            if (r.success) { setCancelPoId(""); setCancelPoReason(""); }
+          }}>Confirm cancellation</Button>
+        </>}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">Only unreceived draft/approved purchase orders can be cancelled. The source remains in audit history.</p>
+          <FormField label="Cancellation reason *"><textarea className={inputClass + " h-20 py-2"} value={cancelPoReason} onChange={(e) => setCancelPoReason(e.target.value)} /></FormField>
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(cancelInvoice)}
+        title={cancelInvoice ? `Cancel supplier invoice — ${cancelInvoice.invoiceNumber}` : "Cancel supplier invoice"}
+        onClose={() => { setCancelInvoiceId(""); setCancelInvoiceReason(""); }}
+        footer={<>
+          <Button variant="outline" onClick={() => { setCancelInvoiceId(""); setCancelInvoiceReason(""); }}>Keep invoice</Button>
+          <Button disabled={cancelInvoiceReason.trim().length < 3} onClick={() => {
+            if (!cancelInvoice) return;
+            const r = onCancelInvoice(cancelInvoice.id, cancelInvoiceReason.trim());
+            setMessage(r.success ? { type: "ok", text: `${cancelInvoice.invoiceNumber} cancelled.` } : { type: "err", text: r.error || "Cancellation failed" });
+            if (r.success) { setCancelInvoiceId(""); setCancelInvoiceReason(""); }
+          }}>Confirm cancellation</Button>
+        </>}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">Posted unpaid invoices reverse Accounts Payable safely. Paid or partially paid invoices stay immutable and require a debit-note correction workflow.</p>
+          <FormField label="Cancellation reason *"><textarea className={inputClass + " h-20 py-2"} value={cancelInvoiceReason} onChange={(e) => setCancelInvoiceReason(e.target.value)} /></FormField>
+        </div>
+      </Modal>
 
       <Modal
         open={Boolean(receiveOrder)}

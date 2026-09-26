@@ -163,15 +163,116 @@ export function ExpenseList({
   );
 }
 
-export function PurchaseList({ purchases, suppliers: _suppliers, onAdd, onCreate }: { purchases: Purchase[]; suppliers?: Supplier[]; onAdd?: () => void; onCreate?: () => void }) {
+export function PurchaseList({ purchases, suppliers = [], onAdd, onCreate }: { purchases: Purchase[]; suppliers?: Supplier[]; onAdd?: () => void; onCreate?: () => void }) {
+  const [query, setQuery] = React.useState("");
+  const [supplierId, setSupplierId] = React.useState("");
+  const [kind, setKind] = React.useState("");
+  const [paymentMethod, setPaymentMethod] = React.useState("");
+  const [dateFrom, setDateFrom] = React.useState("");
+  const [dateTo, setDateTo] = React.useState("");
+  const [outstandingOnly, setOutstandingOnly] = React.useState(false);
+
+  const filtered = React.useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return purchases.filter((purchase) => {
+      if (supplierId === "__none" && purchase.supplierId) return false;
+      if (supplierId && supplierId !== "__none" && purchase.supplierId !== supplierId) return false;
+      if (kind && purchase.kind !== kind) return false;
+      if (paymentMethod && purchase.paymentMethod !== paymentMethod) return false;
+      if (outstandingOnly && purchase.balanceAmount <= 0) return false;
+      const key = dateKey(purchase.date);
+      if (dateFrom && key < dateFrom) return false;
+      if (dateTo && key > dateTo) return false;
+      if (!normalized) return true;
+      return [
+        purchase.purchaseNumber,
+        purchase.supplierName || "",
+        purchase.description,
+        purchase.orderNumber || "",
+        purchase.notes || "",
+      ].some((value) => value.toLowerCase().includes(normalized));
+    });
+  }, [purchases, supplierId, kind, paymentMethod, outstandingOnly, dateFrom, dateTo, query]);
+
+  const clearFilters = () => {
+    setQuery("");
+    setSupplierId("");
+    setKind("");
+    setPaymentMethod("");
+    setDateFrom("");
+    setDateTo("");
+    setOutstandingOnly(false);
+  };
+
   const columns: Column<Purchase>[] = [
     { key: "purchaseNumber", header: "Purchase #", render: (r) => <span className="font-medium">{r.purchaseNumber}</span> },
     { key: "date", header: "Date", render: (r) => new Date(r.date).toLocaleDateString("en-IN") },
     { key: "description", header: "Description" },
     { key: "kind", header: "Kind", render: (r) => <span className={r.kind === "order_specific" ? "text-violet-700" : "text-slate-600"}>{r.kind === "order_specific" ? `Order ${r.orderNumber}` : "General"}</span> },
-    { key: "supplierName", header: "Supplier", render: (r) => r.supplierName || "—" },
+    { key: "supplierName", header: "Supplier", render: (r) => r.supplierName || "Direct / no supplier" },
     { key: "amount", header: "Amount", render: (r) => formatMoney(r.amount) },
+    { key: "paymentMethod", header: "Method", render: (r) => r.paymentMethod },
     { key: "balanceAmount", header: "Balance", render: (r) => <span className={r.balanceAmount > 0 ? "text-rose-600" : "text-slate-500"}>{formatMoney(r.balanceAmount)}</span> },
   ];
-  return <div className="space-y-4"><div className="flex items-center justify-between"><div><h2 className="text-xl font-semibold text-slate-900">Purchases</h2><p className="text-sm text-slate-500">{purchases.length} records</p></div><Button onClick={onAdd ?? onCreate}>+ Add Purchase</Button></div><DataTable columns={columns} rows={purchases} emptyMessage="No purchases yet"/></div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900">Purchases</h2>
+          <p className="text-sm text-slate-500">{filtered.length} of {purchases.length} records</p>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={clearFilters}>Clear filters</Button>
+          <Button onClick={onAdd ?? onCreate}>+ Add Purchase</Button>
+        </div>
+      </div>
+
+      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-6">
+        <label className="text-xs font-medium text-slate-600 lg:col-span-2">
+          Search purchase, supplier, description or order
+          <input className={inputClass + " mt-1"} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search…" />
+        </label>
+        <label className="text-xs font-medium text-slate-600">
+          Direct purchase supplier filter
+          <select className={selectClass + " mt-1"} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+            <option value="">All suppliers</option>
+            <option value="__none">Direct / no supplier</option>
+            {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-medium text-slate-600">
+          Kind
+          <select className={selectClass + " mt-1"} value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="">All kinds</option>
+            <option value="general">General</option>
+            <option value="order_specific">Order-specific</option>
+          </select>
+        </label>
+        <label className="text-xs font-medium text-slate-600">
+          Payment method
+          <select className={selectClass + " mt-1"} value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+            <option value="">All methods</option>
+            {["cash", "bank", "card", "upi", "online", "other"].map((method) => <option key={method} value={method}>{method}</option>)}
+          </select>
+        </label>
+        <label className="flex items-end gap-2 text-xs font-medium text-slate-600">
+          <input type="checkbox" checked={outstandingOnly} onChange={(e) => setOutstandingOnly(e.target.checked)} />
+          Outstanding only
+        </label>
+        <div className="grid grid-cols-2 gap-2 lg:col-span-2">
+          <label className="text-xs font-medium text-slate-600">
+            From
+            <input type="date" className={inputClass + " mt-1"} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          </label>
+          <label className="text-xs font-medium text-slate-600">
+            To
+            <input type="date" className={inputClass + " mt-1"} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          </label>
+        </div>
+      </div>
+
+      <DataTable columns={columns} rows={filtered} emptyMessage="No purchases match the selected filters" />
+    </div>
+  );
 }

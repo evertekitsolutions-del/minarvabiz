@@ -594,10 +594,12 @@ export function prepareSupplierInvoiceSettlements(supplierId: UUID, allocations:
   } };
 }
 
-export function cancelPurchaseInvoice(id: UUID): { purchaseInvoice: PurchaseInvoice | null; error?: string } {
+export function cancelPurchaseInvoice(id: UUID, reason: string): { purchaseInvoice: PurchaseInvoice | null; error?: string } {
   assertPermission("purchases.manage");
   const invoice = mutableInvoice(id);
   if (!invoice) return { purchaseInvoice: null, error: "Purchase invoice not found" };
+  const cancellationReason = reason.trim();
+  if (cancellationReason.length < 3) return { purchaseInvoice: null, error: "Cancellation reason is required" };
   if (invoice.status === "cancelled") return { purchaseInvoice: null, error: "Purchase invoice already cancelled" };
   if (invoice.status === "paid" || invoice.status === "partially_paid" || invoice.paidAmount > 0) {
     return { purchaseInvoice: null, error: "Paid supplier invoice cannot be cancelled; use a debit note in the accounting workflow" };
@@ -621,7 +623,7 @@ export function cancelPurchaseInvoice(id: UUID): { purchaseInvoice: PurchaseInvo
   invoice.version += 1;
   reversal.commit();
   void remoteUpsertPurchaseInvoice(cloneInvoice(invoice));
-  auditAction("purchase_invoice.cancel", "purchase_invoices", invoice.id, before, invoice);
+  auditAction("purchase_invoice.cancel", "purchase_invoices", invoice.id, before, { ...invoice, cancellationReason });
   touchPersistence();
   return { purchaseInvoice: cloneInvoice(invoice) };
 }
@@ -650,10 +652,12 @@ export function buildSupplierPayableAging(asOfDate = new Date().toISOString().sl
   return [...bySupplier.values()].sort((a, b) => b.totalOutstanding - a.totalOutstanding);
 }
 
-export function cancelPurchaseOrder(id: UUID): { purchaseOrder: PurchaseOrder | null; error?: string } {
+export function cancelPurchaseOrder(id: UUID, reason: string): { purchaseOrder: PurchaseOrder | null; error?: string } {
   assertPermission("purchases.manage");
   const po = findMutable(id);
   if (!po) return { purchaseOrder: null, error: "Purchase order not found" };
+  const cancellationReason = reason.trim();
+  if (cancellationReason.length < 3) return { purchaseOrder: null, error: "Cancellation reason is required" };
   if (po.status === "cancelled" || po.status === "received") {
     return { purchaseOrder: null, error: "Completed/cancelled purchase order cannot be cancelled" };
   }
@@ -666,7 +670,7 @@ export function cancelPurchaseOrder(id: UUID): { purchaseOrder: PurchaseOrder | 
   po.updatedAt = nowISO();
   po.version += 1;
   void remoteUpsertPurchaseOrder(cloneOrder(po));
-  auditAction("purchase_order.cancel", "purchase_orders", po.id, before, po);
+  auditAction("purchase_order.cancel", "purchase_orders", po.id, before, { ...po, cancellationReason });
   touchPersistence();
   return { purchaseOrder: cloneOrder(po) };
 }
