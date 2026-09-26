@@ -15,8 +15,10 @@ const deep = read(".github/workflows/windows-deep-smoke.yml");
 const release = read(".github/workflows/release-windows.yml");
 const publisher = read(".github/workflows/publish-windows-release.yml");
 const pkg = JSON.parse(read("apps/desktop/package.json"));
+const rootPkg = JSON.parse(read("package.json"));
 
-assert.equal(pkg.version, "1.0.5");
+assert.match(pkg.version, /^\d+\.\d+\.\d+$/);
+assert.equal(pkg.version, rootPkg.version);
 assert.match(updater, /minarvabiz-update-v1/);
 assert.match(updater, /github\.com/);
 assert.match(updater, /evertekitsolutions-del\/minarvabiz\/releases\/download/);

@@ -27,10 +27,20 @@ const suppliers: Supplier[] = [
   { id: "sup-1", name: "City Laundry Works", company: "CLW", phone: "9800011111", category: "laundry", openingBalance: 0, outstandingBalance: 0, createdAt: nowISO(), updatedAt: nowISO() },
   { id: "sup-2", name: "Thread & Co.", company: "T&C Supplies", phone: "9800022222", category: "materials", openingBalance: 0, outstandingBalance: 0, createdAt: nowISO(), updatedAt: nowISO() },
 ];
+const SYSTEM_EXPENSE_CATEGORY_NAME_BY_ID: Record<string, string> = {
+  "ec-3": "Rental",
+  "ec-4": "Water",
+  "ec-6": "Shop Purchases",
+};
+
+function normalizeSystemExpenseCategoryName(id: string, name: string): string {
+  return SYSTEM_EXPENSE_CATEGORY_NAME_BY_ID[id] ?? name;
+}
+
 const expenseCategories: ExpenseCategory[] = [
   { id: "ec-1", name: "Salary", isSystem: true, createdAt: nowISO() }, { id: "ec-2", name: "Electricity", isSystem: true, createdAt: nowISO() },
-  { id: "ec-3", name: "Rent", isSystem: true, createdAt: nowISO() }, { id: "ec-4", name: "Normal Water", isSystem: true, createdAt: nowISO() },
-  { id: "ec-5", name: "Drinking Water", isSystem: true, createdAt: nowISO() }, { id: "ec-6", name: "Shop Supplies", isSystem: true, createdAt: nowISO() },
+  { id: "ec-3", name: "Rental", isSystem: true, createdAt: nowISO() }, { id: "ec-4", name: "Water", isSystem: true, createdAt: nowISO() },
+  { id: "ec-5", name: "Drinking Water", isSystem: true, createdAt: nowISO() }, { id: "ec-6", name: "Shop Purchases", isSystem: true, createdAt: nowISO() },
   { id: "ec-7", name: "Transportation", isSystem: true, createdAt: nowISO() }, { id: "ec-8", name: "Maintenance", isSystem: true, createdAt: nowISO() },
   { id: "ec-9", name: "Other", isSystem: true, createdAt: nowISO() },
 ];
@@ -776,5 +786,25 @@ mainStore.registerCustomerReceivableProvider("laundry", {
   },
 });
 
-export function hydratePhase5(data:{suppliers?:Supplier[];laundryOrders?:LaundryOrder[];expenses?:Expense[];purchases?:Purchase[];expenseCategories?:ExpenseCategory[]}){if(data.suppliers){suppliers.length=0;suppliers.push(...data.suppliers);}if(data.laundryOrders){laundryOrders.length=0;laundryOrders.push(...data.laundryOrders);}if(data.expenses){expenses.length=0;expenses.push(...data.expenses);}if(data.purchases){purchases.length=0;purchases.push(...data.purchases);}if(data.expenseCategories){expenseCategories.length=0;expenseCategories.push(...data.expenseCategories);}lastLaundryNo=maxDocumentNumber(laundryOrders.map(x=>x.orderNumber),"LDY");lastPurchaseNo=maxDocumentNumber(purchases.map(x=>x.purchaseNumber),"PUR");}
+export function hydratePhase5(data:{suppliers?:Supplier[];laundryOrders?:LaundryOrder[];expenses?:Expense[];purchases?:Purchase[];expenseCategories?:ExpenseCategory[]}){
+  if(data.suppliers){suppliers.length=0;suppliers.push(...data.suppliers);}
+  if(data.laundryOrders){laundryOrders.length=0;laundryOrders.push(...data.laundryOrders);}
+  if(data.expenses){
+    expenses.length=0;
+    expenses.push(...data.expenses.map((expense)=>{
+      const categoryName=SYSTEM_EXPENSE_CATEGORY_NAME_BY_ID[expense.categoryId] ?? expense.categoryName;
+      return categoryName===expense.categoryName?expense:{...expense,categoryName};
+    }));
+  }
+  if(data.purchases){purchases.length=0;purchases.push(...data.purchases);}
+  if(data.expenseCategories){
+    expenseCategories.length=0;
+    expenseCategories.push(...data.expenseCategories.map((category)=>{
+      const name=normalizeSystemExpenseCategoryName(category.id,category.name);
+      return name===category.name?category:{...category,name};
+    }));
+  }
+  lastLaundryNo=maxDocumentNumber(laundryOrders.map(x=>x.orderNumber),"LDY");
+  lastPurchaseNo=maxDocumentNumber(purchases.map(x=>x.purchaseNumber),"PUR");
+}
 function maxDocumentNumber(values:string[],prefix:string){let max=0;for(const value of values){const match=new RegExp(`^${prefix}-(\\d+)$`).exec(value||"");if(match)max=Math.max(max,Number(match[1]));}return max>0?`${prefix}-${String(max).padStart(4,"0")}`:null;}

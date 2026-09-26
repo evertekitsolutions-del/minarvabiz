@@ -7,7 +7,7 @@
 3. Wait until you see **SUCCESS**
 4. Installer path:
 
-`apps\desktop\release\MinarvaBiz-Setup-1.0.0.exe`
+`apps\desktop\release\MinarvaBiz-Setup-1.0.6.exe`
 
 ## Or PowerShell (one block)
 

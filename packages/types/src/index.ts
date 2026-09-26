@@ -356,13 +356,17 @@ export interface ServiceOrder {
 export type ExpenseCategoryName =
   | "Salary"
   | "Electricity"
-  | "Rent"
-  | "Normal Water"
+  | "Rental"
+  | "Water"
   | "Drinking Water"
-  | "Shop Supplies"
+  | "Shop Purchases"
   | "Transportation"
   | "Maintenance"
   | "Other"
+  // Legacy persisted labels remain accepted and are normalized on hydration.
+  | "Rent"
+  | "Normal Water"
+  | "Shop Supplies"
   | string;
 
 export interface Supplier {
