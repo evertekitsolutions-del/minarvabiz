@@ -323,6 +323,9 @@ async function main() {
     await assertMain(ws, "REFUND_CANCEL_AVAILABLE", ["Refund ₹30.00 & Cancel", "Cash refund"]);
     await setByAriaLabel(ws, "Service order refund payment method", "Bank");
     await click(ws, "REFUND_CANCEL_SERVICE", ["refund ₹30.00 & cancel"]);
+    await assertMain(ws, "REFUND_CANCEL_REASON_REQUIRED", ["Cancellation reason *", "Refund ₹30.00 & cancel"]);
+    await setField(ws, "Cancel ORD-", "Cancellation reason", "QA customer cancellation");
+    await clickDialogButton(ws, "REFUND_CANCEL_CONFIRM", "Cancel ORD-", "Refund ₹30.00 & cancel");
     const refundCancelState = JSON.parse(await evalIn(ws, `JSON.stringify({button:[...document.querySelectorAll('button')].some(b=>(b.innerText||'').includes('Refund ₹30.00 & Cancel')),main:(document.querySelector('[data-testid="app-content"]')?.innerText||'').slice(0,5000)})`));
     if (refundCancelState.button) throw new Error("Service-order refund cancel action remained available after cancellation");
     await click(ws, "REFUND_VERIFY_PAYMENTS", ["payments"]);
