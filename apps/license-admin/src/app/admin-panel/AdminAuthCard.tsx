@@ -22,6 +22,11 @@ interface AdminAuthCardProps {
   onBeginMfaEnrollment: () => void;
   onVerifyMfa: () => void;
   onResetMfa: () => void;
+  bootstrapAvailable: boolean;
+  bootstrapBusy: boolean;
+  bootstrapMessage: string | null;
+  bootstrapSent: boolean;
+  onBootstrap: () => void;
 }
 
 export function AdminAuthCard(props: AdminAuthCardProps) {
@@ -44,6 +49,11 @@ export function AdminAuthCard(props: AdminAuthCardProps) {
     onBeginMfaEnrollment,
     onVerifyMfa,
     onResetMfa,
+    bootstrapAvailable,
+    bootstrapBusy,
+    bootstrapMessage,
+    bootstrapSent,
+    onBootstrap,
   } = props;
 
   return (
@@ -78,6 +88,22 @@ export function AdminAuthCard(props: AdminAuthCardProps) {
                 }}
               />
               {message && <p className="text-sm text-rose-600">{message}</p>}
+              {bootstrapAvailable && (
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+                  <p className="text-xs text-slate-600">
+                    No named administrator exists yet. Send a one-time setup email to the configured administrator.
+                  </p>
+                  {bootstrapMessage && <p className="mt-2 text-xs text-slate-700">{bootstrapMessage}</p>}
+                  <Button
+                    className="mt-3"
+                    variant="outline"
+                    disabled={bootstrapBusy || bootstrapSent}
+                    onClick={onBootstrap}
+                  >
+                    {bootstrapBusy ? "Sending setup email…" : bootstrapSent ? "Setup email sent" : "Set up first administrator"}
+                  </Button>
+                </div>
+              )}
               <Button disabled={busy || !email.trim() || !password} onClick={onLogin}>
                 {busy ? "Signing in…" : "Sign in"}
               </Button>
