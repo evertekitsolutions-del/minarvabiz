@@ -88,6 +88,11 @@ export function getPrintTemplate(documentKind: PrintDocumentKind, paper: PrintPa
   return { ...(group.find((template) => template.isDefault) ?? group[0] ?? defaultPrintTemplates().find((template) => template.documentKind === documentKind && template.paper === paper)!) };
 }
 
+export function getPrintTemplateById(id: string): PrintDocumentTemplate | null {
+  const found = settings.templates.find((template) => template.id === id);
+  return found ? { ...found } : null;
+}
+
 export function savePrintTemplate(template: PrintDocumentTemplate): PrintDocumentTemplate {
   const clean = sanitizePrintTemplate(template);
   const templates = settings.templates.map((item) => ({ ...item }));
