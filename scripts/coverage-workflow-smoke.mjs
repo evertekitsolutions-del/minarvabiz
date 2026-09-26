@@ -17,6 +17,7 @@ assert.match(workflow, /permissions:\s*\n\s+contents:\s+read/);
 assert.match(workflow, /actions\/checkout@[0-9a-f]{40}/i);
 assert.match(workflow, /fetch-depth:\s*0/);
 assert.match(workflow, /--experimental-test-coverage/);
+assert.match(workflow, /--test-concurrency=1/);
 assert.match(workflow, /coverage-json-reporter\.mjs/);
 assert.match(workflow, /coverage\/lcov\.info/);
 assert.match(workflow, /coverage-ratchet\.mjs/);
