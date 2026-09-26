@@ -2,6 +2,7 @@ import * as React from "react";
 import { Button } from "../Button";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { PrintTemplateManager } from "./PrintTemplateManager";
+import { code128Svg, qrSvg } from "@minarvabiz/business-logic";
 
 export interface SettingsPanelProps {
   profile: {
@@ -235,9 +236,15 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
     setPrintTestMessage("Sending barcode label test to the selected printer…");
     const width = Math.max(20, Math.min(120, Number(draftPrinting.labelWidthMm) || 50));
     const height = Math.max(15, Math.min(150, Number(draftPrinting.labelHeightMm) || 30));
+    const testCode = "MBIZ-2900000001";
+    const codeBlock = draftPrinting.labelCodeMode === "barcode"
+      ? `<div class="barcode">${code128Svg(testCode)}</div>`
+      : draftPrinting.labelCodeMode === "qr"
+        ? `<div class="qr">${qrSvg(testCode)}</div>`
+        : `<div class="codes"><div class="barcode">${code128Svg(testCode)}</div><div class="qr">${qrSvg(testCode)}</div></div>`;
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Minarva Biz Label Test</title>
-<style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif}.label{width:${width}mm;height:${height}mm;padding:2mm;text-align:center;overflow:hidden}.name{font-size:11px;font-weight:700}.bars{height:12mm;margin:1mm 0;background:repeating-linear-gradient(90deg,#000 0,#000 1px,#fff 1px,#fff 3px)}.code{font-size:9px;letter-spacing:1px}</style>
-</head><body><div class="label"><div class="name">Minarva Biz Label Test</div><div class="bars"></div><div class="code">2900000000000</div></div></body></html>`;
+<style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif}.label{width:${width}mm;height:${height}mm;padding:2mm;text-align:center;overflow:hidden}.name{font-size:10px;font-weight:700}.codes{display:flex;align-items:center;gap:1mm}.barcode{flex:1}.barcode-svg{width:100%;height:13mm}.qr{width:14mm;margin:0 auto}.qr-svg{width:100%;height:auto}.code{font-size:8px}</style>
+</head><body><div class="label"><div class="name">Minarva Biz Label Test</div>${codeBlock}<div class="code">${testCode}</div></div></body></html>`;
     try {
       const result = await api.printHtml({ html, deviceName, paper: "label", labelWidthMm: width, labelHeightMm: height, silent: true });
       if (!result.ok) {
