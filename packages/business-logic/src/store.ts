@@ -168,17 +168,44 @@ export function createCustomer(input: {
   customers.push(c);
   touchPersistence();
   void remoteUpsertCustomer(c);
+  auditAction("customer.create", "customers", c.id, null, { ...c });
   return c;
 }
 
 export function updateCustomer(id: UUID, patch: Partial<Customer>): Customer | null {
   assertPermission("customers.manage");
-  const c = getCustomer(id);
-  if (!c) return null;
-  Object.assign(c, patch, { updatedAt: nowISO(), version: (c.version ?? 1) + 1 });
+  const customer = getCustomer(id);
+  if (!customer) return null;
+  const before = { ...customer };
+  const allowed = ["name", "phone", "whatsapp", "email", "address", "birthday", "notes"] as const;
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(patch, key) && patch[key] !== undefined) customer[key] = patch[key] as never;
+  }
+  customer.updatedAt = nowISO();
+  customer.version = (customer.version ?? 1) + 1;
   touchPersistence();
-  void remoteUpsertCustomer(c);
-  return c;
+  void remoteUpsertCustomer(customer);
+  auditAction("customer.update", "customers", customer.id, before, { ...customer });
+  return customer;
+}
+
+export function archiveCustomer(id: UUID, reason: string): { customer: Customer | null; error?: string } {
+  assertPermission("customers.manage");
+  const customer = getCustomer(id);
+  if (!customer) return { customer: null, error: "Customer not found" };
+  const archiveReason = reason.trim();
+  if (archiveReason.length < 3) return { customer: null, error: "Archive reason is required" };
+  if (!Number.isFinite(customer.outstandingBalance) || customer.outstandingBalance > 0.005) {
+    return { customer: null, error: "Customer has an outstanding balance. Settle it before archiving." };
+  }
+  const before = { ...customer };
+  customer.deletedAt = nowISO();
+  customer.updatedAt = customer.deletedAt;
+  customer.version = (customer.version ?? 1) + 1;
+  touchPersistence();
+  void remoteUpsertCustomer(customer);
+  auditAction("customer.archive", "customers", customer.id, before, { ...customer, archiveReason });
+  return { customer };
 }
 
 export function listProducts(opts?: { query?: string; categoryId?: string; lowStockOnly?: boolean }): Product[] {
