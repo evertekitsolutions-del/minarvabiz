@@ -486,6 +486,7 @@ export function ProcurementPanel({
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-semibold">{formatMoney(po.total)}</span>
+                  {po.status === "draft" && <Button size="sm" variant="outline" onClick={() => openPoEditor(po)}>Edit</Button>}
                   {po.status === "draft" && <Button size="sm" onClick={() => { const r = onApprove(po.id); setMessage(r.success ? { type: "ok", text: `${po.poNumber} approved.` } : { type: "err", text: r.error || "Approval failed" }); }}>Approve</Button>}
                   {(po.status === "approved" || po.status === "partially_received") && <Button size="sm" onClick={() => openReceipt(po)}>Receive goods</Button>}
                   {invoiceable > 0 && <Button size="sm" variant="outline" onClick={() => openInvoice(po)}>Create supplier invoice</Button>}
@@ -562,6 +563,7 @@ export function ProcurementPanel({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-semibold">{formatMoney(invoice.total)} · balance {formatMoney(invoice.balanceAmount)}</span>
+                {invoice.status === "draft" && <Button size="sm" variant="outline" onClick={() => openInvoiceEditor(invoice)}>Edit</Button>}
                 {invoice.status === "draft" && <Button size="sm" onClick={() => { const r = onPostInvoice(invoice.id); setMessage(r.success ? { type: "ok", text: `${invoice.invoiceNumber} posted to AP.` } : { type: "err", text: r.error || "Posting failed" }); }}>Post</Button>}
                 {(invoice.status === "posted" || invoice.status === "partially_paid") && invoice.balanceAmount > 0 && <Button size="sm" variant="outline" onClick={() => { setPayInvoiceId(invoice.id); setPayAmount(String(invoice.balanceAmount)); }}>Pay</Button>}
                 {(invoice.status === "draft" || invoice.status === "posted") && invoice.paidAmount === 0 && <Button size="sm" variant="outline" onClick={() => { setCancelInvoiceId(invoice.id); setCancelInvoiceReason(""); }}>Cancel</Button>}
@@ -588,6 +590,122 @@ export function ProcurementPanel({
           </div>
         </CardContent>
       </Card>
+
+      <Modal
+        open={Boolean(editPo)}
+        title={editPo ? `Edit draft purchase order — ${editPo.poNumber}` : "Edit draft purchase order"}
+        onClose={() => setEditPoId("")}
+        className="max-w-4xl"
+        footer={<>
+          <Button variant="outline" onClick={() => setEditPoId("")}>Cancel</Button>
+          <Button disabled={!editPoSupplierId || !editPoLines.length} onClick={savePoEdit}>Save draft changes</Button>
+        </>}
+      >
+        {editPo && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">
+              Only draft purchase orders are editable. Approval locks supplier, quantities and commercial values before receiving begins.
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <FormField label="Purchase order supplier *">
+                <select className={selectClass} value={editPoSupplierId} onChange={(e) => setEditPoSupplierId(e.target.value)}>
+                  <option value="">Select supplier</option>
+                  {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Expected delivery">
+                <input className={inputClass} type="date" value={editPoExpectedDate} onChange={(e) => setEditPoExpectedDate(e.target.value)} />
+              </FormField>
+              <FormField label="Notes">
+                <input className={inputClass} value={editPoNotes} onChange={(e) => setEditPoNotes(e.target.value)} />
+              </FormField>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-slate-900">Purchase-order lines</h3>
+                <Button size="sm" variant="outline" onClick={() => setEditPoLines((current) => [...current, { productId: "", description: "", quantity: "1", unitCost: "", taxRate: "0" }])}>Add line</Button>
+              </div>
+              {editPoLines.map((line, index) => (
+                <div key={index} className="grid gap-2 rounded-lg border border-slate-200 p-3 md:grid-cols-[1.2fr_1.5fr_.55fr_.7fr_.55fr_auto]">
+                  <select
+                    className={selectClass}
+                    value={line.productId}
+                    onChange={(e) => {
+                      const product = products.find((item) => item.id === e.target.value);
+                      setEditPoLines((current) => current.map((item, i) => i === index ? {
+                        ...item,
+                        productId: e.target.value,
+                        description: product?.name || item.description,
+                        unitCost: product ? String(product.costPrice) : item.unitCost,
+                      } : item));
+                    }}
+                  >
+                    <option value="">Product (optional)</option>
+                    {products.filter((product) => product.isActive).map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+                  </select>
+                  <input className={inputClass} value={line.description} placeholder="Description" onChange={(e) => setEditPoLines((current) => current.map((item, i) => i === index ? { ...item, description: e.target.value } : item))} />
+                  <input className={inputClass} type="number" min="0.001" step="0.001" value={line.quantity} onChange={(e) => setEditPoLines((current) => current.map((item, i) => i === index ? { ...item, quantity: e.target.value } : item))} />
+                  <input className={inputClass} type="number" min="0" step="0.01" value={line.unitCost} onChange={(e) => setEditPoLines((current) => current.map((item, i) => i === index ? { ...item, unitCost: e.target.value } : item))} />
+                  <input className={inputClass} type="number" min="0" step="0.01" value={line.taxRate} onChange={(e) => setEditPoLines((current) => current.map((item, i) => i === index ? { ...item, taxRate: e.target.value } : item))} />
+                  <Button size="sm" variant="outline" disabled={editPoLines.length === 1} onClick={() => setEditPoLines((current) => current.filter((_, i) => i !== index))}>Remove</Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(editInvoice)}
+        title={editInvoice ? `Edit draft supplier invoice — ${editInvoice.invoiceNumber}` : "Edit draft supplier invoice"}
+        onClose={() => setEditInvoiceId("")}
+        className="max-w-4xl"
+        footer={<>
+          <Button variant="outline" onClick={() => setEditInvoiceId("")}>Cancel</Button>
+          <Button disabled={!editInvoiceLines.some((line) => Number(line.quantity) > 0)} onClick={saveInvoiceEdit}>Save draft changes</Button>
+        </>}
+      >
+        {editInvoice && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">
+              Only draft supplier invoices are editable. Posting to Accounts Payable locks supplier invoice values; later corrections use accounting-safe cancellation/debit-note workflows.
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <FormField label="Supplier invoice number">
+                <input className={inputClass} value={editSupplierInvoiceNumber} onChange={(e) => setEditSupplierInvoiceNumber(e.target.value)} />
+              </FormField>
+              <FormField label="Invoice date">
+                <input className={inputClass} type="date" value={editInvoiceDate} onChange={(e) => setEditInvoiceDate(e.target.value)} />
+              </FormField>
+              <FormField label="Due date">
+                <input className={inputClass} type="date" value={editInvoiceDueDate} onChange={(e) => setEditInvoiceDueDate(e.target.value)} />
+              </FormField>
+            </div>
+            <div className="space-y-2">
+              {editInvoiceLines.map((line, index) => (
+                <div key={line.purchaseOrderLineId} className="grid gap-2 rounded-lg border border-slate-200 p-3 md:grid-cols-[1.6fr_.6fr_.7fr_.6fr]">
+                  <div>
+                    <div className="text-sm font-medium text-slate-900">{line.description}</div>
+                    <div className="text-xs text-slate-500">Maximum editable quantity {line.invoiceableQuantity}</div>
+                  </div>
+                  <FormField label="Quantity">
+                    <input className={inputClass} type="number" min="0" max={line.invoiceableQuantity} step="0.001" value={line.quantity} onChange={(e) => setEditInvoiceLines((current) => current.map((item, i) => i === index ? { ...item, quantity: e.target.value } : item))} />
+                  </FormField>
+                  <FormField label="Unit cost">
+                    <input className={inputClass} type="number" min="0" step="0.01" value={line.editUnitCost} onChange={(e) => setEditInvoiceLines((current) => current.map((item, i) => i === index ? { ...item, editUnitCost: e.target.value } : item))} />
+                  </FormField>
+                  <FormField label="Tax %">
+                    <input className={inputClass} type="number" min="0" step="0.01" value={line.editTaxRate} onChange={(e) => setEditInvoiceLines((current) => current.map((item, i) => i === index ? { ...item, editTaxRate: e.target.value } : item))} />
+                  </FormField>
+                </div>
+              ))}
+            </div>
+            <FormField label="Notes">
+              <textarea className={inputClass + " h-20 py-2"} value={editInvoiceNotes} onChange={(e) => setEditInvoiceNotes(e.target.value)} />
+            </FormField>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={Boolean(cancelPo)}
