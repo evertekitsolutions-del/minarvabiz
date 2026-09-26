@@ -160,3 +160,39 @@ export function normalizePrintTemplates(value: unknown): PrintDocumentTemplate[]
   }
   return parsed;
 }
+
+
+function sampleEscape(value: unknown): string {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char] || char));
+}
+
+export function buildTemplateSampleHtml(template: PrintDocumentTemplate): string {
+  const clean = sanitizePrintTemplate(template);
+  const compact = clean.paper === "thermal" || clean.layout === "compact";
+  const width = clean.paper === "thermal" ? "80mm" : "210mm";
+  const title = clean.heading || (clean.documentKind === "quotation" ? "QUOTATION" : "TAX INVOICE");
+  const number = clean.documentKind === "quotation" ? "QT-MT-2026-27-00001" : "INV-MT-2026-27-00001";
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Template Preview</title>
+<style>
+*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;margin:0;color:#0f172a;background:#fff;font-size:${(compact?11:13)*clean.fontScale}px}
+.sheet{width:100%;max-width:${width};margin:0 auto;padding:${compact?"3mm":"12mm"}}
+.brand{display:flex;justify-content:space-between;gap:14px;border-bottom:2px solid ${clean.accentColor};padding-bottom:${compact?7:12}px}.name{font-size:${compact?15:22}px;font-weight:800}.muted{color:#64748b;font-size:${compact?9:11}px;line-height:1.45}.doc{text-align:right}.title{color:${clean.accentColor};font-size:${compact?13:20}px;font-weight:800}
+.box{margin:${compact?8:14}px 0;padding:${compact?6:10}px;border:1px solid #e2e8f0;background:#f8fafc;border-radius:6px}table{width:100%;border-collapse:collapse}th,td{padding:${compact?"4px 2px":"7px 5px"};border-bottom:1px solid #e2e8f0;text-align:left}.r{text-align:right}.total{font-weight:800;border-top:2px solid ${clean.accentColor}}.footer{margin-top:16px;padding-top:8px;border-top:1px solid #e2e8f0;text-align:center;color:#64748b;font-size:10px}.terms{margin-top:12px;color:#475569;font-size:${compact?9:11}px}.sig{text-align:right;margin-top:28px;color:#475569;font-size:11px}
+</style></head><body><div class="sheet">
+<div class="brand"><div><div class="name">Minarva Technologies</div>
+${clean.showLegalName?'<div class="muted">Minarva Technologies Private Limited</div>':""}
+${clean.subheading?`<div class="muted">${sampleEscape(clean.subheading)}</div>`:""}
+${clean.showAddress?'<div class="muted">Vellayani Junction, Nemom, Thiruvananthapuram, Kerala 695020, India</div>':""}
+${clean.showPhone||clean.showEmail||clean.showWebsite?'<div class="muted">+91 98765 43210 · billing@example.com · example.com</div>':""}
+${clean.showGstin?'<div class="muted"><strong>GSTIN:</strong> 32ABCDE1234F1Z5</div>':""}
+</div><div class="doc"><div class="title">${sampleEscape(title)}</div><strong>${number}</strong><div class="muted">26/09/2026 11:00 AM</div></div></div>
+${clean.showCustomer?'<div class="box"><div class="muted">Customer</div><strong>Sample Customer</strong><div class="muted">Thiruvananthapuram, Kerala</div></div>':""}
+<table><thead><tr><th>Item</th>${clean.showSku?'<th>SKU</th>':""}<th class="r">Qty</th><th class="r">Rate</th>${clean.showTax?'<th class="r">Tax</th>':""}<th class="r">Amount</th></tr></thead>
+<tbody><tr><td>Sample Product</td>${clean.showSku?'<td>SKU-001</td>':""}<td class="r">2</td><td class="r">₹500.00</td>${clean.showTax?'<td class="r">5%</td>':""}<td class="r">₹1,000.00</td></tr></tbody></table>
+<table style="margin-top:10px"><tr><td>Subtotal</td><td class="r">₹1,000.00</td></tr>${clean.showTax?'<tr><td>GST / Tax</td><td class="r">₹50.00</td></tr>':""}<tr class="total"><td>Total</td><td class="r">₹1,050.00</td></tr>${clean.showPaymentSummary?'<tr><td>Paid / Advance</td><td class="r">₹500.00</td></tr><tr><td>Balance</td><td class="r">₹550.00</td></tr>':""}</table>
+${clean.showNotes?'<div class="terms"><strong>Notes:</strong> Sample document notes.</div>':""}
+${clean.showTerms&&clean.termsText?`<div class="terms"><strong>Terms:</strong> ${sampleEscape(clean.termsText)}</div>`:""}
+${clean.showSignature&&clean.paper==="a4"?'<div class="sig">For Minarva Technologies<br/><br/><strong>Authorised Signatory</strong></div>':""}
+<div class="footer">${sampleEscape(clean.footerText || "Thank you for your business.")}</div>
+</div></body></html>`;
+}
