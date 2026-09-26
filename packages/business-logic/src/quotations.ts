@@ -156,7 +156,7 @@ export function setQuotationStatus(id: UUID, status: QuotationStatus): { quotati
   q.updatedAt = nowISO();
   q.version += 1;
   enqueueOutbox("quotations", q.id, "update", q);
-  auditAction("quotation.status", "quotations", q.id, before, q);
+  void import("./audit-actions").then(({ auditAction }) => auditAction("quotation.status", "quotations", q.id, before, q));
   touchPersistence();
   return { quotation: q };
 }
