@@ -69,6 +69,5 @@ export * from "./components/printing/PrintPreviewModal";
 
 export * from "./components/settings/PrintTemplateManager";
 
-export * from "./components/printing/PrintTemplateEditor";
 
 export * from "./components/quotations/QuotationsPanel";
