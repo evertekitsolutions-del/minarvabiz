@@ -1,4 +1,4 @@
-import { assertPermission } from "./permissions";
+import { assertPermission, getCurrentRole } from "./permissions";
 /**
  * Phase 7: Returns/refunds, audit logs, backup snapshots, report queries.
  */
@@ -27,8 +27,10 @@ const backups: BackupMeta[] = [];
 const backupPayloads: Record<string, string> = {};
 let lastReturnNo: string | null = null;
 
-function audit(action: string, tableName?: string, recordId?: string, oldValue?: unknown, newValue?: unknown, userName = "Admin") {
-  auditLogs.unshift({ id: generateId(), userName, action, tableName: tableName ?? null, recordId: recordId ?? null,
+function audit(action: string, tableName?: string, recordId?: string, oldValue?: unknown, newValue?: unknown, userName?: string) {
+  const role = getCurrentRole();
+  const actor = userName ?? (role ? role.replaceAll("_", " ").replace(/\\b\\w/g, (ch) => ch.toUpperCase()) : "System");
+  auditLogs.unshift({ id: generateId(), userName: actor, action, tableName: tableName ?? null, recordId: recordId ?? null,
     oldValue: oldValue != null ? JSON.stringify(oldValue) : null, newValue: newValue != null ? JSON.stringify(newValue) : null, createdAt: nowISO() });
 }
 
