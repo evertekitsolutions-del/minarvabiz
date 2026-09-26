@@ -6,7 +6,6 @@ import { formatMoney, generateId, nowISO } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { touchPersistence } from "./autosave";
 import { enqueueOutbox } from "./outbox-bridge";
-import { auditAction } from "./audit-actions";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
 import { escapeHtml } from "./html";
@@ -128,7 +127,7 @@ export function updateQuotation(id: UUID, input: Parameters<typeof createQuotati
   const subtotal = round2(linesSum + materialCharges + labourCharges), discount = round2(input.discount ?? 0), tax = round2(input.tax ?? 0);
   const total = round2(subtotal - discount + tax), advance = round2(input.advance ?? 0);
   Object.assign(q, { customerId: input.customerId, customerName: customer.name, lines, materialCharges, labourCharges, subtotal, discount, tax, total, advance, balance: round2(total - advance), validUntil: input.validUntil ?? null, notes: input.notes?.trim() || null, updatedAt: nowISO(), version: q.version + 1 });
-  enqueueOutbox("quotations", q.id, "update", q); auditAction("quotation.update", "quotations", q.id, before, q); touchPersistence();
+  enqueueOutbox("quotations", q.id, "update", q); void import("./audit-actions").then(({ auditAction }) => auditAction("quotation.update", "quotations", q.id, before, q)); touchPersistence();
   return { quotation: q, errors: [] };
 }
 
@@ -141,7 +140,7 @@ export function archiveQuotation(id: UUID, reason: string): { quotation: Quotati
   if (archiveReason.length < 3) return { quotation: null, error: "Archive reason is required" };
   const before = structuredClone(q);
   q.deletedAt = nowISO(); q.updatedAt = q.deletedAt; q.version += 1;
-  enqueueOutbox("quotations", q.id, "update", q); auditAction("quotation.archive", "quotations", q.id, before, { ...q, archiveReason }); touchPersistence();
+  enqueueOutbox("quotations", q.id, "update", q); void import("./audit-actions").then(({ auditAction }) => auditAction("quotation.archive", "quotations", q.id, before, { ...q, archiveReason })); touchPersistence();
   return { quotation: q };
 }
 
