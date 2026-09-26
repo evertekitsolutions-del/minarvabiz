@@ -9,6 +9,7 @@ import { formatMoney } from "@minarvabiz/utils";
 import { escapeHtml } from "./html";
 import { getPrintSettings } from "./print-settings";
 import { tryDesktopPrintHtml } from "./desktop-print";
+import { code128Svg, qrSvg } from "./machine-codes";
 
 const L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
 const G = ["0100111","0110011","0011011","0100001","0011101","0111001","0000101","0010001","0001001","0010111"];
@@ -48,7 +49,7 @@ function ean13Bits(code: string): string {
 }
 
 function barcodeSvg(code: string): string {
-  if (!isValidEan13(code)) return `<div class="code">${escapeHtml(code)}</div>`;
+  if (!isValidEan13(code)) return code128Svg(code);
   const bits = ean13Bits(code);
   const quiet = 9;
   const total = bits.length + quiet * 2;
@@ -73,6 +74,14 @@ export function buildBarcodeLabelHtml(
   const autoPrint = opts?.autoPrint !== false;
   const labelWidthMm = Math.max(20, Math.min(120, Number(opts?.labelWidthMm ?? settings.labelWidthMm)));
   const labelHeightMm = Math.max(15, Math.min(150, Number(opts?.labelHeightMm ?? settings.labelHeightMm)));
+  const machineValue = product.barcode || product.sku || product.id;
+  const mode = settings.labelCodeMode;
+  const machineCodes =
+    mode === "barcode"
+      ? `<div class="barcode only">${barcodeSvg(machineValue)}</div>`
+      : mode === "qr"
+        ? `<div class="qr only">${qrSvg(machineValue)}</div>`
+        : `<div class="codes"><div class="barcode">${barcodeSvg(machineValue)}</div><div class="qr">${qrSvg(machineValue)}</div></div>`;
   const blocks = Array.from({ length: copies })
     .map(() => `
   <div class="label">
@@ -80,7 +89,7 @@ export function buildBarcodeLabelHtml(
     <div class="name">${escapeHtml(product.name)}</div>
     <div class="meta">${escapeHtml([categoryName, product.size, product.color, product.brand].filter(Boolean).join(" · "))}</div>
     <div class="sku">${product.sku ? "SKU: " + escapeHtml(product.sku) : ""}</div>
-    <div class="barcode">${product.barcode ? barcodeSvg(product.barcode) : '<span class="missing">No barcode</span>'}</div>
+    ${machineCodes}
     <div class="price">${formatMoney(product.sellingPrice)}</div>
   </div>`)
     .join("");
@@ -92,8 +101,10 @@ export function buildBarcodeLabelHtml(
   .shop{font-size:9px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .name{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .meta,.sku{font-size:8px;min-height:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .barcode{margin:1mm 0}.barcode-svg{display:block;width:44mm;height:15mm;margin:0 auto}
-  .missing{font-size:10px;color:#b91c1c}.price{font-size:12px;font-weight:800}
+  .codes{display:flex;align-items:center;justify-content:center;gap:1mm;margin:.7mm 0}
+  .barcode{flex:1;min-width:0}.barcode.only{margin:1mm 0}.barcode-svg{display:block;width:100%;max-width:42mm;height:13mm;margin:0 auto}
+  .qr{width:14mm;flex:0 0 14mm}.qr.only{width:18mm;margin:1mm auto}.qr-svg{display:block;width:100%;height:auto;image-rendering:pixelated}
+  .missing{font-size:8px;color:#b91c1c}.price{font-size:12px;font-weight:800}
   @media print{.label{border:none}}
 </style></head><body>${blocks}
 ${autoPrint ? "<script>window.onload=function(){window.print()}</script>" : ""}</body></html>`;
