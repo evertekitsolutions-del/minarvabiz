@@ -11,6 +11,7 @@ const app = read("apps/desktop/src/App.tsx");
 const main = read("apps/desktop/electron/main.ts");
 const licenseView = read("apps/desktop/src/components/DesktopLicenseView.tsx");
 const expiryBanner = read("apps/desktop/src/components/DesktopLicenseExpiryBanner.tsx");
+const entitlementMonitor = read("apps/desktop/src/components/DesktopEntitlementMonitor.tsx");
 const trialGate = read("packages/ui/src/components/licensing/TrialGate.tsx");
 
 assert.equal(main.includes("30 * 86400000"), true, "Trial duration must remain 30 days");
@@ -27,6 +28,9 @@ assert.equal(app.includes("DesktopLicenseExpiryBanner"), true, "Dashboard must s
 assert.equal(expiryBanner.includes("Manage License"), true);
 assert.equal(expiryBanner.includes("30-day Minarva Biz trial is active"), true);
 assert.equal(app.includes("trialState={trialState}"), true, "License view must receive trial state");
+assert.equal(app.includes("DesktopEntitlementMonitor"), true, "Desktop must refresh entitlement while running");
+assert.equal(entitlementMonitor.includes("60_000"), true, "Entitlement refresh must run periodically");
+assert.equal(entitlementMonitor.includes('window.addEventListener("focus"'), true, "Entitlement must refresh when app regains focus");
 
 assert.equal(licenseView.includes("30-day free trial active"), true);
 assert.equal(licenseView.includes("trialState.daysRemaining"), true);
