@@ -25,6 +25,7 @@ export function documentCss(template: PrintDocumentTemplate, width: string): str
   const padding = compact ? "3mm" : "12mm";
   const border = template.layout === "classic" ? "#0f172a" : "#e2e8f0";
   return `
+@page{size:${compact ? `${width} 297mm` : "A4"};margin:${padding}}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:#fff;color:#0f172a;font-family:Arial,Helvetica,sans-serif;font-size:${base}px}
 body{padding:${padding}}
@@ -33,7 +34,8 @@ body{padding:${padding}}
 .brand-name{font-size:${heading}px;font-weight:800;line-height:1.1;color:#0f172a}
 .legal{font-size:.88em;font-weight:600;margin-top:3px}
 .meta,.muted{color:#64748b;font-size:.88em;line-height:1.45}
-.doc{text-align:right;min-width:150px}.doc-title{font-size:1.25em;font-weight:800;color:${accent};letter-spacing:.04em}
+.doc{text-align:${compact ? "left" : "right"};min-width:${compact ? "0" : "150px"}}
+${compact ? ".top{display:block}.doc{margin-top:8px}.brand-name,.meta,td{overflow-wrap:anywhere}.nowrap{white-space:normal}.party{display:block}" : ""}.doc-title{font-size:1.25em;font-weight:800;color:${accent};letter-spacing:.04em}
 .doc-no{font-weight:700;margin-top:4px}
 .header-note{margin-top:8px;padding:7px 9px;background:#f8fafc;border-left:3px solid ${accent};font-size:.9em}
 .party{margin-top:12px;display:flex;justify-content:space-between;gap:16px}

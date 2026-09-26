@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import { register } from 'node:module';
+register(new URL('../../../../scripts/ts-source-test-loader.mjs', import.meta.url));
+const settings = await import('../print-settings.ts');
+const render = await import('../print-document-render.ts');
+const invoice = await import('../invoice.ts');
+const quotes = await import('../quotations.ts');
+const shop = await import('../shop-profile.ts');
+const stamp = '2026-09-26T08:00:00Z';
+const unsafe = '<img src=x onerror=alert(1)>';
+shop.updateShopProfile({ shopName: unsafe, legalName: 'Legal & Co', address: 'Street <1>', phone:'123', email:'a@example.com', website:'example.com', gstin:'32ABCDE1234F1Z5' });
+const quote = {id:'q', quotationNumber:'QT-TEST-2026-27-00001',customerId:'missing',customerName:unsafe,status:'draft',createdAt:stamp,validUntil:stamp,lines:[{description:unsafe,productId:'product-123',quantity:2,unitPrice:100,lineTotal:200}],materialCharges:10,labourCharges:20,subtotal:230,discount:10,tax:11,total:231,advance:100,balance:131,notes:unsafe};
+const order = {id:'o',orderNumber:'ORD-TEST',orderDate:stamp,deliveryDate:stamp,customerId:'missing',customerName:unsafe,serviceType:'ladies_tailoring',price:230,discount:10,advance:100,balance:120,notes:unsafe};
+for (const paper of ['a4','thermal']) {
+  settings.updatePrintSettings({thermalWidthMm:58});
+  const html = quotes.buildQuotationHtml(quote,{paper,autoPrint:false});
+  assert.match(html,/QT-TEST-2026-27-00001/);
+  assert.match(html,/GSTIN/);
+  assert.match(html,/&lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(html,/<img|<script>/);
+  assert.match(html,/Material charges/);
+  assert.match(html,/Labour charges/);
+  assert.match(html,/Advance/);
+  assert.match(html,paper==='a4'?/size:A4/:/size:58mm 297mm/);
+  const service = invoice.buildOrderInvoiceHtml(order,{paper,autoPrint:false});
+  assert.match(service,/ORD-TEST/);
+  assert.doesNotMatch(service,/<img|<script>/);
+  const template = settings.getPrintTemplate('quotation',paper);
+  settings.savePrintTemplate({...template,heading:'Custom Quote',showTax:false,showCustomer:false,showPaymentSummary:false,showTerms:false,showNotes:false,showSignature:false});
+  const minimal = quotes.buildQuotationHtml(quote,{paper,templateId:template.id});
+  assert.match(minimal,/Custom Quote/);
+  assert.doesNotMatch(minimal,/Bill \/ Quote To|GST \/ Tax|<td>Advance|Terms & Conditions|Notes:|Authorised Signatory/);
+}
+const hidden = {...settings.getPrintTemplate('invoice','a4'),showCustomer:false,showNotes:false,showTerms:false,showSignature:false,footerText:''};
+assert.equal(render.customerBlockHtml(hidden,null,unsafe),'');
+assert.doesNotMatch(render.documentFooterHtml(hidden,unsafe),/img|Notes|Terms/);
+settings.resetPrintTemplates();
+assert.equal(settings.deletePrintTemplate('system-invoice-a4').ok,false);
+assert.equal(settings.deletePrintTemplate('missing').ok,false);
+assert.equal(settings.duplicatePrintTemplate('missing'),null);
+assert.equal(settings.getPrintTemplateById('missing'),null);
+// Settings round trip must retain the exact saved template, not an old UI snapshot.
+const copy = settings.duplicatePrintTemplate('system-invoice-a4');
+settings.savePrintTemplate({...copy,heading:'Persistent design',isDefault:true});
+settings.updatePrintSettings({thermalWidthMm:58,labelCodeMode:'qr'});
+settings.hydratePrintSettings(JSON.parse(JSON.stringify(settings.getPrintSettings())));
+assert.equal(settings.getPrintTemplate('invoice','a4').heading,'Persistent design');
+// Both runtime print routes use the same generated document.
+const calls=[];
+globalThis.window={minarvaDesktop:{printHtml:async input=>{calls.push(input);return {ok:true};}}};
+quotes.printQuotation(quote,'thermal');
+invoice.printOrderInvoice(order,'a4');
+await new Promise(resolve=>setTimeout(resolve,0));
+assert.equal(calls.length,2);
+assert.match(calls[0].html,/QT-TEST/);
+assert.match(calls[1].html,/ORD-TEST/);
+delete globalThis.window;
+console.log('Document templates: A4/58mm, quotation/service, escaping, controls, persistence and desktop route PASS');

@@ -1,14 +1,11 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import { createRequire } from "node:module";
+import { register } from "node:module";
 
-const require = createRequire(import.meta.url);
-const ts = require("typescript");
-require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
-}).outputText, filename);
+// Use the shared source loader so coverage is measured against the same TS
+// source locations as the existing printing runtime tests.
+register(new URL("../../../../scripts/ts-source-test-loader.mjs", import.meta.url));
 
-const settings = require("../print-settings.ts");
+const settings = (await import("../print-settings.ts"));
 
 settings.resetPrintTemplates();
 const defaults = settings.listPrintTemplates();

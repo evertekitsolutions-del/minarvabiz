@@ -32,10 +32,9 @@ const CODE128_PATTERNS = [
 
 function code128BSvg(raw: string): string {
   const value = String(raw || "");
-  const clean = [...value].map((char) => {
-    const code = char.charCodeAt(0);
-    return code >= 32 && code <= 126 ? char : "?";
-  }).join("").slice(0, 80);
+  // Never silently substitute or truncate an identifier: scanners must return the stored code.
+  const clean = value;
+  if (/[^\x20-\x7e]/.test(clean)) return '<span class="missing">Use QR for non-ASCII product codes</span>';
   if (!clean) return '<span class="missing">No barcode</span>';
 
   const values = [...clean].map((char) => char.charCodeAt(0) - 32);
@@ -125,6 +124,11 @@ export function buildBarcodeLabelHtml(
   const labelHeightMm = Math.max(15, Math.min(150, Number(opts?.labelHeightMm ?? settings.labelHeightMm)));
   const codeValue = product.barcode || product.sku || product.id;
   const labelCodeMode = settings.labelCodeMode;
+  let qrHtml = "";
+  if (labelCodeMode !== "barcode") {
+    try { qrHtml = qrSvg(codeValue, `QR ${codeValue}`); }
+    catch (error) { qrHtml = `<span class="missing">${escapeHtml(error instanceof Error ? error.message : "Unable to encode QR")}</span>`; }
+  }
   const blocks = Array.from({ length: copies })
     .map(() => `
   <div class="label">
@@ -134,7 +138,7 @@ export function buildBarcodeLabelHtml(
     <div class="sku">${product.sku ? "SKU: " + escapeHtml(product.sku) : ""}</div>
     <div class="codes ${labelCodeMode}">
       ${labelCodeMode !== "qr" ? `<div class="barcode">${barcodeSvg(codeValue)}</div>` : ""}
-      ${labelCodeMode !== "barcode" ? `<div class="qr">${qrSvg(codeValue, `QR ${codeValue}`)}</div>` : ""}
+      ${labelCodeMode !== "barcode" ? `<div class="qr">${qrHtml}</div>` : ""}
     </div>
     <div class="price">${formatMoney(product.sellingPrice)}</div>
   </div>`)

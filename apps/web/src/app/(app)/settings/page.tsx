@@ -91,7 +91,7 @@ export default function SettingsPage() {
           </FormField>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => { const next = updatePrintSettings(printing); setPrinting(next); setPrintMsg("Printing defaults saved"); }}>Save printing defaults</Button>
+          <Button onClick={() => { const next = updatePrintSettings({ defaultInvoicePaper: printing.defaultInvoicePaper, thermalWidthMm: printing.thermalWidthMm, labelCodeMode: printing.labelCodeMode }); setPrinting(next); setPrintMsg("Printing defaults saved"); }}>Save printing defaults</Button>
           {printMsg && <span className="text-sm text-emerald-600">{printMsg}</span>}
         </div>
       </div>

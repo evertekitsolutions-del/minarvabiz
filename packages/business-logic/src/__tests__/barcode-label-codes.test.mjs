@@ -1,16 +1,13 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import { createRequire } from "node:module";
+import { register } from "node:module";
 
-const require = createRequire(import.meta.url);
-const ts = require("typescript");
-require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
-}).outputText, filename);
+// Use the shared source loader so coverage is measured against the same TS
+// source locations as the existing printing runtime tests.
+register(new URL("../../../../scripts/ts-source-test-loader.mjs", import.meta.url));
 
-const labels = require("../barcode-labels.ts");
-const settings = require("../print-settings.ts");
-const qr = require("../qr-code.ts");
+const labels = (await import("../barcode-labels.ts"));
+const settings = (await import("../print-settings.ts"));
+const qr = (await import("../qr-code.ts"));
 
 settings.updatePrintSettings({ labelCodeMode: "both", labelWidthMm: 50, labelHeightMm: 30 });
 const product = {
@@ -53,3 +50,15 @@ assert.equal(matrix.length, matrix[0].length);
 assert.ok(matrix.flat().filter(Boolean).length > 50);
 
 console.log("Product labels: arbitrary Code128 + offline QR render PASS");
+
+assert.throws(() => qr.qrMatrix("A".repeat(79)), /78 UTF-8 bytes/);
+assert.throws(() => qr.qrMatrix("é".repeat(40)), /78 UTF-8 bytes/);
+assert.match(labels.buildBarcodeLabelHtml({ ...product, barcode: "A".repeat(81) }, { autoPrint: false }), new RegExp("Code 128 " + "A".repeat(81)));
+assert.match(labels.buildBarcodeLabelHtml({ ...product, barcode: "A".repeat(81) }, { autoPrint: false }), /shorten the product code/);
+assert.match(labels.buildBarcodeLabelHtml({ ...product, barcode: "商品" }, { autoPrint: false }), /Use QR for non-ASCII/);
+for (const mode of ["barcode", "qr", "both"]) {
+  settings.updatePrintSettings({ labelCodeMode: mode });
+  const output = labels.buildBarcodeLabelHtml(product, { autoPrint: false });
+  assert.equal(output.includes('class="barcode-svg"'), mode !== "qr");
+  assert.equal(output.includes('class="qr-svg"'), mode !== "barcode");
+}

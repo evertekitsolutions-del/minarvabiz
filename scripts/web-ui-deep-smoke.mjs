@@ -82,8 +82,8 @@ async function run(){const ws=await connect();try{
   await clickText(ws,'REPORTS',['reports & analytics']); await waitFor(ws,['Reports & Analytics','Export Excel','Download PDF','Refresh']);
   await clickText(ws,'NOTIFICATIONS',['messages & notifications','notifications']); await waitFor(ws,['Notifications']);
   await clickText(ws,'SETTINGS',['settings']); await waitFor(ws,['Settings','Business profile','Browser printing defaults']); await setMainField(ws,'Business / trade name','QA Minarva Web'); await clickText(ws,'SAVE_SHOP',['save shop profile']); await waitFor(ws,['Business profile saved']);
-  await clickText(ws,'BACKUP',['backup & restore']); await waitFor(ws,['Backup','Create backup']); await clickText(ws,'CREATE_BACKUP',['create backup'],700); await waitFor(ws,['Backup created']);
   await verifyPrintTemplates(expression => evalIn(ws, expression));
+  await clickText(ws,'BACKUP',['backup & restore']); await waitFor(ws,['Backup','Create backup']); await clickText(ws,'CREATE_BACKUP',['create backup'],700); await waitFor(ws,['Backup created']);
 
   await navigate(ws,'/license',['License','Trial']); await navigate(ws,'/users',['Users & roles','Add user']); await setMainField(ws,'Full name','QA Manager'); await setMainField(ws,'Email','qa.manager@example.com'); await setMainField(ws,'Role','manager'); await clickText(ws,'ADD_USER',['add user'],500); await waitFor(ws,['QA Manager','qa.manager@example.com']);
   await navigate(ws,'/forgot-password',['Reset your password','Send reset link']); await navigate(ws,'/dashboard',['Total Sales','Total Profit']); await styleGuard(ws);

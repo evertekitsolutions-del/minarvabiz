@@ -58,12 +58,14 @@ function appendBits(target: number[], value: number, count: number) {
 }
 
 function chooseSpec(byteLength: number): QrSpec {
-  return SPECS.find((spec) => byteLength <= spec.byteCapacity) ?? SPECS[SPECS.length - 1];
+  const spec = SPECS.find((item) => byteLength <= item.byteCapacity);
+  if (!spec) throw new RangeError("QR code supports up to 78 UTF-8 bytes; shorten the product code.");
+  return spec;
 }
 
 function dataCodewords(text: string, spec: QrSpec): number[] {
   const allBytes = Array.from(new TextEncoder().encode(text));
-  const bytes = allBytes.slice(0, spec.byteCapacity);
+  const bytes = allBytes;
   const bits: number[] = [];
   appendBits(bits, 0b0100, 4); // byte mode
   appendBits(bits, bytes.length, 8);

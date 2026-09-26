@@ -1,18 +1,15 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import { createRequire } from "node:module";
+import { register } from "node:module";
 
-const require = createRequire(import.meta.url);
-const ts = require("typescript");
-require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
-}).outputText, filename);
+// Use the shared source loader so coverage is measured against the same TS
+// source locations as the existing printing runtime tests.
+register(new URL("../../../../scripts/ts-source-test-loader.mjs", import.meta.url));
 
-const templates = require("../print-templates.ts");
-const renderer = require("../print-document-render.ts");
-const settings = require("../print-settings.ts");
-const labels = require("../barcode-labels.ts");
-const qr = require("../qr-code.ts");
+const templates = (await import("../print-templates.ts"));
+const renderer = (await import("../print-document-render.ts"));
+const settings = (await import("../print-settings.ts"));
+const labels = (await import("../barcode-labels.ts"));
+const qr = (await import("../qr-code.ts"));
 
 const defaults = templates.defaultPrintTemplates();
 assert.equal(defaults.length, 4);
@@ -24,7 +21,7 @@ for (const kind of ["invoice", "quotation"]) {
   }
 }
 
-require("../shop-profile.ts").updateShopProfile({ gstin: "32ABCDE1234F1Z5" });
+(await import("../shop-profile.ts")).updateShopProfile({ gstin: "32ABCDE1234F1Z5" });
 const sample = renderer.buildTemplateSampleHtml(defaults.find((item) => item.id === "system-invoice-a4"));
 assert.match(sample, /INV-MT-2026-27-00001/);
 assert.match(sample, /GSTIN/);

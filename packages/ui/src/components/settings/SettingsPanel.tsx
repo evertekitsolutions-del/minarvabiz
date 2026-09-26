@@ -360,7 +360,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <Button type="button" variant="outline" onClick={testSelectedPrinter} disabled={printTestState === "working"}>{printTestState === "working" ? "Printing test…" : "Test invoice printer"}</Button>
         <Button type="button" variant="outline" onClick={testLabelPrinter} disabled={printTestState === "working"}>Test label printer</Button>
-        <Button onClick={() => onSavePrinting(draftPrinting)}>Save printer settings</Button>
+        <Button onClick={() => onSavePrinting({ defaultInvoicePaper: draftPrinting.defaultInvoicePaper, thermalWidthMm: draftPrinting.thermalWidthMm, a4PrinterName: draftPrinting.a4PrinterName, thermalPrinterName: draftPrinting.thermalPrinterName, labelPrinterName: draftPrinting.labelPrinterName, labelWidthMm: draftPrinting.labelWidthMm, labelHeightMm: draftPrinting.labelHeightMm, labelCodeMode: draftPrinting.labelCodeMode, silentDesktopPrint: draftPrinting.silentDesktopPrint })}>Save printer settings</Button>
       </div>
     </section>
     <PrintTemplateManager />
