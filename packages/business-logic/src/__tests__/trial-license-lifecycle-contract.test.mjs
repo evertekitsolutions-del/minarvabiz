@@ -10,6 +10,7 @@ const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
 const app = read("apps/desktop/src/App.tsx");
 const main = read("apps/desktop/electron/main.ts");
 const licenseView = read("apps/desktop/src/components/DesktopLicenseView.tsx");
+const expiryBanner = read("apps/desktop/src/components/DesktopLicenseExpiryBanner.tsx");
 const trialGate = read("packages/ui/src/components/licensing/TrialGate.tsx");
 
 assert.equal(main.includes("30 * 86400000"), true, "Trial duration must remain 30 days");
@@ -22,8 +23,9 @@ assert.equal(trialGate.includes("Your Minarva Biz trial has ended"), true);
 assert.equal(trialGate.includes("Activate a commercial license to continue using Minarva Biz."), true);
 
 assert.equal(app.includes("effectiveLicenseDaysRemaining(commercialLicense, trialState)"), true, "Operational alerts must include trial expiry");
-assert.equal(app.includes("showLicenseDashboardNotice"), true, "Dashboard must surface trial/license notice");
-assert.equal(app.includes("Manage License"), true);
+assert.equal(app.includes("DesktopLicenseExpiryBanner"), true, "Dashboard must surface trial/license notice");
+assert.equal(expiryBanner.includes("Manage License"), true);
+assert.equal(expiryBanner.includes("30-day Minarva Biz trial is active"), true);
 assert.equal(app.includes("trialState={trialState}"), true, "License view must receive trial state");
 
 assert.equal(licenseView.includes("30-day free trial active"), true);

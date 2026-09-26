@@ -13,6 +13,7 @@ import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, Servic
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
+import { DesktopLicenseExpiryBanner, effectiveLicenseDaysRemaining } from "./components/DesktopLicenseExpiryBanner";
 
 type CommercialLicenseState = {
   status: "unlicensed" | "active" | "grace" | "expired" | "invalid";
@@ -68,12 +69,6 @@ function featuresForLicense(state: CommercialLicenseState | null, trial: TrialSt
     return features;
   }
   if (trial?.status === "active") return FULL_TRIAL_FEATURES;
-  return null;
-}
-
-function effectiveLicenseDaysRemaining(state: CommercialLicenseState | null, trial: TrialState | null): number | null {
-  if (state && (state.status === "active" || state.status === "grace")) return state.daysRemaining;
-  if (trial?.status === "active") return trial.daysRemaining;
   return null;
 }
 
@@ -195,9 +190,7 @@ export function App() {
   if(!dbReady||!trialState||!commercialLicense)return <div style={{padding:48,fontFamily:"system-ui",textAlign:"center"}}><p>Initializing Minarva Biz…</p></div>;
   const licenseFeatures = featuresForLicense(commercialLicense, trialState);
   const commercialActive = commercialLicense.status==="active"||commercialLicense.status==="grace";
-  const trialInUse = !commercialActive && trialState.status === "active";
   const licenseDaysForDashboard = effectiveLicenseDaysRemaining(commercialLicense, trialState);
-  const showLicenseDashboardNotice = trialInUse || (licenseDaysForDashboard != null && licenseDaysForDashboard <= 30);
 
   if(!commercialActive&&trialState.status!=="active")return <TrialGate state={trialState} onActivate={activateTrial}/>;
   if(!licenseFeatures)return <TrialGate state={trialState} onActivate={activateTrial}/>;
@@ -243,17 +236,7 @@ export function App() {
 
 
   return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} desktopModuleContext={{customerId:crmCustomerId,staffId:staffDetailId}} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png",navItems:allowedNav}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:phase6Store.unreadNotificationCount(),onMessagesClick:()=>navTo("notifications"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("reports"),onSearch:setGlobalSearchQuery}}>
-    {view==="dashboard"&&dash&&<div className="space-y-4">
-      {showLicenseDashboardNotice&&licenseDaysForDashboard!=null&&<div className={`flex flex-col gap-3 rounded-2xl border px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between ${licenseDaysForDashboard<=3?"border-rose-200 bg-rose-50":licenseDaysForDashboard<=7?"border-amber-200 bg-amber-50":"border-blue-200 bg-blue-50"}`}>
-        <div>
-          <div className={`text-xs font-semibold uppercase tracking-wide ${licenseDaysForDashboard<=3?"text-rose-700":licenseDaysForDashboard<=7?"text-amber-700":"text-blue-700"}`}>{trialInUse?"Free trial":"License"} · Renewal notice</div>
-          <div className="mt-1 font-semibold text-slate-900">{licenseDaysForDashboard} day{licenseDaysForDashboard===1?"":"s"} remaining</div>
-          <p className="mt-0.5 text-sm text-slate-600">{trialInUse?"Your 30-day Minarva Biz trial is active. Activate a commercial license before the trial expires to continue using the application.":"Your Minarva Biz license is approaching expiry. Renew before expiry to avoid service interruption."} Business data is preserved.</p>
-        </div>
-        <Button variant="outline" onClick={()=>navTo("license")}>Manage License</Button>
-      </div>}
-      <Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/>
-    </div>}
+    {view==="dashboard"&&dash&&<div className="space-y-4"><DesktopLicenseExpiryBanner commercialActive={commercialActive} trialState={trialState} daysRemaining={licenseDaysForDashboard} onManage={()=>navTo("license")}/><Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/></div>}
     {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery("")} onNavigate={(_href,id)=>{setGlobalSearchQuery("");navTo(id);}}/>}
     {view==="customers"&&<CustomerList customers={customers} onAdd={openCustomerCreator} onSearch={q=>setCustomers(store.listCustomers(q))} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}
     {view==="products"&&<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={()=>setLowStockOnly(v=>!v)} onSearch={setProductQuery} onFilterCategory={setProductCategoryId} onAddCategory={()=>{setCategoryForm({name:"",description:""});setCategoryOpen(true);}} onAdd={()=>{resetProductForm();setProductOpen(true);}} onEdit={openProductEditor} onAdjustStock={openStockAdjust} onDelete={handleDeleteProduct} onPrintBarcode={openBarcodeLabel}/>} 
