@@ -52,7 +52,8 @@ export function SalesList({
   const filteredSales = React.useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return sales.filter((sale) => {
-      if (customerId && sale.customerId !== customerId) return false;
+      if (customerId === "__walkin" && sale.customerId) return false;
+      if (customerId && customerId !== "__walkin" && sale.customerId !== customerId) return false;
       if (status && sale.status !== status) return false;
       const key = dateKey(sale.saleDate);
       if (dateFrom && key < dateFrom) return false;
@@ -147,7 +148,7 @@ export function SalesList({
 
         <DataTable
           columns={columns}
-          rows={filteredSales.filter((sale) => customerId !== "__walkin" || !sale.customerId)}
+          rows={filteredSales}
           onRowClick={(sale) => { setDetailSale(sale); onSelect?.(sale); }}
           emptyMessage="No invoices match the selected filters"
         />
