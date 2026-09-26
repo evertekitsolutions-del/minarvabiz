@@ -50,6 +50,9 @@ export function OfflineModulesPanel({
   const [supplierQuery, setSupplierQuery] = React.useState("");
   const [supplierOpen, setSupplierOpen] = React.useState(false);
   const [supplierForm, setSupplierForm] = React.useState({ name: "", company: "", phone: "", email: "", address: "", category: "", openingBalance: "", notes: "" });
+  const [supplierEditTarget, setSupplierEditTarget] = React.useState<Supplier | null>(null);
+  const [supplierArchiveTarget, setSupplierArchiveTarget] = React.useState<Supplier | null>(null);
+  const [supplierArchiveReason, setSupplierArchiveReason] = React.useState("");
   const [supplierError, setSupplierError] = React.useState<string | null>(null);
   const [supplierPaymentOpen, setSupplierPaymentOpen] = React.useState(false);
   const [supplierPaymentTarget, setSupplierPaymentTarget] = React.useState<Supplier | null>(null);
@@ -138,11 +141,158 @@ export function OfflineModulesPanel({
   }
 
   if (activeNav === "suppliers") {
-    const suppliers = phase5Store.listSuppliers().filter((s) => { const q = supplierQuery.trim().toLowerCase(); return !q || s.name.toLowerCase().includes(q) || s.company?.toLowerCase().includes(q) || s.phone?.includes(q); });
-    const openPayment = (supplier: Supplier) => { setActionError(null); setSupplierPaymentTarget(supplier); setSupplierPaymentForm({ date: todayLocal(), amount: String(supplier.outstandingBalance), paymentMethod: "cash", reference: "", notes: "" }); setSupplierPaymentOpen(true); };
-    return <><SupplierList suppliers={suppliers} onSearch={setSupplierQuery} onAdd={() => { setSupplierError(null); setSupplierForm({ name: "", company: "", phone: "", email: "", address: "", category: "", openingBalance: "", notes: "" }); setSupplierOpen(true); }} onPay={openPayment} />
-      <Modal open={supplierOpen} title="Add Supplier" onClose={() => setSupplierOpen(false)} footer={<><Button variant="outline" onClick={() => setSupplierOpen(false)}>Cancel</Button><Button onClick={() => { try { if (!supplierForm.name.trim()) throw new Error("Supplier name is required"); phase5Store.createSupplier({ name: supplierForm.name.trim(), company: supplierForm.company.trim() || null, phone: supplierForm.phone.trim() || null, email: supplierForm.email.trim() || null, address: supplierForm.address.trim() || null, category: supplierForm.category.trim() || null, openingBalance: parseFloat(supplierForm.openingBalance) || 0, notes: supplierForm.notes.trim() || null }); setSupplierOpen(false); setSupplierError(null); persistDesktop(); refresh(); } catch (e) { setSupplierError(e instanceof Error ? e.message : String(e)); } }}>Save Supplier</Button></>}><div className="grid gap-4 sm:grid-cols-2"><FormField label="Supplier name *"><input className={inputClass} value={supplierForm.name} onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })} /></FormField><FormField label="Company"><input className={inputClass} value={supplierForm.company} onChange={(e) => setSupplierForm({ ...supplierForm, company: e.target.value })} /></FormField><FormField label="Phone"><input className={inputClass} value={supplierForm.phone} onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })} /></FormField><FormField label="Email"><input className={inputClass} type="email" value={supplierForm.email} onChange={(e) => setSupplierForm({ ...supplierForm, email: e.target.value })} /></FormField><FormField label="Address" className="sm:col-span-2"><textarea className={inputClass + " h-auto py-2"} rows={2} value={supplierForm.address} onChange={(e) => setSupplierForm({ ...supplierForm, address: e.target.value })} /></FormField><FormField label="Category"><select className={selectClass} value={supplierForm.category} onChange={(e) => setSupplierForm({ ...supplierForm, category: e.target.value })}><option value="">General</option><option value="materials">Materials</option><option value="laundry">Laundry</option><option value="general">General</option></select></FormField><FormField label="Opening balance"><input className={inputClass} type="number" min="0" step="0.01" value={supplierForm.openingBalance} onChange={(e) => setSupplierForm({ ...supplierForm, openingBalance: e.target.value })} /></FormField><FormField label="Notes" className="sm:col-span-2"><textarea className={inputClass + " h-auto py-2"} rows={2} value={supplierForm.notes} onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })} /></FormField>{supplierError && <p className="text-sm text-rose-600 sm:col-span-2">{supplierError}</p>}</div></Modal>
-      <Modal open={supplierPaymentOpen} title="Record Supplier Payment" onClose={() => setSupplierPaymentOpen(false)} footer={<><Button variant="outline" onClick={() => setSupplierPaymentOpen(false)}>Cancel</Button><Button onClick={() => { try { if (!supplierPaymentTarget) return; const result = phase5Store.recordSupplierPayment({ supplierId: supplierPaymentTarget.id, amount: parseFloat(supplierPaymentForm.amount) || 0, paymentMethod: supplierPaymentForm.paymentMethod, date: supplierPaymentForm.date, reference: supplierPaymentForm.reference || null, notes: supplierPaymentForm.notes || null }); if (result.errors.length) { setActionError(result.errors.join("; ")); return; } setSupplierPaymentOpen(false); setActionError(null); persistDesktop(); refresh(); } catch (e) { setActionError(e instanceof Error ? e.message : String(e)); } }}>Record Payment</Button></>}><div className="space-y-3"><p className="text-sm text-slate-600">{supplierPaymentTarget?.name} · Outstanding <strong>{supplierPaymentTarget?.outstandingBalance.toFixed(2)}</strong></p><FormField label="Date"><input type="date" className={inputClass} value={supplierPaymentForm.date} onChange={(e) => setSupplierPaymentForm({ ...supplierPaymentForm, date: e.target.value })}/></FormField><FormField label="Amount"><input type="number" min="0" step="0.01" className={inputClass} value={supplierPaymentForm.amount} onChange={(e) => setSupplierPaymentForm({ ...supplierPaymentForm, amount: e.target.value })}/></FormField><FormField label="Payment method"><select className={selectClass} value={supplierPaymentForm.paymentMethod} onChange={(e) => setSupplierPaymentForm({ ...supplierPaymentForm, paymentMethod: e.target.value as PaymentMethod })}><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank">Bank</option><option value="online">Online</option><option value="other">Other</option></select></FormField><FormField label="Reference"><input className={inputClass} value={supplierPaymentForm.reference} onChange={(e) => setSupplierPaymentForm({ ...supplierPaymentForm, reference: e.target.value })}/></FormField><FormField label="Notes"><input className={inputClass} value={supplierPaymentForm.notes} onChange={(e) => setSupplierPaymentForm({ ...supplierPaymentForm, notes: e.target.value })}/></FormField>{actionError && <p className="text-sm text-rose-600">{actionError}</p>}</div></Modal>
+    const suppliers = phase5Store.listSuppliers().filter((supplier) => {
+      const q = supplierQuery.trim().toLowerCase();
+      return !q || supplier.name.toLowerCase().includes(q) || supplier.company?.toLowerCase().includes(q) || supplier.phone?.includes(q);
+    });
+
+    const openPayment = (supplier: Supplier) => {
+      setActionError(null);
+      setSupplierPaymentTarget(supplier);
+      setSupplierPaymentForm({ date: todayLocal(), amount: String(supplier.outstandingBalance), paymentMethod: "cash", reference: "", notes: "" });
+      setSupplierPaymentOpen(true);
+    };
+    const openCreate = () => {
+      setSupplierEditTarget(null);
+      setSupplierError(null);
+      setSupplierForm({ name: "", company: "", phone: "", email: "", address: "", category: "", openingBalance: "", notes: "" });
+      setSupplierOpen(true);
+    };
+    const openEdit = (supplier: Supplier) => {
+      setSupplierEditTarget(supplier);
+      setSupplierError(null);
+      setSupplierForm({
+        name: supplier.name,
+        company: supplier.company || "",
+        phone: supplier.phone || "",
+        email: supplier.email || "",
+        address: supplier.address || "",
+        category: supplier.category || "",
+        openingBalance: String(supplier.openingBalance),
+        notes: supplier.notes || "",
+      });
+      setSupplierOpen(true);
+    };
+    const saveSupplier = () => {
+      try {
+        if (!supplierForm.name.trim()) throw new Error("Supplier name is required");
+        if (supplierEditTarget) {
+          const updated = phase5Store.updateSupplier(supplierEditTarget.id, {
+            name: supplierForm.name.trim(),
+            company: supplierForm.company.trim() || null,
+            phone: supplierForm.phone.trim() || null,
+            email: supplierForm.email.trim() || null,
+            address: supplierForm.address.trim() || null,
+            category: supplierForm.category.trim() || null,
+            notes: supplierForm.notes.trim() || null,
+          });
+          if (!updated) throw new Error("Supplier not found");
+        } else {
+          phase5Store.createSupplier({
+            name: supplierForm.name.trim(),
+            company: supplierForm.company.trim() || null,
+            phone: supplierForm.phone.trim() || null,
+            email: supplierForm.email.trim() || null,
+            address: supplierForm.address.trim() || null,
+            category: supplierForm.category.trim() || null,
+            openingBalance: parseFloat(supplierForm.openingBalance) || 0,
+            notes: supplierForm.notes.trim() || null,
+          });
+        }
+        setSupplierOpen(false);
+        setSupplierEditTarget(null);
+        setSupplierError(null);
+        persistDesktop();
+        refresh();
+      } catch (error) {
+        setSupplierError(error instanceof Error ? error.message : String(error));
+      }
+    };
+    const archiveSupplier = () => {
+      if (!supplierArchiveTarget) return;
+      const result = phase5Store.archiveSupplier(supplierArchiveTarget.id, supplierArchiveReason);
+      if (result.error) { setSupplierError(result.error); return; }
+      setSupplierArchiveTarget(null);
+      setSupplierArchiveReason("");
+      setSupplierError(null);
+      persistDesktop();
+      refresh();
+    };
+
+    return <>
+      <SupplierList
+        suppliers={suppliers}
+        onSearch={setSupplierQuery}
+        onAdd={openCreate}
+        onPay={openPayment}
+        onEdit={openEdit}
+        onArchive={(supplier) => { setSupplierArchiveTarget(supplier); setSupplierArchiveReason(""); setSupplierError(null); }}
+      />
+      <Modal
+        open={supplierOpen}
+        title={supplierEditTarget ? "Edit Supplier" : "Add Supplier"}
+        onClose={() => { setSupplierOpen(false); setSupplierEditTarget(null); setSupplierError(null); }}
+        footer={<><Button variant="outline" onClick={() => { setSupplierOpen(false); setSupplierEditTarget(null); }}>Cancel</Button><Button onClick={saveSupplier}>{supplierEditTarget ? "Save Changes" : "Save Supplier"}</Button></>}
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField label="Supplier name *"><input className={inputClass} value={supplierForm.name} onChange={(e) => setSupplierForm({ ...supplierForm, name: e.target.value })} /></FormField>
+          <FormField label="Company"><input className={inputClass} value={supplierForm.company} onChange={(e) => setSupplierForm({ ...supplierForm, company: e.target.value })} /></FormField>
+          <FormField label="Phone"><input className={inputClass} value={supplierForm.phone} onChange={(e) => setSupplierForm({ ...supplierForm, phone: e.target.value })} /></FormField>
+          <FormField label="Email"><input className={inputClass} type="email" value={supplierForm.email} onChange={(e) => setSupplierForm({ ...supplierForm, email: e.target.value })} /></FormField>
+          <FormField label="Address" className="sm:col-span-2"><textarea className={inputClass + " h-auto py-2"} rows={2} value={supplierForm.address} onChange={(e) => setSupplierForm({ ...supplierForm, address: e.target.value })} /></FormField>
+          <FormField label="Category"><select className={selectClass} value={supplierForm.category} onChange={(e) => setSupplierForm({ ...supplierForm, category: e.target.value })}><option value="">General</option><option value="materials">Materials</option><option value="laundry">Laundry</option><option value="general">General</option></select></FormField>
+          <FormField label="Opening balance"><input className={inputClass} type="number" min="0" step="0.01" disabled={Boolean(supplierEditTarget)} value={supplierForm.openingBalance} onChange={(e) => setSupplierForm({ ...supplierForm, openingBalance: e.target.value })} /><p className="mt-1 text-xs text-slate-500">{supplierEditTarget ? "Opening balance is an accounting source and cannot be edited here." : "Opening balance posts to Accounts Payable."}</p></FormField>
+          <FormField label="Notes" className="sm:col-span-2"><textarea className={inputClass + " h-auto py-2"} rows={2} value={supplierForm.notes} onChange={(e) => setSupplierForm({ ...supplierForm, notes: e.target.value })} /></FormField>
+          {supplierError && <p className="text-sm text-rose-600 sm:col-span-2">{supplierError}</p>}
+        </div>
+      </Modal>
+      <Modal
+        open={Boolean(supplierArchiveTarget)}
+        title={supplierArchiveTarget ? `Archive Supplier — ${supplierArchiveTarget.name}` : "Archive Supplier"}
+        onClose={() => { setSupplierArchiveTarget(null); setSupplierArchiveReason(""); setSupplierError(null); }}
+        footer={<><Button variant="outline" onClick={() => setSupplierArchiveTarget(null)}>Keep Supplier</Button><Button disabled={supplierArchiveReason.trim().length < 3} onClick={archiveSupplier}>Archive Supplier</Button></>}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">This is a soft archive. Historical purchases and payments remain intact. Outstanding payables must be settled first.</p>
+          <FormField label="Archive reason *"><textarea className={inputClass + " h-20 py-2"} value={supplierArchiveReason} onChange={(e) => setSupplierArchiveReason(e.target.value)} /></FormField>
+          {supplierError && <p className="text-sm text-rose-600">{supplierError}</p>}
+        </div>
+      </Modal>
+      <Modal
+        open={supplierPaymentOpen}
+        title="Record Supplier Payment"
+        onClose={() => setSupplierPaymentOpen(false)}
+        footer={<><Button variant="outline" onClick={() => setSupplierPaymentOpen(false)}>Cancel</Button><Button onClick={() => {
+          try {
+            if (!supplierPaymentTarget) return;
+            const result = phase5Store.recordSupplierPayment({
+              supplierId: supplierPaymentTarget.id,
+              amount: parseFloat(supplierPaymentForm.amount) || 0,
+              paymentMethod: supplierPaymentForm.paymentMethod,
+              date: supplierPaymentForm.date,
+              reference: supplierPaymentForm.reference || null,
+              notes: supplierPaymentForm.notes || null,
+            });
+            if (result.errors.length) { setActionError(result.errors.join("; ")); return; }
+            setSupplierPaymentOpen(false);
+            setActionError(null);
+            persistDesktop();
+            refresh();
+          } catch (error) {
+            setActionError(error instanceof Error ? error.message : String(error));
+          }
+        }}>Record Payment</Button></>}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">{supplierPaymentTarget?.name} · Outstanding <strong>{supplierPaymentTarget?.outstandingBalance.toFixed(2)}</strong></p>
+          <FormField label="Date"><input type="date" className={inputClass} value={supplierPaymentForm.date} onChange={(e) => setSupplierPaymentForm({ ...supplierPaymentForm, date: e.target.value })}/></FormField>
+          <FormField label="Amount"><input type="number" min="0" step="0.01" className={inputClass} value={supplierPaymentForm.amount} onChange={(e) => setSupplierPaymentForm({ ...supplierPaymentForm, amount: e.target.value })}/></FormField>
+          <FormField label="Payment method"><select className={selectClass} value={supplierPaymentForm.paymentMethod} onChange={(e) => setSupplierPaymentForm({ ...supplierPaymentForm, paymentMethod: e.target.value as PaymentMethod })}><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank">Bank</option><option value="online">Online</option><option value="other">Other</option></select></FormField>
+          <FormField label="Reference"><input className={inputClass} value={supplierPaymentForm.reference} onChange={(e) => setSupplierPaymentForm({ ...supplierPaymentForm, reference: e.target.value })}/></FormField>
+          <FormField label="Notes"><input className={inputClass} value={supplierPaymentForm.notes} onChange={(e) => setSupplierPaymentForm({ ...supplierPaymentForm, notes: e.target.value })}/></FormField>
+          {actionError && <p className="text-sm text-rose-600">{actionError}</p>}
+        </div>
+      </Modal>
     </>;
   }
 
