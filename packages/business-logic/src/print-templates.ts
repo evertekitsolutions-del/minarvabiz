@@ -28,7 +28,6 @@ export interface PrintDocumentTemplate {
   showNotes: boolean;
   showTerms: boolean;
   showSignature: boolean;
-  signatureLabel: string;
   accentColor: string;
   fontScale: number;
 }
@@ -137,7 +136,6 @@ export function sanitizePrintTemplate(input: PrintDocumentTemplate): PrintDocume
     showNotes: Boolean(input.showNotes),
     showTerms: Boolean(input.showTerms),
     showSignature: Boolean(input.showSignature),
-    signatureLabel: String(input.signatureLabel || "Authorised Signatory").trim().slice(0, 120),
   };
 }
 
