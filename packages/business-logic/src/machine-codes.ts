@@ -138,7 +138,7 @@ function qrMatrix(value: string): boolean[][] | null {
       const row = centerRow + dr, col = centerCol + dc;
       if (row < 0 || row >= size || col < 0 || col >= size) continue;
       const distance = Math.max(Math.abs(dr), Math.abs(dc));
-      const dark = distance !== 3 && distance !== 1 && distance <= 4;
+      const dark = distance === 3 || distance <= 1;
       set(row, col, distance === 4 ? false : dark);
     }
   };
