@@ -196,12 +196,12 @@ function quotationFont(template: PrintTemplate): string {
 
 export function buildQuotationHtml(
   q: Quotation,
-  opts?: { paper?: PrintPaper; autoPrint?: boolean; templateId?: string | null },
+  opts?: { paper?: PrintPaper; autoPrint?: boolean; templateId?: string | null; template?: PrintTemplate },
 ): string {
   const shop = getShopProfile();
   const settings = getPrintSettings();
   const paper = opts?.paper ?? settings.defaultInvoicePaper;
-  const template = getPrintTemplate("quotation", paper, opts?.templateId || quotationTemplateId(paper));
+  const template = opts?.template || getPrintTemplate("quotation", paper, opts?.templateId || quotationTemplateId(paper));
   const customer = mainStore.getCustomer(q.customerId);
   const width = paper === "thermal" ? `${settings.thermalWidthMm}mm` : "210mm";
   const compact = paper === "thermal" || template.density === "compact";
