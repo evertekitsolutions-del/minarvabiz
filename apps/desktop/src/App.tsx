@@ -3,13 +3,14 @@ import {
   AppShell, Dashboard, CustomerList, ProductList, PosBilling, NormalBilling, SalesList,
   OrderList, OrderForm, emptyOrderForm, OrderDetail, ProductionBoard, LaundryList, LaundryForm, LaundryCancellationForm,
   ExpenseList, PurchaseList, ProcurementPanel, StaffList, NotificationCenter, ReportsPanel,
-  BackupPanel, SettingsPanel, WarehousePanel, AccountingPanel, Modal, Button, FormField, inputClass, selectClass, GlobalSearchPalette,
+  BackupPanel, SettingsPanel, WarehousePanel, AccountingPanel, LicensePanel, Modal, Button, FormField, inputClass, selectClass, GlobalSearchPalette,
   TrialGate, MAIN_NAV,
   type QuickAction, type NavItemId, type DashboardData, type OrderFormValues, type LaundryCancellationValues,
   type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
 import { store, ordersStore, phase5Store, phase6Store, phase7Store, procurementStore, warehouseStore, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printBarcodeLabels, printSaleInvoice } from "@minarvabiz/business-logic";
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName, LicenseFeatures, LicensePlan, Edition } from "@minarvabiz/types";
+import { PLAN_LIMITS, checkLimit } from "@minarvabiz/licensing";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
 
@@ -75,6 +76,7 @@ export function App() {
   const [dbError, setDbError] = React.useState<string | null>(null);
   const [trialState, setTrialState] = React.useState<TrialState | null>(null);
   const [commercialLicense, setCommercialLicense] = React.useState<CommercialLicenseState | null>(null);
+  const [deviceFingerprint, setDeviceFingerprint] = React.useState("");
   const [activeNav, setActiveNav] = React.useState<NavItemId>("dashboard");
   const [dash, setDash] = React.useState<DashboardData | null>(null);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
@@ -145,7 +147,7 @@ export function App() {
     catch { scheduleAutoSave(250); }
   }, [refreshAll]);
 
-  React.useEffect(() => { let cancelled=false; (async()=>{ for(let i=0;i<50&&!window.minarvaDesktop;i++) await new Promise(r=>setTimeout(r,20)); if(!window.minarvaDesktop){if(!cancelled)setDbError("Electron bridge missing. Reinstall Minarva Biz desktop.");return;} const result=await bootstrapDesktopSqlite(); if(cancelled)return; if(!result.ok){setDbError(result.error||"SQLite failed to initialize");return;} const [state, license] = await Promise.all([window.minarvaDesktop.getTrialState(), window.minarvaDesktop.getLicenseState()]); if(cancelled)return; setTrialState(state); setCommercialLicense(license as CommercialLicenseState); setDbReady(true); fetchDashboardData().then(setDash); })(); return()=>{cancelled=true;}; }, []);
+  React.useEffect(() => { let cancelled=false; (async()=>{ for(let i=0;i<50&&!window.minarvaDesktop;i++) await new Promise(r=>setTimeout(r,20)); if(!window.minarvaDesktop){if(!cancelled)setDbError("Electron bridge missing. Reinstall Minarva Biz desktop.");return;} const result=await bootstrapDesktopSqlite(); if(cancelled)return; if(!result.ok){setDbError(result.error||"SQLite failed to initialize");return;} const [state, license, deviceId] = await Promise.all([window.minarvaDesktop.getTrialState(), window.minarvaDesktop.getLicenseState(), window.minarvaDesktop.getDeviceId?.() ?? Promise.resolve("")]); if(cancelled)return; setTrialState(state); setCommercialLicense(license as CommercialLicenseState); setDeviceFingerprint(deviceId || ""); setDbReady(true); fetchDashboardData().then(setDash); })(); return()=>{cancelled=true;}; }, []);
   React.useEffect(() => {
     if (!dbReady) return;
     refreshAll();
@@ -228,6 +230,30 @@ export function App() {
   const handleInsightAction=(action:string)=>{const targets:Record<string,NavItemId>={"Review low stock":"products","Open outstanding payments":"payments","Review pending orders":"services","Open ready orders":"services","Open reports":"reports","Review expenses":"expenses"};const target=targets[action];if(target)navTo(target);};
 
   const laundry=phase5Store.listLaundryOrders(), expenses=phase5Store.listExpenses(), purchases=phase5Store.listPurchases(), staff=phase6Store.listStaff(), assignments=phase6Store.listAssignments(), notifications=phase6Store.listNotifications(), reportSales=phase7Store.salesReport(reportFrom||undefined,reportTo?`${reportTo}T23:59:59.999Z`:undefined), reportDayEnd=phase7Store.dayEndReport(), reportStock=phase7Store.stockReport(), reportOutstanding=phase7Store.outstandingPaymentsReport(), backups=phase7Store.listBackups(), suppliers=phase5Store.listSuppliers(), expenseCategories=phase5Store.listExpenseCategories(), profile=getShopProfile(), tax=getTaxConfig(), backupSettings=getAutoBackupSettings(), printSettings=getPrintSettings(), view=activeNav as string;
+  const licensePlan = commercialLicense.plan ?? "trial";
+  const licenseLimits = PLAN_LIMITS[licensePlan];
+  const licenseUsage = {
+    plan: licensePlan,
+    limits: {
+      maxUsers: licenseLimits.maxUsers,
+      maxDevices: licenseLimits.maxDevices,
+      maxBranches: licenseLimits.maxBranches,
+      maxProducts: licenseLimits.maxProducts,
+      maxCustomers: licenseLimits.maxCustomers,
+      maxOrdersPerMonth: licenseLimits.maxOrdersPerMonth,
+      graceDays: licenseLimits.graceDays,
+      cloudSync: licenseLimits.cloudSync,
+      multiBranch: licenseLimits.multiBranch,
+    },
+    usage: { customers: customers.length, products: products.length, branches: 1, users: 1, devices: 1 },
+    checks: {
+      customers: checkLimit(licensePlan, "maxCustomers", customers.length),
+      products: checkLimit(licensePlan, "maxProducts", products.length),
+      branches: checkLimit(licensePlan, "maxBranches", 1),
+      users: checkLimit(licensePlan, "maxUsers", 1),
+      devices: checkLimit(licensePlan, "maxDevices", 1),
+    },
+  };
 
   return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} desktopModuleContext={{customerId:crmCustomerId,staffId:staffDetailId}} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png",navItems:allowedNav}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:phase6Store.unreadNotificationCount(),onMessagesClick:()=>navTo("notifications"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("reports"),onSearch:setGlobalSearchQuery}}>
     {view==="dashboard"&&dash&&<Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/>}
@@ -246,7 +272,17 @@ export function App() {
     {view==="notifications"&&<NotificationCenter notifications={notifications} onMarkAllRead={()=>{phase6Store.markAllNotificationsRead();void persistAndRefresh();}} onMarkRead={id=>{phase6Store.markNotificationRead(id);void persistAndRefresh();}} onNavigate={(href)=>{const target=href.startsWith("/services")?"services":href.startsWith("/reports")?"reports":href.startsWith("/inventory")?"products":href.startsWith("/sales")?"sales":"dashboard";navTo(target as NavItemId);}}/>} 
     {view==="reports"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} onRefresh={()=>{refreshAll();}} from={reportFrom} to={reportTo} onFromChange={setReportFrom} onToChange={setReportTo}/>} 
     {view==="backup"&&<BackupPanel backups={backups}/>} 
-    {view==="settings"&&<SettingsPanel profile={profile} tax={tax} backup={backupSettings} printing={printSettings} onSaveProfile={v=>{updateShopProfile(v);saveSettings();}} onSaveTax={v=>{updateTaxConfig(v);saveSettings();}} onSaveBackup={v=>{setAutoBackupSettings(v);saveSettings();}} onSavePrinting={v=>{updatePrintSettings(v);saveSettings();}}/>}
+    {view==="license"&&<LicensePanel
+      state={{status:commercialLicense.status,plan:commercialLicense.plan,edition:commercialLicense.edition,daysRemaining:commercialLicense.daysRemaining,graceDaysRemaining:commercialLicense.graceDaysRemaining,reason:commercialLicense.reason}}
+      usage={licenseUsage}
+      licenseId={commercialLicense.licenseId}
+      activationId={commercialLicense.activationId}
+      deviceFingerprint={deviceFingerprint}
+      onRefresh={()=>{void window.minarvaDesktop?.getLicenseState().then(value=>setCommercialLicense(value as CommercialLicenseState));}}
+      onActivateToken={token=>{void window.minarvaDesktop?.activateLicenseToken(token).then(value=>setCommercialLicense(value as CommercialLicenseState));}}
+      onDeactivate={()=>{if(!window.confirm("Deactivate this license on this computer? Business data will be kept, but licensed features will be unavailable until reactivated."))return;void window.minarvaDesktop?.deactivateLicense().then(async()=>setCommercialLicense(await window.minarvaDesktop!.getLicenseState() as CommercialLicenseState));}}
+    />}
+    {view==="settings"&&<SettingsPanel profile={profile} tax={tax} backup={backupSettings} printing={printSettings} onSaveProfile={v=>{updateShopProfile(v);if(v.gstin!==undefined)updateTaxConfig({gstin:v.gstin});saveSettings();}} onSaveTax={v=>{updateTaxConfig(v);saveSettings();}} onSaveBackup={v=>{setAutoBackupSettings(v);saveSettings();}} onSavePrinting={v=>{updatePrintSettings(v);saveSettings();}}/>}
 
     <Modal open={!!laundryMode} title={laundryMode==="outsourced"?"Outsourced Laundry":"In-house Ironing"} onClose={()=>setLaundryMode(null)}><LaundryForm mode={laundryMode||"outsourced"} customers={customers} suppliers={suppliers} onAddCustomer={openCustomerCreator} onAddSupplier={()=>{setSupplierForm({name:"",company:"",phone:"",email:"",address:"",category:"laundry",openingBalance:"",notes:""});setSupplierOpen(true);}} onSubmit={handleCreateLaundry} onCancel={()=>setLaundryMode(null)} error={laundryError}/></Modal>
     <Modal open={!!laundryCancelOrder} title="Cancel laundry ticket" onClose={()=>{setLaundryCancelOrder(null);setLaundryCancelError(null);}}>{laundryCancelOrder&&<LaundryCancellationForm order={laundryCancelOrder} error={laundryCancelError} onSubmit={handleLaundryCancel} onCancel={()=>{setLaundryCancelOrder(null);setLaundryCancelError(null);}}/>}</Modal>
