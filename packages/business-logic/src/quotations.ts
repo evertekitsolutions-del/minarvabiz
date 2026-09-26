@@ -118,6 +118,8 @@ export function createQuotation(input: {
 
 type QuotationEditInput = { customerId: UUID; lines: Array<{ kind: QuotationLine["kind"]; productId?: UUID | null; description: string; quantity: number; unitPrice: number }>; materialCharges?: number; labourCharges?: number; discount?: number; tax?: number; advance?: number; validUntil?: string | null; notes?: string | null };
 
+const QUOTATION_STATUS_TRANSITIONS: Record<QuotationStatus, QuotationStatus[]> = { draft: ["draft", "sent", "rejected", "expired"], sent: ["sent", "accepted", "rejected", "expired"], accepted: ["accepted"], rejected: ["rejected", "draft"], expired: ["expired", "draft"], converted: ["converted"] };
+export function canSetQuotationStatus(q: Quotation, status: QuotationStatus): boolean { return QUOTATION_STATUS_TRANSITIONS[q.status].includes(status); }
 export function canEditQuotation(q: Quotation): boolean { return !q.deletedAt && (q.status === "draft" || q.status === "sent"); }
 export function canArchiveQuotation(q: Quotation): boolean { return !q.deletedAt && ["draft", "sent", "rejected", "expired"].includes(q.status); }
 
@@ -159,6 +161,8 @@ export function setQuotationStatus(id: UUID, status: QuotationStatus): { quotati
   const q = getQuotation(id);
   if (!q) return { quotation: null, error: "Not found" };
   if (q.status === "converted") return { quotation: null, error: "Already converted" };
+  if (q.status === status) return { quotation: q };
+  if (!canSetQuotationStatus(q, status)) return { quotation: null, error: `Invalid quotation status transition: ${q.status} → ${status}` };
   const before = structuredClone(q);
   q.status = status;
   q.updatedAt = nowISO();
