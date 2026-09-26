@@ -29,12 +29,8 @@ import type {
   LicenseRegistryRow,
   LicenseStatusAction,
 } from "./admin-panel/types";
-interface AdminPanelProps {
-  identity: AdminIdentityView | null;
-  initialLicenses: LicenseRegistryRow[];
-  bootstrapAvailable: boolean;
-}
-export default function AdminPanel({ identity, initialLicenses, bootstrapAvailable }: AdminPanelProps) {
+interface AdminPanelProps { identity: AdminIdentityView | null; initialLicenses: LicenseRegistryRow[]; bootstrapAvailable: boolean; }
+export default function AdminPanel({identity,initialLicenses,bootstrapAvailable}: AdminPanelProps) {
   const router = useRouter();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
