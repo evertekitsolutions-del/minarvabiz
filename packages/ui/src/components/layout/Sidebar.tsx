@@ -146,6 +146,15 @@ function NavIcon({ name, className }: { name: string; className?: string }) {
           <path d="M10 16h.01" />
         </svg>
       );
+    case "key":
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="8" cy="15" r="4" />
+          <path d="m11 12 8-8" />
+          <path d="m17 6 2 2" />
+          <path d="m15 8 2 2" />
+        </svg>
+      );
     default:
       return <span className={common} />;
   }

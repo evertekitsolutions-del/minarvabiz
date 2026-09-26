@@ -7,9 +7,17 @@ import { touchPersistence } from "./autosave";
 
 export interface ShopProfile {
   shopName: string;
+  legalName: string;
+  documentCode: string;
   address: string;
+  addressLine2: string;
+  district: string;
+  state: string;
+  country: string;
+  postalCode: string;
   phone: string;
   email: string;
+  website: string;
   gstin: string;
   receiptFooter: string;
   currency: string;
@@ -18,9 +26,17 @@ export interface ShopProfile {
 
 const defaultProfile: ShopProfile = {
   shopName: "Minarva Biz",
+  legalName: "",
+  documentCode: "",
   address: "",
+  addressLine2: "",
+  district: "",
+  state: "",
+  country: "India",
+  postalCode: "",
   phone: "",
   email: "",
+  website: "",
   gstin: "",
   receiptFooter: "Thank you for your business!",
   currency: "INR",

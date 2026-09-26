@@ -41,6 +41,10 @@ export function CommandPalette({ activeNav, onNavigate }: CommandPaletteProps) {
   React.useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const modifier = event.ctrlKey || event.metaKey;
+      const target = event.target;
+      const editable = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || (target instanceof HTMLElement && target.isContentEditable);
+      const paletteInput = open && target === inputRef.current;
+      if (editable && !paletteInput && !(modifier && event.key.toLowerCase() === "k")) return;
       if (modifier && event.key.toLowerCase() === "k") { event.preventDefault(); setOpen(true); }
       if (!open) return;
       if (event.key === "Escape") { event.preventDefault(); setOpen(false); }

@@ -5,7 +5,7 @@
 export type NavItemId =
   | "dashboard" | "sales" | "products" | "warehouse" | "services" | "laundry" | "expenses" | "purchases"
   | "customers" | "customer-crm" | "staff" | "staff-detail" | "suppliers" | "payments" | "accounting" | "returns"
-  | "reports" | "day-end" | "audit" | "notifications" | "settings" | "backup";
+  | "reports" | "day-end" | "audit" | "notifications" | "settings" | "backup" | "license";
 
 export interface NavItem { id: NavItemId; label: string; href: string; icon: string; }
 
@@ -32,4 +32,5 @@ export const MAIN_NAV: NavItem[] = [
   { id: "notifications", label: "Messages & Notifications", href: "/notifications", icon: "message-circle" },
   { id: "settings", label: "Settings", href: "/settings", icon: "settings" },
   { id: "backup", label: "Backup & Restore", href: "/backup", icon: "hard-drive" },
+  { id: "license", label: "License & Renewal", href: "/license", icon: "key" },
 ];

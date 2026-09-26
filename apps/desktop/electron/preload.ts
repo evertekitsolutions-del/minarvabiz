@@ -69,6 +69,7 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   exportBackup: (id: string) => ipcRenderer.invoke("backup:export", id) as Promise<NativeBackupResult>,
   createAutomaticBackup: () => ipcRenderer.invoke("backup:createAutomatic") as Promise<NativeBackupResult>,
   chooseBackupDirectory: () => ipcRenderer.invoke("backup:chooseDestination") as Promise<string | null>,
+  useDriveDBackup: () => ipcRenderer.invoke("backup:useDriveD") as Promise<{ ok: boolean; path?: string; error?: string }>,
   pruneAutomaticBackups: (retention?: number) => ipcRenderer.invoke("backup:pruneAutomatic", retention) as Promise<boolean>,
   restoreBackup: () => ipcRenderer.invoke("backup:restoreFromFile") as Promise<NativeRestoreResult>,
   listPrinters: () => ipcRenderer.invoke("printer:list") as Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>,
@@ -113,6 +114,7 @@ export type MinarvaDesktopApi = {
   exportBackup: (id: string) => Promise<NativeBackupResult>;
   createAutomaticBackup: () => Promise<NativeBackupResult>;
   chooseBackupDirectory: () => Promise<string | null>;
+  useDriveDBackup: () => Promise<{ ok: boolean; path?: string; error?: string }>;
   pruneAutomaticBackups: (retention?: number) => Promise<boolean>;
   restoreBackup: () => Promise<NativeRestoreResult>;
   listPrinters: () => Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>;

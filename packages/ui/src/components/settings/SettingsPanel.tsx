@@ -3,7 +3,23 @@ import { Button } from "../Button";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 
 export interface SettingsPanelProps {
-  profile: { shopName: string; address: string; phone: string; email: string; gstin: string; receiptFooter: string; currency: string };
+  profile: {
+    shopName: string;
+    legalName: string;
+    documentCode: string;
+    address: string;
+    addressLine2: string;
+    district: string;
+    state: string;
+    country: string;
+    postalCode: string;
+    phone: string;
+    email: string;
+    website: string;
+    gstin: string;
+    receiptFooter: string;
+    currency: string;
+  };
   tax: { enableGst: boolean; defaultRatePercent: number };
   backup: { enabled: boolean; intervalHours: number; retentionCount: number; destinationPath: string };
   printing: { defaultInvoicePaper: "a4" | "thermal"; thermalWidthMm: 58 | 80; a4PrinterName: string; thermalPrinterName: string; labelPrinterName: string; labelWidthMm: number; labelHeightMm: number; silentDesktopPrint: boolean };
@@ -42,6 +58,7 @@ type DesktopDiagnosticsApi = {
   readSqliteBinary: () => Promise<Uint8Array | null>;
   listBackups: () => Promise<Array<{ createdAt: string; sizeBytes: number; kind: "manual" | "automatic"; verified: boolean }>>;
   chooseBackupDirectory: () => Promise<string | null>;
+  useDriveDBackup?: () => Promise<{ ok: boolean; path?: string; error?: string }>;
   getLicenseState: () => Promise<{ status: string; plan: string | null; edition: string | null; daysRemaining: number | null; graceDaysRemaining: number | null; reason?: string }>;
   listPrinters?: () => Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>;
   printHtml?: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal" | "label"; thermalWidthMm?: number; labelWidthMm?: number; labelHeightMm?: number; silent?: boolean }) => Promise<{ ok: boolean; error?: string }>;
@@ -127,6 +144,30 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
   }
 
   async function chooseBackupLocation() { const api = getDiagnosticsApi(); if (!api) return; try { const selected = await api.chooseBackupDirectory(); if (selected) { setDraftBackup((prev) => ({ ...prev, destinationPath: selected })); onSaveBackup({ destinationPath: selected }); } } catch (error) { setDiagnosticState("error"); setDiagnosticMessage(error instanceof Error ? error.message : "Unable to choose backup folder."); } }
+
+  async function useDriveDBackup() {
+    const api = getDiagnosticsApi();
+    if (!api?.useDriveDBackup) {
+      setDiagnosticState("error");
+      setDiagnosticMessage("D: drive backup selection is available only in the Windows desktop edition.");
+      return;
+    }
+    try {
+      const result = await api.useDriveDBackup();
+      if (!result.ok || !result.path) {
+        setDiagnosticState("error");
+        setDiagnosticMessage(result.error || "Unable to configure D: drive backup.");
+        return;
+      }
+      setDraftBackup((prev) => ({ ...prev, enabled: true, destinationPath: result.path! }));
+      onSaveBackup({ enabled: true, destinationPath: result.path });
+      setDiagnosticState("done");
+      setDiagnosticMessage(`Automatic backups will be stored in ${result.path}`);
+    } catch (error) {
+      setDiagnosticState("error");
+      setDiagnosticMessage(error instanceof Error ? error.message : "Unable to configure D: drive backup.");
+    }
+  }
 
   async function testSelectedPrinter() {
     const api = getDiagnosticsApi();
@@ -278,13 +319,21 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
   return <div className="space-y-6">
     <div><h2 className="text-2xl font-semibold text-slate-900">Business Settings</h2><p className="mt-1 text-sm text-slate-500">Configure your business identity, invoices, tax, backup and application appearance.</p></div>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-lg font-semibold text-slate-900">Business profile</h3><div className="mt-4 grid gap-4 md:grid-cols-2">
-      <FormField label="Business name"><input className={inputClass} value={draftProfile.shopName} onChange={e => setDraftProfile({ ...draftProfile, shopName: e.target.value })} /></FormField>
+      <FormField label="Business / trade name"><input className={inputClass} value={draftProfile.shopName} onChange={e => setDraftProfile({ ...draftProfile, shopName: e.target.value })} /></FormField>
+      <FormField label="Registered legal name"><input className={inputClass} value={draftProfile.legalName} onChange={e => setDraftProfile({ ...draftProfile, legalName: e.target.value })} placeholder="As shown on GST / registration" /></FormField>
+      <FormField label="Document code"><input className={inputClass} maxLength={8} value={draftProfile.documentCode} onChange={e => setDraftProfile({ ...draftProfile, documentCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })} placeholder="Auto from business name, e.g. MT" /></FormField>
+      <FormField label="GSTIN"><input className={inputClass} maxLength={15} value={draftProfile.gstin} onChange={e => setDraftProfile({ ...draftProfile, gstin: e.target.value.toUpperCase().replace(/\s/g, "") })} placeholder="15-character GSTIN" /></FormField>
+      <FormField label="Address line 1" className="md:col-span-2"><input className={inputClass} value={draftProfile.address} onChange={e => setDraftProfile({ ...draftProfile, address: e.target.value })} /></FormField>
+      <FormField label="Address line 2" className="md:col-span-2"><input className={inputClass} value={draftProfile.addressLine2} onChange={e => setDraftProfile({ ...draftProfile, addressLine2: e.target.value })} /></FormField>
+      <FormField label="District / city"><input className={inputClass} value={draftProfile.district} onChange={e => setDraftProfile({ ...draftProfile, district: e.target.value })} /></FormField>
+      <FormField label="State / province"><input className={inputClass} value={draftProfile.state} onChange={e => setDraftProfile({ ...draftProfile, state: e.target.value })} /></FormField>
+      <FormField label="Country"><input className={inputClass} value={draftProfile.country} onChange={e => setDraftProfile({ ...draftProfile, country: e.target.value })} /></FormField>
+      <FormField label="Postal / PIN code"><input className={inputClass} value={draftProfile.postalCode} onChange={e => setDraftProfile({ ...draftProfile, postalCode: e.target.value })} /></FormField>
       <FormField label="Phone"><input className={inputClass} value={draftProfile.phone} onChange={e => setDraftProfile({ ...draftProfile, phone: e.target.value })} /></FormField>
       <FormField label="Email"><input className={inputClass} type="email" value={draftProfile.email} onChange={e => setDraftProfile({ ...draftProfile, email: e.target.value })} /></FormField>
-      <FormField label="GSTIN"><input className={inputClass} value={draftProfile.gstin} onChange={e => setDraftProfile({ ...draftProfile, gstin: e.target.value.toUpperCase() })} /></FormField>
-      <FormField label="Address" className="md:col-span-2"><textarea className={inputClass + " h-auto py-2"} rows={3} value={draftProfile.address} onChange={e => setDraftProfile({ ...draftProfile, address: e.target.value })} /></FormField>
+      <FormField label="Website"><input className={inputClass} value={draftProfile.website} onChange={e => setDraftProfile({ ...draftProfile, website: e.target.value })} placeholder="https://…" /></FormField>
       <FormField label="Currency"><select className={selectClass} value={draftProfile.currency} onChange={e => setDraftProfile({ ...draftProfile, currency: e.target.value })}><option value="INR">INR — Indian Rupee</option><option value="OMR">OMR — Omani Rial</option><option value="AED">AED — UAE Dirham</option><option value="USD">USD — US Dollar</option></select></FormField>
-      <FormField label="Receipt footer"><input className={inputClass} value={draftProfile.receiptFooter} onChange={e => setDraftProfile({ ...draftProfile, receiptFooter: e.target.value })} /></FormField>
+      <FormField label="Receipt footer" className="md:col-span-2"><input className={inputClass} value={draftProfile.receiptFooter} onChange={e => setDraftProfile({ ...draftProfile, receiptFooter: e.target.value })} /></FormField>
     </div><div className="mt-5 flex justify-end"><Button onClick={() => onSaveProfile(draftProfile)}>Save business profile</Button></div></section>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-lg font-semibold text-slate-900">Tax / GST</h3><div className="mt-4 grid gap-4 md:grid-cols-2">
       <FormField label="GST enabled"><select className={selectClass} value={draftTax.enableGst ? "yes" : "no"} onChange={e => setDraftTax({ ...draftTax, enableGst: e.target.value === "yes" })}><option value="yes">Enabled</option><option value="no">Disabled</option></select></FormField>
@@ -317,7 +366,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
       <FormField label="Interval (hours)"><input className={inputClass} type="number" min="1" value={draftBackup.intervalHours} onChange={e => setDraftBackup({ ...draftBackup, intervalHours: Math.max(1, Number(e.target.value) || 24) })} /></FormField>
       <FormField label="Retention count"><input className={inputClass} type="number" min="5" value={draftBackup.retentionCount} onChange={e => setDraftBackup({ ...draftBackup, retentionCount: Math.max(5, Number(e.target.value) || 14) })} /></FormField>
     </div>
-    <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-sm font-medium text-slate-800">Backup folder</div><div className="mt-1 break-all text-xs text-slate-500">{draftBackup.destinationPath || "Default: D:\Minarva Biz Backups when D: drive is available"}</div></div><Button type="button" variant="outline" onClick={chooseBackupLocation}>Choose Folder</Button></div></div><div className="mt-5 flex justify-end"><Button onClick={() => onSaveBackup(draftBackup)}>Save backup settings</Button></div></section>
+    <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-sm font-medium text-slate-800">Backup folder</div><div className="mt-1 break-all text-xs text-slate-500">{draftBackup.destinationPath || "Default: D:\\Minarva Biz Backups when D: drive is available"}</div></div><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={useDriveDBackup}>Use D: Drive</Button><Button type="button" variant="outline" onClick={chooseBackupLocation}>Choose Folder</Button></div></div></div>{diagnosticMessage && <p className={`mt-3 text-sm ${diagnosticState === "error" ? "text-red-600" : "text-emerald-600"}`}>{diagnosticMessage}</p>}<div className="mt-5 flex justify-end"><Button onClick={() => onSaveBackup(draftBackup)}>Save backup settings</Button></div></section>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div><h3 className="text-lg font-semibold text-slate-900">Appearance</h3><p className="mt-1 text-sm text-slate-500">Choose a professional workspace theme. Your choice is remembered on this computer.</p></div>
       <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
