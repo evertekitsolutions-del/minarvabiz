@@ -80,13 +80,13 @@ function templateCss(template: PrintTemplate, paper: PrintPaper, width: string):
 
 export function buildSaleInvoiceHtml(
   sale: Sale,
-  opts?: { paper?: PrintPaper; autoPrint?: boolean; templateId?: string | null },
+  opts?: { paper?: PrintPaper; autoPrint?: boolean; templateId?: string | null; template?: PrintTemplate },
 ): string {
   const shop = getShopProfile();
   const tax = getTaxConfig();
   const settings = getPrintSettings();
   const paper = opts?.paper ?? settings.defaultInvoicePaper;
-  const template = getPrintTemplate("invoice", paper, opts?.templateId || templateIdForInvoice(paper));
+  const template = opts?.template || getPrintTemplate("invoice", paper, opts?.templateId || templateIdForInvoice(paper));
   const width = paper === "thermal" ? `${settings.thermalWidthMm}mm` : "210mm";
   const autoPrint = opts?.autoPrint === true;
   const customer = sale.customerId ? mainStore.getCustomer(sale.customerId) : undefined;
