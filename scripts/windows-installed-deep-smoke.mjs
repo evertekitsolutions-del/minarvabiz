@@ -120,8 +120,8 @@ async function main() {
   console.log(`CONTROLS ${controls}`);
 
   async function clickTarget(name, patterns) {
-    const result = await cdpEval(ws, \`(async()=>{
-      const pats=\${JSON.stringify(patterns)};
+    const result = await cdpEval(ws, `(async()=>{
+      const pats=${JSON.stringify(patterns)};
       const visible=(el)=>{const r=el.getBoundingClientRect();const s=getComputedStyle(el);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'&&!el.disabled};
       const label=(el)=>((el.innerText||el.textContent||'')+' '+(el.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim();
       const score=(el)=>{const s=label(el).toLowerCase();return pats.some(p=>s.includes(String(p).toLowerCase()))};
@@ -140,10 +140,10 @@ async function main() {
       el.click();
       await new Promise(r=>setTimeout(r,900));
       return JSON.stringify({ok:true,text:label(el),body:(document.body?.innerText||'').slice(0,3200)});
-    })()\`);
-    console.log(\`CLICK_\${name} \${result}\`);
+    })()`);
+    console.log(`CLICK_${name} ${result}`);
     const parsed = JSON.parse(result);
-    if (!parsed.ok) throw new Error(\`Could not find clickable target for \${name}. Available=\${JSON.stringify(parsed.available || [])}\`);
+    if (!parsed.ok) throw new Error(`Could not find clickable target for ${name}. Available=${JSON.stringify(parsed.available || [])}`);
     return parsed;
   }
 
