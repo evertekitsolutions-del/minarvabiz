@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { PosBilling, NormalBilling, SalesList, Button, Modal, FormField, inputClass } from "@minarvabiz/ui";
-import { store, printSaleInvoice, assertLimit } from "@minarvabiz/business-logic";
+import { store, printSaleInvoice, buildSaleInvoiceHtml, assertLimit } from "@minarvabiz/business-logic";
 import type { Product, Customer, Sale, CartLine, PaymentMethod } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
@@ -121,7 +121,7 @@ export default function SalesPage() {
         />
       )}
       {tab === "normal" && <NormalBilling products={products} customers={customers} onCompleteSale={handleComplete} onAddCustomer={openCustomerQuickAdd} onPrintSale={(id, paper) => { const sale = store.getSale(id); if (sale) printSaleInvoice(sale, paper); }} />}
-      {tab === "history" && <SalesList sales={sales} onPrintA4={(sale) => printSaleInvoice(sale, "a4")} onPrintThermal={(sale) => printSaleInvoice(sale, "thermal")} />}
+      {tab === "history" && <SalesList sales={sales} buildPreviewHtml={(sale, paper) => buildSaleInvoiceHtml(sale, { paper, autoPrint: false })} onPrintA4={(sale) => printSaleInvoice(sale, "a4")} onPrintThermal={(sale) => printSaleInvoice(sale, "thermal")} />}
 
       <Modal
         open={customerOpen}
