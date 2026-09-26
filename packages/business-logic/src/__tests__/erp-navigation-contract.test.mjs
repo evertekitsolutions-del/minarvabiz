@@ -12,6 +12,9 @@ const sidebar = read("packages/ui/src/components/layout/Sidebar.tsx");
 const webLayout = read("apps/web/src/components/AppLayoutClient.tsx");
 const rootPkg = JSON.parse(read("package.json"));
 const desktopPkg = JSON.parse(read("apps/desktop/package.json"));
+const webSmoke = read("scripts/web-ui-deep-smoke.mjs");
+const windowsInstalledSmoke = read("scripts/windows-installed-deep-smoke.mjs");
+const windowsPopulatedSmoke = read("scripts/windows-populated-deep-smoke.mjs");
 
 for (const section of [
   "Sales & Operations",
@@ -47,6 +50,10 @@ assert.equal(sidebar.includes("NAV_SECTIONS"), true);
 assert.equal(sidebar.includes("sidebarActiveNavId"), true);
 assert.equal(sidebar.includes("aria-expanded={expanded}"), true);
 assert.equal(sidebar.includes('w-[264px]'), true);
+assert.equal(webSmoke.includes("aside button[aria-expanded]"), true);
+assert.equal(windowsInstalledSmoke.includes("aside button[aria-expanded]"), true);
+assert.equal(windowsPopulatedSmoke.includes("aside button[aria-expanded]"), true);
+assert.equal(windowsInstalledSmoke.includes("STAFF_DETAILS"), false);
 
 for (const mapping of [
   '"/quotations": "quotations"',
