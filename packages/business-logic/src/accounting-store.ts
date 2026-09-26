@@ -423,6 +423,69 @@ export function buildTrialBalance(asOf?: string): TrialBalanceRow[] {
   }).filter((row) => row.debit !== 0 || row.credit !== 0);
 }
 
+export interface TaxReconciliationReport {
+  from: string | null;
+  to: string | null;
+  periodOutputTax: number;
+  periodInputTax: number;
+  periodPurchaseTaxPending: number;
+  outputTaxPayable: number;
+  inputTaxCredit: number;
+  purchaseTaxPending: number;
+  netTaxPosition: number;
+  reviewRequired: boolean;
+}
+
+function validateReportDate(value?: string) {
+  if (value && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value)) {
+    throw new Error("Choose a valid report date");
+  }
+}
+
+function taxAccountNet(systemKey: string, from?: string, to?: string): number {
+  const account = getSystemAccount(systemKey);
+  if (!account) return 0;
+  let debitMinor = 0;
+  let creditMinor = 0;
+  for (const entry of reportableEntries(to)) {
+    if (from && entry.entryDate < from) continue;
+    for (const line of entry.lines) {
+      if (line.accountId !== account.id) continue;
+      debitMinor = addMinorUnits(debitMinor, toMinorUnits(line.debit));
+      creditMinor = addMinorUnits(creditMinor, toMinorUnits(line.credit));
+    }
+  }
+  const normal = normalBalance(account.type);
+  const netMinor = normal === "debit"
+    ? subtractMinorUnits(debitMinor, creditMinor)
+    : subtractMinorUnits(creditMinor, debitMinor);
+  return fromMinorUnits(netMinor);
+}
+
+export function buildTaxReconciliation(from?: string, to?: string): TaxReconciliationReport {
+  validateReportDate(from);
+  validateReportDate(to);
+  if (from && to && from > to) throw new Error("Report start date must be on or before end date");
+  const periodOutputTax = taxAccountNet("tax_payable", from, to);
+  const periodInputTax = taxAccountNet("input_tax", from, to);
+  const periodPurchaseTaxPending = taxAccountNet("purchase_tax_pending", from, to);
+  const outputTaxPayable = taxAccountNet("tax_payable", undefined, to);
+  const inputTaxCredit = taxAccountNet("input_tax", undefined, to);
+  const purchaseTaxPending = taxAccountNet("purchase_tax_pending", undefined, to);
+  return {
+    from: from || null,
+    to: to || null,
+    periodOutputTax,
+    periodInputTax,
+    periodPurchaseTaxPending,
+    outputTaxPayable,
+    inputTaxCredit,
+    purchaseTaxPending,
+    netTaxPosition: normalizedMoney(outputTaxPayable - inputTaxCredit),
+    reviewRequired: purchaseTaxPending !== 0,
+  };
+}
+
 export function buildGeneralLedger(accountId: UUID, from?: string, to?: string): GeneralLedgerRow[] {
   const account = accounts.find((candidate) => candidate.id === accountId && !candidate.deletedAt);
   if (!account) return [];
