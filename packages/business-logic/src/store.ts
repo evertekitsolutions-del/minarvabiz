@@ -14,7 +14,7 @@ import {
   type MoneyMinor,
 } from "@minarvabiz/utils";
 import {
-  calculateCartTotals, cartLineToSaleItem, allocatePayment, validateCart, nextInvoiceNumber, validateTender,
+  calculateCartTotals, cartLineToSaleItem, allocatePayment, validateCart, validateTender,
 } from "./sales";
 import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
@@ -25,6 +25,8 @@ import { assertPermission } from "./permissions";
 import { planSalePosting, planCollectionPosting } from "./sales-accounting";
 import { planAutomaticPosting } from "./accounting-store";
 import { consumeWarehouseStock } from "./warehouse-store";
+import { getShopProfile } from "./shop-profile";
+import { nextBusinessDocumentNumber } from "./document-numbering";
 
 const categories: Category[] = [];
 const customers: Customer[] = [];
@@ -108,7 +110,6 @@ if (allowDemoSeed()) {
 
 const sales: Sale[] = [];
 const payments: Payment[] = [];
-let lastInvoice: string | null = null;
 
 function touchProduct(p: Product) {
   p.updatedAt = nowISO();
@@ -445,8 +446,12 @@ export function createSale(input: {
     totals.grandTotal,
     fromMinorUnits(addMinorUnits(creditAppliedMinor, actualPaymentMinor))
   );
-  const invoiceNumber = nextInvoiceNumber(lastInvoice);
-  lastInvoice = invoiceNumber;
+  const shopProfile = getShopProfile();
+  const invoiceNumber = nextBusinessDocumentNumber("invoice", sales.map((sale) => sale.invoiceNumber), {
+    businessCode: shopProfile.documentCode,
+    businessName: shopProfile.shopName,
+    financialYearStartMonth: shopProfile.financialYearStartMonth,
+  });
   const saleId = generateId();
   const items: SaleItem[] = input.lines.map((line) => cartLineToSaleItem(line, saleId, generateId()));
   const customer = input.customerId ? getCustomer(input.customerId) : undefined;
