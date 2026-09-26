@@ -430,7 +430,7 @@ async function main() {
     // Procurement Step 3A: purchase order is separate from direct purchase and
     // must be explicitly approved before any later receipt/accounting step.
     await assertMain(ws, "PURCHASE_ORDER_PANEL", ["Purchase Order", "Create Purchase Order"]);
-    await selectFieldByText(ws, "Supplier", "QA Supplier");
+    await selectFieldByText(ws, "Purchase order supplier", "QA Supplier");
     await setByAriaLabel(ws, "Purchase order product", "QA POS Product");
     await setByPlaceholder(ws, "Qty", "2");
     await setByPlaceholder(ws, "Unit cost", "60");
