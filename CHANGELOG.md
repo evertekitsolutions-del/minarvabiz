@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.8 — Professional ERP navigation
+
+### Navigation & usability
+- Reorganized the shared Online + Offline sidebar into professional ERP sections: Sales & Operations, Inventory & Procurement, Finance & Reporting, Team & Communication, and Administration.
+- Converted Customer CRM and Staff Details from duplicate top-level menu entries into drill-down views reached from Customers and Staff Management.
+- Added compact accordion section navigation while preserving the full icon-only collapsed sidebar.
+- Corrected Online active-navigation mapping for Quotations, License & Renewal, Inventory/Variants, Cash Register, and Stock Take.
+- Reduced sidebar visual height and increased expanded width so long labels remain readable.
+- Preserved all existing routes, license gates, deep links, and module functionality.
+
 ## 1.0.4 — Customer-delivery candidate
 
 ### Release hardening
