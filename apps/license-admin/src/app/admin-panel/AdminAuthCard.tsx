@@ -2,6 +2,7 @@
 
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@minarvabiz/ui";
 import type { AuthStage } from "./types";
+import { useFirstAdminBootstrap } from "./useFirstAdminBootstrap";
 
 interface AdminAuthCardProps {
   authStage: AuthStage;
@@ -22,6 +23,7 @@ interface AdminAuthCardProps {
   onBeginMfaEnrollment: () => void;
   onVerifyMfa: () => void;
   onResetMfa: () => void;
+  bootstrapAvailable: boolean;
 }
 
 export function AdminAuthCard(props: AdminAuthCardProps) {
@@ -44,7 +46,9 @@ export function AdminAuthCard(props: AdminAuthCardProps) {
     onBeginMfaEnrollment,
     onVerifyMfa,
     onResetMfa,
+    bootstrapAvailable,
   } = props;
+  const { bootstrapBusy, bootstrapMessage, bootstrapSent, onBootstrap } = useFirstAdminBootstrap();
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
@@ -78,6 +82,22 @@ export function AdminAuthCard(props: AdminAuthCardProps) {
                 }}
               />
               {message && <p className="text-sm text-rose-600">{message}</p>}
+              {bootstrapAvailable && (
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+                  <p className="text-xs text-slate-600">
+                    No named administrator exists yet. Send a one-time setup email to the configured administrator.
+                  </p>
+                  {bootstrapMessage && <p className="mt-2 text-xs text-slate-700">{bootstrapMessage}</p>}
+                  <Button
+                    className="mt-3"
+                    variant="outline"
+                    disabled={bootstrapBusy || bootstrapSent}
+                    onClick={onBootstrap}
+                  >
+                    {bootstrapBusy ? "Sending setup email…" : bootstrapSent ? "Setup email sent" : "Set up first administrator"}
+                  </Button>
+                </div>
+              )}
               <Button disabled={busy || !email.trim() || !password} onClick={onLogin}>
                 {busy ? "Signing in…" : "Sign in"}
               </Button>

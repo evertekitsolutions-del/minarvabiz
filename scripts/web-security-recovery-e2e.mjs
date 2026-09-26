@@ -158,6 +158,11 @@ async function run() {
 
     await navigate(ws, "/forgot-password");
     await waitFor(ws, `location.pathname==="/forgot-password" && (document.body?.innerText||"").includes("Send reset link")`, "forgot password page");
+    await waitFor(
+      ws,
+      `[...document.querySelectorAll("button")].some(b=>(b.innerText||"").includes("Send reset link")&&Object.keys(b).some(k=>k.startsWith("__reactProps$")))`,
+      "forgot password React hydration",
+    );
     await setInputByLabel(ws, "Email", "unknown-account@example.test");
     await clickButton(ws, "Send reset link");
     await waitFor(

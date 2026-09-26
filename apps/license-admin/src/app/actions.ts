@@ -152,7 +152,12 @@ async function authAdminFetch(path: string, init: RequestInit = {}) {
   if (cfg.key.startsWith("sb_secret_")) requestHeaders.delete("authorization");
   else requestHeaders.set("authorization", `Bearer ${cfg.key}`);
   try {
-    const response = await fetch(`${cfg.base}${path}`, { ...init, headers: requestHeaders, cache: "no-store" });
+    const response = await fetch(`${cfg.base}${path}`, {
+      ...init,
+      headers: requestHeaders,
+      cache: "no-store",
+      signal: init.signal ?? AbortSignal.timeout(10_000),
+    });
     const data = await response.json().catch(() => null);
     return {
       ok: response.ok,
@@ -173,6 +178,106 @@ function onlineAppBaseUrl() {
 }
 
 function clean(value: unknown, max = 2000) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
+
+function firstAdminBootstrapEmail() {
+  return normalizeAdminEmail(process.env.LICENSE_ADMIN_BOOTSTRAP_EMAIL || "");
+}
+
+function firstAdminBootstrapName() {
+  return clean(process.env.LICENSE_ADMIN_BOOTSTRAP_NAME || "Minarva Biz Administrator", 120);
+}
+
+async function bootstrapRegistryState() {
+  const result = await dbFetch("/license_admin_identities?select=auth_user_id&limit=1");
+  if (!result.ok) return { ok: false as const, error: "Administrator identity registry is unavailable." };
+  const rows = Array.isArray(result.data) ? result.data : [];
+  return { ok: true as const, empty: rows.length === 0 };
+}
+
+async function bootstrapIdentity(email: string, displayName: string) {
+  const result = await dbFetch("/rpc/bootstrap_first_license_admin", {
+    method: "POST",
+    body: JSON.stringify({ p_email: email, p_display_name: displayName }),
+  });
+  if (!result.ok) {
+    return { ok: false as const, status: "error", error: String(result.error || "Administrator bootstrap failed.") };
+  }
+  const row = Array.isArray(result.data) ? result.data[0] : result.data;
+  const status = clean(row?.status, 40);
+  return { ok: true as const, status, userId: clean(row?.auth_user_id, 80) };
+}
+
+export async function firstAdminBootstrapStatus() {
+  const email = firstAdminBootstrapEmail();
+  const displayName = firstAdminBootstrapName();
+  if (!email || !displayName) return { available: false };
+  const state = await bootstrapRegistryState();
+  return { available: Boolean(state.ok && state.empty) };
+}
+
+export async function bootstrapFirstLicenseAdmin() {
+  const email = firstAdminBootstrapEmail();
+  const displayName = firstAdminBootstrapName();
+  if (!email || !displayName) {
+    return { ok: false, error: "First administrator bootstrap is not configured." };
+  }
+
+  const requestHeaders = await headers();
+  const throttle = await consumeRateLimit(requestHeaders, "admin-first-bootstrap", 3, 60 * 60, email);
+  if (!throttle.ok) return { ok: false, error: "Administrator bootstrap is temporarily unavailable." };
+  if (!throttle.allowed) {
+    return { ok: false, error: `Too many setup attempts. Try again in ${throttle.retryAfterSeconds} seconds.` };
+  }
+
+  const registry = await bootstrapRegistryState();
+  if (!registry.ok) return { ok: false, error: registry.error };
+  if (!registry.empty) return { ok: false, error: "First administrator setup is already complete." };
+
+  const existing = await bootstrapIdentity(email, displayName);
+  if (existing.ok && existing.status === "created") {
+    return { ok: true, message: "Administrator identity activated. Use the password setup email to continue." };
+  }
+  if (existing.ok && existing.status === "closed") {
+    return { ok: false, error: "First administrator setup is already complete." };
+  }
+  if (existing.ok && existing.status === "not_eligible") {
+    return { ok: false, error: "The configured email already belongs to a non-administrator Minarva Biz account." };
+  }
+  if (!existing.ok) return { ok: false, error: existing.error };
+
+  const redirectTo = `${onlineAppBaseUrl()}/reset-password`;
+  const invited = await authAdminFetch(
+    `/invite?redirect_to=${encodeURIComponent(redirectTo)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+        data: {
+          full_name: displayName,
+          account_type: "license_admin",
+        },
+      }),
+    },
+  );
+  if (!invited.ok) {
+    const retry = await bootstrapIdentity(email, displayName);
+    if (retry.ok && retry.status === "created") {
+      return { ok: true, message: "Administrator identity activated. Check the setup email already sent to the configured address." };
+    }
+    return { ok: false, error: invited.error || "Unable to send administrator setup email." };
+  }
+
+  const created = await bootstrapIdentity(email, displayName);
+  if (!created.ok) return { ok: false, error: created.error };
+  if (created.status !== "created") {
+    return { ok: false, error: "Administrator invitation was sent, but identity activation did not complete." };
+  }
+
+  return {
+    ok: true,
+    message: "First administrator setup email sent. Open it to choose a password, then return here to sign in and enroll MFA.",
+  };
+}
 
 export async function loginAdmin(email: string, password: string) {
   const requestHeaders = await headers();

@@ -98,6 +98,7 @@ async function authFetch<T>(
       ...init,
       headers,
       cache: "no-store",
+      signal: init.signal ?? AbortSignal.timeout(10_000),
     });
     const data = (await response.json().catch(() => null)) as T | null;
     return { ok: response.ok, status: response.status, data };
