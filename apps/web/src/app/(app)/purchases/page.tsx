@@ -120,6 +120,15 @@ export default function PurchasesPage() {
             errors: result.errors,
           };
         }}
+        onUpdate={(id, payload) => {
+          const result = procurementStore.updatePurchaseOrder(id, payload);
+          refresh();
+          return {
+            success: result.errors.length === 0 && Boolean(result.purchaseOrder),
+            poNumber: result.purchaseOrder?.poNumber,
+            errors: result.errors,
+          };
+        }}
         onApprove={(id) => {
           const result = procurementStore.approvePurchaseOrder(id);
           refresh();
@@ -140,9 +149,18 @@ export default function PurchasesPage() {
             errors: result.errors,
           };
         }}
-        getInvoiceableLines={(purchaseOrderId) => procurementStore.getInvoiceablePurchaseOrderLines(purchaseOrderId)}
+        getInvoiceableLines={(purchaseOrderId, excludeInvoiceId) => procurementStore.getInvoiceablePurchaseOrderLines(purchaseOrderId, excludeInvoiceId)}
         onCreateInvoice={(payload) => {
           const result = procurementStore.createPurchaseInvoice(payload);
+          refresh();
+          return {
+            success: result.errors.length === 0 && Boolean(result.purchaseInvoice),
+            invoiceNumber: result.purchaseInvoice?.invoiceNumber,
+            errors: result.errors,
+          };
+        }}
+        onUpdateInvoice={(id, payload) => {
+          const result = procurementStore.updatePurchaseInvoice(id, payload);
           refresh();
           return {
             success: result.errors.length === 0 && Boolean(result.purchaseInvoice),

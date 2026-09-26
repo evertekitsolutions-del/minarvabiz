@@ -211,6 +211,73 @@ function findMutable(id: UUID): PurchaseOrder | undefined {
   return purchaseOrders.find((po) => po.id === id && !po.deletedAt);
 }
 
+export function canEditPurchaseOrder(po: PurchaseOrder): boolean {
+  return !po.deletedAt && po.status === "draft";
+}
+
+export function updatePurchaseOrder(id: UUID, input: {
+  supplierId: UUID;
+  expectedDeliveryDate?: string | null;
+  lines: Array<{ productId?: UUID | null; description?: string; quantity: number; unitCost?: number; taxRate?: number }>;
+  notes?: string | null;
+}): { purchaseOrder: PurchaseOrder | null; errors: string[] } {
+  assertPermission("purchases.manage");
+  const po = findMutable(id);
+  if (!po) return { purchaseOrder: null, errors: ["Purchase order not found"] };
+  if (!canEditPurchaseOrder(po)) return { purchaseOrder: null, errors: ["Only draft purchase orders can be edited"] };
+  const supplier = phase5Store.getSupplier(input.supplierId);
+  const errors: string[] = [];
+  if (!supplier) errors.push("Supplier is required");
+  if (!input.lines.length) errors.push("Add at least one purchase-order line");
+  const normalized: PurchaseOrderLine[] = [];
+  for (const item of input.lines) {
+    const product = item.productId ? mainStore.getProduct(item.productId) : undefined;
+    const description = (item.description || product?.name || "").trim();
+    const quantity = Number(item.quantity);
+    const unitCost = item.unitCost == null ? Number(product?.costPrice || 0) : Number(item.unitCost);
+    const rawTaxRate = item.taxRate == null ? 0 : Number(item.taxRate);
+    const taxRate = toPercentBasisPoints(Math.max(0, rawTaxRate)) / 100;
+    if (!description) errors.push("Every line needs a description or product");
+    if (!Number.isFinite(quantity) || quantity <= 0) errors.push(`${description || "Line"}: quantity must be greater than zero`);
+    if (!Number.isFinite(unitCost) || unitCost < 0) errors.push(`${description || "Line"}: unit cost cannot be negative`);
+    if (!Number.isFinite(rawTaxRate)) errors.push(`${description || "Line"}: tax rate must be a finite number`);
+    const unitCostMinor = toMinorUnits(Math.max(0, unitCost));
+    const baseMinor = multiplyMinorByQuantity(unitCostMinor, Math.max(0, quantity));
+    const taxMinor = percentOfMinor(baseMinor, taxRate);
+    normalized.push({
+      id: generateId(),
+      purchaseOrderId: po.id,
+      productId: item.productId ?? null,
+      description,
+      orderedQuantity: r3(quantity),
+      receivedQuantity: 0,
+      unitCost: fromMinorUnits(unitCostMinor),
+      taxRate,
+      lineSubtotal: fromMinorUnits(baseMinor),
+      taxAmount: fromMinorUnits(taxMinor),
+      lineTotal: fromMinorUnits(addMinorUnits(baseMinor, taxMinor)),
+    });
+  }
+  if (errors.length || !supplier) return { purchaseOrder: null, errors };
+  const before = cloneOrder(po);
+  const subtotalMinor = addMinorUnits(...normalized.map((line) => toMinorUnits(line.lineSubtotal)));
+  const taxMinor = addMinorUnits(...normalized.map((line) => toMinorUnits(line.taxAmount)));
+  po.supplierId = supplier.id;
+  po.supplierName = supplier.name;
+  po.expectedDeliveryDate = input.expectedDeliveryDate || null;
+  po.lines = normalized;
+  po.subtotal = fromMinorUnits(subtotalMinor);
+  po.taxAmount = fromMinorUnits(taxMinor);
+  po.total = fromMinorUnits(addMinorUnits(subtotalMinor, taxMinor));
+  po.notes = input.notes?.trim() || null;
+  po.updatedAt = nowISO();
+  po.version += 1;
+  void remoteUpsertPurchaseOrder(cloneOrder(po));
+  auditAction("purchase_order.update", "purchase_orders", po.id, before, po);
+  touchPersistence();
+  return { purchaseOrder: cloneOrder(po), errors: [] };
+}
+
 export function approvePurchaseOrder(id: UUID, approvedBy?: UUID | null): { purchaseOrder: PurchaseOrder | null; error?: string } {
   assertPermission("purchases.manage");
   const po = findMutable(id);
@@ -399,15 +466,15 @@ function mutableInvoice(id: UUID): PurchaseInvoice | undefined {
   return purchaseInvoices.find((invoice) => invoice.id === id);
 }
 
-function alreadyInvoicedQuantity(purchaseOrderLineId: UUID): number {
+function alreadyInvoicedQuantity(purchaseOrderLineId: UUID, excludeInvoiceId?: UUID): number {
   return r3(purchaseInvoices
-    .filter((invoice) => invoice.status !== "cancelled")
+    .filter((invoice) => invoice.status !== "cancelled" && invoice.id !== excludeInvoiceId)
     .flatMap((invoice) => invoice.lines)
     .filter((line) => line.purchaseOrderLineId === purchaseOrderLineId)
     .reduce((sum, line) => sum + line.invoicedQuantity, 0));
 }
 
-export function getInvoiceablePurchaseOrderLines(purchaseOrderId: UUID) {
+export function getInvoiceablePurchaseOrderLines(purchaseOrderId: UUID, excludeInvoiceId?: UUID) {
   const po = findMutable(purchaseOrderId);
   if (!po) return [];
   return po.lines.map((line) => ({
@@ -415,8 +482,8 @@ export function getInvoiceablePurchaseOrderLines(purchaseOrderId: UUID) {
     description: line.description,
     productId: line.productId ?? null,
     receivedQuantity: line.receivedQuantity,
-    invoicedQuantity: alreadyInvoicedQuantity(line.id),
-    invoiceableQuantity: r3(Math.max(0, line.receivedQuantity - alreadyInvoicedQuantity(line.id))),
+    invoicedQuantity: alreadyInvoicedQuantity(line.id, excludeInvoiceId),
+    invoiceableQuantity: r3(Math.max(0, line.receivedQuantity - alreadyInvoicedQuantity(line.id, excludeInvoiceId))),
     unitCost: line.unitCost,
     taxRate: line.taxRate,
   }));
@@ -512,6 +579,78 @@ export function createPurchaseInvoice(input: {
   auditAction("purchase_invoice.create", "purchase_invoices", purchaseInvoice.id, null, purchaseInvoice);
   touchPersistence();
   return { purchaseInvoice: cloneInvoice(purchaseInvoice), errors: [] };
+}
+
+export function canEditPurchaseInvoice(invoice: PurchaseInvoice): boolean {
+  return invoice.status === "draft";
+}
+
+export function updatePurchaseInvoice(id: UUID, input: {
+  supplierInvoiceNumber?: string | null;
+  invoiceDate?: string;
+  dueDate?: string | null;
+  lines: Array<{ purchaseOrderLineId: UUID; quantity: number; unitCost?: number; taxRate?: number }>;
+  notes?: string | null;
+}): { purchaseInvoice: PurchaseInvoice | null; errors: string[] } {
+  assertPermission("purchases.manage");
+  const invoice = mutableInvoice(id);
+  if (!invoice) return { purchaseInvoice: null, errors: ["Purchase invoice not found"] };
+  if (!canEditPurchaseInvoice(invoice)) return { purchaseInvoice: null, errors: ["Only draft supplier invoices can be edited"] };
+  if (!invoice.purchaseOrderId) return { purchaseInvoice: null, errors: ["Supplier invoice is not linked to a purchase order"] };
+  const po = findMutable(invoice.purchaseOrderId);
+  if (!po) return { purchaseInvoice: null, errors: ["Purchase order not found"] };
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  const lines: PurchaseInvoiceLine[] = [];
+  for (const item of input.lines) {
+    if (seen.has(item.purchaseOrderLineId)) { errors.push("Duplicate purchase-order line in supplier invoice"); continue; }
+    seen.add(item.purchaseOrderLineId);
+    const poLine = po.lines.find((line) => line.id === item.purchaseOrderLineId);
+    if (!poLine) { errors.push("Purchase-order line not found"); continue; }
+    const available = r3(Math.max(0, poLine.receivedQuantity - alreadyInvoicedQuantity(poLine.id, invoice.id)));
+    const quantity = r3(Number(item.quantity));
+    if (!Number.isFinite(quantity) || quantity <= 0) { errors.push(`${poLine.description}: invoice quantity must be greater than zero`); continue; }
+    if (quantity > available) { errors.push(`${poLine.description}: cannot invoice ${quantity}; only ${available} received and uninvoiced`); continue; }
+    const unitCost = fromMinorUnits(toMinorUnits(item.unitCost == null ? poLine.unitCost : Number(item.unitCost)));
+    const rawTaxRate = item.taxRate == null ? poLine.taxRate : Number(item.taxRate);
+    if (!Number.isFinite(unitCost) || unitCost < 0) { errors.push(`${poLine.description}: unit cost cannot be negative`); continue; }
+    if (!Number.isFinite(rawTaxRate)) { errors.push(`${poLine.description}: tax rate must be a finite number`); continue; }
+    const taxRate = toPercentBasisPoints(Math.max(0, rawTaxRate)) / 100;
+    const lineSubtotalMinor = multiplyMinorByQuantity(toMinorUnits(unitCost), quantity);
+    const taxAmountMinor = percentOfMinor(lineSubtotalMinor, taxRate);
+    lines.push({
+      id: generateId(),
+      purchaseInvoiceId: invoice.id,
+      purchaseOrderLineId: poLine.id,
+      productId: poLine.productId ?? null,
+      description: poLine.description,
+      invoicedQuantity: quantity,
+      unitCost,
+      taxRate,
+      lineSubtotal: fromMinorUnits(lineSubtotalMinor),
+      taxAmount: fromMinorUnits(taxAmountMinor),
+      lineTotal: fromMinorUnits(addMinorUnits(lineSubtotalMinor, taxAmountMinor)),
+    });
+  }
+  if (errors.length || !lines.length) return { purchaseInvoice: null, errors: errors.length ? errors : ["Nothing to invoice"] };
+  const before = cloneInvoice(invoice);
+  const subtotalMinor = addMinorUnits(...lines.map((line) => toMinorUnits(line.lineSubtotal)));
+  const taxMinor = addMinorUnits(...lines.map((line) => toMinorUnits(line.taxAmount)));
+  invoice.supplierInvoiceNumber = input.supplierInvoiceNumber?.trim() || null;
+  invoice.invoiceDate = input.invoiceDate || invoice.invoiceDate;
+  invoice.dueDate = input.dueDate || null;
+  invoice.lines = lines;
+  invoice.subtotal = fromMinorUnits(subtotalMinor);
+  invoice.taxAmount = fromMinorUnits(taxMinor);
+  invoice.total = fromMinorUnits(addMinorUnits(subtotalMinor, taxMinor));
+  invoice.balanceAmount = invoice.total;
+  invoice.notes = input.notes?.trim() || null;
+  invoice.updatedAt = nowISO();
+  invoice.version += 1;
+  void remoteUpsertPurchaseInvoice(cloneInvoice(invoice));
+  auditAction("purchase_invoice.update", "purchase_invoices", invoice.id, before, invoice);
+  touchPersistence();
+  return { purchaseInvoice: cloneInvoice(invoice), errors: [] };
 }
 
 export function postPurchaseInvoice(id: UUID): { purchaseInvoice: PurchaseInvoice | null; error?: string } {
