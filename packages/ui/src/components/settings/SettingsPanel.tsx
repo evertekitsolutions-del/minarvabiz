@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Button } from "../Button";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
+import { PrintTemplateEditor, type EditablePrintTemplate } from "../printing/PrintTemplateEditor";
 import { PrintTemplateManager } from "./PrintTemplateManager";
 
 export interface SettingsPanelProps {
@@ -348,6 +349,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
         <FormField label="A4 printer"><select className={selectClass} value={draftPrinting.a4PrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, a4PrinterName: e.target.value })}><option value="">Use Windows print dialog/default printer</option>{printers.map(p => <option key={`a4-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
         <FormField label="Thermal printer"><select className={selectClass} value={draftPrinting.thermalPrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, thermalPrinterName: e.target.value })}><option value="">Use Windows print dialog/default printer</option>{printers.map(p => <option key={`th-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
         <FormField label="Barcode label printer"><select className={selectClass} value={draftPrinting.labelPrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, labelPrinterName: e.target.value })}><option value="">Use thermal printer / Windows dialog</option>{printers.map(p => <option key={`label-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
+        <FormField label="Label code content"><select className={selectClass} value={draftPrinting.labelCodeMode} onChange={e => setDraftPrinting({ ...draftPrinting, labelCodeMode: e.target.value as "barcode" | "qr" | "both" })}><option value="both">Barcode + QR</option><option value="barcode">Barcode only</option><option value="qr">QR only</option></select></FormField>
         <FormField label="Label code"><select className={selectClass} value={draftPrinting.labelCodeMode} onChange={e => setDraftPrinting({ ...draftPrinting, labelCodeMode: e.target.value as "barcode" | "qr" | "both" })}><option value="both">Barcode + QR code</option><option value="barcode">Barcode only</option><option value="qr">QR code only</option></select></FormField>
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Label width (mm)"><input className={inputClass} type="number" min="20" max="120" value={draftPrinting.labelWidthMm} onChange={e => setDraftPrinting({ ...draftPrinting, labelWidthMm: Math.max(20, Math.min(120, Number(e.target.value) || 50)) })} /></FormField>
@@ -363,6 +365,14 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
         <Button onClick={() => onSavePrinting(draftPrinting)}>Save printer settings</Button>
       </div>
     </section>
+    <PrintTemplateEditor
+      templates={draftPrinting.templates}
+      onSaveTemplates={(templates) => {
+        const next = { ...draftPrinting, templates };
+        setDraftPrinting(next);
+        onSavePrinting({ templates });
+      }}
+    />
     <PrintTemplateManager />
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-lg font-semibold text-slate-900">Automatic backup</h3><div className="mt-4 grid gap-4 md:grid-cols-3">
       <FormField label="Automatic backup"><select className={selectClass} value={draftBackup.enabled ? "yes" : "no"} onChange={e => setDraftBackup({ ...draftBackup, enabled: e.target.value === "yes" })}><option value="yes">Enabled</option><option value="no">Disabled</option></select></FormField>
