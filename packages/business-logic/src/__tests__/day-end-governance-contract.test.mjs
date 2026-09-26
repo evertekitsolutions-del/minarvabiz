@@ -12,6 +12,8 @@ const ui = read("packages/ui/src/components/reports/DayEndClose.tsx");
 const web = read("apps/web/src/app/(app)/reports/page.tsx");
 const webRoute = read("apps/web/src/app/(app)/day-end/page.tsx");
 const desktop = read("apps/desktop/src/App.tsx");
+const desktopDayEnd = read("apps/desktop/src/components/DesktopDayEndPanel.tsx");
+const lockState = read("packages/business-logic/src/business-day-state.ts");
 const store = read("packages/business-logic/src/store.ts");
 const orders = read("packages/business-logic/src/orders-store.ts");
 const phase5 = read("packages/business-logic/src/phase5-store.ts");
@@ -45,8 +47,13 @@ assert.equal(web.includes('canReopen={can("dayend.reopen")}'), true);
 assert.equal(web.includes("onReopenDay"), true);
 assert.equal(webRoute.includes('redirect("/reports#day-end-close")'), true);
 
-assert.equal(desktop.includes('view==="day-end"&&<DayEndClosePanel'), true);
-assert.equal(desktop.includes('canReopen={can("dayend.reopen")}'), true);
+assert.equal(desktop.includes('view==="day-end"&&<DesktopDayEndPanel'), true);
+assert.equal(desktopDayEnd.includes('canClose={can("dayend.close")}'), true);
+assert.equal(desktopDayEnd.includes('canReopen={can("dayend.reopen")}'), true);
+assert.equal(desktopDayEnd.includes("onReopenDay"), true);
+assert.equal(lockState.includes("assertBusinessDayOpen"), true);
+assert.equal(lockState.includes("lockBusinessDay"), true);
+assert.equal(lockState.includes("unlockBusinessDay"), true);
 
 for (const [name, source] of [
   ["core sales/payment store", store],
