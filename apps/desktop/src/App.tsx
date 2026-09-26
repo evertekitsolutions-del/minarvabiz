@@ -18,6 +18,7 @@ import { DesktopCustomerMasterPanel } from "./components/DesktopCustomerMasterPa
 import { DesktopLicenseExpiryBanner, effectiveLicenseDaysRemaining } from "./components/DesktopLicenseExpiryBanner";
 import { DesktopEntitlementMonitor } from "./components/DesktopEntitlementMonitor";
 import { DesktopProcurementPanel } from "./components/DesktopProcurementPanel";
+import { DesktopDayEndPanel } from "./components/DesktopDayEndPanel";
 import { buildProfessionalReportData } from "./lib/report-data";
 
 type CommercialLicenseState = {
@@ -281,6 +282,7 @@ export function App() {
     {view==="staff"&&<StaffList staff={staff} onAdd={()=>{resetStaffForm();setModuleError(null);setStaffOpen(true);}} onEdit={openStaffEditor} onArchive={(m,reason)=>{try{const r=phase6Store.archiveStaff(m.id,reason);if(r.error)return{error:r.error};void persistAndRefresh();return{success:true};}catch(error){return{error:errorMessage(error)};}}} onSelect={member=>{setStaffDetailId(member.id);navTo("staff-detail");}}/>} 
     {view==="notifications"&&<NotificationCenter notifications={notifications} onMarkAllRead={()=>{phase6Store.markAllNotificationsRead();void persistAndRefresh();}} onMarkRead={id=>{phase6Store.markNotificationRead(id);void persistAndRefresh();}} onNavigate={(href)=>{const target=href.startsWith("/services")?"services":href.startsWith("/reports")?"reports":href.startsWith("/inventory")?"products":href.startsWith("/sales")?"sales":"dashboard";navTo(target as NavItemId);}}/>} 
     {view==="reports"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} payables={professionalReports.payables} financial={professionalReports.financial} taxReport={professionalReports.taxReport} reportError={professionalReports.error||undefined} onRefresh={()=>{refreshAll();}} from={reportFrom} to={reportTo} onFromChange={setReportFrom} onToChange={setReportTo}/>} 
+    {view==="day-end"&&<DesktopDayEndPanel onChanged={()=>{void persistAndRefresh();}}/>}
     {view==="backup"&&<BackupPanel backups={backups}/>} 
     {view==="license"&&<DesktopLicenseView state={commercialLicense} trialState={trialState} deviceFingerprint={deviceFingerprint} customerCount={customers.length} productCount={products.length} onStateChange={setCommercialLicense} onTrialStateChange={setTrialState}/>} 
     {view==="settings"&&<SettingsPanel profile={profile} tax={tax} backup={backupSettings} printing={printSettings} onSaveProfile={v=>{updateShopProfile(v);if(v.gstin!==undefined)updateTaxConfig({gstin:v.gstin});saveSettings();}} onSaveTax={v=>{updateTaxConfig(v);saveSettings();}} onSaveBackup={v=>{setAutoBackupSettings(v);saveSettings();}} onSavePrinting={v=>{updatePrintSettings(v);saveSettings();}}/>}

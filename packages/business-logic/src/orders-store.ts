@@ -1,5 +1,6 @@
 import { isDemoMode } from "./runtime-mode";
 import { assertPermission } from "./permissions";
+import { assertBusinessDayOpen } from "./business-day-state";
 /**
  * Service orders + measurements store (Phase 4).
  * Shares customer lookup with main store.
@@ -133,6 +134,7 @@ export function createOrder(input: {
   createdBy?: UUID | null;
 }): { order: ServiceOrder | null; errors: string[] } {
   assertPermission("orders.manage");
+  assertBusinessDayOpen();
   const errors = validateOrderInput({
     customerId: input.customerId,
     serviceType: input.serviceType,
@@ -308,6 +310,7 @@ export function updateOrderStatus(
   options?: { refundPaymentMethod?: PaymentMethod; reason?: string }
 ): { order: ServiceOrder | null; error?: string } {
   assertPermission("orders.manage");
+  assertBusinessDayOpen();
   const order = getOrder(id);
   if (!order) return { order: null, error: "Order not found" };
   if (!canTransition(order.status, status)) {
@@ -409,6 +412,7 @@ export function addOrderExpense(
   sourceExpenseId?: UUID
 ): { order: ServiceOrder | null; error?: string } {
   assertPermission("orders.manage");
+  assertBusinessDayOpen();
   const order = getOrder(orderId);
   if (!order) return { order: null, error: "Order not found" };
   if (!Number.isFinite(amount) || round2(amount) <= 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
@@ -439,6 +443,7 @@ export function removeOrderExpense(
   expectedAmount: number
 ): { order: ServiceOrder | null; error?: string } {
   assertPermission("orders.manage");
+  assertBusinessDayOpen();
   const order = getOrder(orderId);
   if (!order) return { order: null, error: "Order not found" };
   const index = order.expenses.findIndex((item) => item.id === expenseId);

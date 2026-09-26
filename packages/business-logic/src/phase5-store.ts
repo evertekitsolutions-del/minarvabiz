@@ -1,5 +1,6 @@
 import { planDirectPurchasePosting, planSupplierPaymentPosting, supplierOpeningPayableBalance } from "./procurement-accounting";
 import { assertPermission } from "./permissions";
+import { assertBusinessDayOpen } from "./business-day-state";
 import { enqueueOutbox } from "./outbox-bridge";
 import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase, remoteSupplierSettlement, remoteUpsertCustomer } from "./remote-write";
 import type { Supplier, LaundryOrder, Expense, ExpenseCategory, Purchase, PaymentMethod, UUID } from "@minarvabiz/types";
@@ -163,6 +164,7 @@ export function recordSupplierPayment(input: {
   reference?: string | null; notes?: string | null; purchaseInvoiceId?: UUID;
 }): { payment: ReturnType<typeof mainStore.recordSupplierPaymentEntry> | null; supplier: Supplier | null; errors: string[] } {
   assertPermission("purchases.manage");
+  assertBusinessDayOpen(input.date?.slice(0, 10));
   const supplier = getSupplier(input.supplierId);
   const errors: string[] = [];
   const date = input.date || nowISO();
@@ -323,6 +325,7 @@ export function recordSupplierPayment(input: {
 export function listLaundryOrders(opts?: { mode?: "outsourced"|"in_house_ironing"; status?: LaundryOrder["status"]; customerId?: UUID; supplierId?: UUID; dateFrom?: string; dateTo?: string; query?: string }): LaundryOrder[] { let list=laundryOrders.filter(o=>!o.deletedAt);if(opts?.mode)list=list.filter(o=>o.mode===opts.mode);if(opts?.status)list=list.filter(o=>o.status===opts.status);if(opts?.customerId)list=list.filter(o=>o.customerId===opts.customerId);if(opts?.supplierId)list=list.filter(o=>o.supplierId===opts.supplierId);if(opts?.dateFrom)list=list.filter(o=>o.createdAt.slice(0,10)>=opts.dateFrom!);if(opts?.dateTo)list=list.filter(o=>o.createdAt.slice(0,10)<=opts.dateTo!);if(opts?.query?.trim()){const q=opts.query.toLowerCase();list=list.filter(o=>o.orderNumber.toLowerCase().includes(q)||o.customerName?.toLowerCase().includes(q)||o.garment?.toLowerCase().includes(q)||o.supplierName?.toLowerCase().includes(q)||o.notes?.toLowerCase().includes(q));}return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
 export function createLaundryOrder(input: { customerId: UUID; garment?: string|null; quantity:number; mode:"outsourced"|"in_house_ironing"; supplierId?: UUID|null; supplierRate:number; customerRate:number; notes?:string|null; paidAmount?:number; paymentMethod?:PaymentMethod }): {order:LaundryOrder|null;errors:string[]} {
   assertPermission("orders.manage");
+  assertBusinessDayOpen();
   const errors:string[]=[];
   const quantity=Number(input.quantity);
   const customerRateInput=Number(input.customerRate);
@@ -453,6 +456,7 @@ export function cancelLaundryOrder(input: {
   supplierCostAction?: "keep" | "reverse";
 }): { order: LaundryOrder | null; errors: string[] } {
   assertPermission("orders.manage");
+  assertBusinessDayOpen();
   const order = laundryOrders.find((item) => item.id === input.orderId && !item.deletedAt);
   if (!order) return { order: null, errors: ["Laundry order not found"] };
   const cancellationReason = input.reason.trim();
@@ -636,6 +640,7 @@ export function createExpenseCategory(name:string):ExpenseCategory{assertPermiss
 export function listExpenses(opts?:{orderId?:UUID}):Expense[]{let list=expenses.filter(e=>!e.deletedAt);if(opts?.orderId)list=list.filter(e=>e.orderId===opts.orderId);return list.sort((a,b)=>b.date.localeCompare(a.date));}
 export function createExpense(input: { date?: string; categoryId: UUID; amount: number; paymentMethod: PaymentMethod; description?: string | null; reference?: string | null; receiptUrl?: string | null; staffId?: UUID | null; orderId?: UUID | null }): { expense: Expense | null; errors: string[] } {
   assertPermission("expenses.manage");
+  assertBusinessDayOpen(input.date?.slice(0, 10));
   const errors: string[] = [];
   const amountMinor = moneyMinorOrNull(input.amount);
   if (amountMinor == null || amountMinor <= 0) errors.push("Amount must be positive and finite");
@@ -710,6 +715,7 @@ export function reverseExpense(id: UUID, reason: string): { expense: Expense | n
 export function listPurchases(opts?:{kind?:"general"|"order_specific"}):Purchase[]{let list=purchases.filter(p=>!p.deletedAt);if(opts?.kind)list=list.filter(p=>p.kind===opts.kind);return list.sort((a,b)=>b.date.localeCompare(a.date));}
 export function createPurchase(input: { date?: string; supplierId?: UUID | null; description: string; amount: number; paymentMethod: PaymentMethod; paidAmount?: number; kind: "general" | "order_specific"; orderId?: UUID | null; notes?: string | null }): { purchase: Purchase | null; errors: string[] } {
   assertPermission("purchases.manage");
+  assertBusinessDayOpen(input.date?.slice(0, 10));
   const errors: string[] = [];
   const amountMinor = moneyMinorOrNull(input.amount);
   const paidInputMinor = moneyMinorOrNull(input.paidAmount ?? 0);

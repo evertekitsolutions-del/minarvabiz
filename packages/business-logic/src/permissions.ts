@@ -24,28 +24,30 @@ export type Permission =
   | "returns.manage"
   | "payments.collect"
   | "accounting.view"
-  | "accounting.manage";
+  | "accounting.manage"
+  | "dayend.close"
+  | "dayend.reopen";
 
 const ROLE_PERMS: Record<RoleName, Permission[]> = {
   super_admin: [
     "sales.create", "sales.void", "products.manage", "inventory.adjust", "customers.manage",
     "orders.manage", "orders.assign", "expenses.manage", "purchases.manage", "staff.manage",
     "reports.view", "settings.manage", "users.manage", "backup.manage", "license.manage",
-    "returns.manage", "payments.collect", "accounting.view", "accounting.manage",
+    "returns.manage", "payments.collect", "accounting.view", "accounting.manage", "dayend.close", "dayend.reopen",
   ],
   admin: [
     "sales.create", "sales.void", "products.manage", "inventory.adjust", "customers.manage",
     "orders.manage", "orders.assign", "expenses.manage", "purchases.manage", "staff.manage",
     "reports.view", "settings.manage", "users.manage", "backup.manage", "license.manage",
-    "returns.manage", "payments.collect", "accounting.view", "accounting.manage",
+    "returns.manage", "payments.collect", "accounting.view", "accounting.manage", "dayend.close", "dayend.reopen",
   ],
   manager: [
     "sales.create", "sales.void", "products.manage", "inventory.adjust", "customers.manage",
     "orders.manage", "orders.assign", "expenses.manage", "purchases.manage", "staff.manage",
-    "reports.view", "settings.manage", "backup.manage", "returns.manage", "payments.collect", "accounting.view", "accounting.manage",
+    "reports.view", "settings.manage", "backup.manage", "returns.manage", "payments.collect", "accounting.view", "accounting.manage", "dayend.close", "dayend.reopen",
   ],
   cashier: [
-    "sales.create", "customers.manage", "payments.collect", "reports.view", "orders.manage",
+    "sales.create", "customers.manage", "payments.collect", "reports.view", "orders.manage", "dayend.close",
   ],
   tailor: ["orders.manage", "customers.manage", "reports.view"],
   staff: ["orders.manage", "reports.view"],
@@ -68,6 +70,8 @@ const PERMISSION_FEATURE: Partial<Record<Permission, keyof LicenseFeatures>> = {
   "payments.collect": "sales",
   "accounting.view": "advancedReports",
   "accounting.manage": "advancedReports",
+  "dayend.close": "reports",
+  "dayend.reopen": "reports",
 };
 
 let currentRole: RoleName | null = null;

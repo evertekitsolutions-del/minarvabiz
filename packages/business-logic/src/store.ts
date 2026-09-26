@@ -27,6 +27,7 @@ import { planAutomaticPosting } from "./accounting-store";
 import { consumeWarehouseStock } from "./warehouse-store";
 import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
+import { assertBusinessDayOpen } from "./business-day-state";
 
 const categories: Category[] = [];
 const customers: Customer[] = [];
@@ -436,6 +437,7 @@ export function createSale(input: {
   creditAmount?: number;
 }): { sale: Sale; payment: Payment | null; payments: Payment[]; errors: string[] } {
   assertPermission("sales.create");
+  assertBusinessDayOpen();
   const errors = validateCart(input.lines, { allowNegativeStock: input.allowNegativeStock });
   if (!input.allowNegativeStock) {
     for (const line of input.lines) {
@@ -575,6 +577,7 @@ export function recordOrderAdvancePaymentEntry(input: {
   paidAt?: string;
 }): Payment {
   assertPermission("orders.manage");
+  assertBusinessDayOpen(input.paidAt?.slice(0, 10));
   if (!Number.isFinite(input.amount) || round2(input.amount) <= 0 || !Number.isSafeInteger(Math.round(input.amount * 100))) {
     throw new Error("Service order advance must be positive and finite");
   }
@@ -615,6 +618,7 @@ export function recordLaundryPaymentEntry(input: {
   orderNumber?: string | null;
 }): Payment {
   assertPermission("orders.manage");
+  assertBusinessDayOpen(input.paidAt?.slice(0, 10));
   if (!Number.isFinite(input.amount) || round2(input.amount) <= 0 || !Number.isSafeInteger(Math.round(input.amount * 100))) {
     throw new Error("Laundry receipt must be positive and finite");
   }
@@ -655,6 +659,7 @@ export function recordLaundryRefundPaymentEntry(input: {
   orderNumber?: string | null;
 }): Payment {
   assertPermission("orders.manage");
+  assertBusinessDayOpen(input.refundedAt?.slice(0, 10));
   if (!Number.isFinite(input.amount) || round2(input.amount) <= 0 || !Number.isSafeInteger(Math.round(input.amount * 100))) {
     throw new Error("Laundry refund must be positive and finite");
   }
@@ -694,6 +699,7 @@ export function recordOrderRefundPaymentEntry(input: {
   refundedAt?: string;
 }): Payment {
   assertPermission("orders.manage");
+  assertBusinessDayOpen(input.refundedAt?.slice(0, 10));
   if (!Number.isFinite(input.amount) || round2(input.amount) <= 0 || !Number.isSafeInteger(Math.round(input.amount * 100))) {
     throw new Error("Service order refund must be positive and finite");
   }
@@ -737,6 +743,7 @@ export function recordSupplierPaymentEntry(input: {
   paymentId?: UUID;
 }): Payment {
   assertPermission("purchases.manage");
+  assertBusinessDayOpen(input.paidAt?.slice(0, 10));
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Amount must be positive");
   const paidAt = input.paidAt
     ? (input.paidAt.length === 10 ? `${input.paidAt}T00:00:00.000Z` : input.paidAt)
@@ -787,6 +794,7 @@ export function recordCustomerPayment(input: {
   customerId: UUID; amount: number; method: PaymentMethod; reference?: string | null; notes?: string | null;
 }): { payment: Payment | null; customer: Customer | null; errors: string[] } {
   assertPermission("payments.collect");
+  assertBusinessDayOpen();
   const errors: string[] = [];
 
   let inputAmountMinor: MoneyMinor = 0;
@@ -980,6 +988,7 @@ export function recordRefundPayment(input: {
   notes?: string | null;
 }): Payment | null {
   assertPermission("returns.manage");
+  assertBusinessDayOpen();
   const amount = round2(input.amount);
   if (amount <= 0) return null;
   const payment: Payment = {
