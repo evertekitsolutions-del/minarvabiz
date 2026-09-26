@@ -11,11 +11,15 @@ export function SupplierList({
   onAdd,
   onSearch,
   onPay,
+  onEdit,
+  onArchive,
 }: {
   suppliers: Supplier[];
   onAdd?: () => void;
   onSearch?: (q: string) => void;
   onPay?: (supplier: Supplier) => void;
+  onEdit?: (supplier: Supplier) => void;
+  onArchive?: (supplier: Supplier) => void;
 }) {
   const [q, setQ] = React.useState("");
   const columns: Column<Supplier>[] = [
@@ -43,7 +47,13 @@ export function SupplierList({
     {
       key: "id",
       header: "Actions",
-      render: (r) => onPay ? <Button size="sm" variant="outline" disabled={r.outstandingBalance <= 0} onClick={() => onPay(r)}>Record Payment</Button> : null,
+      render: (r) => (
+        <div className="flex flex-wrap gap-1">
+          {onPay && <Button size="sm" variant="outline" disabled={r.outstandingBalance <= 0} onClick={() => onPay(r)}>Record Payment</Button>}
+          {onEdit && <Button size="sm" variant="outline" onClick={() => onEdit(r)}>Edit</Button>}
+          {onArchive && <Button size="sm" variant="outline" onClick={() => onArchive(r)}>Archive</Button>}
+        </div>
+      ),
     },
   ];
 
