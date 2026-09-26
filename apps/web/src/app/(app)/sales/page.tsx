@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { PosBilling, NormalBilling, SalesList, Button, Modal, FormField, inputClass } from "@minarvabiz/ui";
 import { store, printSaleInvoice, buildSaleInvoiceHtml, assertLimit } from "@minarvabiz/business-logic";
 import type { Product, Customer, Sale, CartLine, PaymentMethod } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
 export default function SalesPage() {
+  const router = useRouter();
   const [tab, setTab] = React.useState<"pos" | "normal" | "history">("pos");
   const [products, setProducts] = React.useState<Product[]>([]);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
@@ -121,7 +123,7 @@ export default function SalesPage() {
         />
       )}
       {tab === "normal" && <NormalBilling products={products} customers={customers} onCompleteSale={handleComplete} onAddCustomer={openCustomerQuickAdd} onPrintSale={(id, paper) => { const sale = store.getSale(id); if (sale) printSaleInvoice(sale, paper); }} />}
-      {tab === "history" && <SalesList sales={sales} buildPreviewHtml={(sale, paper) => buildSaleInvoiceHtml(sale, { paper, autoPrint: false })} onPrintA4={(sale) => printSaleInvoice(sale, "a4")} onPrintThermal={(sale) => printSaleInvoice(sale, "thermal")} />}
+      {tab === "history" && <SalesList sales={sales} customers={customers} buildPreviewHtml={(sale, paper) => buildSaleInvoiceHtml(sale, { paper, autoPrint: false })} onPrintA4={(sale) => printSaleInvoice(sale, "a4")} onPrintThermal={(sale) => printSaleInvoice(sale, "thermal")} onCreateReturn={(sale) => router.push(`/returns?saleId=${encodeURIComponent(sale.id)}`)} />}
 
       <Modal
         open={customerOpen}

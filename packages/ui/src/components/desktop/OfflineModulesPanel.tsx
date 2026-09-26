@@ -32,11 +32,15 @@ export function OfflineModulesPanel({
   activeNav,
   preferredCustomerId,
   preferredStaffId,
+  preferredReturnSaleId,
+  onReturnSaleHandled,
   onNavigate,
 }: {
   activeNav: NavItemId;
   preferredCustomerId?: string;
   preferredStaffId?: string;
+  preferredReturnSaleId?: string;
+  onReturnSaleHandled?: () => void;
   onNavigate?: (href: string, id: NavItemId) => void;
 }) {
   const [, setTick] = React.useState(0);
@@ -108,7 +112,7 @@ export function OfflineModulesPanel({
   }
 
   if (activeNav === "returns") {
-    return <><ReturnsPanel returns={phase7Store.listReturns()} sales={phase7Store.listSalesForReturn()} products={store.listProducts()} onCreate={(payload) => {
+    return <><ReturnsPanel returns={phase7Store.listReturns()} sales={phase7Store.listSalesForReturn()} products={store.listProducts()} preferredSaleId={preferredReturnSaleId} onPreferredSaleHandled={onReturnSaleHandled} onCreate={(payload) => {
       try {
         const result = phase7Store.createReturn(payload);
         if (!result.errors.length) { setActionError(null); persistDesktop(); refresh(); }
