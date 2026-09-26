@@ -4,17 +4,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@minarvabiz/ui";
 import type { Edition, LicenseFeatures } from "@minarvabiz/types";
 import type { LicensePlan } from "@minarvabiz/licensing";
-import {
-  beginAdminMfaEnrollment,
-  cancelAdminMfa,
-  createCommercialLicense,
-  createOfflineActivationPackage,
-  loginAdmin,
-  loginEmergencyAdmin,
-  logoutAdmin,
-  setLicenseStatus,
-  verifyAdminMfa,
-} from "./actions";
+import { beginAdminMfaEnrollment, cancelAdminMfa, createCommercialLicense, createOfflineActivationPackage, loginAdmin, loginEmergencyAdmin, logoutAdmin, setLicenseStatus, verifyAdminMfa } from "./actions";
 import { AdminAuthCard } from "./admin-panel/AdminAuthCard";
 import { LicenseCreateCard } from "./admin-panel/LicenseCreateCard";
 import { LicenseRegistryCard } from "./admin-panel/LicenseRegistryCard";
