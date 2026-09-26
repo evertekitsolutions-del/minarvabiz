@@ -2,13 +2,13 @@ import * as React from "react";
 import {
   AppShell, Dashboard, ProductList, PosBilling, NormalBilling, SalesList,
   OrderList, OrderForm, emptyOrderForm, OrderDetail, ProductionBoard, LaundryList, LaundryForm, LaundryCancellationForm,
-  ExpenseList, PurchaseList, StaffList, NotificationCenter, ReportsPanel,
+  ExpenseList, PurchaseList, StaffList, NotificationCenter, ReportsPanel, DayEndClosePanel,
   BackupPanel, SettingsPanel, WarehousePanel, AccountingPanel, QuotationsPanel, Modal, Button, FormField, inputClass, selectClass, GlobalSearchPalette,
   TrialGate, MAIN_NAV,
   type QuickAction, type NavItemId, type DashboardData, type OrderFormValues, type LaundryCancellationValues,
   type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printBarcodeLabels, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printBarcodeLabels, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue, closeBusinessDay, reopenBusinessDay, listDayEndCloses, can } from "@minarvabiz/business-logic";
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName, LicenseFeatures, LicensePlan, Edition } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
@@ -95,6 +95,7 @@ export function App() {
   const [salesTab, setSalesTab] = React.useState<"pos" | "normal" | "history">("pos");
   const [reportFrom, setReportFrom] = React.useState("");
   const [reportTo, setReportTo] = React.useState("");
+  const [dayEndCloses, setDayEndCloses] = React.useState(() => listDayEndCloses());
   const [orders, setOrders] = React.useState<ServiceOrder[]>([]);
   const [profiles, setProfiles] = React.useState<MeasurementProfile[]>([]);
   const [orderQuery, setOrderQuery] = React.useState("");
@@ -151,6 +152,7 @@ export function App() {
     setCategories(store.listCategories());
     setSales(store.listSales());
     setHeldSales(store.listHeldSales());
+    setDayEndCloses(listDayEndCloses());
     setOrders(ordersStore.listOrders({
       query: orderQuery || undefined,
       status: orderStatus ?? undefined,
@@ -281,6 +283,30 @@ export function App() {
     {view==="staff"&&<StaffList staff={staff} onAdd={()=>{resetStaffForm();setModuleError(null);setStaffOpen(true);}} onEdit={openStaffEditor} onArchive={(m,reason)=>{try{const r=phase6Store.archiveStaff(m.id,reason);if(r.error)return{error:r.error};void persistAndRefresh();return{success:true};}catch(error){return{error:errorMessage(error)};}}} onSelect={member=>{setStaffDetailId(member.id);navTo("staff-detail");}}/>} 
     {view==="notifications"&&<NotificationCenter notifications={notifications} onMarkAllRead={()=>{phase6Store.markAllNotificationsRead();void persistAndRefresh();}} onMarkRead={id=>{phase6Store.markNotificationRead(id);void persistAndRefresh();}} onNavigate={(href)=>{const target=href.startsWith("/services")?"services":href.startsWith("/reports")?"reports":href.startsWith("/inventory")?"products":href.startsWith("/sales")?"sales":"dashboard";navTo(target as NavItemId);}}/>} 
     {view==="reports"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} payables={professionalReports.payables} financial={professionalReports.financial} taxReport={professionalReports.taxReport} reportError={professionalReports.error||undefined} onRefresh={()=>{refreshAll();}} from={reportFrom} to={reportTo} onFromChange={setReportFrom} onToChange={setReportTo}/>} 
+    {view==="day-end"&&<DayEndClosePanel
+      canClose={can("dayend.close")}
+      canReopen={can("dayend.reopen")}
+      closes={dayEndCloses.map((entry)=>({
+        id:entry.id,businessDate:entry.businessDate,closedAt:entry.closedAt,closedByRole:entry.closedByRole,
+        reopenedAt:entry.reopenedAt,reopenedByRole:entry.reopenedByRole,reopenReason:entry.reopenReason,
+        report:{totalSales:entry.report.totalSales,netProfit:entry.report.netProfit,cashReceived:entry.report.cashReceived,outstandingAmount:entry.report.outstandingAmount},
+        metricsNote:entry.metricsNote,
+      }))}
+      onCloseDay={()=>{
+        const result=closeBusinessDay();
+        if(result.error||!result.record)return{ok:false,error:result.error||"Failed"};
+        setDayEndCloses(listDayEndCloses());void persistAndRefresh();
+        const entry=result.record;
+        return{ok:true,record:{id:entry.id,businessDate:entry.businessDate,closedAt:entry.closedAt,closedByRole:entry.closedByRole,reopenedAt:entry.reopenedAt,reopenedByRole:entry.reopenedByRole,reopenReason:entry.reopenReason,report:{totalSales:entry.report.totalSales,netProfit:entry.report.netProfit,cashReceived:entry.report.cashReceived,outstandingAmount:entry.report.outstandingAmount},metricsNote:entry.metricsNote}};
+      }}
+      onReopenDay={(businessDate,reason)=>{
+        const result=reopenBusinessDay(businessDate,reason);
+        if(result.error||!result.record)return{ok:false,error:result.error||"Failed"};
+        setDayEndCloses(listDayEndCloses());void persistAndRefresh();
+        const entry=result.record;
+        return{ok:true,record:{id:entry.id,businessDate:entry.businessDate,closedAt:entry.closedAt,closedByRole:entry.closedByRole,reopenedAt:entry.reopenedAt,reopenedByRole:entry.reopenedByRole,reopenReason:entry.reopenReason,report:{totalSales:entry.report.totalSales,netProfit:entry.report.netProfit,cashReceived:entry.report.cashReceived,outstandingAmount:entry.report.outstandingAmount},metricsNote:entry.metricsNote}};
+      }}
+    />} 
     {view==="backup"&&<BackupPanel backups={backups}/>} 
     {view==="license"&&<DesktopLicenseView state={commercialLicense} trialState={trialState} deviceFingerprint={deviceFingerprint} customerCount={customers.length} productCount={products.length} onStateChange={setCommercialLicense} onTrialStateChange={setTrialState}/>} 
     {view==="settings"&&<SettingsPanel profile={profile} tax={tax} backup={backupSettings} printing={printSettings} onSaveProfile={v=>{updateShopProfile(v);if(v.gstin!==undefined)updateTaxConfig({gstin:v.gstin});saveSettings();}} onSaveTax={v=>{updateTaxConfig(v);saveSettings();}} onSaveBackup={v=>{setAutoBackupSettings(v);saveSettings();}} onSavePrinting={v=>{updatePrintSettings(v);saveSettings();}}/>}
