@@ -11,11 +11,15 @@ export function CustomerList({
   onAdd,
   onSearch,
   onSelect,
+  onEdit,
+  onArchive,
 }: {
   customers: Customer[];
   onAdd?: () => void;
   onSearch?: (q: string) => void;
   onSelect?: (c: Customer) => void;
+  onEdit?: (c: Customer) => void;
+  onArchive?: (c: Customer) => void;
 }) {
   const [q, setQ] = React.useState("");
   const columns: Column<Customer>[] = [
@@ -42,6 +46,16 @@ export function CustomerList({
         <span className={r.outstandingBalance > 0 ? "font-medium text-rose-600" : "text-slate-500"}>
           {formatMoney(r.outstandingBalance)}
         </span>
+      ),
+    },
+    {
+      key: "id",
+      header: "Actions",
+      render: (r) => (
+        <div className="flex flex-wrap gap-1" onClick={(event) => event.stopPropagation()}>
+          {onEdit && <Button size="sm" variant="outline" onClick={() => onEdit(r)}>Edit</Button>}
+          {onArchive && <Button size="sm" variant="outline" onClick={() => onArchive(r)}>Archive</Button>}
+        </div>
       ),
     },
   ];
