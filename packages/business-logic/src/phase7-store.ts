@@ -29,7 +29,7 @@ let lastReturnNo: string | null = null;
 
 function audit(action: string, tableName?: string, recordId?: string, oldValue?: unknown, newValue?: unknown, userName?: string) {
   const role = getCurrentRole();
-  const actor = userName ?? (role ? role.replaceAll("_", " ").replace(/\\b\\w/g, (ch) => ch.toUpperCase()) : "System");
+  const actor = userName ?? (role ? role.replaceAll("_", " ").replace(/\b\w/g, (ch) => ch.toUpperCase()) : "System");
   auditLogs.unshift({ id: generateId(), userName: actor, action, tableName: tableName ?? null, recordId: recordId ?? null,
     oldValue: oldValue != null ? JSON.stringify(oldValue) : null, newValue: newValue != null ? JSON.stringify(newValue) : null, createdAt: nowISO() });
 }
