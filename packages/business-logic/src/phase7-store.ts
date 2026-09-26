@@ -1,4 +1,5 @@
 import { assertPermission, getCurrentRole } from "./permissions";
+import { assertBusinessDayOpen } from "./day-end";
 /**
  * Phase 7: Returns/refunds, audit logs, backup snapshots, report queries.
  */
@@ -60,6 +61,7 @@ export function createReturn(input: {
   refundMode?: "refund" | "credit";
 }): { ret: SaleReturn | null; errors: string[]; paidRefund: number; receivableReduction: number } {
   assertPermission("returns.manage");
+  assertBusinessDayOpen();
   const sale = mainStore.getSale(input.saleId);
   if (!sale) return { ret: null, errors: ["Sale not found"], paidRefund: 0, receivableReduction: 0 };
   if (!["cash", "card", "upi", "bank", "online", "other"].includes(input.refundMethod)) return { ret: null, errors: ["Invalid refund method"], paidRefund: 0, receivableReduction: 0 };
@@ -158,6 +160,7 @@ export function createExchange(input: {
   errors: string[];
 } {
   assertPermission("returns.manage");
+  assertBusinessDayOpen();
   assertPermission("sales.create");
   const original = mainStore.getSale(input.saleId);
   const errors: string[] = [];
