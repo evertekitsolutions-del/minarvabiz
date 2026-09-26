@@ -20,7 +20,9 @@ assert.equal(created.errors.length,0); assert(created.expense);
 assert.equal(accounting.buildProfitAndLoss().netProfit,-50);
 const original=accounting.listJournalEntries().find(j=>j.referenceType==="expense"&&j.referenceId===created.expense.id); assert(original);
 outbox.hydrateOutbox([]);
-let reversed=phase5.reverseExpense(created.expense.id);
+let missingReason=phase5.reverseExpense(created.expense.id,"");
+assert.equal(missingReason.expense,null); assert.match(missingReason.errors.join(";"),/reason is required/i);
+let reversed=phase5.reverseExpense(created.expense.id,"Correction required");
 assert.equal(reversed.errors.length,0); assert(reversed.expense?.deletedAt);
 assert.equal(phase5.listExpenses().length,0);
 assert.equal(accounting.buildProfitAndLoss().netProfit,0); assert(accounting.buildBalanceSheet().balanced);
@@ -29,7 +31,7 @@ assert.equal(refs.length,2); assert(refs.some(j=>j.referenceType==="expense")); 
 for(const j of refs) assert(accounting.voidJournalEntry(j.id).errors.length);
 for(const type of ["expenses","accounts","journal_entries","journal_entry_lines"]) assert(outbox.listPendingOutbox().some(e=>e.aggregateType===type),type);
 const afterFirst=snap();
-reversed=phase5.reverseExpense(created.expense.id);
+reversed=phase5.reverseExpense(created.expense.id,"Correction required");
 assert.equal(reversed.expense,null); assert.match(reversed.errors.join(";"),/not found/i); assert.equal(snap(),afterFirst);
 
 reset();
@@ -38,7 +40,7 @@ created=phase5.createExpense({date:"2026-09-21",categoryId:"ec-9",amount:25,paym
 assert.equal(created.errors.length,0); assert(created.expense);
 assert.equal(orders.getOrder("o1").orderExpensesTotal,25); assert.equal(orders.getOrder("o1").expenses[0].id,created.expense.id);
 outbox.hydrateOutbox([]);
-reversed=phase5.reverseExpense(created.expense.id);
+reversed=phase5.reverseExpense(created.expense.id,"Correction required");
 assert.equal(reversed.errors.length,0); assert.equal(orders.getOrder("o1").orderExpensesTotal,0); assert.equal(orders.getOrder("o1").expenses.length,0);
 assert(outbox.listPendingOutbox().some(e=>e.aggregateType==="orders"&&e.aggregateId==="o1"&&e.eventType==="update"));
 
@@ -48,7 +50,7 @@ created=phase5.createExpense({date:"2026-09-21",categoryId:"ec-9",amount:20,paym
 assert(created.expense);
 orders.getOrder("o2").expenses[0].id="legacy-unlinked-line";
 const ambiguous=snap();
-reversed=phase5.reverseExpense(created.expense.id);
+reversed=phase5.reverseExpense(created.expense.id,"Correction required");
 assert.equal(reversed.expense,null); assert.match(reversed.errors.join(";"),/source reconciliation/i); assert.equal(snap(),ambiguous);
 
 reset();
@@ -56,14 +58,14 @@ created=phase5.createExpense({date:"2026-09-21",categoryId:"ec-9",amount:15,paym
 assert(created.expense);
 accounting.hydrateAccountingState({accounts:chart,journals:[],journalSequence:0});
 const missing=snap();
-reversed=phase5.reverseExpense(created.expense.id);
+reversed=phase5.reverseExpense(created.expense.id,"Correction required");
 assert.equal(reversed.expense,null); assert.match(reversed.errors.join(";"),/accounting reconciliation/i); assert.equal(snap(),missing);
 
 reset();
 created=phase5.createExpense({date:"2026-09-21",categoryId:"ec-9",amount:10,paymentMethod:"cash",description:"Permission"});
 assert(created.expense);
 permissions.setCurrentRole("cashier");
-assert.throws(()=>phase5.reverseExpense(created.expense.id),/denied|permission/i);
+assert.throws(()=>phase5.reverseExpense(created.expense.id,"Correction required"),/denied|permission/i);
 permissions.setCurrentRole("admin");
 
 console.log("Expense reversal: exact inverse, source soft-delete, linked-order rollback, ambiguous/history guards, permissions and outbox PASS");
