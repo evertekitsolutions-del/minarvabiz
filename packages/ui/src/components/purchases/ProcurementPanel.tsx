@@ -45,11 +45,13 @@ export function ProcurementPanel({
   products,
   warehouseLocations = [],
   onCreate,
+  onUpdate,
   onApprove,
   onCancel,
   onReceive,
   getInvoiceableLines,
   onCreateInvoice,
+  onUpdateInvoice,
   onPostInvoice,
   onPayInvoice,
   onCancelInvoice,
@@ -67,6 +69,12 @@ export function ProcurementPanel({
     lines: Array<{ productId?: string | null; description: string; quantity: number; unitCost: number; taxRate: number }>;
     notes?: string | null;
   }) => { success: boolean; poNumber?: string; errors?: string[] };
+  onUpdate: (id: string, payload: {
+    supplierId: string;
+    expectedDeliveryDate?: string | null;
+    lines: Array<{ productId?: string | null; description: string; quantity: number; unitCost: number; taxRate: number }>;
+    notes?: string | null;
+  }) => { success: boolean; poNumber?: string; errors?: string[] };
   onApprove: (id: string) => { success: boolean; error?: string };
   onCancel: (id: string, reason: string) => { success: boolean; error?: string };
   onReceive: (payload: {
@@ -74,12 +82,19 @@ export function ProcurementPanel({
     lines: Array<{ purchaseOrderLineId: string; quantity: number; warehouseLocationId?: string | null }>;
     notes?: string | null;
   }) => { success: boolean; grnNumber?: string; status?: string; errors?: string[] };
-  getInvoiceableLines: (purchaseOrderId: string) => InvoiceableLine[];
+  getInvoiceableLines: (purchaseOrderId: string, excludeInvoiceId?: string) => InvoiceableLine[];
   onCreateInvoice: (payload: {
     purchaseOrderId: string;
     supplierInvoiceNumber?: string | null;
     dueDate?: string | null;
     lines: Array<{ purchaseOrderLineId: string; quantity: number }>;
+    notes?: string | null;
+  }) => { success: boolean; invoiceNumber?: string; errors?: string[] };
+  onUpdateInvoice: (id: string, payload: {
+    supplierInvoiceNumber?: string | null;
+    invoiceDate?: string;
+    dueDate?: string | null;
+    lines: Array<{ purchaseOrderLineId: string; quantity: number; unitCost?: number; taxRate?: number }>;
     notes?: string | null;
   }) => { success: boolean; invoiceNumber?: string; errors?: string[] };
   onPostInvoice: (id: string) => { success: boolean; error?: string };
@@ -125,6 +140,18 @@ export function ProcurementPanel({
   const [cancelInvoiceId, setCancelInvoiceId] = React.useState("");
   const [cancelInvoiceReason, setCancelInvoiceReason] = React.useState("");
 
+  const [editPoId, setEditPoId] = React.useState("");
+  const [editPoSupplierId, setEditPoSupplierId] = React.useState("");
+  const [editPoExpectedDate, setEditPoExpectedDate] = React.useState("");
+  const [editPoNotes, setEditPoNotes] = React.useState("");
+  const [editPoLines, setEditPoLines] = React.useState<DraftLine[]>([]);
+  const [editInvoiceId, setEditInvoiceId] = React.useState("");
+  const [editSupplierInvoiceNumber, setEditSupplierInvoiceNumber] = React.useState("");
+  const [editInvoiceDate, setEditInvoiceDate] = React.useState("");
+  const [editInvoiceDueDate, setEditInvoiceDueDate] = React.useState("");
+  const [editInvoiceNotes, setEditInvoiceNotes] = React.useState("");
+  const [editInvoiceLines, setEditInvoiceLines] = React.useState<Array<InvoiceableLine & { quantity: string; editUnitCost: string; editTaxRate: string }>>([]);
+
   const receiveOrder = purchaseOrders.find((po) => po.id === receiveOrderId) ?? null;
   const invoiceOrder = purchaseOrders.find((po) => po.id === invoiceOrderId) ?? null;
   const invoiceableLines = invoiceOrder ? getInvoiceableLines(invoiceOrder.id) : [];
@@ -132,6 +159,9 @@ export function ProcurementPanel({
 
   const cancelPo = purchaseOrders.find((po) => po.id === cancelPoId) ?? null;
   const cancelInvoice = purchaseInvoices.find((invoice) => invoice.id === cancelInvoiceId) ?? null;
+
+  const editPo = purchaseOrders.find((po) => po.id === editPoId) ?? null;
+  const editInvoice = purchaseInvoices.find((invoice) => invoice.id === editInvoiceId) ?? null;
   const filteredPurchaseOrders = React.useMemo(() => {
     const q = poQuery.trim().toLowerCase();
     return purchaseOrders.filter((po) => {
@@ -196,6 +226,90 @@ export function ProcurementPanel({
     if (!result.success) { setMessage({ type: "err", text: (result.errors || ["Unable to create purchase order"]).join("; ") }); return; }
     setMessage({ type: "ok", text: `${result.poNumber || "Purchase order"} created.` });
     setSupplierId(""); setExpectedDate(""); setNotes(""); setLines([]);
+  }
+
+  function openPoEditor(po: PurchaseOrder) {
+    if (po.status !== "draft") return;
+    setEditPoId(po.id);
+    setEditPoSupplierId(po.supplierId);
+    setEditPoExpectedDate(po.expectedDeliveryDate ? String(po.expectedDeliveryDate).slice(0, 10) : "");
+    setEditPoNotes(po.notes || "");
+    setEditPoLines(po.lines.map((line) => ({
+      productId: line.productId || "",
+      description: line.description,
+      quantity: String(line.orderedQuantity),
+      unitCost: String(line.unitCost),
+      taxRate: String(line.taxRate),
+    })));
+    setMessage(null);
+  }
+
+  function savePoEdit() {
+    if (!editPo) return;
+    const linesForSave = editPoLines.map((line) => ({
+      productId: line.productId || null,
+      description: line.description.trim(),
+      quantity: Number(line.quantity),
+      unitCost: Number(line.unitCost),
+      taxRate: Number(line.taxRate),
+    }));
+    const result = onUpdate(editPo.id, {
+      supplierId: editPoSupplierId,
+      expectedDeliveryDate: editPoExpectedDate || null,
+      lines: linesForSave,
+      notes: editPoNotes.trim() || null,
+    });
+    if (!result.success) {
+      setMessage({ type: "err", text: (result.errors || ["Unable to update purchase order"]).join("; ") });
+      return;
+    }
+    setMessage({ type: "ok", text: `${result.poNumber || editPo.poNumber} updated.` });
+    setEditPoId("");
+  }
+
+  function openInvoiceEditor(invoice: PurchaseInvoice) {
+    if (invoice.status !== "draft" || !invoice.purchaseOrderId) return;
+    const available = getInvoiceableLines(invoice.purchaseOrderId, invoice.id);
+    setEditInvoiceId(invoice.id);
+    setEditSupplierInvoiceNumber(invoice.supplierInvoiceNumber || "");
+    setEditInvoiceDate(String(invoice.invoiceDate || "").slice(0, 10));
+    setEditInvoiceDueDate(invoice.dueDate ? String(invoice.dueDate).slice(0, 10) : "");
+    setEditInvoiceNotes(invoice.notes || "");
+    setEditInvoiceLines(available.map((line) => {
+      const existing = invoice.lines.find((item) => item.purchaseOrderLineId === line.purchaseOrderLineId);
+      return {
+        ...line,
+        quantity: existing ? String(existing.invoicedQuantity) : "0",
+        editUnitCost: String(existing?.unitCost ?? line.unitCost),
+        editTaxRate: String(existing?.taxRate ?? line.taxRate),
+      };
+    }));
+    setMessage(null);
+  }
+
+  function saveInvoiceEdit() {
+    if (!editInvoice) return;
+    const linesForSave = editInvoiceLines
+      .map((line) => ({
+        purchaseOrderLineId: line.purchaseOrderLineId,
+        quantity: Number(line.quantity),
+        unitCost: Number(line.editUnitCost),
+        taxRate: Number(line.editTaxRate),
+      }))
+      .filter((line) => Number.isFinite(line.quantity) && line.quantity > 0);
+    const result = onUpdateInvoice(editInvoice.id, {
+      supplierInvoiceNumber: editSupplierInvoiceNumber.trim() || null,
+      invoiceDate: editInvoiceDate || undefined,
+      dueDate: editInvoiceDueDate || null,
+      lines: linesForSave,
+      notes: editInvoiceNotes.trim() || null,
+    });
+    if (!result.success) {
+      setMessage({ type: "err", text: (result.errors || ["Unable to update supplier invoice"]).join("; ") });
+      return;
+    }
+    setMessage({ type: "ok", text: `${result.invoiceNumber || editInvoice.invoiceNumber} updated.` });
+    setEditInvoiceId("");
   }
 
   function openReceipt(po: PurchaseOrder) {
