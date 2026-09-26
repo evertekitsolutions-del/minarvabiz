@@ -83,8 +83,8 @@ async function ready(ws) {
 }
 
 async function click(ws, name, patterns, wait = 650) {
-  const raw = await evalIn(ws, \`(async()=>{
-    const pats=\${JSON.stringify(patterns)};
+  const raw = await evalIn(ws, `(async()=>{
+    const pats=${JSON.stringify(patterns)};
     const vis=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'&&!e.disabled};
     const txt=e=>((e.innerText||e.textContent||'')+' '+(e.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim();
     const find=()=>[...document.querySelectorAll('button,a,[role="button"],tr')].find(e=>vis(e)&&pats.some(p=>txt(e).toLowerCase().includes(String(p).toLowerCase())));
@@ -100,12 +100,12 @@ async function click(ws, name, patterns, wait = 650) {
     }
     if(!el){const els=[...document.querySelectorAll('button,a,[role="button"],tr')];return JSON.stringify({ok:false,available:els.filter(vis).map(txt).filter(Boolean).slice(0,180)});}
     el.click();
-    await new Promise(r=>setTimeout(r,\${wait}));
+    await new Promise(r=>setTimeout(r,${wait}));
     return JSON.stringify({ok:true,text:txt(el),main:(document.querySelector('[data-testid="app-content"]')?.innerText||'').slice(0,5000)});
-  })()\`);
+  })()`);
   const out = JSON.parse(raw);
-  console.log(\`CLICK_\${name} \${raw}\`);
-  if (!out.ok) throw new Error(\`Target \${name} not found: \${JSON.stringify(out.available)}\`);
+  console.log(`CLICK_${name} ${raw}`);
+  if (!out.ok) throw new Error(`Target ${name} not found: ${JSON.stringify(out.available)}`);
   return out;
 }
 
