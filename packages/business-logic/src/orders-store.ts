@@ -81,11 +81,19 @@ export function listOrders(opts?: {
   serviceType?: ServiceType;
   customerId?: UUID;
   query?: string;
+  orderDateFrom?: string;
+  orderDateTo?: string;
+  deliveryDateFrom?: string;
+  deliveryDateTo?: string;
 }): ServiceOrder[] {
   let list = orders.filter((o) => !o.deletedAt);
   if (opts?.status) list = list.filter((o) => o.status === opts.status);
   if (opts?.serviceType) list = list.filter((o) => o.serviceType === opts.serviceType);
   if (opts?.customerId) list = list.filter((o) => o.customerId === opts.customerId);
+  if (opts?.orderDateFrom) list = list.filter((o) => o.orderDate.slice(0, 10) >= opts.orderDateFrom!);
+  if (opts?.orderDateTo) list = list.filter((o) => o.orderDate.slice(0, 10) <= opts.orderDateTo!);
+  if (opts?.deliveryDateFrom) list = list.filter((o) => Boolean(o.deliveryDate) && String(o.deliveryDate).slice(0, 10) >= opts.deliveryDateFrom!);
+  if (opts?.deliveryDateTo) list = list.filter((o) => Boolean(o.deliveryDate) && String(o.deliveryDate).slice(0, 10) <= opts.deliveryDateTo!);
   if (opts?.query?.trim()) {
     const q = opts.query.toLowerCase();
     list = list.filter(
@@ -257,10 +265,47 @@ export function createOrder(input: {
   return { order, errors: [] };
 }
 
+export function updateOrderOperationalDetails(
+  id: UUID,
+  input: { deliveryDate?: string | null; notes?: string | null; materialDetails?: string | null },
+  reason: string
+): { order: ServiceOrder | null; errors: string[] } {
+  assertPermission("orders.manage");
+  const order = getOrder(id);
+  if (!order) return { order: null, errors: ["Order not found"] };
+  if (order.status === "delivered" || order.status === "cancelled") {
+    return { order: null, errors: ["Delivered or cancelled orders are immutable"] };
+  }
+  const changeReason = reason.trim();
+  if (changeReason.length < 3) return { order: null, errors: ["Change reason is required"] };
+
+  const before = structuredClone(order);
+  const deliveryDate = input.deliveryDate === undefined ? order.deliveryDate ?? null : input.deliveryDate || null;
+  const notes = input.notes === undefined ? order.notes ?? null : input.notes?.trim() || null;
+  const materialDetails = input.materialDetails === undefined ? order.materialDetails ?? null : input.materialDetails?.trim() || null;
+  const changed = deliveryDate !== (order.deliveryDate ?? null)
+    || notes !== (order.notes ?? null)
+    || materialDetails !== (order.materialDetails ?? null);
+  if (!changed) return { order: null, errors: ["No operational changes to save"] };
+
+  order.deliveryDate = deliveryDate;
+  order.notes = notes;
+  order.materialDetails = materialDetails;
+  order.updatedAt = nowISO();
+  order.version += 1;
+  enqueueOutbox("orders", order.id, "update", { ...order });
+  auditAction("service_order.update", "orders", order.id, before, {
+    order: { ...order },
+    changeReason,
+  });
+  touchPersistence();
+  return { order, errors: [] };
+}
+
 export function updateOrderStatus(
   id: UUID,
   status: OrderStatus,
-  options?: { refundPaymentMethod?: PaymentMethod }
+  options?: { refundPaymentMethod?: PaymentMethod; reason?: string }
 ): { order: ServiceOrder | null; error?: string } {
   assertPermission("orders.manage");
   const order = getOrder(id);
@@ -270,6 +315,8 @@ export function updateOrderStatus(
   }
 
   if (status === "cancelled") {
+    const cancellationReason = options?.reason?.trim() ?? "";
+    if (cancellationReason.length < 3) return { order: null, error: "Cancellation reason is required" };
     if (!Number.isFinite(order.advance) || !Number.isFinite(order.balance) || !Number.isFinite(order.price)
       || order.advance < 0 || order.balance < 0 || order.price < 0
       || !Number.isSafeInteger(Math.round(order.advance * 100))
@@ -331,15 +378,22 @@ export function updateOrderStatus(
       customerOutstandingAfter: customer.outstandingBalance,
       customerSpendingBefore: beforeCustomer.totalSpending,
       customerSpendingAfter: customer.totalSpending,
+      cancellationReason,
     });
     touchPersistence();
     queueOrderStatusMessage(order, customer);
     return { order };
   }
 
+  const beforeOrder = structuredClone(order);
   order.status = status;
   order.updatedAt = nowISO();
   order.version += 1;
+  enqueueOutbox("orders", order.id, "update", { ...order });
+  auditAction("service_order.status", "orders", order.id, beforeOrder, {
+    order: { ...order },
+    reason: options?.reason?.trim() || null,
+  });
   touchPersistence();
 
   // Queue the customer update after the order mutation. The queue itself is
