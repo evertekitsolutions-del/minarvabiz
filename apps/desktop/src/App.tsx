@@ -71,6 +71,12 @@ function featuresForLicense(state: CommercialLicenseState | null, trial: TrialSt
   return null;
 }
 
+function effectiveLicenseDaysRemaining(state: CommercialLicenseState | null, trial: TrialState | null): number | null {
+  if (state && (state.status === "active" || state.status === "grace")) return state.daysRemaining;
+  if (trial?.status === "active") return trial.daysRemaining;
+  return null;
+}
+
 export function App() {
   const [dbReady, setDbReady] = React.useState(false);
   const [dbError, setDbError] = React.useState<string | null>(null);
@@ -152,17 +158,17 @@ export function App() {
     if (!dbReady) return;
     refreshAll();
     phase6Store.refreshOperationalNotifications({
-      licenseDaysRemaining: commercialLicense?.daysRemaining ?? null,
+      licenseDaysRemaining: effectiveLicenseDaysRemaining(commercialLicense, trialState),
       backupReminder: shouldRunAutoBackup(),
     });
     const notificationTimer = window.setInterval(() => {
       phase6Store.refreshOperationalNotifications({
-        licenseDaysRemaining: commercialLicense?.daysRemaining ?? null,
+        licenseDaysRemaining: effectiveLicenseDaysRemaining(commercialLicense, trialState),
         backupReminder: shouldRunAutoBackup(),
       });
     }, 60000);
     return () => window.clearInterval(notificationTimer);
-  }, [dbReady, refreshAll, commercialLicense]);
+  }, [dbReady, refreshAll, commercialLicense, trialState]);
   React.useEffect(() => {
     setRuntimeFeaturePolicy(featuresForLicense(commercialLicense, trialState));
   }, [commercialLicense, trialState]);
@@ -189,6 +195,10 @@ export function App() {
   if(!dbReady||!trialState||!commercialLicense)return <div style={{padding:48,fontFamily:"system-ui",textAlign:"center"}}><p>Initializing Minarva Biz…</p></div>;
   const licenseFeatures = featuresForLicense(commercialLicense, trialState);
   const commercialActive = commercialLicense.status==="active"||commercialLicense.status==="grace";
+  const trialInUse = !commercialActive && trialState.status === "active";
+  const licenseDaysForDashboard = effectiveLicenseDaysRemaining(commercialLicense, trialState);
+  const showLicenseDashboardNotice = trialInUse || (licenseDaysForDashboard != null && licenseDaysForDashboard <= 30);
+
   if(!commercialActive&&trialState.status!=="active")return <TrialGate state={trialState} onActivate={activateTrial}/>;
   if(!licenseFeatures)return <TrialGate state={trialState} onActivate={activateTrial}/>;
 
@@ -233,7 +243,17 @@ export function App() {
 
 
   return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} desktopModuleContext={{customerId:crmCustomerId,staffId:staffDetailId}} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png",navItems:allowedNav}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:phase6Store.unreadNotificationCount(),onMessagesClick:()=>navTo("notifications"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("reports"),onSearch:setGlobalSearchQuery}}>
-    {view==="dashboard"&&dash&&<Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/>}
+    {view==="dashboard"&&dash&&<div className="space-y-4">
+      {showLicenseDashboardNotice&&licenseDaysForDashboard!=null&&<div className={`flex flex-col gap-3 rounded-2xl border px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between ${licenseDaysForDashboard<=3?"border-rose-200 bg-rose-50":licenseDaysForDashboard<=7?"border-amber-200 bg-amber-50":"border-blue-200 bg-blue-50"}`}>
+        <div>
+          <div className={`text-xs font-semibold uppercase tracking-wide ${licenseDaysForDashboard<=3?"text-rose-700":licenseDaysForDashboard<=7?"text-amber-700":"text-blue-700"}`}>{trialInUse?"Free trial":"License"} · Renewal notice</div>
+          <div className="mt-1 font-semibold text-slate-900">{licenseDaysForDashboard} day{licenseDaysForDashboard===1?"":"s"} remaining</div>
+          <p className="mt-0.5 text-sm text-slate-600">{trialInUse?"Your 30-day Minarva Biz trial is active. Activate a commercial license before the trial expires to continue using the application.":"Your Minarva Biz license is approaching expiry. Renew before expiry to avoid service interruption."} Business data is preserved.</p>
+        </div>
+        <Button variant="outline" onClick={()=>navTo("license")}>Manage License</Button>
+      </div>}
+      <Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/>
+    </div>}
     {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery("")} onNavigate={(_href,id)=>{setGlobalSearchQuery("");navTo(id);}}/>}
     {view==="customers"&&<CustomerList customers={customers} onAdd={openCustomerCreator} onSearch={q=>setCustomers(store.listCustomers(q))} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}
     {view==="products"&&<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={()=>setLowStockOnly(v=>!v)} onSearch={setProductQuery} onFilterCategory={setProductCategoryId} onAddCategory={()=>{setCategoryForm({name:"",description:""});setCategoryOpen(true);}} onAdd={()=>{resetProductForm();setProductOpen(true);}} onEdit={openProductEditor} onAdjustStock={openStockAdjust} onDelete={handleDeleteProduct} onPrintBarcode={openBarcodeLabel}/>} 
@@ -250,7 +270,7 @@ export function App() {
     {view==="notifications"&&<NotificationCenter notifications={notifications} onMarkAllRead={()=>{phase6Store.markAllNotificationsRead();void persistAndRefresh();}} onMarkRead={id=>{phase6Store.markNotificationRead(id);void persistAndRefresh();}} onNavigate={(href)=>{const target=href.startsWith("/services")?"services":href.startsWith("/reports")?"reports":href.startsWith("/inventory")?"products":href.startsWith("/sales")?"sales":"dashboard";navTo(target as NavItemId);}}/>} 
     {view==="reports"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} onRefresh={()=>{refreshAll();}} from={reportFrom} to={reportTo} onFromChange={setReportFrom} onToChange={setReportTo}/>} 
     {view==="backup"&&<BackupPanel backups={backups}/>} 
-    {view==="license"&&<DesktopLicenseView state={commercialLicense} deviceFingerprint={deviceFingerprint} customerCount={customers.length} productCount={products.length} onStateChange={setCommercialLicense}/>} 
+    {view==="license"&&<DesktopLicenseView state={commercialLicense} trialState={trialState} deviceFingerprint={deviceFingerprint} customerCount={customers.length} productCount={products.length} onStateChange={setCommercialLicense} onTrialStateChange={setTrialState}/>} 
     {view==="settings"&&<SettingsPanel profile={profile} tax={tax} backup={backupSettings} printing={printSettings} onSaveProfile={v=>{updateShopProfile(v);if(v.gstin!==undefined)updateTaxConfig({gstin:v.gstin});saveSettings();}} onSaveTax={v=>{updateTaxConfig(v);saveSettings();}} onSaveBackup={v=>{setAutoBackupSettings(v);saveSettings();}} onSavePrinting={v=>{updatePrintSettings(v);saveSettings();}}/>}
 
     <Modal open={!!laundryMode} title={laundryMode==="outsourced"?"Outsourced Laundry":"In-house Ironing"} onClose={()=>setLaundryMode(null)}><LaundryForm mode={laundryMode||"outsourced"} customers={customers} suppliers={suppliers} onAddCustomer={openCustomerCreator} onAddSupplier={()=>{setSupplierForm({name:"",company:"",phone:"",email:"",address:"",category:"laundry",openingBalance:"",notes:""});setSupplierOpen(true);}} onSubmit={handleCreateLaundry} onCancel={()=>setLaundryMode(null)} error={laundryError}/></Modal>
