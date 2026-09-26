@@ -33,7 +33,7 @@ assert.match(receipt, /<title>\$\{escapeHtml\(sale\.invoiceNumber\)\}<\/title>/)
 assert.match(receipt, /<title>\$\{escapeHtml\(order\.orderNumber\)\}<\/title>/);
 assert.match(receipt, /const escaped = escapeHtml\(text\)/);
 
-assert.match(quotations, /escapeHtml\(l\.description\)/);
+assert.match(quotations, /escapeHtml\((?:l|line)\.description\)/);
 assert.match(quotations, /escapeHtml\(q\.customerName \|\| ""\)/);
 assert.match(quotations, /escapeHtml\(q\.quotationNumber\)/);
 
