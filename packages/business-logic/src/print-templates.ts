@@ -14,6 +14,7 @@ export interface PrintDocumentTemplate {
   subheading: string;
   footerText: string;
   termsText: string;
+  signatureLabel: string;
   showLegalName: boolean;
   showAddress: boolean;
   showPhone: boolean;
@@ -115,6 +116,7 @@ export function sanitizePrintTemplate(input: PrintDocumentTemplate): PrintDocume
     subheading: String(input.subheading || "").trim().slice(0, 160),
     footerText: String(input.footerText || "").trim().slice(0, 500),
     termsText: String(input.termsText || "").trim().slice(0, 2000),
+    signatureLabel: String(input.signatureLabel || "Authorised Signatory").trim().slice(0, 120),
     accentColor: safeColor(input.accentColor),
     fontScale: Math.max(0.8, Math.min(1.35, Number(input.fontScale) || 1)),
     isDefault: Boolean(input.isDefault),
