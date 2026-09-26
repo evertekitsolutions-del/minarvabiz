@@ -792,7 +792,7 @@ export function hydratePhase5(data:{suppliers?:Supplier[];laundryOrders?:Laundry
   if(data.expenses){
     expenses.length=0;
     expenses.push(...data.expenses.map((expense)=>{
-      const categoryName=normalizeSystemExpenseCategoryName(expense.categoryId,expense.categoryName);
+      const categoryName=SYSTEM_EXPENSE_CATEGORY_NAME_BY_ID[expense.categoryId] ?? expense.categoryName;
       return categoryName===expense.categoryName?expense:{...expense,categoryName};
     }));
   }
