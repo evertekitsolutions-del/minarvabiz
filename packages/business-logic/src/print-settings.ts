@@ -38,7 +38,7 @@ const defaults: PrintSettings = {
 let settings: PrintSettings = { ...defaults };
 
 export function getPrintSettings(): PrintSettings {
-  return { ...settings };
+  return { ...settings, templates: settings.templates.map((template) => ({ ...template })) };
 }
 
 export function updatePrintSettings(patch: Partial<PrintSettings>): PrintSettings {
