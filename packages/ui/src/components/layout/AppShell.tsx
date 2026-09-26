@@ -42,7 +42,7 @@ export function AppShell({ children, activeNav = "dashboard", sidebar, header, o
       <div className="flex min-w-0 flex-1 flex-col">
         <Header onMenuClick={() => { if (typeof window !== "undefined" && window.innerWidth < 768) setMobileOpen((v) => !v); else setCollapsed((v) => !v); }} {...header} onSearch={(query) => { header?.onSearch?.(query); if (showLocalSearch) setSearchQuery(query); }} />
         {showLocalSearch && searchQuery && <GlobalSearchPalette query={searchQuery} onClose={() => setSearchQuery("")} onNavigate={handleNavigate} />}
-        <main data-testid="app-content" className="flex-1 overflow-y-auto p-4 md:p-6">{children}{isDesktopShell && <OfflineModulesPanel activeNav={activeNav} preferredCustomerId={desktopModuleContext?.customerId} preferredStaffId={desktopModuleContext?.staffId} />}</main>
+        <main data-testid="app-content" className="flex-1 overflow-y-auto p-4 md:p-6">{children}{isDesktopShell && <OfflineModulesPanel activeNav={activeNav} preferredCustomerId={desktopModuleContext?.customerId} preferredStaffId={desktopModuleContext?.staffId} onNavigate={handleNavigate} />}</main>
       </div>
       <CommandPalette activeNav={activeNav} onNavigate={handleNavigate} />
     </div>

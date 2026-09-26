@@ -11,6 +11,7 @@ import {
   getSessionToken,
   phase6Store,
   phase9Store,
+  listCustomerCommunicationQueue,
   getRuntimeMode,
 } from "@minarvabiz/business-logic";
 import { hydrateStoresFromSupabase, supabaseHydrationDomainsForPath, validateOnlineSession } from "@/lib/data-source";
@@ -46,6 +47,8 @@ const pathToNav: Record<string, NavItemId> = {
   "/day-end": "day-end",
   "/audit": "audit",
   "/notifications": "notifications",
+  "/messages": "messages",
+  "/agenda": "agenda",
   "/settings": "settings",
   "/users": "settings",
   "/onboarding": "dashboard",
@@ -65,6 +68,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [userName, setUserName] = React.useState<string | undefined>();
   const [unreadNotifications, setUnreadNotifications] = React.useState(0);
+  const [messageAttentionCount, setMessageAttentionCount] = React.useState(0);
 
   const validateProtectedSession = React.useCallback(
     (session: { token: string; user: { id: string } }) =>
@@ -74,8 +78,11 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
     []
   );
 
-  const refreshNotificationCount = React.useCallback(() => {
+  const refreshHeaderCounts = React.useCallback(() => {
     setUnreadNotifications(phase6Store.unreadNotificationCount());
+    setMessageAttentionCount(
+      listCustomerCommunicationQueue().filter((row) => row.status === "pending" || row.status === "failed").length
+    );
   }, []);
 
   React.useEffect(() => {
@@ -93,13 +100,13 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
       setCurrentRole("admin");
     }
     phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
-    refreshNotificationCount();
+    refreshHeaderCounts();
     const notificationTimer = window.setInterval(() => {
       phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
-      refreshNotificationCount();
+      refreshHeaderCounts();
     }, 60000);
     return () => window.clearInterval(notificationTimer);
-  }, [refreshNotificationCount]);
+  }, [refreshHeaderCounts]);
 
   React.useEffect(() => {
     if (getRuntimeMode() === "demo") return;
@@ -119,13 +126,13 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
           syncError: r.message,
         });
       }
-      refreshNotificationCount();
+      refreshHeaderCounts();
     });
 
     return () => {
       cancelled = true;
     };
-  }, [pathname, refreshNotificationCount]);
+  }, [pathname, refreshHeaderCounts]);
 
   const activeNav = pathToNav[pathname] ?? "dashboard";
 
@@ -183,15 +190,22 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
                   : pathname.slice(1).replace(/^\w/, (c) => c.toUpperCase()),
               subtitle: userName ? `Welcome back, ${userName}!` : "Welcome back!",
               notificationCount: unreadNotifications,
-              messageCount: 0,
+              messageCount: messageAttentionCount,
               userName,
               onLogout: () => {
                 clearSession();
                 router.push("/login");
               },
+              onMessagesClick: () => {
+                router.push("/messages");
+                refreshHeaderCounts();
+              },
               onNotificationsClick: () => {
                 router.push("/notifications");
-                refreshNotificationCount();
+                refreshHeaderCounts();
+              },
+              onCalendarClick: () => {
+                router.push("/agenda");
               },
             }}
           >

@@ -34,7 +34,7 @@ assert.match(dataSource, /if \(loadAccounting\) for \(const account of accountin
 
 assert.match(appLayout, /supabaseHydrationDomainsForPath\(pathname\)/);
 assert.match(appLayout, /hydrateStoresFromSupabase\(token, domains\)/);
-assert.match(appLayout, /\[pathname, refreshNotificationCount\]/);
+assert.match(appLayout, /\[pathname, refreshHeaderCounts\]/);
 assert.doesNotMatch(appLayout, /hydrateStoresFromSupabase\(token\)\.then/);
 
 console.log("Supabase route-based lazy hydration contract tests passed");

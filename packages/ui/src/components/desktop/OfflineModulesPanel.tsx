@@ -8,6 +8,8 @@ import { PaymentsPanel } from "../payments/PaymentsPanel";
 import { ReturnsPanel } from "../returns/ReturnsPanel";
 import { StaffDetail } from "../staff/StaffDetail";
 import { SupplierList } from "../suppliers/SupplierList";
+import { CustomerMessagesPanel } from "../notifications/CustomerMessagesPanel";
+import { BusinessAgenda } from "../agenda/BusinessAgenda";
 import { Button } from "../Button";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { Modal } from "../forms/Modal";
@@ -30,10 +32,12 @@ export function OfflineModulesPanel({
   activeNav,
   preferredCustomerId,
   preferredStaffId,
+  onNavigate,
 }: {
   activeNav: NavItemId;
   preferredCustomerId?: string;
   preferredStaffId?: string;
+  onNavigate?: (href: string, id: NavItemId) => void;
 }) {
   const [, setTick] = React.useState(0);
   const refresh = React.useCallback(() => setTick((v) => v + 1), []);
@@ -60,7 +64,11 @@ export function OfflineModulesPanel({
     setActionError(null);
   }, [activeNav, customerId, staffId, preferredCustomerId, preferredStaffId]);
 
-  if (!["day-end", "payments", "customer-crm", "returns", "suppliers", "staff-detail", "audit"].includes(activeNav)) return null;
+  if (!["day-end", "payments", "customer-crm", "returns", "suppliers", "staff-detail", "audit", "messages", "agenda"].includes(activeNav)) return null;
+
+  if (activeNav === "messages") return <CustomerMessagesPanel />;
+
+  if (activeNav === "agenda") return <BusinessAgenda orders={ordersStore.listOrders()} onOpenOrders={onNavigate ? () => onNavigate("/services", "services") : undefined} />;
 
   if (activeNav === "day-end") {
     const closes = listDayEndCloses().map((c) => ({ id: c.id, businessDate: c.businessDate, closedAt: c.closedAt, report: { totalSales: c.report.totalSales, netProfit: c.report.netProfit, cashReceived: c.report.cashReceived, outstandingAmount: c.report.outstandingAmount }, metricsNote: c.metricsNote }));
