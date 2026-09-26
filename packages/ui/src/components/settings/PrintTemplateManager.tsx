@@ -180,13 +180,10 @@ export function PrintTemplateManager({
   }
 
   function previewSaved() {
-    const updated = updatePrintTemplate(draft.id, draft);
-    if (!updated) return;
     const html = documentType === "invoice"
-      ? buildSaleInvoiceHtml(sampleSale, { paper, templateId: updated.id, autoPrint: false })
-      : buildQuotationHtml(sampleQuotation, { paper, templateId: updated.id, autoPrint: false });
-    setDraft(updated);
-    setPreview({ html, title: `${updated.name} Preview` });
+      ? buildSaleInvoiceHtml(sampleSale, { paper, template: draft, autoPrint: false })
+      : buildQuotationHtml(sampleQuotation, { paper, template: draft, autoPrint: false });
+    setPreview({ html, title: `${draft.name} Preview` });
   }
 
   const currentKey = activeKey(documentType, paper);
