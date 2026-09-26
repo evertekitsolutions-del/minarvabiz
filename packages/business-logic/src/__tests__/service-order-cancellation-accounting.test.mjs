@@ -20,7 +20,7 @@ reset();
 let created=orders.createOrder({customerId:"c",serviceType:"ladies_tailoring",price:100,advance:0});
 assert.equal(created.errors.length,0); assert(created.order);
 assert.equal(store.getCustomer("c").outstandingBalance,100); assert.equal(accounting.buildProfitAndLoss().netProfit,100);
-let cancelled=orders.updateOrderStatus(created.order.id,"cancelled",{reason:"Customer cancelled"});
+let cancelled=orders.updateOrderStatus(created.order.id,"cancelled");
 assert.equal(cancelled.order,null); assert.match(cancelled.error,/reason is required/i);
 cancelled=orders.updateOrderStatus(created.order.id,"cancelled",{reason:"Customer cancelled"});
 assert(cancelled.order); assert.equal(cancelled.error,undefined); assert.equal(cancelled.order.status,"cancelled");
