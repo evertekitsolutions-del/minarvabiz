@@ -25,7 +25,7 @@ export default function ProductsPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [form, setForm] = React.useState({
     name: "", sku: "", barcode: "", categoryId: "", unit: "pcs",
-    costPrice: "0", sellingPrice: "0", stockQuantity: "0", minimumStock: "5", isActive: true,
+    costPrice: "0", sellingPrice: "0", stockQuantity: "0", minimumStock: "5",
   });
 
   const refresh = React.useCallback(() => {
@@ -56,12 +56,12 @@ export default function ProductsPage() {
 
   function resetForm() {
     setEditingId(null);
-    setForm({ name: "", sku: "", barcode: "", categoryId: "", unit: "pcs", costPrice: "0", sellingPrice: "0", stockQuantity: "0", minimumStock: "5", isActive: true });
+    setForm({ name: "", sku: "", barcode: "", categoryId: "", unit: "pcs", costPrice: "0", sellingPrice: "0", stockQuantity: "0", minimumStock: "5" });
   }
 
   function openEdit(product: Product) {
     setEditingId(product.id);
-    setForm({ name: product.name, sku: product.sku || "", barcode: product.barcode || "", categoryId: product.categoryId || "", unit: product.unit, costPrice: String(product.costPrice), sellingPrice: String(product.sellingPrice), stockQuantity: String(product.stockQuantity), minimumStock: String(product.minimumStock), isActive: product.isActive });
+    setForm({ name: product.name, sku: product.sku || "", barcode: product.barcode || "", categoryId: product.categoryId || "", unit: product.unit, costPrice: String(product.costPrice), sellingPrice: String(product.sellingPrice), stockQuantity: String(product.stockQuantity), minimumStock: String(product.minimumStock) });
     setOpen(true);
   }
 
@@ -76,7 +76,7 @@ export default function ProductsPage() {
       sellingPrice: parseFloat(form.sellingPrice) || 0,
       stockQuantity: parseInt(form.stockQuantity, 10) || 0,
       minimumStock: parseInt(form.minimumStock, 10) || 0,
-      isActive: form.isActive,
+      isActive: true,
     });
     if (!parsed.success) { setError(parsed.error.errors[0]?.message ?? "Invalid input"); return; }
     try {
@@ -168,12 +168,6 @@ export default function ProductsPage() {
           </FormField>
           <FormField label="Unit">
             <input className={inputClass} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
-          </FormField>
-          <FormField label="Status">
-            <select className={selectClass} value={form.isActive ? "active" : "inactive"} onChange={(e) => setForm({ ...form, isActive: e.target.value === "active" })}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
           </FormField>
           <FormField label="Cost price">
             <input className={inputClass} type="number" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} />
