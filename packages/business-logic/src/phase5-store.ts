@@ -285,7 +285,7 @@ export function recordSupplierPayment(input: {
   return { payment, supplier, errors: [] };
 }
 
-export function listLaundryOrders(opts?: { mode?: "outsourced"|"in_house_ironing"; query?: string }): LaundryOrder[] { let list=laundryOrders.filter(o=>!o.deletedAt);if(opts?.mode)list=list.filter(o=>o.mode===opts.mode);if(opts?.query?.trim()){const q=opts.query.toLowerCase();list=list.filter(o=>o.orderNumber.toLowerCase().includes(q)||o.customerName?.toLowerCase().includes(q)||o.garment?.toLowerCase().includes(q));}return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
+export function listLaundryOrders(opts?: { mode?: "outsourced"|"in_house_ironing"; status?: LaundryOrder["status"]; customerId?: UUID; supplierId?: UUID; dateFrom?: string; dateTo?: string; query?: string }): LaundryOrder[] { let list=laundryOrders.filter(o=>!o.deletedAt);if(opts?.mode)list=list.filter(o=>o.mode===opts.mode);if(opts?.status)list=list.filter(o=>o.status===opts.status);if(opts?.customerId)list=list.filter(o=>o.customerId===opts.customerId);if(opts?.supplierId)list=list.filter(o=>o.supplierId===opts.supplierId);if(opts?.dateFrom)list=list.filter(o=>o.createdAt.slice(0,10)>=opts.dateFrom!);if(opts?.dateTo)list=list.filter(o=>o.createdAt.slice(0,10)<=opts.dateTo!);if(opts?.query?.trim()){const q=opts.query.toLowerCase();list=list.filter(o=>o.orderNumber.toLowerCase().includes(q)||o.customerName?.toLowerCase().includes(q)||o.garment?.toLowerCase().includes(q)||o.supplierName?.toLowerCase().includes(q)||o.notes?.toLowerCase().includes(q));}return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
 export function createLaundryOrder(input: { customerId: UUID; garment?: string|null; quantity:number; mode:"outsourced"|"in_house_ironing"; supplierId?: UUID|null; supplierRate:number; customerRate:number; notes?:string|null; paidAmount?:number; paymentMethod?:PaymentMethod }): {order:LaundryOrder|null;errors:string[]} {
   assertPermission("orders.manage");
   const errors:string[]=[];
@@ -391,14 +391,37 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
   return {order,errors:[]};
 }
 
+export function updateLaundryDetails(id: UUID, input: { garment?: string | null; notes?: string | null }): { order: LaundryOrder | null; errors: string[] } {
+  assertPermission("orders.manage");
+  const order = laundryOrders.find((item) => item.id === id && !item.deletedAt);
+  if (!order) return { order: null, errors: ["Laundry order not found"] };
+  if (order.status === "cancelled") return { order: null, errors: ["Cancelled laundry tickets are immutable"] };
+  const before = { garment: order.garment ?? null, notes: order.notes ?? null, updatedAt: order.updatedAt, version: order.version };
+  order.garment = input.garment?.trim() || null;
+  order.notes = input.notes?.trim() || null;
+  order.updatedAt = nowISO();
+  order.version += 1;
+  enqueueOutbox("laundry_orders", order.id, "update", { ...order });
+  auditAction("laundry.update_details", "laundry_orders", order.id, before, {
+    garment: order.garment ?? null,
+    notes: order.notes ?? null,
+    version: order.version,
+  });
+  touchPersistence();
+  return { order: { ...order }, errors: [] };
+}
+
 export function cancelLaundryOrder(input: {
   orderId: UUID;
+  reason: string;
   refundPaymentMethod?: PaymentMethod;
   supplierCostAction?: "keep" | "reverse";
 }): { order: LaundryOrder | null; errors: string[] } {
   assertPermission("orders.manage");
   const order = laundryOrders.find((item) => item.id === input.orderId && !item.deletedAt);
   if (!order) return { order: null, errors: ["Laundry order not found"] };
+  const cancellationReason = input.reason.trim();
+  if (cancellationReason.length < 3) return { order: null, errors: ["Cancellation reason is required"] };
   if (order.status === "cancelled") return { order: null, errors: ["Laundry order is already cancelled"] };
 
   const customer = mainStore.getCustomer(order.customerId);
@@ -534,6 +557,7 @@ export function cancelLaundryOrder(input: {
     customerSpendingAfter: customer.totalSpending,
     supplierOutstandingBefore: beforeSupplier?.outstandingBalance ?? null,
     supplierOutstandingAfter: supplier?.outstandingBalance ?? null,
+    cancellationReason,
   });
   touchPersistence();
   return { order: { ...order }, errors: [] };

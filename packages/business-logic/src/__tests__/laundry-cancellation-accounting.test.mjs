@@ -21,7 +21,9 @@ reset();
 let created=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"in_house_ironing",supplierRate:0,customerRate:10,paidAmount:10,paymentMethod:"cash"});
 assert.equal(created.errors.length,0); assert(created.order);
 outbox.hydrateOutbox([]);
-let cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,refundPaymentMethod:"bank"});
+let noReason=phase5.cancelLaundryOrder({orderId:created.order.id,reason:"",refundPaymentMethod:"bank"});
+assert.equal(noReason.order,null); assert.match(noReason.errors.join(";"),/reason is required/i);
+let cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,reason:"Customer cancellation",refundPaymentMethod:"bank"});
 assert.equal(cancelled.errors.length,0); assert.equal(cancelled.order?.status,"cancelled");
 assert.equal(store.getCustomer("c").outstandingBalance,0); assert.equal(store.getCustomer("c").totalSpending,0);
 assert.equal(bal("laundry_revenue"),0); assert.equal(bal("cash"),10); assert.equal(bal("bank"),-10);
@@ -36,7 +38,7 @@ for(const type of ["laundry_orders","customers","payments","accounts","journal_e
 reset();
 created=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"outsourced",supplierId:"s",supplierRate:4,customerRate:10,paidAmount:3,paymentMethod:"upi"});
 assert.equal(created.errors.length,0); assert(created.order); assert.equal(store.getCustomer("c").outstandingBalance,7); assert.equal(phase5.getSupplier("s").outstandingBalance,4);
-cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,refundPaymentMethod:"cash",supplierCostAction:"reverse"});
+cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,reason:"Customer cancellation",refundPaymentMethod:"cash",supplierCostAction:"reverse"});
 assert.equal(cancelled.errors.length,0); assert.equal(store.getCustomer("c").outstandingBalance,0); assert.equal(store.getCustomer("c").totalSpending,0); assert.equal(phase5.getSupplier("s").outstandingBalance,0);
 assert.equal(bal("laundry_revenue"),0); assert.equal(bal("laundry_costs"),0); assert.equal(bal("accounts_payable"),0);
 assert.equal(accounting.buildProfitAndLoss().netProfit,0); assert(accounting.buildBalanceSheet().balanced);
@@ -44,7 +46,7 @@ assert.equal(accounting.buildProfitAndLoss().netProfit,0); assert(accounting.bui
 reset();
 created=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"outsourced",supplierId:"s",supplierRate:4,customerRate:10,paidAmount:0});
 assert(created.order);
-cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,supplierCostAction:"keep"});
+cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,reason:"Customer cancellation",supplierCostAction:"keep"});
 assert.equal(cancelled.errors.length,0); assert.equal(store.getCustomer("c").outstandingBalance,0); assert.equal(phase5.getSupplier("s").outstandingBalance,4);
 assert.equal(bal("laundry_revenue"),0); assert.equal(bal("laundry_costs"),4); assert.equal(bal("accounts_payable"),-4);
 assert.equal(accounting.buildProfitAndLoss().netProfit,-4); assert(accounting.buildBalanceSheet().balanced);
@@ -53,7 +55,7 @@ assert.equal(store.listPayments().filter(p=>p.referenceType==="refund"&&p.refere
 reset();
 created=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"outsourced",supplierId:"s",supplierRate:4,customerRate:10,paidAmount:0});
 assert(created.order); let before=snap();
-cancelled=phase5.cancelLaundryOrder({orderId:created.order.id});
+cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,reason:"Customer cancellation"});
 assert.equal(cancelled.order,null); assert.match(cancelled.errors.join(";"),/supplier cost/i); assert.equal(snap(),before);
 
 reset();
@@ -61,7 +63,7 @@ created=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"in_house_iron
 assert(created.order);
 const c=store.getCustomer("c"); store.hydrateCore({customers:[{...c}],products:[],sales:[],payments:[]});
 before=snap();
-cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,refundPaymentMethod:"cash"});
+cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,reason:"Customer cancellation",refundPaymentMethod:"cash"});
 assert.equal(cancelled.order,null); assert.match(cancelled.errors.join(";"),/receipt.*sources? need reconciliation/i); assert.equal(snap(),before);
 
 reset(20,0);
@@ -71,9 +73,9 @@ const collected=store.recordCustomerPayment({customerId:"c",amount:1,method:"cas
 let collectedOrder=phase5.listLaundryOrders().find((item)=>item.id===created.order.id);
 assert(collectedOrder); assert.equal(collectedOrder.paidAmount,1); assert.equal(collectedOrder.balanceAmount,9); assert.match(collected.payment.notes,/Laundry:/);
 before=snap();
-cancelled=phase5.cancelLaundryOrder({orderId:created.order.id});
+cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,reason:"Customer cancellation"});
 assert.equal(cancelled.order,null); assert.match(cancelled.errors.join(";"),/refund method is required/i); assert.equal(snap(),before);
-cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,refundPaymentMethod:"cash"});
+cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,reason:"Customer cancellation",refundPaymentMethod:"cash"});
 assert.equal(cancelled.errors.length,0); assert.equal(cancelled.order?.status,"cancelled");
 assert.equal(store.getCustomer("c").outstandingBalance,20); assert.equal(store.getCustomer("c").totalSpending,0);
 
@@ -82,16 +84,16 @@ created=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"outsourced",s
 assert(created.order);
 const supplierPaid=phase5.recordSupplierPayment({supplierId:"s",amount:1,paymentMethod:"cash"}); assert.equal(supplierPaid.errors.length,0);
 before=snap();
-cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,supplierCostAction:"reverse"});
+cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,reason:"Customer cancellation",supplierCostAction:"reverse"});
 assert.equal(cancelled.order,null); assert.match(cancelled.errors.join(";"),/supplier payments need allocation/i); assert.equal(snap(),before);
-cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,supplierCostAction:"keep"});
+cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,reason:"Customer cancellation",supplierCostAction:"keep"});
 assert.equal(cancelled.errors.length,0); assert.equal(cancelled.order?.status,"cancelled"); assert.equal(phase5.getSupplier("s").outstandingBalance,13);
 
 reset();
 phase5.hydratePhase5({suppliers:[supplier(0)],laundryOrders:[{id:"old",orderNumber:"LDY-OLD",customerId:"c",customerName:"Laundry Customer",quantity:1,mode:"in_house_ironing",supplierId:null,supplierName:null,supplierRate:0,customerRate:10,profit:10,totalCustomerCharge:10,totalSupplierCost:0,status:"delivered",paidAmount:0,balanceAmount:10,createdAt:"2026-01-01",updatedAt:"2026-01-01",version:1}],expenses:[],purchases:[]});
 store.hydrateCore({customers:[customer(10)],products:[],sales:[],payments:[]});
 before=snap();
-cancelled=phase5.cancelLaundryOrder({orderId:"old"});
+cancelled=phase5.cancelLaundryOrder({orderId:"old",reason:"Customer cancellation"});
 assert.equal(cancelled.order,null); assert.match(cancelled.errors.join(";"),/accounting reconciliation/i); assert.equal(snap(),before);
 
 reset();

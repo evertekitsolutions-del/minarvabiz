@@ -3,10 +3,11 @@
 import * as React from "react";
 import type { LaundryOrder, PaymentMethod } from "@minarvabiz/types";
 import { Button } from "../Button";
-import { FormField, selectClass } from "../forms/FormField";
+import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { formatMoney } from "../customers/format";
 
 export type LaundryCancellationValues = {
+  reason: string;
   refundPaymentMethod?: PaymentMethod;
   supplierCostAction?: "keep" | "reverse";
 };
@@ -24,10 +25,12 @@ export function LaundryCancellationForm({
 }) {
   const [refundPaymentMethod, setRefundPaymentMethod] = React.useState<PaymentMethod>("cash");
   const [supplierCostAction, setSupplierCostAction] = React.useState<"" | "keep" | "reverse">("");
+  const [reason, setReason] = React.useState("");
 
   React.useEffect(() => {
     setRefundPaymentMethod("cash");
     setSupplierCostAction("");
+    setReason("");
   }, [order.id]);
 
   const needsSupplierChoice = order.totalSupplierCost > 0;
@@ -71,9 +74,18 @@ export function LaundryCancellationForm({
         </FormField>
       )}
 
+      <FormField label="Cancellation reason *">
+        <textarea
+          className={inputClass + " h-20 py-2"}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Why is this laundry ticket being cancelled?"
+        />
+      </FormField>
+
       <p className="text-xs text-slate-500">
         Cancellation reverses customer revenue/receivable and records any refund using the selected tender.
-        Supplier cost changes only when you explicitly choose to reverse it.
+        Supplier cost changes only when you explicitly choose to reverse it. The reason is retained in the audit trail.
       </p>
       {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
       <div className="flex justify-end gap-2">
@@ -81,8 +93,9 @@ export function LaundryCancellationForm({
         <Button
           type="button"
           variant="danger"
-          disabled={needsSupplierChoice && !supplierCostAction}
+          disabled={reason.trim().length < 3 || (needsSupplierChoice && !supplierCostAction)}
           onClick={() => onSubmit({
+            reason: reason.trim(),
             refundPaymentMethod: order.paidAmount > 0 ? refundPaymentMethod : undefined,
             supplierCostAction: needsSupplierChoice ? (supplierCostAction || undefined) : undefined,
           })}
