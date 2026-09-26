@@ -82,3 +82,5 @@ export * from "./return-value";
 export * from "./document-numbering";
 
 export * from "./print-templates";
+
+export * from "./desktop-print";
