@@ -54,6 +54,14 @@ assert.equal(webSmoke.includes("aside button[aria-expanded]"), true);
 assert.equal(windowsInstalledSmoke.includes("aside button[aria-expanded]"), true);
 assert.equal(windowsPopulatedSmoke.includes("aside button[aria-expanded]"), true);
 assert.equal(windowsInstalledSmoke.includes("STAFF_DETAILS"), false);
+for (const [name, source] of [
+  ["web UI smoke", webSmoke],
+  ["Windows installed smoke", windowsInstalledSmoke],
+  ["Windows populated smoke", windowsPopulatedSmoke],
+]) {
+  assert.equal(source.includes("\\`"), false, `${name} contains an escaped backtick that breaks module syntax`);
+  assert.equal(source.includes("\\${"), false, `${name} contains an escaped template interpolation that breaks module syntax`);
+}
 
 for (const mapping of [
   '"/quotations": "quotations"',
