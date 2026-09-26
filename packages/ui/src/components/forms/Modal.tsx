@@ -31,6 +31,10 @@ export function Modal({
           "relative z-10 w-full max-w-lg rounded-2xl bg-white shadow-xl",
           className
         )}
+        onKeyDown={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.matches("input, textarea, select, [contenteditable='true']")) event.stopPropagation();
+        }}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
