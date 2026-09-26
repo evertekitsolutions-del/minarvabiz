@@ -40,6 +40,7 @@ jobs:
           rm -rf coverage
           mkdir -p coverage
           node --test --experimental-test-coverage \
+            --test-concurrency=1 \
             --test-coverage-include="packages/business-logic/src/**/*.ts" \
             --test-coverage-include="packages/billing/src/**/*.ts" \
             --test-coverage-include="packages/utils/src/**/*.ts" \
