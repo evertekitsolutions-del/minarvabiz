@@ -10,6 +10,8 @@ import type { DayEndReport } from "./reports";
 import { touchPersistence } from "./autosave";
 import { auditAction } from "./audit-actions";
 import { assertPermission, getCurrentRole } from "./permissions";
+import { hydrateBusinessDayLocks, localBusinessDate, lockBusinessDay, unlockBusinessDay } from "./business-day-state";
+export { assertBusinessDayOpen, isBusinessDayClosed } from "./business-day-state";
 
 export interface DayEndCloseRecord {
   id: string;
@@ -24,12 +26,6 @@ export interface DayEndCloseRecord {
 }
 
 const closes: DayEndCloseRecord[] = [];
-
-function localBusinessDate(): string {
-  const now = new Date();
-  const offset = now.getTimezoneOffset() * 60_000;
-  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
-}
 
 function validBusinessDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -90,6 +86,7 @@ export function closeBusinessDay(businessDate?: string): {
     metricsNote: `Sales ${metrics.productSalesToday} · Services ${metrics.serviceRevenueToday} · Laundry ${metrics.laundryRevenueToday}`,
   };
   closes.unshift(record);
+  lockBusinessDay(date);
   auditAction("day_end.close", "day_end_closes", record.id, null, {
     businessDate: date,
     closedAt: record.closedAt,
@@ -133,6 +130,7 @@ export function reopenBusinessDay(
   record.reopenedAt = nowISO();
   record.reopenedByRole = getCurrentRole();
   record.reopenReason = reopenReason;
+  unlockBusinessDay(businessDate);
 
   auditAction("day_end.reopen", "day_end_closes", record.id, before, {
     ...record,
@@ -158,5 +156,6 @@ export function hydrateDayEnd(data: { closes?: DayEndCloseRecord[] }) {
   if (data.closes) {
     closes.length = 0;
     closes.push(...data.closes);
+    hydrateBusinessDayLocks(closes.filter((record) => !record.reopenedAt).map((record) => record.businessDate));
   }
 }
