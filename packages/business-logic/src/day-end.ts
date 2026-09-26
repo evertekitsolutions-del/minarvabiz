@@ -41,16 +41,6 @@ export function getDayEndClose(businessDate: string): DayEndCloseRecord | undefi
   return closes.find((c) => c.businessDate === businessDate && !c.reopenedAt);
 }
 
-export function isBusinessDayClosed(businessDate = localBusinessDate()): boolean {
-  return Boolean(getDayEndClose(businessDate));
-}
-
-export function assertBusinessDayOpen(businessDate = localBusinessDate()): void {
-  if (isBusinessDayClosed(businessDate)) {
-    throw new Error(`Business day ${businessDate} is closed. Reopen the day before posting financial changes.`);
-  }
-}
-
 export function closeBusinessDay(businessDate?: string): {
   record: DayEndCloseRecord | null;
   error?: string;
