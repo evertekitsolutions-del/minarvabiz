@@ -111,7 +111,7 @@ export function documentFooterHtml(template: PrintDocumentTemplate, notes?: stri
   return `
 ${template.showNotes && notes ? `<div class="note"><strong>Notes:</strong><br/>${escapeHtml(notes)}</div>` : ""}
 ${template.showTerms && template.termsText ? `<div class="terms"><strong>Terms & Conditions</strong><br/>${escapeHtml(template.termsText)}</div>` : ""}
-${template.showSignature ? `<div class="sign"><div class="sign-box">Authorised Signatory</div></div>` : ""}
+${template.showSignature ? `<div class="sign"><div class="sign-box">${escapeHtml(template.signatureLabel || "Authorised Signatory")}</div></div>` : ""}
 ${template.footerText ? `<div class="footer">${escapeHtml(template.footerText)}</div>` : ""}`;
 }
 
