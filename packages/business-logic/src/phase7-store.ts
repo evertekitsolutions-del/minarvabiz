@@ -375,12 +375,19 @@ export function salesReport(from?: string, to?: string): SalesReportRow[] {
 }
 
 export function dayEndReport(): DayEndReport {
-  const today = new Date().toISOString().slice(0, 10);
-  const sales = mainStore.listSales().filter((s) => s.saleDate.startsWith(today));
-  const orders = ordersStore.listOrders().filter((o) => o.orderDate.startsWith(today) && o.status !== "cancelled");
-  const laundry = phase5Store.listLaundryOrders().filter((l) => l.createdAt.startsWith(today));
-  const expenses = phase5Store.listExpenses().filter((e) => e.date.startsWith(today));
-  const payments = mainStore.listPayments().filter((p) => p.paidAt.startsWith(today));
+  const localDate = (value: string): string => {
+    if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return value;
+    const parsed = new Date(value);
+    if (!Number.isFinite(parsed.getTime())) return value.slice(0, 10);
+    const offset = parsed.getTimezoneOffset() * 60_000;
+    return new Date(parsed.getTime() - offset).toISOString().slice(0, 10);
+  };
+  const today = localDate(new Date().toISOString());
+  const sales = mainStore.listSales().filter((s) => localDate(s.saleDate) === today && s.status !== "cancelled");
+  const orders = ordersStore.listOrders().filter((o) => localDate(o.orderDate) === today && o.status !== "cancelled");
+  const laundry = phase5Store.listLaundryOrders().filter((l) => localDate(l.createdAt) === today && l.status !== "cancelled");
+  const expenses = phase5Store.listExpenses().filter((e) => localDate(e.date) === today);
+  const payments = mainStore.listPayments().filter((p) => localDate(p.paidAt) === today);
 
   const productSales = sales.reduce((a, s) => a + s.total, 0);
   const cogs = sales.reduce((a, s) => a + s.items.reduce((x, i) => x + i.quantity * i.costPrice, 0), 0);
@@ -390,7 +397,7 @@ export function dayEndReport(): DayEndReport {
   const laundryRevenue = laundry.reduce((a, l) => a + l.totalCustomerCharge, 0);
   const generalExp = expenses.filter((e) => !e.orderId).reduce((a, e) => a + e.amount, 0);
   const staffIncentives = phase6Store.listIncentivePayouts()
-    .filter((p) => p.calculatedAt.startsWith(today))
+    .filter((p) => localDate(p.calculatedAt) === today)
     .reduce((a, p) => a + p.amount, 0);
 
   const inflow = (method: PaymentMethod) => payments.filter((p) => p.method === method && p.referenceType !== "refund").reduce((a, p) => a + p.amount, 0);
