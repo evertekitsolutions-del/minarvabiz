@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { PosBilling, NormalBilling, SalesList, Button, Modal, FormField, inputClass } from "@minarvabiz/ui";
-import { store, printSaleInvoice, assertLimit } from "@minarvabiz/business-logic";
+import { PosBilling, NormalBilling, SalesList, Button, Modal, FormField, inputClass, PrintPreviewModal } from "@minarvabiz/ui";
+import { store, buildSaleInvoiceHtml, printPreparedHtml, assertLimit } from "@minarvabiz/business-logic";
 import type { Product, Customer, Sale, CartLine, PaymentMethod } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
@@ -15,6 +15,15 @@ export default function SalesPage() {
   const [customerOpen, setCustomerOpen] = React.useState(false);
   const [customerError, setCustomerError] = React.useState<string | null>(null);
   const [customerForm, setCustomerForm] = React.useState({ name: "", phone: "", email: "", address: "", notes: "" });
+  const [printPreview, setPrintPreview] = React.useState<{ title: string; html: string; paper: "a4" | "thermal" } | null>(null);
+
+  function previewSale(sale: Sale, paper: "a4" | "thermal") {
+    setPrintPreview({
+      title: `${sale.invoiceNumber} — ${paper === "a4" ? "A4" : "Thermal"} Preview`,
+      html: buildSaleInvoiceHtml(sale, { paper, autoPrint: false }),
+      paper,
+    });
+  }
 
   const refresh = React.useCallback(() => {
     setProducts(store.listProducts());
@@ -45,11 +54,7 @@ export default function SalesPage() {
       return { success: false, errors: result.errors };
     }
     refresh();
-    try {
-      printSaleInvoice(result.sale, "a4");
-    } catch {
-      /* print blocked */
-    }
+    previewSale(result.sale, "a4");
     return { success: true, invoiceNumber: result.sale.invoiceNumber, saleId: result.sale.id };
   }
 
@@ -117,11 +122,20 @@ export default function SalesPage() {
             store.removeHeldSale(id);
             refresh();
           }}
-          onPrintSale={(id, paper) => { const sale = store.getSale(id); if (sale) printSaleInvoice(sale, paper); }}
+          onPrintSale={(id, paper) => { const sale = store.getSale(id); if (sale) previewSale(sale, paper); }}
         />
       )}
-      {tab === "normal" && <NormalBilling products={products} customers={customers} onCompleteSale={handleComplete} onAddCustomer={openCustomerQuickAdd} onPrintSale={(id, paper) => { const sale = store.getSale(id); if (sale) printSaleInvoice(sale, paper); }} />}
-      {tab === "history" && <SalesList sales={sales} onPrintA4={(sale) => printSaleInvoice(sale, "a4")} onPrintThermal={(sale) => printSaleInvoice(sale, "thermal")} />}
+      {tab === "normal" && <NormalBilling products={products} customers={customers} onCompleteSale={handleComplete} onAddCustomer={openCustomerQuickAdd} onPrintSale={(id, paper) => { const sale = store.getSale(id); if (sale) previewSale(sale, paper); }} />}
+      {tab === "history" && <SalesList sales={sales} onPrintA4={(sale) => previewSale(sale, "a4")} onPrintThermal={(sale) => previewSale(sale, "thermal")} />}
+
+      <PrintPreviewModal
+        open={Boolean(printPreview)}
+        title={printPreview?.title || "Invoice Preview"}
+        html={printPreview?.html || ""}
+        paper={printPreview?.paper || "a4"}
+        onClose={() => setPrintPreview(null)}
+        onPrint={() => { if (printPreview) printPreparedHtml(printPreview.html, printPreview.paper); }}
+      />
 
       <Modal
         open={customerOpen}
