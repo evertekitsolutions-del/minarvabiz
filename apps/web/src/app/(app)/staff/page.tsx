@@ -18,7 +18,7 @@ export default function StaffPage() {
   const [open, setOpen] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState({
-    name: "", phone: "", role: "tailor" as RoleName | "tailor" | "staff", salary: "15000", joiningDate: todayLocal(),
+    name: "", phone: "", email: "", role: "tailor" as RoleName | "tailor" | "staff", salary: "15000", joiningDate: todayLocal(), status: "active" as "active" | "inactive" | "on_leave", notes: "",
   });
 
   const refresh = React.useCallback(() => {
@@ -36,18 +36,18 @@ export default function StaffPage() {
 
   function resetForm() {
     setEditingId(null);
-    setForm({ name: "", phone: "", role: "tailor", salary: "15000", joiningDate: todayLocal() });
+    setForm({ name: "", phone: "", email: "", role: "tailor", salary: "15000", joiningDate: todayLocal(), status: "active", notes: "" });
   }
 
   function openEdit(member: StaffMember) {
     setEditingId(member.id);
-    setForm({ name: member.name, phone: member.phone || "", role: member.role, salary: String(member.salary), joiningDate: member.joiningDate || todayLocal() });
+    setForm({ name: member.name, phone: member.phone || "", email: member.email || "", role: member.role, salary: String(member.salary), joiningDate: member.joiningDate || todayLocal(), status: member.status, notes: member.notes || "" });
     setOpen(true);
   }
 
   function saveStaff() {
     if (!form.name.trim()) return;
-    const payload = { name: form.name, phone: form.phone || null, role: form.role, salary: parseFloat(form.salary) || 0, joiningDate: form.joiningDate || null };
+    const payload = { name: form.name, phone: form.phone || null, email: form.email || null, role: form.role, salary: parseFloat(form.salary) || 0, joiningDate: form.joiningDate || null, status: form.status, notes: form.notes || null };
     if (editingId) phase6Store.updateStaff(editingId, payload);
     else phase6Store.createStaff(payload);
     setOpen(false);
@@ -91,7 +91,7 @@ export default function StaffPage() {
     <>
       <StaffList staff={staff} onAdd={() => { resetForm(); setOpen(true); }} onSelect={selectStaff} onEdit={openEdit} onArchive={(member, reason) => { const result = phase6Store.archiveStaff(member.id, reason); if (result.error) return { error: result.error }; refresh(); return { success: true }; }} />
       <Modal open={open} title={editingId ? "Edit Staff" : "Add Staff"} onClose={() => { setOpen(false); resetForm(); }}
-        footer={<><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+        footer={<><Button variant="outline" onClick={() => { setOpen(false); resetForm(); }}>Cancel</Button>
           <Button onClick={saveStaff}>{editingId ? "Update Staff" : "Save Staff"}</Button></>}>
         <div className="space-y-3">
           <FormField label="Name *">
@@ -99,6 +99,9 @@ export default function StaffPage() {
           </FormField>
           <FormField label="Phone">
             <input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </FormField>
+          <FormField label="Email">
+            <input type="email" className={inputClass} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </FormField>
           <FormField label="Role">
             <select className={selectClass} value={form.role}
@@ -116,6 +119,16 @@ export default function StaffPage() {
           <FormField label="Joining date">
             <input type="date" className={inputClass} value={form.joiningDate}
               onChange={(e) => setForm({ ...form, joiningDate: e.target.value })} />
+          </FormField>
+          <FormField label="Status">
+            <select className={selectClass} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as typeof form.status })}>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="on_leave">On leave</option>
+            </select>
+          </FormField>
+          <FormField label="Notes">
+            <textarea className={inputClass + " h-20 py-2"} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </FormField>
         </div>
       </Modal>
