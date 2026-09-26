@@ -6,6 +6,7 @@ import { formatMoney, generateId, nowISO } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { touchPersistence } from "./autosave";
 import { enqueueOutbox } from "./outbox-bridge";
+import { auditAction } from "./audit-actions";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
 import { escapeHtml } from "./html";
@@ -32,10 +33,12 @@ function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-export function listQuotations(opts?: { status?: QuotationStatus; customerId?: UUID; query?: string }): Quotation[] {
+export function listQuotations(opts?: { status?: QuotationStatus; customerId?: UUID; query?: string; dateFrom?: string; dateTo?: string }): Quotation[] {
   let list = quotations.filter((q) => !q.deletedAt);
   if (opts?.status) list = list.filter((q) => q.status === opts.status);
   if (opts?.customerId) list = list.filter((q) => q.customerId === opts.customerId);
+  if (opts?.dateFrom) list = list.filter((q) => q.createdAt.slice(0, 10) >= opts.dateFrom!);
+  if (opts?.dateTo) list = list.filter((q) => q.createdAt.slice(0, 10) <= opts.dateTo!);
   if (opts?.query?.trim()) {
     const q = opts.query.toLowerCase();
     list = list.filter(
@@ -109,8 +112,97 @@ export function createQuotation(input: {
   };
   quotations.push(quotation);
   enqueueOutbox("quotations", quotation.id, "insert", quotation);
+  auditAction("quotation.create", "quotations", quotation.id, null, quotation);
   touchPersistence();
   return { quotation, errors: [] };
+}
+
+export function canEditQuotation(q: Quotation): boolean {
+  return !q.deletedAt && (q.status === "draft" || q.status === "sent");
+}
+
+export function canArchiveQuotation(q: Quotation): boolean {
+  return !q.deletedAt && ["draft", "sent", "rejected", "expired"].includes(q.status);
+}
+
+export function updateQuotation(id: UUID, input: {
+  customerId: UUID;
+  lines: Array<{ kind: QuotationLine["kind"]; productId?: UUID | null; description: string; quantity: number; unitPrice: number }>;
+  materialCharges?: number;
+  labourCharges?: number;
+  discount?: number;
+  tax?: number;
+  advance?: number;
+  validUntil?: string | null;
+  notes?: string | null;
+}): { quotation: Quotation | null; errors: string[] } {
+  assertPermission("sales.create");
+  const q = getQuotation(id);
+  if (!q) return { quotation: null, errors: ["Quotation not found"] };
+  if (!canEditQuotation(q)) return { quotation: null, errors: ["Only draft or sent quotations can be edited"] };
+  const customer = mainStore.getCustomer(input.customerId);
+  if (!customer) return { quotation: null, errors: ["Customer not found"] };
+  if (!input.lines.length) return { quotation: null, errors: ["Add at least one line"] };
+  if (input.lines.some((line) => !line.description.trim() || !Number.isFinite(line.quantity) || line.quantity <= 0 || !Number.isFinite(line.unitPrice) || line.unitPrice < 0)) {
+    return { quotation: null, errors: ["Quotation lines must have a description, positive quantity and valid price"] };
+  }
+
+  const before = structuredClone(q);
+  const lines: QuotationLine[] = input.lines.map((line) => ({
+    id: generateId(),
+    kind: line.kind,
+    productId: line.productId ?? null,
+    description: line.description.trim(),
+    quantity: round2(line.quantity),
+    unitPrice: round2(line.unitPrice),
+    lineTotal: round2(line.quantity * line.unitPrice),
+  }));
+  const linesSum = round2(lines.reduce((sum, line) => sum + line.lineTotal, 0));
+  const materialCharges = round2(input.materialCharges ?? 0);
+  const labourCharges = round2(input.labourCharges ?? 0);
+  const subtotal = round2(linesSum + materialCharges + labourCharges);
+  const discount = round2(input.discount ?? 0);
+  const tax = round2(input.tax ?? 0);
+  const total = round2(subtotal - discount + tax);
+  const advance = round2(input.advance ?? 0);
+
+  q.customerId = input.customerId;
+  q.customerName = customer.name;
+  q.lines = lines;
+  q.materialCharges = materialCharges;
+  q.labourCharges = labourCharges;
+  q.subtotal = subtotal;
+  q.discount = discount;
+  q.tax = tax;
+  q.total = total;
+  q.advance = advance;
+  q.balance = round2(total - advance);
+  q.validUntil = input.validUntil ?? null;
+  q.notes = input.notes?.trim() || null;
+  q.updatedAt = nowISO();
+  q.version += 1;
+
+  enqueueOutbox("quotations", q.id, "update", q);
+  auditAction("quotation.update", "quotations", q.id, before, q);
+  touchPersistence();
+  return { quotation: q, errors: [] };
+}
+
+export function archiveQuotation(id: UUID, reason: string): { quotation: Quotation | null; error?: string } {
+  assertPermission("sales.create");
+  const q = getQuotation(id);
+  if (!q) return { quotation: null, error: "Quotation not found" };
+  if (!canArchiveQuotation(q)) return { quotation: null, error: "Accepted or converted quotations cannot be archived" };
+  const trimmedReason = reason.trim();
+  if (trimmedReason.length < 3) return { quotation: null, error: "Archive reason is required" };
+  const before = structuredClone(q);
+  q.deletedAt = nowISO();
+  q.updatedAt = q.deletedAt;
+  q.version += 1;
+  enqueueOutbox("quotations", q.id, "update", q);
+  auditAction("quotation.archive", "quotations", q.id, before, { ...q, archiveReason: trimmedReason });
+  touchPersistence();
+  return { quotation: q };
 }
 
 export function setQuotationStatus(id: UUID, status: QuotationStatus): { quotation: Quotation | null; error?: string } {
@@ -118,10 +210,12 @@ export function setQuotationStatus(id: UUID, status: QuotationStatus): { quotati
   const q = getQuotation(id);
   if (!q) return { quotation: null, error: "Not found" };
   if (q.status === "converted") return { quotation: null, error: "Already converted" };
+  const before = structuredClone(q);
   q.status = status;
   q.updatedAt = nowISO();
   q.version += 1;
   enqueueOutbox("quotations", q.id, "update", q);
+  auditAction("quotation.status", "quotations", q.id, before, q);
   touchPersistence();
   return { quotation: q };
 }
@@ -154,10 +248,13 @@ export function convertQuotationToSale(id: UUID): { saleId?: UUID; error?: strin
     notes: `From quotation ${q.quotationNumber}`,
   });
   if (result.errors.length) return { error: result.errors.join("; ") };
+  const before = structuredClone(q);
   q.status = "converted";
   q.convertedSaleId = result.sale.id;
   q.updatedAt = nowISO();
   q.version += 1;
+  enqueueOutbox("quotations", q.id, "update", q);
+  auditAction("quotation.convert_sale", "quotations", q.id, before, q);
   touchPersistence();
   return { saleId: result.sale.id };
 }
@@ -176,10 +273,13 @@ export function convertQuotationToOrder(id: UUID, serviceType: string = "ladies_
     notes: `From quotation ${q.quotationNumber}. ${q.notes || ""}`,
   });
   if (result.errors.length) return { error: result.errors.join("; ") };
+  const before = structuredClone(q);
   q.status = "converted";
   q.convertedOrderId = result.order!.id;
   q.updatedAt = nowISO();
   q.version += 1;
+  enqueueOutbox("quotations", q.id, "update", q);
+  auditAction("quotation.convert_order", "quotations", q.id, before, q);
   touchPersistence();
   return { orderId: result.order!.id };
 }
