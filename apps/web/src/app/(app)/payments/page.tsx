@@ -2,15 +2,19 @@
 
 import * as React from "react";
 import { PaymentsPanel } from "@minarvabiz/ui";
-import { store, phase6Store, templatePaymentDue, templatePaymentReceived } from "@minarvabiz/business-logic";
-import type { Customer, Payment } from "@minarvabiz/types";
+import { store, phase5Store, phase6Store, templatePaymentDue, templatePaymentReceived } from "@minarvabiz/business-logic";
+import type { Customer, Payment, Supplier } from "@minarvabiz/types";
 
 export default function PaymentsPage() {
   const [outstanding, setOutstanding] = React.useState<Customer[]>([]);
+  const [customers, setCustomers] = React.useState<Customer[]>([]);
+  const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [payments, setPayments] = React.useState<Payment[]>([]);
 
   const refresh = React.useCallback(() => {
     setOutstanding(store.listOutstandingCustomers());
+    setCustomers(store.listCustomers());
+    setSuppliers(phase5Store.listSuppliers());
     setPayments(store.listPayments());
   }, []);
 
@@ -20,6 +24,8 @@ export default function PaymentsPage() {
     <PaymentsPanel
       outstanding={outstanding}
       payments={payments}
+      customers={customers}
+      suppliers={suppliers}
       onCollect={(data) => {
         const result = store.recordCustomerPayment({
           customerId: data.customerId,
