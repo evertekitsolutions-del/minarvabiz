@@ -23,6 +23,7 @@ import { LicenseSummaryCard } from "./admin-panel/LicenseSummaryCard";
 import { OfflineActivationCard } from "./admin-panel/OfflineActivationCard";
 import { OnlineCustomerProvisionCard } from "./admin-panel/OnlineCustomerProvisionCard";
 import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerProvisioning";
+import { useFirstAdminBootstrap } from "./admin-panel/useFirstAdminBootstrap";
 import { canIssueLicense, canManageLicenseStatus, defaultFeatures } from "./admin-panel/model";
 import type {
   AdminIdentityView,
@@ -34,9 +35,10 @@ import type {
 interface AdminPanelProps {
   identity: AdminIdentityView | null;
   initialLicenses: LicenseRegistryRow[];
+  bootstrapAvailable: boolean;
 }
 
-export default function AdminPanel({ identity, initialLicenses }: AdminPanelProps) {
+export default function AdminPanel({ identity, initialLicenses, bootstrapAvailable }: AdminPanelProps) {
   const router = useRouter();
 
   const [email, setEmail] = React.useState("");
@@ -220,6 +222,8 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
     router.refresh();
   }
 
+  const firstAdminBootstrap = useFirstAdminBootstrap();
+
   if (!identity) {
     return (
       <AdminAuthCard
@@ -241,6 +245,8 @@ export default function AdminPanel({ identity, initialLicenses }: AdminPanelProp
         onBeginMfaEnrollment={() => void beginMfaEnrollment()}
         onVerifyMfa={() => void verifyMfa()}
         onResetMfa={() => void resetMfa()}
+        bootstrapAvailable={bootstrapAvailable}
+        {...firstAdminBootstrap}
       />
     );
   }
