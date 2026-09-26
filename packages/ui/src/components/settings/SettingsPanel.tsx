@@ -58,6 +58,7 @@ type DesktopDiagnosticsApi = {
   readSqliteBinary: () => Promise<Uint8Array | null>;
   listBackups: () => Promise<Array<{ createdAt: string; sizeBytes: number; kind: "manual" | "automatic"; verified: boolean }>>;
   chooseBackupDirectory: () => Promise<string | null>;
+  useDriveDBackup?: () => Promise<{ ok: boolean; path?: string; error?: string }>;
   getLicenseState: () => Promise<{ status: string; plan: string | null; edition: string | null; daysRemaining: number | null; graceDaysRemaining: number | null; reason?: string }>;
   listPrinters?: () => Promise<Array<{ name: string; displayName: string; description: string; status: number; isDefault: boolean }>>;
   printHtml?: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal" | "label"; thermalWidthMm?: number; labelWidthMm?: number; labelHeightMm?: number; silent?: boolean }) => Promise<{ ok: boolean; error?: string }>;
@@ -143,6 +144,30 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
   }
 
   async function chooseBackupLocation() { const api = getDiagnosticsApi(); if (!api) return; try { const selected = await api.chooseBackupDirectory(); if (selected) { setDraftBackup((prev) => ({ ...prev, destinationPath: selected })); onSaveBackup({ destinationPath: selected }); } } catch (error) { setDiagnosticState("error"); setDiagnosticMessage(error instanceof Error ? error.message : "Unable to choose backup folder."); } }
+
+  async function useDriveDBackup() {
+    const api = getDiagnosticsApi();
+    if (!api?.useDriveDBackup) {
+      setDiagnosticState("error");
+      setDiagnosticMessage("D: drive backup selection is available only in the Windows desktop edition.");
+      return;
+    }
+    try {
+      const result = await api.useDriveDBackup();
+      if (!result.ok || !result.path) {
+        setDiagnosticState("error");
+        setDiagnosticMessage(result.error || "Unable to configure D: drive backup.");
+        return;
+      }
+      setDraftBackup((prev) => ({ ...prev, enabled: true, destinationPath: result.path! }));
+      onSaveBackup({ enabled: true, destinationPath: result.path });
+      setDiagnosticState("done");
+      setDiagnosticMessage(`Automatic backups will be stored in ${result.path}`);
+    } catch (error) {
+      setDiagnosticState("error");
+      setDiagnosticMessage(error instanceof Error ? error.message : "Unable to configure D: drive backup.");
+    }
+  }
 
   async function testSelectedPrinter() {
     const api = getDiagnosticsApi();
@@ -341,7 +366,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
       <FormField label="Interval (hours)"><input className={inputClass} type="number" min="1" value={draftBackup.intervalHours} onChange={e => setDraftBackup({ ...draftBackup, intervalHours: Math.max(1, Number(e.target.value) || 24) })} /></FormField>
       <FormField label="Retention count"><input className={inputClass} type="number" min="5" value={draftBackup.retentionCount} onChange={e => setDraftBackup({ ...draftBackup, retentionCount: Math.max(5, Number(e.target.value) || 14) })} /></FormField>
     </div>
-    <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-sm font-medium text-slate-800">Backup folder</div><div className="mt-1 break-all text-xs text-slate-500">{draftBackup.destinationPath || "Default: D:\Minarva Biz Backups when D: drive is available"}</div></div><Button type="button" variant="outline" onClick={chooseBackupLocation}>Choose Folder</Button></div></div><div className="mt-5 flex justify-end"><Button onClick={() => onSaveBackup(draftBackup)}>Save backup settings</Button></div></section>
+    <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-sm font-medium text-slate-800">Backup folder</div><div className="mt-1 break-all text-xs text-slate-500">{draftBackup.destinationPath || "Default: D:\\Minarva Biz Backups when D: drive is available"}</div></div><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={useDriveDBackup}>Use D: Drive</Button><Button type="button" variant="outline" onClick={chooseBackupLocation}>Choose Folder</Button></div></div></div>{diagnosticMessage && <p className={`mt-3 text-sm ${diagnosticState === "error" ? "text-red-600" : "text-emerald-600"}`}>{diagnosticMessage}</p>}<div className="mt-5 flex justify-end"><Button onClick={() => onSaveBackup(draftBackup)}>Save backup settings</Button></div></section>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div><h3 className="text-lg font-semibold text-slate-900">Appearance</h3><p className="mt-1 text-sm text-slate-500">Choose a professional workspace theme. Your choice is remembered on this computer.</p></div>
       <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
