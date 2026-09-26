@@ -48,6 +48,8 @@ export * from "./components/staff/StaffList";
 export * from "./components/staff/StaffDetail";
 export * from "./components/notifications/NotificationCenter";
 export * from "./components/notifications/CustomerCommunicationCenter";
+export * from "./components/notifications/CustomerMessagesPanel";
+export * from "./components/agenda/BusinessAgenda";
 export * from "./components/crm/CustomerProfile";
 export * from "./components/reports/ReportsPanel";
 export * from "./components/returns/ReturnsPanel";
