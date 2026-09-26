@@ -78,6 +78,12 @@ try {
   assert.match(identityMigration, /REVOKE ALL[\s\S]*anon, authenticated/);
   assert.match(identityMigration, /GRANT SELECT[\s\S]*TO service_role/);
 
+  const bootstrapMigration = await readFile(new URL("../supabase/migrations/20260926_first_license_admin_bootstrap.sql", import.meta.url), "utf8");
+  assert.match(bootstrapMigration, /account_type'[\s\S]*license_admin/);
+  assert.match(bootstrapMigration, /bootstrap_first_license_admin/);
+  assert.match(bootstrapMigration, /REVOKE ALL ON FUNCTION[\s\S]*anon, authenticated/);
+  assert.match(bootstrapMigration, /GRANT EXECUTE ON FUNCTION[\s\S]*TO service_role/);
+
   const sessionMigration = await readFile(new URL("../supabase/migrations/20260924_license_admin_mfa_sessions.sql", import.meta.url), "utf8");
   assert.match(sessionMigration, /CREATE TABLE IF NOT EXISTS public\.license_admin_sessions/);
   assert.match(sessionMigration, /revoked_at TIMESTAMPTZ/);
