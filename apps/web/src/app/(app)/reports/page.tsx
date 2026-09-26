@@ -4,7 +4,8 @@ import * as React from "react";
 import { ReportsPanel, DayEndClosePanel } from "@minarvabiz/ui";
 import {
   phase7Store,
-  toCsv,
+  accountingStore,
+  procurementStore,
   closeBusinessDay,
   listDayEndCloses,
 } from "@minarvabiz/business-logic";
@@ -19,52 +20,23 @@ export default function ReportsPage() {
   const stock = React.useMemo(() => phase7Store.stockReport(), [tick]);
   const outstanding = React.useMemo(() => phase7Store.outstandingPaymentsReport(), [tick]);
 
-  function exportCsv(kind: string) {
-    let csv = "";
-    if (kind === "sales") {
-      csv = toCsv(
-        ["Period", "Products", "Services", "Laundry", "Revenue", "Expenses", "Net"],
-        salesRows.map((r) => [
-          r.label,
-          String(r.productSales),
-          String(r.serviceRevenue),
-          String(r.laundryRevenue),
-          String(r.totalRevenue),
-          String(r.expenses),
-          String(r.netProfit),
-        ])
-      );
-    } else if (kind === "stock") {
-      csv = toCsv(
-        ["Name", "SKU", "Stock", "Min", "Value", "Low"],
-        stock.map((r) => [
-          r.name,
-          r.sku || "",
-          String(r.stock),
-          String(r.min),
-          String(r.value),
-          r.low ? "yes" : "no",
-        ])
-      );
-    } else if (kind === "outstanding") {
-      csv = toCsv(
-        ["Name", "Phone", "Outstanding"],
-        outstanding.map((c) => [c.name, c.phone || "", String(c.outstanding)])
-      );
-    } else {
-      csv = toCsv(
-        ["Metric", "Value"],
-        Object.entries(dayEnd).map(([k, v]) => [k, String(v)])
-      );
+  const payables = React.useMemo(() => procurementStore.buildSupplierPayableAging(to || undefined), [tick, to]);
+  const professional = React.useMemo(() => {
+    if (from && to && from > to) return { financial: undefined, taxReport: undefined, error: "Report start date must be on or before end date" };
+    try {
+      return {
+        financial: {
+          trialBalance: accountingStore.buildTrialBalance(to || undefined),
+          profit: accountingStore.buildProfitAndLoss(from || undefined, to || undefined),
+          balance: accountingStore.buildBalanceSheet(to || undefined),
+        },
+        taxReport: accountingStore.buildTaxReconciliation(from || undefined, to || undefined),
+        error: null,
+      };
+    } catch (error) {
+      return { financial: undefined, taxReport: undefined, error: error instanceof Error ? error.message : "Unable to build financial reports" };
     }
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `minarvabiz-${kind}-${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  }, [tick, from, to]);
 
   return (
     <div className="space-y-8">
@@ -73,8 +45,11 @@ export default function ReportsPage() {
         dayEnd={dayEnd}
         stock={stock}
         outstanding={outstanding}
+        payables={payables}
+        financial={professional.financial}
+        taxReport={professional.taxReport}
+        reportError={professional.error || undefined}
         onRefresh={() => setTick((t) => t + 1)}
-        onExportCsv={exportCsv}
         from={from}
         to={to}
         onFromChange={setFrom}
