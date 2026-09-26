@@ -33,8 +33,8 @@ export default function AdminPanel({identity,initialLicenses,bootstrapAvailable}
   const [offlineLicenseId, setOfflineLicenseId] = React.useState("");
   const [offlineDeviceId, setOfflineDeviceId] = React.useState("");
   const [lastToken, setLastToken] = React.useState<string | null>(null);
-  const [message, setMessage] = React.useState<string | null>(null);
-  const [busy, setBusy] = React.useState(false);
+  const [message,setMessage]=React.useState<string|null>(null);
+  const [busy,setBusy]=React.useState(false);
   React.useEffect(() => {
     setFeatures(defaultFeatures(plan));
   }, [plan]);
