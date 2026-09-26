@@ -37,6 +37,7 @@ export * from "./session";
 export * from "./autosave";
 export * from "./receipt";
 export * from "./shop-profile";
+export * from "./document-numbering";
 export * from "./live-dashboard";
 export * from "./day-end";
 export * from "./notification-templates";
