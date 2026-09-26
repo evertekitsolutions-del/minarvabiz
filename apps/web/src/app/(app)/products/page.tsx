@@ -114,7 +114,7 @@ export default function ProductsPage() {
         onAdd={() => { resetForm(); setOpen(true); }}
         onEdit={openEdit}
         onAdjustStock={(p) => { setStockProduct(p); setStockQty(String(p.stockQuantity)); }}
-        onDelete={(p) => { if (window.confirm(`Delete ${p.name}? Existing invoices remain unchanged.`)) { store.deleteProduct(p.id); refresh(); } }}
+        onArchive={(product, reason) => { const result = store.archiveProduct(product.id, reason); if (result.error) return { error: result.error }; refresh(); return { success: true }; }}
         onPrintBarcode={(p) => { setLabelProduct(p); setLabelCopies("1"); }}
       />
       <Modal

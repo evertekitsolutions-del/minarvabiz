@@ -307,20 +307,28 @@ export function updateProduct(id: UUID, patch: Partial<Product>): Product | null
   return p;
 }
 
-export function deleteProduct(id: UUID): Product | null {
+export function archiveProduct(id: UUID, reason: string): { product: Product | null; error?: string } {
   assertPermission("products.manage");
   const p = getProduct(id);
-  if (!p) return null;
+  if (!p) return { product: null, error: "Product not found" };
+  const archiveReason = reason.trim();
+  if (archiveReason.length < 3) return { product: null, error: "Archive reason is required" };
+  if (Math.abs(p.stockQuantity) > 1e-9) return { product: null, error: "Adjust product stock to zero before archiving" };
   const before = { ...p };
   p.deletedAt = nowISO();
   p.isActive = false;
-  p.updatedAt = nowISO();
+  p.updatedAt = p.deletedAt;
   p.version = (p.version ?? 1) + 1;
   touchPersistence();
   void remoteUpsertProduct(p);
-  enqueueOutbox("products", p.id, "delete", p);
-  auditAction("product.delete", "products", p.id, before, { deletedAt: p.deletedAt });
-  return p;
+  enqueueOutbox("products", p.id, "update", p);
+  auditAction("product.archive", "products", p.id, before, { ...p, archiveReason });
+  return { product: p };
+}
+
+/** @deprecated Use archiveProduct with a mandatory business reason. */
+export function deleteProduct(id: UUID): Product | null {
+  return archiveProduct(id, "Legacy product archive").product;
 }
 
 export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "adjustment", quantity: number, notes?: string | null): Product | null {
