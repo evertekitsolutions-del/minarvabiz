@@ -285,7 +285,7 @@ export function ProcurementPanel({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
-            <FormField label="Supplier *">
+            <FormField label="Purchase order supplier *">
               <select className={selectClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
                 <option value="">Select supplier</option>
                 {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}{supplier.company ? ` — ${supplier.company}` : ""}</option>)}
@@ -345,7 +345,7 @@ export function ProcurementPanel({
               <input className={inputClass + " mt-1"} value={poQuery} onChange={(e) => setPoQuery(e.target.value)} placeholder="Search…" />
             </label>
             <label className="text-xs font-medium text-slate-600">
-              Supplier
+              PO supplier filter
               <select className={selectClass + " mt-1"} value={poSupplierId} onChange={(e) => setPoSupplierId(e.target.value)}>
                 <option value="">All suppliers</option>
                 {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
@@ -414,7 +414,7 @@ export function ProcurementPanel({
               <input className={inputClass + " mt-1"} value={invoiceQuery} onChange={(e) => setInvoiceQuery(e.target.value)} placeholder="Search…" />
             </label>
             <label className="text-xs font-medium text-slate-600">
-              Supplier
+              Invoice supplier filter
               <select className={selectClass + " mt-1"} value={invoiceSupplierId} onChange={(e) => setInvoiceSupplierId(e.target.value)}>
                 <option value="">All suppliers</option>
                 {suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.name}</option>)}
