@@ -123,6 +123,7 @@ export function QuotationsPanel() {
           title={`Quotation ${preview.quotation.quotationNumber}`}
           html={buildQuotationHtml(preview.quotation, { paper: preview.paper, autoPrint: false })}
           paper={preview.paper}
+          onPaperChange={(paper) => setPreview({ ...preview, paper })}
           onClose={() => setPreview(null)}
           onPrint={() => printQuotation(preview.quotation, preview.paper)}
         />
