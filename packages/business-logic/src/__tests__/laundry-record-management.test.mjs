@@ -59,6 +59,7 @@ for(const [key,value] of Object.entries(beforeFinancial)) assert.equal(edited.or
 assert.equal(JSON.stringify(accounting.exportAccountingState()),beforeAccounting);
 assert.equal(JSON.stringify(store.getCustomer("c")),beforeCustomer);
 assert(outbox.listPendingOutbox().some(e=>e.aggregateType==="laundry_orders"&&e.aggregateId===created.order.id&&e.eventType==="update"));
+await new Promise((resolve)=>setTimeout(resolve,0));
 assert(phase7.listAuditLogs(20).some(e=>e.action==="laundry.update_details"&&e.recordId===created.order.id));
 
 const noReason=phase5.cancelLaundryOrder({orderId:created.order.id,reason:""});
@@ -68,6 +69,7 @@ assert.match(noReason.errors.join(";"),/reason is required/i);
 const cancelled=phase5.cancelLaundryOrder({orderId:created.order.id,reason:"Customer requested cancellation"});
 assert.equal(cancelled.errors.length,0);
 assert.equal(cancelled.order?.status,"cancelled");
+await new Promise((resolve)=>setTimeout(resolve,0));
 assert(phase7.listAuditLogs(20).some(e=>e.action==="laundry.cancel"&&e.recordId===created.order.id));
 
 const immutable=phase5.updateLaundryDetails(created.order.id,{garment:"Should not change"});
