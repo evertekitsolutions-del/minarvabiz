@@ -21,12 +21,22 @@ export default function ReportsPage() {
   const outstanding = React.useMemo(() => phase7Store.outstandingPaymentsReport(), [tick]);
 
   const payables = React.useMemo(() => procurementStore.buildSupplierPayableAging(to || undefined), [tick, to]);
-  const financial = React.useMemo(() => ({
-    trialBalance: accountingStore.buildTrialBalance(to || undefined),
-    profit: accountingStore.buildProfitAndLoss(from || undefined, to || undefined),
-    balance: accountingStore.buildBalanceSheet(to || undefined),
-  }), [tick, from, to]);
-  const taxReport = React.useMemo(() => accountingStore.buildTaxReconciliation(from || undefined, to || undefined), [tick, from, to]);
+  const professional = React.useMemo(() => {
+    if (from && to && from > to) return { financial: undefined, taxReport: undefined, error: "Report start date must be on or before end date" };
+    try {
+      return {
+        financial: {
+          trialBalance: accountingStore.buildTrialBalance(to || undefined),
+          profit: accountingStore.buildProfitAndLoss(from || undefined, to || undefined),
+          balance: accountingStore.buildBalanceSheet(to || undefined),
+        },
+        taxReport: accountingStore.buildTaxReconciliation(from || undefined, to || undefined),
+        error: null,
+      };
+    } catch (error) {
+      return { financial: undefined, taxReport: undefined, error: error instanceof Error ? error.message : "Unable to build financial reports" };
+    }
+  }, [tick, from, to]);
 
   return (
     <div className="space-y-8">
@@ -36,8 +46,9 @@ export default function ReportsPage() {
         stock={stock}
         outstanding={outstanding}
         payables={payables}
-        financial={financial}
-        taxReport={taxReport}
+        financial={professional.financial}
+        taxReport={professional.taxReport}
+        reportError={professional.error || undefined}
         onRefresh={() => setTick((t) => t + 1)}
         from={from}
         to={to}
