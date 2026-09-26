@@ -87,17 +87,20 @@ async function click(ws, name, patterns, wait = 650) {
     const pats=${JSON.stringify(patterns)};
     const vis=e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&s.display!=='none'&&s.visibility!=='hidden'&&!e.disabled};
     const txt=e=>((e.innerText||e.textContent||'')+' '+(e.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim();
-    const find=()=>[...document.querySelectorAll('button,a,[role="button"],tr')].find(e=>vis(e)&&pats.some(p=>txt(e).toLowerCase().includes(String(p).toLowerCase())));
-    let el=find();
+    const matches=e=>vis(e)&&pats.some(p=>txt(e).toLowerCase().includes(String(p).toLowerCase()));
+    const findSidebar=()=>[...document.querySelectorAll('aside button,aside a,aside [role="button"]')].find(matches);
+    const findAny=()=>[...document.querySelectorAll('button,a,[role="button"],tr')].find(matches);
+    let el=findSidebar();
     if(!el){
       const groups=[...document.querySelectorAll('aside button[aria-expanded]')].filter(vis).map(txt);
       for(const groupLabel of groups){
         const group=[...document.querySelectorAll('aside button[aria-expanded]')].find(e=>vis(e)&&txt(e)===groupLabel);
         if(group&&group.getAttribute('aria-expanded')!=='true'){group.click();await new Promise(r=>setTimeout(r,100));}
-        el=find();
+        el=findSidebar();
         if(el)break;
       }
     }
+    if(!el)el=findAny();
     if(!el){const els=[...document.querySelectorAll('button,a,[role="button"],tr')];return JSON.stringify({ok:false,available:els.filter(vis).map(txt).filter(Boolean).slice(0,180)});}
     el.click();
     await new Promise(r=>setTimeout(r,${wait}));
