@@ -5,6 +5,8 @@ import type { Product, Category } from "@minarvabiz/types";
 import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
+import { Modal } from "../forms/Modal";
+import { FormField, inputClass, selectClass } from "../forms/FormField";
 
 export function ProductList({
   products,
@@ -20,7 +22,7 @@ export function ProductList({
   onRefresh,
   onEdit,
   onAdjustStock,
-  onDelete,
+  onArchive,
   onPrintBarcode,
 }: {
   products: Product[];
@@ -36,10 +38,14 @@ export function ProductList({
   onRefresh?: () => void;
   onEdit?: (p: Product) => void;
   onAdjustStock?: (p: Product) => void;
-  onDelete?: (p: Product) => void;
+  onArchive?: (p: Product, reason: string) => { success?: boolean; error?: string } | void;
   onPrintBarcode?: (p: Product) => void;
 }) {
   const [q, setQ] = React.useState("");
+  const [status, setStatus] = React.useState("");
+  const [archiveTarget, setArchiveTarget] = React.useState<Product | null>(null);
+  const [archiveReason, setArchiveReason] = React.useState("");
+  const [archiveError, setArchiveError] = React.useState<string | null>(null);
   const catMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
 
   const columns: Column<Product>[] = [
@@ -101,7 +107,7 @@ export function ProductList({
           {onEdit && <Button size="sm" variant="outline" onClick={() => onEdit(r)}>Edit</Button>}
           {onAdjustStock && <Button size="sm" variant="outline" onClick={() => onAdjustStock(r)}>Stock</Button>}
           {onPrintBarcode && <Button size="sm" variant="outline" onClick={() => onPrintBarcode(r)}>Label</Button>}
-          {onDelete && <Button size="sm" variant="outline" onClick={() => onDelete(r)}>Delete</Button>}
+          {onArchive && <Button size="sm" variant="outline" onClick={() => { setArchiveTarget(r); setArchiveReason(""); setArchiveError(null); }}>Archive</Button>}
         </div>
       ),
     },
@@ -141,6 +147,11 @@ export function ProductList({
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+          <select className={selectClass + " h-10 sm:w-32"} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
           <Button variant={lowStockOnly ? "primary" : "outline"} onClick={toggleLowStock}>
             Low stock
           </Button>
@@ -148,7 +159,37 @@ export function ProductList({
           <Button onClick={onAdd}>+ Add Product</Button>
         </div>
       </div>
-      <DataTable columns={columns} rows={products} onRowClick={onSelect} emptyMessage="No products found" />
+      <DataTable columns={columns} rows={products.filter((product) => !status || (status === "active" ? product.isActive : !product.isActive))} onRowClick={onSelect} emptyMessage="No products found" />
+      <Modal
+        open={Boolean(archiveTarget)}
+        title={archiveTarget ? `Archive product · ${archiveTarget.name}` : "Archive product"}
+        onClose={() => { setArchiveTarget(null); setArchiveReason(""); setArchiveError(null); }}
+        footer={<>
+          <Button variant="outline" onClick={() => { setArchiveTarget(null); setArchiveReason(""); setArchiveError(null); }}>Keep product</Button>
+          <Button
+            disabled={!archiveTarget || archiveReason.trim().length < 3 || Math.abs(archiveTarget?.stockQuantity ?? 0) > 1e-9}
+            onClick={() => {
+              if (!archiveTarget || !onArchive) return;
+              const result = onArchive(archiveTarget, archiveReason.trim());
+              if (result && result.error) { setArchiveError(result.error); return; }
+              setArchiveTarget(null); setArchiveReason(""); setArchiveError(null);
+            }}
+          >
+            Archive product
+          </Button>
+        </>}
+      >
+        <div className="space-y-3">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            Archived products disappear from normal sales and inventory lists but historical invoices stay intact. Stock must be zero before archive.
+          </div>
+          {archiveTarget && Math.abs(archiveTarget.stockQuantity) > 1e-9 && <p className="text-sm font-medium text-rose-600">Current stock is {archiveTarget.stockQuantity} {archiveTarget.unit}. Use Stock adjustment to bring it to zero first.</p>}
+          <FormField label="Archive reason *">
+            <textarea className={inputClass + " h-24 py-2"} value={archiveReason} onChange={(e) => setArchiveReason(e.target.value)} />
+          </FormField>
+          {archiveError && <p className="text-sm text-rose-600">{archiveError}</p>}
+        </div>
+      </Modal>
     </div>
   );
 }
