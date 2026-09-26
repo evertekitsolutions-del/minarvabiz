@@ -33,6 +33,8 @@ export function ReturnsPanel({
   products = [],
   onCreate,
   onExchange,
+  preferredSaleId,
+  onPreferredSaleHandled,
 }: {
   returns: SaleReturn[];
   sales: Sale[];
@@ -54,6 +56,8 @@ export function ReturnsPanel({
     returnItems: ReturnItemInput[];
     replacementLines: CartLine[];
   }) => ExchangeResult;
+  preferredSaleId?: string;
+  onPreferredSaleHandled?: () => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const [mode, setMode] = React.useState<"return" | "exchange">("return");
@@ -68,8 +72,24 @@ export function ReturnsPanel({
   const [replacementQty, setReplacementQty] = React.useState("1");
   const [replacementLines, setReplacementLines] = React.useState<CartLine[]>([]);
   const [additionalPaid, setAdditionalPaid] = React.useState("");
+  const autoOpenedSaleRef = React.useRef<string | null>(null);
 
   const sale = sales.find((s) => s.id === saleId);
+
+  React.useEffect(() => {
+    if (!preferredSaleId || autoOpenedSaleRef.current === preferredSaleId) return;
+    const target = sales.find((candidate) => candidate.id === preferredSaleId);
+    if (!target) return;
+    autoOpenedSaleRef.current = preferredSaleId;
+    setSaleId(preferredSaleId);
+    setMode("return");
+    setQtyMap({});
+    setReplacementLines([]);
+    setError(null);
+    setSuccess(null);
+    setOpen(true);
+    onPreferredSaleHandled?.();
+  }, [preferredSaleId, sales, onPreferredSaleHandled]);
   const remainingQuantity = (item: Sale["items"][number]) => Math.max(0, item.quantity - returns
     .filter(r => r.saleId === sale?.id && r.status === "completed")
     .flatMap(r => r.items).filter(i => i.saleItemId === item.id).reduce((sum, i) => sum + i.quantity, 0));
