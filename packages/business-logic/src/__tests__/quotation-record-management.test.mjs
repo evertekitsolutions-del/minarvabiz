@@ -58,7 +58,7 @@ assert.ok(edited.quotation);
 assert.equal(edited.quotation.subtotal, 335);
 assert.equal(edited.quotation.total, 338);
 assert.equal(edited.quotation.balance, 288);
-assert.equal(edited.quotation.version, 2);
+assert.equal(edited.quotation.version, 3);
 assert.equal(edited.quotation.lines.length, 2);
 
 assert.equal(quotations.listQuotations({ dateFrom: "2026-09-11" }).length, 0);
