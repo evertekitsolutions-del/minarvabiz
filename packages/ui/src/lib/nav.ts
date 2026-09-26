@@ -9,7 +9,7 @@
 export type NavItemId =
   | "dashboard" | "sales" | "quotations" | "products" | "warehouse" | "services" | "laundry" | "expenses" | "purchases"
   | "customers" | "customer-crm" | "staff" | "staff-detail" | "suppliers" | "payments" | "accounting" | "returns"
-  | "reports" | "day-end" | "audit" | "notifications" | "settings" | "backup" | "license";
+  | "reports" | "day-end" | "audit" | "notifications" | "messages" | "agenda" | "settings" | "backup" | "license";
 
 export type NavSectionId =
   | "sales-operations"
@@ -61,7 +61,9 @@ export const MAIN_NAV: NavItem[] = [
   { id: "reports", label: "Reports & Analytics", href: "/reports", icon: "bar-chart-3", section: "finance-reporting" },
 
   { id: "staff", label: "Staff Management", href: "/staff", icon: "user-cog", section: "team-communication" },
-  { id: "notifications", label: "Messages & Notifications", href: "/notifications", icon: "message-circle", section: "team-communication" },
+  { id: "notifications", label: "Alerts & Notifications", href: "/notifications", icon: "message-circle", section: "team-communication" },
+  { id: "messages", label: "Customer Messages", href: "/messages", icon: "message-circle", section: "team-communication" },
+  { id: "agenda", label: "Business Agenda", href: "/agenda", icon: "bar-chart-3", section: "team-communication" },
 
   { id: "audit", label: "Audit Log", href: "/audit", icon: "bar-chart-3", section: "administration" },
   { id: "settings", label: "Settings", href: "/settings", icon: "settings", section: "administration" },
