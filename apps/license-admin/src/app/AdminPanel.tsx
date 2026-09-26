@@ -16,9 +16,9 @@ import { canIssueLicense, canManageLicenseStatus, defaultFeatures } from "./admi
 import type { AdminIdentityView, AuthStage, LicenseRegistryRow, LicenseStatusAction } from "./admin-panel/types";
 interface AdminPanelProps { identity: AdminIdentityView | null; initialLicenses: LicenseRegistryRow[]; bootstrapAvailable: boolean; }
 export default function AdminPanel({identity,initialLicenses,bootstrapAvailable}: AdminPanelProps) {
-  const router = useRouter();
-  const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
+  const router=useRouter();
+  const [email,setEmail]=React.useState("");
+  const [password,setPassword]=React.useState("");
   const [emergencyPassword, setEmergencyPassword] = React.useState("");
   const [authStage, setAuthStage] = React.useState<AuthStage>("password");
   const [mfaCode, setMfaCode] = React.useState("");
