@@ -9,6 +9,7 @@ const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
 const logic = read("packages/business-logic/src/procurement-store.ts");
 const ui = read("packages/ui/src/components/purchases/ProcurementPanel.tsx");
 const desktop = read("apps/desktop/src/App.tsx");
+const desktopProcurement = read("apps/desktop/src/components/DesktopProcurementPanel.tsx");
 const web = read("apps/web/src/app/(app)/purchases/page.tsx");
 
 assert.match(logic, /export function updatePurchaseOrder/);
@@ -30,8 +31,9 @@ for (const token of [
 
 assert.match(ui, /po\.status === "draft".*openPoEditor/s);
 assert.match(ui, /invoice\.status === "draft".*openInvoiceEditor/s);
-assert.match(desktop, /procurementStore\.updatePurchaseOrder/);
-assert.match(desktop, /procurementStore\.updatePurchaseInvoice/);
+assert.match(desktop, /DesktopProcurementPanel/);
+assert.match(desktopProcurement, /procurementStore\.updatePurchaseOrder/);
+assert.match(desktopProcurement, /procurementStore\.updatePurchaseInvoice/);
 assert.match(web, /procurementStore\.updatePurchaseOrder/);
 assert.match(web, /procurementStore\.updatePurchaseInvoice/);
 assert.match(web, /getInvoiceablePurchaseOrderLines\(purchaseOrderId, excludeInvoiceId\)/);
