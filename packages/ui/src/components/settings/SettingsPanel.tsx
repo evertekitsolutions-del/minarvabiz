@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Button } from "../Button";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
+import { PrintTemplateManager } from "./PrintTemplateManager";
 
 export interface SettingsPanelProps {
   profile: {
@@ -22,7 +23,21 @@ export interface SettingsPanelProps {
   };
   tax: { enableGst: boolean; defaultRatePercent: number };
   backup: { enabled: boolean; intervalHours: number; retentionCount: number; destinationPath: string };
-  printing: { defaultInvoicePaper: "a4" | "thermal"; thermalWidthMm: 58 | 80; a4PrinterName: string; thermalPrinterName: string; labelPrinterName: string; labelWidthMm: number; labelHeightMm: number; silentDesktopPrint: boolean };
+  printing: {
+    defaultInvoicePaper: "a4" | "thermal";
+    thermalWidthMm: 58 | 80;
+    a4PrinterName: string;
+    thermalPrinterName: string;
+    labelPrinterName: string;
+    labelWidthMm: number;
+    labelHeightMm: number;
+    silentDesktopPrint: boolean;
+    invoiceA4TemplateId: string;
+    invoiceThermalTemplateId: string;
+    quotationA4TemplateId: string;
+    quotationThermalTemplateId: string;
+    labelCodeMode: "barcode" | "qr" | "both";
+  };
   onSaveProfile: (patch: Partial<SettingsPanelProps["profile"]>) => void;
   onSaveTax: (patch: Partial<SettingsPanelProps["tax"]>) => void;
   onSaveBackup: (patch: Partial<SettingsPanelProps["backup"]>) => void;
@@ -351,6 +366,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
           <FormField label="Label width (mm)"><input className={inputClass} type="number" min="20" max="120" value={draftPrinting.labelWidthMm} onChange={e => setDraftPrinting({ ...draftPrinting, labelWidthMm: Math.max(20, Math.min(120, Number(e.target.value) || 50)) })} /></FormField>
           <FormField label="Label height (mm)"><input className={inputClass} type="number" min="15" max="150" value={draftPrinting.labelHeightMm} onChange={e => setDraftPrinting({ ...draftPrinting, labelHeightMm: Math.max(15, Math.min(150, Number(e.target.value) || 30)) })} /></FormField>
         </div>
+        <FormField label="Label code"><select className={selectClass} value={draftPrinting.labelCodeMode} onChange={e => setDraftPrinting({ ...draftPrinting, labelCodeMode: e.target.value as "barcode" | "qr" | "both" })}><option value="both">Barcode + QR</option><option value="barcode">Barcode only</option><option value="qr">QR only</option></select></FormField>
         <FormField label="Windows direct print"><select className={selectClass} value={draftPrinting.silentDesktopPrint ? "yes" : "no"} onChange={e => setDraftPrinting({ ...draftPrinting, silentDesktopPrint: e.target.value === "yes" })}><option value="no">Show Windows print dialog</option><option value="yes">Direct print to selected printer</option></select></FormField>
       </div>
       <div className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">{printers.length ? `${printers.length} Windows printer(s) detected.` : "Printer discovery is available in the Windows desktop edition. Web browsers use their normal print dialog."}</div>
@@ -367,6 +383,18 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
       <FormField label="Retention count"><input className={inputClass} type="number" min="5" value={draftBackup.retentionCount} onChange={e => setDraftBackup({ ...draftBackup, retentionCount: Math.max(5, Number(e.target.value) || 14) })} /></FormField>
     </div>
     <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-sm font-medium text-slate-800">Backup folder</div><div className="mt-1 break-all text-xs text-slate-500">{draftBackup.destinationPath || "Default: D:\\Minarva Biz Backups when D: drive is available"}</div></div><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" onClick={useDriveDBackup}>Use D: Drive</Button><Button type="button" variant="outline" onClick={chooseBackupLocation}>Choose Folder</Button></div></div></div>{diagnosticMessage && <p className={`mt-3 text-sm ${diagnosticState === "error" ? "text-red-600" : "text-emerald-600"}`}>{diagnosticMessage}</p>}<div className="mt-5 flex justify-end"><Button onClick={() => onSaveBackup(draftBackup)}>Save backup settings</Button></div></section>
+    <PrintTemplateManager
+      selection={{
+        invoiceA4TemplateId: draftPrinting.invoiceA4TemplateId,
+        invoiceThermalTemplateId: draftPrinting.invoiceThermalTemplateId,
+        quotationA4TemplateId: draftPrinting.quotationA4TemplateId,
+        quotationThermalTemplateId: draftPrinting.quotationThermalTemplateId,
+      }}
+      onSelectionChange={(patch) => {
+        setDraftPrinting((previous) => ({ ...previous, ...patch }));
+        onSavePrinting(patch);
+      }}
+    />
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div><h3 className="text-lg font-semibold text-slate-900">Appearance</h3><p className="mt-1 text-sm text-slate-500">Choose a professional workspace theme. Your choice is remembered on this computer.</p></div>
       <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
