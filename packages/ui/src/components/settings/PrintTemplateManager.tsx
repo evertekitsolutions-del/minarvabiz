@@ -11,6 +11,7 @@ import {
   type PrintDocumentTemplate,
 } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
+import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { PrintPreviewModal } from "../printing/PrintPreviewModal";
 
@@ -40,6 +41,8 @@ export function PrintTemplateManager() {
   const [draft, setDraft] = React.useState<PrintDocumentTemplate | null>(() => templates[0] ? clone(templates[0]) : null);
   const [message, setMessage] = React.useState("");
   const [previewOpen, setPreviewOpen] = React.useState(false);
+  const [pending, setPending] = React.useState<"save" | "delete" | "reset" | null>(null);
+  const [confirmation, setConfirmation] = React.useState("");
 
   function refresh(selectId?: string) {
     const next = listPrintTemplates();
@@ -59,7 +62,7 @@ export function PrintTemplateManager() {
 
   function save() {
     if (!draft) return;
-    if (!window.confirm(`Save changes to print template “${draft.name}”? Future documents using this template will use the new design/content.`)) return;
+
     const saved = savePrintTemplate(draft);
     refresh(saved.id);
     setMessage("Template saved.");
@@ -75,12 +78,7 @@ export function PrintTemplateManager() {
 
   function remove() {
     if (!draft) return;
-    if (!window.confirm(`Delete print template “${draft.name}”? This action cannot be undone.`)) return;
-    const typed = window.prompt('Additional confirmation: type DELETE to permanently remove this template.');
-    if (typed !== "DELETE") {
-      setMessage("Delete cancelled.");
-      return;
-    }
+
     const result = deletePrintTemplate(draft.id);
     if (!result.ok) {
       setMessage(result.error || "Unable to delete template.");
@@ -92,9 +90,7 @@ export function PrintTemplateManager() {
   }
 
   function reset() {
-    if (!window.confirm("Reset all invoice and quotation templates to the professional Minarva Biz defaults? Custom template edits will be replaced.")) return;
-    const typed = window.prompt("Additional confirmation: type RESET to restore all default templates.");
-    if (typed !== "RESET") return;
+
     resetPrintTemplates();
     setSelectedId("");
     refresh();
@@ -112,7 +108,7 @@ export function PrintTemplateManager() {
             Edit A4 and thermal layouts without editing raw HTML. These templates are shared by Online, Offline and Hybrid editions and are included in backups.
           </p>
         </div>
-        <Button type="button" variant="outline" onClick={reset}>Restore professional defaults</Button>
+        <Button type="button" variant="outline" onClick={() => { setConfirmation(""); setPending("reset"); }}>Restore professional defaults</Button>
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[320px_1fr]">
@@ -172,12 +168,40 @@ export function PrintTemplateManager() {
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setPreviewOpen(true)}>Preview</Button>
               <Button type="button" variant="outline" onClick={duplicate}>Duplicate</Button>
-              <Button type="button" variant="outline" onClick={remove}>Delete</Button>
-              <Button type="button" onClick={save}>Save template</Button>
+              <Button type="button" variant="outline" onClick={() => { setConfirmation(""); setPending("delete"); }}>Delete</Button>
+              <Button type="button" onClick={() => setPending("save")}>Save template</Button>
             </div>
           </div>
         )}
       </div>
+
+      <Modal
+        open={pending !== null}
+        title="Confirm template change"
+        onClose={() => setPending(null)}
+        footer={<>
+          <Button variant="outline" onClick={() => setPending(null)}>Cancel</Button>
+          <Button
+            variant={pending === "save" ? "primary" : "danger"}
+            disabled={pending !== "save" && confirmation !== pending?.toUpperCase()}
+            onClick={() => {
+              if (pending === "save") save();
+              else if (pending === "delete" && confirmation === "DELETE") remove();
+              else if (pending === "reset" && confirmation === "RESET") reset();
+              setPending(null);
+            }}
+          >Confirm {pending}</Button>
+        </>}
+      >
+        <p className="mb-4 text-sm text-slate-600">
+          {pending === "save" ? `Save changes to “${draft?.name}”? Future documents will use these settings.`
+            : pending === "delete" ? `Permanently delete “${draft?.name}”? This cannot be undone.`
+            : "Restore professional defaults? All custom template edits will be replaced."}
+        </p>
+        {pending && pending !== "save" && <FormField label={`Type ${pending.toUpperCase()} to confirm`}>
+          <input autoFocus className={inputClass} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} />
+        </FormField>}
+      </Modal>
 
       {draft && (
         <PrintPreviewModal

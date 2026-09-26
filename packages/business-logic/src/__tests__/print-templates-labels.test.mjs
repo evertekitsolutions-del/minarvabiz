@@ -24,11 +24,12 @@ for (const kind of ["invoice", "quotation"]) {
   }
 }
 
+require("../shop-profile.ts").updateShopProfile({ gstin: "32ABCDE1234F1Z5" });
 const sample = renderer.buildTemplateSampleHtml(defaults.find((item) => item.id === "system-invoice-a4"));
 assert.match(sample, /INV-MT-2026-27-00001/);
 assert.match(sample, /GSTIN/);
 assert.match(sample, /Authorised Signatory/);
-assert.match(sample, /Terms:/);
+assert.match(sample, /Terms & Conditions/);
 
 settings.hydratePrintSettings({
   defaultInvoicePaper: "a4",

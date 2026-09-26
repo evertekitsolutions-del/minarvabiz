@@ -1,3 +1,4 @@
+import { verifyPrintTemplates } from "./print-template-ui-smoke.mjs";
 const cdpBase = process.env.MINARVA_WEB_CDP || "http://127.0.0.1:9223";
 const appBase = process.env.MINARVA_WEB_BASE || "http://127.0.0.1:3000";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -80,8 +81,10 @@ async function run(){const ws=await connect();try{
   await setMainField(ws,'Profit and loss from',''); await waitFor(ws,['Balance sheet balanced']); await assertStatementProfit(ws, 125);
   await clickText(ws,'REPORTS',['reports & analytics']); await waitFor(ws,['Reports & Analytics','Export Excel','Download PDF','Refresh']);
   await clickText(ws,'NOTIFICATIONS',['messages & notifications','notifications']); await waitFor(ws,['Notifications']);
-  await clickText(ws,'SETTINGS',['settings']); await waitFor(ws,['Settings','Shop profile','Browser printing defaults']); await setMainField(ws,'Shop name','QA Minarva Web'); await clickText(ws,'SAVE_SHOP',['save shop profile']); await waitFor(ws,['Shop profile saved']);
+  await clickText(ws,'SETTINGS',['settings']); await waitFor(ws,['Settings','Business profile','Browser printing defaults']); await setMainField(ws,'Business / trade name','QA Minarva Web'); await clickText(ws,'SAVE_SHOP',['save shop profile']); await waitFor(ws,['Business profile saved']);
   await clickText(ws,'BACKUP',['backup & restore']); await waitFor(ws,['Backup','Create backup']); await clickText(ws,'CREATE_BACKUP',['create backup'],700); await waitFor(ws,['Backup created']);
+  await verifyPrintTemplates(expression => evalIn(ws, expression));
+
   await navigate(ws,'/license',['License','Trial']); await navigate(ws,'/users',['Users & roles','Add user']); await setMainField(ws,'Full name','QA Manager'); await setMainField(ws,'Email','qa.manager@example.com'); await setMainField(ws,'Role','manager'); await clickText(ws,'ADD_USER',['add user'],500); await waitFor(ws,['QA Manager','qa.manager@example.com']);
   await navigate(ws,'/forgot-password',['Reset your password','Send reset link']); await navigate(ws,'/dashboard',['Total Sales','Total Profit']); await styleGuard(ws);
   console.log('MINARVA_WEB_UI_DEEP_SMOKE PASS');
