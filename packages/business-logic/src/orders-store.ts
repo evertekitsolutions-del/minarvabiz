@@ -1,6 +1,6 @@
 import { isDemoMode } from "./runtime-mode";
 import { assertPermission } from "./permissions";
-import { assertBusinessDayOpen } from "./day-end";
+import { assertBusinessDayOpen } from "./business-day-state";
 /**
  * Service orders + measurements store (Phase 4).
  * Shares customer lookup with main store.
