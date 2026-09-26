@@ -34,6 +34,7 @@ const created=phase5.createLaundryOrder({
 assert.equal(created.errors.length,0);
 assert(created.order);
 
+const beforeVersion=created.order.version;
 const beforeAccounting=JSON.stringify(accounting.exportAccountingState());
 const beforeCustomer=JSON.stringify(store.getCustomer("c"));
 const beforeFinancial={
@@ -53,7 +54,7 @@ assert.equal(edited.errors.length,0);
 assert(edited.order);
 assert.equal(edited.order.garment,"Shirt + trouser");
 assert.equal(edited.order.notes,"Handle carefully");
-assert.equal(edited.order.version,created.order.version+1);
+assert.equal(edited.order.version,beforeVersion+1);
 for(const [key,value] of Object.entries(beforeFinancial)) assert.equal(edited.order[key],value,key);
 assert.equal(JSON.stringify(accounting.exportAccountingState()),beforeAccounting);
 assert.equal(JSON.stringify(store.getCustomer("c")),beforeCustomer);
