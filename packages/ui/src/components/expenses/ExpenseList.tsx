@@ -234,7 +234,7 @@ export function PurchaseList({ purchases, suppliers = [], onAdd, onCreate }: { p
           <input className={inputClass + " mt-1"} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search…" />
         </label>
         <label className="text-xs font-medium text-slate-600">
-          Supplier
+          Direct purchase supplier filter
           <select className={selectClass + " mt-1"} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
             <option value="">All suppliers</option>
             <option value="__none">Direct / no supplier</option>
