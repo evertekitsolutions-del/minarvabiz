@@ -70,6 +70,40 @@ function subtractMinorOrNull(a: number, b: number): number | null {
 
 export function listSuppliers(query?: string): Supplier[] { let list = suppliers.filter((s) => !s.deletedAt); if (query?.trim()) { const q = query.toLowerCase(); list = list.filter((s) => s.name.toLowerCase().includes(q) || s.company?.toLowerCase().includes(q) || s.phone?.includes(q)); } return list.sort((a,b)=>a.name.localeCompare(b.name)); }
 export function getSupplier(id: UUID): Supplier | undefined { return suppliers.find((s) => s.id === id && !s.deletedAt); }
+
+export function updateSupplier(id: UUID, patch: Partial<Supplier>): Supplier | null {
+  assertPermission("purchases.manage");
+  const supplier = getSupplier(id);
+  if (!supplier) return null;
+  const before = { ...supplier };
+  const allowed = ["name", "company", "phone", "email", "address", "category", "notes"] as const;
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(patch, key) && patch[key] !== undefined) supplier[key] = patch[key] as never;
+  }
+  supplier.updatedAt = nowISO();
+  touchPersistence();
+  void remoteUpsertSupplier({ ...supplier });
+  auditAction("supplier.update", "suppliers", supplier.id, before, { ...supplier });
+  return supplier;
+}
+
+export function archiveSupplier(id: UUID, reason: string): { supplier: Supplier | null; error?: string } {
+  assertPermission("purchases.manage");
+  const supplier = getSupplier(id);
+  if (!supplier) return { supplier: null, error: "Supplier not found" };
+  const archiveReason = reason.trim();
+  if (archiveReason.length < 3) return { supplier: null, error: "Archive reason is required" };
+  if (!Number.isFinite(supplier.outstandingBalance) || supplier.outstandingBalance > 0.005) {
+    return { supplier: null, error: "Supplier has an outstanding balance. Settle it before archiving." };
+  }
+  const before = { ...supplier };
+  supplier.deletedAt = nowISO();
+  supplier.updatedAt = supplier.deletedAt;
+  touchPersistence();
+  void remoteUpsertSupplier({ ...supplier });
+  auditAction("supplier.archive", "suppliers", supplier.id, before, { ...supplier, archiveReason });
+  return { supplier };
+}
 export function createSupplier(input: { name: string; company?: string | null; phone?: string | null; email?: string | null; address?: string | null; category?: string | null; notes?: string | null; openingBalance?: number; }): Supplier {
   assertPermission("purchases.manage");
   const rawOpeningBalance = input.openingBalance ?? 0;
@@ -114,6 +148,7 @@ export function createSupplier(input: { name: string; company?: string | null; p
   }
   touchPersistence();
   void remoteCreateSupplier(s);
+  auditAction("supplier.create", "suppliers", s.id, null, { ...s });
   return s;
 }
 
