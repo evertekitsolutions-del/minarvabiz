@@ -13,6 +13,8 @@ import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, Servic
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
+import { DesktopLicenseExpiryBanner, effectiveLicenseDaysRemaining } from "./components/DesktopLicenseExpiryBanner";
+import { DesktopEntitlementMonitor } from "./components/DesktopEntitlementMonitor";
 
 type CommercialLicenseState = {
   status: "unlicensed" | "active" | "grace" | "expired" | "invalid";
@@ -152,17 +154,17 @@ export function App() {
     if (!dbReady) return;
     refreshAll();
     phase6Store.refreshOperationalNotifications({
-      licenseDaysRemaining: commercialLicense?.daysRemaining ?? null,
+      licenseDaysRemaining: effectiveLicenseDaysRemaining(commercialLicense, trialState),
       backupReminder: shouldRunAutoBackup(),
     });
     const notificationTimer = window.setInterval(() => {
       phase6Store.refreshOperationalNotifications({
-        licenseDaysRemaining: commercialLicense?.daysRemaining ?? null,
+        licenseDaysRemaining: effectiveLicenseDaysRemaining(commercialLicense, trialState),
         backupReminder: shouldRunAutoBackup(),
       });
     }, 60000);
     return () => window.clearInterval(notificationTimer);
-  }, [dbReady, refreshAll, commercialLicense]);
+  }, [dbReady, refreshAll, commercialLicense, trialState]);
   React.useEffect(() => {
     setRuntimeFeaturePolicy(featuresForLicense(commercialLicense, trialState));
   }, [commercialLicense, trialState]);
@@ -189,6 +191,8 @@ export function App() {
   if(!dbReady||!trialState||!commercialLicense)return <div style={{padding:48,fontFamily:"system-ui",textAlign:"center"}}><p>Initializing Minarva Biz…</p></div>;
   const licenseFeatures = featuresForLicense(commercialLicense, trialState);
   const commercialActive = commercialLicense.status==="active"||commercialLicense.status==="grace";
+  const licenseDaysForDashboard = effectiveLicenseDaysRemaining(commercialLicense, trialState);
+
   if(!commercialActive&&trialState.status!=="active")return <TrialGate state={trialState} onActivate={activateTrial}/>;
   if(!licenseFeatures)return <TrialGate state={trialState} onActivate={activateTrial}/>;
 
@@ -233,7 +237,8 @@ export function App() {
 
 
   return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} desktopModuleContext={{customerId:crmCustomerId,staffId:staffDetailId}} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png",navItems:allowedNav}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:phase6Store.unreadNotificationCount(),onMessagesClick:()=>navTo("notifications"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("reports"),onSearch:setGlobalSearchQuery}}>
-    {view==="dashboard"&&dash&&<Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/>}
+    <DesktopEntitlementMonitor enabled={dbReady} onTrialStateChange={setTrialState} onLicenseStateChange={setCommercialLicense}/>
+    {view==="dashboard"&&dash&&<div className="space-y-4"><DesktopLicenseExpiryBanner commercialActive={commercialActive} trialState={trialState} daysRemaining={licenseDaysForDashboard} onManage={()=>navTo("license")}/><Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/></div>}
     {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery("")} onNavigate={(_href,id)=>{setGlobalSearchQuery("");navTo(id);}}/>}
     {view==="customers"&&<CustomerList customers={customers} onAdd={openCustomerCreator} onSearch={q=>setCustomers(store.listCustomers(q))} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}
     {view==="products"&&<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={()=>setLowStockOnly(v=>!v)} onSearch={setProductQuery} onFilterCategory={setProductCategoryId} onAddCategory={()=>{setCategoryForm({name:"",description:""});setCategoryOpen(true);}} onAdd={()=>{resetProductForm();setProductOpen(true);}} onEdit={openProductEditor} onAdjustStock={openStockAdjust} onDelete={handleDeleteProduct} onPrintBarcode={openBarcodeLabel}/>} 
@@ -250,7 +255,7 @@ export function App() {
     {view==="notifications"&&<NotificationCenter notifications={notifications} onMarkAllRead={()=>{phase6Store.markAllNotificationsRead();void persistAndRefresh();}} onMarkRead={id=>{phase6Store.markNotificationRead(id);void persistAndRefresh();}} onNavigate={(href)=>{const target=href.startsWith("/services")?"services":href.startsWith("/reports")?"reports":href.startsWith("/inventory")?"products":href.startsWith("/sales")?"sales":"dashboard";navTo(target as NavItemId);}}/>} 
     {view==="reports"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} onRefresh={()=>{refreshAll();}} from={reportFrom} to={reportTo} onFromChange={setReportFrom} onToChange={setReportTo}/>} 
     {view==="backup"&&<BackupPanel backups={backups}/>} 
-    {view==="license"&&<DesktopLicenseView state={commercialLicense} deviceFingerprint={deviceFingerprint} customerCount={customers.length} productCount={products.length} onStateChange={setCommercialLicense}/>} 
+    {view==="license"&&<DesktopLicenseView state={commercialLicense} trialState={trialState} deviceFingerprint={deviceFingerprint} customerCount={customers.length} productCount={products.length} onStateChange={setCommercialLicense} onTrialStateChange={setTrialState}/>} 
     {view==="settings"&&<SettingsPanel profile={profile} tax={tax} backup={backupSettings} printing={printSettings} onSaveProfile={v=>{updateShopProfile(v);if(v.gstin!==undefined)updateTaxConfig({gstin:v.gstin});saveSettings();}} onSaveTax={v=>{updateTaxConfig(v);saveSettings();}} onSaveBackup={v=>{setAutoBackupSettings(v);saveSettings();}} onSavePrinting={v=>{updatePrintSettings(v);saveSettings();}}/>}
 
     <Modal open={!!laundryMode} title={laundryMode==="outsourced"?"Outsourced Laundry":"In-house Ironing"} onClose={()=>setLaundryMode(null)}><LaundryForm mode={laundryMode||"outsourced"} customers={customers} suppliers={suppliers} onAddCustomer={openCustomerCreator} onAddSupplier={()=>{setSupplierForm({name:"",company:"",phone:"",email:"",address:"",category:"laundry",openingBalance:"",notes:""});setSupplierOpen(true);}} onSubmit={handleCreateLaundry} onCancel={()=>setLaundryMode(null)} error={laundryError}/></Modal>
