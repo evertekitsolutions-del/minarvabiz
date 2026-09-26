@@ -1,5 +1,5 @@
 import { assertPermission, getCurrentRole } from "./permissions";
-import { assertBusinessDayOpen } from "./day-end";
+import { assertBusinessDayOpen } from "./business-day-state";
 /**
  * Phase 7: Returns/refunds, audit logs, backup snapshots, report queries.
  */
