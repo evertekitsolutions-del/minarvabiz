@@ -7,7 +7,9 @@ import {
   accountingStore,
   procurementStore,
   closeBusinessDay,
+  reopenBusinessDay,
   listDayEndCloses,
+  can,
 } from "@minarvabiz/business-logic";
 
 export default function ReportsPage() {
@@ -55,11 +57,18 @@ export default function ReportsPage() {
         onFromChange={setFrom}
         onToChange={setTo}
       />
+      <div id="day-end-close">
       <DayEndClosePanel
+        canClose={can("dayend.close")}
+        canReopen={can("dayend.reopen")}
         closes={closes.map((c) => ({
           id: c.id,
           businessDate: c.businessDate,
           closedAt: c.closedAt,
+          closedByRole: c.closedByRole,
+          reopenedAt: c.reopenedAt,
+          reopenedByRole: c.reopenedByRole,
+          reopenReason: c.reopenReason,
           report: {
             totalSales: c.report.totalSales,
             netProfit: c.report.netProfit,
@@ -81,6 +90,37 @@ export default function ReportsPage() {
               id: result.record.id,
               businessDate: result.record.businessDate,
               closedAt: result.record.closedAt,
+              closedByRole: result.record.closedByRole,
+              reopenedAt: result.record.reopenedAt,
+              reopenedByRole: result.record.reopenedByRole,
+              reopenReason: result.record.reopenReason,
+              report: {
+                totalSales: result.record.report.totalSales,
+                netProfit: result.record.report.netProfit,
+                cashReceived: result.record.report.cashReceived,
+                outstandingAmount: result.record.report.outstandingAmount,
+              },
+              metricsNote: result.record.metricsNote,
+            },
+          };
+        }}
+        onReopenDay={(businessDate, reason) => {
+          const result = reopenBusinessDay(businessDate, reason);
+          if (result.error || !result.record) {
+            return { ok: false, error: result.error || "Failed" };
+          }
+          setCloses(listDayEndCloses());
+          setTick((t) => t + 1);
+          return {
+            ok: true,
+            record: {
+              id: result.record.id,
+              businessDate: result.record.businessDate,
+              closedAt: result.record.closedAt,
+              closedByRole: result.record.closedByRole,
+              reopenedAt: result.record.reopenedAt,
+              reopenedByRole: result.record.reopenedByRole,
+              reopenReason: result.record.reopenReason,
               report: {
                 totalSales: result.record.report.totalSales,
                 netProfit: result.record.report.netProfit,
@@ -92,6 +132,7 @@ export default function ReportsPage() {
           };
         }}
       />
+      </div>
     </div>
   );
 }
