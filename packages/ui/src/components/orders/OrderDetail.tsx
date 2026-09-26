@@ -1,8 +1,10 @@
 "use client";
 
 import * as React from "react";
-import type { ExpenseCategory, MeasurementProfile, PaymentMethod, ServiceOrder, OrderStatus } from "@minarvabiz/types";
+import type { AuditLogEntry, ExpenseCategory, MeasurementProfile, PaymentMethod, ServiceOrder, OrderStatus } from "@minarvabiz/types";
 import { Button } from "../Button";
+import { Modal } from "../forms/Modal";
+import { FormField, inputClass } from "../forms/FormField";
 import { PrintPreviewModal } from "../printing/PrintPreviewModal";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
@@ -10,6 +12,29 @@ import {
   SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_FLOW,
   measurementRevisionHistory, ordersStore, buildOrderInvoiceHtml, printOrderInvoice,
 } from "@minarvabiz/business-logic";
+
+function auditReason(entry: AuditLogEntry): string | null {
+  if (!entry.newValue) return null;
+  try {
+    const parsed = JSON.parse(entry.newValue) as Record<string, unknown>;
+    const reason = parsed.changeReason ?? parsed.cancellationReason ?? parsed.reason;
+    return typeof reason === "string" && reason.trim() ? reason : null;
+  } catch {
+    return null;
+  }
+}
+
+function auditActionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    "service_order.create": "Order created",
+    "service_order.update": "Operational details updated",
+    "service_order.status": "Status changed",
+    "service_order.cancel": "Order cancelled",
+    "service_order.collection": "Payment collected",
+    "service_order.quality_check": "Quality check updated",
+  };
+  return labels[action] ?? action.replaceAll("_", " ").replaceAll(".", " · ");
+}
 
 function measurementLabel(key: string): string {
   return key
@@ -24,14 +49,18 @@ export function OrderDetail({
   onQualityCheck,
   expenseCategories = [],
   onAddExpense,
+  onUpdateOperationalDetails,
+  auditHistory = [],
   onClose,
 }: {
   order: ServiceOrder;
   measurementProfiles?: MeasurementProfile[];
-  onStatusChange?: (status: OrderStatus, refundPaymentMethod?: PaymentMethod) => void;
+  onStatusChange?: (status: OrderStatus, options?: { refundPaymentMethod?: PaymentMethod; reason?: string }) => void;
   onQualityCheck?: (input: { passed: boolean; notes: string; issues: string[] }) => void;
   expenseCategories?: ExpenseCategory[];
   onAddExpense?: (input: { description: string; amount: number; categoryId: string; paymentMethod: PaymentMethod }) => void;
+  onUpdateOperationalDetails?: (input: { deliveryDate: string | null; notes: string | null; materialDetails: string | null }, reason: string) => void;
+  auditHistory?: AuditLogEntry[];
   onClose?: () => void;
 }) {
   const [expDesc, setExpDesc] = React.useState("");
@@ -43,6 +72,13 @@ export function OrderDetail({
   const [qcIssue, setQcIssue] = React.useState("");
   const [qcIssues, setQcIssues] = React.useState<string[]>([]);
   const [printPreviewPaper, setPrintPreviewPaper] = React.useState<"a4" | "thermal" | null>(null);
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [editDeliveryDate, setEditDeliveryDate] = React.useState("");
+  const [editNotes, setEditNotes] = React.useState("");
+  const [editMaterialDetails, setEditMaterialDetails] = React.useState("");
+  const [editReason, setEditReason] = React.useState("");
+  const [cancelOpen, setCancelOpen] = React.useState(false);
+  const [cancelReason, setCancelReason] = React.useState("");
   const profit = {
     revenue: order.price,
     materialCost: order.externalMaterialCost,
@@ -58,6 +94,24 @@ export function OrderDetail({
     ? measurementRevisionHistory(profiles, selectedProfile)
     : [];
   const qualityCheck = order.qualityCheck ?? null;
+
+  function openOperationalEditor() {
+    setEditDeliveryDate(order.deliveryDate ? String(order.deliveryDate).slice(0, 10) : "");
+    setEditNotes(order.notes ?? "");
+    setEditMaterialDetails(order.materialDetails ?? "");
+    setEditReason("");
+    setEditOpen(true);
+  }
+
+  function saveOperationalEdit() {
+    if (!onUpdateOperationalDetails || editReason.trim().length < 3) return;
+    onUpdateOperationalDetails({
+      deliveryDate: editDeliveryDate || null,
+      notes: editNotes.trim() || null,
+      materialDetails: editMaterialDetails.trim() || null,
+    }, editReason.trim());
+    setEditOpen(false);
+  }
 
   function addQcIssue() {
     const issue = qcIssue.trim();
@@ -85,6 +139,9 @@ export function OrderDetail({
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setPrintPreviewPaper("a4")}>Preview A4</Button>
           <Button variant="outline" onClick={() => setPrintPreviewPaper("thermal")}>Preview Thermal</Button>
+          {onUpdateOperationalDetails && order.status !== "delivered" && order.status !== "cancelled" && (
+            <Button variant="outline" onClick={openOperationalEditor}>Edit / Reschedule</Button>
+          )}
           {onClose && <Button variant="outline" onClick={onClose}>Close</Button>}
         </div>
       </div>
@@ -131,7 +188,7 @@ export function OrderDetail({
               </select>
               <button
                 type="button"
-                onClick={() => onStatusChange("cancelled", refundPaymentMethod)}
+                onClick={() => { setCancelReason(""); setCancelOpen(true); }}
                 className="rounded-full px-3 py-1 text-xs font-medium text-rose-600 ring-1 ring-inset ring-rose-200"
               >
                 Refund {formatMoney(order.advance)} & Cancel
@@ -140,7 +197,7 @@ export function OrderDetail({
           ) : (
             <button
               type="button"
-              onClick={() => onStatusChange("cancelled")}
+              onClick={() => { setCancelReason(""); setCancelOpen(true); }}
               className="rounded-full px-3 py-1 text-xs font-medium text-rose-600 ring-1 ring-inset ring-rose-200"
             >
               Cancel
@@ -320,7 +377,100 @@ export function OrderDetail({
         </Card>
       )}
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold text-slate-800">Order history</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {auditHistory.length === 0 && <p className="text-sm text-slate-400">No audit events recorded for this order yet.</p>}
+          {auditHistory.map((entry) => {
+            const reason = auditReason(entry);
+            return (
+              <div key={entry.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-slate-800">{auditActionLabel(entry.action)}</span>
+                  <span className="text-xs text-slate-400">{new Date(entry.createdAt).toLocaleString("en-IN")}</span>
+                </div>
+                <div className="mt-0.5 text-xs text-slate-500">{entry.userName || "System"}</div>
+                {reason && <div className="mt-1 text-sm text-slate-600"><span className="font-medium">Reason:</span> {reason}</div>}
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
       {order.notes && <p className="text-sm text-slate-600"><span className="font-medium">Notes:</span> {order.notes}</p>}
+      <Modal
+        open={editOpen}
+        title={`Edit / reschedule ${order.orderNumber}`}
+        onClose={() => setEditOpen(false)}
+        footer={<>
+          <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+          <Button disabled={editReason.trim().length < 3} onClick={saveOperationalEdit}>Save operational changes</Button>
+        </>}
+      >
+        <div className="space-y-3">
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">
+            Customer, service type and financial values are locked after creation because this order is already linked to receivables/accounting. Operational details can still be corrected safely.
+          </div>
+          <FormField label="Delivery date">
+            <input type="date" className={inputClass} value={editDeliveryDate} onChange={(e) => setEditDeliveryDate(e.target.value)} />
+          </FormField>
+          <FormField label="Material details">
+            <textarea className={inputClass + " h-20 py-2"} value={editMaterialDetails} onChange={(e) => setEditMaterialDetails(e.target.value)} />
+          </FormField>
+          <FormField label="Notes">
+            <textarea className={inputClass + " h-20 py-2"} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
+          </FormField>
+          <FormField label="Change reason *">
+            <textarea className={inputClass + " h-20 py-2"} value={editReason} onChange={(e) => setEditReason(e.target.value)} placeholder="Why is this order being changed?" />
+          </FormField>
+        </div>
+      </Modal>
+
+      <Modal
+        open={cancelOpen}
+        title={`Cancel ${order.orderNumber}`}
+        onClose={() => { setCancelOpen(false); setCancelReason(""); }}
+        footer={<>
+          <Button variant="outline" onClick={() => { setCancelOpen(false); setCancelReason(""); }}>Keep order</Button>
+          <Button
+            disabled={cancelReason.trim().length < 3}
+            onClick={() => {
+              onStatusChange?.("cancelled", {
+                refundPaymentMethod: order.advance > 0 ? refundPaymentMethod : undefined,
+                reason: cancelReason.trim(),
+              });
+              setCancelOpen(false);
+              setCancelReason("");
+            }}
+          >
+            {order.advance > 0 ? `Refund ${formatMoney(order.advance)} & cancel` : "Confirm cancellation"}
+          </Button>
+        </>}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">
+            Cancellation reverses the service-order accounting and customer balances. A reason is mandatory and the event remains in the audit trail.
+          </p>
+          {order.advance > 0 && (
+            <FormField label="Refund method">
+              <select className={inputClass} value={refundPaymentMethod} onChange={(e) => setRefundPaymentMethod(e.target.value as PaymentMethod)}>
+                <option value="cash">Cash</option>
+                <option value="bank">Bank</option>
+                <option value="card">Card</option>
+                <option value="upi">UPI</option>
+                <option value="online">Online</option>
+                <option value="other">Other</option>
+              </select>
+            </FormField>
+          )}
+          <FormField label="Cancellation reason *">
+            <textarea className={inputClass + " h-20 py-2"} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Why is this order being cancelled?" />
+          </FormField>
+        </div>
+      </Modal>
+
       {printPreviewPaper && (
         <PrintPreviewModal
           open

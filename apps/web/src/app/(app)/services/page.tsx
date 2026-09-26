@@ -6,7 +6,7 @@ import {
   OrderList, OrderForm, emptyOrderForm, OrderDetail, Modal,
   type OrderFormValues,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, printOrderReceipt, phase6Store, templateFromOrderReady } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, printOrderReceipt, templateFromOrderReady } from "@minarvabiz/business-logic";
 import type {
   ServiceOrder, Customer, ExpenseCategory, MeasurementProfile, PaymentMethod, ServiceType, OrderStatus,
 } from "@minarvabiz/types";
@@ -19,6 +19,11 @@ export default function ServicesOrdersPage() {
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<OrderStatus | null>(null);
   const [serviceType, setServiceType] = React.useState<ServiceType | null>(null);
+  const [customerId, setCustomerId] = React.useState<string | null>(null);
+  const [orderDateFrom, setOrderDateFrom] = React.useState("");
+  const [orderDateTo, setOrderDateTo] = React.useState("");
+  const [deliveryDateFrom, setDeliveryDateFrom] = React.useState("");
+  const [deliveryDateTo, setDeliveryDateTo] = React.useState("");
   const [createOpen, setCreateOpen] = React.useState(false);
   const [form, setForm] = React.useState<OrderFormValues>(emptyOrderForm());
   const [error, setError] = React.useState<string | null>(null);
@@ -32,8 +37,13 @@ export default function ServicesOrdersPage() {
       query: query || undefined,
       status: status ?? undefined,
       serviceType: serviceType ?? undefined,
+      customerId: customerId ?? undefined,
+      orderDateFrom: orderDateFrom || undefined,
+      orderDateTo: orderDateTo || undefined,
+      deliveryDateFrom: deliveryDateFrom || undefined,
+      deliveryDateTo: deliveryDateTo || undefined,
     }));
-  }, [query, status, serviceType]);
+  }, [query, status, serviceType, customerId, orderDateFrom, orderDateTo, deliveryDateFrom, deliveryDateTo]);
 
   React.useEffect(() => { refresh(); }, [refresh]);
 
@@ -92,9 +102,9 @@ export default function ServicesOrdersPage() {
     try { printOrderReceipt(result.order); } catch { /* blocked */ }
   }
 
-  function handleStatus(status: OrderStatus, refundPaymentMethod?: PaymentMethod) {
+  function handleStatus(status: OrderStatus, options?: { refundPaymentMethod?: PaymentMethod; reason?: string }) {
     if (!selected) return;
-    const res = ordersStore.updateOrderStatus(selected.id, status, { refundPaymentMethod });
+    const res = ordersStore.updateOrderStatus(selected.id, status, options);
     if (!res.order) {
       setStatusError(res.error ?? "Unable to update service order status");
       return;
@@ -113,6 +123,21 @@ export default function ServicesOrdersPage() {
       }
       refresh();
     }
+  }
+
+  function handleOperationalUpdate(
+    input: { deliveryDate: string | null; notes: string | null; materialDetails: string | null },
+    reason: string
+  ) {
+    if (!selected) return;
+    const result = ordersStore.updateOrderOperationalDetails(selected.id, input, reason);
+    if (result.errors.length || !result.order) {
+      setStatusError(result.errors.join("; ") || "Unable to update service order");
+      return;
+    }
+    setStatusError(null);
+    setSelected({ ...result.order });
+    refresh();
   }
 
   function handleExpense(input: { description: string; amount: number; categoryId: string; paymentMethod: PaymentMethod }) {
@@ -152,10 +177,16 @@ export default function ServicesOrdersPage() {
       {!selected && (
         <OrderList
           orders={orders}
+          customers={customers}
           onAdd={() => { setForm(emptyOrderForm()); setCreateOpen(true); }}
           onSearch={setQuery}
           onFilterStatus={setStatus}
           onFilterType={setServiceType}
+          onFilterCustomer={setCustomerId}
+          onFilterOrderDateFrom={setOrderDateFrom}
+          onFilterOrderDateTo={setOrderDateTo}
+          onFilterDeliveryDateFrom={setDeliveryDateFrom}
+          onFilterDeliveryDateTo={setDeliveryDateTo}
           onSelect={setSelected}
         />
       )}
@@ -167,6 +198,8 @@ export default function ServicesOrdersPage() {
           expenseCategories={expenseCategories}
           onStatusChange={handleStatus}
           onAddExpense={handleExpense}
+          onUpdateOperationalDetails={handleOperationalUpdate}
+          auditHistory={phase7Store.listAuditLogs(500).filter((entry) => entry.tableName === "orders" && entry.recordId === selected.id)}
           onClose={() => { setSelected(null); setStatusError(null); }}
         />
         </>
