@@ -237,7 +237,7 @@ export function QuotationsPanel() {
           Status
           <select className={selectClass + " mt-1"} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
             <option value="">All statuses</option>
-            {statuses.map((status) => <option key={status} value={status} disabled={!canSetQuotationStatus(q, status)}>{status}</option>)}
+            {statuses.map((status) => <option key={status} value={status}>{status}</option>)}
           </select>
         </label>
         <div className="grid grid-cols-2 gap-2">
@@ -278,7 +278,7 @@ export function QuotationsPanel() {
                     refresh();
                   }}
                 >
-                  {statuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                  {statuses.map((status) => <option key={status} value={status} disabled={!canSetQuotationStatus(q, status)}>{status}</option>)}
                 </select>
                 {canEditQuotation(q) && <Button size="sm" variant="outline" onClick={() => openEditor(q)}>Edit</Button>}
                 <Button size="sm" variant="outline" onClick={() => setPreview({ quotation: q, paper: "a4" })}>A4 Preview</Button>
