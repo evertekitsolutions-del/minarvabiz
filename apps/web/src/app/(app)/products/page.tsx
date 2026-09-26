@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { store, generateProductBarcode, printBarcodeLabels } from "@minarvabiz/business-logic";
+import { ProductList, Modal, Button, FormField, inputClass, selectClass, PrintPreviewModal } from "@minarvabiz/ui";
+import { store, generateProductBarcode, buildBarcodeLabelHtml, getPrintSettings, printPreparedHtml } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 
@@ -18,6 +18,7 @@ export default function ProductsPage() {
   const [stockQty, setStockQty] = React.useState("");
   const [labelProduct, setLabelProduct] = React.useState<Product | null>(null);
   const [labelCopies, setLabelCopies] = React.useState("1");
+  const [labelPreview, setLabelPreview] = React.useState<{ html: string; width: number; height: number; title: string } | null>(null);
   const [categoryOpen, setCategoryOpen] = React.useState(false);
   const [categoryName, setCategoryName] = React.useState("");
   const [categoryDescription, setCategoryDescription] = React.useState("");
@@ -187,8 +188,26 @@ export default function ProductsPage() {
       <Modal open={!!stockProduct} title="Update Stock Quantity" onClose={() => setStockProduct(null)} footer={<><Button variant="outline" onClick={() => setStockProduct(null)}>Cancel</Button><Button onClick={adjustStock}>Update Stock</Button></>}>
         <div className="space-y-3"><p className="text-sm text-slate-600">{stockProduct?.name} · Current stock: <strong>{stockProduct?.stockQuantity}</strong></p><FormField label="New stock quantity"><input className={inputClass} type="number" min="0" value={stockQty} onChange={(e) => setStockQty(e.target.value)} /></FormField></div>
       </Modal>
-      <Modal open={!!labelProduct} title="Print Barcode Label" onClose={() => setLabelProduct(null)} footer={<><Button variant="outline" onClick={() => setLabelProduct(null)}>Cancel</Button><Button onClick={() => { if (!labelProduct?.barcode) { setError("Generate a barcode before printing."); return; } const category = categories.find((cat) => cat.id === labelProduct.categoryId); printBarcodeLabels(labelProduct, Math.max(1, parseInt(labelCopies, 10) || 1), category?.name || null); }}>Print Label</Button></>}>
-        <div className="space-y-3"><p className="text-sm font-medium">{labelProduct?.name}</p><p className="text-xs text-slate-500">Barcode: {labelProduct?.barcode || "Not generated"}</p><FormField label="Copies"><input className={inputClass} type="number" min="1" max="100" value={labelCopies} onChange={(e) => setLabelCopies(e.target.value)} /></FormField></div>
+      <PrintPreviewModal
+        open={Boolean(labelPreview)}
+        title={labelPreview?.title || "Label Preview"}
+        html={labelPreview?.html || ""}
+        paper="label"
+        onClose={() => setLabelPreview(null)}
+        onPrint={() => { if (labelPreview) printPreparedHtml(labelPreview.html, "label", { labelWidthMm: labelPreview.width, labelHeightMm: labelPreview.height }); }}
+      />
+      <Modal open={!!labelProduct} title="Print Barcode / QR Label" onClose={() => setLabelProduct(null)} footer={<><Button variant="outline" onClick={() => setLabelProduct(null)}>Cancel</Button><Button onClick={() => {
+        if (!labelProduct) return;
+        const category = categories.find((cat) => cat.id === labelProduct.categoryId);
+        const settings = getPrintSettings();
+        setLabelPreview({
+          title: `${labelProduct.name} — Label Preview`,
+          html: buildBarcodeLabelHtml(labelProduct, { copies: Math.max(1, parseInt(labelCopies, 10) || 1), categoryName: category?.name || null, autoPrint: false, labelWidthMm: settings.labelWidthMm, labelHeightMm: settings.labelHeightMm }),
+          width: settings.labelWidthMm,
+          height: settings.labelHeightMm,
+        });
+      }}>Preview Label</Button></>}>
+        <div className="space-y-3"><p className="text-sm font-medium">{labelProduct?.name}</p><p className="text-xs text-slate-500">Machine code: {labelProduct?.barcode || labelProduct?.sku || "Product ID fallback"} · Mode: {getPrintSettings().labelCodeMode}</p><FormField label="Copies"><input className={inputClass} type="number" min="1" max="100" value={labelCopies} onChange={(e) => setLabelCopies(e.target.value)} /></FormField></div>
       </Modal>
     </>
   );
