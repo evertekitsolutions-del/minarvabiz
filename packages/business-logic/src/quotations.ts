@@ -9,14 +9,17 @@ import { enqueueOutbox } from "./outbox-bridge";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
 import { escapeHtml } from "./html";
+import { getShopProfile } from "./shop-profile";
+import { nextBusinessDocumentNumber } from "./document-numbering";
 
 const quotations: Quotation[] = [];
-let lastQuo = 0;
-
 function nextQuotationNumber(): string {
-  lastQuo += 1;
-  const y = new Date().getFullYear();
-  return `QT-${y}-${String(lastQuo).padStart(5, "0")}`;
+  const shop = getShopProfile();
+  return nextBusinessDocumentNumber("quotation", quotations.map((q) => q.quotationNumber), {
+    businessCode: shop.documentCode,
+    businessName: shop.shopName,
+    financialYearStartMonth: shop.financialYearStartMonth,
+  });
 }
 
 function round2(n: number) {
@@ -208,9 +211,8 @@ export function hydrateQuotations(data: { quotations?: Quotation[]; lastQuo?: nu
     quotations.length = 0;
     quotations.push(...data.quotations);
   }
-  if (typeof data.lastQuo === "number") lastQuo = data.lastQuo;
 }
 
 export function exportQuotationsState() {
-  return { quotations: [...quotations], lastQuo };
+  return { quotations: [...quotations] };
 }
