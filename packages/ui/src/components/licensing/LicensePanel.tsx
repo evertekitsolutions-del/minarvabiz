@@ -60,13 +60,19 @@ export function LicensePanel({
   onStartTrial,
   onDeactivate,
   onRefresh,
+  licenseId,
+  activationId,
+  deviceFingerprint,
 }: {
   state: LicenseViewState;
   usage: UsageView;
   onActivateToken: (token: string) => void;
-  onStartTrial: () => void;
-  onDeactivate: () => void;
+  onStartTrial?: () => void;
+  onDeactivate?: () => void;
   onRefresh?: () => void;
+  licenseId?: string | null;
+  activationId?: string | null;
+  deviceFingerprint?: string | null;
 }) {
   const [token, setToken] = React.useState("");
   const warning = expiryWarning(state.daysRemaining, state.status);
@@ -131,6 +137,20 @@ export function LicensePanel({
       )}
 
       <Card>
+        <CardHeader><CardTitle className="text-sm font-semibold">License identity & renewal</CardTitle></CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div><div className="text-xs text-slate-500">License ID</div><div className="break-all font-mono text-xs text-slate-800">{licenseId || "Not activated"}</div></div>
+            <div><div className="text-xs text-slate-500">Activation ID</div><div className="break-all font-mono text-xs text-slate-800">{activationId || "—"}</div></div>
+            <div className="md:col-span-2"><div className="text-xs text-slate-500">Device fingerprint</div><div className="break-all font-mono text-xs text-slate-800">{deviceFingerprint || "Loading…"}</div></div>
+          </div>
+          <div className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">
+            To renew an Offline license, send the License ID and Device Fingerprint to your software provider. Paste the renewed signed token below; your business data is preserved.
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader><CardTitle className="text-sm font-semibold">Plan limits & usage</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -167,7 +187,7 @@ export function LicensePanel({
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-sm font-semibold">Activate license</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-sm font-semibold">Activate / renew license</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <FormField label="License token (Ed25519 signed)">
             <textarea
@@ -178,9 +198,9 @@ export function LicensePanel({
             />
           </FormField>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => onActivateToken(token.trim())} disabled={!token.trim()}>Activate token</Button>
-            <Button variant="outline" onClick={onStartTrial}>Start trial</Button>
-            <Button variant="outline" onClick={onDeactivate}>Deactivate</Button>
+            <Button onClick={() => onActivateToken(token.trim())} disabled={!token.trim()}>Activate / Renew</Button>
+            {onStartTrial && <Button variant="outline" onClick={onStartTrial}>Start trial</Button>}
+            {onDeactivate && <Button variant="outline" onClick={onDeactivate}>Deactivate</Button>}
           </div>
         </CardContent>
       </Card>
