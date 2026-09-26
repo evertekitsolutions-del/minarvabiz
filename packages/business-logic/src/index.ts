@@ -80,3 +80,7 @@ export * from "./print-settings";
 export * from "./return-value";
 
 export * from "./document-numbering";
+
+export * from "./print-templates";
+
+export * from "./print-document-render";

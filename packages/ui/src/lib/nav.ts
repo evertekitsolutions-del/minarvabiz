@@ -3,7 +3,7 @@
  */
 
 export type NavItemId =
-  | "dashboard" | "sales" | "products" | "warehouse" | "services" | "laundry" | "expenses" | "purchases"
+  | "dashboard" | "sales" | "quotations" | "products" | "warehouse" | "services" | "laundry" | "expenses" | "purchases"
   | "customers" | "customer-crm" | "staff" | "staff-detail" | "suppliers" | "payments" | "accounting" | "returns"
   | "reports" | "day-end" | "audit" | "notifications" | "settings" | "backup" | "license";
 
@@ -12,6 +12,7 @@ export interface NavItem { id: NavItemId; label: string; href: string; icon: str
 export const MAIN_NAV: NavItem[] = [
   { id: "dashboard", label: "Dashboard", href: "/dashboard", icon: "layout-dashboard" },
   { id: "sales", label: "Sales & Billing", href: "/sales", icon: "shopping-bag" },
+  { id: "quotations", label: "Quotations", href: "/quotations", icon: "file-text" },
   { id: "products", label: "Products & Inventory", href: "/products", icon: "package" },
   { id: "warehouse", label: "Warehouse / WMS", href: "/warehouse", icon: "package" },
   { id: "services", label: "Services & Orders", href: "/services", icon: "scissors" },

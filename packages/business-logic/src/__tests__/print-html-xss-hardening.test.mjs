@@ -13,6 +13,7 @@ const quotations = read("../quotations.ts");
 const delivery = read("../delivery.ts");
 const barcode = read("../barcode-labels.ts");
 const cash = read("../cash-register.ts");
+const documentRenderer = read("../print-document-render.ts");
 
 assert.match(helper, /export function escapeHtml\(value: unknown\)/);
 for (const entity of ["&amp;", "&lt;", "&gt;", "&quot;", "&#39;"]) {
@@ -33,8 +34,10 @@ assert.match(receipt, /<title>\$\{escapeHtml\(sale\.invoiceNumber\)\}<\/title>/)
 assert.match(receipt, /<title>\$\{escapeHtml\(order\.orderNumber\)\}<\/title>/);
 assert.match(receipt, /const escaped = escapeHtml\(text\)/);
 
-assert.match(quotations, /escapeHtml\(l\.description\)/);
-assert.match(quotations, /escapeHtml\(q\.customerName \|\| ""\)/);
+assert.match(quotations, /escapeHtml\((?:l|line)\.description\)/);
+assert.match(quotations, /customerBlockHtml\(template, customer, q\.customerName \|\| ""\)/);
+assert.match(documentRenderer, /escapeHtml\(name\)/);
+assert.match(documentRenderer, /escapeHtml\(customer\.address\)/);
 assert.match(quotations, /escapeHtml\(q\.quotationNumber\)/);
 
 assert.match(delivery, /<pre>\$\{escapeHtml\(text\)\}<\/pre>/);

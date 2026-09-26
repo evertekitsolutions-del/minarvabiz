@@ -3,11 +3,12 @@
 import * as React from "react";
 import type { ExpenseCategory, MeasurementProfile, PaymentMethod, ServiceOrder, OrderStatus } from "@minarvabiz/types";
 import { Button } from "../Button";
+import { PrintPreviewModal } from "../printing/PrintPreviewModal";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
 import {
   SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_FLOW,
-  measurementRevisionHistory, ordersStore, printOrderInvoice,
+  measurementRevisionHistory, ordersStore, buildOrderInvoiceHtml, printOrderInvoice,
 } from "@minarvabiz/business-logic";
 
 function measurementLabel(key: string): string {
@@ -41,6 +42,7 @@ export function OrderDetail({
   const [qcNotes, setQcNotes] = React.useState("");
   const [qcIssue, setQcIssue] = React.useState("");
   const [qcIssues, setQcIssues] = React.useState<string[]>([]);
+  const [printPreviewPaper, setPrintPreviewPaper] = React.useState<"a4" | "thermal" | null>(null);
   const profit = {
     revenue: order.price,
     materialCost: order.externalMaterialCost,
@@ -81,8 +83,8 @@ export function OrderDetail({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => printOrderInvoice(order, "a4")}>Print A4</Button>
-          <Button variant="outline" onClick={() => printOrderInvoice(order, "thermal")}>Print Thermal</Button>
+          <Button variant="outline" onClick={() => setPrintPreviewPaper("a4")}>Preview A4</Button>
+          <Button variant="outline" onClick={() => setPrintPreviewPaper("thermal")}>Preview Thermal</Button>
           {onClose && <Button variant="outline" onClick={onClose}>Close</Button>}
         </div>
       </div>
@@ -319,6 +321,16 @@ export function OrderDetail({
       )}
 
       {order.notes && <p className="text-sm text-slate-600"><span className="font-medium">Notes:</span> {order.notes}</p>}
+      {printPreviewPaper && (
+        <PrintPreviewModal
+          open
+          title={`Service invoice ${order.orderNumber}`}
+          html={buildOrderInvoiceHtml(order, { paper: printPreviewPaper, autoPrint: false })}
+          paper={printPreviewPaper}
+          onClose={() => setPrintPreviewPaper(null)}
+          onPrint={() => printOrderInvoice(order, printPreviewPaper)}
+        />
+      )}
     </div>
   );
 }

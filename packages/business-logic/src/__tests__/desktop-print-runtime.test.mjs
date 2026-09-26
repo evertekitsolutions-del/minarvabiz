@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
-import { register } from "node:module";
+import fs from "node:fs";
+import { createRequire } from "node:module";
 
-register(new URL("../../../../scripts/ts-source-test-loader.mjs", import.meta.url));
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
+require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+}).outputText, filename);
 
-const printSettings = await import(new URL("../print-settings.ts", import.meta.url));
-const desktopPrint = await import(new URL("../desktop-print.ts", import.meta.url));
-const barcode = await import(new URL("../barcode-labels.ts", import.meta.url));
-const invoice = await import(new URL("../invoice.ts", import.meta.url));
-const receipt = await import(new URL("../receipt.ts", import.meta.url));
+
+const printSettings = require("../print-settings.ts");
+const desktopPrint = require("../desktop-print.ts");
+const barcode = require("../barcode-labels.ts");
+const invoice = require("../invoice.ts");
+const receipt = require("../receipt.ts");
 
 printSettings.hydratePrintSettings({
   defaultInvoicePaper: "thermal",

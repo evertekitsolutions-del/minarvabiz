@@ -1,29 +1,35 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import fs from "node:fs";
+import { createRequire } from "node:module";
 
-import { register } from "node:module";
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
+require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+}).outputText, filename);
 
-register(new URL("../../../../scripts/ts-source-test-loader.mjs", import.meta.url));
+
 
 const {
   buildBarcodeLabelHtml,
   ean13CheckDigit,
   isValidEan13,
   printBarcodeLabels,
-} = await import("../barcode-labels.ts");
-const { tryDesktopPrintHtml } = await import("../desktop-print.ts");
-const { buildSaleInvoiceHtml, printSaleInvoice } = await import("../invoice.ts");
+} = require("../barcode-labels.ts");
+const { tryDesktopPrintHtml } = require("../desktop-print.ts");
+const { buildSaleInvoiceHtml, printSaleInvoice } = require("../invoice.ts");
 const {
   getPrintSettings,
   hydratePrintSettings,
   updatePrintSettings,
-} = await import("../print-settings.ts");
+} = require("../print-settings.ts");
 const {
   buildOrderReceiptHtml,
   buildSaleReceiptHtml,
   printOrderReceipt,
   printSaleReceipt,
-} = await import("../receipt.ts");
+} = require("../receipt.ts");
 
 const iso = "2026-09-25T12:00:00.000Z";
 

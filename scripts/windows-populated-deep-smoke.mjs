@@ -1,3 +1,4 @@
+import { verifyPrintTemplates } from "./print-template-ui-smoke.mjs";
 const base = "http://127.0.0.1:9222";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function json(path) { const r = await fetch(`${base}${path}`); if (!r.ok) throw new Error(`CDP HTTP ${r.status}`); return r.json(); }
@@ -548,6 +549,8 @@ async function main() {
     await click(ws, "DASHBOARD_AFTER_SETTINGS", ["dashboard"]);
     await click(ws, "SETTINGS_REOPEN", ["settings"]);
     await assertMainFieldValue(ws, "Business / trade name", "QA Minarva Shop");
+
+  await verifyPrintTemplates(expression => evalIn(ws, expression));
 
     // Automatic backup is a non-dialog desktop action and must create a verifiable file.
     await click(ws, "BACKUP", ["backup & restore"]);

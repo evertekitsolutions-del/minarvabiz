@@ -2,7 +2,7 @@
  * Quotation / estimate system
  */
 import type { Quotation, QuotationLine, QuotationStatus, UUID } from "@minarvabiz/types";
-import { generateId, nowISO } from "@minarvabiz/utils";
+import { formatMoney, generateId, nowISO } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { touchPersistence } from "./autosave";
 import { enqueueOutbox } from "./outbox-bridge";
@@ -11,6 +11,10 @@ import * as ordersStore from "./orders-store";
 import { escapeHtml } from "./html";
 import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
+import { getPrintSettings, getPrintTemplate, getPrintTemplateById } from "./print-settings";
+import { businessHeaderHtml, customerBlockHtml, documentCss, documentFooterHtml } from "./print-document-render";
+import { tryDesktopPrintHtml } from "./desktop-print";
+import type { PrintPaper } from "./print-templates";
 
 const quotations: Quotation[] = [];
 function nextQuotationNumber(): string {
@@ -180,31 +184,54 @@ export function convertQuotationToOrder(id: UUID, serviceType: string = "ladies_
   return { orderId: result.order!.id };
 }
 
-export function buildQuotationHtml(q: Quotation): string {
-  const rows = q.lines
-    .map(
-      (l) =>
-        `<tr><td>${escapeHtml(l.description)}</td><td>${l.quantity}</td><td>${l.unitPrice}</td><td>${l.lineTotal}</td></tr>`
-    )
-    .join("");
-  return `<!DOCTYPE html><html><head><title>${escapeHtml(q.quotationNumber)}</title>
-<style>body{font-family:system-ui;padding:16px}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #e2e8f0;padding:6px;text-align:left}</style></head>
-<body><h1>Quotation ${escapeHtml(q.quotationNumber)}</h1>
-<p>Customer: ${escapeHtml(q.customerName || "")} · Status: ${escapeHtml(q.status)}</p>
-<p>Valid until: ${escapeHtml(q.validUntil || "—")}</p>
-<table><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead>
-<tbody>${rows}</tbody></table>
-<p>Material: ${q.materialCharges} · Labour: ${q.labourCharges}</p>
-<p>Subtotal: ${q.subtotal} · Discount: ${q.discount} · Tax: ${q.tax}</p>
-<p><strong>Total: ${q.total}</strong> · Advance: ${q.advance} · Balance: ${q.balance}</p>
-<script>window.onload=function(){window.print()}</script></body></html>`;
+export function buildQuotationHtml(
+  q: Quotation,
+  opts?: { paper?: PrintPaper; autoPrint?: boolean; templateId?: string },
+): string {
+  const settings = getPrintSettings();
+  const paper = opts?.paper ?? settings.defaultInvoicePaper;
+  const template = (opts?.templateId ? getPrintTemplateById(opts.templateId) : null) ?? getPrintTemplate("quotation", paper);
+  const width = paper === "thermal" ? `${settings.thermalWidthMm}mm` : "210mm";
+  const autoPrint = opts?.autoPrint === true;
+  const customer = mainStore.getCustomer(q.customerId);
+  const rows = q.lines.map((line, index) => `<tr>
+    <td class="c">${index + 1}</td>
+    <td>${escapeHtml(line.description)}${template.showSku && line.productId ? `<div class="meta">Ref: ${escapeHtml(line.productId.slice(0, 8))}</div>` : ""}</td>
+    <td class="r">${line.quantity}</td>
+    <td class="r nowrap">${formatMoney(line.unitPrice)}</td>
+    <td class="r nowrap">${formatMoney(line.lineTotal)}</td>
+  </tr>`).join("");
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${escapeHtml(q.quotationNumber)}</title>
+<style>${documentCss(template, width)}</style></head><body><div class="sheet">
+${businessHeaderHtml(template, {
+  number: q.quotationNumber,
+  date: q.createdAt,
+  fallbackTitle: "QUOTATION",
+  extraMeta: q.validUntil ? `Valid until: ${new Date(q.validUntil).toLocaleDateString("en-IN")}` : `Status: ${q.status}`,
+})}
+${customerBlockHtml(template, customer, q.customerName || "")}
+<table><thead><tr><th class="c">#</th><th>Description</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead><tbody>${rows}</tbody></table>
+<table class="totals">
+${q.materialCharges ? `<tr><td>Material charges</td><td class="r">${formatMoney(q.materialCharges)}</td></tr>` : ""}
+${q.labourCharges ? `<tr><td>Labour charges</td><td class="r">${formatMoney(q.labourCharges)}</td></tr>` : ""}
+<tr><td>Subtotal</td><td class="r">${formatMoney(q.subtotal)}</td></tr>
+${q.discount ? `<tr><td>Discount</td><td class="r">− ${formatMoney(q.discount)}</td></tr>` : ""}
+${template.showTax && q.tax ? `<tr><td>GST / Tax</td><td class="r">${formatMoney(q.tax)}</td></tr>` : ""}
+<tr class="grand"><td>Total</td><td class="r">${formatMoney(q.total)}</td></tr>
+${template.showPaymentSummary ? `<tr><td>Advance</td><td class="r">${formatMoney(q.advance)}</td></tr><tr><td>Balance</td><td class="r">${formatMoney(q.balance)}</td></tr>` : ""}
+</table>
+${documentFooterHtml(template, q.notes)}
+</div>${autoPrint ? "<script>window.onload=function(){window.print&&window.print()}</script>" : ""}</body></html>`;
 }
 
-export function printQuotation(q: Quotation) {
+export function printQuotation(q: Quotation, paper?: PrintPaper, templateId?: string) {
   if (typeof window === "undefined") return;
-  const w = window.open("", "_blank", "width=800,height=900");
+  const selectedPaper = paper ?? getPrintSettings().defaultInvoicePaper;
+  const directHtml = buildQuotationHtml(q, { paper: selectedPaper, autoPrint: false, templateId });
+  if (tryDesktopPrintHtml(directHtml, selectedPaper)) return;
+  const w = window.open("", "_blank", selectedPaper === "thermal" ? "width=420,height=700" : "width=900,height=900");
   if (!w) return;
-  w.document.write(buildQuotationHtml(q));
+  w.document.write(buildQuotationHtml(q, { paper: selectedPaper, autoPrint: true, templateId }));
   w.document.close();
 }
 

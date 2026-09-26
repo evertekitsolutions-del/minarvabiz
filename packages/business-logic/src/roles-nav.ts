@@ -2,7 +2,7 @@
 import type { RoleName } from "@minarvabiz/types";
 
 const ALL = [
-  "dashboard", "sales", "services", "laundry", "expenses", "customers",
+  "dashboard", "sales", "quotations", "services", "laundry", "expenses", "customers",
   "staff", "accounting", "reports", "sms", "settings", "backup",
 ] as const;
 
@@ -11,8 +11,8 @@ export type NavId = (typeof ALL)[number];
 const ROLE_NAV: Record<RoleName, readonly NavId[]> = {
   super_admin: ALL,
   admin: ALL,
-  manager: ["dashboard", "sales", "services", "laundry", "expenses", "customers", "staff", "accounting", "reports", "sms", "settings"],
-  cashier: ["dashboard", "sales", "customers", "sms"],
+  manager: ["dashboard", "sales", "quotations", "services", "laundry", "expenses", "customers", "staff", "accounting", "reports", "sms", "settings"],
+  cashier: ["dashboard", "sales", "quotations", "customers", "sms"],
   tailor: ["dashboard", "services", "customers"],
   staff: ["dashboard", "services", "laundry"],
 };
