@@ -92,7 +92,7 @@ export function OfflineModulesPanel({
 
   if (activeNav === "payments") {
     const outstanding = store.listCustomers().filter((c) => c.outstandingBalance > 0);
-    return <><PaymentsPanel outstanding={outstanding} payments={store.listPayments().filter((p) => p.referenceType !== "supplier")} onCollect={(data) => {
+    return <><PaymentsPanel outstanding={outstanding} payments={store.listPayments()} customers={store.listCustomers()} suppliers={phase5Store.listSuppliers()} onCollect={(data) => {
       try {
         const result = store.recordCustomerPayment(data);
         if (!result.errors.length) { setActionError(null); persistDesktop(); refresh(); }
