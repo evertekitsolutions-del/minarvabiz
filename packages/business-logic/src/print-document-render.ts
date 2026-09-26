@@ -40,7 +40,7 @@ body{padding:${padding}}
 .party-box{flex:1;border:1px solid ${border};border-radius:8px;padding:9px}
 .party-label{font-size:.75em;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:4px}
 table{width:100%;border-collapse:collapse;margin-top:12px}
-th{background:${template.layout === "minimal" ? "#fff" : "#f8fafc"};font-size:.82em;text-transform:uppercase;letter-spacing:.04em}
+th{background:${template.layout === "compact" ? "#fff" : "#f8fafc"};font-size:.82em;text-transform:uppercase;letter-spacing:.04em}
 th,td{border-bottom:1px solid ${border};padding:${compact ? "5px 3px" : "7px 5px"};text-align:left;vertical-align:top}
 .r{text-align:right}.c{text-align:center}.nowrap{white-space:nowrap}
 .totals{margin-left:auto;max-width:${compact ? "100%" : "340px"}}
