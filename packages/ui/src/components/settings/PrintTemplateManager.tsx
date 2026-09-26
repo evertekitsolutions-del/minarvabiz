@@ -59,6 +59,7 @@ export function PrintTemplateManager() {
 
   function save() {
     if (!draft) return;
+    if (!window.confirm(`Save changes to print template “${draft.name}”? Future documents using this template will use the new design/content.`)) return;
     const saved = savePrintTemplate(draft);
     refresh(saved.id);
     setMessage("Template saved.");
