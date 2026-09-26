@@ -74,6 +74,15 @@ export function ReturnsPanel({
   const [additionalPaid, setAdditionalPaid] = React.useState("");
   const autoOpenedSaleRef = React.useRef<string | null>(null);
 
+  const [historyQuery, setHistoryQuery] = React.useState("");
+  const [historyCustomer, setHistoryCustomer] = React.useState("");
+  const [historyResolution, setHistoryResolution] = React.useState("");
+  const [historyReason, setHistoryReason] = React.useState("");
+  const [historyRefundMethod, setHistoryRefundMethod] = React.useState("");
+  const [historyDateFrom, setHistoryDateFrom] = React.useState("");
+  const [historyDateTo, setHistoryDateTo] = React.useState("");
+  const [detailReturn, setDetailReturn] = React.useState<SaleReturn | null>(null);
+
   const sale = sales.find((s) => s.id === saleId);
 
   React.useEffect(() => {
@@ -121,6 +130,47 @@ export function ReturnsPanel({
   const amountDue = Math.max(0, replacementTotals.grandTotal - creditApplied);
   const extraRefund = Math.max(0, paidCreditAvailable - creditApplied);
 
+  const historyCustomers = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const ret of returns) {
+      if (ret.customerId) map.set(ret.customerId, ret.customerName || "Customer");
+    }
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [returns]);
+
+  const filteredReturns = React.useMemo(() => {
+    const query = historyQuery.trim().toLowerCase();
+    return returns.filter((ret) => {
+      if (historyCustomer === "__walkin" && ret.customerId) return false;
+      if (historyCustomer && historyCustomer !== "__walkin" && ret.customerId !== historyCustomer) return false;
+      if (historyResolution && (ret.resolution || "refund") !== historyResolution) return false;
+      if (historyReason && ret.reason !== historyReason) return false;
+      if (historyRefundMethod && ret.refundMethod !== historyRefundMethod) return false;
+      const key = ret.createdAt.slice(0, 10);
+      if (historyDateFrom && key < historyDateFrom) return false;
+      if (historyDateTo && key > historyDateTo) return false;
+      if (!query) return true;
+      return [
+        ret.returnNumber,
+        ret.invoiceNumber,
+        ret.customerName || "Walk-in",
+        ret.exchangeInvoiceNumber || "",
+        ret.notes || "",
+        ...ret.items.map((item) => item.productName),
+      ].some((value) => value.toLowerCase().includes(query));
+    });
+  }, [returns, historyQuery, historyCustomer, historyResolution, historyReason, historyRefundMethod, historyDateFrom, historyDateTo]);
+
+  const clearHistoryFilters = () => {
+    setHistoryQuery("");
+    setHistoryCustomer("");
+    setHistoryResolution("");
+    setHistoryReason("");
+    setHistoryRefundMethod("");
+    setHistoryDateFrom("");
+    setHistoryDateTo("");
+  };
+
   const columns: Column<SaleReturn>[] = [
     { key: "returnNumber", header: "Return #", render: (r) => <span className="font-medium">{r.returnNumber}</span> },
     { key: "invoiceNumber", header: "Invoice" },
@@ -132,8 +182,10 @@ export function ReturnsPanel({
     ) },
     { key: "totalRefund", header: "Return value", render: (r) => formatMoney(r.totalRefund) },
     { key: "reason", header: "Reason", render: (r) => r.reason.replace(/_/g, " ") },
+    { key: "refundMethod", header: "Refund method", render: (r) => r.refundMethod },
     { key: "exchangeInvoiceNumber", header: "Replacement", render: (r) => r.exchangeInvoiceNumber || "—" },
     { key: "createdAt", header: "Date", render: (r) => new Date(r.createdAt).toLocaleString("en-IN") },
+    { key: "action", header: "Action", render: (r) => <Button size="sm" variant="outline" onClick={() => setDetailReturn(r)}>Details</Button> },
   ];
 
   function resetForm() {
@@ -228,7 +280,7 @@ export function ReturnsPanel({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Returns, Refunds & Exchanges</h2>
-          <p className="text-sm text-slate-500">{returns.length} completed return transactions</p>
+          <p className="text-sm text-slate-500">{filteredReturns.length} of {returns.length} return transactions</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => openFlow("return")}>+ New Return</Button>
@@ -236,7 +288,116 @@ export function ReturnsPanel({
         </div>
       </div>
       {success && <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p>}
-      <DataTable columns={columns} rows={returns} emptyMessage="No returns or exchanges yet" />
+
+      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-7">
+        <label className="text-xs font-medium text-slate-600 lg:col-span-2">
+          Search return, invoice, customer or product
+          <input className={inputClass + " mt-1"} value={historyQuery} onChange={(e) => setHistoryQuery(e.target.value)} placeholder="Search…" />
+        </label>
+        <label className="text-xs font-medium text-slate-600">
+          Customer
+          <select className={selectClass + " mt-1"} value={historyCustomer} onChange={(e) => setHistoryCustomer(e.target.value)}>
+            <option value="">All customers</option>
+            <option value="__walkin">Walk-in</option>
+            {historyCustomers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+        </label>
+        <label className="text-xs font-medium text-slate-600">
+          Type
+          <select className={selectClass + " mt-1"} value={historyResolution} onChange={(e) => setHistoryResolution(e.target.value)}>
+            <option value="">All types</option>
+            <option value="refund">Refund</option>
+            <option value="exchange">Exchange</option>
+          </select>
+        </label>
+        <label className="text-xs font-medium text-slate-600">
+          Reason
+          <select className={selectClass + " mt-1"} value={historyReason} onChange={(e) => setHistoryReason(e.target.value)}>
+            <option value="">All reasons</option>
+            <option value="defective">Defective</option>
+            <option value="wrong_item">Wrong item</option>
+            <option value="customer_changed_mind">Customer changed mind</option>
+            <option value="size_issue">Size issue</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label className="text-xs font-medium text-slate-600">
+          Refund method
+          <select className={selectClass + " mt-1"} value={historyRefundMethod} onChange={(e) => setHistoryRefundMethod(e.target.value)}>
+            <option value="">All methods</option>
+            {["cash", "card", "upi", "bank", "online", "other"].map((method) => <option key={method} value={method}>{method}</option>)}
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-2 lg:col-span-2">
+          <label className="text-xs font-medium text-slate-600">
+            From
+            <input type="date" className={inputClass + " mt-1"} value={historyDateFrom} onChange={(e) => setHistoryDateFrom(e.target.value)} />
+          </label>
+          <label className="text-xs font-medium text-slate-600">
+            To
+            <input type="date" className={inputClass + " mt-1"} value={historyDateTo} onChange={(e) => setHistoryDateTo(e.target.value)} />
+          </label>
+        </div>
+        <div className="flex items-end justify-end lg:col-span-5">
+          <Button size="sm" variant="outline" onClick={clearHistoryFilters}>Clear filters</Button>
+        </div>
+      </div>
+
+      <DataTable columns={columns} rows={filteredReturns} emptyMessage="No returns or exchanges match the selected filters" />
+
+      <Modal
+        open={Boolean(detailReturn)}
+        title={detailReturn ? `Return ${detailReturn.returnNumber}` : "Return details"}
+        onClose={() => setDetailReturn(null)}
+        footer={<Button variant="outline" onClick={() => setDetailReturn(null)}>Close</Button>}
+        className="max-w-3xl"
+      >
+        {detailReturn && (
+          <div className="space-y-4 text-sm">
+            <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div><div className="text-xs text-slate-500">Original invoice</div><div className="font-semibold text-slate-900">{detailReturn.invoiceNumber}</div></div>
+              <div><div className="text-xs text-slate-500">Customer</div><div className="font-semibold text-slate-900">{detailReturn.customerName || "Walk-in"}</div></div>
+              <div><div className="text-xs text-slate-500">Resolution</div><div className="font-semibold text-slate-900">{detailReturn.resolution === "exchange" ? "Exchange" : "Refund"}</div></div>
+              <div><div className="text-xs text-slate-500">Status</div><div className="font-semibold text-slate-900">{detailReturn.status}</div></div>
+              <div><div className="text-xs text-slate-500">Reason</div><div className="font-semibold text-slate-900">{detailReturn.reason.replaceAll("_", " ")}</div></div>
+              <div><div className="text-xs text-slate-500">Refund method</div><div className="font-semibold text-slate-900">{detailReturn.refundMethod}</div></div>
+              <div><div className="text-xs text-slate-500">Return value</div><div className="font-semibold text-slate-900">{formatMoney(detailReturn.totalRefund)}</div></div>
+              <div><div className="text-xs text-slate-500">Processed</div><div className="font-semibold text-slate-900">{new Date(detailReturn.createdAt).toLocaleString("en-IN")}</div></div>
+            </div>
+
+            {detailReturn.resolution === "exchange" && (
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-indigo-800">
+                Replacement invoice: <strong>{detailReturn.exchangeInvoiceNumber || "Not linked"}</strong>
+                {detailReturn.storeCreditApplied != null && <> · Store credit applied <strong>{formatMoney(detailReturn.storeCreditApplied)}</strong></>}
+              </div>
+            )}
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr><th className="px-3 py-2">Item</th><th className="px-3 py-2">Qty</th><th className="px-3 py-2">Rate</th><th className="px-3 py-2">Refund</th><th className="px-3 py-2">Stock</th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {detailReturn.items.map((item) => (
+                    <tr key={item.id}>
+                      <td className="px-3 py-2">{item.productName}</td>
+                      <td className="px-3 py-2">{item.quantity}</td>
+                      <td className="px-3 py-2">{formatMoney(item.unitPrice)}</td>
+                      <td className="px-3 py-2">{formatMoney(item.refundAmount)}</td>
+                      <td className="px-3 py-2">{item.restock ? "Restocked" : "Not restocked"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {detailReturn.notes && <div><div className="text-xs text-slate-500">Notes</div><div className="mt-1 whitespace-pre-wrap text-slate-700">{detailReturn.notes}</div></div>}
+            <div className="rounded-lg border border-slate-100 bg-white p-3 text-xs text-slate-500">
+              Traceability: return <strong>{detailReturn.returnNumber}</strong> → original sale <strong>{detailReturn.invoiceNumber}</strong>{detailReturn.exchangeInvoiceNumber ? <> → replacement sale <strong>{detailReturn.exchangeInvoiceNumber}</strong></> : null}.
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={open}
