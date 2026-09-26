@@ -2,6 +2,7 @@
 
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@minarvabiz/ui";
 import type { AuthStage } from "./types";
+import { useFirstAdminBootstrap } from "./useFirstAdminBootstrap";
 
 interface AdminAuthCardProps {
   authStage: AuthStage;
@@ -23,10 +24,6 @@ interface AdminAuthCardProps {
   onVerifyMfa: () => void;
   onResetMfa: () => void;
   bootstrapAvailable: boolean;
-  bootstrapBusy: boolean;
-  bootstrapMessage: string | null;
-  bootstrapSent: boolean;
-  onBootstrap: () => void;
 }
 
 export function AdminAuthCard(props: AdminAuthCardProps) {
@@ -50,11 +47,8 @@ export function AdminAuthCard(props: AdminAuthCardProps) {
     onVerifyMfa,
     onResetMfa,
     bootstrapAvailable,
-    bootstrapBusy,
-    bootstrapMessage,
-    bootstrapSent,
-    onBootstrap,
   } = props;
+  const { bootstrapBusy, bootstrapMessage, bootstrapSent, onBootstrap } = useFirstAdminBootstrap();
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
