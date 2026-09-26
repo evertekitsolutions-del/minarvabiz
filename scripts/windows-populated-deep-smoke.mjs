@@ -542,6 +542,7 @@ async function main() {
     await assertMain(ws, "LAUNDRY_CANCEL_PAID_TO_DATE", ["₹150.00"]);
     await selectDialogFieldByText(ws, "Cancel laundry ticket", "Laundry refund payment method", "UPI");
     await selectDialogFieldByText(ws, "Cancel laundry ticket", "Supplier cost handling", "Reverse supplier payable / cost");
+    await setField(ws, "Cancel laundry ticket", "Cancellation reason", "Customer requested cancellation");
     await clickDialogButton(ws, "LAUNDRY_CANCEL_CONFIRM", "Cancel laundry ticket", "Cancel Ticket");
     await assertMain(ws, "LAUNDRY_CANCELLED", ["cancelled"]);
     await click(ws, "LAUNDRY_REFUND_VERIFY", ["payments"]);
