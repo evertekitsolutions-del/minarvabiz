@@ -9,11 +9,61 @@ import { formatMoney } from "@minarvabiz/utils";
 import { escapeHtml } from "./html";
 import { getPrintSettings } from "./print-settings";
 import { tryDesktopPrintHtml } from "./desktop-print";
+import { qrSvg } from "./qr-code";
 
 const L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
 const G = ["0100111","0110011","0011011","0100001","0011101","0111001","0000101","0010001","0001001","0010111"];
 const R = ["1110010","1100110","1101100","1000010","1011100","1001110","1010000","1000100","1001000","1110100"];
 const PARITY = ["LLLLLL","LLGLGG","LLGGLG","LLGGGL","LGLLGG","LGGLLG","LGGGLL","LGLGLG","LGLGGL","LGGLGL"];
+
+const CODE128_PATTERNS = [
+  "212222","222122","222221","121223","121322","131222","122213","122312","132212","221213",
+  "221312","231212","112232","122132","122231","113222","123122","123221","223211","221132",
+  "221231","213212","223112","312131","311222","321122","321221","312212","322112","322211",
+  "212123","212321","232121","111323","131123","131321","112313","132113","132311","211313",
+  "231113","231311","112133","112331","132131","113123","113321","133121","313121","211331",
+  "231131","213113","213311","213131","311123","311321","331121","312113","312311","332111",
+  "314111","221411","431111","111224","111422","121124","121421","141122","141221","112214",
+  "112412","122114","122411","142112","142211","241211","221114","413111","241112","134111",
+  "111242","121142","121241","114212","124112","124211","411212","421112","421211","212141",
+  "214121","412121","111143","111341","131141","114113","114311","411113","411311","113141",
+  "114131","311141","411131","211412","211214","211232","2331112",
+];
+
+function code128BSvg(raw: string): string {
+  const value = String(raw || "");
+  const clean = [...value].map((char) => {
+    const code = char.charCodeAt(0);
+    return code >= 32 && code <= 126 ? char : "?";
+  }).join("").slice(0, 80);
+  if (!clean) return '<span class="missing">No barcode</span>';
+
+  const values = [...clean].map((char) => char.charCodeAt(0) - 32);
+  let checksum = 104;
+  values.forEach((item, index) => { checksum += item * (index + 1); });
+  checksum %= 103;
+  const symbols = [104, ...values, checksum, 106];
+
+  let x = 10;
+  const rects: string[] = [];
+  for (const symbol of symbols) {
+    const pattern = CODE128_PATTERNS[symbol];
+    let black = true;
+    for (const char of pattern) {
+      const width = Number(char);
+      if (black) rects.push(`<rect x="${x}" y="0" width="${width}" height="38"/>`);
+      x += width;
+      black = !black;
+    }
+  }
+  x += 10;
+  return `<svg class="barcode-svg" viewBox="0 0 ${x} 48" role="img" aria-label="Code 128 ${escapeHtml(clean)}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${x}" height="48" fill="white"/>
+    <g fill="black">${rects.join("")}</g>
+    <text x="${x / 2}" y="47" text-anchor="middle" font-size="8" font-family="Arial,sans-serif" letter-spacing=".6">${escapeHtml(clean)}</text>
+  </svg>`;
+}
+
 
 export function ean13CheckDigit(first12: string): number {
   if (!/^\d{12}$/.test(first12)) throw new Error("EAN-13 base must contain 12 digits");
@@ -48,7 +98,7 @@ function ean13Bits(code: string): string {
 }
 
 function barcodeSvg(code: string): string {
-  if (!isValidEan13(code)) return `<div class="code">${escapeHtml(code)}</div>`;
+  if (!isValidEan13(code)) return code128BSvg(code);
   const bits = ean13Bits(code);
   const quiet = 9;
   const total = bits.length + quiet * 2;
@@ -73,6 +123,8 @@ export function buildBarcodeLabelHtml(
   const autoPrint = opts?.autoPrint !== false;
   const labelWidthMm = Math.max(20, Math.min(120, Number(opts?.labelWidthMm ?? settings.labelWidthMm)));
   const labelHeightMm = Math.max(15, Math.min(150, Number(opts?.labelHeightMm ?? settings.labelHeightMm)));
+  const codeValue = product.barcode || product.sku || product.id;
+  const labelCodeMode = settings.labelCodeMode;
   const blocks = Array.from({ length: copies })
     .map(() => `
   <div class="label">
@@ -80,7 +132,10 @@ export function buildBarcodeLabelHtml(
     <div class="name">${escapeHtml(product.name)}</div>
     <div class="meta">${escapeHtml([categoryName, product.size, product.color, product.brand].filter(Boolean).join(" · "))}</div>
     <div class="sku">${product.sku ? "SKU: " + escapeHtml(product.sku) : ""}</div>
-    <div class="barcode">${product.barcode ? barcodeSvg(product.barcode) : '<span class="missing">No barcode</span>'}</div>
+    <div class="codes ${labelCodeMode}">
+      ${labelCodeMode !== "qr" ? `<div class="barcode">${barcodeSvg(codeValue)}</div>` : ""}
+      ${labelCodeMode !== "barcode" ? `<div class="qr">${qrSvg(codeValue, `QR ${codeValue}`)}</div>` : ""}
+    </div>
     <div class="price">${formatMoney(product.sellingPrice)}</div>
   </div>`)
     .join("");
@@ -92,7 +147,10 @@ export function buildBarcodeLabelHtml(
   .shop{font-size:9px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .name{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .meta,.sku{font-size:8px;min-height:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .barcode{margin:1mm 0}.barcode-svg{display:block;width:44mm;height:15mm;margin:0 auto}
+  .codes{display:flex;align-items:center;justify-content:center;gap:1mm;margin:.6mm 0;min-height:11mm}
+  .codes.barcode .barcode{width:100%}.codes.qr .qr{width:100%}
+  .codes.both .barcode{width:72%}.codes.both .qr{width:26%}
+  .barcode-svg{display:block;width:100%;height:11mm;margin:0 auto}.qr-svg{display:block;width:11mm;height:11mm;margin:0 auto}
   .missing{font-size:10px;color:#b91c1c}.price{font-size:12px;font-weight:800}
   @media print{.label{border:none}}
 </style></head><body>${blocks}
