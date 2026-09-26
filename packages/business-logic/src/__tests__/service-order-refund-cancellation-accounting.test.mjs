@@ -57,19 +57,19 @@ assert.equal(bal("accounts_receivable"),50);
 assert.equal(bal("service_revenue"),-100);
 
 let before=snap();
-let cancelled=orders.updateOrderStatus(created.order.id,"cancelled");
+let cancelled=orders.updateOrderStatus(created.order.id,"cancelled",{reason:"Customer cancelled"});
 assert.equal(cancelled.order,null);
 assert.match(cancelled.error,/refund.*advance/i);
 assert.equal(snap(),before);
 
 before=snap();
-cancelled=orders.updateOrderStatus(created.order.id,"cancelled",{refundPaymentMethod:"invalid"});
+cancelled=orders.updateOrderStatus(created.order.id,"cancelled",{refundPaymentMethod:"invalid",reason:"Customer cancelled"});
 assert.equal(cancelled.order,null);
 assert.match(cancelled.error,/valid refund payment method/i);
 assert.equal(snap(),before);
 
 outbox.hydrateOutbox([]);
-cancelled=orders.updateOrderStatus(created.order.id,"cancelled",{refundPaymentMethod:"bank"});
+cancelled=orders.updateOrderStatus(created.order.id,"cancelled",{refundPaymentMethod:"bank",reason:"Customer cancelled"});
 assert(cancelled.order);
 assert.equal(cancelled.error,undefined);
 assert.equal(cancelled.order.status,"cancelled");
