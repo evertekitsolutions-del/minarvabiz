@@ -64,3 +64,5 @@ export * from "./components/reports/DayEndClose";
 export * from "./components/settings/SettingsPanel";
 export * from "./components/Toast";
 export * from "./components/ErrorBoundary";
+
+export * from "./components/printing/PrintPreviewModal";
