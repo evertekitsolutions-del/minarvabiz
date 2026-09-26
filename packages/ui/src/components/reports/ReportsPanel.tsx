@@ -78,11 +78,11 @@ function StatementSection({ title, rows, total }: { title:string; rows:Statement
 
 export function ReportsPanel({
   salesRows, sales, dayEnd, stock, outstanding, payables = [], financial, taxReport,
-  onRefresh, from, to, onFromChange, onToChange,
+  onRefresh, from, to, onFromChange, onToChange, reportError,
 }: {
   salesRows?:SalesReportRow[]; sales?:SalesReportRow[]; dayEnd:DayEndView; stock:StockRow[]; outstanding:ReceivableRow[];
   payables?:PayableAgingRow[]; financial?:FinancialReportsView; taxReport?:TaxReconciliationView;
-  onRefresh?:()=>void; from?:string; to?:string; onFromChange?:(value:string)=>void; onToChange?:(value:string)=>void;
+  onRefresh?:()=>void; from?:string; to?:string; onFromChange?:(value:string)=>void; onToChange?:(value:string)=>void; reportError?:string;
 }) {
   const [tab,setTab]=React.useState<ReportTab>("sales");
   const rows=salesRows??sales??[];
@@ -133,6 +133,7 @@ export function ReportsPanel({
     </div>}
 
     <div className="flex flex-wrap gap-2 print:hidden">{tabs.map(([id,label])=><Button key={id} size="sm" variant={tab===id?"primary":"outline"} onClick={()=>setTab(id)}>{label}</Button>)}</div>
+    {reportError&&<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{reportError}</div>}
 
     {tab==="sales"&&<Card><CardHeader><CardTitle className="text-sm font-semibold">Sales summary</CardTitle></CardHeader><CardContent className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-slate-400"><th>Period</th><th>Products</th><th>Services</th><th>Laundry</th><th>Revenue</th><th>Expenses</th><th>Net profit</th></tr></thead><tbody>{rows.map(r=><tr key={r.label} className="border-b border-slate-50"><td className="py-2 font-medium">{r.label}</td><td>{formatMoney(r.productSales)}</td><td>{formatMoney(r.serviceRevenue)}</td><td>{formatMoney(r.laundryRevenue)}</td><td>{formatMoney(r.totalRevenue)}</td><td>{formatMoney(r.expenses)}</td><td className="font-semibold">{formatMoney(r.netProfit)}</td></tr>)}</tbody></table></CardContent></Card>}
 
