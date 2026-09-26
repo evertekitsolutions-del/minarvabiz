@@ -56,3 +56,19 @@ export function tryDesktopPrintHtml(
 
   return true;
 }
+
+
+export function printPreparedHtml(
+  html: string,
+  paper: DesktopPrintPaper,
+  options?: { labelWidthMm?: number; labelHeightMm?: number },
+): boolean {
+  if (typeof window === "undefined") return false;
+  if (tryDesktopPrintHtml(html, paper, options)) return true;
+  const w = window.open("", "_blank", paper === "thermal" ? "width=420,height=700" : paper === "label" ? "width=520,height=600" : "width=900,height=900");
+  if (!w) return false;
+  w.document.write(html);
+  w.document.close();
+  w.addEventListener("load", () => w.print(), { once: true });
+  return true;
+}
