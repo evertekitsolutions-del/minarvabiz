@@ -23,12 +23,7 @@ import { OfflineActivationCard } from "./admin-panel/OfflineActivationCard";
 import { OnlineCustomerProvisionCard } from "./admin-panel/OnlineCustomerProvisionCard";
 import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerProvisioning";
 import { canIssueLicense, canManageLicenseStatus, defaultFeatures } from "./admin-panel/model";
-import type {
-  AdminIdentityView,
-  AuthStage,
-  LicenseRegistryRow,
-  LicenseStatusAction,
-} from "./admin-panel/types";
+import type { AdminIdentityView, AuthStage, LicenseRegistryRow, LicenseStatusAction } from "./admin-panel/types";
 interface AdminPanelProps { identity: AdminIdentityView | null; initialLicenses: LicenseRegistryRow[]; bootstrapAvailable: boolean; }
 export default function AdminPanel({identity,initialLicenses,bootstrapAvailable}: AdminPanelProps) {
   const router = useRouter();
@@ -44,9 +39,7 @@ export default function AdminPanel({identity,initialLicenses,bootstrapAvailable}
   const [edition, setEdition] = React.useState<Edition>("hybrid");
   const [expiresAt, setExpiresAt] = React.useState("");
   const [activationLimit, setActivationLimit] = React.useState("");
-  const [features, setFeatures] = React.useState<LicenseFeatures>(() =>
-    defaultFeatures("professional"),
-  );
+  const [features, setFeatures] = React.useState<LicenseFeatures>(() => defaultFeatures("professional"));
   const [offlineLicenseId, setOfflineLicenseId] = React.useState("");
   const [offlineDeviceId, setOfflineDeviceId] = React.useState("");
   const [lastToken, setLastToken] = React.useState<string | null>(null);
