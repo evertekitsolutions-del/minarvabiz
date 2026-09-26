@@ -30,6 +30,12 @@ quotations.hydrateQuotations({
   }],
 });
 
+assert.equal(quotations.canEditQuotation(quotations.getQuotation("q-1")), true);
+assert.equal(quotations.canArchiveQuotation(quotations.getQuotation("q-1")), true);
+const statusChange = quotations.setQuotationStatus("q-1", "sent");
+assert.equal(statusChange.error, undefined);
+assert.equal(statusChange.quotation.status, "sent");
+
 const edited = quotations.updateQuotation("q-1", {
   customerId: "cust-1",
   lines: [
@@ -69,6 +75,7 @@ quotations.hydrateQuotations({
 });
 assert.equal(quotations.canEditQuotation(quotations.getQuotation("q-2")), false);
 assert.equal(quotations.canArchiveQuotation(quotations.getQuotation("q-2")), false);
+assert.match(quotations.setQuotationStatus("q-2", "draft").error, /Already converted/);
 assert.match(quotations.updateQuotation("q-2", {
   customerId: "cust-1",
   lines: [{ kind: "service", description: "Blocked", quantity: 1, unitPrice: 1 }],
