@@ -605,10 +605,12 @@ export function createExpense(input: { date?: string; categoryId: UUID; amount: 
   return { expense, errors: [] };
 }
 
-export function reverseExpense(id: UUID): { expense: Expense | null; errors: string[] } {
+export function reverseExpense(id: UUID, reason: string): { expense: Expense | null; errors: string[] } {
   assertPermission("expenses.manage");
   const expense = expenses.find((item) => item.id === id);
   if (!expense || expense.deletedAt) return { expense: null, errors: ["Expense not found"] };
+  const reversalReason = reason.trim();
+  if (reversalReason.length < 3) return { expense: null, errors: ["Reversal reason is required"] };
   const expenseMinor = moneyMinorOrNull(expense.amount);
   if (expenseMinor == null || expenseMinor <= 0) {
     return { expense: null, errors: ["Expense amount needs reconciliation"] };
@@ -640,6 +642,7 @@ export function reverseExpense(id: UUID): { expense: Expense | null; errors: str
     deletedAt: expense.deletedAt,
     version: expense.version,
     orderId: expense.orderId ?? null,
+    reversalReason,
   });
   touchPersistence();
   return { expense: { ...expense }, errors: [] };
