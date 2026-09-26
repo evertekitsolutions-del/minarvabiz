@@ -35,7 +35,7 @@ assert.equal(store.getCustomer("c").outstandingBalance,50); assert.equal(store.g
 assert.equal(bal("cash"),20); assert.equal(bal("payment_clearing"),30); assert.equal(bal("accounts_receivable"),50); assert.equal(bal("laundry_revenue"),-100);
 assert(outbox.listPendingOutbox().some(e=>e.aggregateType==="laundry_orders"&&e.aggregateId===laundry.order.id&&e.eventType==="update"));
 
-const cancelled=phase5.cancelLaundryOrder({orderId:laundry.order.id,refundPaymentMethod:"bank"});
+const cancelled=phase5.cancelLaundryOrder({orderId:laundry.order.id,reason:"Customer cancellation",refundPaymentMethod:"bank"});
 assert.equal(cancelled.errors.length,0); assert.equal(cancelled.order?.status,"cancelled");
 assert.equal(store.getCustomer("c").outstandingBalance,0); assert.equal(store.getCustomer("c").totalSpending,0);
 assert.equal(bal("accounts_receivable"),0); assert.equal(bal("laundry_revenue"),0); assert.equal(bal("bank"),-50);
@@ -91,7 +91,7 @@ const historic=store.recordCustomerPayment({customerId:"c",amount:80,method:"cas
 assert.equal(historic.errors.length,0); assert.match(historic.payment.notes,/Laundry: LDY-OLD-1 80\.00/);
 current=phase5.listLaundryOrders().find(o=>o.id==="old"); assert(current); assert.equal(current.paidAmount,80); assert.equal(current.balanceAmount,0);
 assert.equal(bal("accounts_receivable"),0); assert.equal(bal("legacy_settlement_clearing"),-80); assert.equal(bal("cash"),80);
-const blockedCancel=phase5.cancelLaundryOrder({orderId:"old",refundPaymentMethod:"cash"});
+const blockedCancel=phase5.cancelLaundryOrder({orderId:"old",reason:"Customer cancellation",refundPaymentMethod:"cash"});
 assert(blockedCancel.errors.length); assert.match(blockedCancel.errors.join(";"),/accounting reconciliation/i);
 
 console.log("Laundry collection: FIFO provider allocation, no duplicate Payment, service coexistence, posted AR, historical clearing and cancellation source reconciliation PASS");
