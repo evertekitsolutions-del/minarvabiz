@@ -5,6 +5,8 @@ import type { Sale, Customer } from "@minarvabiz/types";
 import { DataTable, type Column } from "../data/DataTable";
 import { formatMoney } from "../customers/format";
 import { Button } from "../Button";
+import { PrintPreviewModal } from "../printing/PrintPreviewModal";
+import { buildSaleInvoiceHtml } from "@minarvabiz/business-logic";
 
 const statusStyle: Record<string, string> = {
   completed: "bg-emerald-50 text-emerald-700",
@@ -15,6 +17,10 @@ const statusStyle: Record<string, string> = {
 };
 
 export function SalesList({ sales, customers: _customers, onSelect, onPrintA4, onPrintThermal }: { sales: Sale[]; customers?: Customer[]; onSelect?: (s: Sale) => void; onPrintA4?: (s: Sale) => void; onPrintThermal?: (s: Sale) => void }) {
+  const [preview, setPreview] = React.useState<{ sale: Sale; paper: "a4" | "thermal"; html: string } | null>(null);
+  function openPreview(sale: Sale, paper: "a4" | "thermal") {
+    setPreview({ sale, paper, html: buildSaleInvoiceHtml(sale, { paper, autoPrint: false }) });
+  }
   const columns: Column<Sale>[] = [
     { key: "invoiceNumber", header: "Invoice", render: (r) => <span className="font-medium text-slate-900">{r.invoiceNumber}</span> },
     { key: "customerName", header: "Customer", render: (r) => r.customerName || "Walk-in" },
@@ -25,9 +31,20 @@ export function SalesList({ sales, customers: _customers, onSelect, onPrintA4, o
     { key: "saleDate", header: "Date", render: (r) => new Date(r.saleDate).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) },
     ...(onPrintA4 || onPrintThermal ? [{
       key: "id" as keyof Sale,
-      header: "Print",
-      render: (r: Sale) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{onPrintA4 && <Button size="sm" variant="outline" onClick={() => onPrintA4(r)}>A4</Button>}{onPrintThermal && <Button size="sm" variant="outline" onClick={() => onPrintThermal(r)}>Thermal</Button>}</div>,
+      header: "Preview / Print",
+      render: (r: Sale) => <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>{onPrintA4 && <Button size="sm" variant="outline" onClick={() => openPreview(r, "a4")}>A4 Preview</Button>}{onPrintThermal && <Button size="sm" variant="outline" onClick={() => openPreview(r, "thermal")}>Thermal Preview</Button>}</div>,
     }] : []),
   ];
-  return <div className="space-y-4"><div><h2 className="text-xl font-semibold text-slate-900">Sales</h2><p className="text-sm text-slate-500">{sales.length} invoices</p></div><DataTable columns={columns} rows={sales} onRowClick={onSelect} emptyMessage="No sales yet" /></div>;
+  return <div className="space-y-4">
+    <div><h2 className="text-xl font-semibold text-slate-900">Sales</h2><p className="text-sm text-slate-500">{sales.length} invoices</p></div>
+    <DataTable columns={columns} rows={sales} onRowClick={onSelect} emptyMessage="No sales yet" />
+    {preview && <PrintPreviewModal
+      open
+      title={`Invoice ${preview.sale.invoiceNumber}`}
+      html={preview.html}
+      paper={preview.paper}
+      onClose={() => setPreview(null)}
+      onPrint={() => preview.paper === "a4" ? onPrintA4?.(preview.sale) : onPrintThermal?.(preview.sale)}
+    />}
+  </div>;
 }
