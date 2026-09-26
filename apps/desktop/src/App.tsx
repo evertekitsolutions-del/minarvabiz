@@ -37,7 +37,7 @@ const FULL_TRIAL_FEATURES: LicenseFeatures = {
 
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
 
-const errorMessage=(error:unknown)=>errorMessage(error);
+const errorMessage=(error:unknown):string=>error instanceof Error?error.message:String(error);
 
 const NAV_FEATURE: Partial<Record<NavItemId, keyof LicenseFeatures>> = {
   sales: "sales",
