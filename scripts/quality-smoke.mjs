@@ -12,12 +12,14 @@ const criticalDesktopFiles = [
   "apps/desktop/electron/main.ts",
   "apps/desktop/electron/preload.ts",
   "apps/desktop/src/App.tsx",
+  "apps/desktop/src/components/DesktopProcurementPanel.tsx",
   "apps/desktop/src/lib/sqlite-bootstrap.ts",
 ];
 for (const file of criticalDesktopFiles) assert(exists(file), `Missing critical desktop file: ${file}`);
 
 const desktopSource = criticalDesktopFiles.map(read).join("\n");
 const appSource = read("apps/desktop/src/App.tsx");
+const desktopProcurementSource = read("apps/desktop/src/components/DesktopProcurementPanel.tsx");
 const mainSource = read("apps/desktop/electron/main.ts");
 const desktopIndex = read("apps/desktop/index.html");
 const preloadSource = read("apps/desktop/electron/preload.ts");
@@ -98,7 +100,7 @@ assert(persistence.includes("phase10Store.exportPhase10State") && persistence.in
 assert(persistence.includes("warehouseStore.exportWarehouseState") && persistence.includes("warehouseStore.hydrateWarehouseState"), "Warehouse/WMS state is missing from domain snapshots");
 assert(persistence.includes("procurementStore.exportProcurementState") && persistence.includes("procurementStore.hydrateProcurementState"), "Procurement state is missing from domain snapshots");
 assert(persistence.includes("accountingStore.exportAccountingState") && persistence.includes("accountingStore.hydrateAccountingState"), "Accounting state is missing from domain snapshots");
-assert(appSource.includes("ProcurementPanel") && appSource.includes("createPurchaseOrder"), "Windows procurement workflow is not wired into the desktop shell");
+assert(appSource.includes("DesktopProcurementPanel") && desktopProcurementSource.includes("ProcurementPanel") && desktopProcurementSource.includes("createPurchaseOrder"), "Windows procurement workflow is not wired into the desktop shell");
 assert(persistence.includes("activeBranchId"), "Branch state is missing from domain snapshots");
 assert(phase10.includes("ensureProductionWorkflow") && phase10.includes("advanceProductionWorkflow"), "Production workflow persistence is missing");
 assert(phase10.includes("createMaterialRoll") && phase10.includes("reserveMaterialRoll") && phase10.includes("consumeMaterialFromRoll"), "Material roll lifecycle is missing");
