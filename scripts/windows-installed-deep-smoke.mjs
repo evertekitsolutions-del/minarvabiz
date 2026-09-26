@@ -125,17 +125,19 @@ async function main() {
       const visible=(el)=>{const r=el.getBoundingClientRect();const s=getComputedStyle(el);return r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'&&!el.disabled};
       const label=(el)=>((el.innerText||el.textContent||'')+' '+(el.getAttribute('aria-label')||'')).replace(/\\s+/g,' ').trim();
       const score=(el)=>{const s=label(el).toLowerCase();return pats.some(p=>s.includes(String(p).toLowerCase()))};
-      const find=()=>[...document.querySelectorAll('button,a,[role="button"]')].find(e=>visible(e)&&score(e));
-      let el=find();
+      const findSidebar=()=>[...document.querySelectorAll('aside button,aside a,aside [role="button"]')].find(e=>visible(e)&&score(e));
+      const findAny=()=>[...document.querySelectorAll('button,a,[role="button"]')].find(e=>visible(e)&&score(e));
+      let el=findSidebar();
       if(!el){
         const groups=[...document.querySelectorAll('aside button[aria-expanded]')].filter(visible).map(label);
         for(const groupLabel of groups){
           const group=[...document.querySelectorAll('aside button[aria-expanded]')].find(e=>visible(e)&&label(e)===groupLabel);
           if(group&&group.getAttribute('aria-expanded')!=='true'){group.click();await new Promise(r=>setTimeout(r,100));}
-          el=find();
+          el=findSidebar();
           if(el)break;
         }
       }
+      if(!el)el=findAny();
       if(!el){const els=[...document.querySelectorAll('button,a,[role="button"]')];return JSON.stringify({ok:false,available:els.filter(visible).map(label).filter(Boolean).slice(0,140)});}
       el.click();
       await new Promise(r=>setTimeout(r,900));
