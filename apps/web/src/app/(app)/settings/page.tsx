@@ -1,16 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { SyncPanel, PersistencePanel, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage, getShopProfile, updateShopProfile, getPrintSettings, updatePrintSettings } from "@minarvabiz/business-logic";
+import { SyncPanel, PersistencePanel, SettingsPanel } from "@minarvabiz/ui";
+import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings } from "@minarvabiz/business-logic";
 
 export default function SettingsPage() {
   const [snap, setSnap] = React.useState(() => syncBridge.getSyncSnapshot());
   const [syncing, setSyncing] = React.useState(false);
   const [shop, setShop] = React.useState(() => getShopProfile());
-  const [shopMsg, setShopMsg] = React.useState<string | null>(null);
+  const [tax, setTax] = React.useState(() => getTaxConfig());
+  const [backup, setBackup] = React.useState(() => getAutoBackupSettings());
   const [printing, setPrinting] = React.useState(() => getPrintSettings());
-  const [printMsg, setPrintMsg] = React.useState<string | null>(null);
 
   function refresh() {
     setSnap(syncBridge.getSyncSnapshot());
@@ -38,66 +38,34 @@ export default function SettingsPage() {
         </a>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-        <h2 className="text-sm font-semibold text-slate-800">Shop profile (receipts)</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <FormField label="Shop name">
-            <input className={inputClass} value={shop.shopName}
-              onChange={(e) => setShop({ ...shop, shopName: e.target.value })} />
-          </FormField>
-          <FormField label="Phone">
-            <input className={inputClass} value={shop.phone}
-              onChange={(e) => setShop({ ...shop, phone: e.target.value })} />
-          </FormField>
-          <FormField label="Address" className="sm:col-span-2">
-            <input className={inputClass} value={shop.address}
-              onChange={(e) => setShop({ ...shop, address: e.target.value })} />
-          </FormField>
-          <FormField label="Email">
-            <input className={inputClass} value={shop.email}
-              onChange={(e) => setShop({ ...shop, email: e.target.value })} />
-          </FormField>
-          <FormField label="GSTIN">
-            <input className={inputClass} value={shop.gstin}
-              onChange={(e) => setShop({ ...shop, gstin: e.target.value })} />
-          </FormField>
-          <FormField label="Receipt footer" className="sm:col-span-2">
-            <input className={inputClass} value={shop.receiptFooter}
-              onChange={(e) => setShop({ ...shop, receiptFooter: e.target.value })} />
-          </FormField>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => {
-            const next = updateShopProfile(shop);
-            setShop(next);
-            setShopMsg("Shop profile saved");
-          }}>Save shop profile</Button>
-          {shopMsg && <span className="text-sm text-emerald-600">{shopMsg}</span>}
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-800">Browser printing defaults</h2>
-          <p className="text-xs text-slate-500">Web browsers choose the physical printer in the system print dialog. These settings control the default invoice layout and thermal width.</p>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <FormField label="Default invoice paper">
-            <select className={selectClass} value={printing.defaultInvoicePaper} onChange={(e) => setPrinting({ ...printing, defaultInvoicePaper: e.target.value as "a4" | "thermal" })}>
-              <option value="a4">A4</option><option value="thermal">Thermal</option>
-            </select>
-          </FormField>
-          <FormField label="Thermal receipt width">
-            <select className={selectClass} value={printing.thermalWidthMm} onChange={(e) => setPrinting({ ...printing, thermalWidthMm: Number(e.target.value) === 58 ? 58 : 80 })}>
-              <option value={80}>80 mm</option><option value={58}>58 mm</option>
-            </select>
-          </FormField>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => { const next = updatePrintSettings(printing); setPrinting(next); setPrintMsg("Printing defaults saved"); }}>Save printing defaults</Button>
-          {printMsg && <span className="text-sm text-emerald-600">{printMsg}</span>}
-        </div>
-      </div>
+      <SettingsPanel
+        profile={shop}
+        tax={tax}
+        backup={backup}
+        printing={printing}
+        onSaveProfile={(patch) => {
+          const next = updateShopProfile(patch);
+          if (patch.gstin !== undefined) updateTaxConfig({ gstin: patch.gstin });
+          setShop(next);
+          saveToLocalStorage();
+        }}
+        onSaveTax={(patch) => {
+          const next = updateTaxConfig(patch);
+          setTax(next);
+          if (patch.gstin !== undefined) setShop(updateShopProfile({ gstin: patch.gstin }));
+          saveToLocalStorage();
+        }}
+        onSaveBackup={(patch) => {
+          setAutoBackupSettings(patch);
+          setBackup(getAutoBackupSettings());
+          saveToLocalStorage();
+        }}
+        onSavePrinting={(patch) => {
+          const next = updatePrintSettings(patch);
+          setPrinting(next);
+          saveToLocalStorage();
+        }}
+      />
 
       <PersistencePanel
         onExport={() => exportDomainSnapshotJson()}
