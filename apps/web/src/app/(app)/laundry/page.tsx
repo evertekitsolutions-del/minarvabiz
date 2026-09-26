@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { LaundryList, LaundryForm, LaundryCancellationForm, Modal, Button, FormField, inputClass, selectClass, type LaundryCancellationValues } from "@minarvabiz/ui";
-import { store, phase5Store, assertLimit } from "@minarvabiz/business-logic";
+import { store, phase5Store, phase7Store, assertLimit } from "@minarvabiz/business-logic";
 import type { LaundryOrder, Customer, PaymentMethod, Supplier } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
@@ -10,7 +10,6 @@ export default function LaundryPage() {
   const [orders, setOrders] = React.useState<LaundryOrder[]>([]);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
-  const [query, setQuery] = React.useState("");
   const [mode, setMode] = React.useState<"outsourced" | "in_house_ironing" | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [statusError, setStatusError] = React.useState<string | null>(null);
@@ -24,10 +23,10 @@ export default function LaundryPage() {
   const [supplierForm, setSupplierForm] = React.useState({ name: "", company: "", phone: "", category: "laundry", notes: "" });
 
   const refresh = React.useCallback(() => {
-    setOrders(phase5Store.listLaundryOrders({ query: query || undefined }));
+    setOrders(phase5Store.listLaundryOrders());
     setCustomers(store.listCustomers());
     setSuppliers(phase5Store.listSuppliers());
-  }, [query]);
+  }, []);
 
   React.useEffect(() => { refresh(); }, [refresh]);
 
@@ -70,11 +69,25 @@ export default function LaundryPage() {
     }
   }
 
+  function handleUpdateLaundryDetails(order: LaundryOrder, values: { garment: string; notes: string }) {
+    try {
+      const result = phase5Store.updateLaundryDetails(order.id, values);
+      if (result.errors.length || !result.order) {
+        return { success: false, error: result.errors.join("; ") || "Unable to update laundry ticket" };
+      }
+      refresh();
+      return { success: true, order: result.order };
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : "Unable to update laundry ticket" };
+    }
+  }
+
   function handleCancelLaundry(values: LaundryCancellationValues) {
     if (!cancelOrder) return;
     try {
       const result = phase5Store.cancelLaundryOrder({
         orderId: cancelOrder.id,
+        reason: values.reason,
         refundPaymentMethod: values.refundPaymentMethod,
         supplierCostAction: values.supplierCostAction,
       });
@@ -137,7 +150,8 @@ export default function LaundryPage() {
       {statusError && <p role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{statusError}</p>}
       <LaundryList
         orders={orders}
-        onSearch={setQuery}
+        auditLogs={phase7Store.listAuditLogs(500)}
+        onUpdateDetails={handleUpdateLaundryDetails}
         onAddOutsourced={() => setMode("outsourced")}
         onAddIroning={() => setMode("in_house_ironing")}
         onStatusChange={handleStatusChange}
