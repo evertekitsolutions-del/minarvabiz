@@ -9,6 +9,7 @@ require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileMo
 }).outputText, filename);
 
 const templates = require("../print-templates.ts");
+const renderer = require("../print-document-render.ts");
 const settings = require("../print-settings.ts");
 const labels = require("../barcode-labels.ts");
 const qr = require("../qr-code.ts");
@@ -23,7 +24,7 @@ for (const kind of ["invoice", "quotation"]) {
   }
 }
 
-const sample = templates.buildTemplateSampleHtml(defaults.find((item) => item.id === "system-invoice-a4"));
+const sample = renderer.buildTemplateSampleHtml(defaults.find((item) => item.id === "system-invoice-a4"));
 assert.match(sample, /INV-MT-2026-27-00001/);
 assert.match(sample, /GSTIN/);
 assert.match(sample, /Authorised Signatory/);
