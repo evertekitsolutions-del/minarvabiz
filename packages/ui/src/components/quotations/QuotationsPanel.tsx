@@ -7,6 +7,7 @@ import {
   buildQuotationHtml,
   canArchiveQuotation,
   canEditQuotation,
+  canSetQuotationStatus,
   convertQuotationToOrder,
   convertQuotationToSale,
   createQuotation,
@@ -236,7 +237,7 @@ export function QuotationsPanel() {
           Status
           <select className={selectClass + " mt-1"} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
             <option value="">All statuses</option>
-            {statuses.map((status) => <option key={status} value={status}>{status}</option>)}
+            {statuses.map((status) => <option key={status} value={status} disabled={!canSetQuotationStatus(q, status)}>{status}</option>)}
           </select>
         </label>
         <div className="grid grid-cols-2 gap-2">
