@@ -101,7 +101,7 @@ export default function PurchasesPage() {
         <Button onClick={() => { setError(null); setOpen(true); }}>Add Purchase</Button>
       </div>
 
-      <PurchaseList purchases={purchases} onAdd={() => { setError(null); setOpen(true); }} />
+      <PurchaseList purchases={purchases} suppliers={suppliers} onAdd={() => { setError(null); setOpen(true); }} />
 
       <ProcurementPanel
         purchaseOrders={purchaseOrders}
@@ -125,8 +125,8 @@ export default function PurchasesPage() {
           refresh();
           return { success: Boolean(result.purchaseOrder), error: result.error };
         }}
-        onCancel={(id) => {
-          const result = procurementStore.cancelPurchaseOrder(id);
+        onCancel={(id, reason) => {
+          const result = procurementStore.cancelPurchaseOrder(id, reason);
           refresh();
           return { success: Boolean(result.purchaseOrder), error: result.error };
         }}
@@ -160,8 +160,8 @@ export default function PurchasesPage() {
           refresh();
           return { success: Boolean(result.purchaseInvoice), error: result.error };
         }}
-        onCancelInvoice={(id) => {
-          const result = procurementStore.cancelPurchaseInvoice(id);
+        onCancelInvoice={(id, reason) => {
+          const result = procurementStore.cancelPurchaseInvoice(id, reason);
           refresh();
           return { success: Boolean(result.purchaseInvoice), error: result.error };
         }}
