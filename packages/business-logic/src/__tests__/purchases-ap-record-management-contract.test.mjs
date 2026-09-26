@@ -10,6 +10,7 @@ const purchaseList = read("packages/ui/src/components/expenses/ExpenseList.tsx")
 const procurement = read("packages/ui/src/components/purchases/ProcurementPanel.tsx");
 const logic = read("packages/business-logic/src/procurement-store.ts");
 const desktop = read("apps/desktop/src/App.tsx");
+const desktopProcurement = read("apps/desktop/src/components/DesktopProcurementPanel.tsx");
 const web = read("apps/web/src/app/(app)/purchases/page.tsx");
 
 for (const token of [
@@ -35,8 +36,9 @@ assert.equal(logic.includes("Cancellation reason is required"), true);
 assert.equal(logic.includes("Paid supplier invoice cannot be cancelled"), true);
 assert.equal(logic.includes("cancellationReason"), true);
 
-assert.equal(desktop.includes("cancelPurchaseOrder(id,reason)"), true);
-assert.equal(desktop.includes("cancelPurchaseInvoice(id,reason)"), true);
+assert.equal(desktop.includes("DesktopProcurementPanel"), true);
+assert.equal(desktopProcurement.includes("cancelPurchaseOrder(id, reason)"), true);
+assert.equal(desktopProcurement.includes("cancelPurchaseInvoice(id, reason)"), true);
 assert.equal(web.includes("cancelPurchaseOrder(id, reason)"), true);
 assert.equal(web.includes("cancelPurchaseInvoice(id, reason)"), true);
 assert.equal(web.includes("suppliers={suppliers}"), true);
