@@ -27,7 +27,7 @@ import { planAutomaticPosting } from "./accounting-store";
 import { consumeWarehouseStock } from "./warehouse-store";
 import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
-import { assertBusinessDayOpen } from "./day-end";
+import { assertBusinessDayOpen } from "./business-day-state";
 
 const categories: Category[] = [];
 const customers: Customer[] = [];
