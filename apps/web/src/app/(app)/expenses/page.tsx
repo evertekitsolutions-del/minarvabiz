@@ -45,9 +45,9 @@ export default function ExpensesPage() {
     setExpOpen(false); setError(null); setExpForm((v) => ({ ...v, date: todayLocal(), amount: "", description: "", orderId: "" })); refresh();
   }
 
-  function reverseExpense(expense: Expense) {
+  function reverseExpense(expense: Expense, reason: string) {
     try {
-      const result = phase5Store.reverseExpense(expense.id);
+      const result = phase5Store.reverseExpense(expense.id, reason);
       if (result.errors.length || !result.expense) {
         setActionError(result.errors.join("; ") || "Unable to reverse expense");
         return;
@@ -81,7 +81,7 @@ export default function ExpensesPage() {
         <Button variant={tab === "expenses" ? "primary" : "outline"} onClick={() => setTab("expenses")}>Expenses</Button>
         <Button variant={tab === "purchases" ? "primary" : "outline"} onClick={() => setTab("purchases")}>Purchases</Button>
       </div>
-      {tab === "expenses" && <ExpenseList expenses={expenses} onAdd={() => setExpOpen(true)} onReverse={reverseExpense} />}
+      {tab === "expenses" && <ExpenseList expenses={expenses} categories={categories} onAdd={() => setExpOpen(true)} onReverse={reverseExpense} />}
       {tab === "purchases" && <PurchaseList purchases={purchases} onAdd={() => setPurOpen(true)} />}
 
       <Modal open={expOpen} title="Add Expense" onClose={() => setExpOpen(false)} footer={<><Button variant="outline" onClick={() => setExpOpen(false)}>Cancel</Button><Button onClick={saveExpense}>Save</Button></>}>
