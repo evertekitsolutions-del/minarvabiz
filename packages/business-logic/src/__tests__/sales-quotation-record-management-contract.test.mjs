@@ -37,7 +37,7 @@ for (const token of [
 
 assert.equal(quotationsLogic.includes("export function updateQuotation"), true);
 assert.equal(quotationsLogic.includes("export function archiveQuotation"), true);
-assert.equal(quotationsLogic.includes("export function canSetQuotationStatus"), true);
+assert.match(quotationsLogic, /export (?:function|const) canSetQuotationStatus/);
 assert.equal(quotationsPanel.includes("canSetQuotationStatus(q, status)"), true);
 assert.equal(quotationsLogic.includes('auditAction("quotation.update"'), true);
 assert.equal(quotationsLogic.includes('auditAction("quotation.archive"'), true);
