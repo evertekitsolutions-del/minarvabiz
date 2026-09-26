@@ -48,6 +48,28 @@ async function evalIn(ws, expression) {
   });
 }
 
+async function cdp(ws, method, params = {}) {
+  const id = ++nextId;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(`CDP timeout: ${method}`));
+    }, 20000);
+    pending.set(id, { resolve, reject, timer });
+    ws.send(JSON.stringify({ id, method, params }));
+  });
+}
+
+async function typeFieldLikeUser(ws, dialogName, labelText, value) {
+  const focused = JSON.parse(await evalIn(ws, `(()=>{const d=[...document.querySelectorAll('[role="dialog"]')].find(x=>(x.getAttribute('aria-label')||'').toLowerCase().includes(${JSON.stringify(dialogName.toLowerCase())}));const label=[...(d?.querySelectorAll('label')||[])].find(x=>(x.innerText||'').toLowerCase().includes(${JSON.stringify(labelText.toLowerCase())}));const el=label?.querySelector('input,textarea');if(!el)return JSON.stringify({ok:false});el.focus();const proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value')?.set?.call(el,'');el.dispatchEvent(new Event('input',{bubbles:true}));return JSON.stringify({ok:true});})()`));
+  if (!focused.ok) throw new Error(`TYPE_FIELD ${dialogName}/${labelText}: focus failed`);
+  await cdp(ws, "Input.insertText", { text: value });
+  await sleep(120);
+  const actual = JSON.parse(await evalIn(ws, `JSON.stringify(document.activeElement?.value ?? "")`));
+  if (actual !== value) throw new Error(`TYPE_FIELD ${dialogName}/${labelText}: expected ${value}, got ${actual}`);
+  console.log(`REAL_KEYBOARD_${labelText.replace(/\s+/g, "_").toUpperCase()} PASS`);
+}
+
 async function ready(ws) {
   for (let i = 0; i < 60; i++) {
     const raw = await evalIn(ws, `JSON.stringify({ready:document.documentElement.dataset.minarvaRendererReady==='true',error:document.documentElement.dataset.minarvaRendererError==='true',text:(document.body?.innerText||'').slice(0,1400)})`);
@@ -187,7 +209,7 @@ async function main() {
     await click(ws, "PRODUCTS", ["products & inventory"]);
     await assertMain(ws, "PRODUCTS", ["Products & Inventory", "Add Product"]);
     await click(ws, "PRODUCT_ADD", ["add product"]);
-    await setField(ws, "Add Product", "Product name", "QA POS Product");
+    await typeFieldLikeUser(ws, "Add Product", "Product name", "QA POS Product");
     await setField(ws, "Add Product", "Barcode", "QA1001");
     await setField(ws, "Add Product", "Cost price", "60");
     await setField(ws, "Add Product", "Selling price", "100");
@@ -197,7 +219,7 @@ async function main() {
     await assertMain(ws, "PRODUCT_SAVED", ["QA POS Product"]);
     // Product category add button must open/save and immediately appear in the filter.
     await click(ws, "CATEGORY_ADD", ["+ Category"]);
-    await setField(ws, "Add Product Category", "Category name", "QA Category");
+    await typeFieldLikeUser(ws, "Add Product Category", "Category name", "QA Category");
     await click(ws, "CATEGORY_SAVE", ["save category"]);
     await assertMain(ws, "CATEGORY_SAVED", ["QA Category"]);
 
