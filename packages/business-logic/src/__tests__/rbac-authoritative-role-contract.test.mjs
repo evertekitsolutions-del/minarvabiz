@@ -19,9 +19,10 @@ for (const token of [
   "CREATE OR REPLACE FUNCTION public.current_user_authorization",
   "SECURITY INVOKER",
   "Exactly one Minarva Biz organization membership is required",
-  "CREATE OR REPLACE FUNCTION public.set_organization_member_role",
-  "Users cannot change their own organization role",
-  "Only a super admin may grant or modify the super admin role",
+  "GRANT UPDATE (role) ON TABLE public.organization_members TO authenticated",
+  "CREATE POLICY organization_members_role_update",
+  "user_id <> (SELECT auth.uid())",
+  "organization_members.role <> 'super_admin'",
 ]) assert.equal(migration.includes(token), true, `Missing authoritative RBAC migration contract: ${token}`);
 
 for (const table of [
