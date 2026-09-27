@@ -98,6 +98,18 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   }, []);
 
   React.useEffect(() => {
+    if (!searchOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSearchOpen(false);
+        setSearchResults([]);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [searchOpen]);
+
+  React.useEffect(() => {
     bootstrapFromLocalStorage();
     const u = getSessionUser();
     const token = getSessionToken();
@@ -158,14 +170,22 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
     >
       <ToastProvider>
         <ErrorBoundary>
-          {searchOpen && searchResults.length > 0 && (
-            <div className="fixed left-1/2 top-16 z-[100] w-full max-w-lg -translate-x-1/2 rounded-xl border border-slate-200 bg-white shadow-xl">
+          {searchOpen && (
+            <div
+              className="fixed left-1/2 top-16 z-[100] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-slate-200 bg-white shadow-xl"
+              role="region"
+              aria-label="Global search results"
+              aria-live="polite"
+            >
+              {searchResults.length === 0 ? (
+                <p className="px-4 py-6 text-center text-sm text-slate-500" role="status">No matching records found.</p>
+              ) : (
               <ul className="max-h-80 overflow-auto py-2 text-sm">
                 {searchResults.map((r) => (
                   <li key={r.kind + r.id}>
                     <button
                       type="button"
-                      className="flex w-full flex-col px-4 py-2 text-left hover:bg-slate-50"
+                      className="flex w-full flex-col px-4 py-2 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
                       onClick={() => {
                         setSearchOpen(false);
                         router.push(r.href);
@@ -179,6 +199,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
                   </li>
                 ))}
               </ul>
+              )}
             </div>
           )}
           <AppShell
