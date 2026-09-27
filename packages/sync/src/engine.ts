@@ -14,7 +14,6 @@ import {
   createConflict, autoResolve, manualResolve, compareVersions,
   type VersionedRecord,
 } from "./conflict";
-import { isFinancialTable } from "./constants";
 
 export interface CloudAdapter {
   push(events: OutboxEvent[]): Promise<{
@@ -98,16 +97,47 @@ export class SyncEngine {
   ): ConflictRecord | null {
     const idx = this.conflicts.findIndex((c) => c.id === conflictId);
     if (idx < 0) return null;
-    const resolved = manualResolve(this.conflicts[idx], choice, merged);
-    this.conflicts[idx] = resolved;
+
+    const conflict = this.conflicts[idx];
+    let payload: VersionedRecord | null = null;
+
     if (choice === "local" || choice === "merged") {
-      const payload = (choice === "merged" && merged
+      const selected = (choice === "merged" && merged
         ? merged
-        : resolved.localPayload) as VersionedRecord;
-      this.local.upsert(resolved.tableName, payload);
+        : conflict.localPayload) as VersionedRecord;
+      payload = {
+        ...selected,
+        id: conflict.recordId,
+        version: Math.max(conflict.localVersion, conflict.remoteVersion) + 1,
+        updatedAt: nowISO(),
+      };
+      this.local.upsert(conflict.tableName, payload);
+      this.outbox.resolveConflict(
+        conflict.tableName,
+        conflict.recordId,
+        "local",
+        payload as Record<string, unknown>
+      );
     } else {
-      this.local.upsert(resolved.tableName, resolved.remotePayload as unknown as VersionedRecord);
+      payload = conflict.remotePayload as unknown as VersionedRecord;
+      this.local.upsert(conflict.tableName, payload);
+      this.outbox.resolveConflict(conflict.tableName, conflict.recordId, "remote");
     }
+
+    const resolved = manualResolve(
+      conflict,
+      choice,
+      choice === "merged" ? (payload as Record<string, unknown>) : undefined
+    );
+    if (choice === "local" && payload) {
+      resolved.localPayload = { ...payload };
+      resolved.localVersion = payload.version;
+    }
+    if (choice === "merged" && payload) {
+      resolved.localPayload = { ...payload };
+      resolved.localVersion = payload.version;
+    }
+    this.conflicts[idx] = resolved;
     return resolved;
   }
 
@@ -196,22 +226,46 @@ export class SyncEngine {
           session.pulled += 1;
           continue;
         }
+        const sameVersionDiverged =
+          existing.version === record.version &&
+          JSON.stringify(existing) !== JSON.stringify(record);
+
+        if (sameVersionDiverged) {
+          const alreadyOpen = this.conflicts.some(
+            (c) =>
+              !c.resolution &&
+              c.tableName === tableName &&
+              c.recordId === record.id &&
+              c.localVersion === existing.version &&
+              c.remoteVersion === record.version
+          );
+          if (alreadyOpen) continue;
+
+          const conflict = createConflict({
+            tableName,
+            recordId: record.id,
+            local: existing,
+            remote: record,
+          });
+          const auto = autoResolve(conflict);
+          this.conflicts.push(auto.conflict);
+          if (auto.winner === "remote") {
+            this.local.upsert(tableName, record);
+            session.pulled += 1;
+          } else if (auto.winner === "local") {
+            // Local stays authoritative for non-financial LWW conflicts.
+          } else {
+            session.conflicts += 1;
+          }
+          continue;
+        }
+
         const cmp = compareVersions(existing, record);
         if (cmp === "remote") {
           this.local.upsert(tableName, record);
           session.pulled += 1;
-        } else if (cmp === "conflict" || (cmp === "local" && isFinancialTable(tableName) === false && existing.updatedAt === record.updatedAt)) {
-          // same version different content → conflict
-          if (JSON.stringify(existing) !== JSON.stringify(record)) {
-            const conflict = createConflict({ tableName, recordId: record.id, local: existing, remote: record });
-            const auto = autoResolve(conflict);
-            this.conflicts.push(auto.conflict);
-            if (auto.winner === "remote") this.local.upsert(tableName, record);
-            if (!auto.winner) session.conflicts += 1;
-            else session.pulled += 1;
-          }
         }
-        // local wins → skip
+        // local/equal wins → skip
       }
       this.lastPullAt = pull.serverTime;
 
