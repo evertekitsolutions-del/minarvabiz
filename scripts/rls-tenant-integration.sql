@@ -206,6 +206,12 @@ SELECT test.assert_true(
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', false);
 
+-- Restore the downstream fixture after validating same-tenant role mutation.
+UPDATE public.organization_members
+SET role = 'tailor'
+WHERE org_id = '10000000-0000-0000-0000-000000000001'
+  AND user_id = 'a0000000-0000-0000-0000-000000000003';
+
 UPDATE public.organization_members
 SET role = 'manager'
 WHERE org_id = '20000000-0000-0000-0000-000000000002'
