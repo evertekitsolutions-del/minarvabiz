@@ -11,7 +11,7 @@ type NativeDesktopApi = {
   createManualBackup?: () => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
   createAutomaticBackup?: (retention?: number) => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
   exportBackup?: (id: string) => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
-  restoreBackup?: () => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
+  restoreBackup?: () => Promise<{ ok: boolean; preRestoreBackup?: string | null; error?: string; cancelled?: boolean }>;
   relaunch?: () => Promise<boolean>;
 };
 
