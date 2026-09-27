@@ -57,7 +57,7 @@ type DesktopDiagnosticsApi = {
   platform: string;
   sqliteExists: () => Promise<boolean>;
   readSqliteBinary: () => Promise<Uint8Array | null>;
-  listBackups: () => Promise<Array<{ createdAt: string; sizeBytes: number; kind: "manual" | "automatic"; verified: boolean }>>;
+  listBackups: () => Promise<Array<{ createdAt: string; sizeBytes: number; kind: "manual" | "automatic" | "pre-restore" | "pre-update"; verified: boolean }>>;
   chooseBackupDirectory: () => Promise<string | null>;
   useDriveDBackup?: () => Promise<{ ok: boolean; path?: string; error?: string }>;
   getLicenseState: () => Promise<{ status: string; plan: string | null; edition: string | null; daysRemaining: number | null; graceDaysRemaining: number | null; reason?: string }>;
