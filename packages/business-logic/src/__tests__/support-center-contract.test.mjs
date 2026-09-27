@@ -12,6 +12,7 @@ const ui = read("packages/ui/src/components/support/SupportCenter.tsx");
 const server = read("apps/web/src/lib/support-server.ts");
 const chatRoute = read("apps/web/src/app/api/support/chat/route.ts");
 const feedbackRoute = read("apps/web/src/app/api/support/feedback/route.ts");
+const healthRoute = read("apps/web/src/app/api/support/health/route.ts");
 const adminActions = read("apps/license-admin/src/app/actions.ts");
 const adminInbox = read("apps/license-admin/src/app/admin-panel/SupportInboxCard.tsx");
 const migration = read("supabase/migrations/20260927_ai_support_center.sql");
@@ -49,6 +50,8 @@ assert.match(chatRoute, /answerTechnicalSupport/);
 assert.match(feedbackRoute, /support-submit-day/);
 assert.match(feedbackRoute, /createSupportRequest/);
 assert.match(feedbackRoute, /triageSupportRequest/);
+assert.match(healthRoute, /supportConfigurationStatus/);
+assert.match(healthRoute, /ready/);
 
 assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.support_requests/);
 assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
