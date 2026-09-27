@@ -393,30 +393,88 @@ ipcMain.handle("trial:activate", (event, registration: unknown) => {
   catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 });
 ipcMain.handle("trial:markSynced", (event) => { requireTrustedRenderer(event); const trial = readTrial(); if (!trial) return false; try { writeTrial({ ...trial, synced: true }); return true; } catch { return false; } });
-ipcMain.handle("backup:list", async (event) => { requireTrustedRenderer(event); fs.mkdirSync(backupDir(), { recursive: true }); const filenames = fs.readdirSync(backupDir()).filter((f) => f.endsWith(".db")); const items = await Promise.all(filenames.map(async (filename) => { const full = path.join(backupDir(), filename), stat = fs.statSync(full), validationError = await minarvaSqliteValidationError(full), kind = filename.includes("-automatic-") ? "automatic" : "manual"; return { id: filename, filename, createdAt: stat.mtime.toISOString(), sizeBytes: stat.size, kind, verified: validationError === null, location: "local" }; })); return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt)); });
-ipcMain.handle("backup:createManual", async (event) => { requireTrustedRenderer(event); const source = sqlitePath(); if (!fs.existsSync(source)) return { ok: false, error: "SQLite database is missing or invalid" }; const sourceError = await minarvaSqliteValidationError(source); if (sourceError) return { ok: false, error: `Minarva Biz database failed backup validation: ${sourceError}` }; const result = await dialog.showSaveDialog({ title: "Save Minarva Biz Backup", defaultPath: path.join(app.getPath("documents"), `minarvabiz-backup-${timestamp()}.db`), filters: [{ name: "Minarva Biz SQLite Backup", extensions: ["db"] }] }); if (result.canceled || !result.filePath) return { ok: false, cancelled: true }; try { const sizeBytes = copySqlite(source, result.filePath); const validationError = await minarvaSqliteValidationError(result.filePath); if (validationError) { try { fs.unlinkSync(result.filePath); } catch {} return { ok: false, error: `Created backup failed Minarva Biz validation: ${validationError}` }; } return { ok: true, path: result.filePath, sizeBytes, filename: path.basename(result.filePath) }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; } });
-ipcMain.handle("backup:export", async (event, id: unknown) => {
+ipcMain.handle("backup:list", async (event) => {
   requireTrustedRenderer(event);
-  const cleanId = typeof id === "string" ? id : "";
-  if (!cleanId || cleanId.length > MAX_BACKUP_ID_CHARS || cleanId !== path.basename(cleanId) || !/^[A-Za-z0-9._-]+\.db$/i.test(cleanId)) {
-    return { ok: false, error: "Backup identifier is invalid" };
-  }
-  const source = path.join(backupDir(), cleanId);
-  if (!fs.existsSync(source)) return { ok: false, error: "Backup file is missing or invalid" };
-  const sourceError = await minarvaSqliteValidationError(source);
-  if (sourceError) return { ok: false, error: `Backup file failed Minarva Biz validation: ${sourceError}` };
-  const result = await dialog.showSaveDialog({ title: "Export Minarva Biz Backup", defaultPath: path.join(app.getPath("documents"), cleanId), filters: [{ name: "Minarva Biz SQLite Backup", extensions: ["db"] }] });
+  return listBackupFiles();
+});
+ipcMain.handle("backup:createManual", async (event) => {
+  requireTrustedRenderer(event);
+  const result = await dialog.showSaveDialog({
+    title: "Save Minarva Biz Backup",
+    defaultPath: path.join(app.getPath("documents"), `minarvabiz-backup-${timestamp()}.db`),
+    filters: [{ name: "Minarva Biz SQLite Backup", extensions: ["db"] }],
+  });
   if (result.canceled || !result.filePath) return { ok: false, cancelled: true };
+
+  const internal = await createLocalBackup("manual");
+  if (!internal.ok) return internal;
   try {
-    const sizeBytes = copySqlite(source, result.filePath);
+    const sizeBytes = copySqlite(internal.path, result.filePath);
     const validationError = await minarvaSqliteValidationError(result.filePath);
-    if (validationError) { try { fs.unlinkSync(result.filePath); } catch {} return { ok: false, error: `Exported backup failed Minarva Biz validation: ${validationError}` }; }
-    return { ok: true, path: result.filePath, sizeBytes, filename: path.basename(result.filePath) };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    if (validationError) {
+      try { fs.unlinkSync(result.filePath); } catch {}
+      return { ok: false, error: `Exported manual backup failed Minarva Biz validation: ${validationError}`, internalBackup: internal.path };
+    }
+    return {
+      ok: true,
+      path: result.filePath,
+      sizeBytes,
+      filename: path.basename(result.filePath),
+      internalBackup: internal.path,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: `A verified internal backup was preserved, but saving the selected copy failed: ${error instanceof Error ? error.message : String(error)}`,
+      internalBackup: internal.path,
+    };
   }
 });
-ipcMain.handle("backup:chooseDestination", async (event) => { requireTrustedRenderer(event); const result = await dialog.showOpenDialog({ title: "Choose automatic backup folder", properties: ["openDirectory", "createDirectory"] }); if (result.canceled || !result.filePaths[0]) return null; const selected = path.resolve(result.filePaths[0]); fs.mkdirSync(selected, { recursive: true }); fs.writeFileSync(backupDestinationConfigPath(), selected, "utf8"); return selected; });
+ipcMain.handle("backup:export", async (event, id: unknown) => {
+  requireTrustedRenderer(event);
+  const resolved = resolveBackupId(id);
+  if (!resolved) return { ok: false, error: "Backup identifier is invalid" };
+  if (!fs.existsSync(resolved.file)) return { ok: false, error: "Backup file is missing or invalid" };
+
+  const sourceError = await minarvaSqliteValidationError(resolved.file);
+  if (sourceError) return { ok: false, error: `Backup file failed Minarva Biz validation: ${sourceError}` };
+
+  const result = await dialog.showSaveDialog({
+    title: "Export Minarva Biz Backup",
+    defaultPath: path.join(app.getPath("documents"), resolved.filename),
+    filters: [{ name: "Minarva Biz SQLite Backup", extensions: ["db"] }],
+  });
+  if (result.canceled || !result.filePath) return { ok: false, cancelled: true };
+
+  try {
+    const sizeBytes = copySqlite(resolved.file, result.filePath);
+    const validationError = await minarvaSqliteValidationError(result.filePath);
+    if (validationError) {
+      try { fs.unlinkSync(result.filePath); } catch {}
+      return { ok: false, error: `Exported backup failed Minarva Biz validation: ${validationError}` };
+    }
+    return { ok: true, path: result.filePath, sizeBytes, filename: path.basename(result.filePath) };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+});
+ipcMain.handle("backup:chooseDestination", async (event) => {
+  requireTrustedRenderer(event);
+  const result = await dialog.showOpenDialog({
+    title: "Choose automatic backup folder",
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  const selected = path.resolve(result.filePaths[0]);
+  try {
+    fs.mkdirSync(selected, { recursive: true });
+    fs.accessSync(selected, fs.constants.W_OK);
+    fs.writeFileSync(backupDestinationConfigPath(), selected, "utf8");
+    return selected;
+  } catch (error) {
+    throw new Error(`Selected backup folder is not writable: ${error instanceof Error ? error.message : String(error)}`);
+  }
+});
 ipcMain.handle("backup:useDriveD", async (event) => {
   requireTrustedRenderer(event);
   if (process.platform !== "win32") return { ok: false, error: "D: drive backup is available on Windows only." };
@@ -431,9 +489,94 @@ ipcMain.handle("backup:useDriveD", async (event) => {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
 });
-ipcMain.handle("backup:createAutomatic", async (event) => { requireTrustedRenderer(event); try { const result = createLocalBackup("automatic"); if (!result) return { ok: false, error: "SQLite database does not exist or is invalid" }; const validationError = await minarvaSqliteValidationError(result.path); if (validationError) { try { fs.unlinkSync(result.path); } catch {} return { ok: false, error: `Automatic backup failed Minarva Biz validation: ${validationError}` }; } return { ok: true, ...result, filename: path.basename(result.path) }; } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; } });
-ipcMain.handle("backup:pruneAutomatic", (event, retention?: number) => { requireTrustedRenderer(event); const safeRetention = Number.isFinite(retention) ? Math.max(1, Math.min(365, Math.floor(retention as number))) : 14; pruneAutomaticBackups(safeRetention); return true; });
-ipcMain.handle("backup:restoreFromFile", async (event) => { requireTrustedRenderer(event); const result = await dialog.showOpenDialog({ title: "Restore Minarva Biz Backup", properties: ["openFile"], filters: [{ name: "Minarva Biz SQLite Backup", extensions: ["db"] }] }); if (result.canceled || !result.filePaths[0]) return { ok: false, cancelled: true }; const source = result.filePaths[0]; const validationError = await minarvaSqliteValidationError(source); if (validationError) return { ok: false, error: `Selected file is not a valid Minarva Biz SQLite backup: ${validationError}` }; const target = sqlitePath(), temp = `${target}.restore-${process.pid}-${Date.now()}`, rollback = `${target}.rollback-${process.pid}-${Date.now()}`; let targetMoved = false; try { const pre = createLocalBackup("automatic"); copySqlite(source, temp); const stagedError = await minarvaSqliteValidationError(temp); if (stagedError) { fs.unlinkSync(temp); return { ok: false, error: `Restore staging file failed SQLite validation: ${stagedError}` }; } if (fs.existsSync(target)) { fs.renameSync(target, rollback); targetMoved = true; } fs.renameSync(temp, target); const restoredError = await minarvaSqliteValidationError(target); if (restoredError) throw new Error(`Restored database failed SQLite validation: ${restoredError}`); if (targetMoved) { try { fs.unlinkSync(rollback); } catch {} } return { ok: true, source, preRestoreBackup: pre?.path ?? null }; } catch (e) { try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch {} try { if (fs.existsSync(target) && targetMoved) fs.unlinkSync(target); } catch {} try { if (targetMoved && fs.existsSync(rollback)) { fs.renameSync(rollback, target); } } catch {} return { ok: false, error: `Restore failed and the previous database was restored when possible: ${e instanceof Error ? e.message : String(e)}` }; } });
+ipcMain.handle("backup:createAutomatic", async (event, retention?: number) => {
+  requireTrustedRenderer(event);
+  const result = await createLocalBackup("automatic");
+  if (!result.ok) return result;
+  pruneAutomaticBackups(Number.isFinite(retention) ? Number(retention) : 14);
+  return { ok: true, path: result.path, sizeBytes: result.sizeBytes, filename: path.basename(result.path) };
+});
+ipcMain.handle("backup:pruneAutomatic", (event, retention?: number) => {
+  requireTrustedRenderer(event);
+  pruneAutomaticBackups(Number.isFinite(retention) ? Number(retention) : 14);
+  return true;
+});
+ipcMain.handle("backup:restoreFromFile", async (event) => {
+  requireTrustedRenderer(event);
+  const result = await dialog.showOpenDialog({
+    title: "Restore Minarva Biz Backup",
+    properties: ["openFile"],
+    filters: [{ name: "Minarva Biz SQLite Backup", extensions: ["db"] }],
+  });
+  if (result.canceled || !result.filePaths[0]) return { ok: false, cancelled: true };
+
+  const source = result.filePaths[0];
+  const validationError = await minarvaSqliteValidationError(source);
+  if (validationError) {
+    return { ok: false, error: `Selected file is not a valid Minarva Biz SQLite backup: ${validationError}` };
+  }
+
+  const target = sqlitePath();
+  const temp = `${target}.restore-${process.pid}-${Date.now()}`;
+  const rollback = `${target}.rollback-${process.pid}-${Date.now()}`;
+  const hadTarget = fs.existsSync(target);
+  let targetMoved = false;
+  let preRestoreBackup: string | null = null;
+
+  if (hadTarget) {
+    const pre = await createLocalBackup("pre-restore");
+    if (!pre.ok) {
+      return { ok: false, error: `Restore blocked because a verified pre-restore safety backup could not be created: ${pre.error}` };
+    }
+    preRestoreBackup = pre.path;
+  }
+
+  try {
+    copySqlite(source, temp);
+    const stagedError = await minarvaSqliteValidationError(temp);
+    if (stagedError) {
+      try { fs.unlinkSync(temp); } catch {}
+      return { ok: false, error: `Restore staging file failed Minarva Biz validation: ${stagedError}` };
+    }
+
+    if (hadTarget) {
+      fs.renameSync(target, rollback);
+      targetMoved = true;
+    }
+    fs.renameSync(temp, target);
+
+    const restoredError = await minarvaSqliteValidationError(target);
+    if (restoredError) throw new Error(`Restored database failed Minarva Biz validation: ${restoredError}`);
+
+    if (targetMoved) {
+      try { fs.unlinkSync(rollback); } catch {}
+    }
+    return { ok: true, source, preRestoreBackup };
+  } catch (error) {
+    try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch {}
+    try { if (targetMoved && fs.existsSync(target)) fs.unlinkSync(target); } catch {}
+
+    let rollbackError: string | null = null;
+    if (targetMoved && fs.existsSync(rollback)) {
+      try {
+        fs.renameSync(rollback, target);
+        rollbackError = await minarvaSqliteValidationError(target);
+      } catch (rollbackFailure) {
+        rollbackError = rollbackFailure instanceof Error ? rollbackFailure.message : String(rollbackFailure);
+      }
+    }
+    const rollbackStatus = rollbackError
+      ? ` Previous database rollback validation failed: ${rollbackError}`
+      : targetMoved
+        ? " Previous database was restored and revalidated."
+        : "";
+    return {
+      ok: false,
+      error: `Restore failed: ${error instanceof Error ? error.message : String(error)}.${rollbackStatus}`,
+      preRestoreBackup,
+    };
+  }
+});
 ipcMain.handle("printer:list", async (event) => {
   requireTrustedRenderer(event);
   const printers = await event.sender.getPrintersAsync();
