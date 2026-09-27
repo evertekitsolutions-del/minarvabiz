@@ -98,16 +98,45 @@ export class SyncEngine {
   ): ConflictRecord | null {
     const idx = this.conflicts.findIndex((c) => c.id === conflictId);
     if (idx < 0) return null;
-    const resolved = manualResolve(this.conflicts[idx], choice, merged);
-    this.conflicts[idx] = resolved;
-    if (choice === "local" || choice === "merged") {
-      const payload = (choice === "merged" && merged
-        ? merged
-        : resolved.localPayload) as VersionedRecord;
-      this.local.upsert(resolved.tableName, payload);
-    } else {
-      this.local.upsert(resolved.tableName, resolved.remotePayload as unknown as VersionedRecord);
+
+    const current = this.conflicts[idx];
+    if (choice === "merged" && isFinancialTable(current.tableName)) {
+      throw new Error("Financial and stock conflicts cannot be field-merged");
     }
+
+    if (choice === "remote") {
+      const resolved = manualResolve(current, "remote");
+      this.conflicts[idx] = resolved;
+      this.local.upsert(
+        resolved.tableName,
+        resolved.remotePayload as unknown as VersionedRecord
+      );
+      this.outbox.discardAggregate(resolved.tableName, resolved.recordId);
+      return resolved;
+    }
+
+    const source = (choice === "merged" && merged
+      ? merged
+      : current.localPayload) as Record<string, unknown>;
+    const winningPayload: VersionedRecord = {
+      ...source,
+      id: current.recordId,
+      version: Math.max(current.localVersion, current.remoteVersion) + 1,
+      updatedAt: nowISO(),
+    } as VersionedRecord;
+    const resolved = {
+      ...manualResolve(current, choice, choice === "merged" ? winningPayload : undefined),
+      localPayload: { ...winningPayload },
+      localVersion: winningPayload.version,
+    };
+    this.conflicts[idx] = resolved;
+    this.local.upsert(resolved.tableName, winningPayload);
+    this.outbox.requeueAggregate(
+      resolved.tableName,
+      resolved.recordId,
+      winningPayload,
+      this.deviceId
+    );
     return resolved;
   }
 
@@ -164,15 +193,19 @@ export class SyncEngine {
                 remote: rej.remote,
               });
               const auto = autoResolve(conflict);
-              if (auto.winner) {
-                this.conflicts.push(auto.conflict);
-                if (auto.winner === "remote") {
-                  this.local.upsert(conflict.tableName, rej.remote);
-                }
-                this.outbox.markSynced([rej.id]);
+              this.conflicts.push(auto.conflict);
+              if (auto.winner === "remote") {
+                this.local.upsert(conflict.tableName, rej.remote);
+                this.outbox.discardAggregate(conflict.tableName, conflict.recordId);
+              } else if (auto.winner === "local") {
+                this.outbox.requeueAggregate(
+                  conflict.tableName,
+                  conflict.recordId,
+                  local,
+                  this.deviceId
+                );
               } else {
-                this.conflicts.push(auto.conflict);
-                this.outbox.markConflict(rej.id);
+                this.outbox.markAggregateConflict(conflict.tableName, conflict.recordId);
                 session.conflicts += 1;
               }
             } else {
@@ -196,22 +229,53 @@ export class SyncEngine {
           session.pulled += 1;
           continue;
         }
+
+        const differs = JSON.stringify(existing) !== JSON.stringify(record);
+        if (!differs) continue;
+
+        const unresolvedLocal = this.outbox.unresolvedForAggregate(tableName, record.id);
+        if (unresolvedLocal.length > 0) {
+          const conflict = createConflict({
+            tableName,
+            recordId: record.id,
+            local: existing,
+            remote: record,
+          });
+          const auto = autoResolve(conflict);
+          this.conflicts.push(auto.conflict);
+
+          if (auto.winner === "remote") {
+            this.local.upsert(tableName, record);
+            this.outbox.discardAggregate(tableName, record.id);
+            session.pulled += 1;
+          } else if (auto.winner === "local") {
+            // Keep the unsynced local mutation queued; the next push reconciles it.
+          } else {
+            this.outbox.markAggregateConflict(tableName, record.id);
+            session.conflicts += 1;
+          }
+          continue;
+        }
+
         const cmp = compareVersions(existing, record);
         if (cmp === "remote") {
           this.local.upsert(tableName, record);
           session.pulled += 1;
-        } else if (cmp === "conflict" || (cmp === "local" && isFinancialTable(tableName) === false && existing.updatedAt === record.updatedAt)) {
-          // same version different content → conflict
-          if (JSON.stringify(existing) !== JSON.stringify(record)) {
-            const conflict = createConflict({ tableName, recordId: record.id, local: existing, remote: record });
-            const auto = autoResolve(conflict);
-            this.conflicts.push(auto.conflict);
-            if (auto.winner === "remote") this.local.upsert(tableName, record);
-            if (!auto.winner) session.conflicts += 1;
-            else session.pulled += 1;
-          }
+          continue;
         }
-        // local wins → skip
+        if (cmp === "local") continue;
+
+        // Same version/timestamp but different payload is a real simultaneous
+        // conflict. Never guess, even for non-financial master data.
+        const conflict = createConflict({
+          tableName,
+          recordId: record.id,
+          local: existing,
+          remote: record,
+          strategy: "manual",
+        });
+        this.conflicts.push(conflict);
+        session.conflicts += 1;
       }
       this.lastPullAt = pull.serverTime;
 
