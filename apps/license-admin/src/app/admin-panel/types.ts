@@ -39,3 +39,32 @@ export interface LicenseRegistryRow {
   metadata?: LicenseMetadataView | null;
   activations?: LicenseActivationView[];
 }
+
+
+export type SupportRequestType = "technical_escalation" | "bug" | "feature_request" | "suggestion";
+export type SupportRequestStatus = "new" | "in_review" | "planned" | "resolved" | "rejected" | "duplicate";
+export type SupportRequestPriority = "low" | "normal" | "high" | "urgent";
+
+export interface SupportRequestRow {
+  id: string;
+  request_type: SupportRequestType;
+  status: SupportRequestStatus;
+  priority: SupportRequestPriority;
+  title: string;
+  description: string;
+  module?: string | null;
+  organization_name?: string | null;
+  contact_email?: string | null;
+  app_version?: string | null;
+  edition?: string | null;
+  platform?: string | null;
+  ai_summary?: string | null;
+  screenshot_summary?: string | null;
+  transcript?: Array<{ role?: string; content?: string }>;
+  metadata?: Record<string, unknown> | null;
+  assigned_to?: string | null;
+  admin_notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at?: string | null;
+}
