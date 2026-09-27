@@ -64,7 +64,7 @@ export function DataTable<T extends { id: string }>({
               key={row.id}
               onClick={() => onRowClick?.(row)}
               onKeyDown={(event) => {
-                if (!onRowClick || (event.key !== "Enter" && event.key !== " ")) return;
+                if (event.target !== event.currentTarget || !onRowClick || (event.key !== "Enter" && event.key !== " ")) return;
                 event.preventDefault();
                 onRowClick(row);
               }}

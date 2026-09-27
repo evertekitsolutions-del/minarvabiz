@@ -96,13 +96,13 @@ export function DesktopCustomerMasterPanel({ onAdd, onSelect, onPersist }: Props
       </Modal>
       <Modal
         open={Boolean(archiveTarget)}
-        title={archiveTarget ? `Archive Customer — ${archiveTarget.name}` : "Archive Customer"}
+        title={archiveTarget ? `Delete / Archive Customer — ${archiveTarget.name}` : "Delete / Archive Customer"}
         onClose={() => { setArchiveTarget(null); setArchiveReason(""); setError(null); }}
-        footer={<><Button variant="outline" onClick={() => setArchiveTarget(null)}>Keep Customer</Button><Button disabled={archiveReason.trim().length < 3} onClick={() => void archiveCustomer()}>Archive Customer</Button></>}
+        footer={<><Button variant="outline" onClick={() => setArchiveTarget(null)}>Keep Customer</Button><Button disabled={archiveReason.trim().length < 3} onClick={() => void archiveCustomer()}>Delete / Archive Customer</Button></>}
       >
         <div className="space-y-3">
-          <p className="text-sm text-slate-600">This is a soft archive. Historical invoices and audit records remain intact. Outstanding balances must be settled first.</p>
-          <FormField label="Archive reason *"><textarea className={inputClass + " h-20 py-2"} value={archiveReason} onChange={(e) => setArchiveReason(e.target.value)} /></FormField>
+          <p className="text-sm text-slate-600">This removes the customer from the active list (soft archive). Historical invoices and audit records remain intact. Outstanding balances must be settled first.</p>
+          <FormField label="Deletion reason *"><textarea className={inputClass + " h-20 py-2"} value={archiveReason} onChange={(e) => setArchiveReason(e.target.value)} /></FormField>
           {error && <p className="text-sm text-rose-600">{error}</p>}
         </div>
       </Modal>

@@ -285,7 +285,7 @@ export function QuotationsPanel() {
                 <Button size="sm" variant="outline" onClick={() => setPreview({ quotation: q, paper: "thermal" })}>Thermal Preview</Button>
                 {q.status !== "converted" && <Button size="sm" variant="outline" onClick={() => { const result = convertQuotationToSale(q.id); setMsg(result.error || `Sale ${result.saleId}`); refresh(); }}>→ Sale</Button>}
                 {q.status !== "converted" && <Button size="sm" variant="outline" onClick={() => { const result = convertQuotationToOrder(q.id); setMsg(result.error || `Order ${result.orderId}`); refresh(); }}>→ Order</Button>}
-                {canArchiveQuotation(q) && <Button size="sm" variant="outline" onClick={() => { setArchiveReason(""); setArchiveTarget(q); }}>Archive</Button>}
+                {canArchiveQuotation(q) && <Button size="sm" variant="outline" onClick={() => { setArchiveReason(""); setArchiveTarget(q); }}>Delete / Archive</Button>}
               </div>
             </CardContent>
           </Card>
@@ -426,15 +426,15 @@ export function QuotationsPanel() {
 
       <Modal
         open={Boolean(archiveTarget)}
-        title={archiveTarget ? `Archive ${archiveTarget.quotationNumber}` : "Archive quotation"}
+        title={archiveTarget ? `Delete / Archive ${archiveTarget.quotationNumber}` : "Delete / Archive quotation"}
         onClose={() => { setArchiveTarget(null); setArchiveReason(""); }}
         footer={<>
           <Button variant="outline" onClick={() => { setArchiveTarget(null); setArchiveReason(""); }}>Cancel</Button>
-          <Button onClick={archiveSelected}>Archive quotation</Button>
+          <Button onClick={archiveSelected}>Delete / Archive quotation</Button>
         </>}
       >
         <div className="space-y-3">
-          <p className="text-sm text-slate-600">This is a soft archive, not a destructive database delete. Converted and accepted quotations cannot be archived.</p>
+          <p className="text-sm text-slate-600">This removes the quotation from the active list (soft archive) and keeps its audit history. Converted and accepted quotations cannot be archived.</p>
           <FormField label="Reason *">
             <textarea className={inputClass + " h-20 py-2"} value={archiveReason} onChange={(e) => setArchiveReason(e.target.value)} placeholder="Why is this quotation being archived?" />
           </FormField>

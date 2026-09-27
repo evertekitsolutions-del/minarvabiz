@@ -77,13 +77,6 @@ export function SalesList({
   };
 
   const columns: Column<Sale>[] = [
-    { key: "invoiceNumber", header: "Invoice", render: (row) => <span className="font-medium text-slate-900">{row.invoiceNumber}</span> },
-    { key: "customerName", header: "Customer", render: (row) => row.customerName || "Walk-in" },
-    { key: "total", header: "Total", render: (row) => formatMoney(row.total) },
-    { key: "paidAmount", header: "Paid", render: (row) => formatMoney(row.paidAmount) },
-    { key: "balanceAmount", header: "Balance", render: (row) => <span className={row.balanceAmount > 0 ? "text-rose-600" : "text-slate-500"}>{formatMoney(row.balanceAmount)}</span> },
-    { key: "status", header: "Status", render: (row) => <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyle[row.status] ?? ""}`}>{row.status}</span> },
-    { key: "saleDate", header: "Date", render: (row) => new Date(row.saleDate).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) },
     {
       key: "id",
       header: "Actions",
@@ -94,11 +87,19 @@ export function SalesList({
           {onPrintA4 && <Button size="sm" variant="outline" onClick={() => onPrintA4(row)}>A4</Button>}
           {onPrintThermal && <Button size="sm" variant="outline" onClick={() => onPrintThermal(row)}>Thermal</Button>}
           {onCreateReturn && ["completed", "partial"].includes(row.status) && (
-            <Button size="sm" variant="outline" onClick={() => onCreateReturn(row)}>Return / Refund</Button>
+            <Button size="sm" variant="outline" onClick={() => onCreateReturn(row)}>Cancel / Return / Refund</Button>
           )}
         </div>
       ),
     },
+    { key: "invoiceNumber", header: "Invoice", render: (row) => <span className="font-medium text-slate-900">{row.invoiceNumber}</span> },
+    { key: "customerName", header: "Customer", render: (row) => row.customerName || "Walk-in" },
+    { key: "total", header: "Total", render: (row) => formatMoney(row.total) },
+    { key: "paidAmount", header: "Paid", render: (row) => formatMoney(row.paidAmount) },
+    { key: "balanceAmount", header: "Balance", render: (row) => <span className={row.balanceAmount > 0 ? "text-rose-600" : "text-slate-500"}>{formatMoney(row.balanceAmount)}</span> },
+    { key: "status", header: "Status", render: (row) => <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyle[row.status] ?? ""}`}>{row.status}</span> },
+    { key: "saleDate", header: "Date", render: (row) => new Date(row.saleDate).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) },
+
   ];
 
   const previewHtml = previewSale && buildPreviewHtml ? buildPreviewHtml(previewSale, previewPaper) : "";
@@ -110,6 +111,7 @@ export function SalesList({
           <div>
             <h2 className="text-xl font-semibold text-slate-900">Sales History</h2>
             <p className="text-sm text-slate-500">{filteredSales.length} of {sales.length} invoices</p>
+            <p className="mt-1 text-sm text-slate-500">To cancel a posted bill, choose Cancel / Return / Refund and select all remaining items. The original invoice stays in history.</p>
           </div>
           <Button size="sm" variant="outline" onClick={clearFilters}>Clear filters</Button>
         </div>
@@ -160,7 +162,7 @@ export function SalesList({
         onClose={() => setDetailSale(null)}
         footer={detailSale ? <>
           <Button variant="outline" onClick={() => setDetailSale(null)}>Close</Button>
-          {onCreateReturn && ["completed", "partial"].includes(detailSale.status) && <Button onClick={() => { onCreateReturn(detailSale); setDetailSale(null); }}>Return / Refund</Button>}
+          {onCreateReturn && ["completed", "partial"].includes(detailSale.status) && <Button onClick={() => { onCreateReturn(detailSale); setDetailSale(null); }}>Cancel / Return / Refund</Button>}
         </> : undefined}
       >
         {detailSale && (

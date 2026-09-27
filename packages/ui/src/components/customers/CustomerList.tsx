@@ -24,6 +24,16 @@ export function CustomerList({
   const [q, setQ] = React.useState("");
   const columns: Column<Customer>[] = [
     {
+      key: "id",
+      header: "Actions",
+      render: (r) => (
+        <div className="flex flex-wrap gap-1" onClick={(event) => event.stopPropagation()}>
+          {onEdit && <Button size="sm" variant="outline" onClick={() => onEdit(r)}>Edit</Button>}
+          {onArchive && <Button size="sm" variant="outline" onClick={() => onArchive(r)}>Delete / Archive</Button>}
+        </div>
+      ),
+    },
+    {
       key: "name",
       header: "Name",
       render: (r) => (
@@ -48,16 +58,7 @@ export function CustomerList({
         </span>
       ),
     },
-    {
-      key: "id",
-      header: "Actions",
-      render: (r) => (
-        <div className="flex flex-wrap gap-1" onClick={(event) => event.stopPropagation()}>
-          {onEdit && <Button size="sm" variant="outline" onClick={() => onEdit(r)}>Edit</Button>}
-          {onArchive && <Button size="sm" variant="outline" onClick={() => onArchive(r)}>Archive</Button>}
-        </div>
-      ),
-    },
+
   ];
 
   return (

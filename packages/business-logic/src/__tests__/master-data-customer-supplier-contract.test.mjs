@@ -19,11 +19,11 @@ const supplierStore = read("packages/business-logic/src/phase5-store.ts");
 assert.match(customerList, /onEdit/);
 assert.match(customerList, /onArchive/);
 assert.match(customerList, />Edit</);
-assert.match(customerList, />Archive</);
+assert.match(customerList, />Delete \/ Archive</);
 assert.match(supplierList, /onEdit/);
 assert.match(supplierList, /onArchive/);
 
-assert.match(customerWeb, /Archive reason \*/);
+assert.match(customerWeb, /Deletion reason \*/);
 assert.match(customerWeb, /soft archive/i);
 assert.match(customerWeb, /outstanding balance/i);
 assert.match(supplierWeb, /Archive reason \*/);

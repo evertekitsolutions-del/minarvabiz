@@ -101,7 +101,7 @@ async function assertStatementProfit(ws, expected) {
 async function assertSettledInvoice(ws, customerName) {
   const row = await evalIn(ws, `(()=>{const row=[...document.querySelectorAll('tbody tr')].find(r=>(r.innerText||'').includes(${JSON.stringify(customerName)}));return row ? [...row.querySelectorAll('td')].map(c=>(c.innerText||'').trim()) : null;})()`);
   const money = (value) => Number(String(value).replace(/[^0-9.\-]/g,''));
-  if (!row || money(row[2]) !== 100 || money(row[3]) !== 100 || money(row[4]) !== 0 || row[5] !== 'completed') throw new Error('Invoice settlement mismatch: '+JSON.stringify(row));
+  if (!row || money(row[3]) !== 100 || money(row[4]) !== 100 || money(row[5]) !== 0 || row[6] !== 'completed') throw new Error('Invoice settlement mismatch: '+JSON.stringify(row));
   console.log('CUSTOMER_COLLECTION_INVOICE_SETTLED PASS');
 }
 
