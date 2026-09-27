@@ -9,7 +9,7 @@ type NativeBackup = BackupMeta;
 type NativeDesktopApi = {
   listBackups?: () => Promise<NativeBackup[]>;
   createManualBackup?: () => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
-  createAutomaticBackup?: () => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
+  createAutomaticBackup?: (retention?: number) => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
   exportBackup?: (id: string) => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
   restoreBackup?: () => Promise<{ ok: boolean; error?: string; cancelled?: boolean }>;
   relaunch?: () => Promise<boolean>;
@@ -27,6 +27,8 @@ export function BackupPanel({
   onDownload,
   onInspect,
   onRestore,
+  canManage = true,
+  retentionCount = 14,
 }: {
   backups: BackupMeta[];
   onCreate?: () => void | Promise<void>;
@@ -34,18 +36,23 @@ export function BackupPanel({
   onDownload?: (id: string) => void;
   onInspect?: (id: string) => { ok: boolean; summary?: Record<string, number>; error?: string } | void;
   onRestore?: () => void | Promise<void>;
+  canManage?: boolean;
+  retentionCount?: number;
 }) {
   const [nativeBackups, setNativeBackups] = React.useState<NativeBackup[] | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const native = desktopApi();
 
-  const refreshNative = React.useCallback(async () => {
-    if (!native?.listBackups) return;
+  const refreshNative = React.useCallback(async (): Promise<NativeBackup[] | null> => {
+    if (!native?.listBackups) return null;
     try {
-      setNativeBackups(await native.listBackups());
+      const items = await native.listBackups();
+      setNativeBackups(items);
+      return items;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
+      return null;
     }
   }, [native]);
 
@@ -85,18 +92,22 @@ export function BackupPanel({
 
   const createAutomatic = async () => {
     if (!native?.createAutomaticBackup) throw new Error("Automatic backup is available in the desktop edition only");
-    const r = await native.createAutomaticBackup();
+    const r = await native.createAutomaticBackup(retentionCount);
     if (r.cancelled) return;
     if (!r.ok) throw new Error(r.error || "Automatic backup failed");
     await refreshNative();
   };
 
   const restore = async () => {
+    if (!canManage) throw new Error("You do not have permission to restore backups.");
+    if (!window.confirm("Restore a backup? Minarva Biz will first create a verified safety backup of the current database, then replace the active database and restart.")) return;
     if (native?.restoreBackup) {
       const r = await native.restoreBackup();
       if (r.cancelled) return;
       if (!r.ok) throw new Error(r.error || "Restore failed");
-      setMessage("Restore successful. Restarting Minarva Biz…");
+      setMessage(r.preRestoreBackup
+        ? "Restore successful. Verified pre-restore safety backup created. Restarting Minarva Biz…"
+        : "Restore successful. Restarting Minarva Biz…");
       await native.relaunch?.();
       return;
     }
@@ -116,9 +127,9 @@ export function BackupPanel({
 
   const verify = async (backup: NativeBackup) => {
     if (native?.listBackups) {
-      await refreshNative();
-      const latest = nativeBackups?.find((item) => item.id === backup.id) ?? backup;
-      setMessage(latest.verified ? "Backup verified: valid SQLite database" : "Verification failed: invalid or unreadable SQLite backup");
+      const refreshed = await refreshNative();
+      const latest = refreshed?.find((item) => item.id === backup.id) ?? backup;
+      setMessage(latest.verified ? "Backup verified: valid Minarva Biz SQLite database" : "Verification failed: invalid, incompatible, or unreadable Minarva Biz backup");
       return;
     }
     const ok = onVerify?.(backup.id);
@@ -127,9 +138,9 @@ export function BackupPanel({
 
   const inspect = async (backup: NativeBackup) => {
     if (native?.listBackups) {
-      await refreshNative();
-      const latest = nativeBackups?.find((item) => item.id === backup.id) ?? backup;
-      setMessage(`${latest.verified ? "Valid SQLite backup" : "Invalid SQLite backup"} · ${(latest.sizeBytes / 1024).toFixed(1)} KB · ${new Date(latest.createdAt).toLocaleString("en-IN")}`);
+      const refreshed = await refreshNative();
+      const latest = refreshed?.find((item) => item.id === backup.id) ?? backup;
+      setMessage(`${latest.verified ? "Valid Minarva Biz SQLite backup" : "Invalid or incompatible Minarva Biz backup"} · ${(latest.sizeBytes / 1024).toFixed(1)} KB · ${latest.kind} · ${new Date(latest.createdAt).toLocaleString("en-IN")}`);
       return;
     }
     const result = onInspect?.(backup.id);
@@ -144,9 +155,9 @@ export function BackupPanel({
           <p className="text-sm text-slate-500">Full local SQLite backups with a safety backup before restore</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" disabled={busy} onClick={() => void run(restore, "Restore completed")}>Restore backup</Button>
-          <Button variant="outline" disabled={busy || !native?.createAutomaticBackup} onClick={() => void run(createAutomatic, "Automatic backup created")}>Run automatic backup</Button>
-          <Button disabled={busy} onClick={() => void run(create, "Backup created")}>Create backup</Button>
+          <Button variant="outline" disabled={busy || !canManage} onClick={() => void run(restore, "Restore completed")}>Restore backup</Button>
+          <Button variant="outline" disabled={busy || !canManage || !native?.createAutomaticBackup} onClick={() => void run(createAutomatic, "Automatic backup created")}>Run automatic backup</Button>
+          <Button disabled={busy || !canManage} onClick={() => void run(create, "Backup created")}>Create backup</Button>
         </div>
       </div>
 
@@ -170,7 +181,7 @@ export function BackupPanel({
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" disabled={busy} onClick={() => void verify(b)}>Verify</Button>
                 <Button size="sm" variant="outline" disabled={busy} onClick={() => void inspect(b)}>Inspect</Button>
-                <Button size="sm" disabled={busy} onClick={() => void download(b.id)}>Download</Button>
+                <Button size="sm" disabled={busy || !canManage} onClick={() => void download(b.id)}>Download</Button>
               </div>
             </CardContent>
           </Card>
