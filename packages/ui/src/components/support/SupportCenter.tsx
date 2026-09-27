@@ -156,7 +156,8 @@ export function SupportCenter({
   appVersion = "",
 }: SupportCenterProps) {
   const [mode, setMode] = React.useState<SupportMode>(null);
-  const [clientId] = React.useState(() => supportClientId());
+  const [clientId, setClientId] = React.useState("");
+  const [online, setOnline] = React.useState(true);
   const [detectedVersion, setDetectedVersion] = React.useState(appVersion);
   const [detectedEdition, setDetectedEdition] = React.useState(edition);
   const [detectedPlatform, setDetectedPlatform] = React.useState("");
@@ -187,6 +188,19 @@ export function SupportCenter({
   const [feedbackImageName, setFeedbackImageName] = React.useState("");
   const [feedbackBusy, setFeedbackBusy] = React.useState(false);
   const [feedbackMessage, setFeedbackMessage] = React.useState("");
+
+  React.useEffect(() => {
+    setClientId(supportClientId());
+    setOnline(typeof navigator === "undefined" ? true : navigator.onLine);
+    const handleOnline = () => setOnline(true);
+    const handleOffline = () => setOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -407,7 +421,7 @@ export function SupportCenter({
             <p className="mt-1 text-sm text-slate-500">Version {detectedVersion || appVersion || "online"} · {detectedEdition || edition || "online"} · screenshot analysis supported</p>
           </div>
           <Button variant="outline" onClick={() => {
-            setMessages([messages[0]]);
+            setMessages(messages.slice(0, 1));
             setChatText("");
             setChatImage(null);
             setChatImageName("");
