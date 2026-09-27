@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { BackupPanel, AuditLogList } from "@minarvabiz/ui";
-import { phase7Store } from "@minarvabiz/business-logic";
+import { can, phase7Store } from "@minarvabiz/business-logic";
 import type { BackupMeta, AuditLogEntry } from "@minarvabiz/types";
 
 export default function BackupPage() {
@@ -34,6 +34,7 @@ export default function BackupPage() {
       {tab === "backup" && (
         <BackupPanel
           backups={backups}
+          canManage={can("backup.manage")}
           onCreate={() => { phase7Store.createBackup("manual"); refresh(); }}
           onVerify={(id) => phase7Store.verifyBackup(id)}
           onInspect={(id) => phase7Store.inspectBackup(id)}
