@@ -70,87 +70,45 @@ $$;
 REVOKE ALL ON FUNCTION public.current_user_authorization() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.current_user_authorization() TO authenticated;
 
-CREATE OR REPLACE FUNCTION public.set_organization_member_role(
-  target_user_id UUID,
-  new_role TEXT
+-- Role changes are enforced with column-level grants + RLS. This avoids
+-- exposing privileged SECURITY DEFINER mutation functions through the Data API.
+REVOKE UPDATE ON TABLE public.organization_members FROM PUBLIC, anon, authenticated;
+GRANT UPDATE (role) ON TABLE public.organization_members TO authenticated;
+
+DROP POLICY IF EXISTS organization_members_role_update ON public.organization_members;
+CREATE POLICY organization_members_role_update
+ON public.organization_members
+FOR UPDATE
+TO authenticated
+USING (
+  user_id <> (SELECT auth.uid())
+  AND EXISTS (
+    SELECT 1
+    FROM public.organization_members actor
+    WHERE actor.org_id = organization_members.org_id
+      AND actor.user_id = (SELECT auth.uid())
+      AND actor.role IN ('super_admin','admin')
+      AND (
+        actor.role = 'super_admin'
+        OR organization_members.role <> 'super_admin'
+      )
+  )
 )
-RETURNS VOID
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-DECLARE
-  caller_id UUID := auth.uid();
-  caller_org_id UUID;
-  caller_role TEXT;
-  caller_membership_count INTEGER;
-  target_role TEXT;
-BEGIN
-  IF caller_id IS NULL THEN
-    RAISE EXCEPTION 'Authentication required' USING ERRCODE = '42501';
-  END IF;
-
-  IF new_role NOT IN ('super_admin','admin','manager','cashier','tailor','staff') THEN
-    RAISE EXCEPTION 'Invalid Minarva Biz role' USING ERRCODE = '22023';
-  END IF;
-
-  SELECT COUNT(*)
-    INTO caller_membership_count
-    FROM public.organization_members om
-   WHERE om.user_id = caller_id;
-
-  IF caller_membership_count <> 1 THEN
-    RAISE EXCEPTION 'Exactly one organization membership is required'
-      USING ERRCODE = '42501';
-  END IF;
-
-  SELECT om.org_id, om.role
-    INTO caller_org_id, caller_role
-    FROM public.organization_members om
-   WHERE om.user_id = caller_id
-   LIMIT 1;
-
-  IF caller_org_id IS NULL OR caller_role NOT IN ('super_admin','admin') THEN
-    RAISE EXCEPTION 'Role management requires admin privileges'
-      USING ERRCODE = '42501';
-  END IF;
-
-  IF target_user_id = caller_id THEN
-    RAISE EXCEPTION 'Users cannot change their own organization role'
-      USING ERRCODE = '42501';
-  END IF;
-
-  SELECT om.role
-    INTO target_role
-    FROM public.organization_members om
-   WHERE om.org_id = caller_org_id
-     AND om.user_id = target_user_id;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Target user is not a member of this organization'
-      USING ERRCODE = '22023';
-  END IF;
-
-  IF caller_role <> 'super_admin'
-     AND (new_role = 'super_admin' OR target_role = 'super_admin') THEN
-    RAISE EXCEPTION 'Only a super admin may grant or modify the super admin role'
-      USING ERRCODE = '42501';
-  END IF;
-
-  UPDATE public.organization_members
-     SET role = new_role
-   WHERE org_id = caller_org_id
-     AND user_id = target_user_id;
-
-  UPDATE public.profiles
-     SET role = new_role,
-         updated_at = now()
-   WHERE id = target_user_id;
-END;
-$$;
-
-REVOKE ALL ON FUNCTION public.set_organization_member_role(UUID, TEXT) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.set_organization_member_role(UUID, TEXT) TO authenticated;
+WITH CHECK (
+  user_id <> (SELECT auth.uid())
+  AND role IN ('super_admin','admin','manager','cashier','tailor','staff')
+  AND EXISTS (
+    SELECT 1
+    FROM public.organization_members actor
+    WHERE actor.org_id = organization_members.org_id
+      AND actor.user_id = (SELECT auth.uid())
+      AND actor.role IN ('super_admin','admin')
+      AND (
+        actor.role = 'super_admin'
+        OR organization_members.role <> 'super_admin'
+      )
+  )
+);
 
 
 -- Align remaining tenant tables with the same role model enforced by the
