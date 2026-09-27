@@ -25,6 +25,7 @@ function assertCanManageRole(targetRole: RoleName, existingRole?: RoleName): voi
 
 
 export function listAppUsers(): AppUser[] {
+  assertPermission("users.manage");
   return [...users];
 }
 
