@@ -331,7 +331,7 @@ async function listBackupFiles() {
   const locations: Array<{ dir: string; automaticStorage: boolean }> = [{ dir: internalDir, automaticStorage: false }];
   if (path.resolve(automaticDir) !== path.resolve(internalDir)) locations.push({ dir: automaticDir, automaticStorage: true });
 
-  const items = [];
+  const items: Array<{ id: string; filename: string; createdAt: string; sizeBytes: number; kind: LocalBackupKind; verified: boolean; location: "local" }> = [];
   for (const location of locations) {
     for (const filename of fs.readdirSync(location.dir).filter((name) => name.endsWith(".db") && safeBackupFilename(name))) {
       const full = path.join(location.dir, filename);
