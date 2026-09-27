@@ -110,6 +110,25 @@ function isNewerVersion(candidate: string, current: string) {
   return false;
 }
 
+const FALLBACK_UPDATE_MANIFEST_URL =
+  "https://github.com/evertekitsolutions-del/minarvabiz/releases/latest/download/MinarvaBiz-update-manifest.json";
+const MANIFEST_FETCH_TIMEOUT_MS = 25_000;
+
+async function fetchManifestText(url: string) {
+  const response = await fetch(url, {
+    headers: { accept: "application/json", "cache-control": "no-cache" },
+    signal: AbortSignal.timeout(MANIFEST_FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const text = await response.text();
+  if (Buffer.byteLength(text, "utf8") > 64 * 1024) throw new Error("Update manifest is too large.");
+  return text;
+}
+
+function updateNetworkError() {
+  return "Update service is temporarily unreachable. Check your internet connection and try again.";
+}
+
 export async function checkForSecureUpdate(currentVersion: string): Promise<UpdateCheckResult> {
   const { manifestUrl, publicKeyHex } = config();
   verifiedManifest = null;
@@ -118,16 +137,19 @@ export async function checkForSecureUpdate(currentVersion: string): Promise<Upda
   if (!/^https:\/\//i.test(manifestUrl) || !/^[0-9a-f]{64}$/.test(publicKeyHex)) {
     return { status: "error", currentVersion, error: "Secure update channel configuration is invalid." };
   }
+  let manifestText: string;
   try {
-    const response = await fetch(manifestUrl, {
-      headers: { accept: "application/json", "cache-control": "no-cache" },
-      // The update service may need to wake before it can serve the manifest.
-      signal: AbortSignal.timeout(70000),
-    });
-    if (!response.ok) return { status: "error", currentVersion, error: `Update server returned HTTP ${response.status}.` };
-    const text = await response.text();
-    if (Buffer.byteLength(text, "utf8") > 64 * 1024) return { status: "error", currentVersion, error: "Update manifest is too large." };
-    const manifest = validateManifest(JSON.parse(text));
+    manifestText = await fetchManifestText(manifestUrl);
+  } catch {
+    try {
+      manifestText = await fetchManifestText(FALLBACK_UPDATE_MANIFEST_URL);
+    } catch {
+      return { status: "error", currentVersion, error: updateNetworkError() };
+    }
+  }
+
+  try {
+    const manifest = validateManifest(JSON.parse(manifestText));
     if (!manifest) return { status: "error", currentVersion, error: "Update manifest is malformed." };
     if (!verifyManifestSignature(manifest, publicKeyHex)) return { status: "error", currentVersion, error: "Update manifest signature verification failed." };
     if (!isNewerVersion(manifest.version, currentVersion)) {
@@ -135,11 +157,8 @@ export async function checkForSecureUpdate(currentVersion: string): Promise<Upda
     }
     verifiedManifest = manifest;
     return { status: "available", currentVersion, version: manifest.version, publishedAt: manifest.publishedAt, notes: manifest.notes };
-  } catch (e) {
-    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
-      return { status: "error", currentVersion, error: "The update server did not respond in time. Check your connection and try again." };
-    }
-    return { status: "error", currentVersion, error: e instanceof Error ? e.message : String(e) };
+  } catch {
+    return { status: "error", currentVersion, error: "Update manifest is malformed." };
   }
 }
 
