@@ -217,15 +217,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
               {identity.source === "emergency" ? " · emergency session" : ""}
             </p>
           </div>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              await logoutAdmin();
-              router.refresh();
-            }}
-          >
-            Sign out
-          </Button>
+          <Button variant="outline" onClick={async()=>{await logoutAdmin();router.refresh();}}>Sign out</Button>
         </div>
         <div className="grid gap-6 md:grid-cols-2">
           <OnlineCustomerProvisionCard {...onlineProvisioning} />
@@ -252,15 +244,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
           />
           <LicenseSummaryCard licenses={initialLicenses} />
         </div>
-        <OfflineActivationCard
-          licenseId={offlineLicenseId}
-          deviceId={offlineDeviceId}
-          busy={busy}
-          canIssue={canIssue}
-          onLicenseIdChange={setOfflineLicenseId}
-          onDeviceIdChange={setOfflineDeviceId}
-          onCreate={() => void createOfflinePackage()}
-        />
+        <OfflineActivationCard licenseId={offlineLicenseId} deviceId={offlineDeviceId} busy={busy} canIssue={canIssue} onLicenseIdChange={setOfflineLicenseId} onDeviceIdChange={setOfflineDeviceId} onCreate={()=>void createOfflinePackage()}/>
         <SupportInboxSection role={identity.role} requests={initialSupportRequests} />
         <LicenseRegistryCard
           licenses={initialLicenses}
