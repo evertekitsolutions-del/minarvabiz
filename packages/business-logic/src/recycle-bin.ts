@@ -146,6 +146,7 @@ export function restoreRecycleBinItem(entityType: TrashEntityType, id: string): 
       return result.quotation ? { ok: true } : { ok: false, error: result.error || "Unable to restore quotation" };
     }
   }
+  return { ok: false, error: "Unsupported Trash item type" };
 }
 
 export function permanentlyDeleteRecycleBinItem(entityType: TrashEntityType, id: string): { ok: boolean; error?: string } {
@@ -172,6 +173,7 @@ export function permanentlyDeleteRecycleBinItem(entityType: TrashEntityType, id:
       return result.purged ? { ok: true } : { ok: false, error: result.error || "Unable to permanently delete quotation" };
     }
   }
+  return { ok: false, error: "Unsupported Trash item type" };
 }
 
 export function purgeExpiredRecycleBinItems(now: Date = new Date()): { purged: number; errors: string[] } {
