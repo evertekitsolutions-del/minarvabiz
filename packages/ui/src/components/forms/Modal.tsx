@@ -80,6 +80,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-label={title}
         tabIndex={-1}
         className={cn(
           "relative z-10 w-full max-w-lg rounded-2xl bg-white shadow-xl outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2",
