@@ -170,12 +170,15 @@ SET role = 'manager'
 WHERE org_id = '10000000-0000-0000-0000-000000000001'
   AND user_id = 'a0000000-0000-0000-0000-000000000003';
 
+RESET ROLE;
 SELECT test.assert_true(
   (SELECT role FROM public.organization_members
    WHERE org_id = '10000000-0000-0000-0000-000000000001'
      AND user_id = 'a0000000-0000-0000-0000-000000000003') = 'manager',
   'Admin A must be able to change another same-tenant non-super-admin role'
 );
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', false);
 
 SELECT test.expect_rls_denial(
   $UPDATE public.organization_members
