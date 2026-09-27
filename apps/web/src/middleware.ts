@@ -53,10 +53,14 @@ export function middleware(request: NextRequest) {
     manifestSources: ["'self'"],
   });
 
-  if (!["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase())) {
+  const method = request.method.toUpperCase();
+  const isSupportApi = request.nextUrl.pathname.startsWith("/api/support/");
+  const allowedMethod = ["GET", "HEAD", "OPTIONS"].includes(method) || (isSupportApi && method === "POST");
+
+  if (!allowedMethod) {
     const response = new NextResponse("Method Not Allowed", {
       status: 405,
-      headers: { Allow: "GET, HEAD, OPTIONS" },
+      headers: { Allow: isSupportApi ? "GET, HEAD, POST, OPTIONS" : "GET, HEAD, OPTIONS" },
     });
     for (const header of minarvaHttpSecurityHeaders()) {
       response.headers.set(header.key, header.value);
