@@ -16,8 +16,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 25
     env:
-      MINARVA_UPDATE_FROM: "1.0.9"
-      MINARVA_UPDATE_TO: "1.0.10"
+      MINARVA_UPDATE_FROM: "1.0.10"
+      MINARVA_UPDATE_TO: "1.0.11"
       MINARVA_CDP_PORT: "9224"
       MINARVA_UPDATE_E2E_CUSTOMER: "Upgrade E2E Customer"
       MINARVA_UPDATE_E2E_STATE_FILE: "minarva-update-e2e-state.json"
@@ -41,23 +41,23 @@ jobs:
             throw "Production update verification key is unavailable."
           }
           "MINARVA_UPDATE_PUBLIC_KEY_HEX=$key" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Download and verify v1.0.9 installer
+      - name: Download and verify v1.0.10 installer
         shell: pwsh
         run: |
-          $base = "https://github.com/evertekitsolutions-del/minarvabiz/releases/download/v1.0.9"
-          $installer = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Setup-1.0.9.exe"
-          $checksum = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Setup-1.0.9.exe.sha256"
-          Invoke-WebRequest -UseBasicParsing "$base/MinarvaBiz-Setup-1.0.9.exe" -OutFile $installer
-          Invoke-WebRequest -UseBasicParsing "$base/MinarvaBiz-Setup-1.0.9.exe.sha256" -OutFile $checksum
+          $base = "https://github.com/evertekitsolutions-del/minarvabiz/releases/download/v1.0.10"
+          $installer = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Setup-1.0.10.exe"
+          $checksum = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Setup-1.0.10.exe.sha256"
+          Invoke-WebRequest -UseBasicParsing "$base/MinarvaBiz-Setup-1.0.10.exe" -OutFile $installer
+          Invoke-WebRequest -UseBasicParsing "$base/MinarvaBiz-Setup-1.0.10.exe.sha256" -OutFile $checksum
           $expected = ((Get-Content -Raw $checksum).Trim() -split '\s+')[0].ToLower()
           $actual = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLower()
           if ($expected -notmatch '^[0-9a-f]{64}$' -or $actual -ne $expected) {
-            throw "v1.0.9 release checksum verification failed."
+            throw "v1.0.10 release checksum verification failed."
           }
           "OLD_INSTALLER=$installer" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "OLD_RELEASE_CHECKSUM PASS $actual"
 
-      - name: Clean install v1.0.9
+      - name: Clean install v1.0.10
         shell: pwsh
         run: |
           $installRoot = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Release-Upgrade-UAT"
@@ -66,7 +66,7 @@ jobs:
 
           $exitCode = $null
           for ($attempt = 1; $attempt -le 4; $attempt++) {
-            $copy = Join-Path $env:RUNNER_TEMP ("MinarvaBiz-1.0.9-attempt-{0}.exe" -f $attempt)
+            $copy = Join-Path $env:RUNNER_TEMP ("MinarvaBiz-1.0.10-attempt-{0}.exe" -f $attempt)
             Copy-Item -LiteralPath $env:OLD_INSTALLER -Destination $copy -Force
             Unblock-File -LiteralPath $copy -ErrorAction SilentlyContinue
             $proc = Start-Process -FilePath $copy -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
@@ -74,18 +74,18 @@ jobs:
             Remove-Item -LiteralPath $copy -Force -ErrorAction SilentlyContinue
             if ($exitCode -eq 0) { break }
             if ($exitCode -ne -1073741819 -or $attempt -eq 4) {
-              throw "v1.0.9 installer exited with code $exitCode on attempt $attempt."
+              throw "v1.0.10 installer exited with code $exitCode on attempt $attempt."
             }
             Start-Sleep -Seconds (2 * $attempt)
           }
 
           $exe = Join-Path $installRoot "Minarva Biz.exe"
-          if (-not (Test-Path $exe)) { throw "v1.0.9 installed executable was not found." }
+          if (-not (Test-Path $exe)) { throw "v1.0.10 installed executable was not found." }
           "INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
           "INSTALLED_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "OLD_RELEASE_INSTALL PASS"
 
-      - name: Launch installed v1.0.9
+      - name: Launch installed v1.0.10
         shell: pwsh
         run: |
           $proc = Start-Process -FilePath $env:INSTALLED_EXE -ArgumentList "--remote-debugging-port=$env:MINARVA_CDP_PORT" -PassThru
@@ -98,10 +98,10 @@ jobs:
             Start-Sleep -Milliseconds 750
           }
           if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port ([int]$env:MINARVA_CDP_PORT) -InformationLevel Quiet)) {
-            throw "v1.0.9 Electron CDP port did not open."
+            throw "v1.0.10 Electron CDP port did not open."
           }
 
-      - name: Check, download and start v1.0.10 update from v1.0.9
+      - name: Check, download and start v1.0.11 update from v1.0.10
         shell: pwsh
         run: node scripts/windows-release-update-e2e.mjs prepare
 
@@ -110,11 +110,11 @@ jobs:
         run: |
           if (-not (Test-Path $env:MINARVA_UPDATE_E2E_STATE_FILE)) { throw "Update E2E state file is missing." }
           $state = Get-Content -Raw $env:MINARVA_UPDATE_E2E_STATE_FILE | ConvertFrom-Json
-          if (-not (Test-Path $state.installerPath)) { throw "Verified downloaded v1.0.10 installer is missing." }
-          if (-not (Test-Path $state.backupPath)) { throw "Verified v1.0.9 update safety backup is missing." }
+          if (-not (Test-Path $state.installerPath)) { throw "Verified downloaded v1.0.11 installer is missing." }
+          if (-not (Test-Path $state.backupPath)) { throw "Verified v1.0.10 update safety backup is missing." }
 
           $manifest = Invoke-RestMethod -Uri $env:MINARVA_UPDATE_MANIFEST_URL -Headers @{ "Cache-Control" = "no-cache" }
-          if ($manifest.version -ne "1.0.10") { throw "Production update manifest does not report v1.0.10." }
+          if ($manifest.version -ne "1.0.11") { throw "Production update manifest does not report v1.0.11." }
           $actual = (Get-FileHash -Algorithm SHA256 $state.installerPath).Hash.ToLower()
           if ($actual -ne "$($manifest.sha256)".ToLower()) {
             throw "Downloaded installer hash does not match production signed manifest."
@@ -123,7 +123,7 @@ jobs:
           Write-Host "UPDATE_DOWNLOAD_HASH PASS $actual"
           Write-Host "UPDATE_SAFETY_BACKUP_FILE PASS $($state.backupPath)"
 
-      - name: Complete verified v1.0.10 installer upgrade
+      - name: Complete verified v1.0.11 installer upgrade
         shell: pwsh
         run: |
           for ($i = 1; $i -le 30; $i++) {
@@ -131,24 +131,24 @@ jobs:
             Start-Sleep -Milliseconds 500
           }
 
-          # v1.0.9 deliberately launches the normal interactive NSIS wizard.
+          # v1.0.10 deliberately launches the normal interactive NSIS wizard.
           # The product install entrypoint and safety backup have already been exercised above.
           # CI closes only that wizard and completes the same verified installer silently so the
           # release-to-release data-preservation result can be asserted deterministically.
           Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
             Where-Object {
               $_.ExecutablePath -eq $env:DOWNLOADED_INSTALLER -or
-              $_.Name -like "MinarvaBiz-Setup-1.0.10*"
+              $_.Name -like "MinarvaBiz-Setup-1.0.11*"
             } |
             ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
           Start-Sleep -Seconds 2
 
           $proc = Start-Process -FilePath $env:DOWNLOADED_INSTALLER -ArgumentList "/S", "/D=$env:INSTALL_ROOT" -PassThru -Wait
-          if ($proc.ExitCode -ne 0) { throw "v1.0.10 silent completion exited with code $($proc.ExitCode)." }
+          if ($proc.ExitCode -ne 0) { throw "v1.0.11 silent completion exited with code $($proc.ExitCode)." }
           if (-not (Test-Path $env:INSTALLED_EXE)) { throw "Upgraded executable is missing." }
           Write-Host "VERIFIED_INSTALLER_UPGRADE PASS"
 
-      - name: Launch upgraded v1.0.10
+      - name: Launch upgraded v1.0.11
         shell: pwsh
         run: |
           $proc = Start-Process -FilePath $env:INSTALLED_EXE -ArgumentList "--remote-debugging-port=$env:MINARVA_CDP_PORT" -PassThru
@@ -161,10 +161,10 @@ jobs:
             Start-Sleep -Milliseconds 750
           }
           if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port ([int]$env:MINARVA_CDP_PORT) -InformationLevel Quiet)) {
-            throw "v1.0.10 Electron CDP port did not open."
+            throw "v1.0.11 Electron CDP port did not open."
           }
 
-      - name: Verify v1.0.10 and preserved business data
+      - name: Verify v1.0.11 and preserved business data
         shell: pwsh
         run: node scripts/windows-release-update-e2e.mjs verify
 
@@ -184,7 +184,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: minarvabiz-v1.0.9-to-v1.0.10-update-e2e
+          name: minarvabiz-v1.0.10-to-v1.0.11-update-e2e
           path: minarva-update-e2e-state.json
           if-no-files-found: ignore
           retention-days: 14
