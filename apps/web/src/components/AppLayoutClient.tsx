@@ -72,6 +72,16 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const [unreadNotifications, setUnreadNotifications] = React.useState(0);
   const [messageAttentionCount, setMessageAttentionCount] = React.useState(0);
 
+  const purgeTrashWhenAuthorized = React.useCallback(() => {
+    if (!can("settings.manage")) return;
+    try {
+      const result = purgeExpiredRecycleBinItems();
+      if (result.purged > 0) saveToLocalStorage();
+    } catch {
+      // Trash maintenance is best-effort until an authorized role is resolved.
+    }
+  }, []);
+
   const validateProtectedSession = React.useCallback(
     async (session: { token: string; user: { id: string; email?: string; fullName?: string; role?: string } }) => {
       if (getRuntimeMode() === "demo") return true;
@@ -85,20 +95,11 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
       };
       setSession(session.token, authoritativeUser);
       setUserName(authoritativeUser.fullName || authoritativeUser.email);
+      purgeTrashWhenAuthorized();
       return true;
     },
-    []
+    [purgeTrashWhenAuthorized]
   );
-
-  const purgeTrashWhenAuthorized = React.useCallback(() => {
-    if (!can("settings.manage")) return;
-    try {
-      const result = purgeExpiredRecycleBinItems();
-      if (result.purged > 0) saveToLocalStorage();
-    } catch {
-      // Trash maintenance is best-effort until an authorized role is resolved.
-    }
-  }, []);
 
   const refreshHeaderCounts = React.useCallback(() => {
     setUnreadNotifications(phase6Store.unreadNotificationCount());
