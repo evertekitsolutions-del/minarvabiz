@@ -16,6 +16,8 @@ const componentPaths = [
   "../apps/license-admin/src/app/admin-panel/LicenseSummaryCard.tsx",
   "../apps/license-admin/src/app/admin-panel/OfflineActivationCard.tsx",
   "../apps/license-admin/src/app/admin-panel/LicenseRegistryCard.tsx",
+  "../apps/license-admin/src/app/admin-panel/AdminHeader.tsx",
+  "../apps/license-admin/src/app/admin-panel/SupportInboxCard.tsx",
   "../apps/license-admin/src/app/admin-panel/types.ts",
 ];
 
@@ -32,6 +34,8 @@ assert.match(panel, /LicenseCreateCard/);
 assert.match(panel, /OfflineActivationCard/);
 assert.match(panel, /LicenseRegistryCard/);
 assert.match(panel, /LicenseSummaryCard/);
+assert.match(panel, /AdminHeader/);
+assert.match(panel, /SupportInboxSection/);
 assert.doesNotMatch(combined, /type\s+LicenseRow\s*=\s*any/);
 assert.doesNotMatch(combined, /\([^)]*:\s*any\b/);
 assert.doesNotMatch(
