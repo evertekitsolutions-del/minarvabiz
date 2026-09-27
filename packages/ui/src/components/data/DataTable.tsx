@@ -69,8 +69,7 @@ export function DataTable<T extends { id: string }>({
                 onRowClick(row);
               }}
               tabIndex={onRowClick ? 0 : undefined}
-              role={onRowClick ? "button" : undefined}
-              aria-label={onRowClick ? `Open row ${row.id}` : undefined}
+              aria-label={onRowClick ? `Open row ${row.id}. Press Enter or Space to open.` : undefined}
               className={cn(
                 "text-slate-700 transition-colors",
                 onRowClick && "cursor-pointer hover:bg-slate-50 focus-visible:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
