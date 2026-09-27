@@ -251,11 +251,19 @@ for (let i = 0; i < 400; i += 1) {
   const parsed = csv.parseProductCsv(
     `name,sku,cost,price,stock,min,unit\nItem-${i},SKU-${i},${cost},${price},${stock},${min},pcs`,
   );
-  assert.deepEqual(parsed.errors, []);
   assert.equal(parsed.rows.length, 1);
+  const sourceValues = { cost, price, stock, min };
   for (const field of ["cost", "price", "stock", "min"]) {
-    assert.ok(Number.isFinite(parsed.rows[0][field]), `valid CSV ${field} must stay finite`);
+    assert.ok(Number.isFinite(parsed.rows[0][field]), `CSV ${field} must stay finite`);
+    if (sourceValues[field] < 0) {
+      assert.ok(
+        parsed.errors.some((error) => error.includes(`${field} must be a finite non-negative number`)),
+        `negative CSV ${field} must be rejected`,
+      );
+      assert.equal(parsed.rows[0][field], 0, `negative CSV ${field} must fail safe to zero`);
+    }
   }
+  if (Object.values(sourceValues).every((value) => value >= 0)) assert.deepEqual(parsed.errors, []);
 }
 
 for (const token of invalidNumericTokens) {
@@ -265,7 +273,7 @@ for (const token of invalidNumericTokens) {
     values[headers.indexOf(field)] = token;
     const parsed = csv.parseProductCsv(`${headers.join(",")}\n${values.join(",")}`);
     assert.equal(parsed.rows.length, 1);
-    assert.ok(parsed.errors.some((error) => error.includes(`${field} must be a finite number`)));
+    assert.ok(parsed.errors.some((error) => error.includes(`${field} must be a finite non-negative number`)));
     assert.equal(parsed.rows[0][field], 0, "invalid numeric import must fail safe to zero");
     assert.ok(Number.isFinite(parsed.rows[0][field]), "invalid numeric import must never leak NaN/Infinity");
   }

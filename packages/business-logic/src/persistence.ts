@@ -80,7 +80,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     customers: store.listCustomers(), products: store.listProducts(), categories: store.listCategories(), sales: store.listSales(), payments: store.listPayments(), stockTransfers: store.listStockTransfers(), heldSales: store.listHeldSales(),
     orders: ordersStore.listOrders(), measurements: [], laundry: phase5Store.listLaundryOrders(), expenses: phase5Store.listExpenses(), purchases: phase5Store.listPurchases(),
     suppliers: phase5Store.listSuppliers(), expenseCategories: phase5Store.listExpenseCategories(), staff: phase6Store.listStaff(), assignments: phase6Store.listAssignments(),
-    incentiveRules: phase6Store.listIncentiveRules(), payouts: phase6Store.listIncentivePayouts(), notifications: phase6Store.listNotifications(), returns: phase7Store.listReturns(), audit: phase7Store.listAuditLogs(500),
+    incentiveRules: phase6Store.listIncentiveRules(), payouts: phase6Store.listIncentivePayouts(), notifications: phase6Store.listNotifications(), returns: phase7Store.listReturns(), audit: phase7Store.listAuditLogs(Number.MAX_SAFE_INTEGER),
     branches: phase9Store.listBranches(), activeBranchId: phase9Store.getActiveBranch()?.id ?? null, shopProfile: shopProfile.getShopProfile(), taxConfig: taxConfig.getTaxConfig(),
     autoBackup: autoBackup.exportAutoBackupState(), printSettings: printSettings.getPrintSettings(), outbox: exportOutbox(), quotations: quotationsMod.exportQuotationsState().quotations, cashSessions: cashReg.exportCashRegisterState().sessions,
     purchaseReturns: purchaseReturnsMod.exportPurchaseReturnsState().returns, phase10: phase10Store.exportPhase10State(), warehouse: warehouseStore.exportWarehouseState(), procurement: procurementStore.exportProcurementState(), accounting: accountingStore.exportAccountingState(), dayEndCloses: dayEnd.listDayEndCloses(),
@@ -94,30 +94,149 @@ export function exportDomainSnapshotFull(): DomainSnapshot {
 }
 export function exportDomainSnapshotJson(): string { return JSON.stringify(exportDomainSnapshotFull(), null, 2); }
 
-export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error?: string; counts?: Record<string, number> } {
-  if (!snap || ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(snap.version)) return { ok: false, error: `Unsupported snapshot version ${snap?.version}` };
+const SUPPORTED_SNAPSHOT_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+
+function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
+  const collection = <T>(value: T[] | undefined, field: string): T[] => {
+    if (value == null) return [];
+    if (!Array.isArray(value)) throw new Error(`Snapshot field "${field}" must be an array`);
+    return value;
+  };
+
+  if (!input || typeof input !== "object") throw new Error("Snapshot must be a JSON object");
+  if (!SUPPORTED_SNAPSHOT_VERSIONS.has(Number(input.version))) {
+    throw new Error(`Unsupported snapshot version ${String(input.version)}`);
+  }
+
+  return {
+    ...input,
+    version: Number(input.version),
+    exportedAt: typeof input.exportedAt === "string" && input.exportedAt
+      ? input.exportedAt
+      : new Date(0).toISOString(),
+    customers: collection(input.customers, "customers"),
+    products: collection(input.products, "products"),
+    categories: collection(input.categories, "categories"),
+    sales: collection(input.sales, "sales"),
+    payments: collection(input.payments, "payments"),
+    stockTransfers: collection(input.stockTransfers, "stockTransfers"),
+    heldSales: collection(input.heldSales, "heldSales"),
+    orders: collection(input.orders, "orders"),
+    measurements: collection(input.measurements, "measurements"),
+    laundry: collection(input.laundry, "laundry"),
+    expenses: collection(input.expenses, "expenses"),
+    purchases: collection(input.purchases, "purchases"),
+    suppliers: collection(input.suppliers, "suppliers"),
+    expenseCategories: collection(input.expenseCategories, "expenseCategories"),
+    staff: collection(input.staff, "staff"),
+    assignments: collection(input.assignments, "assignments"),
+    incentiveRules: collection(input.incentiveRules, "incentiveRules"),
+    payouts: collection(input.payouts, "payouts"),
+    notifications: collection(input.notifications, "notifications"),
+    returns: collection(input.returns, "returns"),
+    audit: collection(input.audit, "audit"),
+    branches: collection(input.branches, "branches"),
+    outbox: input.outbox == null ? undefined : collection(input.outbox, "outbox"),
+    quotations: input.quotations == null ? undefined : collection(input.quotations, "quotations"),
+    cashSessions: input.cashSessions == null ? undefined : collection(input.cashSessions, "cashSessions"),
+    purchaseReturns: input.purchaseReturns == null ? undefined : collection(input.purchaseReturns, "purchaseReturns"),
+    dayEndCloses: input.dayEndCloses == null ? undefined : collection(input.dayEndCloses, "dayEndCloses"),
+  };
+}
+
+function applyDomainSnapshot(snap: DomainSnapshot): void {
+  if (snap.outbox) hydrateOutbox(snap.outbox);
+  if (snap.quotations) quotationsMod.hydrateQuotations({ quotations: snap.quotations });
+  if (snap.cashSessions) cashReg.hydrateCashRegister({ sessions: snap.cashSessions });
+  if (snap.purchaseReturns) purchaseReturnsMod.hydratePurchaseReturns({ returns: snap.purchaseReturns });
+
+  store.hydrateCore({
+    customers: snap.customers,
+    products: snap.products,
+    categories: snap.categories,
+    sales: snap.sales,
+    payments: snap.payments,
+    stockTransfers: snap.stockTransfers,
+    heldSales: snap.heldSales,
+  });
+  ordersStore.hydrateOrders({ orders: snap.orders, measurements: snap.measurements });
+  phase5Store.hydratePhase5({
+    suppliers: snap.suppliers,
+    laundryOrders: snap.laundry,
+    expenses: snap.expenses,
+    purchases: snap.purchases,
+    expenseCategories: snap.expenseCategories,
+  });
+  phase6Store.hydratePhase6({
+    staff: snap.staff,
+    assignments: snap.assignments,
+    incentiveRules: snap.incentiveRules,
+    payouts: snap.payouts,
+    notifications: snap.notifications,
+  });
+  phase7Store.hydratePhase7({ returns: snap.returns, auditLogs: snap.audit });
+
+  if (snap.branches?.length) {
+    phase9Store.hydratePhase9({ branches: snap.branches, activeBranchId: snap.activeBranchId ?? undefined });
+  }
+  if (snap.phase10) phase10Store.hydratePhase10(snap.phase10);
+  if (snap.warehouse) warehouseStore.hydrateWarehouseState(snap.warehouse);
+  if (snap.procurement) procurementStore.hydrateProcurementState(snap.procurement);
+  if (snap.accounting) accountingStore.hydrateAccountingState(snap.accounting);
+  if (snap.shopProfile) shopProfile.hydrateShopProfile(snap.shopProfile);
+  if (snap.taxConfig) taxConfig.hydrateTaxConfig(snap.taxConfig);
+  if (snap.autoBackup) autoBackup.hydrateAutoBackup(snap.autoBackup);
+  if (snap.printSettings) printSettings.hydratePrintSettings(snap.printSettings);
+  if (snap.dayEndCloses) dayEnd.hydrateDayEnd({ closes: snap.dayEndCloses });
+}
+
+export function validateDomainSnapshot(snap: unknown): { ok: true; snapshot: DomainSnapshot } | { ok: false; error: string } {
   try {
-    if (snap.outbox) hydrateOutbox(snap.outbox);
-    if (snap.quotations) quotationsMod.hydrateQuotations({ quotations: snap.quotations });
-    if (snap.cashSessions) cashReg.hydrateCashRegister({ sessions: snap.cashSessions });
-    if (snap.purchaseReturns) purchaseReturnsMod.hydratePurchaseReturns({ returns: snap.purchaseReturns });
-    store.hydrateCore({ customers: snap.customers, products: snap.products, categories: snap.categories, sales: snap.sales, payments: snap.payments, stockTransfers: snap.stockTransfers, heldSales: snap.heldSales });
-    ordersStore.hydrateOrders({ orders: snap.orders, measurements: snap.measurements });
-    phase5Store.hydratePhase5({ suppliers: snap.suppliers, laundryOrders: snap.laundry, expenses: snap.expenses, purchases: snap.purchases, expenseCategories: snap.expenseCategories });
-    phase6Store.hydratePhase6({ staff: snap.staff, assignments: snap.assignments, incentiveRules: snap.incentiveRules, payouts: snap.payouts, notifications: snap.notifications });
-    phase7Store.hydratePhase7({ returns: snap.returns, auditLogs: snap.audit });
-    if (snap.branches?.length) phase9Store.hydratePhase9({ branches: snap.branches, activeBranchId: snap.activeBranchId ?? undefined });
-    if (snap.phase10) phase10Store.hydratePhase10(snap.phase10);
-    if (snap.warehouse) warehouseStore.hydrateWarehouseState(snap.warehouse);
-    if (snap.procurement) procurementStore.hydrateProcurementState(snap.procurement);
-    if (snap.accounting) accountingStore.hydrateAccountingState(snap.accounting);
-    if (snap.shopProfile) shopProfile.hydrateShopProfile(snap.shopProfile);
-    if (snap.taxConfig) taxConfig.hydrateTaxConfig(snap.taxConfig);
-    if (snap.autoBackup) autoBackup.hydrateAutoBackup(snap.autoBackup);
-    if (snap.printSettings) printSettings.hydratePrintSettings(snap.printSettings);
-    if (snap.dayEndCloses) dayEnd.hydrateDayEnd({ closes: snap.dayEndCloses });
-  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
-  return { ok: true, counts: { customers: snap.customers?.length ?? 0, products: snap.products?.length ?? 0, sales: snap.sales?.length ?? 0, orders: snap.orders?.length ?? 0, staff: snap.staff?.length ?? 0, expenses: snap.expenses?.length ?? 0, productionWorkflows: snap.phase10?.productionWorkflows?.length ?? 0, materialRolls: snap.phase10?.materialRolls?.length ?? 0, warehouses: snap.warehouse?.warehouses?.length ?? 0, warehouseLocations: snap.warehouse?.locations?.length ?? 0, accounts: snap.accounting?.accounts?.length ?? 0, journals: snap.accounting?.journals?.length ?? 0 } };
+    return { ok: true, snapshot: normalizeSnapshot(snap as DomainSnapshot) };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error?: string; counts?: Record<string, number> } {
+  const validated = validateDomainSnapshot(snap);
+  if (!validated.ok) return { ok: false, error: validated.error };
+
+  const incoming = validated.snapshot;
+  const rollback = exportDomainSnapshotFull();
+
+  try {
+    applyDomainSnapshot(incoming);
+  } catch (error) {
+    const importError = error instanceof Error ? error.message : String(error);
+    try {
+      applyDomainSnapshot(rollback);
+    } catch (rollbackError) {
+      return {
+        ok: false,
+        error: `Import failed: ${importError}. Automatic rollback also failed: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+      };
+    }
+    return { ok: false, error: `Import failed and was rolled back safely: ${importError}` };
+  }
+
+  return {
+    ok: true,
+    counts: {
+      customers: incoming.customers.length,
+      products: incoming.products.length,
+      sales: incoming.sales.length,
+      orders: incoming.orders.length,
+      staff: incoming.staff.length,
+      expenses: incoming.expenses.length,
+      productionWorkflows: incoming.phase10?.productionWorkflows?.length ?? 0,
+      materialRolls: incoming.phase10?.materialRolls?.length ?? 0,
+      warehouses: incoming.warehouse?.warehouses?.length ?? 0,
+      warehouseLocations: incoming.warehouse?.locations?.length ?? 0,
+      accounts: incoming.accounting?.accounts?.length ?? 0,
+      journals: incoming.accounting?.journals?.length ?? 0,
+    },
+  };
 }
 export function importDomainSnapshotJson(json: string) { try { return importDomainSnapshot(JSON.parse(json) as DomainSnapshot); } catch { return { ok: false as const, error: "Invalid snapshot JSON" }; } }
 

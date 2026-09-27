@@ -6,6 +6,7 @@ import {
   store,
   printProductLabels,
   importProductsFromCsv,
+  exportProductsCsv,
   getTaxConfig,
   updateTaxConfig,
   openWhatsApp,
@@ -59,7 +60,22 @@ export default function ToolsPage() {
       <Card>
         <CardHeader><CardTitle className="text-sm font-semibold">Import products CSV</CardTitle></CardHeader>
         <CardContent className="space-y-2">
-          <p className="text-xs text-slate-500">Columns: name,sku,barcode,cost,price,stock,min,unit</p>
+          <p className="text-xs text-slate-500">Columns: name,sku,barcode,cost,price,stock,min,unit. Import is validated fully before any product is created.</p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              const blob = new Blob([exportProductsCsv()], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `minarvabiz-products-${new Date().toISOString().slice(0, 10)}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Export current products CSV
+          </Button>
           <input
             ref={fileRef}
             type="file"
@@ -70,7 +86,10 @@ export default function ToolsPage() {
               if (!f) return;
               const text = await f.text();
               const result = importProductsFromCsv(text);
-              setCsvMsg(`Created ${result.created}. ${result.errors.join("; ") || "OK"}`);
+              setCsvMsg(result.errors.length
+                ? `Import blocked. ${result.errors.join("; ")}`
+                : `Imported ${result.created} product(s) safely.`);
+              e.currentTarget.value = "";
             }}
           />
           {csvMsg && <p className="text-sm text-slate-600">{csvMsg}</p>}
