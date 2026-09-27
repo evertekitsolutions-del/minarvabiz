@@ -105,6 +105,35 @@ export function archiveSupplier(id: UUID, reason: string): { supplier: Supplier 
   auditAction("supplier.archive", "suppliers", supplier.id, before, { ...supplier, archiveReason });
   return { supplier };
 }
+
+export function listArchivedSuppliers(): Supplier[] {
+  return suppliers.filter((supplier) => Boolean(supplier.deletedAt)).sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
+}
+
+export function restoreArchivedSupplier(id: UUID): { supplier: Supplier | null; error?: string } {
+  assertPermission("purchases.manage");
+  const supplier = suppliers.find((entry) => entry.id === id && Boolean(entry.deletedAt));
+  if (!supplier) return { supplier: null, error: "Supplier is not in Trash" };
+  const before = { ...supplier };
+  supplier.deletedAt = null;
+  supplier.updatedAt = nowISO();
+  touchPersistence();
+  void remoteUpsertSupplier({ ...supplier });
+  auditAction("supplier.restore", "suppliers", supplier.id, before, { ...supplier });
+  return { supplier };
+}
+
+export function purgeArchivedSupplier(id: UUID): { purged: boolean; error?: string } {
+  assertPermission("purchases.manage");
+  const index = suppliers.findIndex((entry) => entry.id === id && Boolean(entry.deletedAt));
+  if (index < 0) return { purged: false, error: "Supplier is not in Trash" };
+  const [supplier] = suppliers.splice(index, 1);
+  const purgedAt = nowISO();
+  enqueueOutbox("suppliers", supplier.id, "delete", { id: supplier.id, deletedAt: supplier.deletedAt ?? null, purgedAt });
+  auditAction("supplier.purge", "suppliers", supplier.id, { ...supplier }, { id: supplier.id, purgedAt });
+  touchPersistence();
+  return { purged: true };
+}
 export function createSupplier(input: { name: string; company?: string | null; phone?: string | null; email?: string | null; address?: string | null; category?: string | null; notes?: string | null; openingBalance?: number; }): Supplier {
   assertPermission("purchases.manage");
   const rawOpeningBalance = input.openingBalance ?? 0;
@@ -853,6 +882,16 @@ mainStore.registerCustomerReceivableProvider("laundry", {
     touchPersistence();
   },
 });
+
+export function exportPhase5State() {
+  return {
+    suppliers: [...suppliers],
+    laundryOrders: [...laundryOrders],
+    expenses: [...expenses],
+    purchases: [...purchases],
+    expenseCategories: [...expenseCategories],
+  };
+}
 
 export function hydratePhase5(data:{suppliers?:Supplier[];laundryOrders?:LaundryOrder[];expenses?:Expense[];purchases?:Purchase[];expenseCategories?:ExpenseCategory[]}){
   if(data.suppliers){suppliers.length=0;suppliers.push(...data.suppliers);}
