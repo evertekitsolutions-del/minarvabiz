@@ -99,7 +99,9 @@ export async function consumeSupportRateLimit(
   if (!secret) {
     return { ok: false, allowed: false, remaining: 0, retryAfterSeconds: windowSeconds, error: "Support rate limiting is not configured." };
   }
-  const raw = `${clientAddress(headers)}|${clean(clientId, 160)}`;
+  // Rate-limit by network origin so rotating the anonymous client ID cannot bypass the quota.
+  // The raw address is never stored; only an HMAC is persisted in the rate-limit table.
+  const raw = clientAddress(headers);
   const keyHash = createHmac("sha256", secret).update(raw).digest("hex");
   const cfg = serviceDbConfig();
   if (!cfg) {
