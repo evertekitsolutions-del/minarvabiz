@@ -90,6 +90,16 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
     []
   );
 
+  const purgeTrashWhenAuthorized = React.useCallback(() => {
+    if (!can("settings.manage")) return;
+    try {
+      const result = purgeExpiredRecycleBinItems();
+      if (result.purged > 0) saveToLocalStorage();
+    } catch {
+      // Trash maintenance is best-effort until an authorized role is resolved.
+    }
+  }, []);
+
   const refreshHeaderCounts = React.useCallback(() => {
     setUnreadNotifications(phase6Store.unreadNotificationCount());
     setMessageAttentionCount(
@@ -119,12 +129,12 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
       // Online roles are resolved from Supabase membership by AuthGate before
       // protected content is rendered. Never trust the sessionStorage role.
       if (isSupabaseConfigured()) setCurrentRole(null);
-      else setCurrentRole(u.role as Parameters<typeof setCurrentRole>[0]);
+      else { setCurrentRole(u.role as Parameters<typeof setCurrentRole>[0]); purgeTrashWhenAuthorized(); }
     } else if (runtimeMode === "demo") {
       // Explicit demo mode is a non-production QA/demo environment. Give it an
       // admin role so the visible demo controls can execute real domain mutations.
       setUserName("Demo Admin");
-      setCurrentRole("admin");
+      setCurrentRole("admin");\n      purgeTrashWhenAuthorized();
     }
     phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
     refreshHeaderCounts();
@@ -133,7 +143,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
       refreshHeaderCounts();
     }, 60000);
     return () => window.clearInterval(notificationTimer);
-  }, [refreshHeaderCounts]);
+  }, [refreshHeaderCounts, purgeTrashWhenAuthorized]);
 
   React.useEffect(() => {
     if (getRuntimeMode() === "demo") return;
