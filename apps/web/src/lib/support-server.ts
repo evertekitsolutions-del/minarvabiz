@@ -93,7 +93,6 @@ export async function consumeSupportRateLimit(
   bucket: string,
   limit: number,
   windowSeconds: number,
-  clientId = "",
 ) {
   const secret = rateLimitSecret();
   if (!secret) {
