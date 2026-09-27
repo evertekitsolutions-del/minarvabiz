@@ -24,6 +24,27 @@ for (const token of [
   "Only a super admin may grant or modify the super admin role",
 ]) assert.equal(migration.includes(token), true, `Missing authoritative RBAC migration contract: ${token}`);
 
+for (const table of [
+  "orders",
+  "order_expenses",
+  "laundry_orders",
+  "production_workflows",
+  "production_stage_events",
+  "material_rolls",
+  "material_consumptions",
+  "audit_logs",
+]) {
+  assert.equal(migration.includes(table), true, `RBAC migration must cover ${table}`);
+}
+assert.match(migration, /ARRAY\['super_admin','admin','manager','cashier','tailor','staff'\]::text\[\]/);
+assert.match(migration, /ARRAY\['super_admin','admin','manager'\]::text\[\]/);
+assert.match(migration, /production_stage_events_role_insert/);
+assert.doesNotMatch(migration, /production_stage_events_role_update/);
+assert.match(migration, /material_consumptions_role_insert/);
+assert.doesNotMatch(migration, /material_consumptions_role_update/);
+assert.match(migration, /audit_logs_role_insert/);
+assert.doesNotMatch(migration, /audit_logs_role_update/);
+
 assert.match(dataSource, /resolveOnlineAuthorization/);
 assert.match(dataSource, /current_user_authorization/);
 assert.match(dataSource, /AUTHORIZED_ROLES/);
