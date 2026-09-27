@@ -53,7 +53,7 @@ assert.match(feedbackRoute, /createSupportRequest/);
 assert.match(feedbackRoute, /triageSupportRequest/);
 assert.match(healthRoute, /supportConfigurationStatus/);
 assert.match(healthRoute, /ready/);
-assert.match(webMiddleware, /startsWith\("\\/api\\/support\\/"\)/);
+assert.equal(webMiddleware.includes('request.nextUrl.pathname.startsWith("/api/support/")'), true);
 assert.match(webMiddleware, /method === "POST"/);
 
 assert.match(migration, /CREATE TABLE IF NOT EXISTS public\.support_requests/);
