@@ -17,7 +17,7 @@ jobs:
       MINARVA_OLD_VERSION: "1.0.8"
       MINARVA_NEW_VERSION: "1.0.9"
       MINARVA_UPDATE_MANIFEST_URL: "https://minarvabiz-license-admin.onrender.com/api/update/manifest"
-      MINARVA_UPGRADE_RESULT: ${{ runner.temp }}\minarva-upgrade-e2e-result.json
+      MINARVA_UPGRADE_RESULT: upgrade-e2e-result.json
       GH_TOKEN: ${{ github.token }}
 
     steps:
@@ -191,7 +191,7 @@ jobs:
         with:
           name: minarvabiz-v1.0.8-to-v1.0.9-upgrade-e2e
           path: |
-            ${{ runner.temp }}/minarva-upgrade-e2e-result.json
+            upgrade-e2e-result.json
             ${{ runner.temp }}/**/runtime-smoke.log
           if-no-files-found: ignore
           retention-days: 30
