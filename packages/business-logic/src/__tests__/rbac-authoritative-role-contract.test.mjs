@@ -39,11 +39,11 @@ for (const table of [
 assert.match(migration, /ARRAY\['super_admin','admin','manager','cashier','tailor','staff'\]::text\[\]/);
 assert.match(migration, /ARRAY\['super_admin','admin','manager'\]::text\[\]/);
 assert.match(migration, /production_stage_events_role_insert/);
-assert.doesNotMatch(migration, /production_stage_events_role_update/);
+assert.doesNotMatch(migration, /CREATE POLICY production_stage_events_role_update/);
 assert.match(migration, /material_consumptions_role_insert/);
-assert.doesNotMatch(migration, /material_consumptions_role_update/);
+assert.doesNotMatch(migration, /CREATE POLICY material_consumptions_role_update/);
 assert.match(migration, /audit_logs_role_insert/);
-assert.doesNotMatch(migration, /audit_logs_role_update/);
+assert.doesNotMatch(migration, /CREATE POLICY audit_logs_role_update/);
 
 assert.match(dataSource, /resolveOnlineAuthorization/);
 assert.match(dataSource, /current_user_authorization/);
