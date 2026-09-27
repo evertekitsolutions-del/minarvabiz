@@ -756,7 +756,7 @@ export interface BackupMeta {
   filename: string;
   createdAt: ISODateString;
   sizeBytes: number;
-  kind: "manual" | "automatic";
+  kind: "manual" | "automatic" | "pre-restore" | "pre-update";
   verified: boolean;
   location: "local" | "download";
 }
