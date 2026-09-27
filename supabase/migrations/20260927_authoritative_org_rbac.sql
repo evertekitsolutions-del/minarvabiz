@@ -70,6 +70,45 @@ $$;
 REVOKE ALL ON FUNCTION public.current_user_authorization() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.current_user_authorization() TO authenticated;
 
+-- This boolean helper is safe to run as the function owner because it only
+-- returns whether auth.uid() has one of the requested roles in the target org.
+-- SECURITY DEFINER prevents organization_members RLS recursion when it is used
+-- by organization_members policies themselves.
+CREATE OR REPLACE FUNCTION public.user_has_org_role(
+  target_org_id UUID,
+  allowed_roles TEXT[]
+)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $FUNC$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.organization_members om
+    WHERE om.org_id = target_org_id
+      AND om.user_id = (SELECT auth.uid())
+      AND om.role = ANY (allowed_roles)
+  );
+$FUNC$;
+
+REVOKE ALL ON FUNCTION public.user_has_org_role(UUID, TEXT[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.user_has_org_role(UUID, TEXT[]) TO authenticated;
+
+DROP POLICY IF EXISTS organization_members_admin_select ON public.organization_members;
+CREATE POLICY organization_members_admin_select
+ON public.organization_members
+FOR SELECT
+TO authenticated
+USING (
+  user_id = (SELECT auth.uid())
+  OR public.user_has_org_role(
+    organization_members.org_id,
+    ARRAY['super_admin','admin']::text[]
+  )
+);
+
 -- Role changes are enforced with column-level grants + RLS. This avoids
 -- exposing privileged SECURITY DEFINER mutation functions through the Data API.
 REVOKE UPDATE ON TABLE public.organization_members FROM PUBLIC, anon, authenticated;
