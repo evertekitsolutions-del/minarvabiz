@@ -36,7 +36,8 @@ for (const token of [
 
 assert.match(table, /event\.key !== "Enter" && event\.key !== " "/);
 assert.match(table, /tabIndex=\{onRowClick \? 0 : undefined\}/);
-assert.match(table, /role=\{onRowClick \? "button" : undefined\}/);
+assert.doesNotMatch(table, /role=\{onRowClick \? "button" : undefined\}/);
+assert.match(table, /Press Enter or Space to open/);
 assert.match(table, /role="status"/);
 assert.match(table, /aria-label="Rows per page"/);
 
