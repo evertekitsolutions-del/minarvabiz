@@ -86,4 +86,6 @@ export function canProvisionOnlineCustomer(role: AdminRole): boolean {
   return role === "operator" || role === "admin";
 }
 
-export function canManageSupport(role: AdminRole): boolean {\n  return role === "operator" || role === "admin";\n}\n
+export function canManageSupport(role: AdminRole): boolean {
+  return role === "operator" || role === "admin";
+}
