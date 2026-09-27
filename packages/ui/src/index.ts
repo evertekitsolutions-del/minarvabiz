@@ -74,3 +74,5 @@ export * from "./components/settings/TrashRecoveryPanel";
 
 
 export * from "./components/quotations/QuotationsPanel";
+
+export * from "./components/support/SupportCenter";
