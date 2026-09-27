@@ -121,34 +121,33 @@ FOR UPDATE
 TO authenticated
 USING (
   user_id <> (SELECT auth.uid())
-  AND EXISTS (
-    SELECT 1
-    FROM public.organization_members actor
-    WHERE actor.org_id = organization_members.org_id
-      AND actor.user_id = (SELECT auth.uid())
-      AND actor.role IN ('super_admin','admin')
-      AND (
-        actor.role = 'super_admin'
-        OR organization_members.role <> 'super_admin'
-      )
+  AND public.user_has_org_role(
+    organization_members.org_id,
+    ARRAY['super_admin','admin']::text[]
+  )
+  AND (
+    public.user_has_org_role(
+      organization_members.org_id,
+      ARRAY['super_admin']::text[]
+    )
+    OR organization_members.role <> 'super_admin'
   )
 )
 WITH CHECK (
   user_id <> (SELECT auth.uid())
   AND role IN ('super_admin','admin','manager','cashier','tailor','staff')
-  AND EXISTS (
-    SELECT 1
-    FROM public.organization_members actor
-    WHERE actor.org_id = organization_members.org_id
-      AND actor.user_id = (SELECT auth.uid())
-      AND actor.role IN ('super_admin','admin')
-      AND (
-        actor.role = 'super_admin'
-        OR organization_members.role <> 'super_admin'
-      )
+  AND public.user_has_org_role(
+    organization_members.org_id,
+    ARRAY['super_admin','admin']::text[]
+  )
+  AND (
+    public.user_has_org_role(
+      organization_members.org_id,
+      ARRAY['super_admin']::text[]
+    )
+    OR organization_members.role <> 'super_admin'
   )
 );
-
 
 -- Align remaining tenant tables with the same role model enforced by the
 -- shared business-logic permission layer. Read access remains tenant-scoped.
