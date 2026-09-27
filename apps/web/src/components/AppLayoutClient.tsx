@@ -135,7 +135,8 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
       // Explicit demo mode is a non-production QA/demo environment. Give it an
       // admin role so the visible demo controls can execute real domain mutations.
       setUserName("Demo Admin");
-      setCurrentRole("admin");\n      purgeTrashWhenAuthorized();
+      setCurrentRole("admin");
+      purgeTrashWhenAuthorized();
     }
     phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
     refreshHeaderCounts();
