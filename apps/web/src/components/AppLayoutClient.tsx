@@ -14,6 +14,9 @@ import {
   phase9Store,
   listCustomerCommunicationQueue,
   getRuntimeMode,
+  can,
+  purgeExpiredRecycleBinItems,
+  saveToLocalStorage,
 } from "@minarvabiz/business-logic";
 import { hydrateStoresFromSupabase, supabaseHydrationDomainsForPath, resolveOnlineAuthorization } from "@/lib/data-source";
 import { isSupabaseConfigured } from "@minarvabiz/database";
@@ -72,6 +75,16 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const [unreadNotifications, setUnreadNotifications] = React.useState(0);
   const [messageAttentionCount, setMessageAttentionCount] = React.useState(0);
 
+  const purgeTrashWhenAuthorized = React.useCallback(() => {
+    if (!can("settings.manage")) return;
+    try {
+      const result = purgeExpiredRecycleBinItems();
+      if (result.purged > 0) saveToLocalStorage();
+    } catch {
+      // Trash maintenance is best-effort until an authorized role is resolved.
+    }
+  }, []);
+
   const validateProtectedSession = React.useCallback(
     async (session: { token: string; user: { id: string; email?: string; fullName?: string; role?: string } }) => {
       if (getRuntimeMode() === "demo") return true;
@@ -85,9 +98,10 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
       };
       setSession(session.token, authoritativeUser);
       setUserName(authoritativeUser.fullName || authoritativeUser.email);
+      purgeTrashWhenAuthorized();
       return true;
     },
-    []
+    [purgeTrashWhenAuthorized]
   );
 
   const refreshHeaderCounts = React.useCallback(() => {
@@ -119,12 +133,13 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
       // Online roles are resolved from Supabase membership by AuthGate before
       // protected content is rendered. Never trust the sessionStorage role.
       if (isSupabaseConfigured()) setCurrentRole(null);
-      else setCurrentRole(u.role as Parameters<typeof setCurrentRole>[0]);
+      else { setCurrentRole(u.role as Parameters<typeof setCurrentRole>[0]); purgeTrashWhenAuthorized(); }
     } else if (runtimeMode === "demo") {
       // Explicit demo mode is a non-production QA/demo environment. Give it an
       // admin role so the visible demo controls can execute real domain mutations.
       setUserName("Demo Admin");
       setCurrentRole("admin");
+      purgeTrashWhenAuthorized();
     }
     phase6Store.refreshOperationalNotifications({ licenseDaysRemaining: phase9Store.getLicenseState().daysRemaining });
     refreshHeaderCounts();
@@ -133,7 +148,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
       refreshHeaderCounts();
     }, 60000);
     return () => window.clearInterval(notificationTimer);
-  }, [refreshHeaderCounts]);
+  }, [refreshHeaderCounts, purgeTrashWhenAuthorized]);
 
   React.useEffect(() => {
     if (getRuntimeMode() === "demo") return;

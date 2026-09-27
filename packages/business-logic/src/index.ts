@@ -84,3 +84,5 @@ export * from "./document-numbering";
 export * from "./print-templates";
 
 export * from "./print-document-render";
+
+export * from "./recycle-bin";

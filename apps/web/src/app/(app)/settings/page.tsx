@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { SyncPanel, PersistencePanel, Button, FormField, inputClass, selectClass, PrintTemplateManager } from "@minarvabiz/ui";
+import { SyncPanel, PersistencePanel, Button, FormField, inputClass, selectClass, PrintTemplateManager, TrashRecoveryPanel } from "@minarvabiz/ui";
 import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage, getShopProfile, updateShopProfile, updateTaxConfig, getPrintSettings, updatePrintSettings } from "@minarvabiz/business-logic";
 
 export default function SettingsPage() {
@@ -95,6 +95,8 @@ export default function SettingsPage() {
           {printMsg && <span className="text-sm text-emerald-600">{printMsg}</span>}
         </div>
       </div>
+
+      <TrashRecoveryPanel />
 
       <PrintTemplateManager />
 

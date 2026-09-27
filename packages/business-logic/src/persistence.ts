@@ -27,6 +27,7 @@ import * as cashReg from "./cash-register";
 import * as purchaseReturnsMod from "./purchase-returns";
 import { exportOutbox, hydrateOutbox, type LocalOutboxEvent } from "./outbox-bridge";
 import * as dayEnd from "./day-end";
+import * as recycleBin from "./recycle-bin";
 import type { ShopProfile } from "./shop-profile";
 import type { TaxConfig } from "./tax-config";
 import type { AutoBackupSettings, BackupMeta } from "./auto-backup";
@@ -72,18 +73,53 @@ export interface DomainSnapshot {
   procurement?: ReturnType<typeof procurementStore.exportProcurementState>;
   accounting?: ReturnType<typeof accountingStore.exportAccountingState>;
   dayEndCloses?: ReturnType<typeof dayEnd.listDayEndCloses>;
+  recycleBin?: ReturnType<typeof recycleBin.exportRecycleBinState> | null;
 }
 
 export function exportDomainSnapshot(): DomainSnapshot {
+  const core = store.exportCoreState();
+  const phase5 = phase5Store.exportPhase5State();
+  const phase6 = phase6Store.exportPhase6State();
   return {
-    version: SNAPSHOT_VERSION, exportedAt: new Date().toISOString(),
-    customers: store.listCustomers(), products: store.listProducts(), categories: store.listCategories(), sales: store.listSales(), payments: store.listPayments(), stockTransfers: store.listStockTransfers(), heldSales: store.listHeldSales(),
-    orders: ordersStore.listOrders(), measurements: [], laundry: phase5Store.listLaundryOrders(), expenses: phase5Store.listExpenses(), purchases: phase5Store.listPurchases(),
-    suppliers: phase5Store.listSuppliers(), expenseCategories: phase5Store.listExpenseCategories(), staff: phase6Store.listStaff(), assignments: phase6Store.listAssignments(),
-    incentiveRules: phase6Store.listIncentiveRules(), payouts: phase6Store.listIncentivePayouts(), notifications: phase6Store.listNotifications(), returns: phase7Store.listReturns(), audit: phase7Store.listAuditLogs(Number.MAX_SAFE_INTEGER),
-    branches: phase9Store.listBranches(), activeBranchId: phase9Store.getActiveBranch()?.id ?? null, shopProfile: shopProfile.getShopProfile(), taxConfig: taxConfig.getTaxConfig(),
-    autoBackup: autoBackup.exportAutoBackupState(), printSettings: printSettings.getPrintSettings(), outbox: exportOutbox(), quotations: quotationsMod.exportQuotationsState().quotations, cashSessions: cashReg.exportCashRegisterState().sessions,
-    purchaseReturns: purchaseReturnsMod.exportPurchaseReturnsState().returns, phase10: phase10Store.exportPhase10State(), warehouse: warehouseStore.exportWarehouseState(), procurement: procurementStore.exportProcurementState(), accounting: accountingStore.exportAccountingState(), dayEndCloses: dayEnd.listDayEndCloses(),
+    version: SNAPSHOT_VERSION,
+    exportedAt: new Date().toISOString(),
+    customers: core.customers,
+    products: core.products,
+    categories: core.categories,
+    sales: core.sales,
+    payments: core.payments,
+    stockTransfers: core.stockTransfers,
+    heldSales: core.heldSales,
+    orders: ordersStore.listOrders(),
+    measurements: [],
+    laundry: phase5.laundryOrders,
+    expenses: phase5.expenses,
+    purchases: phase5.purchases,
+    suppliers: phase5.suppliers,
+    expenseCategories: phase5.expenseCategories,
+    staff: phase6.staff,
+    assignments: phase6.assignments,
+    incentiveRules: phase6.incentiveRules,
+    payouts: phase6.payouts,
+    notifications: phase6.notifications,
+    returns: phase7Store.listReturns(),
+    audit: phase7Store.listAuditLogs(Number.MAX_SAFE_INTEGER),
+    branches: phase9Store.listBranches(),
+    activeBranchId: phase9Store.getActiveBranch()?.id ?? null,
+    shopProfile: shopProfile.getShopProfile(),
+    taxConfig: taxConfig.getTaxConfig(),
+    autoBackup: autoBackup.exportAutoBackupState(),
+    printSettings: printSettings.getPrintSettings(),
+    outbox: exportOutbox(),
+    quotations: quotationsMod.exportQuotationsState().quotations,
+    cashSessions: cashReg.exportCashRegisterState().sessions,
+    purchaseReturns: purchaseReturnsMod.exportPurchaseReturnsState().returns,
+    phase10: phase10Store.exportPhase10State(),
+    warehouse: warehouseStore.exportWarehouseState(),
+    procurement: procurementStore.exportProcurementState(),
+    accounting: accountingStore.exportAccountingState(),
+    dayEndCloses: dayEnd.listDayEndCloses(),
+    recycleBin: recycleBin.exportRecycleBinState(),
   };
 }
 
@@ -188,6 +224,7 @@ function applyDomainSnapshot(snap: DomainSnapshot): void {
   if (snap.autoBackup) autoBackup.hydrateAutoBackup(snap.autoBackup);
   if (snap.printSettings) printSettings.hydratePrintSettings(snap.printSettings);
   if (snap.dayEndCloses) dayEnd.hydrateDayEnd({ closes: snap.dayEndCloses });
+  recycleBin.hydrateRecycleBinState(snap.recycleBin);
 }
 
 export function validateDomainSnapshot(snap: unknown): { ok: true; snapshot: DomainSnapshot } | { ok: false; error: string } {

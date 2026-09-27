@@ -209,6 +209,36 @@ export function archiveCustomer(id: UUID, reason: string): { customer: Customer 
   return { customer };
 }
 
+export function listArchivedCustomers(): Customer[] {
+  return customers.filter((customer) => Boolean(customer.deletedAt)).sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
+}
+
+export function restoreArchivedCustomer(id: UUID): { customer: Customer | null; error?: string } {
+  assertPermission("customers.manage");
+  const customer = customers.find((entry) => entry.id === id && Boolean(entry.deletedAt));
+  if (!customer) return { customer: null, error: "Customer is not in Trash" };
+  const before = { ...customer };
+  customer.deletedAt = null;
+  customer.updatedAt = nowISO();
+  customer.version = (customer.version ?? 1) + 1;
+  touchPersistence();
+  void remoteUpsertCustomer(customer);
+  auditAction("customer.restore", "customers", customer.id, before, { ...customer });
+  return { customer };
+}
+
+export function purgeArchivedCustomer(id: UUID): { purged: boolean; error?: string } {
+  assertPermission("customers.manage");
+  const index = customers.findIndex((entry) => entry.id === id && Boolean(entry.deletedAt));
+  if (index < 0) return { purged: false, error: "Customer is not in Trash" };
+  const [customer] = customers.splice(index, 1);
+  const purgedAt = nowISO();
+  enqueueOutbox("customers", customer.id, "delete", { id: customer.id, deletedAt: customer.deletedAt ?? null, purgedAt });
+  auditAction("customer.purge", "customers", customer.id, { ...customer }, { id: customer.id, purgedAt });
+  touchPersistence();
+  return { purged: true };
+}
+
 export function listProducts(opts?: { query?: string; categoryId?: string; lowStockOnly?: boolean }): Product[] {
   let list = products.filter((p) => !p.deletedAt);
   if (opts?.categoryId) list = list.filter((p) => p.categoryId === opts.categoryId);
@@ -325,6 +355,37 @@ export function archiveProduct(id: UUID, reason: string): { product: Product | n
   enqueueOutbox("products", p.id, "update", p);
   auditAction("product.archive", "products", p.id, before, { ...p, archiveReason });
   return { product: p };
+}
+
+export function listArchivedProducts(): Product[] {
+  return products.filter((product) => Boolean(product.deletedAt)).sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
+}
+
+export function restoreArchivedProduct(id: UUID): { product: Product | null; error?: string } {
+  assertPermission("products.manage");
+  const product = products.find((entry) => entry.id === id && Boolean(entry.deletedAt));
+  if (!product) return { product: null, error: "Product is not in Trash" };
+  const before = { ...product };
+  product.deletedAt = null;
+  product.isActive = true;
+  product.updatedAt = nowISO();
+  product.version = (product.version ?? 1) + 1;
+  touchPersistence();
+  void remoteUpsertProduct(product);
+  auditAction("product.restore", "products", product.id, before, { ...product });
+  return { product };
+}
+
+export function purgeArchivedProduct(id: UUID): { purged: boolean; error?: string } {
+  assertPermission("products.manage");
+  const index = products.findIndex((entry) => entry.id === id && Boolean(entry.deletedAt));
+  if (index < 0) return { purged: false, error: "Product is not in Trash" };
+  const [product] = products.splice(index, 1);
+  const purgedAt = nowISO();
+  enqueueOutbox("products", product.id, "delete", { id: product.id, deletedAt: product.deletedAt ?? null, purgedAt });
+  auditAction("product.purge", "products", product.id, { ...product }, { id: product.id, purgedAt });
+  touchPersistence();
+  return { purged: true };
 }
 
 /** @deprecated Use archiveProduct with a mandatory business reason. */
@@ -773,6 +834,18 @@ export function recordSupplierPaymentEntry(input: {
 
 function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+export function exportCoreState() {
+  return {
+    customers: [...customers],
+    products: [...products],
+    categories: [...categories],
+    sales: [...sales],
+    payments: [...payments],
+    stockTransfers: listStockTransfers(),
+    heldSales: listHeldSales(),
+  };
 }
 
 export function hydrateCore(data: {

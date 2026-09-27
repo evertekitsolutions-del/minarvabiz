@@ -70,6 +70,7 @@ export * from "./components/ErrorBoundary";
 export * from "./components/printing/PrintPreviewModal";
 
 export * from "./components/settings/PrintTemplateManager";
+export * from "./components/settings/TrashRecoveryPanel";
 
 
 export * from "./components/quotations/QuotationsPanel";
