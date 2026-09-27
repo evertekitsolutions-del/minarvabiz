@@ -114,7 +114,7 @@ WITH CHECK (
 -- Align remaining tenant tables with the same role model enforced by the
 -- shared business-logic permission layer. Read access remains tenant-scoped.
 
-DO $
+DO $$
 DECLARE
   t TEXT;
   tenant_expr TEXT;
@@ -221,11 +221,11 @@ BEGIN
       write_expr, write_expr
     );
   END IF;
-END $;
+END $$;
 
 -- Append-only operational/audit history. Authenticated tenant members can read;
 -- only the role set corresponding to the originating domain action may insert.
-DO $
+DO $$
 DECLARE
   tenant_expr TEXT;
   insert_expr TEXT;
@@ -321,4 +321,4 @@ BEGIN
         )
       );
   END IF;
-END $;
+END $$;
