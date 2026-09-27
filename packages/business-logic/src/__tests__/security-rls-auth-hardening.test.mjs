@@ -38,7 +38,8 @@ assert.match(appLayout, /<AuthGate[\s\S]*requireAuth=\{requireAuthByDefault\}[\s
 assert.match(appLayout, /validateOnlineSession\(session\.token, session\.user\.id\)/);
 assert.match(dataSource, /export async function validateOnlineSession\(accessToken: string, userId: string\)/);
 assert.match(dataSource, /\{ \.\.\.cfg, accessToken \}/);
-assert.match(dataSource, /"profiles"/);
+assert.match(dataSource, /"current_user_authorization"/);
+assert.match(dataSource, /AUTHORIZED_ROLES/);
 assert.match(authGate, /validateSession\?:/);
 assert.match(authGate, /valid = await validateSession\(session\)/);
 assert.match(authGate, /clearStoredSession\(\)/);
