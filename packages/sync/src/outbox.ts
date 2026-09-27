@@ -66,6 +66,64 @@ export class Outbox {
     if (e) e.status = "conflict";
   }
 
+  unresolvedForAggregate(aggregateType: string, aggregateId: UUID): OutboxEvent[] {
+    return this.events
+      .filter((e) =>
+        e.aggregateType === aggregateType
+        && e.aggregateId === aggregateId
+        && e.status !== "synced"
+      )
+      .sort((a, b) => a.sequence - b.sequence);
+  }
+
+  markAggregateConflict(aggregateType: string, aggregateId: UUID): void {
+    for (const e of this.unresolvedForAggregate(aggregateType, aggregateId)) {
+      e.status = "conflict";
+    }
+  }
+
+  discardAggregate(aggregateType: string, aggregateId: UUID): void {
+    for (const e of this.unresolvedForAggregate(aggregateType, aggregateId)) {
+      e.status = "synced";
+      e.lastError = null;
+    }
+  }
+
+  /**
+   * Requeue a manual local/merged winner after a conflict. Older unsynced
+   * mutations are superseded so one deterministic event is pushed next.
+   */
+  requeueAggregate(
+    aggregateType: string,
+    aggregateId: UUID,
+    payload: Record<string, unknown>,
+    deviceId: UUID
+  ): OutboxEvent {
+    const unresolved = this.unresolvedForAggregate(aggregateType, aggregateId);
+    const latest = unresolved.at(-1);
+    for (const e of unresolved) {
+      e.status = "synced";
+      e.lastError = null;
+    }
+
+    if (latest) {
+      latest.status = "pending";
+      latest.payload = { ...payload };
+      latest.occurredAt = nowISO();
+      latest.attempts = 0;
+      latest.lastError = null;
+      return latest;
+    }
+
+    return this.enqueue({
+      aggregateType,
+      aggregateId,
+      eventType: "update",
+      payload,
+      deviceId,
+    });
+  }
+
   stats() {
     const all = this.events;
     return {
