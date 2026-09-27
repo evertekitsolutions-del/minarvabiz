@@ -121,7 +121,8 @@ export async function checkForSecureUpdate(currentVersion: string): Promise<Upda
   try {
     const response = await fetch(manifestUrl, {
       headers: { accept: "application/json", "cache-control": "no-cache" },
-      signal: AbortSignal.timeout(12000),
+      // The update service may need to wake before it can serve the manifest.
+      signal: AbortSignal.timeout(70000),
     });
     if (!response.ok) return { status: "error", currentVersion, error: `Update server returned HTTP ${response.status}.` };
     const text = await response.text();
@@ -135,6 +136,9 @@ export async function checkForSecureUpdate(currentVersion: string): Promise<Upda
     verifiedManifest = manifest;
     return { status: "available", currentVersion, version: manifest.version, publishedAt: manifest.publishedAt, notes: manifest.notes };
   } catch (e) {
+    if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
+      return { status: "error", currentVersion, error: "The update server did not respond in time. Check your connection and try again." };
+    }
     return { status: "error", currentVersion, error: e instanceof Error ? e.message : String(e) };
   }
 }
