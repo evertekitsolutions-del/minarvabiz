@@ -94,17 +94,23 @@ BEGIN
     RAISE EXCEPTION 'Invalid Minarva Biz role' USING ERRCODE = '22023';
   END IF;
 
-  SELECT COUNT(*), MIN(om.org_id), MIN(om.role)
-    INTO caller_membership_count, caller_org_id, caller_role
+  SELECT COUNT(*)
+    INTO caller_membership_count
     FROM public.organization_members om
    WHERE om.user_id = caller_id;
 
-  IF caller_membership_count <> 1 OR caller_org_id IS NULL THEN
+  IF caller_membership_count <> 1 THEN
     RAISE EXCEPTION 'Exactly one organization membership is required'
       USING ERRCODE = '42501';
   END IF;
 
-  IF caller_role NOT IN ('super_admin','admin') THEN
+  SELECT om.org_id, om.role
+    INTO caller_org_id, caller_role
+    FROM public.organization_members om
+   WHERE om.user_id = caller_id
+   LIMIT 1;
+
+  IF caller_org_id IS NULL OR caller_role NOT IN ('super_admin','admin') THEN
     RAISE EXCEPTION 'Role management requires admin privileges'
       USING ERRCODE = '42501';
   END IF;
