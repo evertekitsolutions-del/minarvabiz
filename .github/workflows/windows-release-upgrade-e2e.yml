@@ -39,7 +39,11 @@ jobs:
       - name: Configure update verification key
         shell: pwsh
         run: |
-          if ("$env:MINARVA_LICENSE_PUBLIC_KEY_HEX" -notmatch '^[0-9a-fA-F]{64}
+          $key = "$env:MINARVA_LICENSE_PUBLIC_KEY_HEX".Trim()
+          if ($key.Length -ne 64 -or $key -notmatch '^[0-9a-fA-F]+') {
+            throw "Production update verification key is unavailable."
+          }
+          "MINARVA_UPDATE_PUBLIC_KEY_HEX=$key" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Download and verify v1.0.8 installer
         shell: pwsh
         run: |
