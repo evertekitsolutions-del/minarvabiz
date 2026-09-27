@@ -1,4 +1,4 @@
-import { assertPermission } from "./permissions";
+import { assertPermission, getCurrentRole } from "./permissions";
 /** App users registry (mirrors local auth users for UI) */
 import type { RoleName, UUID } from "@minarvabiz/types";
 import { generateId, nowISO } from "@minarvabiz/utils";
@@ -16,6 +16,14 @@ export interface AppUser {
 
 const users: AppUser[] = [];
 
+function assertCanManageRole(targetRole: RoleName, existingRole?: RoleName): void {
+  const actorRole = getCurrentRole();
+  if (actorRole !== "super_admin" && (targetRole === "super_admin" || existingRole === "super_admin")) {
+    throw new Error("Only a super admin may grant or modify the super admin role");
+  }
+}
+
+
 export function listAppUsers(): AppUser[] {
   return [...users];
 }
@@ -26,6 +34,7 @@ export function createAppUser(input: {
   role: RoleName;
 }): AppUser {
   assertPermission("users.manage");
+  assertCanManageRole(input.role);
   const u: AppUser = {
     id: generateId(),
     email: input.email.toLowerCase(),
@@ -40,16 +49,20 @@ export function createAppUser(input: {
 }
 
 export function setUserActive(id: UUID, isActive: boolean): AppUser | null {
+  assertPermission("users.manage");
   const u = users.find((x) => x.id === id);
   if (!u) return null;
+  assertCanManageRole(u.role, u.role);
   u.isActive = isActive;
   touchPersistence();
   return u;
 }
 
 export function setUserRole(id: UUID, role: RoleName): AppUser | null {
+  assertPermission("users.manage");
   const u = users.find((x) => x.id === id);
   if (!u) return null;
+  assertCanManageRole(role, u.role);
   u.role = role;
   touchPersistence();
   return u;
