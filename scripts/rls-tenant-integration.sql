@@ -181,18 +181,12 @@ SET ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', false);
 
 SELECT test.expect_rls_denial(
-  $UPDATE public.organization_members
-    SET role = 'manager'
-    WHERE org_id = '10000000-0000-0000-0000-000000000001'
-      AND user_id = 'a0000000-0000-0000-0000-000000000001'$,
+  'UPDATE public.organization_members SET role = ''manager'' WHERE org_id = ''10000000-0000-0000-0000-000000000001'' AND user_id = ''a0000000-0000-0000-0000-000000000001''',
   'Admin must not change their own organization role'
 );
 
 SELECT test.expect_rls_denial(
-  $UPDATE public.organization_members
-    SET role = 'super_admin'
-    WHERE org_id = '10000000-0000-0000-0000-000000000001'
-      AND user_id = 'a0000000-0000-0000-0000-000000000003'$,
+  'UPDATE public.organization_members SET role = ''super_admin'' WHERE org_id = ''10000000-0000-0000-0000-000000000001'' AND user_id = ''a0000000-0000-0000-0000-000000000003''',
   'Admin must not grant super_admin'
 );
 
