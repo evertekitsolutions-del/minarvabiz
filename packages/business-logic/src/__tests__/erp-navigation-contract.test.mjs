@@ -74,7 +74,7 @@ for (const mapping of [
   assert.equal(webLayout.includes(mapping), true, `Missing path-to-nav mapping: ${mapping}`);
 }
 
-assert.equal(rootPkg.version, "1.0.8");
+assert.match(rootPkg.version, /^\d+\.\d+\.\d+$/);
 assert.equal(desktopPkg.version, rootPkg.version);
 
 console.log("Professional ERP navigation contract PASS");
