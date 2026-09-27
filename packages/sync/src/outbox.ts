@@ -66,6 +66,34 @@ export class Outbox {
     if (e) e.status = "conflict";
   }
 
+  resolveConflict(
+    aggregateType: string,
+    aggregateId: UUID,
+    choice: "local" | "remote",
+    payload?: Record<string, unknown>
+  ): boolean {
+    const event = [...this.events]
+      .reverse()
+      .find((e) =>
+        e.aggregateType === aggregateType &&
+        e.aggregateId === aggregateId &&
+        e.status === "conflict"
+      );
+    if (!event) return false;
+
+    if (choice === "remote") {
+      event.status = "synced";
+      event.lastError = null;
+      return true;
+    }
+
+    if (payload) event.payload = { ...payload };
+    event.status = "pending";
+    event.lastError = null;
+    event.attempts = 0;
+    return true;
+  }
+
   stats() {
     const all = this.events;
     return {
