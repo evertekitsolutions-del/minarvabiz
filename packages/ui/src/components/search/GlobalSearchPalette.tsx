@@ -38,13 +38,14 @@ export function GlobalSearchPalette({ query, onClose, onNavigate }: GlobalSearch
   return (
     <div
       className="fixed left-1/2 top-16 z-[90] w-[min(680px,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
-      role="listbox"
+      role="region"
       aria-label="Global search results"
+      aria-live="polite"
       onMouseDown={(event) => event.stopPropagation()}
     >
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2 text-xs text-slate-500">
         <span>{results.length ? `${results.length} results` : "No matching records"}</span>
-        <button type="button" onClick={onClose} className="rounded-md px-2 py-1 hover:bg-slate-100">Esc</button>
+        <button type="button" onClick={onClose} aria-label="Close global search results" className="rounded-md px-2 py-1 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">Esc</button>
       </div>
       <div className="max-h-[60vh] overflow-y-auto p-2">
         {results.length === 0 ? (
@@ -54,9 +55,8 @@ export function GlobalSearchPalette({ query, onClose, onNavigate }: GlobalSearch
             <button
               key={`${item.kind}:${item.id}`}
               type="button"
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-indigo-50"
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
               onClick={() => { onNavigate?.(item.href, NAV_BY_KIND[item.kind]); onClose(); }}
-              role="option"
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-600">{item.title.charAt(0).toUpperCase()}</span>
               <span className="min-w-0 flex-1">
