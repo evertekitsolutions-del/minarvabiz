@@ -114,6 +114,7 @@ INSERT INTO public.products(id, org_id, label) VALUES
 \i supabase/migrations/20260925_tenant_org_helper_uuid_fix.sql
 \i supabase/migrations/20260919_tenant_policy_alignment.sql
 \i supabase/migrations/20260924_security_rls_role_auth_hardening.sql
+\i supabase/migrations/20260927_authoritative_org_rbac.sql
 
 CREATE SCHEMA test;
 CREATE FUNCTION test.assert_true(condition boolean, message text)
@@ -156,6 +157,53 @@ SELECT test.assert_true(
     WHERE schemaname = 'public' AND policyname LIKE '%_auth_all'
   ),
   'legacy *_auth_all policies must be absent after hardening'
+);
+
+
+-- Authoritative membership role mutation: role column only, same tenant,
+-- no self-escalation, and admin cannot grant/modify super_admin.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', false);
+
+UPDATE public.organization_members
+SET role = 'manager'
+WHERE org_id = '10000000-0000-0000-0000-000000000001'
+  AND user_id = 'a0000000-0000-0000-0000-000000000003';
+
+SELECT test.assert_true(
+  (SELECT role FROM public.organization_members
+   WHERE org_id = '10000000-0000-0000-0000-000000000001'
+     AND user_id = 'a0000000-0000-0000-0000-000000000003') = 'manager',
+  'Admin A must be able to change another same-tenant non-super-admin role'
+);
+
+SELECT test.expect_rls_denial(
+  $UPDATE public.organization_members
+    SET role = 'manager'
+    WHERE org_id = '10000000-0000-0000-0000-000000000001'
+      AND user_id = 'a0000000-0000-0000-0000-000000000001'$,
+  'Admin must not change their own organization role'
+);
+
+SELECT test.expect_rls_denial(
+  $UPDATE public.organization_members
+    SET role = 'super_admin'
+    WHERE org_id = '10000000-0000-0000-0000-000000000001'
+      AND user_id = 'a0000000-0000-0000-0000-000000000003'$,
+  'Admin must not grant super_admin'
+);
+
+UPDATE public.organization_members
+SET role = 'manager'
+WHERE org_id = '20000000-0000-0000-0000-000000000002'
+  AND user_id = 'b0000000-0000-0000-0000-000000000001';
+
+RESET ROLE;
+SELECT test.assert_true(
+  (SELECT role FROM public.organization_members
+   WHERE org_id = '20000000-0000-0000-0000-000000000002'
+     AND user_id = 'b0000000-0000-0000-0000-000000000001') = 'admin',
+  'Admin A must not mutate Tenant B membership'
 );
 
 -- Admin A: reads only tenant A, implicit org trigger assigns tenant A, explicit tenant B insert is denied.
