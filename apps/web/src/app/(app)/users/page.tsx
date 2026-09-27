@@ -7,18 +7,32 @@ import {
   createAppUser,
   setUserActive,
   setUserRole,
+  can,
 } from "@minarvabiz/business-logic";
 import type { RoleName } from "@minarvabiz/types";
 
 const ROLES: RoleName[] = ["super_admin", "admin", "manager", "cashier", "tailor", "staff"];
 
 export default function UsersPage() {
-  const [users, setUsers] = React.useState(() => listAppUsers());
+  const allowed = can("users.manage");
+  const [users, setUsers] = React.useState(() => allowed ? listAppUsers() : []);
+  const [error, setError] = React.useState<string | null>(null);
   const [email, setEmail] = React.useState("");
   const [name, setName] = React.useState("");
   const [role, setRole] = React.useState<RoleName>("cashier");
 
-  const refresh = () => setUsers(listAppUsers());
+  const refresh = () => {
+    if (!allowed) return;
+    setUsers(listAppUsers());
+  };
+
+  if (!allowed) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
+        You do not have permission to manage users and roles.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -42,10 +56,15 @@ export default function UsersPage() {
             <Button
               onClick={() => {
                 if (!email || !name) return;
-                createAppUser({ email, fullName: name, role });
-                setEmail("");
-                setName("");
-                refresh();
+                try {
+                  createAppUser({ email, fullName: name, role });
+                  setEmail("");
+                  setName("");
+                  setError(null);
+                  refresh();
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Unable to create user");
+                }
               }}
             >
               Add user
@@ -53,6 +72,7 @@ export default function UsersPage() {
           </div>
         </CardContent>
       </Card>
+      {error && <p className="text-sm text-rose-600">{error}</p>}
       <div className="space-y-2">
         {users.map((u) => (
           <Card key={u.id}>
@@ -66,8 +86,14 @@ export default function UsersPage() {
                   className={selectClass}
                   value={u.role}
                   onChange={(e) => {
-                    setUserRole(u.id, e.target.value as RoleName);
-                    refresh();
+                    try {
+                      setUserRole(u.id, e.target.value as RoleName);
+                      setError(null);
+                      refresh();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Unable to change role");
+                      refresh();
+                    }
                   }}
                 >
                   {ROLES.map((r) => (
@@ -78,8 +104,13 @@ export default function UsersPage() {
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    setUserActive(u.id, !u.isActive);
-                    refresh();
+                    try {
+                      setUserActive(u.id, !u.isActive);
+                      setError(null);
+                      refresh();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Unable to change user status");
+                    }
                   }}
                 >
                   {u.isActive ? "Deactivate" : "Activate"}

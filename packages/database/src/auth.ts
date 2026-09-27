@@ -95,6 +95,16 @@ export async function registerUser(input: {
   role?: RoleName;
 }): Promise<{ user: AuthUser | null; error?: string }> {
   loadUsers();
+
+  // This low-level helper is only safe for first-run bootstrap because it has
+  // no authenticated actor context. Additional users must be provisioned by
+  // an authorized user-management workflow rather than direct registration.
+  if (users.length > 0) {
+    return { user: null, error: "Direct local registration is disabled after initial setup" };
+  }
+  if (input.role && input.role !== "admin") {
+    return { user: null, error: "The first local user must be an administrator" };
+  }
   if (users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) {
     return { user: null, error: "Email already registered" };
   }
@@ -107,7 +117,7 @@ export async function registerUser(input: {
     id: generateId(),
     email: input.email.toLowerCase(),
     fullName: input.fullName,
-    role: input.role ?? "admin",
+    role: "admin",
     isActive: true,
     passwordHash,
     createdAt: nowISO(),

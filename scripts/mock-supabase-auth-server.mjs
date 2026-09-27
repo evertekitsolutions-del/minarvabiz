@@ -33,6 +33,7 @@ const server = http.createServer((req, res) => {
 
   const url = new URL(req.url || "/", `http://${host}:${port}`);
   const token = bearer(req);
+  console.log("MOCK_REQ", req.method, url.pathname, token === validToken ? "valid" : token ? "invalid" : "none");
 
   if (url.pathname === "/auth/v1/user" && req.method === "GET") {
     if (token !== validToken) {
@@ -60,6 +61,15 @@ const server = http.createServer((req, res) => {
   if (url.pathname.startsWith("/rest/v1/")) {
     if (token !== validToken) {
       json(req, res, 401, { message: "row-level security / JWT rejection" });
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/rest/v1/rpc/current_user_authorization") {
+      json(req, res, 200, [{
+        auth_user_id: userId,
+        auth_org_id: "22222222-2222-2222-2222-222222222222",
+        auth_role: "manager",
+        auth_full_name: "E2E Authorized User",
+      }]);
       return;
     }
     if (req.method === "GET" && url.pathname === "/rest/v1/profiles") {

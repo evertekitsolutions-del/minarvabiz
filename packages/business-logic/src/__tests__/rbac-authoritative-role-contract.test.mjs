@@ -1,0 +1,76 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+
+const migration = read("supabase/migrations/20260927_authoritative_org_rbac.sql");
+const dataSource = read("apps/web/src/lib/data-source.ts");
+const login = read("apps/web/src/app/login/page.tsx");
+const layout = read("apps/web/src/components/AppLayoutClient.tsx");
+const users = read("packages/business-logic/src/users.ts");
+const localAuth = read("packages/database/src/auth.ts");
+const usersPage = read("apps/web/src/app/(app)/users/page.tsx");
+
+for (const token of [
+  "REVOKE INSERT, UPDATE, DELETE ON TABLE public.organization_members",
+  "CREATE OR REPLACE FUNCTION public.current_user_authorization",
+  "SECURITY INVOKER",
+  "Exactly one Minarva Biz organization membership is required",
+  "GRANT UPDATE (role) ON TABLE public.organization_members TO authenticated",
+  "CREATE POLICY organization_members_role_update",
+  "user_id <> (SELECT auth.uid())",
+  "organization_members.role <> 'super_admin'",
+]) assert.equal(migration.includes(token), true, `Missing authoritative RBAC migration contract: ${token}`);
+
+for (const table of [
+  "orders",
+  "order_expenses",
+  "laundry_orders",
+  "production_workflows",
+  "production_stage_events",
+  "material_rolls",
+  "material_consumptions",
+  "audit_logs",
+]) {
+  assert.equal(migration.includes(table), true, `RBAC migration must cover ${table}`);
+}
+assert.match(migration, /ARRAY\['super_admin','admin','manager','cashier','tailor','staff'\]::text\[\]/);
+assert.match(migration, /ARRAY\['super_admin','admin','manager'\]::text\[\]/);
+assert.match(migration, /production_stage_events_role_insert/);
+assert.doesNotMatch(migration, /CREATE POLICY production_stage_events_role_update/);
+assert.match(migration, /material_consumptions_role_insert/);
+assert.doesNotMatch(migration, /CREATE POLICY material_consumptions_role_update/);
+assert.match(migration, /audit_logs_role_insert/);
+assert.doesNotMatch(migration, /CREATE POLICY audit_logs_role_update/);
+
+assert.match(dataSource, /resolveOnlineAuthorization/);
+assert.match(dataSource, /current_user_authorization/);
+assert.match(dataSource, /AUTHORIZED_ROLES/);
+assert.match(dataSource, /authorization\.role/);
+assert.match(dataSource, /authorization\.orgId/);
+
+assert.doesNotMatch(login, /role:\s*"admin"/);
+assert.match(login, /role:\s*remote\.role/);
+assert.match(login, /fullName:\s*remote\.fullName/);
+
+assert.match(layout, /if \(isSupabaseConfigured\(\)\) setCurrentRole\(null\)/);
+assert.match(layout, /resolveOnlineAuthorization\(session\.token, session\.user\.id\)/);
+assert.match(layout, /setSession\(session\.token, authoritativeUser\)/);
+
+for (const fn of ["listAppUsers", "createAppUser", "setUserActive", "setUserRole"]) {
+  const start = users.indexOf(`export function ${fn}`);
+  assert.ok(start >= 0, `${fn} must exist`);
+  const block = users.slice(start, start + 900);
+  assert.match(block, /assertPermission\("users\.manage"\)/, `${fn} must enforce users.manage`);
+}
+assert.match(users, /Only a super admin may grant or modify the super admin role/);
+assert.match(usersPage, /can\("users\.manage"\)/);
+
+assert.match(localAuth, /Direct local registration is disabled after initial setup/);
+assert.match(localAuth, /The first local user must be an administrator/);
+assert.match(localAuth, /role:\s*"admin"/);
+
+console.log("Authoritative RBAC role contract PASS");

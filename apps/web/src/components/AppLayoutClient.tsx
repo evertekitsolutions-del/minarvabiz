@@ -6,6 +6,7 @@ import { AppShell, AuthGate, ToastProvider, ErrorBoundary, type NavItemId } from
 import {
   bootstrapFromLocalStorage, globalSearch,
   setCurrentRole,
+  setSession,
   clearSession,
   getSessionUser,
   getSessionToken,
@@ -14,7 +15,8 @@ import {
   listCustomerCommunicationQueue,
   getRuntimeMode,
 } from "@minarvabiz/business-logic";
-import { hydrateStoresFromSupabase, supabaseHydrationDomainsForPath, validateOnlineSession } from "@/lib/data-source";
+import { hydrateStoresFromSupabase, supabaseHydrationDomainsForPath, resolveOnlineAuthorization } from "@/lib/data-source";
+import { isSupabaseConfigured } from "@minarvabiz/database";
 import { SetupBanner } from "@/components/SetupBanner";
 
 const requireAuthByDefault =
@@ -71,10 +73,20 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const [messageAttentionCount, setMessageAttentionCount] = React.useState(0);
 
   const validateProtectedSession = React.useCallback(
-    (session: { token: string; user: { id: string } }) =>
-      getRuntimeMode() === "demo"
-        ? Promise.resolve(true)
-        : validateOnlineSession(session.token, session.user.id),
+    async (session: { token: string; user: { id: string; email?: string; fullName?: string; role?: string } }) => {
+      if (getRuntimeMode() === "demo") return true;
+      const authorization = await resolveOnlineAuthorization(session.token, session.user.id);
+      if (!authorization.ok) return false;
+      const authoritativeUser = {
+        id: session.user.id,
+        email: session.user.email || "",
+        fullName: authorization.fullName,
+        role: authorization.role,
+      };
+      setSession(session.token, authoritativeUser);
+      setUserName(authoritativeUser.fullName || authoritativeUser.email);
+      return true;
+    },
     []
   );
 
@@ -92,7 +104,10 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
     const runtimeMode = getRuntimeMode();
     if (u) {
       setUserName(u.fullName || u.email);
-      setCurrentRole(u.role as Parameters<typeof setCurrentRole>[0]);
+      // Online roles are resolved from Supabase membership by AuthGate before
+      // protected content is rendered. Never trust the sessionStorage role.
+      if (isSupabaseConfigured()) setCurrentRole(null);
+      else setCurrentRole(u.role as Parameters<typeof setCurrentRole>[0]);
     } else if (runtimeMode === "demo") {
       // Explicit demo mode is a non-production QA/demo environment. Give it an
       // admin role so the visible demo controls can execute real domain mutations.
@@ -170,7 +185,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
             activeNav={activeNav}
             onNavigate={(href) => router.push(href)}
             sidebar={{
-              user: { name: userName || "Admin", role: "Super Admin" },
+              user: { name: userName || "User", role: "Authorized User" },
               logoSrc: "/logo-mark.png",
             }}
             header={{

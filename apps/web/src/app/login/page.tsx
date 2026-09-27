@@ -46,8 +46,8 @@ export default function LoginPage() {
         setSession(remote.token, {
           id: remote.user.id,
           email: remote.user.email || email,
-          fullName: remote.user.email || email,
-          role: "admin",
+          fullName: remote.fullName,
+          role: remote.role,
         });
         router.push("/dashboard");
         return;
