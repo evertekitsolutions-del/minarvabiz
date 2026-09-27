@@ -17,6 +17,7 @@ import {
   pgRpc,
   type UnitOfWork,
 } from "@minarvabiz/database";
+import type { RoleName } from "@minarvabiz/types";
 import { store, ordersStore, phase5Store, phase6Store, warehouseStore, procurementStore, accountingStore, registerRemoteWriter, getRuntimeMode } from "@minarvabiz/business-logic";
 import {
   mapCategory,
@@ -819,21 +820,59 @@ export async function hydrateStoresFromSupabase(
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : String(e) }; }
 }
 
-export async function validateOnlineSession(accessToken: string, userId: string) {
+const AUTHORIZED_ROLES = new Set<RoleName>(["super_admin","admin","manager","cashier","tailor","staff"]);
+
+export async function resolveOnlineAuthorization(accessToken: string, userId: string): Promise<
+  | { ok: true; role: RoleName; orgId: string; fullName: string }
+  | { ok: false; error: string }
+> {
   const cfg = configFromEnv();
-  if (!cfg || !accessToken || !userId) return false;
-  const res = await pgSelect<Record<string, unknown>>(
+  if (!cfg || !accessToken || !userId) return { ok: false, error: "Online authorization context is incomplete." };
+
+  const res = await pgRpc<Array<Record<string, unknown>>>(
     { ...cfg, accessToken },
-    "profiles",
-    `select=id&id=eq.${encodeURIComponent(userId)}&limit=1`
+    "current_user_authorization",
+    {}
   );
-  return !res.error && String(res.data?.[0]?.id || "") === userId;
+  if (res.error) return { ok: false, error: res.error.message };
+
+  const rows = Array.isArray(res.data) ? res.data : [];
+  if (rows.length !== 1) return { ok: false, error: "Exactly one organization membership is required." };
+
+  const row = rows[0];
+  const resolvedUserId = String(row.auth_user_id || "");
+  const role = String(row.auth_role || "") as RoleName;
+  const orgId = String(row.auth_org_id || "");
+  if (resolvedUserId !== userId || !AUTHORIZED_ROLES.has(role) || !orgId) {
+    return { ok: false, error: "Online role authorization is invalid." };
+  }
+
+  return {
+    ok: true,
+    role,
+    orgId,
+    fullName: String(row.auth_full_name || "Minarva Biz User"),
+  };
+}
+
+export async function validateOnlineSession(accessToken: string, userId: string) {
+  const authorization = await resolveOnlineAuthorization(accessToken, userId);
+  return authorization.ok;
 }
 
 export async function supabaseLogin(email: string, password: string) {
   const cfg = configFromEnv(); if (!cfg) return { ok: false as const, error: "Supabase not configured" };
   const res = await authSignIn(cfg, email, password); if (res.error || !res.data) return { ok: false as const, error: res.error?.message || "Login failed" };
-  return { ok: true as const, token: res.data.access_token, user: res.data.user };
+  const authorization = await resolveOnlineAuthorization(res.data.access_token, res.data.user.id);
+  if (!authorization.ok) return { ok: false as const, error: authorization.error };
+  return {
+    ok: true as const,
+    token: res.data.access_token,
+    user: res.data.user,
+    role: authorization.role,
+    fullName: authorization.fullName,
+    orgId: authorization.orgId,
+  };
 }
 
 
