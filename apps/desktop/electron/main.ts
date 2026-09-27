@@ -264,8 +264,92 @@ function sqliteValidationError(file: string): string | null { try { const stat =
 function isValidSqliteFile(file: string) { return sqliteValidationError(file) === null; }
 async function minarvaSqliteValidationError(file: string): Promise<string | null> { return sqliteValidationError(file) || await minarvaBackupSchemaError(file); }
 function copySqlite(source: string, destination: string) { fs.mkdirSync(path.dirname(destination), { recursive: true }); fs.copyFileSync(source, destination); return fs.statSync(destination).size; }
-function createLocalBackup(kind: "manual" | "automatic") { const source = sqlitePath(); if (!fs.existsSync(source) || !isValidSqliteFile(source)) return null; const targetDir = kind === "automatic" ? backupDestinationDir() : backupDir(); fs.mkdirSync(targetDir, { recursive: true }); const destination = path.join(targetDir, `minarvabiz-${kind}-${timestamp()}.db`); const sizeBytes = copySqlite(source, destination); if (!isValidSqliteFile(destination)) { try { fs.unlinkSync(destination); } catch {} return null; } return { path: destination, sizeBytes }; }
-function pruneAutomaticBackups(retention = 14) { const targetDir = backupDestinationDir(); fs.mkdirSync(targetDir, { recursive: true }); const files = fs.readdirSync(targetDir).filter((f) => f.startsWith("minarvabiz-automatic-") && f.endsWith(".db")).map((name) => ({ name, time: fs.statSync(path.join(targetDir, name)).mtimeMs })).sort((a, b) => b.time - a.time); for (const item of files.slice(retention)) { try { fs.unlinkSync(path.join(backupDestinationDir(), item.name)); } catch {} } }
+
+type LocalBackupKind = "manual" | "automatic" | "pre-restore" | "pre-update";
+type LocalBackupResult = { ok: true; path: string; sizeBytes: number } | { ok: false; error: string };
+
+function backupKindFromFilename(filename: string): LocalBackupKind {
+  if (filename.includes("-pre-restore-")) return "pre-restore";
+  if (filename.includes("-pre-update-")) return "pre-update";
+  if (filename.includes("-automatic-")) return "automatic";
+  return "manual";
+}
+function safeBackupFilename(filename: string): boolean {
+  return filename.length > 0 && filename.length <= MAX_BACKUP_ID_CHARS && filename === path.basename(filename) && /^[A-Za-z0-9._-]+\.db$/i.test(filename);
+}
+function backupIdFor(filename: string, automaticStorage: boolean): string {
+  return automaticStorage ? `auto--${filename}` : filename;
+}
+function resolveBackupId(id: unknown): { file: string; filename: string } | null {
+  const raw = typeof id === "string" ? id : "";
+  const automaticStorage = raw.startsWith("auto--");
+  const filename = automaticStorage ? raw.slice("auto--".length) : raw;
+  if (!safeBackupFilename(filename)) return null;
+  const base = automaticStorage ? backupDestinationDir() : backupDir();
+  return { file: path.join(base, filename), filename };
+}
+async function createLocalBackup(kind: LocalBackupKind): Promise<LocalBackupResult> {
+  const source = sqlitePath();
+  if (!fs.existsSync(source)) return { ok: false, error: "SQLite database does not exist" };
+  const sourceError = await minarvaSqliteValidationError(source);
+  if (sourceError) return { ok: false, error: `Current Minarva Biz database failed validation: ${sourceError}` };
+
+  const targetDir = kind === "automatic" ? backupDestinationDir() : backupDir();
+  fs.mkdirSync(targetDir, { recursive: true });
+  const destination = path.join(targetDir, `minarvabiz-${kind}-${timestamp()}.db`);
+  try {
+    const sizeBytes = copySqlite(source, destination);
+    const validationError = await minarvaSqliteValidationError(destination);
+    if (validationError) {
+      try { fs.unlinkSync(destination); } catch {}
+      return { ok: false, error: `Created backup failed Minarva Biz validation: ${validationError}` };
+    }
+    return { ok: true, path: destination, sizeBytes };
+  } catch (error) {
+    try { if (fs.existsSync(destination)) fs.unlinkSync(destination); } catch {}
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+function pruneAutomaticBackups(retention = 14) {
+  const safeRetention = Number.isFinite(retention) ? Math.max(1, Math.min(365, Math.floor(retention))) : 14;
+  const targetDir = backupDestinationDir();
+  fs.mkdirSync(targetDir, { recursive: true });
+  const files = fs.readdirSync(targetDir)
+    .filter((f) => f.startsWith("minarvabiz-automatic-") && f.endsWith(".db"))
+    .map((name) => ({ name, time: fs.statSync(path.join(targetDir, name)).mtimeMs }))
+    .sort((a, b) => b.time - a.time);
+  for (const item of files.slice(safeRetention)) {
+    try { fs.unlinkSync(path.join(targetDir, item.name)); } catch {}
+  }
+}
+async function listBackupFiles() {
+  const internalDir = backupDir();
+  const automaticDir = backupDestinationDir();
+  fs.mkdirSync(internalDir, { recursive: true });
+  fs.mkdirSync(automaticDir, { recursive: true });
+
+  const locations: Array<{ dir: string; automaticStorage: boolean }> = [{ dir: internalDir, automaticStorage: false }];
+  if (path.resolve(automaticDir) !== path.resolve(internalDir)) locations.push({ dir: automaticDir, automaticStorage: true });
+
+  const items = [];
+  for (const location of locations) {
+    for (const filename of fs.readdirSync(location.dir).filter((name) => name.endsWith(".db") && safeBackupFilename(name))) {
+      const full = path.join(location.dir, filename);
+      const stat = fs.statSync(full);
+      const validationError = await minarvaSqliteValidationError(full);
+      items.push({
+        id: backupIdFor(filename, location.automaticStorage),
+        filename,
+        createdAt: stat.mtime.toISOString(),
+        sizeBytes: stat.size,
+        kind: backupKindFromFilename(filename),
+        verified: validationError === null,
+        location: "local" as const,
+      });
+    }
+  }
+  return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
 
 app.disableHardwareAcceleration();
 app.whenReady().then(() => { Menu.setApplicationMenu(null); runtimeSmokeLog(`app-ready platform=${process.platform} version=${app.getVersion()} userData=${app.getPath("userData")}`); process.env.MINARVA_SQLITE_PATH = sqlitePath(); process.env.MINARVA_MODE = process.env.MINARVA_MODE || "production"; fs.mkdirSync(app.getPath("userData"), { recursive: true }); configureDesktopSession(); registerDesktopLicenseIpc(getDeviceId, requireTrustedRenderer); createWindow(); app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); }); });
