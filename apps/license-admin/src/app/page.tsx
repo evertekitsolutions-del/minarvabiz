@@ -7,6 +7,7 @@ export default async function LicenseAdminHome() {
     <AdminPanel
       identity={result.identity || null}
       initialLicenses={result.licenses || []}
+      initialSupportRequests={support.requests || []}
       bootstrapAvailable={bootstrap.available}
     />
   );
