@@ -67,7 +67,7 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   listBackups: () => ipcRenderer.invoke("backup:list") as Promise<NativeBackupMeta[]>,
   createManualBackup: () => ipcRenderer.invoke("backup:createManual") as Promise<NativeBackupResult>,
   exportBackup: (id: string) => ipcRenderer.invoke("backup:export", id) as Promise<NativeBackupResult>,
-  createAutomaticBackup: () => ipcRenderer.invoke("backup:createAutomatic") as Promise<NativeBackupResult>,
+  createAutomaticBackup: (retention?: number) => ipcRenderer.invoke("backup:createAutomatic", retention) as Promise<NativeBackupResult>,
   chooseBackupDirectory: () => ipcRenderer.invoke("backup:chooseDestination") as Promise<string | null>,
   useDriveDBackup: () => ipcRenderer.invoke("backup:useDriveD") as Promise<{ ok: boolean; path?: string; error?: string }>,
   pruneAutomaticBackups: (retention?: number) => ipcRenderer.invoke("backup:pruneAutomatic", retention) as Promise<boolean>,
@@ -85,7 +85,7 @@ export type NativeBackupMeta = {
   filename: string;
   createdAt: string;
   sizeBytes: number;
-  kind: "manual" | "automatic";
+  kind: "manual" | "automatic" | "pre-restore" | "pre-update";
   verified: boolean;
   location: "local";
 };
