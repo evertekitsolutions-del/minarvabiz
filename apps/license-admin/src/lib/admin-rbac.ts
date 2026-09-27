@@ -5,17 +5,21 @@ export type AdminPermission =
   | "license.issue"
   | "license.offline_activate"
   | "license.status_manage"
-  | "customer.provision";
+  | "customer.provision"
+  | "support.read"
+  | "support.manage";
 
 export const ADMIN_ROLES: readonly AdminRole[] = ["viewer", "operator", "admin"] as const;
 
 const ROLE_PERMISSIONS: Record<AdminRole, ReadonlySet<AdminPermission>> = {
-  viewer: new Set<AdminPermission>(["license.read"]),
+  viewer: new Set<AdminPermission>(["license.read", "support.read"]),
   operator: new Set<AdminPermission>([
     "license.read",
     "license.issue",
     "license.offline_activate",
     "customer.provision",
+    "support.read",
+    "support.manage",
   ]),
   admin: new Set<AdminPermission>([
     "license.read",
@@ -23,6 +27,8 @@ const ROLE_PERMISSIONS: Record<AdminRole, ReadonlySet<AdminPermission>> = {
     "license.offline_activate",
     "license.status_manage",
     "customer.provision",
+    "support.read",
+    "support.manage",
   ]),
 };
 
