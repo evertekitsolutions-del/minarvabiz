@@ -66,11 +66,15 @@ try {
 
   const panel = await readFile(new URL("../apps/license-admin/src/app/AdminPanel.tsx", import.meta.url), "utf8");
   const authCard = await readFile(new URL("../apps/license-admin/src/app/admin-panel/AdminAuthCard.tsx", import.meta.url), "utf8");
+  const adminHeader = await readFile(new URL("../apps/license-admin/src/app/admin-panel/AdminHeader.tsx", import.meta.url), "utf8");
   assert.match(authCard, /Administrator email/);
   assert.match(authCard, /Emergency break-glass access/);
   assert.match(authCard, /MFA is required/);
   assert.match(authCard, /Authenticator code/);
-  assert.match(panel, /identity\.displayName/);
+  assert.match(panel, /AdminHeader/);
+  assert.match(adminHeader, /identity\.displayName/);
+  assert.match(adminHeader, /identity\.email/);
+  assert.match(adminHeader, /identity\.role/);
 
   const identityMigration = await readFile(new URL("../supabase/migrations/20260924_license_admin_named_identities.sql", import.meta.url), "utf8");
   assert.match(identityMigration, /REFERENCES auth\.users\(id\) ON DELETE CASCADE/);
