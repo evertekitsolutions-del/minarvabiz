@@ -58,10 +58,10 @@ It intentionally excludes customer records, database contents, license tokens an
 
 The public support APIs reuse the persistent Supabase rate-limit RPC:
 
-- chat: 8 requests/minute and 40/hour per IP + anonymous client identifier;
+- chat: 8 requests/minute and 40/hour per network origin;
 - support/feedback submissions: 20/day.
 
-The anonymous client identifier is HMAC-hashed before storage or use as a rate-limit key.
+The network address is HMAC-hashed before it is used as a rate-limit key. The raw address is not stored. A separate anonymous client identifier may be hashed into support-request metadata without being used to bypass the network quota.
 
 ## Admin Support Inbox
 
