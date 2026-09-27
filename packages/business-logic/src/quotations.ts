@@ -144,6 +144,36 @@ export function archiveQuotation(id: UUID, reason: string): { quotation: Quotati
   return { quotation: q };
 }
 
+export function listArchivedQuotations(): Quotation[] {
+  return quotations.filter((quotation) => Boolean(quotation.deletedAt)).sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
+}
+
+export function restoreArchivedQuotation(id: UUID): { quotation: Quotation | null; error?: string } {
+  assertPermission("sales.create");
+  const q = quotations.find((quotation) => quotation.id === id && Boolean(quotation.deletedAt));
+  if (!q) return { quotation: null, error: "Quotation is not in Trash" };
+  const before = structuredClone(q);
+  q.deletedAt = null;
+  q.updatedAt = nowISO();
+  q.version += 1;
+  enqueueOutbox("quotations", q.id, "update", { ...q });
+  void import("./audit-actions").then(({ auditAction }) => auditAction("quotation.restore", "quotations", q.id, before, { ...q }));
+  touchPersistence();
+  return { quotation: q };
+}
+
+export function purgeArchivedQuotation(id: UUID): { purged: boolean; error?: string } {
+  assertPermission("sales.create");
+  const index = quotations.findIndex((quotation) => quotation.id === id && Boolean(quotation.deletedAt));
+  if (index < 0) return { purged: false, error: "Quotation is not in Trash" };
+  const [quotation] = quotations.splice(index, 1);
+  const purgedAt = nowISO();
+  enqueueOutbox("quotations", quotation.id, "delete", { id: quotation.id, deletedAt: quotation.deletedAt ?? null, purgedAt });
+  void import("./audit-actions").then(({ auditAction }) => auditAction("quotation.purge", "quotations", quotation.id, structuredClone(quotation), { id: quotation.id, purgedAt }));
+  touchPersistence();
+  return { purged: true };
+}
+
 export function setQuotationStatus(id: UUID, status: QuotationStatus): { quotation: Quotation | null; error?: string } {
   assertPermission("sales.create");
   const q = getQuotation(id);
