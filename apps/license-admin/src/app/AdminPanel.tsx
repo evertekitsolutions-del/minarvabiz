@@ -4,18 +4,19 @@ import { useRouter } from "next/navigation";
 import { Button } from "@minarvabiz/ui";
 import type { Edition, LicenseFeatures } from "@minarvabiz/types";
 import type { LicensePlan } from "@minarvabiz/licensing";
-import { beginAdminMfaEnrollment, cancelAdminMfa, createCommercialLicense, createOfflineActivationPackage, loginAdmin, loginEmergencyAdmin, logoutAdmin, setLicenseStatus, verifyAdminMfa } from "./actions";
+import { beginAdminMfaEnrollment, cancelAdminMfa, createCommercialLicense, createOfflineActivationPackage, loginAdmin, loginEmergencyAdmin, logoutAdmin, setLicenseStatus, updateSupportRequest, verifyAdminMfa } from "./actions";
 import { AdminAuthCard } from "./admin-panel/AdminAuthCard";
 import { LicenseCreateCard } from "./admin-panel/LicenseCreateCard";
 import { LicenseRegistryCard } from "./admin-panel/LicenseRegistryCard";
 import { LicenseSummaryCard } from "./admin-panel/LicenseSummaryCard";
 import { OfflineActivationCard } from "./admin-panel/OfflineActivationCard";
 import { OnlineCustomerProvisionCard } from "./admin-panel/OnlineCustomerProvisionCard";
+import { SupportInboxCard } from "./admin-panel/SupportInboxCard";
 import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerProvisioning";
-import { canIssueLicense, canManageLicenseStatus, defaultFeatures } from "./admin-panel/model";
-import type { AdminIdentityView, AuthStage, LicenseRegistryRow, LicenseStatusAction } from "./admin-panel/types";
-interface AdminPanelProps { identity: AdminIdentityView | null; initialLicenses: LicenseRegistryRow[]; bootstrapAvailable: boolean; }
-export default function AdminPanel({identity,initialLicenses,bootstrapAvailable}: AdminPanelProps) {
+import { canIssueLicense, canManageLicenseStatus, canManageSupport, defaultFeatures } from "./admin-panel/model";
+import type { AdminIdentityView, AuthStage, LicenseRegistryRow, LicenseStatusAction, SupportRequestRow, SupportRequestStatus } from "./admin-panel/types";
+interface AdminPanelProps { identity: AdminIdentityView | null; initialLicenses: LicenseRegistryRow[]; initialSupportRequests: SupportRequestRow[]; bootstrapAvailable: boolean; }
+export default function AdminPanel({identity,initialLicenses,initialSupportRequests,bootstrapAvailable}: AdminPanelProps) {
   const router=useRouter();
   const [email,setEmail]=React.useState("");
   const [password,setPassword]=React.useState("");
@@ -176,6 +177,19 @@ export default function AdminPanel({identity,initialLicenses,bootstrapAvailable}
     router.refresh();
   }
 
+  async function updateSupport(input: { id: string; status: SupportRequestStatus; assignedTo: string; adminNotes: string }) {
+    setBusy(true);
+    setMessage(null);
+    const result = await updateSupportRequest(input);
+    setBusy(false);
+    if (!result.ok) {
+      setMessage(result.error || "Support request update failed");
+      return;
+    }
+    setMessage("Support request updated.");
+    router.refresh();
+  }
+
   if (!identity) {
     return (
       <AdminAuthCard
@@ -204,6 +218,7 @@ export default function AdminPanel({identity,initialLicenses,bootstrapAvailable}
   const onlineProvisioning = useOnlineCustomerProvisioning(identity.role);
   const canIssue = canIssueLicense(identity.role);
   const canManageStatus = canManageLicenseStatus(identity.role);
+  const canManageSupportInbox = canManageSupport(identity.role);
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
       <div className="mx-auto max-w-6xl space-y-6">
@@ -259,6 +274,12 @@ export default function AdminPanel({identity,initialLicenses,bootstrapAvailable}
           onLicenseIdChange={setOfflineLicenseId}
           onDeviceIdChange={setOfflineDeviceId}
           onCreate={() => void createOfflinePackage()}
+        />
+        <SupportInboxCard
+          requests={initialSupportRequests}
+          busy={busy}
+          canManage={canManageSupportInbox}
+          onUpdate={(input) => void updateSupport(input)}
         />
         <LicenseRegistryCard
           licenses={initialLicenses}
