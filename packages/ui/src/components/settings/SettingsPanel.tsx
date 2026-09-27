@@ -2,6 +2,7 @@ import * as React from "react";
 import { Button } from "../Button";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { PrintTemplateManager } from "./PrintTemplateManager";
+import { TrashRecoveryPanel } from "./TrashRecoveryPanel";
 
 export interface SettingsPanelProps {
   profile: {
@@ -363,6 +364,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
         <Button onClick={() => onSavePrinting({ defaultInvoicePaper: draftPrinting.defaultInvoicePaper, thermalWidthMm: draftPrinting.thermalWidthMm, a4PrinterName: draftPrinting.a4PrinterName, thermalPrinterName: draftPrinting.thermalPrinterName, labelPrinterName: draftPrinting.labelPrinterName, labelWidthMm: draftPrinting.labelWidthMm, labelHeightMm: draftPrinting.labelHeightMm, labelCodeMode: draftPrinting.labelCodeMode, silentDesktopPrint: draftPrinting.silentDesktopPrint })}>Save printer settings</Button>
       </div>
     </section>
+    <TrashRecoveryPanel />
     <PrintTemplateManager />
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-lg font-semibold text-slate-900">Automatic backup</h3><div className="mt-4 grid gap-4 md:grid-cols-3">
       <FormField label="Automatic backup"><select className={selectClass} value={draftBackup.enabled ? "yes" : "no"} onChange={e => setDraftBackup({ ...draftBackup, enabled: e.target.value === "yes" })}><option value="yes">Enabled</option><option value="no">Disabled</option></select></FormField>
