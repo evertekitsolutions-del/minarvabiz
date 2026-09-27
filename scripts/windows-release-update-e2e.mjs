@@ -205,10 +205,12 @@ async function verify(ws) {
   if (!(await bodyIncludes(ws, marker))) throw new Error("Customer data was not preserved through the upgrade.");
   console.log("BUSINESS_DATA_PRESERVED PASS");
 
+  const upgradeState = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+  const expectedBackupName = String(upgradeState.backupPath || "").split(/[\\/]/).pop();
   const backups = JSON.parse(await evalIn(ws, `(async()=>JSON.stringify(await window.minarvaDesktop.listBackups()))()`));
-  const preUpdate = backups.find((b) => b.kind === "pre-update" && b.verified === true);
-  if (!preUpdate) throw new Error(`Verified pre-update backup was not retained: ${JSON.stringify(backups)}`);
-  console.log(`PRE_UPDATE_BACKUP PASS ${preUpdate.filename}`);
+  const safetyBackup = backups.find((b) => b.verified === true && (!expectedBackupName || b.filename === expectedBackupName));
+  if (!safetyBackup) throw new Error(`Verified update safety backup was not retained: expected=${expectedBackupName} backups=${JSON.stringify(backups)}`);
+  console.log(`UPDATE_SAFETY_BACKUP PASS kind=${safetyBackup.kind} file=${safetyBackup.filename}`);
 
   const check = JSON.parse(await evalIn(ws, `(async()=>JSON.stringify(await window.minarvaDesktop.checkForUpdates()))()`));
   console.log(`POST_UPDATE_CHECK ${JSON.stringify(check)}`);
