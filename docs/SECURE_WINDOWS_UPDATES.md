@@ -11,6 +11,8 @@ A production update channel is enabled only when the desktop build receives both
 
 The private signing key must remain outside the client, repository and installer.
 
+For availability, every stable GitHub release also carries a copy of the **same verified Ed25519-signed manifest** as `MinarvaBiz-update-manifest.json`. The desktop first checks the primary update service; if that service is unreachable, it falls back to the GitHub release asset. The fallback does not weaken authenticity because the manifest signature is still verified with the bundled public key before an update is offered.
+
 ## Manifest
 
 ```json

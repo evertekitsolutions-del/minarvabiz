@@ -38,5 +38,7 @@ assert.match(release, /contents: read/);
 assert.match(publisher, /workflow_run/);
 assert.match(publisher, /contents: write/);
 assert.match(publisher, /gh release create/);
+assert.match(publisher, /MinarvaBiz-update-manifest\.json/);
+assert.match(publisher, /gh release upload/);
 
 console.log("Secure Windows update channel contract PASS");
