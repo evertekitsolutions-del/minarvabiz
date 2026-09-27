@@ -3,7 +3,7 @@ import {
   AppShell, Dashboard, ProductList, PosBilling, NormalBilling, SalesList,
   OrderList, OrderForm, emptyOrderForm, OrderDetail, ProductionBoard, LaundryList, LaundryForm, LaundryCancellationForm,
   ExpenseList, PurchaseList, StaffList, NotificationCenter, ReportsPanel,
-  BackupPanel, SettingsPanel, WarehousePanel, AccountingPanel, QuotationsPanel, Modal, Button, FormField, inputClass, selectClass, GlobalSearchPalette,
+  BackupPanel, SettingsPanel, SupportCenter, WarehousePanel, AccountingPanel, QuotationsPanel, Modal, Button, FormField, inputClass, selectClass, GlobalSearchPalette,
   TrialGate, MAIN_NAV,
   type QuickAction, type NavItemId, type DashboardData, type OrderFormValues, type LaundryCancellationValues,
   type TrialRegistration, type TrialState,
@@ -287,6 +287,7 @@ export function App() {
     {view==="backup"&&<BackupPanel backups={backups} canManage={can("backup.manage")} retentionCount={backupSettings.retentionCount}/>} 
     {view==="license"&&<DesktopLicenseView state={commercialLicense} trialState={trialState} deviceFingerprint={deviceFingerprint} customerCount={customers.length} productCount={products.length} onStateChange={setCommercialLicense} onTrialStateChange={setTrialState}/>} 
     {view==="settings"&&<SettingsPanel profile={profile} tax={tax} backup={backupSettings} printing={printSettings} onSaveProfile={v=>{updateShopProfile(v);if(v.gstin!==undefined)updateTaxConfig({gstin:v.gstin});saveSettings();}} onSaveTax={v=>{updateTaxConfig(v);saveSettings();}} onSaveBackup={v=>{setAutoBackupSettings(v);saveSettings();}} onSavePrinting={v=>{updatePrintSettings(v);saveSettings();}}/>}
+    {view==="support"&&<SupportCenter apiBaseUrl={(import.meta.env.VITE_SUPPORT_API_URL as string|undefined)||"https://minarvabiz-steel.vercel.app"} organizationName={profile.shopName||""} currentModule={view} edition={commercialLicense?.edition||trialState?.status==="active"?"offline":""}/>}
 
     <Modal open={!!laundryMode} title={laundryMode==="outsourced"?"Outsourced Laundry":"In-house Ironing"} onClose={()=>setLaundryMode(null)}><LaundryForm mode={laundryMode||"outsourced"} customers={customers} suppliers={suppliers} onAddCustomer={openCustomerCreator} onAddSupplier={()=>{setSupplierForm({name:"",company:"",phone:"",email:"",address:"",category:"laundry",openingBalance:"",notes:""});setSupplierOpen(true);}} onSubmit={handleCreateLaundry} onCancel={()=>setLaundryMode(null)} error={laundryError}/></Modal>
     <Modal open={!!laundryCancelOrder} title="Cancel laundry ticket" onClose={()=>{setLaundryCancelOrder(null);setLaundryCancelError(null);}}>{laundryCancelOrder&&<LaundryCancellationForm order={laundryCancelOrder} error={laundryCancelError} onSubmit={handleLaundryCancel} onCancel={()=>{setLaundryCancelOrder(null);setLaundryCancelError(null);}}/>}</Modal>
