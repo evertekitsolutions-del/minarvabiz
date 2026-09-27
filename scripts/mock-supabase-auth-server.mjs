@@ -33,7 +33,7 @@ const server = http.createServer((req, res) => {
 
   const url = new URL(req.url || "/", `http://${host}:${port}`);
   const token = bearer(req);
-  if (process.env.MINARVA_MOCK_SUPABASE_DEBUG === "1") console.log("MOCK_REQ", req.method, url.pathname, token === validToken ? "valid" : token ? "invalid" : "none");
+  console.log("MOCK_REQ", req.method, url.pathname, token === validToken ? "valid" : token ? "invalid" : "none");
 
   if (url.pathname === "/auth/v1/user" && req.method === "GET") {
     if (token !== validToken) {
