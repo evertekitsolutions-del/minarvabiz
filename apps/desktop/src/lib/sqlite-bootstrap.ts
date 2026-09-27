@@ -9,6 +9,7 @@ import {
   exportDomainSnapshotFull,
   importDomainSnapshot,
   shouldRunAutoBackup,
+  getAutoBackupSettings,
   recordBackupSuccess,
   recordBackupFailure,
 } from "@minarvabiz/business-logic";
@@ -140,7 +141,7 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
 
     try {
       if (shouldRunAutoBackup() && api.createAutomaticBackup) {
-        void api.createAutomaticBackup().then((result) => {
+        void api.createAutomaticBackup(getAutoBackupSettings().retentionCount).then((result) => {
           if (result.ok && result.path) recordBackupSuccess(result.path, "auto", result.sizeBytes);
           else if (!result.cancelled) recordBackupFailure(result.error || "Automatic backup returned no verified file");
         });
