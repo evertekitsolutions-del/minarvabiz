@@ -6,6 +6,7 @@ import type { Edition, LicenseFeatures } from "@minarvabiz/types";
 import type { LicensePlan } from "@minarvabiz/licensing";
 import { beginAdminMfaEnrollment, cancelAdminMfa, createCommercialLicense, createOfflineActivationPackage, loginAdmin, loginEmergencyAdmin, logoutAdmin, setLicenseStatus, verifyAdminMfa } from "./actions";
 import { AdminAuthCard } from "./admin-panel/AdminAuthCard";
+import { AdminHeader } from "./admin-panel/AdminHeader";
 import { LicenseCreateCard } from "./admin-panel/LicenseCreateCard";
 import { LicenseRegistryCard } from "./admin-panel/LicenseRegistryCard";
 import { LicenseSummaryCard } from "./admin-panel/LicenseSummaryCard";
@@ -208,17 +209,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
       <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Minarva Biz — License Admin</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Signed in as <b>{identity.displayName}</b> · {identity.email} · role:{" "}
-              <b>{identity.role}</b>
-              {identity.source === "emergency" ? " · emergency session" : ""}
-            </p>
-          </div>
-          <Button variant="outline" onClick={async()=>{await logoutAdmin();router.refresh();}}>Sign out</Button>
-        </div>
+        <AdminHeader identity={identity} onSignOut={async()=>{await logoutAdmin();router.refresh();}} />
         <div className="grid gap-6 md:grid-cols-2">
           <OnlineCustomerProvisionCard {...onlineProvisioning} />
           <LicenseCreateCard
