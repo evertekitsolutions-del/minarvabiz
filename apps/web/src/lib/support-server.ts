@@ -244,6 +244,16 @@ function modelName() {
   return clean(process.env.MINARVA_SUPPORT_AI_MODEL || "gpt-5.6-luna", 120);
 }
 
+export function supportConfigurationStatus() {
+  const db = serviceDbConfig();
+  return {
+    aiConfigured: Boolean(String(process.env.OPENAI_API_KEY || "").trim()),
+    databaseConfigured: Boolean(db),
+    rateLimitConfigured: Boolean(rateLimitSecret()),
+    model: modelName(),
+  };
+}
+
 async function openAiResponse(input: {
   instructions: string;
   messages: SupportChatMessage[];
