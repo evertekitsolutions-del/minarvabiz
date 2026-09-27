@@ -35,7 +35,7 @@ assert.match(migration, /'sales','sale_items','payments','cash_register_sessions
 assert.match(appLayout, /process\.env\.NODE_ENV === "production"/);
 assert.match(appLayout, /process\.env\.NEXT_PUBLIC_REQUIRE_AUTH !== "false"/);
 assert.match(appLayout, /<AuthGate[\s\S]*requireAuth=\{requireAuthByDefault\}[\s\S]*validateSession=\{requireAuthByDefault \? validateProtectedSession : undefined\}/);
-assert.match(appLayout, /validateOnlineSession\(session\.token, session\.user\.id\)/);
+assert.match(appLayout, /resolveOnlineAuthorization\(session\.token, session\.user\.id\)/);
 assert.match(dataSource, /export async function validateOnlineSession\(accessToken: string, userId: string\)/);
 assert.match(dataSource, /\{ \.\.\.cfg, accessToken \}/);
 assert.match(dataSource, /"current_user_authorization"/);
