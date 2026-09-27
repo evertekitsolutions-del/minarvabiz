@@ -62,6 +62,15 @@ const server = http.createServer((req, res) => {
       json(req, res, 401, { message: "row-level security / JWT rejection" });
       return;
     }
+    if (req.method === "POST" && url.pathname === "/rest/v1/rpc/current_user_authorization") {
+      json(req, res, 200, [{
+        auth_user_id: userId,
+        auth_org_id: "22222222-2222-2222-2222-222222222222",
+        auth_role: "manager",
+        auth_full_name: "E2E Authorized User",
+      }]);
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/rest/v1/profiles") {
       json(req, res, 200, [{ id: userId }]);
       return;
