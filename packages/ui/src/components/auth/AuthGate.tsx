@@ -93,7 +93,7 @@ export function AuthGate({
 
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">
+      <div className="flex min-h-screen items-center justify-center text-sm text-slate-500" role="status" aria-live="polite" aria-busy="true">
         Loading…
       </div>
     );

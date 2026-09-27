@@ -203,8 +203,9 @@ export function Sidebar({
         key={item.id}
         type="button"
         onClick={() => onNavigate?.(item.href, item.id)}
+        aria-current={active ? "page" : undefined}
         className={cn(
-          "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150",
+          "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#071633]",
           active
             ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-950/30"
             : "text-slate-400 hover:bg-white/5 hover:text-white",
@@ -220,6 +221,7 @@ export function Sidebar({
 
   return (
     <aside
+      aria-label="Primary navigation"
       className={cn(
         "flex h-full flex-col bg-gradient-to-b from-[#071633] via-[#0A1733] to-[#06132C] text-slate-300 transition-all duration-200",
         collapsed ? "w-[72px]" : "w-[264px]",
@@ -246,7 +248,7 @@ export function Sidebar({
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-3">
+      <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Minarva Biz modules">
         {collapsed ? (
           <div className="space-y-1">
             {navItems.map((item) => renderNavItem(item))}
@@ -268,7 +270,7 @@ export function Sidebar({
                       aria-expanded={expanded}
                       onClick={() => setOpenSection((current) => current === section.id ? null : section.id)}
                       className={cn(
-                        "flex w-full items-center justify-between rounded-lg px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] transition-colors",
+                        "flex w-full items-center justify-between rounded-lg px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300",
                         groupHasActive ? "text-indigo-300" : "text-slate-500 hover:bg-white/[0.03] hover:text-slate-300"
                       )}
                     >

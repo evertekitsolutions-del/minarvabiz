@@ -18,6 +18,7 @@ export function DataTable<T extends { id: string }>({
   className,
   pagination = true,
   initialPageSize = 25,
+  ariaLabel = "Records",
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -26,6 +27,7 @@ export function DataTable<T extends { id: string }>({
   className?: string;
   pagination?: boolean;
   initialPageSize?: number;
+  ariaLabel?: string;
 }) {
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(initialPageSize);
@@ -46,7 +48,7 @@ export function DataTable<T extends { id: string }>({
   return (
     <div className={cn("overflow-hidden rounded-xl border border-slate-200 bg-white", className)}>
       <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] text-left text-sm">
+      <table className="w-full min-w-[640px] text-left text-sm" aria-label={ariaLabel}>
         <thead>
           <tr className="border-b border-slate-100 bg-slate-50/80 text-xs uppercase tracking-wide text-slate-500">
             {columns.map((col) => (
@@ -61,9 +63,16 @@ export function DataTable<T extends { id: string }>({
             <tr
               key={row.id}
               onClick={() => onRowClick?.(row)}
+              onKeyDown={(event) => {
+                if (!onRowClick || (event.key !== "Enter" && event.key !== " ")) return;
+                event.preventDefault();
+                onRowClick(row);
+              }}
+              tabIndex={onRowClick ? 0 : undefined}
+              aria-label={onRowClick ? `Open row ${row.id}. Press Enter or Space to open.` : undefined}
               className={cn(
                 "text-slate-700 transition-colors",
-                onRowClick && "cursor-pointer hover:bg-slate-50"
+                onRowClick && "cursor-pointer hover:bg-slate-50 focus-visible:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
               )}
             >
               {columns.map((col) => (
@@ -78,7 +87,7 @@ export function DataTable<T extends { id: string }>({
           {rows.length === 0 && (
             <tr>
               <td colSpan={columns.length} className="px-4 py-12 text-center text-slate-400">
-                {emptyMessage}
+                <span role="status">{emptyMessage}</span>
               </td>
             </tr>
           )}
@@ -96,14 +105,15 @@ export function DataTable<T extends { id: string }>({
               <select
                 className="h-8 rounded-md border border-slate-200 bg-white px-2"
                 value={pageSize}
+                aria-label="Rows per page"
                 onChange={(e) => setPageSize(Math.max(1, Number(e.target.value) || initialPageSize))}
               >
                 {[25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
               </select>
             </label>
-            <button type="button" className="h-8 rounded-md border border-slate-200 bg-white px-3 disabled:opacity-40" disabled={safePage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Previous</button>
+            <button type="button" aria-label="Previous page" className="h-8 rounded-md border border-slate-200 bg-white px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-40" disabled={safePage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Previous</button>
             <span>Page {safePage} / {totalPages}</span>
-            <button type="button" className="h-8 rounded-md border border-slate-200 bg-white px-3 disabled:opacity-40" disabled={safePage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
+            <button type="button" aria-label="Next page" className="h-8 rounded-md border border-slate-200 bg-white px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-40" disabled={safePage >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
           </div>
         </div>
       )}
