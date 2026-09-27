@@ -156,7 +156,9 @@ async function createPersistentCustomer(evaluate) {
   await clickTarget(evaluate, "ADD_CUSTOMER", ["add customer"]);
 
   const filled = JSON.parse(await evaluate(`(async()=>{
-    const fields=[...document.querySelectorAll("input,textarea")].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0});
+    const dialogs=[...document.querySelectorAll("[role='dialog']")];
+    const root=dialogs.find(d=>/add customer/i.test(((d.getAttribute("aria-label")||"")+" "+(d.innerText||"")))) || dialogs.at(-1) || document;
+    const fields=[...root.querySelectorAll("input,textarea")].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0});
     const set=(el,val)=>{
       const proto=el.tagName==="TEXTAREA"?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;
       const setter=Object.getOwnPropertyDescriptor(proto,"value")?.set;
