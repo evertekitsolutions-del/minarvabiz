@@ -606,10 +606,11 @@ ipcMain.handle("update:install", async (event) => {
   const update = getDownloadedVerifiedUpdate();
   if (!update) return { ok: false, error: "No verified downloaded update is available." };
 
-  // Upgrade safety gate: never start an updater unless a fresh valid SQLite backup exists.
-  const backup = createLocalBackup("automatic");
-  if (!backup || await minarvaSqliteValidationError(backup.path)) {
-    return { ok: false, error: "Update blocked: a verified Minarva Biz pre-update database backup could not be created." };
+  // Upgrade safety gate: never start an updater unless a fresh, separately classified,
+  // fully validated pre-update SQLite backup exists.
+  const backup = await createLocalBackup("pre-update");
+  if (!backup.ok) {
+    return { ok: false, error: `Update blocked: a verified Minarva Biz pre-update database backup could not be created. ${backup.error}` };
   }
 
   try {
