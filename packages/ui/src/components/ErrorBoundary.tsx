@@ -17,7 +17,7 @@ export class ErrorBoundary extends React.Component<
     if (this.state.error) {
       return (
         this.props.fallback ?? (
-          <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 p-8 text-center">
+          <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 p-8 text-center" role="alert" aria-live="assertive">
             <h2 className="text-lg font-semibold text-slate-900">Something went wrong</h2>
             <p className="max-w-md text-sm text-slate-500">{this.state.error.message}</p>
             <Button onClick={() => this.setState({ error: null })}>Try again</Button>
