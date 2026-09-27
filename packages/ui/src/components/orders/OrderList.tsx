@@ -74,6 +74,11 @@ export function OrderList({
   };
 
   const columns: Column<ServiceOrder>[] = [
+    { key: "actions", header: "Actions", render: (order) => onSelect ? (
+      <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); onSelect(order); }}>
+        {order.status === "delivered" || order.status === "cancelled" ? "Details" : "Edit / Cancel"}
+      </Button>
+    ) : null },
     { key: "orderNumber", header: "Order No.", render: (r) => <span className="font-medium text-slate-900">{r.orderNumber}</span> },
     { key: "customerName", header: "Customer", render: (r) => r.customerName || "—" },
     { key: "serviceType", header: "Type", render: (r) => SERVICE_TYPE_LABELS[r.serviceType] ?? r.serviceType },

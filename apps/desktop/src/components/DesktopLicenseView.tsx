@@ -114,7 +114,7 @@ export function DesktopLicenseView({
           <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
             <div><div className="text-xs text-slate-500">Started</div><div className="font-semibold text-slate-800">{formatDate(trialState.trialStartedAt)}</div></div>
             <div><div className="text-xs text-slate-500">Expires</div><div className="font-semibold text-slate-800">{formatDate(trialState.trialExpiresAt)}</div></div>
-            <div><div className="text-xs text-slate-500">Business</div><div className="font-semibold text-slate-800">{trialState.registration?.organizationName || "—"}</div></div>
+            <div><div className="text-xs text-slate-500">Trial registration business</div><div className="font-semibold text-slate-800">{trialState.registration?.organizationName || "—"}</div><p className="mt-1 text-xs text-slate-500">Name entered when this PC's trial was registered. Invoice details are managed in Settings.</p></div>
             <div><div className="text-xs text-slate-500">Edition</div><div className="font-semibold text-slate-800">Offline trial</div></div>
           </div>
         </div>
