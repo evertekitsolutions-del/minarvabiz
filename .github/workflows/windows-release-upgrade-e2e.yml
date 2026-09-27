@@ -20,7 +20,7 @@ jobs:
       MINARVA_UPDATE_TO: "1.0.9"
       MINARVA_CDP_PORT: "9224"
       MINARVA_UPDATE_E2E_CUSTOMER: "Upgrade E2E Customer"
-      MINARVA_UPDATE_E2E_STATE_FILE: ${{ runner.temp }}\minarva-update-e2e-state.json
+      MINARVA_UPDATE_E2E_STATE_FILE: "minarva-update-e2e-state.json"
       VITE_LICENSE_API_URL: "https://minarvabiz-license-admin.onrender.com"
       MINARVA_UPDATE_MANIFEST_URL: "https://minarvabiz-license-admin.onrender.com/api/update/manifest"
       MINARVA_RUNTIME_SMOKE: "1"
@@ -185,6 +185,6 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: minarvabiz-v1.0.8-to-v1.0.9-update-e2e
-          path: ${{ runner.temp }}\minarva-update-e2e-state.json
+          path: minarva-update-e2e-state.json
           if-no-files-found: ignore
           retention-days: 14
