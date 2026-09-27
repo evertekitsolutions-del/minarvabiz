@@ -35,16 +35,25 @@ export function PersistencePanel({
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!window.confirm("Import this Minarva Biz snapshot? Current in-memory business data will be replaced only if the complete snapshot validates successfully. A rollback copy is kept automatically if applying the snapshot fails.")) {
+      e.target.value = "";
+      return;
+    }
     const reader = new FileReader();
+    reader.onerror = () => {
+      setMsg("Import failed: the selected file could not be read");
+      e.target.value = "";
+    };
     reader.onload = () => {
       const result = onImport(String(reader.result || ""));
       setMsg(
         result.ok
-          ? `Imported: ${Object.entries(result.counts || {})
+          ? `Imported safely: ${Object.entries(result.counts || {})
               .map(([k, v]) => `${k}=${v}`)
               .join(", ")}`
           : result.error || "Import failed"
       );
+      e.target.value = "";
     };
     reader.readAsText(file);
   }
@@ -75,7 +84,7 @@ export function PersistencePanel({
             </Button>
           )}
         </div>
-        <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={handleFile} />
+        <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={handleFile} aria-label="Import Minarva Biz domain snapshot" />
         {msg && <p className="text-sm text-slate-600">{msg}</p>}
       </CardContent>
     </Card>
