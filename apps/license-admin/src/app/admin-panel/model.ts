@@ -85,3 +85,7 @@ export function customerNameForLicense(license: LicenseRegistryRow): string {
 export function canProvisionOnlineCustomer(role: AdminRole): boolean {
   return role === "operator" || role === "admin";
 }
+
+export function canManageSupport(role: AdminRole): boolean {
+  return role === "operator" || role === "admin";
+}

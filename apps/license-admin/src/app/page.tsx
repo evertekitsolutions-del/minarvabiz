@@ -1,12 +1,13 @@
 import AdminPanel from "./AdminPanel";
-import { firstAdminBootstrapStatus, listLicenses } from "./actions";
+import { firstAdminBootstrapStatus, listLicenses, listSupportRequests } from "./actions";
 
 export default async function LicenseAdminHome() {
-  const [result, bootstrap] = await Promise.all([listLicenses(), firstAdminBootstrapStatus()]);
+  const [result, bootstrap, support] = await Promise.all([listLicenses(), firstAdminBootstrapStatus(), listSupportRequests()]);
   return (
     <AdminPanel
       identity={result.identity || null}
       initialLicenses={result.licenses || []}
+      initialSupportRequests={support.requests || []}
       bootstrapAvailable={bootstrap.available}
     />
   );

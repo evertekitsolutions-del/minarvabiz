@@ -6,16 +6,18 @@ import type { Edition, LicenseFeatures } from "@minarvabiz/types";
 import type { LicensePlan } from "@minarvabiz/licensing";
 import { beginAdminMfaEnrollment, cancelAdminMfa, createCommercialLicense, createOfflineActivationPackage, loginAdmin, loginEmergencyAdmin, logoutAdmin, setLicenseStatus, verifyAdminMfa } from "./actions";
 import { AdminAuthCard } from "./admin-panel/AdminAuthCard";
+import { AdminHeader } from "./admin-panel/AdminHeader";
 import { LicenseCreateCard } from "./admin-panel/LicenseCreateCard";
 import { LicenseRegistryCard } from "./admin-panel/LicenseRegistryCard";
 import { LicenseSummaryCard } from "./admin-panel/LicenseSummaryCard";
 import { OfflineActivationCard } from "./admin-panel/OfflineActivationCard";
 import { OnlineCustomerProvisionCard } from "./admin-panel/OnlineCustomerProvisionCard";
+import { SupportInboxSection } from "./admin-panel/SupportInboxSection";
 import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerProvisioning";
 import { canIssueLicense, canManageLicenseStatus, defaultFeatures } from "./admin-panel/model";
-import type { AdminIdentityView, AuthStage, LicenseRegistryRow, LicenseStatusAction } from "./admin-panel/types";
-interface AdminPanelProps { identity: AdminIdentityView | null; initialLicenses: LicenseRegistryRow[]; bootstrapAvailable: boolean; }
-export default function AdminPanel({identity,initialLicenses,bootstrapAvailable}: AdminPanelProps) {
+import type { AdminIdentityView, AuthStage, LicenseRegistryRow, LicenseStatusAction, SupportRequestRow } from "./admin-panel/types";
+interface AdminPanelProps { identity: AdminIdentityView | null; initialLicenses: LicenseRegistryRow[]; initialSupportRequests: SupportRequestRow[]; bootstrapAvailable: boolean; }
+export default function AdminPanel({identity,initialLicenses,initialSupportRequests,bootstrapAvailable}: AdminPanelProps) {
   const router=useRouter();
   const [email,setEmail]=React.useState("");
   const [password,setPassword]=React.useState("");
@@ -207,25 +209,7 @@ export default function AdminPanel({identity,initialLicenses,bootstrapAvailable}
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
       <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Minarva Biz — License Admin</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Signed in as <b>{identity.displayName}</b> · {identity.email} · role:{" "}
-              <b>{identity.role}</b>
-              {identity.source === "emergency" ? " · emergency session" : ""}
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              await logoutAdmin();
-              router.refresh();
-            }}
-          >
-            Sign out
-          </Button>
-        </div>
+        <AdminHeader identity={identity} onSignOut={async()=>{await logoutAdmin();router.refresh();}} />
         <div className="grid gap-6 md:grid-cols-2">
           <OnlineCustomerProvisionCard {...onlineProvisioning} />
           <LicenseCreateCard
@@ -251,15 +235,8 @@ export default function AdminPanel({identity,initialLicenses,bootstrapAvailable}
           />
           <LicenseSummaryCard licenses={initialLicenses} />
         </div>
-        <OfflineActivationCard
-          licenseId={offlineLicenseId}
-          deviceId={offlineDeviceId}
-          busy={busy}
-          canIssue={canIssue}
-          onLicenseIdChange={setOfflineLicenseId}
-          onDeviceIdChange={setOfflineDeviceId}
-          onCreate={() => void createOfflinePackage()}
-        />
+        <OfflineActivationCard licenseId={offlineLicenseId} deviceId={offlineDeviceId} busy={busy} canIssue={canIssue} onLicenseIdChange={setOfflineLicenseId} onDeviceIdChange={setOfflineDeviceId} onCreate={()=>void createOfflinePackage()}/>
+        <SupportInboxSection role={identity.role} requests={initialSupportRequests} />
         <LicenseRegistryCard
           licenses={initialLicenses}
           busy={busy}

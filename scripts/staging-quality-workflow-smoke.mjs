@@ -21,9 +21,12 @@ assert.match(nextConfig, /process\.env\.VERCEL_ENV === "preview"/);
 assert.match(nextConfig, /NEXT_PUBLIC_MINARVA_MODE: "demo"/);
 assert.match(nextConfig, /NEXT_PUBLIC_REQUIRE_AUTH: "false"/);
 assert.match(nextConfig, /poweredByHeader: false/);
-assert.match(middleware, /\["GET", "HEAD", "OPTIONS"\]\.includes\(request\.method\.toUpperCase\(\)\)/);
+assert.match(middleware, /const method = request\.method\.toUpperCase\(\)/);
+assert.match(middleware, /request\.nextUrl\.pathname\.startsWith\("\/api\/support\/"\)/);
+assert.match(middleware, /\["GET", "HEAD", "OPTIONS"\]\.includes\(method\)/);
+assert.match(middleware, /isSupportApi && method === "POST"/);
 assert.match(middleware, /status: 405/);
-assert.match(middleware, /Allow: "GET, HEAD, OPTIONS"/);
+assert.match(middleware, /isSupportApi \? "GET, HEAD, POST, OPTIONS" : "GET, HEAD, OPTIONS"/);
 
 assert.equal(appVercel.git.deploymentEnabled.staging, true);
 assert.equal(rootVercel.git.deploymentEnabled.staging, true);

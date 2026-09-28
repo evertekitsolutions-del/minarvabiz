@@ -817,3 +817,76 @@ export async function setLicenseStatus(licenseId: string, status: unknown) {
   });
   return { ok: true };
 }
+
+
+const SUPPORT_REQUEST_STATUSES = ["new", "in_review", "planned", "resolved", "rejected", "duplicate"] as const;
+
+export async function listSupportRequests() {
+  const authorized = await authorizeAdmin(
+    "support.read",
+    "support.inbox.read",
+    "support_request",
+    null,
+    undefined,
+    false,
+  );
+  if (!authorized.ok) return { ok: false, error: authorized.error, requests: [] as any[] };
+
+  const result = await dbFetch(
+    "/support_requests?select=id%2Crequest_type%2Cstatus%2Cpriority%2Ctitle%2Cdescription%2Cmodule%2Corganization_name%2Ccontact_email%2Capp_version%2Cedition%2Cplatform%2Cai_summary%2Cscreenshot_summary%2Ctranscript%2Cmetadata%2Cassigned_to%2Cadmin_notes%2Ccreated_at%2Cupdated_at%2Cresolved_at&order=created_at.desc&limit=200",
+  );
+  if (!result.ok) return { ok: false, error: result.error, requests: [] as any[] };
+  return { ok: true, requests: Array.isArray(result.data) ? result.data : [] };
+}
+
+export async function updateSupportRequest(input: {
+  id: string;
+  status: string;
+  assignedTo?: string | null;
+  adminNotes?: string | null;
+}) {
+  const id = clean(input.id, 80);
+  const status = clean(input.status, 40);
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !(SUPPORT_REQUEST_STATUSES as readonly string[]).includes(status)) {
+    return { ok: false, error: "Invalid support request update." };
+  }
+
+  const authorized = await authorizeAdmin(
+    "support.manage",
+    "support.request.update",
+    "support_request",
+    id,
+    { requestedStatus: status },
+  );
+  if (!authorized.ok) return { ok: false, error: authorized.error };
+  const session = authorized.session;
+
+  const current = await dbFetch(
+    `/support_requests?select=id%2Cstatus%2Cassigned_to%2Cadmin_notes&id=eq.${encodeURIComponent(id)}&limit=1`,
+  );
+  if (!current.ok) return { ok: false, error: current.error };
+  const row = Array.isArray(current.data) ? current.data[0] : null;
+  if (!row) return { ok: false, error: "Support request not found." };
+
+  const now = new Date().toISOString();
+  const body = {
+    status,
+    assigned_to: clean(input.assignedTo, 320) || null,
+    admin_notes: clean(input.adminNotes, 12000) || null,
+    updated_at: now,
+    resolved_at: status === "resolved" ? now : null,
+  };
+  const updated = await dbFetch(`/support_requests?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify(body),
+  });
+  if (!updated.ok) return { ok: false, error: updated.error };
+
+  await recordAdminAudit(session, "support.request.update", "success", "support_request", id, {
+    previousStatus: row.status,
+    status,
+    assignedTo: body.assigned_to,
+  });
+  return { ok: true };
+}

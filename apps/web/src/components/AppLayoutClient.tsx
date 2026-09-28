@@ -54,6 +54,7 @@ const pathToNav: Record<string, NavItemId> = {
   "/notifications": "notifications",
   "/messages": "messages",
   "/agenda": "agenda",
+  "/support": "support",
   "/settings": "settings",
   "/users": "settings",
   "/onboarding": "dashboard",
