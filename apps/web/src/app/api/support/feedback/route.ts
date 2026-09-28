@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   }
 
   const clientId = clean(body?.context?.clientId, 160);
-  const rate = await consumeSupportRateLimit(headers, "support-submit-day", 20, 86400, clientId);
+  const rate = await consumeSupportRateLimit(headers, "support-submit-day", 20, 86400);
   if (!rate.ok) {
     return NextResponse.json({ ok: false, error: rate.error || "Support submission service is unavailable." }, { status: 503, headers: supportCorsHeaders() });
   }
