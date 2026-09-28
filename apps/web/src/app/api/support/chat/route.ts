@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Enter a Minarva Biz support question." }, { status: 400, headers: supportCorsHeaders() });
   }
 
-  const minute = await consumeSupportRateLimit(headers, "support-chat-minute", 8, 60, clientId);
+  const minute = await consumeSupportRateLimit(headers, "support-chat-minute", 8, 60);
   if (!minute.ok) {
     return NextResponse.json({ ok: false, error: minute.error || "AI support is temporarily unavailable." }, { status: 503, headers: supportCorsHeaders() });
   }
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       { status: 429, headers: { ...supportCorsHeaders(), "Retry-After": String(minute.retryAfterSeconds) } },
     );
   }
-  const hourly = await consumeSupportRateLimit(headers, "support-chat-hour", 40, 3600, clientId);
+  const hourly = await consumeSupportRateLimit(headers, "support-chat-hour", 40, 3600);
   if (!hourly.ok) {
     return NextResponse.json({ ok: false, error: hourly.error || "AI support is temporarily unavailable." }, { status: 503, headers: supportCorsHeaders() });
   }
