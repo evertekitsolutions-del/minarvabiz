@@ -581,7 +581,7 @@ export async function supportConfigurationStatus(oidcToken = "") {
     instructions: "This is an automated Minarva Biz readiness check. Reply exactly OK.",
     messages: [{ role: "user", content: "Verify text and image input. Reply OK only." }],
     image: READINESS_PROBE_IMAGE,
-    maxOutputTokens: 16,
+    maxOutputTokens: 256,
     oidcToken,
   });
 
@@ -612,7 +612,7 @@ export async function supportConfigurationStatus(oidcToken = "") {
   };
 
   readinessCache = {
-    expiresAt: Date.now() + (aiProbe.ok && broker.ok ? 5 * 60_000 : 60_000),
+    expiresAt: Date.now() + (aiProbe.ok && broker.ok ? 30 * 60_000 : 60_000),
     value,
   };
   return value;
