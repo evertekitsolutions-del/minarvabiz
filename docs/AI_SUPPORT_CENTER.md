@@ -19,7 +19,9 @@ Technical conversations can also be escalated to the Support Inbox for human rev
 - Windows client: calls the production web support API over HTTPS.
 - Online client: calls the same API locally through the web deployment.
 
-The OpenAI API key and Supabase service-role credential are server-side only and are never bundled into the Windows client or browser JavaScript.
+Production uses **Vercel OIDC** instead of a manually stored OpenAI API key. The Vercel serverless route authenticates to Vercel AI Gateway with the automatically issued `VERCEL_OIDC_TOKEN`.
+
+Database writes and persistent rate limiting are delegated to the Supabase Edge Function `minarva-support-broker`. That broker validates the Vercel OIDC issuer, audience, production subject, team ID and project ID before using Supabase's built-in service-role credential. The service-role credential never leaves Supabase and is never bundled into the Windows client, browser JavaScript or Vercel project settings.
 
 ## Knowledge freshness
 
@@ -56,12 +58,12 @@ It intentionally excludes customer records, database contents, license tokens an
 
 ## Rate and cost controls
 
-The public support APIs reuse the persistent Supabase rate-limit RPC:
+The Vercel API forwards the request to the OIDC-authenticated Supabase support broker, which applies the persistent Supabase rate-limit RPC:
 
 - chat: 8 requests/minute and 40/hour per network origin;
 - support/feedback submissions: 20/day.
 
-The network address is HMAC-hashed before it is used as a rate-limit key. The raw address is not stored. A separate anonymous client identifier may be hashed into support-request metadata without being used to bypass the network quota.
+The broker HMAC-hashes the network address with a secret that exists only inside the Supabase runtime before using it as a rate-limit key. The raw address is not stored. A separate anonymous client identifier is also HMAC-hashed before it is stored with a support request.
 
 ## Admin Support Inbox
 
@@ -80,13 +82,19 @@ Roles:
 
 ## Required production environment
 
-Web support deployment:
+Production is designed to require **no manual OpenAI API key, Supabase service-role key, or custom rate-limit secret in Vercel**.
 
-- `OPENAI_API_KEY`
-- `SUPPORT_RATE_LIMIT_SECRET` (32+ characters; `LICENSE_RATE_LIMIT_SECRET` can be used as a fallback)
-- `SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL`
-- `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY`
-- optional `MINARVA_SUPPORT_AI_MODEL` (defaults to `gpt-5.6-luna`)
+Automatically provided / existing values:
+
+- `VERCEL_OIDC_TOKEN` — automatically issued by Vercel at runtime;
+- `NEXT_PUBLIC_SUPABASE_URL` — already used by the Minarva Biz web application;
+- Supabase Edge Function built-ins: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
+
+Optional local-development fallbacks:
+
+- `AI_GATEWAY_API_KEY` — for running AI Gateway outside a Vercel deployment;
+- `OPENAI_API_KEY` — direct OpenAI fallback for local development;
+- `MINARVA_SUPPORT_AI_MODEL` — defaults to `openai/gpt-5.4-mini`.
 
 Windows production build:
 
@@ -94,4 +102,4 @@ Windows production build:
 
 ## Operational rule
 
-The UI may be present while the AI endpoint is not configured, but the feature must not be marketed as operational 24/7 support until the production database migration, API key, service credentials, rate-limit secret and deployed endpoint have all been verified.
+The feature is considered operational only after the production support broker is deployed, the Vercel production health endpoint reports `ready: true`, a real AI chat request succeeds, and a real support submission reaches the private admin Support Inbox.

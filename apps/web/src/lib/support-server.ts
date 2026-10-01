@@ -1,5 +1,3 @@
-import { createHmac, randomUUID } from "node:crypto";
-
 export type SupportChatMessage = { role: "user" | "assistant"; content: string };
 
 export type SupportClientContext = {
@@ -19,6 +17,7 @@ const REPO = "evertekitsolutions-del/minarvabiz";
 const RAW_BASE = `https://raw.githubusercontent.com/${REPO}/main`;
 const GITHUB_API = `https://api.github.com/repos/${REPO}`;
 const OPENAI_URL = "https://api.openai.com/v1/responses";
+const AI_GATEWAY_URL = "https://ai-gateway.vercel.sh/v1/responses";
 const KNOWLEDGE_TTL_MS = 15 * 60 * 1000;
 const MAX_IMAGE_DATA_URL_CHARS = 2_600_000;
 
@@ -38,41 +37,13 @@ function clean(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
-function serviceDbConfig() {
-  const base = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim().replace(/\/$/, "");
-  const key = String(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
-  return base && key ? { base: `${base}/rest/v1`, key } : null;
+function supportBrokerUrl() {
+  const base = String(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "").trim().replace(/\/$/, "");
+  return base ? `${base}/functions/v1/minarva-support-broker` : "";
 }
 
-async function serviceDbFetch(path: string, init: RequestInit = {}) {
-  const cfg = serviceDbConfig();
-  if (!cfg) return { ok: false, data: null as unknown, error: "Support database is not configured." };
-  const headers = new Headers(init.headers);
-  headers.set("apikey", cfg.key);
-  headers.set("content-type", "application/json");
-  if (cfg.key.startsWith("sb_secret_")) headers.delete("authorization");
-  else headers.set("authorization", `Bearer ${cfg.key}`);
-  try {
-    const response = await fetch(`${cfg.base}${path}`, {
-      ...init,
-      headers,
-      cache: "no-store",
-      signal: init.signal ?? AbortSignal.timeout(12_000),
-    });
-    const data = await response.json().catch(() => null);
-    return {
-      ok: response.ok,
-      data,
-      error: response.ok ? null : String((data as any)?.message || (data as any)?.error || response.statusText || "Support database request failed."),
-    };
-  } catch (error) {
-    return { ok: false, data: null as unknown, error: error instanceof Error ? error.message : String(error) };
-  }
-}
-
-function rateLimitSecret() {
-  const value = String(process.env.SUPPORT_RATE_LIMIT_SECRET || process.env.LICENSE_RATE_LIMIT_SECRET || "").trim();
-  return value.length >= 32 ? value : "";
+function vercelOidcToken() {
+  return String(process.env.VERCEL_OIDC_TOKEN || "").trim();
 }
 
 function clientAddress(headers: Headers) {
@@ -88,45 +59,64 @@ function clientAddress(headers: Headers) {
   ).slice(0, 200);
 }
 
+async function brokerFetch(body: Record<string, unknown>) {
+  const url = supportBrokerUrl();
+  const token = vercelOidcToken();
+  if (!url || !token) {
+    return { ok: false, data: null as any, error: "Support broker is not configured for this deployment." };
+  }
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+      signal: AbortSignal.timeout(12_000),
+    });
+    const data = await response.json().catch(() => null);
+    return {
+      ok: response.ok && Boolean(data?.ok),
+      data,
+      error: response.ok && data?.ok
+        ? null
+        : clean(data?.error, 500) || `Support broker returned HTTP ${response.status}.`,
+    };
+  } catch (error) {
+    return { ok: false, data: null as any, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 export async function consumeSupportRateLimit(
   headers: Headers,
   bucket: string,
   limit: number,
   windowSeconds: number,
 ) {
-  const secret = rateLimitSecret();
-  if (!secret) {
-    return { ok: false, allowed: false, remaining: 0, retryAfterSeconds: windowSeconds, error: "Support rate limiting is not configured." };
-  }
-  // Rate-limit by network origin so rotating the anonymous client ID cannot bypass the quota.
-  // The raw address is never stored; only an HMAC is persisted in the rate-limit table.
-  const raw = clientAddress(headers);
-  const keyHash = createHmac("sha256", secret).update(raw).digest("hex");
-  const cfg = serviceDbConfig();
-  if (!cfg) {
-    return { ok: false, allowed: false, remaining: 0, retryAfterSeconds: windowSeconds, error: "Support database is not configured." };
-  }
-  const response = await serviceDbFetch("/rpc/consume_license_rate_limit", {
-    method: "POST",
-    headers: { Prefer: "return=representation" },
-    body: JSON.stringify({
-      p_bucket: bucket,
-      p_key_hash: keyHash,
-      p_limit: limit,
-      p_window_seconds: windowSeconds,
-    }),
+  const response = await brokerFetch({
+    op: "rate-limit",
+    bucket,
+    clientAddress: clientAddress(headers),
   });
-  const rows = Array.isArray(response.data) ? response.data as Array<{ allowed?: boolean; remaining?: number; reset_at?: string }> : [];
-  const row = rows[0];
+  const row = response.data;
   if (!response.ok || !row) {
-    return { ok: false, allowed: false, remaining: 0, retryAfterSeconds: windowSeconds, error: response.error || "Support rate-limit service is unavailable." };
+    return {
+      ok: false,
+      allowed: false,
+      remaining: 0,
+      retryAfterSeconds: windowSeconds,
+      error: response.error || "Support rate-limit service is unavailable.",
+    };
   }
-  const resetAt = new Date(String(row.reset_at || "")).getTime();
+  const resetAt = new Date(String(row.resetAt || "")).getTime();
   return {
     ok: true,
     allowed: Boolean(row.allowed),
     remaining: Math.max(0, Number(row.remaining || 0)),
     retryAfterSeconds: Number.isFinite(resetAt) ? Math.max(1, Math.ceil((resetAt - Date.now()) / 1000)) : windowSeconds,
+    configuredLimit: limit,
   };
 }
 
@@ -242,15 +232,26 @@ function extractOutputText(payload: any) {
 }
 
 function modelName() {
-  return clean(process.env.MINARVA_SUPPORT_AI_MODEL || "gpt-5.6-luna", 120);
+  return clean(process.env.MINARVA_SUPPORT_AI_MODEL || "openai/gpt-5.4-mini", 120);
 }
 
-export function supportConfigurationStatus() {
-  const db = serviceDbConfig();
+function aiCredentials() {
+  const gatewayKey = String(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN || "").trim();
+  if (gatewayKey) return { url: AI_GATEWAY_URL, key: gatewayKey, gateway: true as const };
+  const openAiKey = String(process.env.OPENAI_API_KEY || "").trim();
+  if (openAiKey) return { url: OPENAI_URL, key: openAiKey, gateway: false as const };
+  return null;
+}
+
+export async function supportConfigurationStatus() {
+  const credentials = aiCredentials();
+  const broker = await brokerFetch({ op: "health" });
   return {
-    aiConfigured: Boolean(String(process.env.OPENAI_API_KEY || "").trim()),
-    databaseConfigured: Boolean(db),
-    rateLimitConfigured: Boolean(rateLimitSecret()),
+    aiConfigured: Boolean(credentials),
+    databaseConfigured: broker.ok,
+    rateLimitConfigured: broker.ok,
+    brokerConfigured: broker.ok,
+    aiTransport: credentials?.gateway ? "vercel-ai-gateway-oidc" : credentials ? "openai-key-fallback" : "unconfigured",
     model: modelName(),
   };
 }
@@ -261,8 +262,8 @@ async function openAiResponse(input: {
   image?: string | null;
   maxOutputTokens?: number;
 }) {
-  const key = String(process.env.OPENAI_API_KEY || "").trim();
-  if (!key) return { ok: false as const, error: "AI support is not configured on the server." };
+  const credentials = aiCredentials();
+  if (!credentials) return { ok: false as const, error: "AI support is not configured on the server." };
 
   const normalizedMessages = input.messages.slice(-12).map((message) => ({
     role: message.role,
@@ -276,15 +277,20 @@ async function openAiResponse(input: {
     last.content.push({ type: "input_image", image_url: image } as any);
   }
 
+  const configuredModel = modelName();
+  const model = credentials.gateway
+    ? (configuredModel.includes("/") ? configuredModel : `openai/${configuredModel}`)
+    : configuredModel.replace(/^openai\//, "");
+
   try {
-    const response = await fetch(OPENAI_URL, {
+    const response = await fetch(credentials.url, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${key}`,
+        authorization: `Bearer ${credentials.key}`,
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: modelName(),
+        model,
         instructions: input.instructions,
         input: normalizedMessages,
         max_output_tokens: input.maxOutputTokens ?? 1400,
@@ -383,12 +389,6 @@ If an image is attached, include the visible error/UI evidence. Do not invent fa
   return response.ok ? response.text : "";
 }
 
-function clientHash(clientId: string) {
-  const secret = rateLimitSecret();
-  if (!secret || !clientId) return null;
-  return createHmac("sha256", secret).update(clientId).digest("hex");
-}
-
 export async function createSupportRequest(input: {
   type: SupportRequestType;
   priority: SupportPriority;
@@ -407,13 +407,14 @@ export async function createSupportRequest(input: {
 
   const transcript = (Array.isArray(input.transcript) ? input.transcript : [])
     .slice(-20)
-    .map((message) => ({ role: message.role === "assistant" ? "assistant" : "user", content: clean(message.content, 4000) }))
+    .map((message) => ({
+      role: message.role === "assistant" ? "assistant" : "user",
+      content: clean(message.content, 4000),
+    }))
     .filter((message) => message.content);
 
-  const payload = {
-    id: randomUUID(),
+  const request = {
     request_type: input.type,
-    status: "new",
     priority: input.priority,
     title,
     description,
@@ -423,7 +424,7 @@ export async function createSupportRequest(input: {
     app_version: clean(input.context.appVersion, 80) || null,
     edition: clean(input.context.edition, 40) || null,
     platform: clean(input.context.platform, 120) || null,
-    client_hash: clientHash(clean(input.context.clientId, 160)),
+    client_id: clean(input.context.clientId, 160) || null,
     ai_summary: clean(input.aiSummary, 4000) || null,
     screenshot_summary: clean(input.screenshotSummary, 4000) || null,
     transcript,
@@ -433,12 +434,7 @@ export async function createSupportRequest(input: {
     },
   };
 
-  const result = await serviceDbFetch("/support_requests", {
-    method: "POST",
-    headers: { Prefer: "return=representation" },
-    body: JSON.stringify(payload),
-  });
+  const result = await brokerFetch({ op: "create-request", request });
   if (!result.ok) return { ok: false as const, error: result.error || "Unable to submit support request." };
-  const row = Array.isArray(result.data) ? result.data[0] as any : null;
-  return { ok: true as const, requestId: clean(row?.id || payload.id, 80) };
+  return { ok: true as const, requestId: clean(result.data?.requestId, 80) };
 }
