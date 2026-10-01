@@ -20,6 +20,8 @@ const RATE_POLICIES: Record<string, { limit: number; windowSeconds: number }> = 
 
 const TYPES = new Set(["technical_escalation", "bug", "feature_request", "suggestion"]);
 const PRIORITIES = new Set(["low", "normal", "high", "urgent"]);
+const TERMINAL_SUPPORT_STATUSES = ["resolved", "rejected", "duplicate"] as const;
+const SUPPORT_RETENTION_DAYS = 180;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -67,6 +69,16 @@ async function hmacHex(secret: string, value: string) {
   );
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(value));
   return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function purgeExpiredSupportRequests(supabase: ReturnType<typeof createClient>) {
+  const cutoff = new Date(Date.now() - SUPPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const { error } = await supabase
+    .from("support_requests")
+    .delete()
+    .in("status", [...TERMINAL_SUPPORT_STATUSES])
+    .lt("updated_at", cutoff);
+  return { ok: !error, cutoff };
 }
 
 Deno.serve(async (req: Request) => {
@@ -160,7 +172,13 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, service: "minarva-support-broker", checks, error: "Support readiness cleanup failed." }, 503);
     }
 
-    return json({ ok: true, service: "minarva-support-broker", checks });
+    const retention = await purgeExpiredSupportRequests(supabase);
+    return json({
+      ok: true,
+      service: "minarva-support-broker",
+      checks,
+      retention: { ok: retention.ok, days: SUPPORT_RETENTION_DAYS },
+    });
   }
 
   if (op === "rate-limit") {
@@ -188,6 +206,7 @@ Deno.serve(async (req: Request) => {
   }
 
   if (op === "create-request") {
+    await purgeExpiredSupportRequests(supabase);
     const request = body?.request && typeof body.request === "object" ? body.request : {};
     const requestType = clean(request.request_type, 40);
     const priority = clean(request.priority, 20);
