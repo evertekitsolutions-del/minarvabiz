@@ -12,6 +12,7 @@ const ALLOWED_ROUTES = new Map([
 const DEFAULT_ORIGIN = "https://minarvabiz-license-admin.onrender.com";
 const DEFAULT_UPDATE_FALLBACK =
   "https://github.com/evertekitsolutions-del/minarvabiz/releases/latest/download/MinarvaBiz-update-manifest.json";
+const LICENSE_PUBLIC_KEY_HEX = "2e1e4a5136c118603da5618d21017adf9c8a699e44856efa3aa127ebe090e6b4";
 
 function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -170,6 +171,17 @@ export default {
         },
         200,
         { "x-minarva-license-backend": "cloudflare-native" },
+      );
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/public-key") {
+      return json(
+        { publicKeyHex: LICENSE_PUBLIC_KEY_HEX },
+        200,
+        {
+          "cache-control": "public, max-age=3600",
+          "x-minarva-license-backend": "cloudflare-native",
+        },
       );
     }
 

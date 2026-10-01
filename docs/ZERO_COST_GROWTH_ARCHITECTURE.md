@@ -39,7 +39,7 @@ Do not fork the application by industry. Industry differences should become modu
 - customer-facing serverless web during transition: free-compatible hosting only;
 - AI: Cloudflare Workers AI Free via a provider-neutral adapter;
 - AI fallback after free quota: Help Center + private Support Inbox, **not paid inference**;
-- License API front door: Cloudflare Worker; health and signed update manifest are already origin-independent, while public-key/licensing mutations remain on the transition origin until migrated.
+- License API front door: Cloudflare Worker; health, production public verification key and signed update manifest are origin-independent, while license mutation/signing routes remain on the transition origin until migrated.
 - License Admin transition target: remove dependence on free services that prohibit production/commercial use.
 - Licensing client front door: Cloudflare License Edge; the current Render License Admin remains a temporary origin behind that stable boundary until signing/admin logic is migrated.
 
