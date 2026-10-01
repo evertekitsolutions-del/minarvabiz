@@ -79,8 +79,9 @@ async function waitFor(ws, predicate, label, timeout = 30000) {
   throw new Error(`${label} timed out: ${state}`);
 }
 
-async function navigate(ws, path) {
-  await evalIn(ws, `location.href=${JSON.stringify(appBase)}+${JSON.stringify(path)}`);
+function isNavigationDisconnect(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /navigated|closed|socket|not open|target/i.test(message);
 }
 
 async function setInputByLabel(ws, label, value) {
@@ -94,7 +95,23 @@ async function clickButton(ws, text) {
 }
 
 async function run() {
-  const ws = await connect();
+  let ws = await connect();
+
+  async function reconnectAfterNavigation(expression) {
+    try {
+      await evalIn(ws, expression);
+    } catch (error) {
+      if (!isNavigationDisconnect(error)) throw error;
+    }
+    try { ws.close(); } catch {}
+    await sleep(300);
+    ws = await connect();
+  }
+
+  async function navigate(path) {
+    await reconnectAfterNavigation(`location.href=${JSON.stringify(appBase)}+${JSON.stringify(path)}`);
+  }
+
   try {
     await waitFor(
       ws,
