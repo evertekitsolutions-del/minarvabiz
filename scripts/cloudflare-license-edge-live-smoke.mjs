@@ -37,13 +37,17 @@ assert(edge.data?.paidDependencyIntroduced === false, "edge must not introduce a
 
 const health = await fetchJson("/api/health");
 assert(health.response.ok, `origin health HTTP ${health.response.status}`);
-assert(health.data?.status === "ok", "origin health did not report ok");
+assert(health.data?.status === "ok", "edge API health did not report ok");
+assert(health.data?.provider === "cloudflare-workers", "edge API health provider mismatch");
+assert(health.data?.updateChannel === "github-release", "edge API health update channel mismatch");
 assert(health.response.headers.get("x-minarva-license-edge") === "cloudflare", "edge response marker missing");
+assert(health.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "health must be served natively by Cloudflare");
 
 const keyResult = await fetchJson("/api/public-key");
 assert(keyResult.response.ok, `public-key HTTP ${keyResult.response.status}`);
 const keyHex = String(keyResult.data?.publicKeyHex || "").trim().toLowerCase();
 assert(/^[0-9a-f]{64}$/.test(keyHex), "public key is not 64 hex characters");
+assert(keyResult.response.headers.get("x-minarva-license-backend") === "origin-transition", "public key should still use the transition origin");
 
 const manifestResult = await fetchJson("/api/update/manifest");
 assert(manifestResult.response.ok, `update manifest HTTP ${manifestResult.response.status}`);
@@ -53,6 +57,8 @@ assert(/^\d+\.\d+\.\d+$/.test(String(manifest.version || "")), "manifest version
 assert(/^https:\/\/github\.com\/evertekitsolutions-del\/minarvabiz\/releases\/download\//.test(String(manifest.installerUrl || "")), "manifest installer URL is not trusted GitHub release URL");
 assert(/^[0-9a-f]{64}$/i.test(String(manifest.sha256 || "")), "manifest SHA-256 invalid");
 assert(typeof manifest.signature === "string" && manifest.signature.length > 40, "manifest signature missing");
+assert(manifestResult.response.headers.get("x-minarva-license-backend") === "github-release", "update manifest must bypass the transition origin");
+assert(manifestResult.response.headers.get("x-minarva-update-source") === "github-release", "update source marker mismatch");
 
 const canonical = [
   "minarvabiz-update-v1",
@@ -72,5 +78,6 @@ const invalidActivation = await fetchJson("/api/license/activate", {
 });
 assert(invalidActivation.response.status === 400, `invalid activation expected 400, got ${invalidActivation.response.status}`);
 assert(invalidActivation.response.headers.get("x-minarva-license-edge") === "cloudflare", "activation did not traverse Cloudflare edge");
+assert(invalidActivation.response.headers.get("x-minarva-license-backend") === "origin-transition", "activation should still use the transition origin in this milestone");
 
 console.log(`CLOUDFLARE_LICENSE_EDGE_LIVE_SMOKE PASS version=${manifest.version}`);
