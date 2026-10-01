@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const status = supportConfigurationStatus();
+  const status = await supportConfigurationStatus();
   const ready = status.aiConfigured && status.databaseConfigured && status.rateLimitConfigured;
   return NextResponse.json(
     {
