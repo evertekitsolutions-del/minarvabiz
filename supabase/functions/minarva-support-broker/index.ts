@@ -20,6 +20,8 @@ const RATE_POLICIES: Record<string, { limit: number; windowSeconds: number }> = 
 
 const TYPES = new Set(["technical_escalation", "bug", "feature_request", "suggestion"]);
 const PRIORITIES = new Set(["low", "normal", "high", "urgent"]);
+const TERMINAL_SUPPORT_STATUSES = ["resolved", "rejected", "duplicate"] as const;
+const SUPPORT_RETENTION_DAYS = 180;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -69,6 +71,16 @@ async function hmacHex(secret: string, value: string) {
   return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function purgeExpiredSupportRequests(supabase: ReturnType<typeof createClient>) {
+  const cutoff = new Date(Date.now() - SUPPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const { error } = await supabase
+    .from("support_requests")
+    .delete()
+    .in("status", [...TERMINAL_SUPPORT_STATUSES])
+    .lt("updated_at", cutoff);
+  return { ok: !error, cutoff };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
 
@@ -104,6 +116,71 @@ Deno.serve(async (req: Request) => {
       : json({ ok: true, service: "minarva-support-broker" });
   }
 
+  if (op === "readiness") {
+    const checks = {
+      database: false,
+      rateLimit: false,
+      submissionWrite: false,
+      cleanup: false,
+    };
+
+    const { error: selectError } = await supabase.from("support_requests").select("id").limit(1);
+    checks.database = !selectError;
+    if (!checks.database) {
+      return json({ ok: false, service: "minarva-support-broker", checks, error: "Support database read failed." }, 503);
+    }
+
+    const readinessHash = await hmacHex(serviceRoleKey, "support-readiness");
+    const { data: rateData, error: rateError } = await supabase.rpc("consume_license_rate_limit", {
+      p_bucket: "support-readiness",
+      p_key_hash: readinessHash,
+      p_limit: 100000,
+      p_window_seconds: 60,
+    });
+    checks.rateLimit = !rateError && Array.isArray(rateData) && Boolean(rateData[0]);
+    if (!checks.rateLimit) {
+      return json({ ok: false, service: "minarva-support-broker", checks, error: "Support rate-limit RPC failed." }, 503);
+    }
+
+    const probeId = crypto.randomUUID();
+    const probePayload = {
+      id: probeId,
+      request_type: "suggestion",
+      status: "resolved",
+      priority: "low",
+      title: "__minarva_support_readiness__",
+      description: "Synthetic readiness probe. This row should be deleted immediately.",
+      module: "support-readiness",
+      organization_name: "Minarva Biz",
+      app_version: null,
+      edition: "system",
+      platform: "vercel",
+      transcript: [],
+      metadata: { syntheticReadiness: true },
+      resolved_at: new Date().toISOString(),
+    };
+
+    const { error: insertError } = await supabase.from("support_requests").insert(probePayload);
+    checks.submissionWrite = !insertError;
+    if (!checks.submissionWrite) {
+      return json({ ok: false, service: "minarva-support-broker", checks, error: "Support inbox write failed." }, 503);
+    }
+
+    const { error: deleteError } = await supabase.from("support_requests").delete().eq("id", probeId);
+    checks.cleanup = !deleteError;
+    if (!checks.cleanup) {
+      return json({ ok: false, service: "minarva-support-broker", checks, error: "Support readiness cleanup failed." }, 503);
+    }
+
+    const retention = await purgeExpiredSupportRequests(supabase);
+    return json({
+      ok: true,
+      service: "minarva-support-broker",
+      checks,
+      retention: { ok: retention.ok, days: SUPPORT_RETENTION_DAYS },
+    });
+  }
+
   if (op === "rate-limit") {
     const bucket = clean(body?.bucket, 80);
     const policy = RATE_POLICIES[bucket];
@@ -129,6 +206,7 @@ Deno.serve(async (req: Request) => {
   }
 
   if (op === "create-request") {
+    await purgeExpiredSupportRequests(supabase);
     const request = body?.request && typeof body.request === "object" ? body.request : {};
     const requestType = clean(request.request_type, 40);
     const priority = clean(request.priority, 20);

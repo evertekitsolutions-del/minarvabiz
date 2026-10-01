@@ -6,7 +6,14 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const status = await supportConfigurationStatus(request.headers.get("x-vercel-oidc-token") || "");
-  const ready = status.aiConfigured && status.databaseConfigured && status.rateLimitConfigured;
+  const ready =
+    status.aiConfigured &&
+    status.aiOperational &&
+    status.databaseConfigured &&
+    status.rateLimitConfigured &&
+    status.submissionConfigured &&
+    status.brokerConfigured &&
+    status.retentionConfigured;
   return NextResponse.json(
     {
       product: "minarvabiz",

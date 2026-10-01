@@ -235,42 +235,90 @@ function modelName() {
   return clean(process.env.MINARVA_SUPPORT_AI_MODEL || "openai/gpt-5.4-mini", 120);
 }
 
-function aiCredentials(oidcToken = "") {
-  const gatewayKey = String(process.env.AI_GATEWAY_API_KEY || oidcToken || process.env.VERCEL_OIDC_TOKEN || "").trim();
-  if (gatewayKey) return { url: AI_GATEWAY_URL, key: gatewayKey, gateway: true as const };
+type AiCredential = {
+  url: string;
+  key: string;
+  gateway: boolean;
+  transport: "vercel-ai-gateway-oidc" | "vercel-ai-gateway-key" | "openai-key-fallback";
+};
+
+function aiCredentials(oidcToken = ""): AiCredential | null {
+  const explicitGatewayKey = String(process.env.AI_GATEWAY_API_KEY || "").trim();
+  if (explicitGatewayKey) {
+    return { url: AI_GATEWAY_URL, key: explicitGatewayKey, gateway: true, transport: "vercel-ai-gateway-key" };
+  }
+  const gatewayOidc = String(oidcToken || process.env.VERCEL_OIDC_TOKEN || "").trim();
+  if (gatewayOidc) {
+    return { url: AI_GATEWAY_URL, key: gatewayOidc, gateway: true, transport: "vercel-ai-gateway-oidc" };
+  }
   const openAiKey = String(process.env.OPENAI_API_KEY || "").trim();
-  if (openAiKey) return { url: OPENAI_URL, key: openAiKey, gateway: false as const };
+  if (openAiKey) {
+    return { url: OPENAI_URL, key: openAiKey, gateway: false, transport: "openai-key-fallback" };
+  }
   return null;
 }
 
-export async function supportConfigurationStatus(oidcToken = "") {
-  const credentials = aiCredentials(oidcToken);
-  const broker = await brokerFetch({ op: "health" }, oidcToken);
-  return {
-    aiConfigured: Boolean(credentials),
-    databaseConfigured: broker.ok,
-    rateLimitConfigured: broker.ok,
-    brokerConfigured: broker.ok,
-    aiTransport: credentials?.gateway ? "vercel-ai-gateway-oidc" : credentials ? "openai-key-fallback" : "unconfigured",
-    model: modelName(),
-  };
+function directOpenAiCredentials(): AiCredential | null {
+  const key = String(process.env.OPENAI_API_KEY || "").trim();
+  return key ? { url: OPENAI_URL, key, gateway: false, transport: "openai-key-fallback" } : null;
 }
 
-async function openAiResponse(input: {
-  instructions: string;
-  messages: SupportChatMessage[];
-  image?: string | null;
-  maxOutputTokens?: number;
-  oidcToken?: string;
-}) {
-  const credentials = aiCredentials(input.oidcToken || "");
-  if (!credentials) return { ok: false as const, error: "AI support is not configured on the server." };
+type AiFailureCode =
+  | "unconfigured"
+  | "billing_or_quota"
+  | "authentication"
+  | "model_unavailable"
+  | "timeout"
+  | "provider_unavailable"
+  | "empty_response";
 
+function classifyAiFailure(detail: string, status = 0): AiFailureCode {
+  const value = detail.toLowerCase();
+  if (/credit card|billing|credits?|quota|insufficient|payment/.test(value) || status === 402 || status === 429) {
+    return "billing_or_quota";
+  }
+  if (/unauthorized|authentication|invalid api key|invalid token/.test(value) || status === 401) {
+    return "authentication";
+  }
+  if (/model|provider/.test(value) && /not found|unavailable|disabled|restricted|unsupported/.test(value)) {
+    return "model_unavailable";
+  }
+  if (/timeout|timed out|aborted/.test(value)) return "timeout";
+  return "provider_unavailable";
+}
+
+function publicAiError(code: AiFailureCode) {
+  if (code === "billing_or_quota") {
+    return "AI Support is temporarily unavailable because the AI service account is not currently enabled for requests. You can still send this conversation to Minarva Biz Support.";
+  }
+  if (code === "authentication" || code === "unconfigured") {
+    return "AI Support is temporarily unavailable because the support service is not fully configured. You can still send this conversation to Minarva Biz Support.";
+  }
+  if (code === "model_unavailable") {
+    return "AI Support is temporarily unavailable because the configured AI model cannot be reached. You can still send this conversation to Minarva Biz Support.";
+  }
+  if (code === "timeout") {
+    return "AI Support took too long to respond. Please retry, or send this conversation to Minarva Biz Support.";
+  }
+  return "AI Support is temporarily unavailable. Please retry, or send this conversation to Minarva Biz Support.";
+}
+
+async function executeAiRequest(
+  credentials: AiCredential,
+  input: {
+    instructions: string;
+    messages: SupportChatMessage[];
+    image?: string | null;
+    maxOutputTokens?: number;
+  },
+) {
   const normalizedMessages = input.messages.slice(-12).map((message) => ({
     role: message.role,
     content: [{ type: "input_text", text: clean(message.content, 4000) }],
   }));
-  if (!normalizedMessages.length) return { ok: false as const, error: "A support message is required." };
+  if (!normalizedMessages.length) {
+    return { ok: false as const, error: "A support message is required.", code: "provider_unavailable" as AiFailureCode };
+  }
 
   const image = imageDataUrl(input.image);
   if (image) {
@@ -283,6 +331,21 @@ async function openAiResponse(input: {
     ? (configuredModel.includes("/") ? configuredModel : `openai/${configuredModel}`)
     : configuredModel.replace(/^openai\//, "");
 
+  const body: Record<string, unknown> = {
+    model,
+    instructions: input.instructions,
+    input: normalizedMessages,
+    max_output_tokens: input.maxOutputTokens ?? 1400,
+  };
+  if (credentials.gateway) {
+    body.providerOptions = {
+      gateway: {
+        zeroDataRetention: true,
+        disallowPromptTraining: true,
+      },
+    };
+  }
+
   try {
     const response = await fetch(credentials.url, {
       method: "POST",
@@ -290,25 +353,118 @@ async function openAiResponse(input: {
         authorization: `Bearer ${credentials.key}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        model,
-        instructions: input.instructions,
-        input: normalizedMessages,
-        max_output_tokens: input.maxOutputTokens ?? 1400,
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(60_000),
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      const detail = clean((payload as any)?.error?.message, 500);
-      return { ok: false as const, error: detail || `AI support returned HTTP ${response.status}.` };
+      const detail = clean((payload as any)?.error?.message || (payload as any)?.error, 800) || `HTTP ${response.status}`;
+      const code = classifyAiFailure(detail, response.status);
+      console.warn("Minarva Biz AI Support provider request failed", {
+        code,
+        status: response.status,
+        transport: credentials.transport,
+      });
+      return { ok: false as const, error: publicAiError(code), code };
     }
+
     const text = extractOutputText(payload);
-    if (!text) return { ok: false as const, error: "AI support returned an empty response." };
-    return { ok: true as const, text };
+    if (!text) {
+      return {
+        ok: false as const,
+        error: publicAiError("empty_response"),
+        code: "empty_response" as AiFailureCode,
+      };
+    }
+    return { ok: true as const, text, transport: credentials.transport };
   } catch (error) {
-    return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+    const detail = error instanceof Error ? error.message : String(error);
+    const code = classifyAiFailure(detail);
+    console.warn("Minarva Biz AI Support provider request failed", {
+      code,
+      status: 0,
+      transport: credentials.transport,
+    });
+    return { ok: false as const, error: publicAiError(code), code };
   }
+}
+
+async function openAiResponse(input: {
+  instructions: string;
+  messages: SupportChatMessage[];
+  image?: string | null;
+  maxOutputTokens?: number;
+  oidcToken?: string;
+}) {
+  const credentials = aiCredentials(input.oidcToken || "");
+  if (!credentials) {
+    return {
+      ok: false as const,
+      error: publicAiError("unconfigured"),
+      code: "unconfigured" as AiFailureCode,
+    };
+  }
+
+  const primary = await executeAiRequest(credentials, input);
+  if (primary.ok) return primary;
+
+  if (credentials.gateway) {
+    const fallback = directOpenAiCredentials();
+    if (fallback) {
+      const retry = await executeAiRequest(fallback, input);
+      if (retry.ok) return retry;
+      return retry;
+    }
+  }
+  return primary;
+}
+
+const READINESS_PROBE_IMAGE =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl6sAAAAASUVORK5CYII=";
+let readinessCache: { expiresAt: number; value: Record<string, unknown> } | null = null;
+
+export async function supportConfigurationStatus(oidcToken = "") {
+  if (readinessCache && readinessCache.expiresAt > Date.now()) return readinessCache.value;
+
+  const credentials = aiCredentials(oidcToken);
+  const broker = await brokerFetch({ op: "readiness" }, oidcToken);
+  const brokerChecks = broker.data?.checks && typeof broker.data.checks === "object" ? broker.data.checks : {};
+  const retention = broker.data?.retention && typeof broker.data.retention === "object" ? broker.data.retention : {};
+
+  const aiProbe = credentials
+    ? await openAiResponse({
+        instructions: "This is an automated Minarva Biz readiness check. Reply exactly OK.",
+        messages: [{ role: "user", content: "Verify text and image input. Reply OK only." }],
+        image: READINESS_PROBE_IMAGE,
+        maxOutputTokens: 16,
+        oidcToken,
+      })
+    : {
+        ok: false as const,
+        error: publicAiError("unconfigured"),
+        code: "unconfigured" as AiFailureCode,
+      };
+
+  const value = {
+    aiConfigured: Boolean(credentials),
+    aiOperational: Boolean(aiProbe.ok),
+    aiStatus: aiProbe.ok ? "operational" : aiProbe.code,
+    aiError: aiProbe.ok ? null : aiProbe.error,
+    databaseConfigured: Boolean((brokerChecks as any).database),
+    rateLimitConfigured: Boolean((brokerChecks as any).rateLimit),
+    submissionConfigured: Boolean((brokerChecks as any).submissionWrite && (brokerChecks as any).cleanup),
+    brokerConfigured: Boolean(broker.ok),
+    retentionConfigured: Boolean((retention as any).ok),
+    retentionDays: Number((retention as any).days || 0) || null,
+    aiTransport: credentials?.transport || "unconfigured",
+    model: modelName(),
+  };
+
+  readinessCache = {
+    expiresAt: Date.now() + (aiProbe.ok && broker.ok ? 5 * 60_000 : 60_000),
+    value,
+  };
+  return value;
 }
 
 function contextSummary(context: SupportClientContext) {

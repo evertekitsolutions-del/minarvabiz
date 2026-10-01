@@ -43,6 +43,18 @@ The client resizes/re-encodes large screenshots before upload. Screenshots are s
 
 Customers are warned not to upload passwords, license tokens, payment-card data or unnecessary customer-sensitive information.
 
+
+## AI provider privacy
+
+Production AI requests sent through Vercel AI Gateway set both:
+
+- `zeroDataRetention: true`;
+- `disallowPromptTraining: true`.
+
+The Zero Data Retention option instructs AI Gateway to route only through providers covered by its verified ZDR path. The support service does not silently remove these privacy controls when a gateway provider cannot satisfy them.
+
+A direct `OPENAI_API_KEY` path exists only as an optional operator-controlled fallback. If it is enabled, the operator is responsible for confirming the direct provider account's retention and training settings before using it with customer data.
+
 ## Redacted diagnostics
 
 The customer can explicitly opt in to sharing a redacted diagnostics object. It contains operational facts such as:
@@ -64,6 +76,21 @@ The Vercel API forwards the request to the OIDC-authenticated Supabase support b
 - support/feedback submissions: 20/day.
 
 The broker HMAC-hashes the network address with a secret that exists only inside the Supabase runtime before using it as a rate-limit key. The raw address is not stored. A separate anonymous client identifier is also HMAC-hashed before it is stored with a support request.
+
+
+## Saved support-data retention
+
+Ordinary AI chat is not written to the Support Inbox automatically. A transcript is persisted only when the customer explicitly escalates the conversation or submits a support/feature request.
+
+For persisted Support Inbox records:
+
+- open / in-review / planned requests are retained while work is active;
+- resolved / rejected / duplicate requests are automatically eligible for permanent purge after **180 days**;
+- the broker performs opportunistic retention cleanup during readiness checks and new submissions;
+- raw screenshots are never stored in the Support Inbox;
+- AI summaries, screenshot text summaries, saved transcripts, hashed client identifiers, admin notes and contact details are deleted with the support record when the retention purge runs.
+
+If a legal, contractual or customer-specific retention requirement differs from this default, change the broker retention policy before deployment and document the applicable period.
 
 ## Admin Support Inbox
 
@@ -100,6 +127,45 @@ Windows production build:
 
 - `VITE_SUPPORT_API_URL=https://minarvabiz-steel.vercel.app`
 
-## Operational rule
 
-The feature is considered operational only after the production support broker is deployed, the Vercel production health endpoint reports `ready: true`, a real AI chat request succeeds, and a real support submission reaches the private admin Support Inbox.
+AI Gateway still requires the Vercel team account to be allowed to spend AI Gateway credits. OIDC removes the need to copy an API key into Vercel; it does **not** bypass the provider/account billing or credit requirement.
+
+## OIDC request flow and broker deployment
+
+For Vercel-hosted support API requests, the server reads the current request-bound `x-vercel-oidc-token` injected by Vercel. It forwards that token to `minarva-support-broker` as `Authorization: Bearer <token>`.
+
+The broker validates:
+
+- issuer;
+- Vercel team audience;
+- exact production subject;
+- owner/team ID;
+- project ID and project name;
+- production environment claim.
+
+The Supabase function must be deployed with Supabase JWT verification disabled because the incoming bearer token is a **Vercel OIDC token**, not a Supabase Auth JWT. The broker performs its own signature and claim verification with Vercel's JWKS.
+
+CLI equivalent:
+
+```bash
+supabase functions deploy minarva-support-broker --no-verify-jwt
+```
+
+Do not change this to a publicly trusted unauthenticated broker: `verify_jwt=false` is safe here only because the function itself rejects any request that fails the Vercel OIDC checks.
+
+## Operational readiness
+
+`GET /api/support/health` is an operational probe, not just a configuration check. It verifies:
+
+- the Vercel AI credential path exists;
+- a real text + synthetic image request can reach the configured AI model;
+- Support Inbox database reads succeed;
+- the persistent rate-limit RPC succeeds;
+- a synthetic Support Inbox row can be inserted and immediately deleted;
+- retention cleanup can run.
+
+The live AI probe is intentionally tiny and the result is cached briefly (longer after success, shorter after failure). Provider URLs, billing links, API keys and raw provider error bodies are not returned to customers.
+
+`ready: true` is returned only when all required AI, broker, database, rate-limit, submission and retention checks pass. A configured credential by itself is **not** considered operational readiness.
+
+A customer-facing support submission must additionally be observed reaching the private Support Inbox before a new deployment is declared fully verified. Authorized Admin Inbox viewing remains subject to the normal License Admin authentication and `support.read` / `support.manage` permissions.
