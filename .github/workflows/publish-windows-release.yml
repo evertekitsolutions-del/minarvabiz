@@ -98,7 +98,7 @@ jobs:
           const fs = require("node:fs");
           const { createPublicKey, verify } = require("node:crypto");
 
-          const base = "https://minarvabiz-license-admin.onrender.com";
+          const base = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
           const releaseApi = "https://api.github.com/repos/evertekitsolutions-del/minarvabiz/releases/latest";
           const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
