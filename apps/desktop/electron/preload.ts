@@ -76,7 +76,7 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   printHtml: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal" | "label"; thermalWidthMm?: number; labelWidthMm?: number; labelHeightMm?: number; silent?: boolean }) => ipcRenderer.invoke("printer:printHtml", input) as Promise<{ ok: boolean; error?: string }>,
   checkForUpdates: () => ipcRenderer.invoke("update:check") as Promise<UpdateCheckResult>,
   downloadUpdate: () => ipcRenderer.invoke("update:download") as Promise<UpdateDownloadResult>,
-  installUpdate: () => ipcRenderer.invoke("update:install") as Promise<{ ok: boolean; version?: string; backupPath?: string; error?: string }>,
+  installUpdate: () => ipcRenderer.invoke("update:install") as Promise<{ ok: boolean; version?: string; backupPath?: string; restartExpected?: boolean; error?: string }>,
   relaunch: () => ipcRenderer.invoke("app:relaunch") as Promise<boolean>,
 });
 
@@ -121,7 +121,7 @@ export type MinarvaDesktopApi = {
   printHtml: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal" | "label"; thermalWidthMm?: number; labelWidthMm?: number; labelHeightMm?: number; silent?: boolean }) => Promise<{ ok: boolean; error?: string }>;
   checkForUpdates: () => Promise<UpdateCheckResult>;
   downloadUpdate: () => Promise<UpdateDownloadResult>;
-  installUpdate: () => Promise<{ ok: boolean; version?: string; backupPath?: string; error?: string }>;
+  installUpdate: () => Promise<{ ok: boolean; version?: string; backupPath?: string; restartExpected?: boolean; error?: string }>;
   relaunch: () => Promise<boolean>;
 };
 
