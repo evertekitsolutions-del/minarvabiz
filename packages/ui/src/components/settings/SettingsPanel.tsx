@@ -394,7 +394,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
     </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div><h3 className="text-lg font-semibold text-slate-900">Software updates</h3><p className="mt-1 max-w-2xl text-sm text-slate-500">Optional secure Windows updates. After you choose Update & restart, Minarva Biz verifies the signed installer, creates a protected database backup, closes, installs silently and reopens automatically. No manual installer wizard is required.</p></div>
+        <div><h3 className="text-lg font-semibold text-slate-900">Software updates</h3><p className="mt-1 max-w-2xl text-sm text-slate-500">Optional secure Windows updates. Updates are never forced. After you choose Update & restart, Minarva Biz verifies the signed installer, creates a protected database backup, closes, installs silently and reopens automatically. No manual installer wizard is required.</p></div>
         <Button variant="outline" onClick={checkUpdates} disabled={updateState === "checking" || updateState === "downloading"}>{updateState === "checking" ? "Checking…" : "Check for updates"}</Button>
       </div>
       {updateMessage && <p className={`mt-4 text-sm ${updateState === "error" ? "text-red-600" : updateState === "available" || updateState === "ready" ? "text-blue-700" : "text-slate-600"}`}>{updateMessage}</p>}
