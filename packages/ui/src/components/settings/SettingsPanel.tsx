@@ -66,7 +66,7 @@ type DesktopDiagnosticsApi = {
   printHtml?: (input: { html: string; deviceName?: string | null; paper?: "a4" | "thermal" | "label"; thermalWidthMm?: number; labelWidthMm?: number; labelHeightMm?: number; silent?: boolean }) => Promise<{ ok: boolean; error?: string }>;
   checkForUpdates?: () => Promise<{ status: "disabled" | "up_to_date" | "available" | "error"; currentVersion: string; version?: string; publishedAt?: string; notes?: string; error?: string }>;
   downloadUpdate?: () => Promise<{ ok: boolean; version?: string; installerPath?: string; error?: string }>;
-  installUpdate?: () => Promise<{ ok: boolean; version?: string; backupPath?: string; error?: string }>;
+  installUpdate?: () => Promise<{ ok: boolean; version?: string; backupPath?: string; restartExpected?: boolean; error?: string }>;
 };
 
 function getDiagnosticsApi(): DesktopDiagnosticsApi | null {
@@ -119,29 +119,34 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
     }
   }
 
-  async function downloadUpdate() {
+  async function updateAndRestart() {
     const api = getDiagnosticsApi();
-    if (!api?.downloadUpdate) return;
-    setUpdateState("downloading"); setUpdateMessage("Downloading and verifying the signed installer…");
+    if (!api?.downloadUpdate || !api?.installUpdate) return;
+    setUpdateState("downloading");
+    setUpdateMessage("Downloading and verifying the signed update…");
     try {
-      const result = await api.downloadUpdate();
-      if (!result.ok) { setUpdateState("error"); setUpdateMessage(result.error || "Update download failed."); return; }
-      setUpdateState("ready"); setUpdateVersion(result.version || updateVersion); setUpdateMessage("Update verified and ready. Installation will create a fresh database backup first.");
-    } catch (error) {
-      setUpdateState("error"); setUpdateMessage(error instanceof Error ? error.message : String(error));
-    }
-  }
+      const download = await api.downloadUpdate();
+      if (!download.ok) {
+        setUpdateState("error");
+        setUpdateMessage(download.error || "Update download failed.");
+        return;
+      }
 
-  async function installUpdate() {
-    const api = getDiagnosticsApi();
-    if (!api?.installUpdate) return;
-    setUpdateMessage("Creating verified pre-update backup and starting installer…");
-    try {
-      const result = await api.installUpdate();
-      if (!result.ok) { setUpdateState("error"); setUpdateMessage(result.error || "Update installation was blocked."); return; }
-      setUpdateMessage(`Installer started for ${result.version || updateVersion}. Pre-update backup created successfully.`);
+      setUpdateVersion(download.version || updateVersion);
+      setUpdateState("ready");
+      setUpdateMessage("Update verified. Creating a protected database backup, then Minarva Biz will close, install silently and reopen automatically…");
+
+      const install = await api.installUpdate();
+      if (!install.ok) {
+        setUpdateState("error");
+        setUpdateMessage(install.error || "Update installation was blocked.");
+        return;
+      }
+
+      setUpdateMessage(`Installing Minarva Biz ${install.version || download.version || updateVersion}. The app will close and reopen automatically.`);
     } catch (error) {
-      setUpdateState("error"); setUpdateMessage(error instanceof Error ? error.message : String(error));
+      setUpdateState("error");
+      setUpdateMessage(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -389,13 +394,12 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
     </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div><h3 className="text-lg font-semibold text-slate-900">Software updates</h3><p className="mt-1 max-w-2xl text-sm text-slate-500">Optional secure Windows updates. Minarva Biz verifies a signed manifest and installer SHA-256 before download/install. Updates are never forced and installation is blocked unless a verified database backup can be created.</p></div>
+        <div><h3 className="text-lg font-semibold text-slate-900">Software updates</h3><p className="mt-1 max-w-2xl text-sm text-slate-500">Optional secure Windows updates. After you choose Update & restart, Minarva Biz verifies the signed installer, creates a protected database backup, closes, installs silently and reopens automatically. No manual installer wizard is required.</p></div>
         <Button variant="outline" onClick={checkUpdates} disabled={updateState === "checking" || updateState === "downloading"}>{updateState === "checking" ? "Checking…" : "Check for updates"}</Button>
       </div>
       {updateMessage && <p className={`mt-4 text-sm ${updateState === "error" ? "text-red-600" : updateState === "available" || updateState === "ready" ? "text-blue-700" : "text-slate-600"}`}>{updateMessage}</p>}
       <div className="mt-4 flex flex-wrap gap-2">
-        {updateState === "available" && <Button onClick={downloadUpdate}>Download & verify {updateVersion || "update"}</Button>}
-        {updateState === "ready" && <Button onClick={installUpdate}>Install update safely</Button>}
+        {updateState === "available" && <Button onClick={updateAndRestart}>Update & restart {updateVersion || ""}</Button>}
       </div>
     </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
