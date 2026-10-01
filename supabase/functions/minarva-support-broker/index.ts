@@ -134,7 +134,7 @@ Deno.serve(async (req: Request) => {
     const { data: rateData, error: rateError } = await supabase.rpc("consume_license_rate_limit", {
       p_bucket: "support-readiness",
       p_key_hash: readinessHash,
-      p_limit: 100000,
+      p_limit: 10000,
       p_window_seconds: 60,
     });
     checks.rateLimit = !rateError && Array.isArray(rateData) && Boolean(rateData[0]);
