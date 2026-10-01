@@ -152,7 +152,7 @@ jobs:
           "AUTO_RELAUNCHED_PID=$($auto.ProcessId)" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "AUTO_RELAUNCH PASS pid=$($auto.ProcessId)"
 
-          Stop-Process -Id ([int]$auto.ProcessId -as [int]) -Force -ErrorAction SilentlyContinue
+          Stop-Process -Id ([int]$auto.ProcessId) -Force -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 2
           if (-not (Test-Path $env:INSTALLED_EXE)) { throw "Upgraded executable is missing." }
 
