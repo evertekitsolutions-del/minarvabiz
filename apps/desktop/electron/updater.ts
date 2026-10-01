@@ -79,6 +79,7 @@ function validateManifest(value: unknown): UpdateManifest | null {
   if (!isTrustedInstallerUrl(m.installerUrl)) return null;
   if (!/^[0-9a-f]{64}$/i.test(m.sha256)) return null;
   if (!Number.isFinite(new Date(m.publishedAt).getTime())) return null;
+  if (m.notes != null && (typeof m.notes !== "string" || Buffer.byteLength(m.notes, "utf8") > 16 * 1024)) return null;
   return m as UpdateManifest;
 }
 
