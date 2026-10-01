@@ -52,6 +52,7 @@ function copyResponseHeaders(source) {
   }
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-minarva-license-edge", "cloudflare");
+  headers.set("x-minarva-license-backend", "origin-transition");
   if (!headers.has("cache-control")) headers.set("cache-control", "no-store");
   return headers;
 }
@@ -131,7 +132,8 @@ async function updateFallback(env) {
     if (!response.ok) return json({ error: "Update manifest service is unavailable." }, 503);
     const headers = copyResponseHeaders(response);
     headers.set("cache-control", "no-store");
-    headers.set("x-minarva-update-source", "github-release-fallback");
+    headers.set("x-minarva-license-backend", "github-release");
+    headers.set("x-minarva-update-source", "github-release");
     return new Response(response.body, { status: 200, headers });
   } catch {
     return json({ error: "Update manifest service is unavailable." }, 503);
@@ -156,9 +158,27 @@ export default {
     const route = ALLOWED_ROUTES.get(`${request.method} ${url.pathname}`);
     if (!route) return json({ ok: false, code: "NOT_FOUND" }, 404);
 
+    if (request.method === "GET" && url.pathname === "/api/health") {
+      return json(
+        {
+          status: "ok",
+          service: "minarva-license-edge",
+          provider: "cloudflare-workers",
+          updateChannel: "github-release",
+          licenseBackend: "origin-transition",
+          paidDependencyIntroduced: false,
+        },
+        200,
+        { "x-minarva-license-backend": "cloudflare-native" },
+      );
+    }
+
+    if (route.updateFallback) {
+      return updateFallback(env);
+    }
+
     const proxied = await fetchOrigin(request, env, route);
     if (proxied) return proxied;
-    if (route.updateFallback) return updateFallback(env);
 
     return json({ ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503);
   },
