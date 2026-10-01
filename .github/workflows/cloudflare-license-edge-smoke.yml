@@ -1,0 +1,30 @@
+name: Cloudflare License Edge Smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "infra/cloudflare-license-edge/**"
+      - "scripts/cloudflare-license-edge-live-smoke.mjs"
+      - ".github/workflows/cloudflare-license-edge-smoke.yml"
+      - ".github/workflows/release-windows.yml"
+      - ".github/workflows/publish-windows-release.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  live-edge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+
+      - name: Verify Cloudflare license edge
+        run: node scripts/cloudflare-license-edge-live-smoke.mjs

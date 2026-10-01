@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "minarva-biz-license-edge",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "vars": {
+    "LICENSE_ORIGIN": "https://minarvabiz-license-admin.onrender.com",
+    "UPDATE_MANIFEST_FALLBACK": "https://github.com/evertekitsolutions-del/minarvabiz/releases/latest/download/MinarvaBiz-update-manifest.json"
+  }
+}

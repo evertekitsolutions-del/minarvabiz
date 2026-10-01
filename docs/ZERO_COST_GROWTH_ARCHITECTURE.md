@@ -40,6 +40,7 @@ Do not fork the application by industry. Industry differences should become modu
 - AI: Cloudflare Workers AI Free via a provider-neutral adapter;
 - AI fallback after free quota: Help Center + private Support Inbox, **not paid inference**;
 - License Admin transition target: remove dependence on free services that prohibit production/commercial use.
+- Licensing client front door: Cloudflare License Edge; the current Render License Admin remains a temporary origin behind that stable boundary until signing/admin logic is migrated.
 
 ## AI routing
 
