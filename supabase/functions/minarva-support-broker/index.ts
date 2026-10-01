@@ -116,18 +116,56 @@ Deno.serve(async (req: Request) => {
       : json({ ok: true, service: "minarva-support-broker" });
   }
 
+  if (op === "runtime-config") {
+    const { data, error } = await supabase
+      .from("support_runtime_config")
+      .select("key,value,updated_at")
+      .eq("key", "ai_provider")
+      .maybeSingle();
+
+    if (error) return json({ ok: false, error: "Support runtime configuration is unavailable." }, 503);
+
+    const value = data?.value && typeof data.value === "object" && !Array.isArray(data.value)
+      ? data.value
+      : {};
+    return json({
+      ok: true,
+      config: {
+        kind: clean((value as any).kind, 80) || "disabled",
+        enabled: Boolean((value as any).enabled),
+        endpoint: clean((value as any).endpoint, 500) || null,
+        textModel: clean((value as any).textModel, 160) || null,
+        visionModel: clean((value as any).visionModel, 160) || null,
+        phase: clean((value as any).phase, 120) || null,
+      },
+      updatedAt: data?.updated_at || null,
+    });
+  }
+
+
   if (op === "readiness") {
     const checks = {
       database: false,
       rateLimit: false,
       submissionWrite: false,
       cleanup: false,
+      runtimeConfig: false,
     };
 
     const { error: selectError } = await supabase.from("support_requests").select("id").limit(1);
     checks.database = !selectError;
     if (!checks.database) {
       return json({ ok: false, service: "minarva-support-broker", checks, error: "Support database read failed." }, 503);
+    }
+
+    const { data: runtimeData, error: runtimeError } = await supabase
+      .from("support_runtime_config")
+      .select("value")
+      .eq("key", "ai_provider")
+      .maybeSingle();
+    checks.runtimeConfig = !runtimeError && Boolean(runtimeData);
+    if (!checks.runtimeConfig) {
+      return json({ ok: false, service: "minarva-support-broker", checks, error: "Support runtime configuration read failed." }, 503);
     }
 
     const readinessHash = await hmacHex(serviceRoleKey, "support-readiness");
