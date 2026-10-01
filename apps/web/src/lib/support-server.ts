@@ -566,7 +566,7 @@ async function supportAiResponse(input: {
 }
 
 const READINESS_PROBE_IMAGE =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl6sAAAAASUVORK5CYII=";
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAGUlEQVR4nGP8//8/AymAiSTVoxpGNQwpDQBVbQMdPVIhQwAAAABJRU5ErkJggg==";
 let readinessCache: { expiresAt: number; value: Record<string, unknown> } | null = null;
 
 export async function supportConfigurationStatus(oidcToken = "") {

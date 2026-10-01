@@ -147,6 +147,9 @@ assert.match(freeAiWorker, /RSASSA-PKCS1-v1_5/);
 assert.match(freeAiWorker, /EXPECTED_SUBJECT/);
 assert.match(freeAiWorker, /PROJECT_ID/);
 assert.match(freeAiWorker, /free_quota_exhausted/);
+assert.match(freeAiWorker, /type: "image_url"/);
+assert.match(freeAiWorker, /image_url: \{ url: image \}/);
+assert.match(server, /iVBORw0KGgoAAAANSUhEUgAAABAAAAAQ/);
 assert.match(freeAiWrangler, /"binding": "AI"/);
 
 assert.match(zeroCostArchitecture, /25 paying customers/i);

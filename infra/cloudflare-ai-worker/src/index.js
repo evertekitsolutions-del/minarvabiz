@@ -208,6 +208,19 @@ export default {
       { role: "system", content: instructions },
       ...messages,
     ];
+    if (image) {
+      const lastUserIndex = aiMessages.map((item) => item.role).lastIndexOf("user");
+      if (lastUserIndex >= 0) {
+        const last = aiMessages[lastUserIndex];
+        aiMessages[lastUserIndex] = {
+          role: "user",
+          content: [
+            { type: "text", text: clean(last.content, MAX_MESSAGE_CHARS) },
+            { type: "image_url", image_url: { url: image } },
+          ],
+        };
+      }
+    }
 
     try {
       const input = {
@@ -215,7 +228,6 @@ export default {
         max_tokens: maxTokens,
         stream: false,
       };
-      if (image) input.image = image;
 
       const result = await env.AI.run(model, input);
       const text = extractText(result);
