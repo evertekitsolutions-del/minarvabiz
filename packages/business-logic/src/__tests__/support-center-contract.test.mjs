@@ -18,6 +18,10 @@ const webMiddleware = read("apps/web/src/middleware.ts");
 const adminActions = read("apps/license-admin/src/app/actions.ts");
 const adminInbox = read("apps/license-admin/src/app/admin-panel/SupportInboxCard.tsx");
 const migration = read("supabase/migrations/20260927_ai_support_center.sql");
+const runtimeConfigMigration = read("supabase/migrations/20261001_support_runtime_config.sql");
+const freeAiWorker = read("infra/cloudflare-ai-worker/src/index.js");
+const freeAiWrangler = read("infra/cloudflare-ai-worker/wrangler.jsonc");
+const zeroCostArchitecture = read("docs/ZERO_COST_GROWTH_ARCHITECTURE.md");
 const release = read(".github/workflows/release-windows.yml");
 const docs = read("docs/AI_SUPPORT_CENTER.md");
 
@@ -33,6 +37,12 @@ assert.match(ui, /Send to Product Team/);
 assert.match(ui, /compressScreenshot/);
 assert.match(ui, /license token/i);
 
+assert.match(server, /cloudflare-workers-ai/);
+assert.match(server, /MINARVA_FREE_AI_URL/);
+assert.match(server, /MINARVA_ALLOW_PAID_AI_FALLBACK/);
+assert.match(server, /paidAiFallbackEnabled/);
+assert.match(server, /free_quota_exhausted/);
+assert.match(server, /runtime-config/);
 assert.match(server, /ai-gateway\.vercel\.sh\/v1\/responses/);
 assert.match(server, /api\.openai\.com\/v1\/responses/);
 assert.match(server, /input_image/);
@@ -42,6 +52,7 @@ assert.match(server, /MINARVA_SUPPORT_AI_MODEL/);
 assert.match(server, /openai\/gpt-5\.4-mini/);
 assert.match(server, /zeroDataRetention: true/);
 assert.match(server, /disallowPromptTraining: true/);
+assert.match(server, /String\(process\.env\.MINARVA_ALLOW_PAID_AI_FALLBACK \|\| ""\)/);
 assert.match(server, /READINESS_PROBE_IMAGE/);
 assert.match(server, /aiOperational/);
 assert.match(server, /submissionConfigured/);
@@ -75,6 +86,9 @@ assert.match(broker, /submissionWrite/);
 assert.match(broker, /Synthetic readiness probe/);
 assert.match(broker, /SUPPORT_RETENTION_DAYS = 180/);
 assert.match(broker, /purgeExpiredSupportRequests/);
+assert.match(broker, /op === "runtime-config"/);
+assert.match(broker, /support_runtime_config/);
+assert.match(broker, /runtimeConfig/);
 
 assert.match(chatRoute, /support-chat-minute/);
 assert.match(chatRoute, /support-chat-hour/);
@@ -87,6 +101,7 @@ assert.match(healthRoute, /await supportConfigurationStatus/);
 assert.match(healthRoute, /ready/);
 assert.match(healthRoute, /status\.aiOperational/);
 assert.match(healthRoute, /status\.submissionConfigured/);
+assert.match(healthRoute, /status\.runtimeConfigConfigured/);
 assert.match(healthRoute, /status\.retentionConfigured/);
 assert.equal(webMiddleware.includes('request.nextUrl.pathname.startsWith("/api/support/")'), true);
 assert.match(webMiddleware, /method === "POST"/);
@@ -97,6 +112,12 @@ assert.match(migration, /REVOKE ALL ON TABLE public\.support_requests FROM PUBLI
 assert.match(migration, /GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public\.support_requests TO service_role/);
 assert.match(migration, /feature_request/);
 assert.match(migration, /technical_escalation/);
+
+assert.match(runtimeConfigMigration, /CREATE TABLE IF NOT EXISTS public\.support_runtime_config/);
+assert.match(runtimeConfigMigration, /REVOKE ALL ON TABLE public\.support_runtime_config FROM PUBLIC, anon, authenticated/);
+assert.match(runtimeConfigMigration, /GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public\.support_runtime_config TO service_role/);
+assert.match(runtimeConfigMigration, /cloudflare-workers-ai/);
+assert.match(runtimeConfigMigration, /"enabled", false|'enabled', false/);
 
 assert.match(adminActions, /listSupportRequests/);
 assert.match(adminActions, /updateSupportRequest/);
@@ -110,11 +131,27 @@ assert.match(release, /https:\/\/minarvabiz-steel\.vercel\.app/);
 assert.match(docs, /does not persist raw screenshot bytes/i);
 assert.match(docs, /Viewer: read-only Support Inbox/);
 assert.match(docs, /Vercel OIDC/);
-assert.match(docs, /no manual OpenAI API key/i);
-assert.match(docs, /zeroDataRetention: true/);
+assert.match(docs, /no OpenAI API key/i);
+assert.match(docs, /does not use that content to train/i);
 assert.match(docs, /180 days/);
 assert.match(docs, /x-vercel-oidc-token/);
 assert.match(docs, /--no-verify-jwt/);
 assert.match(docs, /configured credential by itself/i);
+assert.match(docs, /provider-neutral AI adapter/i);
+assert.match(docs, /MINARVA_ALLOW_PAID_AI_FALLBACK/);
+assert.match(docs, /Cloudflare Workers AI/i);
+
+assert.match(freeAiWorker, /@cf\/zai-org\/glm-4\.7-flash/);
+assert.match(freeAiWorker, /@cf\/google\/gemma-4-26b-a4b-it/);
+assert.match(freeAiWorker, /RSASSA-PKCS1-v1_5/);
+assert.match(freeAiWorker, /EXPECTED_SUBJECT/);
+assert.match(freeAiWorker, /PROJECT_ID/);
+assert.match(freeAiWorker, /free_quota_exhausted/);
+assert.match(freeAiWrangler, /"binding": "AI"/);
+
+assert.match(zeroCostArchitecture, /25 paying customers/i);
+assert.match(zeroCostArchitecture, /no automatic upgrade to a paid cloud plan/i);
+assert.match(zeroCostArchitecture, /self-host/i);
+assert.match(zeroCostArchitecture, /MINARVA_ALLOW_PAID_AI_FALLBACK=true/);
 
 console.log("AI Support Center contract PASS");

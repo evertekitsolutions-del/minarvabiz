@@ -19,9 +19,11 @@ Technical conversations can also be escalated to the Support Inbox for human rev
 - Windows client: calls the production web support API over HTTPS.
 - Online client: calls the same API locally through the web deployment.
 
-Production uses **Vercel OIDC** instead of a manually stored OpenAI API key. The Vercel serverless route authenticates to Vercel AI Gateway with the automatically issued `VERCEL_OIDC_TOKEN`.
+Production uses a **provider-neutral AI adapter**. During the zero-cost phase, Minarva Biz prefers a Cloudflare Workers AI endpoint protected by the same short-lived Vercel OIDC identity already used by the support backend.
 
-Database writes and persistent rate limiting are delegated to the Supabase Edge Function `minarva-support-broker`. That broker validates the Vercel OIDC issuer, audience, production subject, team ID and project ID before using Supabase's built-in service-role credential. The service-role credential never leaves Supabase and is never bundled into the Windows client, browser JavaScript or Vercel project settings.
+The private Supabase `support_runtime_config` table selects the active AI endpoint. This lets Minarva Biz move from Cloudflare to a future self-hosted inference server without changing the Windows client or customer Support Center UI.
+
+Database writes, runtime routing and persistent rate limiting are delegated to the Supabase Edge Function `minarva-support-broker`. That broker validates the Vercel OIDC issuer, audience, production subject, team ID and project ID before using Supabase's built-in service-role credential. The service-role credential never leaves Supabase and is never bundled into the Windows client, browser JavaScript or Vercel project settings.
 
 ## Knowledge freshness
 
@@ -46,14 +48,11 @@ Customers are warned not to upload passwords, license tokens, payment-card data 
 
 ## AI provider privacy
 
-Production AI requests sent through Vercel AI Gateway set both:
+The zero-cost production path uses **Cloudflare Workers AI directly through a Workers AI binding**, not a third-party paid model routed through AI Gateway. Cloudflare documents Workers AI inputs/outputs as Customer Content and states that it does not use that content to train Workers AI models or improve Cloudflare/third-party services without explicit consent.
 
-- `zeroDataRetention: true`;
-- `disallowPromptTraining: true`.
+The Minarva Biz Worker does not persist prompts, screenshots or responses. Raw screenshots remain request-scoped and are not written to the Support Inbox.
 
-The Zero Data Retention option instructs AI Gateway to route only through providers covered by its verified ZDR path. The support service does not silently remove these privacy controls when a gateway provider cannot satisfy them.
-
-A direct `OPENAI_API_KEY` path exists only as an optional operator-controlled fallback. If it is enabled, the operator is responsible for confirming the direct provider account's retention and training settings before using it with customer data.
+Paid AI fallback is disabled by default. The legacy Vercel AI Gateway/OpenAI code path can run only when a future operator explicitly sets `MINARVA_ALLOW_PAID_AI_FALLBACK=true`. Until the 25-customer review, that flag must remain disabled.
 
 ## Redacted diagnostics
 
@@ -109,30 +108,35 @@ Roles:
 
 ## Required production environment
 
-Production is designed to require **no manual OpenAI API key, Supabase service-role key, or custom rate-limit secret in Vercel**.
+The zero-cost production path is designed to require **no OpenAI API key and no paid AI account**.
 
-Automatically provided / existing values:
+Existing values:
 
-- `VERCEL_OIDC_TOKEN` — automatically issued by Vercel at runtime;
-- `NEXT_PUBLIC_SUPABASE_URL` — already used by the Minarva Biz web application;
+- request-bound Vercel OIDC identity;
+- `NEXT_PUBLIC_SUPABASE_URL`;
 - Supabase Edge Function built-ins: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
 
-Optional local-development fallbacks:
+AI provider routing comes from the private `public.support_runtime_config` row `ai_provider`. The Cloudflare endpoint is stored there after the one-time Worker deployment; no Windows build change is needed.
 
-- `AI_GATEWAY_API_KEY` — for running AI Gateway outside a Vercel deployment;
-- `OPENAI_API_KEY` — direct OpenAI fallback for local development;
-- `MINARVA_SUPPORT_AI_MODEL` — defaults to `openai/gpt-5.4-mini`.
+Optional development/future migration values:
+
+- `MINARVA_FREE_AI_URL` — local/operator override for the free/self-hosted AI endpoint;
+- `MINARVA_FREE_AI_TEXT_MODEL`;
+- `MINARVA_FREE_AI_VISION_MODEL`;
+- `MINARVA_ALLOW_PAID_AI_FALLBACK=true` — explicit future opt-in only;
+- `AI_GATEWAY_API_KEY`, `OPENAI_API_KEY`, `MINARVA_SUPPORT_AI_MODEL` — ignored for production fallback unless paid fallback has explicitly been enabled.
 
 Windows production build:
 
 - `VITE_SUPPORT_API_URL=https://minarvabiz-steel.vercel.app`
 
-
-AI Gateway still requires the Vercel team account to be allowed to spend AI Gateway credits. OIDC removes the need to copy an API key into Vercel; it does **not** bypass the provider/account billing or credit requirement.
+The pre-25-customer policy requires `MINARVA_ALLOW_PAID_AI_FALLBACK` to stay unset/false. Reaching a free quota must degrade to Help Center + Support Inbox rather than create a charge.
 
 ## OIDC request flow and broker deployment
 
-For Vercel-hosted support API requests, the server reads the current request-bound `x-vercel-oidc-token` injected by Vercel. It forwards that token to `minarva-support-broker` as `Authorization: Bearer <token>`.
+For Vercel-hosted support API requests, the server reads the current request-bound `x-vercel-oidc-token` injected by Vercel. It forwards that token to `minarva-support-broker` and, when enabled, to the Cloudflare AI Worker as `Authorization: Bearer <token>`.
+
+The Cloudflare Worker independently validates the RSA signature, issuer, audience, exact production subject, team ID, project ID/name, environment and token lifetime before any Workers AI inference is run. No long-lived shared secret is stored in the Windows app or browser.
 
 The broker validates:
 
@@ -157,7 +161,8 @@ Do not change this to a publicly trusted unauthenticated broker: `verify_jwt=fal
 
 `GET /api/support/health` is an operational probe, not just a configuration check. It verifies:
 
-- the Vercel AI credential path exists;
+- private runtime AI routing can be read;
+- the configured free/self-hosted provider endpoint is enabled;
 - a real text + synthetic image request can reach the configured AI model;
 - Support Inbox database reads succeed;
 - the persistent rate-limit RPC succeeds;

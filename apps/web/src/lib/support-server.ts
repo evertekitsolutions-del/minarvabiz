@@ -231,18 +231,99 @@ function extractOutputText(payload: any) {
   return parts.join("\n").trim();
 }
 
-function modelName() {
-  return clean(process.env.MINARVA_SUPPORT_AI_MODEL || "openai/gpt-5.4-mini", 120);
-}
+type AiFailureCode =
+  | "unconfigured"
+  | "free_quota_exhausted"
+  | "free_plan_restricted"
+  | "billing_or_quota"
+  | "authentication"
+  | "model_unavailable"
+  | "timeout"
+  | "provider_unavailable"
+  | "empty_response";
 
-type AiCredential = {
+type AiRuntimeConfig = {
+  kind: string;
+  enabled: boolean;
+  endpoint: string | null;
+  textModel: string | null;
+  visionModel: string | null;
+  phase: string | null;
+};
+
+type PaidAiCredential = {
   url: string;
   key: string;
   gateway: boolean;
   transport: "vercel-ai-gateway-oidc" | "vercel-ai-gateway-key" | "openai-key-fallback";
 };
 
-function aiCredentials(oidcToken = ""): AiCredential | null {
+let runtimeConfigCache: { expiresAt: number; value: AiRuntimeConfig } | null = null;
+
+function paidAiFallbackEnabled() {
+  return String(process.env.MINARVA_ALLOW_PAID_AI_FALLBACK || "").trim().toLowerCase() === "true";
+}
+
+function normalizeProviderEndpoint(value: unknown) {
+  const raw = clean(value, 500);
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return null;
+    const host = url.hostname.toLowerCase();
+    if (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "::1" ||
+      host.endsWith(".local") ||
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    ) {
+      return null;
+    }
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
+async function aiRuntimeConfig(oidcToken = ""): Promise<AiRuntimeConfig> {
+  const envEndpoint = normalizeProviderEndpoint(process.env.MINARVA_FREE_AI_URL);
+  if (envEndpoint) {
+    return {
+      kind: "cloudflare-workers-ai",
+      enabled: true,
+      endpoint: envEndpoint,
+      textModel: clean(process.env.MINARVA_FREE_AI_TEXT_MODEL || "@cf/zai-org/glm-4.7-flash", 160),
+      visionModel: clean(process.env.MINARVA_FREE_AI_VISION_MODEL || "@cf/google/gemma-4-26b-a4b-it", 160),
+      phase: "env-override",
+    };
+  }
+
+  if (runtimeConfigCache && runtimeConfigCache.expiresAt > Date.now()) return runtimeConfigCache.value;
+
+  const response = await brokerFetch({ op: "runtime-config" }, oidcToken);
+  const row = response.data?.config && typeof response.data.config === "object" ? response.data.config : {};
+  const value: AiRuntimeConfig = {
+    kind: clean((row as any).kind, 80) || "disabled",
+    enabled: Boolean((row as any).enabled),
+    endpoint: normalizeProviderEndpoint((row as any).endpoint),
+    textModel: clean((row as any).textModel, 160) || null,
+    visionModel: clean((row as any).visionModel, 160) || null,
+    phase: clean((row as any).phase, 120) || null,
+  };
+  runtimeConfigCache = { expiresAt: Date.now() + 5 * 60_000, value };
+  return value;
+}
+
+function paidModelName() {
+  return clean(process.env.MINARVA_SUPPORT_AI_MODEL || "openai/gpt-5.4-mini", 120);
+}
+
+function paidAiCredentials(oidcToken = ""): PaidAiCredential | null {
+  if (!paidAiFallbackEnabled()) return null;
+
   const explicitGatewayKey = String(process.env.AI_GATEWAY_API_KEY || "").trim();
   if (explicitGatewayKey) {
     return { url: AI_GATEWAY_URL, key: explicitGatewayKey, gateway: true, transport: "vercel-ai-gateway-key" };
@@ -258,22 +339,14 @@ function aiCredentials(oidcToken = ""): AiCredential | null {
   return null;
 }
 
-function directOpenAiCredentials(): AiCredential | null {
-  const key = String(process.env.OPENAI_API_KEY || "").trim();
-  return key ? { url: OPENAI_URL, key, gateway: false, transport: "openai-key-fallback" } : null;
-}
-
-type AiFailureCode =
-  | "unconfigured"
-  | "billing_or_quota"
-  | "authentication"
-  | "model_unavailable"
-  | "timeout"
-  | "provider_unavailable"
-  | "empty_response";
-
-function classifyAiFailure(detail: string, status = 0): AiFailureCode {
+function classifyAiFailure(detail: string, status = 0, freeProvider = false): AiFailureCode {
   const value = detail.toLowerCase();
+  if (freeProvider && (status === 429 || /daily|neuron|quota|limit exceeded|capacity/.test(value))) {
+    return "free_quota_exhausted";
+  }
+  if (freeProvider && status === 403 && /paid|plan|upgrade|restricted/.test(value)) {
+    return "free_plan_restricted";
+  }
   if (/credit card|billing|credits?|quota|insufficient|payment/.test(value) || status === 402 || status === 429) {
     return "billing_or_quota";
   }
@@ -288,11 +361,17 @@ function classifyAiFailure(detail: string, status = 0): AiFailureCode {
 }
 
 function publicAiError(code: AiFailureCode) {
+  if (code === "free_quota_exhausted") {
+    return "Today’s free AI allowance has been used. AI Support will become available again after the free daily quota resets. You can still search the Help Center or send this conversation to Minarva Biz Support.";
+  }
+  if (code === "free_plan_restricted") {
+    return "The configured free AI model is temporarily unavailable on the free plan. You can still use the Help Center or send this conversation to Minarva Biz Support.";
+  }
   if (code === "billing_or_quota") {
-    return "AI Support is temporarily unavailable because the AI service account is not currently enabled for requests. You can still send this conversation to Minarva Biz Support.";
+    return "AI Support is temporarily unavailable because the configured AI service cannot accept more requests. You can still send this conversation to Minarva Biz Support.";
   }
   if (code === "authentication" || code === "unconfigured") {
-    return "AI Support is temporarily unavailable because the support service is not fully configured. You can still send this conversation to Minarva Biz Support.";
+    return "AI Support is temporarily unavailable because the free AI service is not fully configured. You can still send this conversation to Minarva Biz Support.";
   }
   if (code === "model_unavailable") {
     return "AI Support is temporarily unavailable because the configured AI model cannot be reached. You can still send this conversation to Minarva Biz Support.";
@@ -303,8 +382,84 @@ function publicAiError(code: AiFailureCode) {
   return "AI Support is temporarily unavailable. Please retry, or send this conversation to Minarva Biz Support.";
 }
 
-async function executeAiRequest(
-  credentials: AiCredential,
+async function executeFreeAiRequest(
+  config: AiRuntimeConfig,
+  input: {
+    instructions: string;
+    messages: SupportChatMessage[];
+    image?: string | null;
+    maxOutputTokens?: number;
+    oidcToken?: string;
+  },
+) {
+  if (!config.enabled || config.kind !== "cloudflare-workers-ai" || !config.endpoint || !input.oidcToken) {
+    return {
+      ok: false as const,
+      error: publicAiError("unconfigured"),
+      code: "unconfigured" as AiFailureCode,
+    };
+  }
+
+  const messages = input.messages
+    .slice(-12)
+    .map((message) => ({ role: message.role, content: clean(message.content, 4000) }))
+    .filter((message) => message.content);
+  if (!messages.length) {
+    return {
+      ok: false as const,
+      error: "A support message is required.",
+      code: "provider_unavailable" as AiFailureCode,
+    };
+  }
+
+  try {
+    const response = await fetch(`${config.endpoint}/v1/respond`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${input.oidcToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        instructions: clean(input.instructions, 24_000),
+        messages,
+        image: imageDataUrl(input.image),
+        maxOutputTokens: Math.max(16, Math.min(1600, Number(input.maxOutputTokens || 1400))),
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(60_000),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) {
+      const detail = clean(payload?.error, 800) || `HTTP ${response.status}`;
+      const code = classifyAiFailure(detail, response.status, true);
+      console.warn("Minarva Biz free AI provider request failed", { code, status: response.status });
+      return { ok: false as const, error: publicAiError(code), code };
+    }
+
+    const text = clean(payload?.text, 24_000);
+    if (!text) {
+      return {
+        ok: false as const,
+        error: publicAiError("empty_response"),
+        code: "empty_response" as AiFailureCode,
+      };
+    }
+    return {
+      ok: true as const,
+      text,
+      transport: "cloudflare-workers-ai-free" as const,
+      model: clean(payload?.model, 160) || (input.image ? config.visionModel : config.textModel),
+    };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    const code = classifyAiFailure(detail, 0, true);
+    console.warn("Minarva Biz free AI provider request failed", { code, status: 0 });
+    return { ok: false as const, error: publicAiError(code), code };
+  }
+}
+
+async function executePaidAiRequest(
+  credentials: PaidAiCredential,
   input: {
     instructions: string;
     messages: SupportChatMessage[];
@@ -326,7 +481,7 @@ async function executeAiRequest(
     last.content.push({ type: "input_image", image_url: image } as any);
   }
 
-  const configuredModel = modelName();
+  const configuredModel = paidModelName();
   const model = credentials.gateway
     ? (configuredModel.includes("/") ? configuredModel : `openai/${configuredModel}`)
     : configuredModel.replace(/^openai\//, "");
@@ -360,7 +515,7 @@ async function executeAiRequest(
     if (!response.ok) {
       const detail = clean((payload as any)?.error?.message || (payload as any)?.error, 800) || `HTTP ${response.status}`;
       const code = classifyAiFailure(detail, response.status);
-      console.warn("Minarva Biz AI Support provider request failed", {
+      console.warn("Minarva Biz paid AI fallback request failed", {
         code,
         status: response.status,
         transport: credentials.transport,
@@ -376,11 +531,11 @@ async function executeAiRequest(
         code: "empty_response" as AiFailureCode,
       };
     }
-    return { ok: true as const, text, transport: credentials.transport };
+    return { ok: true as const, text, transport: credentials.transport, model };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     const code = classifyAiFailure(detail);
-    console.warn("Minarva Biz AI Support provider request failed", {
+    console.warn("Minarva Biz paid AI fallback request failed", {
       code,
       status: 0,
       transport: credentials.transport,
@@ -389,34 +544,25 @@ async function executeAiRequest(
   }
 }
 
-async function openAiResponse(input: {
+async function supportAiResponse(input: {
   instructions: string;
   messages: SupportChatMessage[];
   image?: string | null;
   maxOutputTokens?: number;
   oidcToken?: string;
 }) {
-  const credentials = aiCredentials(input.oidcToken || "");
-  if (!credentials) {
-    return {
-      ok: false as const,
-      error: publicAiError("unconfigured"),
-      code: "unconfigured" as AiFailureCode,
-    };
+  const config = await aiRuntimeConfig(input.oidcToken || "");
+  const free = await executeFreeAiRequest(config, input);
+  if (free.ok) return free;
+
+  const paid = paidAiCredentials(input.oidcToken || "");
+  if (paid) {
+    const fallback = await executePaidAiRequest(paid, input);
+    if (fallback.ok) return fallback;
+    return fallback;
   }
 
-  const primary = await executeAiRequest(credentials, input);
-  if (primary.ok) return primary;
-
-  if (credentials.gateway) {
-    const fallback = directOpenAiCredentials();
-    if (fallback) {
-      const retry = await executeAiRequest(fallback, input);
-      if (retry.ok) return retry;
-      return retry;
-    }
-  }
-  return primary;
+  return free;
 }
 
 const READINESS_PROBE_IMAGE =
@@ -426,38 +572,43 @@ let readinessCache: { expiresAt: number; value: Record<string, unknown> } | null
 export async function supportConfigurationStatus(oidcToken = "") {
   if (readinessCache && readinessCache.expiresAt > Date.now()) return readinessCache.value;
 
-  const credentials = aiCredentials(oidcToken);
+  const runtimeConfig = await aiRuntimeConfig(oidcToken);
   const broker = await brokerFetch({ op: "readiness" }, oidcToken);
   const brokerChecks = broker.data?.checks && typeof broker.data.checks === "object" ? broker.data.checks : {};
   const retention = broker.data?.retention && typeof broker.data.retention === "object" ? broker.data.retention : {};
 
-  const aiProbe = credentials
-    ? await openAiResponse({
-        instructions: "This is an automated Minarva Biz readiness check. Reply exactly OK.",
-        messages: [{ role: "user", content: "Verify text and image input. Reply OK only." }],
-        image: READINESS_PROBE_IMAGE,
-        maxOutputTokens: 16,
-        oidcToken,
-      })
-    : {
-        ok: false as const,
-        error: publicAiError("unconfigured"),
-        code: "unconfigured" as AiFailureCode,
-      };
+  const aiProbe = await supportAiResponse({
+    instructions: "This is an automated Minarva Biz readiness check. Reply exactly OK.",
+    messages: [{ role: "user", content: "Verify text and image input. Reply OK only." }],
+    image: READINESS_PROBE_IMAGE,
+    maxOutputTokens: 16,
+    oidcToken,
+  });
 
   const value = {
-    aiConfigured: Boolean(credentials),
+    aiConfigured: Boolean(runtimeConfig.enabled && runtimeConfig.endpoint) || Boolean(paidAiCredentials(oidcToken)),
     aiOperational: Boolean(aiProbe.ok),
     aiStatus: aiProbe.ok ? "operational" : aiProbe.code,
     aiError: aiProbe.ok ? null : aiProbe.error,
     databaseConfigured: Boolean((brokerChecks as any).database),
     rateLimitConfigured: Boolean((brokerChecks as any).rateLimit),
     submissionConfigured: Boolean((brokerChecks as any).submissionWrite && (brokerChecks as any).cleanup),
+    runtimeConfigConfigured: Boolean((brokerChecks as any).runtimeConfig),
     brokerConfigured: Boolean(broker.ok),
     retentionConfigured: Boolean((retention as any).ok),
     retentionDays: Number((retention as any).days || 0) || null,
-    aiTransport: credentials?.transport || "unconfigured",
-    model: modelName(),
+    aiTransport: aiProbe.ok
+      ? aiProbe.transport
+      : runtimeConfig.enabled
+        ? "cloudflare-workers-ai-free"
+        : paidAiFallbackEnabled()
+          ? "paid-fallback"
+          : "free-provider-unconfigured",
+    model: aiProbe.ok
+      ? aiProbe.model
+      : (runtimeConfig.visionModel || runtimeConfig.textModel || (paidAiFallbackEnabled() ? paidModelName() : null)),
+    zeroCostPhase: !paidAiFallbackEnabled(),
+    paidFallbackEnabled: paidAiFallbackEnabled(),
   };
 
   readinessCache = {
@@ -514,7 +665,7 @@ ${knowledge.context}`;
     ...input.history.slice(-10),
     { role: "user", content: query },
   ];
-  const response = await openAiResponse({
+  const response = await supportAiResponse({
     instructions,
     messages,
     image: input.image as string | null,
@@ -535,7 +686,7 @@ export async function triageSupportRequest(input: {
   oidcToken?: string;
 }) {
   const image = imageDataUrl(input.image);
-  const response = await openAiResponse({
+  const response = await supportAiResponse({
     instructions: `You triage Minarva Biz customer support submissions for an internal admin inbox.
 Return a concise plain-text summary (maximum 8 lines) covering: request intent, likely module, user impact, reproduction clues, and a suggested priority.
 If an image is attached, include the visible error/UI evidence. Do not invent facts and do not include secrets.`,

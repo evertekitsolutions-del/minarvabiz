@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
     status.databaseConfigured &&
     status.rateLimitConfigured &&
     status.submissionConfigured &&
+    status.runtimeConfigConfigured &&
     status.brokerConfigured &&
     status.retentionConfigured;
   return NextResponse.json(
