@@ -47,6 +47,7 @@ const keyResult = await fetchJson("/api/public-key");
 assert(keyResult.response.ok, `public-key HTTP ${keyResult.response.status}`);
 const keyHex = String(keyResult.data?.publicKeyHex || "").trim().toLowerCase();
 assert(/^[0-9a-f]{64}$/.test(keyHex), "public key is not 64 hex characters");
+console.log(`PRODUCTION_PUBLIC_KEY_HEX=${keyHex}`);
 assert(keyResult.response.headers.get("x-minarva-license-backend") === "origin-transition", "public key should still use the transition origin");
 
 const manifestResult = await fetchJson("/api/update/manifest");
