@@ -42,8 +42,8 @@ function supportBrokerUrl() {
   return base ? `${base}/functions/v1/minarva-support-broker` : "";
 }
 
-function vercelOidcToken() {
-  return String(process.env.VERCEL_OIDC_TOKEN || "").trim();
+function requestOidcToken(headers?: Headers | null) {
+  return String(headers?.get("x-vercel-oidc-token") || process.env.VERCEL_OIDC_TOKEN || "").trim();
 }
 
 function clientAddress(headers: Headers) {
@@ -59,9 +59,9 @@ function clientAddress(headers: Headers) {
   ).slice(0, 200);
 }
 
-async function brokerFetch(body: Record<string, unknown>) {
+async function brokerFetch(body: Record<string, unknown>, oidcToken = "") {
   const url = supportBrokerUrl();
-  const token = vercelOidcToken();
+  const token = oidcToken || requestOidcToken();
   if (!url || !token) {
     return { ok: false, data: null as any, error: "Support broker is not configured for this deployment." };
   }
@@ -99,7 +99,7 @@ export async function consumeSupportRateLimit(
     op: "rate-limit",
     bucket,
     clientAddress: clientAddress(headers),
-  });
+  }, requestOidcToken(headers));
   const row = response.data;
   if (!response.ok || !row) {
     return {
@@ -235,17 +235,17 @@ function modelName() {
   return clean(process.env.MINARVA_SUPPORT_AI_MODEL || "openai/gpt-5.4-mini", 120);
 }
 
-function aiCredentials() {
-  const gatewayKey = String(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN || "").trim();
+function aiCredentials(oidcToken = "") {
+  const gatewayKey = String(process.env.AI_GATEWAY_API_KEY || oidcToken || process.env.VERCEL_OIDC_TOKEN || "").trim();
   if (gatewayKey) return { url: AI_GATEWAY_URL, key: gatewayKey, gateway: true as const };
   const openAiKey = String(process.env.OPENAI_API_KEY || "").trim();
   if (openAiKey) return { url: OPENAI_URL, key: openAiKey, gateway: false as const };
   return null;
 }
 
-export async function supportConfigurationStatus() {
-  const credentials = aiCredentials();
-  const broker = await brokerFetch({ op: "health" });
+export async function supportConfigurationStatus(oidcToken = "") {
+  const credentials = aiCredentials(oidcToken);
+  const broker = await brokerFetch({ op: "health" }, oidcToken);
   return {
     aiConfigured: Boolean(credentials),
     databaseConfigured: broker.ok,
@@ -261,8 +261,9 @@ async function openAiResponse(input: {
   messages: SupportChatMessage[];
   image?: string | null;
   maxOutputTokens?: number;
+  oidcToken?: string;
 }) {
-  const credentials = aiCredentials();
+  const credentials = aiCredentials(input.oidcToken || "");
   if (!credentials) return { ok: false as const, error: "AI support is not configured on the server." };
 
   const normalizedMessages = input.messages.slice(-12).map((message) => ({
@@ -329,6 +330,7 @@ export async function answerTechnicalSupport(input: {
   history: SupportChatMessage[];
   image?: unknown;
   context: SupportClientContext;
+  oidcToken?: string;
 }) {
   const query = clean(input.message, 4000);
   const knowledge = await supportKnowledge(query);
@@ -361,6 +363,7 @@ ${knowledge.context}`;
     messages,
     image: input.image as string | null,
     maxOutputTokens: 1500,
+    oidcToken: input.oidcToken,
   });
   return response.ok
     ? { ok: true as const, answer: response.text, sources: knowledge.sources }
@@ -373,6 +376,7 @@ export async function triageSupportRequest(input: {
   description: string;
   image?: unknown;
   context: SupportClientContext;
+  oidcToken?: string;
 }) {
   const image = imageDataUrl(input.image);
   const response = await openAiResponse({
@@ -385,6 +389,7 @@ If an image is attached, include the visible error/UI evidence. Do not invent fa
     }],
     image,
     maxOutputTokens: 500,
+    oidcToken: input.oidcToken,
   });
   return response.ok ? response.text : "";
 }
@@ -400,6 +405,7 @@ export async function createSupportRequest(input: {
   aiSummary?: string;
   screenshotSummary?: string;
   context: SupportClientContext;
+  oidcToken?: string;
 }) {
   const title = clean(input.title, 200);
   const description = clean(input.description, 12000);
@@ -434,7 +440,7 @@ export async function createSupportRequest(input: {
     },
   };
 
-  const result = await brokerFetch({ op: "create-request", request });
+  const result = await brokerFetch({ op: "create-request", request }, input.oidcToken || "");
   if (!result.ok) return { ok: false as const, error: result.error || "Unable to submit support request." };
   return { ok: true as const, requestId: clean(result.data?.requestId, 80) };
 }
