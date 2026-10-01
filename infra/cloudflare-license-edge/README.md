@@ -4,7 +4,13 @@ Cloudflare Workers front door for Minarva Biz public licensing/update endpoints.
 
 ## Purpose
 
-This is a transition layer. Windows clients should depend on a stable Minarva-controlled edge URL, not directly on the current hosting provider. The initial origin remains the existing License Admin service while signing/database logic is migrated in later milestones.
+This is a transition layer. Windows clients should depend on a stable Minarva-controlled edge URL, not directly on the current hosting provider.
+
+Current migration state:
+
+- `/api/health` is served natively by Cloudflare;
+- `/api/update/manifest` is served directly from the signed immutable GitHub Release manifest;
+- `/api/public-key` and license mutation routes still use the existing License Admin origin while signing/database logic is migrated in later milestones.
 
 This gives Minarva Biz a replaceable boundary:
 
@@ -14,7 +20,11 @@ Windows / web client
         v
 Cloudflare License Edge
         |
-        +--> current license origin (transition)
+        +--> Cloudflare-native health
+        |
+        +--> immutable GitHub signed update manifest
+        |
+        +--> current license origin (public key + mutations, transition)
         |
         +--> future Minarva-owned/self-hosted license API
 ```
@@ -38,7 +48,7 @@ Request bodies are bounded. Cookies and arbitrary inbound headers are not forwar
 
 ## Update resilience
 
-If the current origin cannot return `/api/update/manifest`, the edge falls back to the immutable GitHub Release manifest. The Windows updater still verifies the Ed25519 signature and installer SHA-256, so the fallback cannot bypass the existing update trust chain.
+`/api/update/manifest` no longer depends on the current License Admin origin. The edge reads the immutable GitHub Release manifest directly. The Windows updater still verifies the Ed25519 signature and installer SHA-256, so the edge cannot bypass the existing update trust chain.
 
 ## Zero-cost / future migration
 
