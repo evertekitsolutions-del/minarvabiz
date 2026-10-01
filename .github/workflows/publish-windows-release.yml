@@ -17,6 +17,11 @@ jobs:
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout release metadata
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
       - name: Download verified Windows installer artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,7 +59,35 @@ jobs:
             exit 0
           fi
 
-          gh release create "$tag" "$INSTALLER_PATH" "$checksum"             --repo "$GITHUB_REPOSITORY"             --target "${{ github.event.workflow_run.head_sha }}"             --title "Minarva Biz $version"             --notes "Stable Windows release $version. Installer SHA-256: $hash"
+          node - "$version" "$hash" <<'NODE'
+          const fs = require("node:fs");
+          const version = process.argv[2];
+          const hash = process.argv[3];
+          const notes = JSON.parse(fs.readFileSync("release-notes.json", "utf8"));
+          const items = Array.isArray(notes[version])
+            ? notes[version].map((item) => String(item || "").trim()).filter(Boolean)
+            : [];
+          if (!items.length) {
+            throw new Error(`release-notes.json is missing customer-facing notes for v${version}`);
+          }
+          const markdown = [
+            `# Minarva Biz ${version}`,
+            "",
+            "## What's new",
+            "",
+            ...items.map((item) => `- ${item}`),
+            "",
+            `Installer SHA-256: ${hash}`,
+            "",
+          ].join("\n");
+          fs.writeFileSync("release-notes.md", markdown, "utf8");
+          NODE
+
+          gh release create "$tag" "$INSTALLER_PATH" "$checksum" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "${{ github.event.workflow_run.head_sha }}" \
+            --title "Minarva Biz $version" \
+            --notes-file release-notes.md
 
 
       - name: Verify production signed update channel
