@@ -73,6 +73,14 @@ function getDiagnosticsApi(): DesktopDiagnosticsApi | null {
   return (window as unknown as { minarvaDesktop?: DesktopDiagnosticsApi }).minarvaDesktop ?? null;
 }
 
+function updateReleaseItems(notes: string) {
+  return notes
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^[-*•]\s*/, ""))
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
 export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, onSaveTax, onSaveBackup, onSavePrinting }: SettingsPanelProps) {
   const [draftProfile, setDraftProfile] = React.useState(profile);
   const [draftTax, setDraftTax] = React.useState(tax);
@@ -85,6 +93,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
   const [updateState, setUpdateState] = React.useState<"idle" | "checking" | "available" | "downloading" | "ready" | "up_to_date" | "disabled" | "error">("idle");
   const [updateVersion, setUpdateVersion] = React.useState("");
   const [updateMessage, setUpdateMessage] = React.useState("");
+  const [updateNotes, setUpdateNotes] = React.useState("");
   const [printTestState, setPrintTestState] = React.useState<"idle" | "working" | "done" | "error">("idle");
   const [printTestMessage, setPrintTestMessage] = React.useState("");
   React.useEffect(() => setDraftProfile(profile), [profile]);
@@ -106,12 +115,12 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
       setUpdateMessage("Secure updates are available in the Windows desktop edition.");
       return;
     }
-    setUpdateState("checking"); setUpdateMessage("");
+    setUpdateState("checking"); setUpdateMessage(""); setUpdateNotes("");
     try {
       const result = await api.checkForUpdates();
       setUpdateVersion(result.version || "");
-      if (result.status === "available") { setUpdateState("available"); setUpdateMessage(result.notes || `Version ${result.version} is available.`); return; }
-      if (result.status === "up_to_date") { setUpdateState("up_to_date"); setUpdateMessage(`Minarva Biz ${result.currentVersion} is up to date.`); return; }
+      if (result.status === "available") { setUpdateState("available"); setUpdateNotes(result.notes || ""); setUpdateMessage(`Version ${result.version} is available. Review what’s new below before updating.`); return; }
+      if (result.status === "up_to_date") { setUpdateState("up_to_date"); setUpdateNotes(""); setUpdateMessage(`Minarva Biz ${result.currentVersion} is up to date.`); return; }
       if (result.status === "disabled") { setUpdateState("disabled"); setUpdateMessage("Secure update channel is not configured on this build."); return; }
       setUpdateState("error"); setUpdateMessage(result.error || "Unable to check for updates.");
     } catch (error) {
@@ -398,6 +407,19 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
         <Button variant="outline" onClick={checkUpdates} disabled={updateState === "checking" || updateState === "downloading"}>{updateState === "checking" ? "Checking…" : "Check for updates"}</Button>
       </div>
       {updateMessage && <p className={`mt-4 text-sm ${updateState === "error" ? "text-red-600" : updateState === "available" || updateState === "ready" ? "text-blue-700" : "text-slate-600"}`}>{updateMessage}</p>}
+      {updateNotes && ["available", "downloading", "ready"].includes(updateState) && (
+        <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-indigo-700">What&apos;s new in {updateVersion || "this version"}</div>
+          <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-700">
+            {updateReleaseItems(updateNotes).map((item, index) => (
+              <li key={`${index}-${item}`} className="flex gap-2">
+                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="mt-4 flex flex-wrap gap-2">
         {updateState === "available" && <Button onClick={updateAndRestart}>Update & restart {updateVersion || ""}</Button>}
       </div>

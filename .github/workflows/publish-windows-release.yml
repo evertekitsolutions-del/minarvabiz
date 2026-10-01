@@ -49,12 +49,45 @@ jobs:
           checksum="$INSTALLER_PATH.sha256"
           printf '%s  %s' "$hash" "$INSTALLER_NAME" > "$checksum"
 
+          gh api \
+            -H "Accept: application/vnd.github.raw+json" \
+            "repos/$GITHUB_REPOSITORY/contents/release-notes.json?ref=${{ github.event.workflow_run.head_sha }}" \
+            > release-notes.json
+
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $tag already exists; preserving immutable published assets."
             exit 0
           fi
 
-          gh release create "$tag" "$INSTALLER_PATH" "$checksum"             --repo "$GITHUB_REPOSITORY"             --target "${{ github.event.workflow_run.head_sha }}"             --title "Minarva Biz $version"             --notes "Stable Windows release $version. Installer SHA-256: $hash"
+          node - "$version" "$hash" <<'NODE'
+          const fs = require("node:fs");
+          const version = process.argv[2];
+          const hash = process.argv[3];
+          const notes = JSON.parse(fs.readFileSync("release-notes.json", "utf8"));
+          const items = Array.isArray(notes[version])
+            ? notes[version].map((item) => String(item || "").trim()).filter(Boolean)
+            : [];
+          if (!items.length) {
+            throw new Error(`release-notes.json is missing customer-facing notes for v${version}`);
+          }
+          const markdown = [
+            `# Minarva Biz ${version}`,
+            "",
+            "## What's new",
+            "",
+            ...items.map((item) => `- ${item}`),
+            "",
+            `Installer SHA-256: ${hash}`,
+            "",
+          ].join("\n");
+          fs.writeFileSync("release-notes.md", markdown, "utf8");
+          NODE
+
+          gh release create "$tag" "$INSTALLER_PATH" "$checksum" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "${{ github.event.workflow_run.head_sha }}" \
+            --title "Minarva Biz $version" \
+            --notes-file release-notes.md
 
 
       - name: Verify production signed update channel

@@ -1,0 +1,13 @@
+{
+  "1.0.13": [
+    "One-click Update & restart now installs verified Windows updates silently without the manual setup wizard.",
+    "A protected pre-update database backup is created and validated before installation starts.",
+    "Minarva Biz closes for the upgrade and reopens automatically after the new version is installed."
+  ],
+  "1.0.14": [
+    "Minarva Biz now checks for a newer Windows version when the dashboard opens and shows an update notification there.",
+    "The dashboard update card shows a clear What's new summary before the customer starts the update.",
+    "Software Updates now keeps the release changes visible while downloading and installing the new version.",
+    "Update & restart continues to verify the signed installer, create a protected backup, install silently and reopen Minarva Biz automatically."
+  ]
+}

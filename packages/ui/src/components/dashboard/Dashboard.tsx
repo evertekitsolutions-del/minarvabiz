@@ -10,6 +10,7 @@ import { RecentOrders, type RecentOrderRow } from "./RecentOrders";
 import { LowStockAlert, type LowStockItem } from "./LowStockAlert";
 import { QuickActions, type QuickAction } from "./QuickActions";
 import { BusinessInsights } from "./BusinessInsights";
+import { SoftwareUpdateNotice } from "./SoftwareUpdateNotice";
 import { SalesOverviewChart, type SalesPoint } from "../charts/SalesOverviewChart";
 import type { OrderStatusItem } from "./OrderStatusSummary";
 import type { CategoryItem } from "./CategoryBreakdown";
@@ -172,6 +173,7 @@ export function Dashboard({ data, quickActions = [], onViewAllOrders, onViewAllS
 
   return (
     <div className={cn("space-y-5", className)}>
+      <SoftwareUpdateNotice />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title="Total Sales" value={stats.totalSales.value} changeLabel={stats.totalSales.change} changePositive={stats.totalSales.positive} tone="blue" icon={defaultIcons.cart} sparkline={stats.totalSales.spark} />
         <StatCard title="Total Services" value={stats.totalServices.value} changeLabel={stats.totalServices.change} changePositive={stats.totalServices.positive} tone="green" icon={defaultIcons.bag} sparkline={stats.totalServices.spark} />
