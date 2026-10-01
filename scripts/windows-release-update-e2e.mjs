@@ -3,9 +3,10 @@ import fs from "node:fs";
 const port = Number(process.env.MINARVA_CDP_PORT || 9224);
 const base = `http://127.0.0.1:${port}`;
 const mode = process.argv[2] || "prepare";
-const expectedFrom = process.env.MINARVA_UPDATE_FROM || "1.0.10";
-const expectedTo = process.env.MINARVA_UPDATE_TO || "1.0.11";
+const expectedFrom = process.env.MINARVA_UPDATE_FROM || "1.0.13";
+const expectedTo = process.env.MINARVA_UPDATE_TO || "1.0.14";
 const marker = process.env.MINARVA_UPDATE_E2E_CUSTOMER || "Upgrade E2E Customer";
+const expectedNoteFragment = process.env.MINARVA_UPDATE_E2E_NOTE_FRAGMENT || "dashboard opens";
 const stateFile = process.env.MINARVA_UPDATE_E2E_STATE_FILE || "update-e2e-state.json";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -170,6 +171,11 @@ async function prepare(ws) {
     throw new Error(`Update discovery mismatch: ${JSON.stringify(check)}`);
   }
 
+  if (!String(check.notes || "").toLowerCase().includes(expectedNoteFragment.toLowerCase())) {
+    throw new Error(`Update release notes are missing expected content "${expectedNoteFragment}": ${JSON.stringify(check)}`);
+  }
+  console.log(`UPDATE_RELEASE_NOTES PASS fragment=${expectedNoteFragment}`);
+
   const download = JSON.parse(await evalIn(ws, `(async()=>JSON.stringify(await window.minarvaDesktop.downloadUpdate()))()`, 240000));
   console.log(`UPDATE_DOWNLOAD ${JSON.stringify(download)}`);
   if (!download.ok || download.version !== expectedTo || !download.installerPath) {
@@ -178,9 +184,10 @@ async function prepare(ws) {
 
   const install = JSON.parse(await evalIn(ws, `(async()=>JSON.stringify(await window.minarvaDesktop.installUpdate()))()`, 60000));
   console.log(`UPDATE_INSTALL_ENTRYPOINT ${JSON.stringify(install)}`);
-  if (!install.ok || install.version !== expectedTo || !install.backupPath) {
-    throw new Error(`Update install entrypoint failed: ${JSON.stringify(install)}`);
+  if (!install.ok || install.version !== expectedTo || !install.backupPath || install.restartExpected !== true) {
+    throw new Error(`Automatic update install entrypoint failed: ${JSON.stringify(install)}`);
   }
+  console.log("AUTO_RESTART_EXPECTED PASS");
 
   fs.writeFileSync(stateFile, JSON.stringify({
     sourceVersion: version,
