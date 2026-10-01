@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import rootPackage from "../../../../../../../package.json";
+import releaseNotes from "../../../../../../../release-notes.json";
 import { signTextBase64Url } from "../../../../lib/signing-key";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,16 @@ function cleanSha(value: string | null | undefined) {
 function releaseVersion() {
   const version = String(rootPackage.version || "").trim();
   return /^\d+\.\d+\.\d+$/.test(version) ? version : "";
+}
+
+function notesForVersion(version: string) {
+  const notes = (releaseNotes as Record<string, unknown>)[version];
+  if (!Array.isArray(notes)) return `Minarva Biz ${version}`;
+  const lines = notes
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  return lines.length ? lines.map((line) => `- ${line}`).join("\n") : `Minarva Biz ${version}`;
 }
 
 function responseTimestamp(response: Response) {
@@ -95,7 +106,7 @@ export async function GET() {
     return NextResponse.json(
       {
         ...unsigned,
-        notes: `Minarva Biz ${version}`,
+        notes: notesForVersion(version),
         signature,
       },
       { headers: { "Cache-Control": "no-store, max-age=0" } },
