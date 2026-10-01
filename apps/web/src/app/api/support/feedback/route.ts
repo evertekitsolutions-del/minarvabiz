@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
   }
 
   const clientId = clean(body?.context?.clientId, 160);
+  const oidcToken = clean(headers.get("x-vercel-oidc-token"), 12000);
   const rate = await consumeSupportRateLimit(headers, "support-submit-day", 20, 86400);
   if (!rate.ok) {
     return NextResponse.json({ ok: false, error: rate.error || "Support submission service is unavailable." }, { status: 503, headers: supportCorsHeaders() });
@@ -81,6 +82,7 @@ export async function POST(request: NextRequest) {
     description,
     image: body?.image || null,
     context,
+    oidcToken,
   });
 
   const result = await createSupportRequest({
@@ -94,6 +96,7 @@ export async function POST(request: NextRequest) {
     aiSummary,
     screenshotSummary: body?.image ? aiSummary : "",
     context,
+    oidcToken,
   });
 
   if (!result.ok) {
