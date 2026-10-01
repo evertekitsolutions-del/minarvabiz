@@ -62,6 +62,9 @@ Before installation:
 2. A fresh SQLite backup is created.
 3. The backup must pass SQLite structural validation.
 4. If backup creation/validation fails, installation is blocked.
-5. Only an explicit user action starts the installer.
+5. Only an explicit user action starts the update.
+6. The verified electron-builder NSIS installer is launched with the normal update marker plus silent mode.
+7. Minarva Biz exits so the installer can replace application files.
+8. The installer runs without the manual setup wizard and automatically launches the updated Minarva Biz application when installation finishes.
 
-Updates are never forced, and customer data is not deleted during upgrade.
+Updates are never forced, and customer data is not deleted during upgrade. The customer initiates the update once with **Update & restart**; download, verification, backup, installation and application restart then complete automatically.
