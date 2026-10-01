@@ -79,8 +79,9 @@ async function waitFor(ws, predicate, label, timeout = 30000) {
   throw new Error(`${label} timed out: ${state}`);
 }
 
-async function navigate(ws, path) {
-  await evalIn(ws, `location.href=${JSON.stringify(appBase)}+${JSON.stringify(path)}`);
+function isNavigationDisconnect(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /navigated|closed|socket|not open|target/i.test(message);
 }
 
 async function setInputByLabel(ws, label, value) {
@@ -94,7 +95,23 @@ async function clickButton(ws, text) {
 }
 
 async function run() {
-  const ws = await connect();
+  let ws = await connect();
+
+  async function reconnectAfterNavigation(expression) {
+    try {
+      await evalIn(ws, expression);
+    } catch (error) {
+      if (!isNavigationDisconnect(error)) throw error;
+    }
+    try { ws.close(); } catch {}
+    await sleep(300);
+    ws = await connect();
+  }
+
+  async function navigate(path) {
+    await reconnectAfterNavigation(`location.href=${JSON.stringify(appBase)}+${JSON.stringify(path)}`);
+  }
+
   try {
     await waitFor(
       ws,
@@ -103,19 +120,19 @@ async function run() {
     );
     console.log("BROWSER_AUTH_NEGATIVE unauthenticated redirect PASS");
 
-    await evalIn(ws, `sessionStorage.setItem("minarva_session","forged-token");sessionStorage.setItem("minarva_user","not-json");location.href=${JSON.stringify(appBase + "/dashboard")}`);
+    await reconnectAfterNavigation( `sessionStorage.setItem("minarva_session","forged-token");sessionStorage.setItem("minarva_user","not-json");location.href=${JSON.stringify(appBase + "/dashboard")}`);
     await waitFor(ws, `location.pathname==="/login"`, "malformed session rejection");
     const malformedCleared = await evalIn(ws, `sessionStorage.getItem("minarva_session")===null&&sessionStorage.getItem("minarva_user")===null`);
     if (!malformedCleared) throw new Error("Malformed session was not cleared");
     console.log("BROWSER_AUTH_NEGATIVE malformed session PASS");
 
-    await evalIn(ws, `sessionStorage.setItem("minarva_session","invalid-e2e-access-token");sessionStorage.setItem("minarva_user",JSON.stringify({id:"11111111-1111-1111-1111-111111111111",email:"e2e@example.test",fullName:"Forged",role:"admin"}));location.href=${JSON.stringify(appBase + "/dashboard")}`);
+    await reconnectAfterNavigation( `sessionStorage.setItem("minarva_session","invalid-e2e-access-token");sessionStorage.setItem("minarva_user",JSON.stringify({id:"11111111-1111-1111-1111-111111111111",email:"e2e@example.test",fullName:"Forged",role:"admin"}));location.href=${JSON.stringify(appBase + "/dashboard")}`);
     await waitFor(ws, `location.pathname==="/login"`, "server-side token rejection");
     const invalidCleared = await evalIn(ws, `sessionStorage.getItem("minarva_session")===null&&sessionStorage.getItem("minarva_user")===null`);
     if (!invalidCleared) throw new Error("Server-rejected session was not cleared");
     console.log("BROWSER_AUTH_NEGATIVE forged token PASS");
 
-    await evalIn(ws, `sessionStorage.setItem("minarva_session","valid-e2e-access-token");sessionStorage.setItem("minarva_user",JSON.stringify({id:"11111111-1111-1111-1111-111111111111",email:"e2e@example.test",fullName:"E2E User",role:"admin"}));location.href=${JSON.stringify(appBase + "/dashboard")}`);
+    await reconnectAfterNavigation( `sessionStorage.setItem("minarva_session","valid-e2e-access-token");sessionStorage.setItem("minarva_user",JSON.stringify({id:"11111111-1111-1111-1111-111111111111",email:"e2e@example.test",fullName:"E2E User",role:"admin"}));location.href=${JSON.stringify(appBase + "/dashboard")}`);
     await waitFor(
       ws,
       `location.pathname==="/dashboard" && (document.body?.innerText||"").includes("Total Sales")`,
@@ -124,7 +141,7 @@ async function run() {
     );
     console.log("BROWSER_AUTH_RECOVERY valid session PASS");
 
-    await evalIn(ws, `sessionStorage.clear();location.href=${JSON.stringify(appBase + "/reset-password")}`);
+    await reconnectAfterNavigation( `sessionStorage.clear();location.href=${JSON.stringify(appBase + "/reset-password")}`);
     await waitFor(
       ws,
       `location.pathname==="/reset-password" && (document.body?.innerText||"").includes("missing its access token")`,
@@ -135,7 +152,6 @@ async function run() {
     console.log("BROWSER_RECOVERY_NEGATIVE missing token PASS");
 
     await navigate(
-      ws,
       "/reset-password?access_token=query-secret&refresh_token=query-refresh-secret&keep=1#access_token=valid-e2e-access-token&refresh_token=hash-secret&type=recovery",
     );
     await waitFor(ws, `location.pathname==="/reset-password" && !location.href.includes("access_token") && !location.href.includes("refresh_token")`, "recovery URL secret scrubbing");
@@ -156,7 +172,7 @@ async function run() {
     await waitFor(ws, `(document.body?.innerText||"").includes("Password updated successfully.")`, "password recovery success");
     console.log("BROWSER_RECOVERY_PATH password update PASS");
 
-    await navigate(ws, "/forgot-password");
+    await navigate("/forgot-password");
     await waitFor(ws, `location.pathname==="/forgot-password" && (document.body?.innerText||"").includes("Send reset link")`, "forgot password page");
     await waitFor(
       ws,
