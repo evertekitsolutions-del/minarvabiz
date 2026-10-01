@@ -614,10 +614,18 @@ ipcMain.handle("update:install", async (event) => {
   }
 
   try {
-    const child = spawn(update.path, [], { detached: true, stdio: "ignore", windowsHide: false });
+    // electron-builder's NSIS update flags mirror the production electron-updater flow:
+    // --updated marks this as an in-place upgrade, /S removes the installer wizard,
+    // and --force-run guarantees the newly installed app is launched again.
+    const child = spawn(update.path, ["--updated", "/S", "--force-run"], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
     child.unref();
-    setTimeout(() => app.quit(), 350);
-    return { ok: true, version: update.version, backupPath: backup.path };
+    runtimeSmokeLog(`silent-update-started version=${update.version} installer=${update.path}`);
+    setTimeout(() => app.quit(), 500);
+    return { ok: true, version: update.version, backupPath: backup.path, restartExpected: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
