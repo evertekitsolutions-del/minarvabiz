@@ -10,7 +10,8 @@ Current migration state:
 
 - `/api/health` is served natively by Cloudflare;
 - `/api/update/manifest` is served directly from the signed immutable GitHub Release manifest;
-- `/api/public-key` and license mutation routes still use the existing License Admin origin while signing/database logic is migrated in later milestones.
+- `/api/public-key` is served natively by Cloudflare from the already-public production Ed25519 verification key;
+- license mutation routes still use the existing License Admin origin while signing/database logic is migrated in later milestones.
 
 This gives Minarva Biz a replaceable boundary:
 
@@ -24,7 +25,9 @@ Cloudflare License Edge
         |
         +--> immutable GitHub signed update manifest
         |
-        +--> current license origin (public key + mutations, transition)
+        +--> Cloudflare-native public verification key
+        |
+        +--> current license origin (mutations/signing, transition)
         |
         +--> future Minarva-owned/self-hosted license API
 ```
