@@ -35,6 +35,7 @@ assert(edge.data?.service === "minarva-license-edge", "edge health service marke
 assert(edge.data?.provider === "cloudflare-workers", "edge provider marker missing");
 assert(edge.data?.validationRpcConfigured === true, "Cloudflare-native validation RPC is not configured");
 assert(edge.data?.deactivationRpcConfigured === true, "Cloudflare-native deactivation RPC is not configured");
+assert(edge.data?.trialRpcConfigured === true, "Cloudflare-native trial RPC is not configured");
 assert(edge.data?.paidDependencyIntroduced === false, "edge must not introduce a paid dependency");
 
 const health = await fetchJson("/api/health");
@@ -44,6 +45,7 @@ assert(health.data?.provider === "cloudflare-workers", "edge API health provider
 assert(health.data?.updateChannel === "github-release", "edge API health update channel mismatch");
 assert(health.data?.validationBackend === "cloudflare-native-supabase-rpc", "validation backend is not Cloudflare-native");
 assert(health.data?.deactivationBackend === "cloudflare-native-supabase-rpc", "deactivation backend is not Cloudflare-native");
+assert(health.data?.trialBackend === "cloudflare-native-supabase-rpc", "trial backend is not Cloudflare-native");
 assert(health.data?.mutationBackend === "origin-transition", "remaining mutation backend marker mismatch");
 assert(health.response.headers.get("x-minarva-license-edge") === "cloudflare", "edge response marker missing");
 assert(health.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "health must be served natively by Cloudflare");
@@ -104,6 +106,28 @@ const invalidDeactivation = await fetchJson("/api/license/deactivate", {
 assert(invalidDeactivation.response.status === 400, `invalid deactivation expected 400, got ${invalidDeactivation.response.status}`);
 assert(invalidDeactivation.data?.code === "INVALID_REQUEST", "invalid deactivation response code mismatch");
 assert(invalidDeactivation.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "invalid deactivation should be rejected natively at the edge");
+
+const trialOptions = await fetchJson("/api/trial/register", {
+  method: "OPTIONS",
+});
+assert(trialOptions.response.status === 204, `trial OPTIONS expected 204, got ${trialOptions.response.status}`);
+assert(trialOptions.response.headers.get("access-control-allow-origin") === "*", "trial OPTIONS CORS origin missing");
+assert(trialOptions.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "trial OPTIONS must be Cloudflare-native");
+
+const invalidTrial = await fetchJson("/api/trial/register", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    email: "bad",
+    phone: "x",
+    organizationName: "",
+    address: "",
+    deviceId: "bad",
+  }),
+});
+assert(invalidTrial.response.status === 400, `invalid trial expected 400, got ${invalidTrial.response.status}`);
+assert(invalidTrial.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "invalid trial must be rejected natively at the edge");
+assert(invalidTrial.response.headers.get("access-control-allow-origin") === "*", "trial POST CORS origin missing");
 
 const smokeDeviceId = createHash("sha256")
   .update(`cloudflare-native-validation-smoke-${Date.now()}-${process.pid}`)
