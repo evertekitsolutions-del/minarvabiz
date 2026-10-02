@@ -19,6 +19,7 @@ const trialBridge = read("supabase/migrations/20261002_cloudflare_trial_register
 const activationBridge = read("supabase/migrations/20261002_cloudflare_license_activate_bridge.sql");
 const adminIdentityBoundary = read("supabase/migrations/20261002_cloudflare_admin_identity_boundary.sql");
 const adminLicenseRegistry = read("supabase/migrations/20261002_cloudflare_admin_license_registry.sql");
+const adminLicenseStatus = read("supabase/migrations/20261002_cloudflare_admin_license_status.sql");
 const adminSupportInbox = read("supabase/migrations/20261002_cloudflare_admin_support_inbox.sql");
 const adminSupportUpdate = read("supabase/migrations/20261002_cloudflare_admin_support_update.sql");
 
@@ -29,6 +30,11 @@ assert.match(worker, /GET \/api\/public-key/);
 assert.match(worker, /GET \/api\/update\/manifest/);
 assert.match(worker, /GET \/api\/admin\/me/);
 assert.match(worker, /GET \/api\/admin\/licenses/);
+assert.match(worker, /PATCH \/api\/admin\/licenses\/status/);
+assert.match(worker, /nativeAdminLicenseStatus: true/);
+assert.match(worker, /function parseAdminLicenseStatusBody\(bytes\)/);
+assert.match(worker, /async function adminLicenseStatusNatively\(request, env, route\)/);
+assert.match(worker, /cloudflare_admin_set_license_status/);
 assert.match(worker, /GET \/api\/admin\/support/);
 assert.match(worker, /PATCH \/api\/admin\/support/);
 assert.match(worker, /nativeAdminSupportUpdate: true/);
@@ -150,6 +156,18 @@ assert.match(adminLicenseRegistry, /LIMIT 200/);
 assert.doesNotMatch(adminLicenseRegistry, /'token'\s*,|'token_sha256'\s*,/);
 assert.match(adminLicenseRegistry, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_list_licenses\(\)[\s\S]*TO authenticated/);
 assert.match(adminLicenseRegistry, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_list_licenses\(\)[\s\S]*FROM PUBLIC, anon, service_role/);
+
+assert.match(adminLicenseStatus, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_set_license_status/);
+assert.match(adminLicenseStatus, /public\.cloudflare_admin_me\(\)/);
+assert.match(adminLicenseStatus, /license\.status_manage/);
+assert.match(adminLicenseStatus, /FOR UPDATE/);
+assert.match(adminLicenseStatus, /UPDATE public\.license_activations/);
+assert.match(adminLicenseStatus, /license\.status_change/);
+assert.match(adminLicenseStatus, /license_admin_audit_log/);
+assert.match(adminLicenseStatus, /license_events/);
+assert.match(adminLicenseStatus, /'authority', 'cloudflare'/);
+assert.match(adminLicenseStatus, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_set_license_status[\s\S]*TO authenticated/);
+assert.match(adminLicenseStatus, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_set_license_status[\s\S]*FROM PUBLIC, anon, service_role/);
 
 assert.match(adminSupportInbox, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_list_support_requests\(\)/);
 assert.match(adminSupportInbox, /public\.cloudflare_admin_me\(\)/);
