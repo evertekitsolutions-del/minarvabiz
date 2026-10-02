@@ -100,6 +100,11 @@ assert(unauthenticatedAdmin.response.status === 401, `admin me without bearer ex
 assert(unauthenticatedAdmin.data?.code === "UNAUTHENTICATED", "admin me unauthenticated code mismatch");
 assert(unauthenticatedAdmin.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin auth must terminate at Cloudflare");
 
+const unauthenticatedLicenseRegistry = await fetchJson("/api/admin/licenses");
+assert(unauthenticatedLicenseRegistry.response.status === 401, `admin licenses without bearer expected 401, got ${unauthenticatedLicenseRegistry.response.status}`);
+assert(unauthenticatedLicenseRegistry.data?.code === "UNAUTHENTICATED", "admin licenses unauthenticated code mismatch");
+assert(unauthenticatedLicenseRegistry.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin license registry guard must terminate at Cloudflare");
+
 const invalidValidation = await fetchJson("/api/license/validate", {
   method: "POST",
   headers: { "content-type": "application/json" },
