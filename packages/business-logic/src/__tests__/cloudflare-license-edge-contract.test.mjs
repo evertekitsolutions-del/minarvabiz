@@ -13,6 +13,7 @@ const release = read(".github/workflows/release-windows.yml");
 const publisher = read(".github/workflows/publish-windows-release.yml");
 const desktopLicense = read("apps/desktop/electron/license.ts");
 const validationBridge = read("supabase/migrations/20261002_cloudflare_license_validate_bridge.sql");
+const deactivationBridge = read("supabase/migrations/20261002_cloudflare_license_deactivate_bridge.sql");
 
 const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
 
@@ -29,6 +30,9 @@ assert.match(worker, /SUPABASE_PUBLISHABLE_KEY/);
 assert.match(worker, /LICENSE_EDGE_RPC_SECRET/);
 assert.match(worker, /x-minarva-license-data/);
 assert.match(worker, /POST \/api\/license\/deactivate/);
+assert.match(worker, /nativeDeactivate: true/);
+assert.match(worker, /async function deactivateNatively\(request, env, route\)/);
+assert.match(worker, /rest\/v1\/rpc\/cloudflare_deactivate_license/);
 assert.match(worker, /POST \/api\/trial\/register/);
 assert.match(worker, /REQUEST_TOO_LARGE/);
 assert.match(worker, /x-minarva-license-edge/);
@@ -55,6 +59,14 @@ assert.match(validationBridge, /SECURITY DEFINER/);
 assert.match(validationBridge, /SET search_path = ''/);
 assert.match(validationBridge, /GRANT EXECUTE ON FUNCTION public\.cloudflare_validate_license[\s\S]*TO anon/);
 assert.match(validationBridge, /REVOKE ALL ON FUNCTION public\.cloudflare_validate_license[\s\S]*FROM PUBLIC, authenticated, service_role/);
+
+assert.match(deactivationBridge, /CREATE OR REPLACE FUNCTION public\.cloudflare_deactivate_license/);
+assert.match(deactivationBridge, /SECURITY DEFINER/);
+assert.match(deactivationBridge, /SET search_path = ''/);
+assert.match(deactivationBridge, /license-deactivate-ip', v_ip_hash, 60, 15 \* 60/);
+assert.match(deactivationBridge, /license-deactivate-device', v_device_hash, 10, 15 \* 60/);
+assert.match(deactivationBridge, /GRANT EXECUTE ON FUNCTION public\.cloudflare_deactivate_license[\s\S]*TO anon/);
+assert.match(deactivationBridge, /REVOKE ALL ON FUNCTION public\.cloudflare_deactivate_license[\s\S]*FROM PUBLIC, authenticated, service_role/);
 
 assert.ok(release.includes(`VITE_LICENSE_API_URL: "${EDGE}"`));
 assert.ok(release.includes(`MINARVA_UPDATE_MANIFEST_URL: "${EDGE}/api/update/manifest"`));
