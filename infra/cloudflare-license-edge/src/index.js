@@ -886,7 +886,10 @@ export default {
         trialRpcConfigured: validationRpcConfigured,
         activationSigningConfigured: Boolean(authority),
         updateSigningConfigured: Boolean(authority),
-        adminAuthConfigured: Boolean(\n          supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL) &&\n          String(env.SUPABASE_PUBLISHABLE_KEY || "").trim(),\n        ),
+        adminAuthConfigured: Boolean(
+          supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL) &&
+          String(env.SUPABASE_PUBLISHABLE_KEY || "").trim(),
+        ),
         renderDependency: false,
         paidDependencyIntroduced: false,
       });
