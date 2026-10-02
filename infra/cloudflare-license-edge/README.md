@@ -11,7 +11,7 @@ Current migration state:
 - `/api/health` is served natively by Cloudflare;
 - `/api/update/manifest` is served directly from the signed immutable GitHub Release manifest;
 - `/api/public-key` is served natively by Cloudflare from the already-public production Ed25519 verification key;
-- license mutation routes still use the existing License Admin origin while signing/database logic is migrated in later milestones.
+- malformed/invalid `/api/license/validate` requests are now rejected natively at the edge before any origin call; valid validation plus the remaining license mutation/signing paths still use the existing License Admin origin while secrets/database logic are migrated in later milestones.
 
 This gives Minarva Biz a replaceable boundary:
 
@@ -47,7 +47,7 @@ The Worker is **not** an open proxy. Only these routes are accepted:
 - `POST /api/trial/register`
 - `OPTIONS /api/trial/register`
 
-Request bodies are bounded. Cookies and arbitrary inbound headers are not forwarded. The Worker holds no license signing private key and no Supabase service-role key.
+Request bodies are bounded. Cookies and arbitrary inbound headers are not forwarded. The validation preflight only checks request shape/token presence/device-id format and never receives licensing database or signing secrets. The Worker still holds no license signing private key and no Supabase service-role key.
 
 ## Update resilience
 
