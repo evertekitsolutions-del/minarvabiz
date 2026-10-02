@@ -47,7 +47,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     setBusy(false);
     if (!result.ok) {
       setPendingBrowserAuth(null);
-      setMessage(result.error || "Login failed");
+      setMessage(result.error || "Login fail");
       return;
     }
     setPendingBrowserAuth(result.pending);
