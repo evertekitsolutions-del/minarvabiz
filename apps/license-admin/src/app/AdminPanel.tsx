@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@minarvabiz/ui";
 import type { Edition, LicenseFeatures } from "@minarvabiz/types";
 import type { LicensePlan } from "@minarvabiz/licensing";
-import { beginAdminMfaEnrollment, cancelAdminMfa, createCommercialLicense, createOfflineActivationPackage, loginAdmin, loginEmergencyAdmin, logoutAdmin, setLicenseStatus, verifyAdminMfa } from "./actions";
+import { adoptCloudflareAdminSession, createCommercialLicense, createOfflineActivationPackage, loginEmergencyAdmin, logoutAdmin, setLicenseStatus } from "./actions";
 import { AdminAuthCard } from "./admin-panel/AdminAuthCard";
 import { AdminHeader } from "./admin-panel/AdminHeader";
 import { LicenseCreateCard } from "./admin-panel/LicenseCreateCard";
@@ -15,6 +15,7 @@ import { OnlineCustomerProvisionCard } from "./admin-panel/OnlineCustomerProvisi
 import { SupportInboxSection } from "./admin-panel/SupportInboxSection";
 import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerProvisioning";
 import { canIssueLicense, canManageLicenseStatus, defaultFeatures } from "./admin-panel/model";
+import { beginBrowserAdminMfaEnrollment, beginBrowserNamedAdminLogin, verifyBrowserAdminMfa, type BrowserAdminPendingAuth } from "./admin-panel/browser-admin-auth";
 import type { AdminIdentityView, AuthStage, LicenseRegistryRow, LicenseStatusAction, SupportRequestRow } from "./admin-panel/types";
 interface AdminPanelProps { identity: AdminIdentityView | null; initialLicenses: LicenseRegistryRow[]; initialSupportRequests: SupportRequestRow[]; bootstrapAvailable: boolean; }
 export default function AdminPanel({identity,initialLicenses,initialSupportRequests,bootstrapAvailable}: AdminPanelProps) {
@@ -26,6 +27,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
   const [mfaCode,setMfaCode]=React.useState("");
   const [mfaSecret, setMfaSecret] = React.useState("");
   const [mfaQrCode, setMfaQrCode] = React.useState("");
+  const [pendingBrowserAuth, setPendingBrowserAuth] = React.useState<BrowserAdminPendingAuth | null>(null);
   const [customerName, setCustomerName] = React.useState("");
   const [plan, setPlan] = React.useState<LicensePlan>("professional");
   const [edition, setEdition] = React.useState<Edition>("hybrid");
@@ -43,12 +45,14 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
   async function login() {
     setBusy(true);
     setMessage(null);
-    const result = await loginAdmin(email, password);
+    const result = await beginBrowserNamedAdminLogin(email, password);
     setBusy(false);
     if (!result.ok) {
+      setPendingBrowserAuth(null);
       setMessage(result.error || "Login failed");
       return;
     }
+    setPendingBrowserAuth(result.pending);
     setPassword("");
     setMfaCode("");
     setMfaSecret("");
@@ -64,12 +68,13 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
   async function beginMfaEnrollment() {
     setBusy(true);
     setMessage(null);
-    const result = await beginAdminMfaEnrollment();
+    const result = await beginBrowserAdminMfaEnrollment(pendingBrowserAuth);
     setBusy(false);
     if (!result.ok) {
       setMessage(result.error || "MFA setup failed");
       return;
     }
+    setPendingBrowserAuth(result.pending);
     setMfaSecret(result.secret || "");
     setMfaQrCode(result.qrCode || "");
     setAuthStage("mfa");
@@ -78,12 +83,21 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
   async function verifyMfa() {
     setBusy(true);
     setMessage(null);
-    const result = await verifyAdminMfa(mfaCode);
-    setBusy(false);
-    if (!result.ok) {
-      setMessage(result.error || "MFA verification failed");
+    const verified = await verifyBrowserAdminMfa(pendingBrowserAuth, mfaCode);
+    if (!verified.ok) {
+      setBusy(false);
+      setMessage(verified.error || "MFA verification failed");
       return;
     }
+
+    const adopted = await adoptCloudflareAdminSession(verified.accessToken);
+    setBusy(false);
+    if (!adopted.ok) {
+      setMessage(adopted.error || "Administrator session could not be established.");
+      return;
+    }
+
+    setPendingBrowserAuth(null);
     setEmail("");
     setPassword("");
     setMfaCode("");
@@ -93,7 +107,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     router.refresh();
   }
   async function resetMfa() {
-    await cancelAdminMfa();
+    setPendingBrowserAuth(null);
     setAuthStage("password");
     setMfaCode("");
     setMfaSecret("");
