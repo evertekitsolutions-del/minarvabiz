@@ -38,6 +38,7 @@ assert(edge.data?.deactivationRpcConfigured === true, "Cloudflare-native deactiv
 assert(edge.data?.trialRpcConfigured === true, "Cloudflare-native trial RPC is not configured");
 assert(edge.data?.activationSigningConfigured === true, "Cloudflare activation signing authority is not configured");
 assert(edge.data?.updateSigningConfigured === true, "Cloudflare update signing authority is not configured");
+assert(edge.data?.adminAuthConfigured === true, "Cloudflare admin auth foundation is not configured");
 assert(edge.data?.renderDependency === false, "license edge must not depend on Render");
 assert(edge.data?.paidDependencyIntroduced === false, "edge must not introduce a paid dependency");
 
