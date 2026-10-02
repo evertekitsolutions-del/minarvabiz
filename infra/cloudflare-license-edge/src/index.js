@@ -3,29 +3,18 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/public-key", { maxBody: 0 }],
   ["GET /api/update/manifest", { maxBody: 0, updateFallback: true }],
   ["POST /api/license/activate", { maxBody: 64 * 1024 }],
-  ["POST /api/license/validate", { maxBody: 64 * 1024, validatePreflight: true }],
+  ["POST /api/license/validate", { maxBody: 16 * 1024, nativeValidate: true }],
   ["POST /api/license/deactivate", { maxBody: 64 * 1024 }],
   ["POST /api/trial/register", { maxBody: 64 * 1024 }],
   ["OPTIONS /api/trial/register", { maxBody: 0 }],
 ]);
 
 const DEFAULT_ORIGIN = "https://minarvabiz-license-admin.onrender.com";
+const DEFAULT_SUPABASE_URL = "https://wmjgefbaliuwmaxyzxkq.supabase.co";
 const DEFAULT_UPDATE_FALLBACK =
   "https://github.com/evertekitsolutions-del/minarvabiz/releases/latest/download/MinarvaBiz-update-manifest.json";
 const LICENSE_PUBLIC_KEY_HEX = "2e1e4a5136c118603da5618d21017adf9c8a699e44856efa3aa127ebe090e6b4";
 const DEVICE_RE = /^[a-f0-9]{64}$/;
-
-function invalidValidationRequest(bytes) {
-  try {
-    const raw = new TextDecoder().decode(bytes || new Uint8Array());
-    const body = JSON.parse(raw);
-    const licenseToken = typeof body?.licenseToken === "string" ? body.licenseToken.trim().slice(0, 2000) : "";
-    const deviceId = typeof body?.deviceId === "string" ? body.deviceId.trim().slice(0, 64).toLowerCase() : "";
-    return !licenseToken || !DEVICE_RE.test(deviceId);
-  } catch {
-    return true;
-  }
-}
 
 function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -45,6 +34,18 @@ function allowedOrigin(value) {
     const url = new URL(String(value || ""));
     if (url.protocol !== "https:") return null;
     return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function supabaseOrigin(value) {
+  const origin = allowedOrigin(value);
+  if (!origin) return null;
+  try {
+    const url = new URL(origin);
+    if (!url.hostname.endsWith(".supabase.co")) return null;
+    return origin;
   } catch {
     return null;
   }
@@ -82,11 +83,125 @@ async function readRequestBody(request, maxBody) {
   return { tooLarge: false, bytes };
 }
 
-async function fetchOrigin(request, env, route, preReadBody = null) {
+function parseValidationBody(bytes) {
+  try {
+    const raw = new TextDecoder().decode(bytes || new Uint8Array());
+    const body = JSON.parse(raw);
+    const licenseToken = typeof body?.licenseToken === "string" ? body.licenseToken.trim().slice(0, 2001) : "";
+    const deviceId = typeof body?.deviceId === "string" ? body.deviceId.trim().slice(0, 64).toLowerCase() : "";
+    if (!licenseToken || licenseToken.length > 2000 || !DEVICE_RE.test(deviceId)) return null;
+    return { licenseToken, deviceId };
+  } catch {
+    return null;
+  }
+}
+
+async function validateNatively(request, env, route) {
+  const contentType = request.headers.get("content-type") || "";
+  if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
+    return json(
+      { ok: false, code: "UNSUPPORTED_MEDIA_TYPE" },
+      415,
+      { "x-minarva-license-backend": "cloudflare-native" },
+    );
+  }
+
+  const body = await readRequestBody(request, route.maxBody);
+  if (body?.tooLarge) {
+    return json(
+      { ok: false, code: "REQUEST_TOO_LARGE" },
+      413,
+      { "x-minarva-license-backend": "cloudflare-native" },
+    );
+  }
+
+  const parsed = parseValidationBody(body?.bytes);
+  if (!parsed) {
+    return json(
+      { ok: false, code: "INVALID_REQUEST" },
+      400,
+      { "x-minarva-license-backend": "cloudflare-native" },
+    );
+  }
+
+  const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
+  const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+  const edgeSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
+  if (!apiOrigin || !publishableKey || edgeSecret.length < 32) {
+    return json(
+      { ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" },
+      503,
+      { "x-minarva-license-backend": "cloudflare-native" },
+    );
+  }
+
+  const clientIp = String(request.headers.get("cf-connecting-ip") || "unknown").trim().slice(0, 200) || "unknown";
+
+  try {
+    const response = await fetch(`${apiOrigin}/rest/v1/rpc/cloudflare_validate_license`, {
+      method: "POST",
+      headers: {
+        apikey: publishableKey,
+        authorization: `Bearer ${publishableKey}`,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        p_edge_secret: edgeSecret,
+        p_license_token: parsed.licenseToken,
+        p_device_id: parsed.deviceId,
+        p_client_ip: clientIp,
+      }),
+      redirect: "error",
+      signal: AbortSignal.timeout(8_000),
+    });
+
+    if (!response.ok) {
+      return json(
+        { ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" },
+        503,
+        { "x-minarva-license-backend": "cloudflare-native" },
+      );
+    }
+
+    const data = await response.json().catch(() => null);
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      return json(
+        { ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" },
+        503,
+        { "x-minarva-license-backend": "cloudflare-native" },
+      );
+    }
+
+    const rawStatus = Number(data.httpStatus);
+    const status = Number.isInteger(rawStatus) && rawStatus >= 200 && rawStatus <= 599 ? rawStatus : 503;
+    const retryAfter = Number(data.retryAfterSeconds);
+    const output = { ...data };
+    delete output.httpStatus;
+    delete output.retryAfterSeconds;
+
+    const headers = {
+      "x-minarva-license-backend": "cloudflare-native",
+      "x-minarva-license-data": "supabase-rpc",
+    };
+    if (status === 429 && Number.isFinite(retryAfter) && retryAfter > 0) {
+      headers["retry-after"] = String(Math.ceil(retryAfter));
+    }
+    return json(output, status, headers);
+  } catch {
+    return json(
+      { ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" },
+      503,
+      { "x-minarva-license-backend": "cloudflare-native" },
+    );
+  }
+}
+
+async function fetchOrigin(request, env, route) {
   const origin = allowedOrigin(env.LICENSE_ORIGIN || DEFAULT_ORIGIN);
   if (!origin) return json({ ok: false, code: "EDGE_ORIGIN_NOT_CONFIGURED" }, 503);
 
-  const body = preReadBody || (await readRequestBody(request, route.maxBody));
+  const body = await readRequestBody(request, route.maxBody);
   if (body?.tooLarge) return json({ ok: false, code: "REQUEST_TOO_LARGE" }, 413);
 
   const sourceUrl = new URL(request.url);
@@ -160,11 +275,17 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/edge/health") {
       const origin = allowedOrigin(env.LICENSE_ORIGIN || DEFAULT_ORIGIN);
+      const validationRpcConfigured = Boolean(
+        supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL) &&
+        String(env.SUPABASE_PUBLISHABLE_KEY || "").trim() &&
+        String(env.LICENSE_EDGE_RPC_SECRET || "").trim().length >= 32,
+      );
       return json({
         ok: true,
         service: "minarva-license-edge",
         provider: "cloudflare-workers",
         originConfigured: Boolean(origin),
+        validationRpcConfigured,
         paidDependencyIntroduced: false,
       });
     }
@@ -179,7 +300,8 @@ export default {
           service: "minarva-license-edge",
           provider: "cloudflare-workers",
           updateChannel: "github-release",
-          licenseBackend: "origin-transition",
+          validationBackend: "cloudflare-native-supabase-rpc",
+          mutationBackend: "origin-transition",
           paidDependencyIntroduced: false,
         },
         200,
@@ -202,22 +324,11 @@ export default {
       return updateFallback(env);
     }
 
-    let preReadBody = null;
-    if (route.validatePreflight) {
-      preReadBody = await readRequestBody(request, route.maxBody);
-      if (preReadBody?.tooLarge) {
-        return json({ ok: false, code: "REQUEST_TOO_LARGE" }, 413);
-      }
-      if (invalidValidationRequest(preReadBody?.bytes)) {
-        return json(
-          { ok: false, code: "INVALID_REQUEST" },
-          400,
-          { "x-minarva-license-backend": "cloudflare-native" },
-        );
-      }
+    if (route.nativeValidate) {
+      return validateNatively(request, env, route);
     }
 
-    const proxied = await fetchOrigin(request, env, route, preReadBody);
+    const proxied = await fetchOrigin(request, env, route);
     if (proxied) return proxied;
 
     return json({ ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503);
