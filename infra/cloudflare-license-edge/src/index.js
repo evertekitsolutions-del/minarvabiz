@@ -1,103 +1,72 @@
+import { Buffer } from "node:buffer";
+import { createHash, createPrivateKey, createPublicKey, sign as nodeSign, verify as nodeVerify } from "node:crypto";
+
 const ALLOWED_ROUTES = new Map([
   ["GET /api/health", { maxBody: 0 }],
   ["GET /api/public-key", { maxBody: 0 }],
-  ["GET /api/update/manifest", { maxBody: 0, updateFallback: true }],
-  ["POST /api/license/activate", { maxBody: 16 * 1024, nativeActivateCandidate: true }],
+  ["GET /api/update/manifest", { maxBody: 0, nativeUpdateManifest: true }],
+  ["POST /api/license/activate", { maxBody: 16 * 1024, nativeActivate: true }],
   ["POST /api/license/validate", { maxBody: 16 * 1024, nativeValidate: true }],
   ["POST /api/license/deactivate", { maxBody: 16 * 1024, nativeDeactivate: true }],
   ["POST /api/trial/register", { maxBody: 16 * 1024, nativeTrial: true }],
   ["OPTIONS /api/trial/register", { maxBody: 0 }],
 ]);
 
-const DEFAULT_ORIGIN = "https://minarvabiz-license-admin.onrender.com";
 const DEFAULT_SUPABASE_URL = "https://wmjgefbaliuwmaxyzxkq.supabase.co";
-const DEFAULT_UPDATE_FALLBACK =
-  "https://github.com/evertekitsolutions-del/minarvabiz/releases/latest/download/MinarvaBiz-update-manifest.json";
-const LICENSE_PUBLIC_KEY_HEX = "2e1e4a5136c118603da5618d21017adf9c8a699e44856efa3aa127ebe090e6b4";
+const GITHUB_RELEASE_API =
+  "https://api.github.com/repos/evertekitsolutions-del/minarvabiz/releases/latest";
+const SIGNING_KDF_DOMAIN = "minarvabiz-ed25519-authority-v1\0";
 const DEVICE_RE = /^[a-f0-9]{64}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[0-9]{6,50}$/;
 
-function hexToBytes(hex) {
-  const clean = String(hex || "").trim().replace(/^0x/i, "");
-  if (!/^[0-9a-f]+$/i.test(clean) || clean.length % 2 !== 0) return null;
-  const bytes = new Uint8Array(clean.length / 2);
-  for (let i = 0; i < bytes.length; i += 1) {
-    bytes[i] = Number.parseInt(clean.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
-}
+function signingAuthority(env) {
+  const rootSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
+  if (rootSecret.length < 32) return null;
 
-function signingSeedBytes(value) {
-  const raw = String(value || "").trim();
-  const hex = hexToBytes(raw.replace(/\s/g, ""));
-  if (hex?.byteLength === 32) return hex;
   try {
-    const normalized = raw.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-    const binary = atob(padded);
-    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-    return bytes.byteLength === 32 ? bytes : null;
+    const seed = createHash("sha256")
+      .update(SIGNING_KDF_DOMAIN, "utf8")
+      .update(rootSecret, "utf8")
+      .digest();
+    const pkcs8Prefix = Buffer.from("302e020100300506032b657004220420", "hex");
+    const privateKey = createPrivateKey({
+      key: Buffer.concat([pkcs8Prefix, seed]),
+      format: "der",
+      type: "pkcs8",
+    });
+    const publicDer = createPublicKey(privateKey).export({ format: "der", type: "spki" });
+    const publicKeyHex = Buffer.from(publicDer).subarray(-32).toString("hex");
+
+    const check = Buffer.from("minarvabiz-cloudflare-signing-authority-check-v1", "utf8");
+    const signature = nodeSign(null, check, privateKey);
+    if (!nodeVerify(null, check, createPublicKey(privateKey), signature)) return null;
+
+    return { privateKey, publicKeyHex };
   } catch {
     return null;
   }
-}
-
-function concatBytes(...parts) {
-  const length = parts.reduce((sum, part) => sum + part.byteLength, 0);
-  const output = new Uint8Array(length);
-  let offset = 0;
-  for (const part of parts) {
-    output.set(part, offset);
-    offset += part.byteLength;
-  }
-  return output;
 }
 
 function base64Url(data) {
-  const bytes = data instanceof Uint8Array ? data : new TextEncoder().encode(String(data));
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-async function activationSigner(env) {
-  const seed = signingSeedBytes(env.LICENSE_PRIVATE_KEY);
-  const publicKeyBytes = hexToBytes(LICENSE_PUBLIC_KEY_HEX);
-  if (!seed || !publicKeyBytes || publicKeyBytes.byteLength !== 32) return null;
-
-  try {
-    const pkcs8Prefix = hexToBytes("302e020100300506032b657004220420");
-    if (!pkcs8Prefix) return null;
-    const privateKey = await crypto.subtle.importKey(
-      "pkcs8",
-      concatBytes(pkcs8Prefix, seed),
-      { name: "Ed25519" },
-      false,
-      ["sign"],
-    );
-    const publicKey = await crypto.subtle.importKey(
-      "raw",
-      publicKeyBytes,
-      { name: "Ed25519" },
-      false,
-      ["verify"],
-    );
-    const check = new TextEncoder().encode("minarvabiz-cloudflare-signing-key-check-v1");
-    const signature = await crypto.subtle.sign("Ed25519", privateKey, check);
-    const matchesProductionKey = await crypto.subtle.verify("Ed25519", publicKey, signature, check);
-    return matchesProductionKey ? privateKey : null;
-  } catch {
-    return null;
-  }
+  return Buffer.from(data).toString("base64url");
 }
 
 async function signActivationCertificateNatively(payload, privateKey) {
   const body = base64Url(JSON.stringify(payload));
-  const signature = new Uint8Array(
-    await crypto.subtle.sign("Ed25519", privateKey, new TextEncoder().encode(body)),
-  );
-  return `${body}.${base64Url(signature)}`;
+  const signature = nodeSign(null, Buffer.from(body, "utf8"), privateKey);
+  return `${body}.${signature.toString("base64url")}`;
+}
+
+function canonicalUpdateManifest(input) {
+  return [
+    "minarvabiz-update-v1",
+    input.product,
+    input.version,
+    input.installerUrl,
+    String(input.sha256).toLowerCase(),
+    input.publishedAt,
+  ].join("\n");
 }
 
 function json(body, status = 200, headers = {}) {
@@ -228,7 +197,7 @@ function parseTrialBody(bytes) {
   }
 }
 
-async function activateNatively(request, env, route, privateKey) {
+async function activateNatively(request, env, route, authority) {
   const contentType = request.headers.get("content-type") || "";
   if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
     return json(
@@ -350,7 +319,7 @@ async function activateNatively(request, env, route, privateKey) {
         issuedAt: validatedAt,
         expiresAt: output.expiresAt || null,
       },
-      privateKey,
+      authority.privateKey,
     );
 
     return json(
@@ -712,73 +681,69 @@ async function registerTrialNatively(request, env, route) {
   }
 }
 
-async function fetchOrigin(request, env, route) {
-  const origin = allowedOrigin(env.LICENSE_ORIGIN || DEFAULT_ORIGIN);
-  if (!origin) return json({ ok: false, code: "EDGE_ORIGIN_NOT_CONFIGURED" }, 503);
-
-  const body = await readRequestBody(request, route.maxBody);
-  if (body?.tooLarge) return json({ ok: false, code: "REQUEST_TOO_LARGE" }, 413);
-
-  const sourceUrl = new URL(request.url);
-  const target = new URL(sourceUrl.pathname + sourceUrl.search, origin);
-  const headers = new Headers();
-  const contentType = request.headers.get("content-type");
-  const accept = request.headers.get("accept");
-  if (contentType) headers.set("content-type", contentType);
-  if (accept) headers.set("accept", accept);
-  const cfIp = request.headers.get("cf-connecting-ip");
-  if (cfIp) headers.set("cf-connecting-ip", cfIp);
-  headers.set("x-minarva-edge", "cloudflare-license-edge");
-
-  try {
-    const response = await fetch(target.toString(), {
-      method: request.method,
-      headers,
-      body: body?.bytes || undefined,
-      redirect: "manual",
-      signal: AbortSignal.timeout(request.method === "GET" ? 20_000 : 70_000),
-    });
-
-    if (route.updateFallback && !response.ok) {
-      return null;
-    }
-
-    return new Response(response.body, {
-      status: response.status,
-      headers: copyResponseHeaders(response),
-    });
-  } catch {
-    return null;
-  }
-}
-
-async function updateFallback(env) {
-  const fallbackUrl = String(env.UPDATE_MANIFEST_FALLBACK || DEFAULT_UPDATE_FALLBACK).trim();
-  let parsed;
-  try {
-    parsed = new URL(fallbackUrl);
-  } catch {
-    return json({ error: "Update manifest service is unavailable." }, 503);
-  }
-  if (parsed.protocol !== "https:" || parsed.hostname !== "github.com") {
+async function updateManifestNatively(authority) {
+  if (!authority) {
     return json({ error: "Update manifest service is unavailable." }, 503);
   }
 
   try {
-    const response = await fetch(parsed.toString(), {
+    const response = await fetch(GITHUB_RELEASE_API, {
       headers: {
-        accept: "application/json",
+        accept: "application/vnd.github+json",
         "user-agent": "MinarvaBiz-License-Edge",
       },
-      redirect: "follow",
+      cache: "no-store",
       signal: AbortSignal.timeout(20_000),
     });
     if (!response.ok) return json({ error: "Update manifest service is unavailable." }, 503);
-    const headers = copyResponseHeaders(response);
-    headers.set("cache-control", "no-store");
-    headers.set("x-minarva-license-backend", "github-release");
-    headers.set("x-minarva-update-source", "github-release");
-    return new Response(response.body, { status: 200, headers });
+
+    const release = await response.json();
+    const version = String(release?.tag_name || "").replace(/^v/, "");
+    if (!/^\d+\.\d+\.\d+$/.test(version)) {
+      return json({ error: "Stable release version is invalid." }, 503);
+    }
+
+    const installerName = `MinarvaBiz-Setup-${version}.exe`;
+    const asset = Array.isArray(release?.assets)
+      ? release.assets.find((item) => item?.name === installerName)
+      : null;
+    const digest = String(asset?.digest || "").replace(/^sha256:/i, "").toLowerCase();
+    const installerUrl = String(asset?.browser_download_url || "");
+    const publishedAt = String(release?.published_at || asset?.updated_at || "");
+    if (
+      !asset ||
+      !/^[0-9a-f]{64}$/.test(digest) ||
+      !installerUrl.startsWith("https://github.com/evertekitsolutions-del/minarvabiz/releases/download/") ||
+      !Number.isFinite(new Date(publishedAt).getTime())
+    ) {
+      return json({ error: "Stable release metadata is incomplete." }, 503);
+    }
+
+    const unsigned = {
+      product: "minarvabiz",
+      version,
+      installerUrl,
+      sha256: digest,
+      publishedAt: new Date(publishedAt).toISOString(),
+    };
+    const signature = nodeSign(
+      null,
+      Buffer.from(canonicalUpdateManifest(unsigned), "utf8"),
+      authority.privateKey,
+    ).toString("base64url");
+
+    return json(
+      {
+        ...unsigned,
+        notes: String(release?.body || "").slice(0, 8000),
+        signature,
+      },
+      200,
+      {
+        "x-minarva-license-backend": "cloudflare-native",
+        "x-minarva-update-source": "github-release",
+      },
+    );
   } catch {
     return json({ error: "Update manifest service is unavailable." }, 503);
   }
@@ -789,8 +754,7 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === "GET" && url.pathname === "/edge/health") {
-      const origin = allowedOrigin(env.LICENSE_ORIGIN || DEFAULT_ORIGIN);
-      const nativeActivationSigner = await activationSigner(env);
+      const authority = signingAuthority(env);
       const validationRpcConfigured = Boolean(
         supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL) &&
         String(env.SUPABASE_PUBLISHABLE_KEY || "").trim() &&
@@ -800,11 +764,12 @@ export default {
         ok: true,
         service: "minarva-license-edge",
         provider: "cloudflare-workers",
-        originConfigured: Boolean(origin),
         validationRpcConfigured,
         deactivationRpcConfigured: validationRpcConfigured,
         trialRpcConfigured: validationRpcConfigured,
-        activationSigningConfigured: Boolean(nativeActivationSigner),
+        activationSigningConfigured: Boolean(authority),
+        updateSigningConfigured: Boolean(authority),
+        renderDependency: false,
         paidDependencyIntroduced: false,
       });
     }
@@ -823,18 +788,19 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/api/health") {
-      const nativeActivationSigner = await activationSigner(env);
+      const authority = signingAuthority(env);
       return json(
         {
           status: "ok",
           service: "minarva-license-edge",
           provider: "cloudflare-workers",
-          updateChannel: "github-release",
+          updateChannel: "github-release-signed-at-cloudflare",
           validationBackend: "cloudflare-native-supabase-rpc",
           deactivationBackend: "cloudflare-native-supabase-rpc",
           trialBackend: "cloudflare-native-supabase-rpc",
-          activationBackend: nativeActivationSigner ? "cloudflare-native-supabase-rpc" : "origin-transition",
-          mutationBackend: nativeActivationSigner ? "cloudflare-native" : "origin-transition",
+          activationBackend: authority ? "cloudflare-native-supabase-rpc" : "unavailable",
+          mutationBackend: authority ? "cloudflare-native" : "unavailable",
+          renderDependency: false,
           paidDependencyIntroduced: false,
         },
         200,
@@ -843,8 +809,10 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/api/public-key") {
+      const authority = signingAuthority(env);
+      if (!authority) return json({ error: "Public key service is unavailable." }, 503);
       return json(
-        { publicKeyHex: LICENSE_PUBLIC_KEY_HEX },
+        { publicKeyHex: authority.publicKeyHex },
         200,
         {
           "cache-control": "public, max-age=3600",
@@ -853,15 +821,20 @@ export default {
       );
     }
 
-    if (route.updateFallback) {
-      return updateFallback(env);
+    if (route.nativeUpdateManifest) {
+      return updateManifestNatively(signingAuthority(env));
     }
 
-    if (route.nativeActivateCandidate) {
-      const privateKey = await activationSigner(env);
-      if (privateKey) {
-        return activateNatively(request, env, route, privateKey);
+    if (route.nativeActivate) {
+      const authority = signingAuthority(env);
+      if (!authority) {
+        return json(
+          { ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" },
+          503,
+          { "x-minarva-license-backend": "cloudflare-native" },
+        );
       }
+      return activateNatively(request, env, route, authority);
     }
 
     if (route.nativeValidate) {
@@ -876,9 +849,6 @@ export default {
       return registerTrialNatively(request, env, route);
     }
 
-    const proxied = await fetchOrigin(request, env, route);
-    if (proxied) return proxied;
-
-    return json({ ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503);
+    return json({ ok: false, code: "NOT_FOUND" }, 404);
   },
 };
