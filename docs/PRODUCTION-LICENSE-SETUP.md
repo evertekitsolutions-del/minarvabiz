@@ -26,7 +26,20 @@ This prints two values:
 
 Generate this once for the production license authority. Do not generate a new pair during every build.
 
-## 2. Configure the license-admin production server
+## 2. Production signing authority and Cloudflare cutover
+
+The production public key already shipped to Windows clients is fixed. **Do not generate a replacement key merely to leave Render.** The exact existing `LICENSE_PRIVATE_KEY` seed must be preserved.
+
+The Cloudflare License Edge supports a safe staged cutover:
+
+1. deploy the activation-ready Worker without `LICENSE_PRIVATE_KEY`; online activation continues through the transition origin;
+2. securely add the exact existing production seed as an encrypted Worker secret named `LICENSE_PRIVATE_KEY` (never paste it into source control, docs, logs, or chat);
+3. the Worker signs a private self-check and verifies it with the fixed production public key before enabling Cloudflare-native activation;
+4. if the secret is absent, malformed, or belongs to another keypair, the Worker refuses native signing and keeps the transition-origin fallback.
+
+Cloudflare-native activation uses only the encrypted signing seed, the existing encrypted edge RPC secret, and a Supabase publishable key. It does **not** require a Supabase service-role/secret key.
+
+### Temporary legacy license-admin production server
 
 Set these server-side environment variables:
 
@@ -39,7 +52,7 @@ SUPABASE_SECRET_KEY=<production server-side Supabase secret key>
 
 `LICENSE_PRIVATE_KEY`, `SUPABASE_SECRET_KEY`, and `LICENSE_API_SECRET` must never be exposed to the browser or desktop client.
 
-### Simplest isolated deployment: Render
+### Temporary legacy deployment: Render
 
 Do not change the existing Vercel project that serves the live production web application. The repository now contains a root `render.yaml` blueprint for a separate `minarvabiz-license-admin` Render Web Service.
 
@@ -66,7 +79,7 @@ SUPABASE_URL=https://wmjgefbaliuwmaxyzxkq.supabase.co
 SUPABASE_SECRET_KEY=<production server-side Supabase secret key>
 ```
 
-After deployment, open the Render service URL and verify the license-admin UI loads. The repository's desktop client does **not** normally use the license-admin UI URL directly for activation. `VITE_LICENSE_API_URL` must be the base URL of the live web service that implements the license API routes under `/api/license/*` and `/api/trial/*` (currently those routes live under `apps/web`).
+During the transition, the Render service remains only as activation fallback and as the current License Admin host for signing/admin operations. Windows clients already use the Cloudflare License Edge as `VITE_LICENSE_API_URL`; validation, deactivation, trial registration, health, public key and updates no longer depend on Render.
 
 Render's official monorepo guidance recommends keeping the repository root available when workspace dependencies/shared packages are needed, and Render Web Services provide configurable build/start commands and environment variables. urlRender monorepo supporthttps://render.com/docs/monorepo-support urlRender Next.js deployment guidehttps://render.com/docs/deploy-nextjs-app
 
@@ -138,7 +151,7 @@ A production release is considered ready only when all of the following are true
 - CI desktop, web, and Windows packaging jobs pass.
 - The Windows installed-runtime smoke test passes and creates `%APPDATA%\Minarva Biz\minarvabiz.db`.
 - The production desktop build contains the matching public key.
-- `LICENSE_PRIVATE_KEY` exists only in the license-admin server secret store.
+- the exact production `LICENSE_PRIVATE_KEY` exists only in approved encrypted server/Worker secret storage and matches the shipped public key.
 - Online activation/validation works against the production API.
 - Offline `.lic` import works on a real Windows device and enforces device binding.
 - Deactivation/revocation prevents continued use after the locally stored grace window rules are applied.
