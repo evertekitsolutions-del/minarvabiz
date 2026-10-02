@@ -41,7 +41,7 @@ assert.match(worker, /nativeAdminSupport: true/);
 assert.match(worker, /async function adminSupportNatively\(request, env\)/);
 assert.match(worker, /cloudflare_admin_list_support_requests/);
 assert.match(worker, /nativeAdminLicenses: true/);
-assert.match(worker, /async function adminAuthenticatedRpc\(request, env, rpcName\)/);
+assert.match(worker, /async function adminAuthenticatedRpc\(request, env, rpcName, rpcBody = \{\}\)/);
 assert.match(worker, /async function adminLicensesNatively\(request, env\)/);
 assert.match(worker, /cloudflare_admin_list_licenses/);
 assert.match(worker, /nativeAdminMe: true/);
