@@ -110,6 +110,20 @@ assert(unauthenticatedSupport.response.status === 401, `admin support without be
 assert(unauthenticatedSupport.data?.code === "UNAUTHENTICATED", "admin support unauthenticated code mismatch");
 assert(unauthenticatedSupport.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin support guard must terminate at Cloudflare");
 
+const unauthenticatedSupportUpdate = await fetchJson("/api/admin/support", {
+  method: "PATCH",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    id: "11111111-1111-4111-8111-111111111111",
+    status: "in_review",
+    assignedTo: "smoke",
+    adminNotes: "unauthenticated smoke must not mutate",
+  }),
+});
+assert(unauthenticatedSupportUpdate.response.status === 401, `admin support PATCH without bearer expected 401, got ${unauthenticatedSupportUpdate.response.status}`);
+assert(unauthenticatedSupportUpdate.data?.code === "UNAUTHENTICATED", "admin support PATCH unauthenticated code mismatch");
+assert(unauthenticatedSupportUpdate.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin support PATCH guard must terminate at Cloudflare");
+
 const invalidValidation = await fetchJson("/api/license/validate", {
   method: "POST",
   headers: { "content-type": "application/json" },
