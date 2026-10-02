@@ -39,9 +39,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
   const [lastToken, setLastToken] = React.useState<string | null>(null);
   const [message,setMessage]=React.useState<string|null>(null);
   const [busy,setBusy]=React.useState(false);
-  React.useEffect(() => {
-    setFeatures(defaultFeatures(plan));
-  }, [plan]);
+  React.useEffect(() => setFeatures(defaultFeatures(plan)), [plan]);
   async function login() {
     setBusy(true);
     setMessage(null);
@@ -54,16 +52,14 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     }
     setPendingBrowserAuth(result.pending);
     setPassword("");
-    setMfaCode("");
-    setMfaSecret("");
-    setMfaQrCode("");
+    setMfaCode(""); setMfaSecret(""); setMfaQrCode("");
     if (result.next === "enroll") {
       setAuthStage("enroll");
-      setMessage("MFA is required. Set up an authenticator before continuing.");
+      setMessage("Set up an authenticator to continue.");
       return;
     }
     setAuthStage("mfa");
-    setMessage("MFA is required. Enter the code from your authenticator.");
+    setMessage("Enter your authenticator code.");
   }
   async function beginMfaEnrollment() {
     setBusy(true);
@@ -78,7 +74,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     setMfaSecret(result.secret || "");
     setMfaQrCode(result.qrCode || "");
     setAuthStage("mfa");
-    setMessage("Authenticator setup started. Add the account, then enter the current code.");
+    setMessage("Authenticator ready. Enter the current code.");
   }
   async function verifyMfa() {
     setBusy(true);
@@ -93,25 +89,20 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     const adopted = await adoptCloudflareAdminSession(verified.accessToken);
     setBusy(false);
     if (!adopted.ok) {
-      setMessage(adopted.error || "Administrator session could not be established.");
+      setMessage(adopted.error || "Admin session failed.");
       return;
     }
 
     setPendingBrowserAuth(null);
     setEmail("");
-    setPassword("");
-    setMfaCode("");
-    setMfaSecret("");
-    setMfaQrCode("");
+    setMfaCode(""); setMfaSecret(""); setMfaQrCode("");
     setAuthStage("password");
     router.refresh();
   }
-  async function resetMfa() {
+  function resetMfa() {
     setPendingBrowserAuth(null);
     setAuthStage("password");
-    setMfaCode("");
-    setMfaSecret("");
-    setMfaQrCode("");
+    setMfaCode(""); setMfaSecret(""); setMfaQrCode("");
     setMessage(null);
   }
   async function emergencyLogin() {
