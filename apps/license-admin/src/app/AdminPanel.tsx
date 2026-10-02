@@ -109,7 +109,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     const result = await loginEmergencyAdmin(emergencyPassword);
     setBusy(false);
     if (!result.ok) {
-      setMessage(result.error || "Emergency login failed.");
+      setMessage(result.error || "Emergency failed.");
       return;
     }
     setEmergencyPassword("");
