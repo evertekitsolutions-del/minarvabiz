@@ -81,4 +81,14 @@ assert(invalidActivation.response.status === 400, `invalid activation expected 4
 assert(invalidActivation.response.headers.get("x-minarva-license-edge") === "cloudflare", "activation did not traverse Cloudflare edge");
 assert(invalidActivation.response.headers.get("x-minarva-license-backend") === "origin-transition", "activation should still use the transition origin in this milestone");
 
+const invalidValidation = await fetchJson("/api/license/validate", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ licenseToken: "", deviceId: "bad" }),
+});
+assert(invalidValidation.response.status === 400, `invalid validation expected 400, got ${invalidValidation.response.status}`);
+assert(invalidValidation.data?.code === "INVALID_REQUEST", "invalid validation response code mismatch");
+assert(invalidValidation.response.headers.get("x-minarva-license-edge") === "cloudflare", "validation did not traverse Cloudflare edge");
+assert(invalidValidation.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "invalid validation should be rejected natively at the edge");
+
 console.log(`CLOUDFLARE_LICENSE_EDGE_LIVE_SMOKE PASS version=${manifest.version}`);
