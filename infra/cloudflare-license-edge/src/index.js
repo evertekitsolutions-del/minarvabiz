@@ -8,6 +8,7 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/admin/me", { maxBody: 0, nativeAdminMe: true }],
   ["GET /api/admin/licenses", { maxBody: 0, nativeAdminLicenses: true }],
   ["GET /api/admin/support", { maxBody: 0, nativeAdminSupport: true }],
+  ["PATCH /api/admin/support", { maxBody: 16 * 1024, nativeAdminSupportUpdate: true }],
   ["POST /api/license/activate", { maxBody: 16 * 1024, nativeActivate: true }],
   ["POST /api/license/validate", { maxBody: 16 * 1024, nativeValidate: true }],
   ["POST /api/license/deactivate", { maxBody: 16 * 1024, nativeDeactivate: true }],
@@ -24,6 +25,8 @@ const SIGNING_KDF_DOMAIN = "minarvabiz-ed25519-authority-v1\0";
 const DEVICE_RE = /^[a-f0-9]{64}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[0-9]{6,50}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SUPPORT_REQUEST_STATUSES = new Set(["new", "in_review", "planned", "resolved", "rejected", "duplicate"]);
 
 function signingAuthority(env) {
   const rootSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
@@ -665,7 +668,7 @@ async function registerTrialNatively(request, env, route) {
   }
 }
 
-async function adminAuthenticatedRpc(request, env, rpcName) {
+async function adminAuthenticatedRpc(request, env, rpcName, rpcBody = {}) {
   const authorization = String(request.headers.get("authorization") || "").trim();
   if (!authorization.startsWith("Bearer ")) {
     return json(
@@ -703,7 +706,7 @@ async function adminAuthenticatedRpc(request, env, rpcName) {
         "content-type": "application/json",
         accept: "application/json",
       },
-      body: "{}",
+      body: JSON.stringify(rpcBody),
       redirect: "error",
       signal: AbortSignal.timeout(8_000),
     });
@@ -736,14 +739,21 @@ async function adminAuthenticatedRpc(request, env, rpcName) {
       );
     }
 
-    if (data.ok === true) {
-      return json(data, 200, {
+    const rawStatus = Number(data.httpStatus);
+    const explicitStatus = Number.isInteger(rawStatus) && rawStatus >= 200 && rawStatus <= 599
+      ? rawStatus
+      : null;
+    const output = { ...data };
+    delete output.httpStatus;
+
+    if (output.ok === true) {
+      return json(output, explicitStatus || 200, {
         "x-minarva-admin-backend": "cloudflare-native",
         "x-minarva-admin-data": "supabase-authenticated-rpc",
       });
     }
 
-    const code = String(data.code || "ADMIN_FORBIDDEN");
+    const code = String(output.code || "ADMIN_FORBIDDEN");
     if (code === "UNAUTHENTICATED") {
       return json(
         { ok: false, code },
@@ -761,7 +771,15 @@ async function adminAuthenticatedRpc(request, env, rpcName) {
     ) {
       return json(
         { ok: false, code },
-        403,
+        explicitStatus || 403,
+        { "x-minarva-admin-backend": "cloudflare-native" },
+      );
+    }
+
+    if (code === "INVALID_REQUEST" || code === "NOT_FOUND") {
+      return json(
+        { ok: false, code },
+        explicitStatus || (code === "NOT_FOUND" ? 404 : 400),
         { "x-minarva-admin-backend": "cloudflare-native" },
       );
     }
@@ -793,6 +811,76 @@ async function adminLicensesNatively(request, env) {
 
 async function adminSupportNatively(request, env) {
   return adminAuthenticatedRpc(request, env, "cloudflare_admin_list_support_requests");
+}
+
+function parseAdminSupportUpdateBody(bytes) {
+  try {
+    const raw = new TextDecoder().decode(bytes || new Uint8Array());
+    const body = JSON.parse(raw);
+    const id = typeof body?.id === "string" ? body.id.trim().toLowerCase() : "";
+    const status = typeof body?.status === "string" ? body.status.trim() : "";
+    const assignedTo =
+      typeof body?.assignedTo === "string" ? body.assignedTo.trim().slice(0, 321) : "";
+    const adminNotes =
+      typeof body?.adminNotes === "string" ? body.adminNotes.trim().slice(0, 12001) : "";
+
+    if (!UUID_RE.test(id) || !SUPPORT_REQUEST_STATUSES.has(status)) return null;
+    if (assignedTo.length > 320 || adminNotes.length > 12000) return null;
+
+    return {
+      p_id: id,
+      p_status: status,
+      p_assigned_to: assignedTo || null,
+      p_admin_notes: adminNotes || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function adminSupportUpdateNatively(request, env, route) {
+  const authorization = String(request.headers.get("authorization") || "").trim();
+  if (!authorization.startsWith("Bearer ")) {
+    return json(
+      { ok: false, code: "UNAUTHENTICATED" },
+      401,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const contentType = request.headers.get("content-type") || "";
+  if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
+    return json(
+      { ok: false, code: "UNSUPPORTED_MEDIA_TYPE" },
+      415,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const body = await readRequestBody(request, route.maxBody);
+  if (body?.tooLarge) {
+    return json(
+      { ok: false, code: "REQUEST_TOO_LARGE" },
+      413,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const parsed = parseAdminSupportUpdateBody(body?.bytes);
+  if (!parsed) {
+    return json(
+      { ok: false, code: "INVALID_REQUEST" },
+      400,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  return adminAuthenticatedRpc(
+    request,
+    env,
+    "cloudflare_admin_update_support_request",
+    parsed,
+  );
 }
 
 async function updateManifestNatively(authority) {
@@ -972,6 +1060,10 @@ export default {
 
     if (route.nativeAdminSupport) {
       return adminSupportNatively(request, env);
+    }
+
+    if (route.nativeAdminSupportUpdate) {
+      return adminSupportUpdateNatively(request, env, route);
     }
 
     if (route.nativeActivate) {
