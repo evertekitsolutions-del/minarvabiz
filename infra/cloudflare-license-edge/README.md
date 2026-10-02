@@ -47,7 +47,7 @@ The Worker is **not** an open proxy. Only these routes are accepted:
 - `POST /api/trial/register`
 - `OPTIONS /api/trial/register`
 
-Request bodies are bounded. Cookies and arbitrary inbound headers are not forwarded. The validation preflight only checks request shape/token presence/device-id format and never receives licensing database or signing secrets. The Worker still holds no license signing private key and no Supabase service-role key.
+Request bodies are bounded. Cookies and arbitrary inbound headers are not forwarded. The validation preflight only checks request shape/token presence/device-id format and never receives licensing database or signing secrets. The transition validation origin now independently enforces JSON-only requests, a 16 KiB body ceiling, a 600-per-15-minute IP bucket and a 60-per-15-minute device bucket so direct-origin calls cannot bypass basic resource-abuse protection. These limits leave headroom above the Windows client's one-minute entitlement refresh plus focus/visibility refreshes. The Worker still holds no license signing private key and no Supabase service-role key.
 
 ## Update resilience
 
