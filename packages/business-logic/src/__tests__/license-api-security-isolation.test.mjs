@@ -74,6 +74,14 @@ assert.match(activate, /"license-activate-ip", 30, 15 \* 60/);
 assert.match(activate, /"license-activate-device", 10, 15 \* 60, deviceId/);
 assert.match(activate, /status: 429/);
 
+const validate = read("apps/license-admin/src/app/api/license/validate/route.ts");
+assert.match(validate, /MAX_BODY_BYTES = 16 \* 1024/);
+assert.match(validate, /"license-validate-ip", 600, 15 \* 60/);
+assert.match(validate, /"license-validate-device", 60, 15 \* 60, deviceId/);
+assert.match(validate, /UNSUPPORTED_MEDIA_TYPE/);
+assert.match(validate, /REQUEST_TOO_LARGE/);
+assert.match(validate, /status: 429/);
+
 const trial = read("apps/license-admin/src/app/api/trial/register/route.ts");
 assert.match(trial, /"trial-register-ip", 10, 60 \* 60/);
 assert.match(trial, /"trial-register-device", 3, 24 \* 60 \* 60, deviceId/);

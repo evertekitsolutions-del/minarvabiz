@@ -3,23 +3,67 @@ import { createHash, randomUUID } from "node:crypto";
 import { signActivationCertificate } from "@minarvabiz/licensing";
 import { privateKeyHex } from "../../../../lib/signing-key";
 import { adminDbFetch } from "../../../../lib/supabase-admin";
+import { consumeRateLimit } from "../../../../lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const DEVICE_RE = /^[a-f0-9]{64}$/;
+const MAX_BODY_BYTES = 16 * 1024;
 
 function clean(value: unknown, max = 2000) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
+async function readBody(request: Request): Promise<Record<string, unknown> | null> {
+  const contentType = request.headers.get("content-type") || "";
+  if (!/^application\/json(?:\s*;|$)/i.test(contentType)) return null;
+  const declaredLength = Number(request.headers.get("content-length") || 0);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) return null;
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) return null;
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as Record<string, unknown>;
+    const contentType = request.headers.get("content-type") || "";
+    if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
+      return NextResponse.json({ ok: false, code: "UNSUPPORTED_MEDIA_TYPE" }, { status: 415 });
+    }
+    const declaredLength = Number(request.headers.get("content-length") || 0);
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+      return NextResponse.json({ ok: false, code: "REQUEST_TOO_LARGE" }, { status: 413 });
+    }
+
+    const body = await readBody(request);
+    if (!body) return NextResponse.json({ ok: false, code: "INVALID_REQUEST" }, { status: 400 });
+
     const licenseToken = clean(body.licenseToken);
     const deviceId = clean(body.deviceId, 64).toLowerCase();
     if (!licenseToken || !DEVICE_RE.test(deviceId)) {
       return NextResponse.json({ ok: false, code: "INVALID_REQUEST" }, { status: 400 });
+    }
+
+    const ipLimit = await consumeRateLimit(request.headers, "license-validate-ip", 600, 15 * 60);
+    if (!ipLimit.ok) return NextResponse.json({ ok: false, code: "RATE_LIMIT_UNAVAILABLE" }, { status: 503 });
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        { ok: false, code: "RATE_LIMITED" },
+        { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSeconds) } },
+      );
+    }
+    const deviceLimit = await consumeRateLimit(request.headers, "license-validate-device", 60, 15 * 60, deviceId);
+    if (!deviceLimit.ok) return NextResponse.json({ ok: false, code: "RATE_LIMIT_UNAVAILABLE" }, { status: 503 });
+    if (!deviceLimit.allowed) {
+      return NextResponse.json(
+        { ok: false, code: "RATE_LIMITED" },
+        { status: 429, headers: { "Retry-After": String(deviceLimit.retryAfterSeconds) } },
+      );
     }
 
     const hash = createHash("sha256").update(licenseToken, "utf8").digest("hex");
