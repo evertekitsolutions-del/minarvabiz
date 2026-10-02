@@ -413,6 +413,81 @@ export async function cancelAdminMfa() {
   return { ok: true };
 }
 
+export async function adoptCloudflareAdminSession(accessTokenInput: string) {
+  const accessToken = String(accessTokenInput || "").trim();
+  if (
+    accessToken.length < 40 ||
+    accessToken.length > 16384 ||
+    accessToken.split(".").length !== 3
+  ) {
+    return { ok: false, error: "Administrator authorization token is invalid." };
+  }
+
+  const requestHeaders = await headers();
+  const tokenSubject = createHash("sha256").update(accessToken, "utf8").digest("hex").slice(0, 32);
+  const throttle = await consumeRateLimit(
+    requestHeaders,
+    "admin-session-adopt",
+    10,
+    5 * 60,
+    tokenSubject,
+  );
+  if (!throttle.ok) {
+    return { ok: false, error: "Administrator authorization is temporarily unavailable." };
+  }
+  if (!throttle.allowed) {
+    return {
+      ok: false,
+      error: `Too many administrator session attempts. Try again in ${throttle.retryAfterSeconds} seconds.`,
+    };
+  }
+
+  try {
+    const response = await fetch(
+      "https://minarva-biz-license-edge.minarva-biz.workers.dev/api/admin/me",
+      {
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${accessToken}`,
+        },
+        cache: "no-store",
+        signal: AbortSignal.timeout(8_000),
+      },
+    );
+    const data = await response.json().catch(() => null);
+    const row = data?.identity;
+    const id = String(row?.id || "").trim();
+    const email = normalizeAdminEmail(row?.email || "");
+    const displayName = String(row?.displayName || "").trim();
+    const role = String(row?.role || "");
+
+    if (
+      !response.ok ||
+      data?.ok !== true ||
+      !/^[0-9a-f-]{36}$/i.test(id) ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      !displayName ||
+      displayName.length > 120 ||
+      (role !== "viewer" && role !== "operator" && role !== "admin")
+    ) {
+      return { ok: false, error: "This account is not an active License Admin." };
+    }
+
+    return establishAdminSession(
+      {
+        id,
+        email,
+        displayName,
+        source: "supabase",
+        role,
+      },
+      "totp",
+    );
+  } catch {
+    return { ok: false, error: "Administrator authorization is temporarily unavailable." };
+  }
+}
+
 export async function loginEmergencyAdmin(password: string) {
   const requestHeaders = await headers();
   const subject = "emergency";
