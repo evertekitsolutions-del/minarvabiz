@@ -13,6 +13,9 @@ const wrangler = read("infra/cloudflare-license-edge/wrangler.jsonc");
 const release = read(".github/workflows/release-windows.yml");
 const publisher = read(".github/workflows/publish-windows-release.yml");
 const desktopLicense = read("apps/desktop/electron/license.ts");
+const adminPanel = read("apps/license-admin/src/app/AdminPanel.tsx");
+const adminActions = read("apps/license-admin/src/app/actions.ts");
+const browserAdminAuth = read("apps/license-admin/src/app/admin-panel/browser-admin-auth.ts");
 const validationBridge = read("supabase/migrations/20261002_cloudflare_license_validate_bridge.sql");
 const deactivationBridge = read("supabase/migrations/20261002_cloudflare_license_deactivate_bridge.sql");
 const trialBridge = read("supabase/migrations/20261002_cloudflare_trial_register_bridge.sql");
@@ -31,6 +34,10 @@ const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
 assert.match(worker, /ALLOWED_ROUTES/);
 assert.match(worker, /GET \/api\/public-key/);
 assert.match(worker, /GET \/api\/update\/manifest/);
+assert.match(worker, /GET \/api\/admin\/auth-config/);
+assert.match(worker, /nativeAdminAuthConfig: true/);
+assert.match(worker, /supabasePublishableKey/);
+assert.match(worker, /cache-control": "public, max-age=300"/);
 assert.match(worker, /GET \/api\/admin\/me/);
 assert.match(worker, /GET \/api\/admin\/licenses/);
 assert.match(worker, /POST \/api\/admin\/licenses/);
@@ -134,6 +141,24 @@ assert.match(wrangler, /LICENSE_EDGE_RPC_SECRET/);
 assert.doesNotMatch(wrangler, /LICENSE_PRIVATE_KEY/);
 
 assert.match(desktopLicense, /typeof result\.data\.activationCertificate === "string"[\s\S]*stored\.activationCertificate/);
+
+assert.match(browserAdminAuth, /beginBrowserNamedAdminLogin/);
+assert.match(browserAdminAuth, /\/token\?grant_type=password/);
+assert.match(browserAdminAuth, /\/factors\/\$\{encodeURIComponent\(factorId\)\}\/challenge/);
+assert.match(browserAdminAuth, /\/factors\/\$\{encodeURIComponent\(pending\.factorId\)\}\/verify/);
+assert.match(browserAdminAuth, /aal !== "aal2"/);
+assert.match(browserAdminAuth, /api\/admin\/me/);
+assert.doesNotMatch(browserAdminAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET/);
+
+assert.match(adminPanel, /beginBrowserNamedAdminLogin/);
+assert.match(adminPanel, /beginBrowserAdminMfaEnrollment/);
+assert.match(adminPanel, /verifyBrowserAdminMfa/);
+assert.match(adminPanel, /adoptCloudflareAdminSession/);
+assert.doesNotMatch(adminPanel, /\bloginAdmin\b|\bbeginAdminMfaEnrollment\b|\bverifyAdminMfa\b|\bcancelAdminMfa\b/);
+
+assert.match(adminActions, /export async function adoptCloudflareAdminSession/);
+assert.match(adminActions, /minarva-biz-license-edge\.minarva-biz\.workers\.dev\/api\/admin\/me/);
+assert.match(adminActions, /establishAdminSession[\s\S]*"totp"/);
 
 assert.match(validationBridge, /CREATE SCHEMA IF NOT EXISTS license_private/);
 assert.match(validationBridge, /secret_sha256/);
