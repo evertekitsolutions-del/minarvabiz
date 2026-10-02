@@ -67,7 +67,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     const result = await beginBrowserAdminMfaEnrollment(pendingBrowserAuth);
     setBusy(false);
     if (!result.ok) {
-      setMessage(result.error || "MFA setup failed.");
+      setMessage(result.error || "MFA setup failed");
       return;
     }
     setPendingBrowserAuth(result.pending);
