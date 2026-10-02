@@ -7,6 +7,7 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/update/manifest", { maxBody: 0, nativeUpdateManifest: true }],
   ["GET /api/admin/me", { maxBody: 0, nativeAdminMe: true }],
   ["GET /api/admin/licenses", { maxBody: 0, nativeAdminLicenses: true }],
+  ["GET /api/admin/support", { maxBody: 0, nativeAdminSupport: true }],
   ["POST /api/license/activate", { maxBody: 16 * 1024, nativeActivate: true }],
   ["POST /api/license/validate", { maxBody: 16 * 1024, nativeValidate: true }],
   ["POST /api/license/deactivate", { maxBody: 16 * 1024, nativeDeactivate: true }],
@@ -790,6 +791,10 @@ async function adminLicensesNatively(request, env) {
   return adminAuthenticatedRpc(request, env, "cloudflare_admin_list_licenses");
 }
 
+async function adminSupportNatively(request, env) {
+  return adminAuthenticatedRpc(request, env, "cloudflare_admin_list_support_requests");
+}
+
 async function updateManifestNatively(authority) {
   if (!authority) {
     return json({ error: "Update manifest service is unavailable.", stage: "authority" }, 503);
@@ -963,6 +968,10 @@ export default {
 
     if (route.nativeAdminLicenses) {
       return adminLicensesNatively(request, env);
+    }
+
+    if (route.nativeAdminSupport) {
+      return adminSupportNatively(request, env);
     }
 
     if (route.nativeActivate) {
