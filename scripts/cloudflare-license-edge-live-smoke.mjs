@@ -105,6 +105,18 @@ assert(unauthenticatedLicenseRegistry.response.status === 401, `admin licenses w
 assert(unauthenticatedLicenseRegistry.data?.code === "UNAUTHENTICATED", "admin licenses unauthenticated code mismatch");
 assert(unauthenticatedLicenseRegistry.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin license registry guard must terminate at Cloudflare");
 
+const unauthenticatedLicenseStatus = await fetchJson("/api/admin/licenses/status", {
+  method: "PATCH",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    licenseId: "LIC-SMOKE-NONEXISTENT",
+    status: "suspended",
+  }),
+});
+assert(unauthenticatedLicenseStatus.response.status === 401, `admin license status PATCH without bearer expected 401, got ${unauthenticatedLicenseStatus.response.status}`);
+assert(unauthenticatedLicenseStatus.data?.code === "UNAUTHENTICATED", "admin license status unauthenticated code mismatch");
+assert(unauthenticatedLicenseStatus.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin license status guard must terminate at Cloudflare");
+
 const unauthenticatedSupport = await fetchJson("/api/admin/support");
 assert(unauthenticatedSupport.response.status === 401, `admin support without bearer expected 401, got ${unauthenticatedSupport.response.status}`);
 assert(unauthenticatedSupport.data?.code === "UNAUTHENTICATED", "admin support unauthenticated code mismatch");

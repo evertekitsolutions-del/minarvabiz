@@ -7,6 +7,7 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/update/manifest", { maxBody: 0, nativeUpdateManifest: true }],
   ["GET /api/admin/me", { maxBody: 0, nativeAdminMe: true }],
   ["GET /api/admin/licenses", { maxBody: 0, nativeAdminLicenses: true }],
+  ["PATCH /api/admin/licenses/status", { maxBody: 8 * 1024, nativeAdminLicenseStatus: true }],
   ["GET /api/admin/support", { maxBody: 0, nativeAdminSupport: true }],
   ["PATCH /api/admin/support", { maxBody: 16 * 1024, nativeAdminSupportUpdate: true }],
   ["POST /api/license/activate", { maxBody: 16 * 1024, nativeActivate: true }],
@@ -27,6 +28,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[0-9]{6,50}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SUPPORT_REQUEST_STATUSES = new Set(["new", "in_review", "planned", "resolved", "rejected", "duplicate"]);
+const LICENSE_STATUS_ACTIONS = new Set(["active", "suspended", "revoked", "deactivated"]);
 
 function signingAuthority(env) {
   const rootSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
@@ -809,6 +811,64 @@ async function adminLicensesNatively(request, env) {
   return adminAuthenticatedRpc(request, env, "cloudflare_admin_list_licenses");
 }
 
+function parseAdminLicenseStatusBody(bytes) {
+  try {
+    const raw = new TextDecoder().decode(bytes || new Uint8Array());
+    const body = JSON.parse(raw);
+    const licenseId = typeof body?.licenseId === "string" ? body.licenseId.trim().slice(0, 201) : "";
+    const status = typeof body?.status === "string" ? body.status.trim() : "";
+    if (!licenseId || licenseId.length > 200 || !LICENSE_STATUS_ACTIONS.has(status)) return null;
+    return { p_license_id: licenseId, p_status: status };
+  } catch {
+    return null;
+  }
+}
+
+async function adminLicenseStatusNatively(request, env, route) {
+  const authorization = String(request.headers.get("authorization") || "").trim();
+  if (!authorization.startsWith("Bearer ")) {
+    return json(
+      { ok: false, code: "UNAUTHENTICATED" },
+      401,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const contentType = request.headers.get("content-type") || "";
+  if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
+    return json(
+      { ok: false, code: "UNSUPPORTED_MEDIA_TYPE" },
+      415,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const body = await readRequestBody(request, route.maxBody);
+  if (body?.tooLarge) {
+    return json(
+      { ok: false, code: "REQUEST_TOO_LARGE" },
+      413,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const parsed = parseAdminLicenseStatusBody(body?.bytes);
+  if (!parsed) {
+    return json(
+      { ok: false, code: "INVALID_REQUEST" },
+      400,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  return adminAuthenticatedRpc(
+    request,
+    env,
+    "cloudflare_admin_set_license_status",
+    parsed,
+  );
+}
+
 async function adminSupportNatively(request, env) {
   return adminAuthenticatedRpc(request, env, "cloudflare_admin_list_support_requests");
 }
@@ -1056,6 +1116,10 @@ export default {
 
     if (route.nativeAdminLicenses) {
       return adminLicensesNatively(request, env);
+    }
+
+    if (route.nativeAdminLicenseStatus) {
+      return adminLicenseStatusNatively(request, env, route);
     }
 
     if (route.nativeAdminSupport) {
