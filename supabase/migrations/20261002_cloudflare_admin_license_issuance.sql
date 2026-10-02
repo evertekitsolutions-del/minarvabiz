@@ -93,7 +93,7 @@ BEGIN
   END;
 
   IF v_max_devices = -1 THEN
-    IF p_activation_limit <> -1 AND (p_activation_limit IS NULL OR p_activation_limit < 1) THEN
+    IF p_activation_limit IS NULL OR (p_activation_limit <> -1 AND p_activation_limit < 1) THEN
       RETURN jsonb_build_object('ok', false, 'code', 'INVALID_ACTIVATION_LIMIT', 'httpStatus', 400);
     END IF;
   ELSE
