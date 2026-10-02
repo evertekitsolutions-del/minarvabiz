@@ -85,14 +85,12 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
       setMessage(verified.error || "MFA failed.");
       return;
     }
-
     const adopted = await adoptCloudflareAdminSession(verified.accessToken);
     setBusy(false);
     if (!adopted.ok) {
       setMessage(adopted.error || "Admin session failed.");
       return;
     }
-
     setPendingBrowserAuth(null);
     setEmail("");
     setMfaCode(""); setMfaSecret(""); setMfaQrCode("");
@@ -111,7 +109,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     const result = await loginEmergencyAdmin(emergencyPassword);
     setBusy(false);
     if (!result.ok) {
-      setMessage(result.error || "Emergency sign-in failed.");
+      setMessage(result.error || "Emergency login failed.");
       return;
     }
     setEmergencyPassword("");
@@ -182,7 +180,6 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     );
     router.refresh();
   }
-
   if (!identity) {
     return (
       <AdminAuthCard
