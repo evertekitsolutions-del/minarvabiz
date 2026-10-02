@@ -12,13 +12,13 @@
 
 ## Online registration
 
-The desktop app calls the deployed web API at `VITE_LICENSE_API_URL` when configured. The endpoint:
+The desktop app calls the Cloudflare License Edge at `VITE_LICENSE_API_URL` when configured. The endpoint:
 
 1. validates the submitted fields;
 2. normalizes email and phone identity and checks email, phone, and device uniqueness;
-3. stores the registration in Supabase `trial_registrations` using a server-only Supabase secret;
-4. sends a notification to `minarvatechnologies@gmail.com` through Resend;
-5. uses an idempotency key so retries do not intentionally duplicate the notification;
+3. calls a narrowly-scoped Supabase Postgres RPC using a Cloudflare-only RPC secret plus the Supabase publishable key;
+4. stores the registration in `trial_registrations` while direct public table access remains blocked by RLS;
+5. records the new row as `registered_email_pending` in the zero-cost phase instead of depending on Resend;
 6. treats a database unique-constraint race as an already-registered trial rather than creating a second trial.
 
 If the first activation happens while offline, the trial can still start locally. The registration remains marked unsynced and is retried on a later launch when the API is reachable.
@@ -33,18 +33,17 @@ For non-Windows development environments, the implementation falls back to the e
 
 ## Required production configuration
 
-Set these on the **web/server deployment**, never inside the desktop installer:
+Set these only on the Cloudflare License Edge / build environment, never inside the desktop installer:
 
-- `SUPABASE_URL`
-- `SUPABASE_SECRET_KEY` (preferred) or legacy `SUPABASE_SERVICE_ROLE_KEY`
-- `RESEND_API_KEY`
-- `TRIAL_NOTIFICATION_FROM` — a sender address on a domain verified in Resend
-- `VITE_LICENSE_API_URL` in the desktop build environment, pointing to the deployed Minarva Biz web/API origin
+- `SUPABASE_URL` — plain Worker configuration pointing at the Minarva Biz Supabase project;
+- `SUPABASE_PUBLISHABLE_KEY` — encrypted Worker secret;
+- `LICENSE_EDGE_RPC_SECRET` — encrypted Worker secret; only its SHA-256 hash is stored in the private database schema;
+- `VITE_LICENSE_API_URL` in the desktop build environment, pointing to the Cloudflare License Edge.
 
-The destination `minarvatechnologies@gmail.com` is intentionally hard-coded as the business notification recipient. It is not exposed as a secret.
+No Resend API key, SMTP password, or Supabase service-role key is required for public trial registration.
 
 ## Why this design
 
-The desktop application must not contain Supabase secret keys, Resend API keys, SMTP passwords, or the Ed25519 private license key. Those secrets stay on the server. The desktop sends only the minimum registration data over HTTPS. Supabase RLS blocks public roles from reading/inserting trial records; the server endpoint uses the elevated secret key.
+The desktop application contains no Supabase secret/service-role key, email-provider credential, SMTP password, or Ed25519 private license key. The desktop sends only the minimum registration data over HTTPS. Supabase RLS blocks direct public access to trial records; the Cloudflare Worker calls only the scoped trial-registration RPC.
 
 The commercial license system remains separate: Ed25519-signed commercial tokens are verified locally, while private signing material remains server-side.
