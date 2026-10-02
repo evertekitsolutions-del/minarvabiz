@@ -13,8 +13,10 @@ const ALLOWED_ROUTES = new Map([
 ]);
 
 const DEFAULT_SUPABASE_URL = "https://wmjgefbaliuwmaxyzxkq.supabase.co";
-const GITHUB_RELEASE_API =
-  "https://api.github.com/repos/evertekitsolutions-del/minarvabiz/releases/latest";
+const GITHUB_LATEST_RELEASE =
+  "https://github.com/evertekitsolutions-del/minarvabiz/releases/latest";
+const GITHUB_RELEASE_DOWNLOAD_BASE =
+  "https://github.com/evertekitsolutions-del/minarvabiz/releases/download";
 const SIGNING_KDF_DOMAIN = "minarvabiz-ed25519-authority-v1\0";
 const DEVICE_RE = /^[a-f0-9]{64}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -662,48 +664,66 @@ async function registerTrialNatively(request, env, route) {
 
 async function updateManifestNatively(authority) {
   if (!authority) {
-    return json({ error: "Update manifest service is unavailable." }, 503);
+    return json({ error: "Update manifest service is unavailable.", stage: "authority" }, 503);
   }
 
   try {
-    const response = await fetch(GITHUB_RELEASE_API, {
-      headers: {
-        accept: "application/vnd.github+json",
-        "user-agent": "MinarvaBiz-License-Edge",
-      },
-      cache: "no-store",
+    const latest = await fetch(GITHUB_LATEST_RELEASE, {
+      headers: { "user-agent": "MinarvaBiz-License-Edge" },
+      redirect: "manual",
       signal: AbortSignal.timeout(20_000),
     });
-    if (!response.ok) return json({ error: "Update manifest service is unavailable." }, 503);
-
-    const release = await response.json();
-    const version = String(release?.tag_name || "").replace(/^v/, "");
-    if (!/^\d+\.\d+\.\d+$/.test(version)) {
-      return json({ error: "Stable release version is invalid." }, 503);
+    const location = String(latest.headers.get("location") || "");
+    const match = location.match(/\/releases\/tag\/v(\d+\.\d+\.\d+)(?:$|[?#])/);
+    const version = match?.[1] || "";
+    if (!version) {
+      return json(
+        { error: "Stable release version is unavailable.", stage: "latest-release", status: latest.status },
+        503,
+      );
     }
 
     const installerName = `MinarvaBiz-Setup-${version}.exe`;
-    const asset = Array.isArray(release?.assets)
-      ? release.assets.find((item) => item?.name === installerName)
-      : null;
-    const digest = String(asset?.digest || "").replace(/^sha256:/i, "").toLowerCase();
-    const installerUrl = String(asset?.browser_download_url || "");
-    const publishedAt = String(release?.published_at || asset?.updated_at || "");
-    if (
-      !asset ||
-      !/^[0-9a-f]{64}$/.test(digest) ||
-      !installerUrl.startsWith("https://github.com/evertekitsolutions-del/minarvabiz/releases/download/") ||
-      !Number.isFinite(new Date(publishedAt).getTime())
-    ) {
-      return json({ error: "Stable release metadata is incomplete." }, 503);
+    const checksumUrl = `${GITHUB_RELEASE_DOWNLOAD_BASE}/v${version}/${installerName}.sha256`;
+    const checksumResponse = await fetch(checksumUrl, {
+      headers: {
+        accept: "text/plain",
+        "user-agent": "MinarvaBiz-License-Edge",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!checksumResponse.ok) {
+      return json(
+        { error: "Stable installer checksum is unavailable.", stage: "checksum", status: checksumResponse.status },
+        503,
+      );
     }
+
+    const checksumText = (await checksumResponse.text()).trim();
+    const checksumMatch = checksumText.match(/^([0-9a-f]{64})\s+\*?(.+)$/i);
+    const sha256 = String(checksumMatch?.[1] || "").toLowerCase();
+    const declaredName = String(checksumMatch?.[2] || "").trim();
+    if (!/^[0-9a-f]{64}$/.test(sha256) || declaredName !== installerName) {
+      return json({ error: "Stable installer checksum is malformed.", stage: "checksum-parse" }, 503);
+    }
+
+    const installerUrl = `${GITHUB_RELEASE_DOWNLOAD_BASE}/v${version}/${installerName}`;
+    const timestampHeader =
+      checksumResponse.headers.get("last-modified") ||
+      checksumResponse.headers.get("date") ||
+      "";
+    const timestamp = new Date(timestampHeader);
+    const publishedAt = Number.isFinite(timestamp.getTime())
+      ? timestamp.toISOString()
+      : new Date().toISOString();
 
     const unsigned = {
       product: "minarvabiz",
       version,
       installerUrl,
-      sha256: digest,
-      publishedAt: new Date(publishedAt).toISOString(),
+      sha256,
+      publishedAt,
     };
     const signature = nodeSign(
       null,
@@ -714,7 +734,7 @@ async function updateManifestNatively(authority) {
     return json(
       {
         ...unsigned,
-        notes: String(release?.body || "").slice(0, 8000),
+        notes: `Minarva Biz ${version}`,
         signature,
       },
       200,
@@ -724,7 +744,7 @@ async function updateManifestNatively(authority) {
       },
     );
   } catch {
-    return json({ error: "Update manifest service is unavailable." }, 503);
+    return json({ error: "Update manifest service is unavailable.", stage: "fetch-or-sign" }, 503);
   }
 }
 
