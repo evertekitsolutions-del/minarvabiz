@@ -105,6 +105,19 @@ assert(unauthenticatedLicenseRegistry.response.status === 401, `admin licenses w
 assert(unauthenticatedLicenseRegistry.data?.code === "UNAUTHENTICATED", "admin licenses unauthenticated code mismatch");
 assert(unauthenticatedLicenseRegistry.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin license registry guard must terminate at Cloudflare");
 
+const unauthenticatedLicenseIssue = await fetchJson("/api/admin/licenses", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    customerName: "Unauthenticated smoke",
+    plan: "basic",
+    edition: "hybrid",
+  }),
+});
+assert(unauthenticatedLicenseIssue.response.status === 401, `admin license issuance without bearer expected 401, got ${unauthenticatedLicenseIssue.response.status}`);
+assert(unauthenticatedLicenseIssue.data?.code === "UNAUTHENTICATED", "admin license issuance unauthenticated code mismatch");
+assert(unauthenticatedLicenseIssue.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin license issuance guard must terminate at Cloudflare");
+
 const unauthenticatedLicenseStatus = await fetchJson("/api/admin/licenses/status", {
   method: "PATCH",
   headers: { "content-type": "application/json" },
