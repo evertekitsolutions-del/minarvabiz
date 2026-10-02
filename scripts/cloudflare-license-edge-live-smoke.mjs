@@ -52,6 +52,7 @@ assert(health.data?.trialBackend === "cloudflare-native-supabase-rpc", "trial ba
 assert(health.data?.activationBackend === "cloudflare-native-supabase-rpc", "activation backend is not Cloudflare-native");
 assert(health.data?.mutationBackend === "cloudflare-native", "mutation backend is not Cloudflare-native");
 assert(health.data?.renderDependency === false, "API health must report zero Render dependency");
+assert(health.data?.adminAuthBackend === "cloudflare-native-supabase-jwt", "admin auth backend is not Cloudflare-native");
 assert(health.response.headers.get("x-minarva-license-edge") === "cloudflare", "edge response marker missing");
 assert(health.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "health must be served natively by Cloudflare");
 
@@ -92,6 +93,11 @@ const invalidActivation = await fetchJson("/api/license/activate", {
 assert(invalidActivation.response.status === 400, `invalid activation expected 400, got ${invalidActivation.response.status}`);
 assert(invalidActivation.response.headers.get("x-minarva-license-edge") === "cloudflare", "activation did not traverse Cloudflare edge");
 assert(invalidActivation.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "activation must be Cloudflare-native");
+
+const unauthenticatedAdmin = await fetchJson("/api/admin/me");
+assert(unauthenticatedAdmin.response.status === 401, `admin me without bearer expected 401, got ${unauthenticatedAdmin.response.status}`);
+assert(unauthenticatedAdmin.data?.code === "UNAUTHENTICATED", "admin me unauthenticated code mismatch");
+assert(unauthenticatedAdmin.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin auth must terminate at Cloudflare");
 
 const invalidValidation = await fetchJson("/api/license/validate", {
   method: "POST",
