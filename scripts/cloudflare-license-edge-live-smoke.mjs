@@ -36,22 +36,22 @@ assert(edge.data?.provider === "cloudflare-workers", "edge provider marker missi
 assert(edge.data?.validationRpcConfigured === true, "Cloudflare-native validation RPC is not configured");
 assert(edge.data?.deactivationRpcConfigured === true, "Cloudflare-native deactivation RPC is not configured");
 assert(edge.data?.trialRpcConfigured === true, "Cloudflare-native trial RPC is not configured");
-assert(typeof edge.data?.activationSigningConfigured === "boolean", "activation signing readiness marker missing");
+assert(edge.data?.activationSigningConfigured === true, "Cloudflare activation signing authority is not configured");
+assert(edge.data?.updateSigningConfigured === true, "Cloudflare update signing authority is not configured");
+assert(edge.data?.renderDependency === false, "license edge must not depend on Render");
 assert(edge.data?.paidDependencyIntroduced === false, "edge must not introduce a paid dependency");
 
 const health = await fetchJson("/api/health");
 assert(health.response.ok, `origin health HTTP ${health.response.status}`);
 assert(health.data?.status === "ok", "edge API health did not report ok");
 assert(health.data?.provider === "cloudflare-workers", "edge API health provider mismatch");
-assert(health.data?.updateChannel === "github-release", "edge API health update channel mismatch");
+assert(health.data?.updateChannel === "github-release-signed-at-cloudflare", "edge API health update channel mismatch");
 assert(health.data?.validationBackend === "cloudflare-native-supabase-rpc", "validation backend is not Cloudflare-native");
 assert(health.data?.deactivationBackend === "cloudflare-native-supabase-rpc", "deactivation backend is not Cloudflare-native");
 assert(health.data?.trialBackend === "cloudflare-native-supabase-rpc", "trial backend is not Cloudflare-native");
-assert(["origin-transition", "cloudflare-native-supabase-rpc"].includes(health.data?.activationBackend), "activation backend marker invalid");
-const expectedMutationBackend = health.data?.activationBackend === "cloudflare-native-supabase-rpc"
-  ? "cloudflare-native"
-  : "origin-transition";
-assert(health.data?.mutationBackend === expectedMutationBackend, "mutation backend marker mismatch");
+assert(health.data?.activationBackend === "cloudflare-native-supabase-rpc", "activation backend is not Cloudflare-native");
+assert(health.data?.mutationBackend === "cloudflare-native", "mutation backend is not Cloudflare-native");
+assert(health.data?.renderDependency === false, "API health must report zero Render dependency");
 assert(health.response.headers.get("x-minarva-license-edge") === "cloudflare", "edge response marker missing");
 assert(health.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "health must be served natively by Cloudflare");
 
@@ -70,7 +70,7 @@ assert(/^\d+\.\d+\.\d+$/.test(String(manifest.version || "")), "manifest version
 assert(/^https:\/\/github\.com\/evertekitsolutions-del\/minarvabiz\/releases\/download\//.test(String(manifest.installerUrl || "")), "manifest installer URL is not trusted GitHub release URL");
 assert(/^[0-9a-f]{64}$/i.test(String(manifest.sha256 || "")), "manifest SHA-256 invalid");
 assert(typeof manifest.signature === "string" && manifest.signature.length > 40, "manifest signature missing");
-assert(manifestResult.response.headers.get("x-minarva-license-backend") === "github-release", "update manifest must bypass the transition origin");
+assert(manifestResult.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "update manifest must be signed at Cloudflare");
 assert(manifestResult.response.headers.get("x-minarva-update-source") === "github-release", "update source marker mismatch");
 
 const canonical = [
@@ -91,10 +91,7 @@ const invalidActivation = await fetchJson("/api/license/activate", {
 });
 assert(invalidActivation.response.status === 400, `invalid activation expected 400, got ${invalidActivation.response.status}`);
 assert(invalidActivation.response.headers.get("x-minarva-license-edge") === "cloudflare", "activation did not traverse Cloudflare edge");
-const expectedActivationHeader = health.data?.activationBackend === "cloudflare-native-supabase-rpc"
-  ? "cloudflare-native"
-  : "origin-transition";
-assert(invalidActivation.response.headers.get("x-minarva-license-backend") === expectedActivationHeader, "activation backend response marker mismatch");
+assert(invalidActivation.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "activation must be Cloudflare-native");
 
 const invalidValidation = await fetchJson("/api/license/validate", {
   method: "POST",
@@ -166,8 +163,7 @@ assert(unknownDeactivation.data?.code === "INVALID_LICENSE", "unknown deactivati
 assert(unknownDeactivation.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "valid-shaped deactivation must bypass the transition origin");
 assert(unknownDeactivation.response.headers.get("x-minarva-license-data") === "supabase-rpc", "valid-shaped deactivation must round-trip through the scoped Supabase RPC");
 
-if (health.data?.activationBackend === "cloudflare-native-supabase-rpc") {
-  const unknownActivation = await fetchJson("/api/license/activate", {
+const unknownActivation = await fetchJson("/api/license/activate", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -175,10 +171,9 @@ if (health.data?.activationBackend === "cloudflare-native-supabase-rpc") {
       deviceId: smokeDeviceId,
     }),
   });
-  assert(unknownActivation.response.status === 401, `unknown activation expected 401, got ${unknownActivation.response.status}`);
-  assert(unknownActivation.data?.code === "INVALID_LICENSE", "unknown activation response code mismatch");
-  assert(unknownActivation.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "native activation must bypass the transition origin");
-  assert(unknownActivation.response.headers.get("x-minarva-license-data") === "supabase-rpc", "native activation must use the scoped Supabase RPC");
-}
+assert(unknownActivation.response.status === 401, `unknown activation expected 401, got ${unknownActivation.response.status}`);
+assert(unknownActivation.data?.code === "INVALID_LICENSE", "unknown activation response code mismatch");
+assert(unknownActivation.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "native activation must bypass the transition origin");
+assert(unknownActivation.response.headers.get("x-minarva-license-data") === "supabase-rpc", "native activation must use the scoped Supabase RPC");
 
 console.log(`CLOUDFLARE_LICENSE_EDGE_LIVE_SMOKE PASS version=${manifest.version}`);
