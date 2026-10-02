@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { createHash, createPrivateKey, createPublicKey, sign as nodeSign, verify as nodeVerify } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, randomUUID, sign as nodeSign, verify as nodeVerify } from "node:crypto";
 
 const ALLOWED_ROUTES = new Map([
   ["GET /api/health", { maxBody: 0 }],
@@ -7,6 +7,7 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/update/manifest", { maxBody: 0, nativeUpdateManifest: true }],
   ["GET /api/admin/me", { maxBody: 0, nativeAdminMe: true }],
   ["GET /api/admin/licenses", { maxBody: 0, nativeAdminLicenses: true }],
+  ["POST /api/admin/licenses", { maxBody: 16 * 1024, nativeAdminLicenseIssue: true }],
   ["PATCH /api/admin/licenses/status", { maxBody: 8 * 1024, nativeAdminLicenseStatus: true }],
   ["GET /api/admin/support", { maxBody: 0, nativeAdminSupport: true }],
   ["PATCH /api/admin/support", { maxBody: 16 * 1024, nativeAdminSupportUpdate: true }],
@@ -29,6 +30,46 @@ const PHONE_RE = /^\+?[0-9]{6,50}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SUPPORT_REQUEST_STATUSES = new Set(["new", "in_review", "planned", "resolved", "rejected", "duplicate"]);
 const LICENSE_STATUS_ACTIONS = new Set(["active", "suspended", "revoked", "deactivated"]);
+const LICENSE_PLANS = new Set(["trial", "basic", "professional", "business", "enterprise"]);
+const LICENSE_EDITIONS = new Set(["online", "offline", "hybrid"]);
+const LICENSE_FEATURE_KEYS = [
+  "sales", "customers", "inventory", "tailoring", "orders", "laundry", "reports",
+  "staff", "advancedReports", "cloudSync", "multiUser", "multiBranch", "apiAccess",
+];
+const PLAN_MAX_DEVICES = {
+  trial: 1,
+  basic: 1,
+  professional: 2,
+  business: 5,
+  enterprise: -1,
+};
+const PLAN_FEATURES = {
+  trial: {
+    sales: true, customers: true, inventory: true, tailoring: true, orders: true,
+    laundry: true, reports: true, staff: true, advancedReports: true, cloudSync: true,
+    multiUser: true, multiBranch: true, apiAccess: true,
+  },
+  basic: {
+    sales: true, customers: true, inventory: true, tailoring: false, orders: false,
+    laundry: false, reports: false, staff: false, advancedReports: false, cloudSync: false,
+    multiUser: false, multiBranch: false, apiAccess: false,
+  },
+  professional: {
+    sales: true, customers: true, inventory: true, tailoring: true, orders: true,
+    laundry: true, reports: true, staff: false, advancedReports: false, cloudSync: false,
+    multiUser: false, multiBranch: false, apiAccess: false,
+  },
+  business: {
+    sales: true, customers: true, inventory: true, tailoring: true, orders: true,
+    laundry: true, reports: true, staff: true, advancedReports: true, cloudSync: true,
+    multiUser: true, multiBranch: false, apiAccess: false,
+  },
+  enterprise: {
+    sales: true, customers: true, inventory: true, tailoring: true, orders: true,
+    laundry: true, reports: true, staff: true, advancedReports: true, cloudSync: true,
+    multiUser: true, multiBranch: true, apiAccess: true,
+  },
+};
 
 function signingAuthority(env) {
   const rootSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
@@ -63,6 +104,12 @@ function base64Url(data) {
 }
 
 async function signActivationCertificateNatively(payload, privateKey) {
+  const body = base64Url(JSON.stringify(payload));
+  const signature = nodeSign(null, Buffer.from(body, "utf8"), privateKey);
+  return `${body}.${signature.toString("base64url")}`;
+}
+
+async function signLicenseTokenNatively(payload, privateKey) {
   const body = base64Url(JSON.stringify(payload));
   const signature = nodeSign(null, Buffer.from(body, "utf8"), privateKey);
   return `${body}.${signature.toString("base64url")}`;
@@ -778,10 +825,17 @@ async function adminAuthenticatedRpc(request, env, rpcName, rpcBody = {}) {
       );
     }
 
-    if (code === "INVALID_REQUEST" || code === "NOT_FOUND") {
+    if (
+      code === "INVALID_REQUEST" ||
+      code === "INVALID_ACTIVATION_LIMIT" ||
+      code === "INVALID_FEATURES" ||
+      code === "NOT_FOUND" ||
+      code === "LICENSE_CONFLICT"
+    ) {
+      const fallbackStatus = code === "NOT_FOUND" ? 404 : code === "LICENSE_CONFLICT" ? 409 : 400;
       return json(
         { ok: false, code },
-        explicitStatus || (code === "NOT_FOUND" ? 404 : 400),
+        explicitStatus || fallbackStatus,
         { "x-minarva-admin-backend": "cloudflare-native" },
       );
     }
@@ -809,6 +863,146 @@ async function adminMeNatively(request, env) {
 
 async function adminLicensesNatively(request, env) {
   return adminAuthenticatedRpc(request, env, "cloudflare_admin_list_licenses");
+}
+
+function parseAdminLicenseIssueBody(bytes) {
+  try {
+    const raw = new TextDecoder().decode(bytes || new Uint8Array());
+    const body = JSON.parse(raw);
+    const customerName =
+      typeof body?.customerName === "string" ? body.customerName.trim().slice(0, 201) : "";
+    const plan = typeof body?.plan === "string" ? body.plan.trim() : "";
+    const edition = typeof body?.edition === "string" ? body.edition.trim() : "";
+    if (!customerName || customerName.length > 200 || !LICENSE_PLANS.has(plan) || !LICENSE_EDITIONS.has(edition)) {
+      return null;
+    }
+
+    let expiresAt = null;
+    if (body?.expiresAt != null && String(body.expiresAt).trim()) {
+      const date = new Date(String(body.expiresAt).trim());
+      if (!Number.isFinite(date.getTime())) return null;
+      expiresAt = date.toISOString();
+    }
+
+    const maximum = PLAN_MAX_DEVICES[plan];
+    let activationLimit = maximum;
+    if (body?.activationLimit != null) {
+      if (typeof body.activationLimit !== "number" || !Number.isSafeInteger(body.activationLimit)) return null;
+      activationLimit = body.activationLimit;
+    }
+    if (maximum === -1) {
+      if (activationLimit !== -1 && activationLimit < 1) return null;
+    } else if (activationLimit < 1 || activationLimit > maximum) {
+      return null;
+    }
+
+    const features = { ...PLAN_FEATURES[plan] };
+    const overrides = body?.featureOverrides;
+    if (overrides != null) {
+      if (typeof overrides !== "object" || Array.isArray(overrides)) return null;
+      for (const [key, value] of Object.entries(overrides)) {
+        if (!LICENSE_FEATURE_KEYS.includes(key) || typeof value !== "boolean") return null;
+        if (value === true && features[key] !== true) return null;
+        if (value === false) features[key] = false;
+      }
+    }
+
+    return { customerName, plan, edition, expiresAt, activationLimit, features };
+  } catch {
+    return null;
+  }
+}
+
+async function adminLicenseIssueNatively(request, env, route) {
+  const authorization = String(request.headers.get("authorization") || "").trim();
+  if (!authorization.startsWith("Bearer ")) {
+    return json(
+      { ok: false, code: "UNAUTHENTICATED" },
+      401,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const contentType = request.headers.get("content-type") || "";
+  if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
+    return json(
+      { ok: false, code: "UNSUPPORTED_MEDIA_TYPE" },
+      415,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const body = await readRequestBody(request, route.maxBody);
+  if (body?.tooLarge) {
+    return json(
+      { ok: false, code: "REQUEST_TOO_LARGE" },
+      413,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const parsed = parseAdminLicenseIssueBody(body?.bytes);
+  if (!parsed) {
+    return json(
+      { ok: false, code: "INVALID_REQUEST" },
+      400,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const authority = signingAuthority(env);
+  const edgeSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
+  if (!authority || edgeSecret.length < 32) {
+    return json(
+      { ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" },
+      503,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const issuedAt = new Date().toISOString();
+  if (parsed.expiresAt && new Date(parsed.expiresAt).getTime() < new Date(issuedAt).getTime()) {
+    return json(
+      { ok: false, code: "INVALID_REQUEST" },
+      400,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const payload = {
+    licenseId: randomUUID(),
+    customerId: randomUUID(),
+    product: "minarvabiz",
+    edition: parsed.edition,
+    plan: parsed.plan,
+    features: parsed.features,
+    issuedAt,
+    expiresAt: parsed.expiresAt,
+    activationLimit: parsed.activationLimit,
+    deviceBindings: [],
+  };
+  const token = await signLicenseTokenNatively(payload, authority.privateKey);
+  const tokenSha256 = createHash("sha256").update(token, "utf8").digest("hex");
+
+  return adminAuthenticatedRpc(
+    request,
+    env,
+    "cloudflare_admin_issue_license",
+    {
+      p_edge_secret: edgeSecret,
+      p_license_id: payload.licenseId,
+      p_customer_id: payload.customerId,
+      p_customer_name: parsed.customerName,
+      p_plan: payload.plan,
+      p_edition: payload.edition,
+      p_expires_at: payload.expiresAt,
+      p_activation_limit: payload.activationLimit,
+      p_features: payload.features,
+      p_token: token,
+      p_token_sha256: tokenSha256,
+      p_issued_at: payload.issuedAt,
+    },
+  );
 }
 
 function parseAdminLicenseStatusBody(bytes) {
@@ -1116,6 +1310,10 @@ export default {
 
     if (route.nativeAdminLicenses) {
       return adminLicensesNatively(request, env);
+    }
+
+    if (route.nativeAdminLicenseIssue) {
+      return adminLicenseIssueNatively(request, env, route);
     }
 
     if (route.nativeAdminLicenseStatus) {
