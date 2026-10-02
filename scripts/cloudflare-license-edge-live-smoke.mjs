@@ -97,6 +97,15 @@ assert(invalidActivation.response.status === 400, `invalid activation expected 4
 assert(invalidActivation.response.headers.get("x-minarva-license-edge") === "cloudflare", "activation did not traverse Cloudflare edge");
 assert(invalidActivation.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "activation must be Cloudflare-native");
 
+const adminAuthConfig = await fetchJson("/api/admin/auth-config");
+assert(adminAuthConfig.response.ok, `admin auth config HTTP ${adminAuthConfig.response.status}`);
+assert(adminAuthConfig.data?.ok === true, "admin auth config did not report ok");
+assert(/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(String(adminAuthConfig.data?.supabaseUrl || "")), "admin auth config Supabase URL invalid");
+const publicKey = String(adminAuthConfig.data?.supabasePublishableKey || "");
+assert(publicKey.length >= 20, "admin auth publishable key missing");
+assert(!/service_role|sb_secret_/i.test(publicKey), "admin auth config exposed a privileged key");
+assert(adminAuthConfig.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin auth config must be Cloudflare-native");
+
 const unauthenticatedAdmin = await fetchJson("/api/admin/me");
 assert(unauthenticatedAdmin.response.status === 401, `admin me without bearer expected 401, got ${unauthenticatedAdmin.response.status}`);
 assert(unauthenticatedAdmin.data?.code === "UNAUTHENTICATED", "admin me unauthenticated code mismatch");
