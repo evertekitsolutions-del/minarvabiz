@@ -11,7 +11,8 @@ Current migration state:
 - `/api/health` is served natively by Cloudflare;
 - `/api/update/manifest` is served directly from the signed immutable GitHub Release manifest;
 - `/api/public-key` is served natively by Cloudflare from the already-public production Ed25519 verification key;
-- malformed/invalid `/api/license/validate` requests are now rejected natively at the edge before any origin call; valid validation plus the remaining license mutation/signing paths still use the existing License Admin origin while secrets/database logic are migrated in later milestones.
+- the complete `/api/license/validate` path is Cloudflare-native: request validation runs in the Worker and valid-shaped requests call one narrowly-scoped Supabase Postgres RPC directly; the RPC returns license state but does not issue a fresh activation certificate, so Windows keeps its already-verified stored certificate;
+- `/api/license/activate`, `/api/license/deactivate` and `/api/trial/register` still use the transition origin until their separate migrations are completed.
 
 This gives Minarva Biz a replaceable boundary:
 
@@ -27,7 +28,9 @@ Cloudflare License Edge
         |
         +--> Cloudflare-native public verification key
         |
-        +--> current license origin (mutations/signing, transition)
+        +--> scoped Supabase RPC (license validation)
+        |
+        +--> current license origin (remaining mutations/signing, transition)
         |
         +--> future Minarva-owned/self-hosted license API
 ```
@@ -47,7 +50,9 @@ The Worker is **not** an open proxy. Only these routes are accepted:
 - `POST /api/trial/register`
 - `OPTIONS /api/trial/register`
 
-Request bodies are bounded. Cookies and arbitrary inbound headers are not forwarded. The validation preflight only checks request shape/token presence/device-id format and never receives licensing database or signing secrets. The transition validation origin now independently enforces JSON-only requests, a 16 KiB body ceiling, a 600-per-15-minute IP bucket and a 60-per-15-minute device bucket so direct-origin calls cannot bypass basic resource-abuse protection. These limits leave headroom above the Windows client's one-minute entitlement refresh plus focus/visibility refreshes. The Worker still holds no license signing private key and no Supabase service-role key.
+Request bodies are bounded. Cookies and arbitrary inbound headers are not forwarded. Native validation accepts JSON only, has a 16 KiB body ceiling, and the database RPC enforces the existing 600-per-15-minute IP bucket plus 60-per-15-minute device bucket.
+
+The Worker holds a Cloudflare-only RPC secret and a Supabase publishable key. The plaintext RPC secret is stored only as an encrypted Worker secret; the database stores only its SHA-256 hash in a non-exposed `license_private` schema. The RPC is `SECURITY DEFINER` with an empty search path, is revoked from `PUBLIC`, `authenticated` and `service_role`, and is granted only to `anon` because the Cloudflare-only secret is the additional server-to-server authorization factor. Direct table access remains denied by RLS. The Worker still holds no license signing private key and no Supabase service-role/secret key.
 
 ## Update resilience
 
@@ -55,4 +60,4 @@ Request bodies are bounded. Cookies and arbitrary inbound headers are not forwar
 
 ## Zero-cost / future migration
 
-The Worker uses the Cloudflare Free plan. The current upstream is temporary. In a later milestone, licensing logic can move to another free-compatible or Minarva-owned service while clients keep the same edge endpoint.
+The Worker uses the Cloudflare Free plan. The consolidation target is Cloudflare for public/server compute, Supabase only for PostgreSQL/Auth, and GitHub only for source plus signed Windows releases. The remaining transition origin routes are being removed one small milestone at a time so existing licenses are not broken. The stable public edge endpoint remains unchanged and can later point at Minarva-owned infrastructure.
