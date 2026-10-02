@@ -5,6 +5,7 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/health", { maxBody: 0 }],
   ["GET /api/public-key", { maxBody: 0 }],
   ["GET /api/update/manifest", { maxBody: 0, nativeUpdateManifest: true }],
+  ["GET /api/admin/me", { maxBody: 0, nativeAdminMe: true }],
   ["POST /api/license/activate", { maxBody: 16 * 1024, nativeActivate: true }],
   ["POST /api/license/validate", { maxBody: 16 * 1024, nativeValidate: true }],
   ["POST /api/license/deactivate", { maxBody: 16 * 1024, nativeDeactivate: true }],
@@ -662,6 +663,123 @@ async function registerTrialNatively(request, env, route) {
   }
 }
 
+async function adminMeNatively(request, env) {
+  const authorization = String(request.headers.get("authorization") || "").trim();
+  if (!authorization.startsWith("Bearer ")) {
+    return json(
+      { ok: false, code: "UNAUTHENTICATED" },
+      401,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const accessToken = authorization.slice("Bearer ".length).trim();
+  if (accessToken.length < 40 || accessToken.length > 16384 || accessToken.split(".").length !== 3) {
+    return json(
+      { ok: false, code: "UNAUTHENTICATED" },
+      401,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
+  const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+  if (!apiOrigin || !publishableKey) {
+    return json(
+      { ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" },
+      503,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  }
+
+  try {
+    const response = await fetch(`${apiOrigin}/rest/v1/rpc/cloudflare_admin_me`, {
+      method: "POST",
+      headers: {
+        apikey: publishableKey,
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: "{}",
+      redirect: "error",
+      signal: AbortSignal.timeout(8_000),
+    });
+
+    if (response.status === 401) {
+      return json(
+        { ok: false, code: "UNAUTHENTICATED" },
+        401,
+        { "x-minarva-admin-backend": "cloudflare-native" },
+      );
+    }
+
+    if (!response.ok) {
+      return json(
+        { ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" },
+        503,
+        {
+          "x-minarva-admin-backend": "cloudflare-native",
+          "x-minarva-admin-upstream-status": String(response.status),
+        },
+      );
+    }
+
+    const data = await response.json().catch(() => null);
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      return json(
+        { ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" },
+        503,
+        { "x-minarva-admin-backend": "cloudflare-native" },
+      );
+    }
+
+    if (data.ok === true) {
+      return json(data, 200, {
+        "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-data": "supabase-authenticated-rpc",
+      });
+    }
+
+    const code = String(data.code || "ADMIN_FORBIDDEN");
+    if (code === "UNAUTHENTICATED") {
+      return json(
+        { ok: false, code },
+        401,
+        { "x-minarva-admin-backend": "cloudflare-native" },
+      );
+    }
+
+    if (
+      code === "MFA_REQUIRED" ||
+      code === "ADMIN_NOT_ALLOWED" ||
+      code === "ADMIN_IDENTITY_MISMATCH" ||
+      code === "ADMIN_ROLE_INVALID"
+    ) {
+      return json(
+        { ok: false, code },
+        403,
+        { "x-minarva-admin-backend": "cloudflare-native" },
+      );
+    }
+
+    return json(
+      { ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" },
+      503,
+      { "x-minarva-admin-backend": "cloudflare-native" },
+    );
+  } catch {
+    return json(
+      { ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" },
+      503,
+      {
+        "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-upstream-stage": "supabase-fetch",
+      },
+    );
+  }
+}
+
 async function updateManifestNatively(authority) {
   if (!authority) {
     return json({ error: "Update manifest service is unavailable.", stage: "authority" }, 503);
@@ -768,6 +886,7 @@ export default {
         trialRpcConfigured: validationRpcConfigured,
         activationSigningConfigured: Boolean(authority),
         updateSigningConfigured: Boolean(authority),
+        adminAuthConfigured: Boolean(\n          supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL) &&\n          String(env.SUPABASE_PUBLISHABLE_KEY || "").trim(),\n        ),
         renderDependency: false,
         paidDependencyIntroduced: false,
       });
@@ -799,6 +918,7 @@ export default {
           trialBackend: "cloudflare-native-supabase-rpc",
           activationBackend: authority ? "cloudflare-native-supabase-rpc" : "unavailable",
           mutationBackend: authority ? "cloudflare-native" : "unavailable",
+          adminAuthBackend: "cloudflare-native-supabase-jwt",
           renderDependency: false,
           paidDependencyIntroduced: false,
         },
@@ -822,6 +942,10 @@ export default {
 
     if (route.nativeUpdateManifest) {
       return updateManifestNatively(signingAuthority(env));
+    }
+
+    if (route.nativeAdminMe) {
+      return adminMeNatively(request, env);
     }
 
     if (route.nativeActivate) {
