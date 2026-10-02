@@ -17,12 +17,19 @@ const validationBridge = read("supabase/migrations/20261002_cloudflare_license_v
 const deactivationBridge = read("supabase/migrations/20261002_cloudflare_license_deactivate_bridge.sql");
 const trialBridge = read("supabase/migrations/20261002_cloudflare_trial_register_bridge.sql");
 const activationBridge = read("supabase/migrations/20261002_cloudflare_license_activate_bridge.sql");
+const adminIdentityBoundary = read("supabase/migrations/20261002_cloudflare_admin_identity_boundary.sql");
 
 const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
 
 assert.match(worker, /ALLOWED_ROUTES/);
 assert.match(worker, /GET \/api\/public-key/);
 assert.match(worker, /GET \/api\/update\/manifest/);
+assert.match(worker, /GET \/api\/admin\/me/);
+assert.match(worker, /nativeAdminMe: true/);
+assert.match(worker, /async function adminMeNatively\(request, env\)/);
+assert.match(worker, /rest\/v1\/rpc\/cloudflare_admin_me/);
+assert.match(worker, /x-minarva-admin-backend/);
+assert.match(worker, /x-minarva-admin-data/);
 assert.match(worker, /POST \/api\/license\/activate/);
 assert.match(worker, /nativeActivate: true/);
 assert.match(worker, /function signingAuthority\(env\)/);
@@ -105,6 +112,16 @@ assert.match(activationBridge, /license-activate-device', v_device_hash, 10, 15 
 assert.match(activationBridge, /public\.activate_license_device\(v_license\.id, v_device_id\)/);
 assert.match(activationBridge, /GRANT EXECUTE ON FUNCTION public\.cloudflare_prepare_license_activation[\s\S]*TO anon/);
 assert.match(activationBridge, /REVOKE ALL ON FUNCTION public\.cloudflare_prepare_license_activation[\s\S]*FROM PUBLIC, authenticated, service_role/);
+
+assert.match(adminIdentityBoundary, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_me\(\)/);
+assert.match(adminIdentityBoundary, /SECURITY DEFINER/);
+assert.match(adminIdentityBoundary, /SET search_path = ''/);
+assert.match(adminIdentityBoundary, /auth\.uid\(\)/);
+assert.match(adminIdentityBoundary, /auth\.jwt\(\)/);
+assert.match(adminIdentityBoundary, /v_aal <> 'aal2'/);
+assert.match(adminIdentityBoundary, /license_admin_identities/);
+assert.match(adminIdentityBoundary, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_me\(\) TO authenticated/);
+assert.match(adminIdentityBoundary, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_me\(\) FROM PUBLIC, anon, service_role/);
 
 const testRootSecret = "test-root-secret-at-least-32-characters-long";
 const seed = createHash("sha256")

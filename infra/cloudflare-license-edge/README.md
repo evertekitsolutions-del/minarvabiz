@@ -14,7 +14,7 @@ Current migration state:
 - the complete `/api/license/validate` path is Cloudflare-native: request validation runs in the Worker and valid-shaped requests call one narrowly-scoped Supabase Postgres RPC directly; the RPC returns license state but does not issue a fresh activation certificate, so Windows keeps its already-verified stored certificate;
 - `/api/license/deactivate` is also Cloudflare-native through a scoped Supabase RPC; it preserves the existing token/device/activation semantics and adds bounded abuse protection;
 - `/api/trial/register` is Cloudflare-native through a scoped Supabase RPC with public CORS, uniqueness checks, and rate limits; no email provider is required in the zero-cost phase, so notifications remain marked `registered_email_pending`;
-- `/api/license/activate` is Cloudflare-native through the scoped activation RPC. The Worker derives the Ed25519 signing authority from the existing encrypted `LICENSE_EDGE_RPC_SECRET` using a domain-separated SHA-256 KDF, so no additional signing secret or Render fallback is required.
+- `/api/license/activate` is Cloudflare-native through the scoped activation RPC. The Worker derives the Ed25519 signing authority from the existing encrypted `LICENSE_EDGE_RPC_SECRET` using a domain-separated SHA-256 KDF, so no additional signing secret or Render fallback is required;\n- `GET /api/admin/me` is the first License Admin migration boundary: it accepts a Supabase user JWT, requires MFA assurance level `aal2`, and returns an active allowlisted admin identity/role/permissions through a narrowly-scoped authenticated RPC. No Supabase service-role key is used.
 
 This gives Minarva Biz a replaceable boundary:
 
@@ -50,7 +50,7 @@ The Worker is **not** an open proxy. Only these routes are accepted:
 - `POST /api/license/validate`
 - `POST /api/license/deactivate`
 - `POST /api/trial/register`
-- `OPTIONS /api/trial/register`
+- `OPTIONS /api/trial/register`\n- `GET /api/admin/me`
 
 Request bodies are bounded. Cookies and arbitrary inbound headers are not forwarded. Native validation, deactivation, and trial registration accept JSON only and have a 16 KiB body ceiling. Validation enforces 600 requests per 15 minutes per IP plus 60 per 15 minutes per device. Deactivation enforces 60 per 15 minutes per IP plus 10 per 15 minutes per device. Trial registration enforces 10 per hour per IP plus 3 per day per device.
 
@@ -62,4 +62,4 @@ The Worker holds only the existing Cloudflare-only RPC secret and a Supabase pub
 
 ## Zero-cost / future migration
 
-The Worker uses the Cloudflare Free plan. Customer-facing licensing/update compute is fully on Cloudflare. Supabase remains PostgreSQL/Auth, and GitHub remains source plus Windows release storage. The stable public edge endpoint remains unchanged and can later point at Minarva-owned infrastructure.
+The Worker uses the Cloudflare Free plan. Customer-facing licensing/update compute is fully on Cloudflare. License Admin migration now also starts at the same edge boundary with user-JWT + MFA authorization. Supabase remains PostgreSQL/Auth, and GitHub remains source plus Windows release storage. The stable public edge endpoint remains unchanged and can later point at Minarva-owned infrastructure.
