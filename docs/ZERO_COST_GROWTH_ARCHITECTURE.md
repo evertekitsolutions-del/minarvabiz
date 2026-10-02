@@ -36,12 +36,12 @@ Do not fork the application by industry. Industry differences should become modu
 - Windows Offline: Electron + SQLite;
 - source/release/update artifacts: GitHub;
 - central PostgreSQL/Auth/support metadata: Supabase Free while within limits;
-- customer-facing serverless web during transition: free-compatible hosting only;
+- customer-facing/server API compute: consolidate on Cloudflare Workers/Pages where practical;
 - AI: Cloudflare Workers AI Free via a provider-neutral adapter;
 - AI fallback after free quota: Help Center + private Support Inbox, **not paid inference**;
-- License API front door: Cloudflare Worker; health, production public verification key and signed update manifest are origin-independent. Invalid license-validation requests are rejected at the edge without an origin call. Valid validation remains on the transition origin for now, but the origin independently enforces JSON/body-size checks and bounded IP/device rate limits before database/signing work; the remaining mutation/signing paths stay there until trusted signing/database secrets are migrated behind a server-side boundary.
-- License Admin transition target: remove dependence on free services that prohibit production/commercial use.
-- Licensing client front door: Cloudflare License Edge; the current Render License Admin remains a temporary origin behind that stable boundary until signing/admin logic is migrated.
+- License API front door: Cloudflare Worker. Health, production public verification key and signed update manifest are origin-independent. The complete validation route now runs through Cloudflare plus one narrowly-scoped Supabase RPC; it uses no signing private key and no Supabase service-role key. Activate/deactivate/trial and admin signing operations remain the only licensing transition-origin dependency and are next in the staged removal plan.
+- Platform consolidation rule: no new Render dependency. Public/server compute goes to Cloudflare; Supabase remains the PostgreSQL/Auth layer; GitHub remains source and signed-release storage. Do not migrate the central PostgreSQL model to D1 merely to reduce vendor count, because that would create a large rewrite and weaken the planned self-host/PostgreSQL portability.
+- Licensing client front door: Cloudflare License Edge. Clients remain pinned to that stable Minarva-controlled endpoint while the last transition-origin routes are removed.
 
 ## AI routing
 
