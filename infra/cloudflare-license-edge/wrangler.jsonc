@@ -11,6 +11,7 @@
     ]
   },
   "vars": {
-    "SUPABASE_URL": "https://wmjgefbaliuwmaxyzxkq.supabase.co"
+    "SUPABASE_URL": "https://wmjgefbaliuwmaxyzxkq.supabase.co",
+    "MINARVA_ONLINE_APP_URL": "https://minarvabiz-steel.vercel.app"
   }
 }
