@@ -55,11 +55,11 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     setMfaCode(""); setMfaSecret(""); setMfaQrCode("");
     if (result.next === "enroll") {
       setAuthStage("enroll");
-      setMessage("Set up an authenticator to continue.");
+      setMessage("Set up authenticator.");
       return;
     }
     setAuthStage("mfa");
-    setMessage("Enter your authenticator code.");
+    setMessage("Enter MFA code.");
   }
   async function beginMfaEnrollment() {
     setBusy(true);
@@ -176,7 +176,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     setMessage(
       "Offline activation package created for activation " +
         result.activationId +
-        ". Copy the .lic file to the Windows PC.",
+        ". Copy the .lic file to Windows.",
     );
     router.refresh();
   }
