@@ -8,6 +8,7 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/admin/me", { maxBody: 0, nativeAdminMe: true }],
   ["GET /api/admin/licenses", { maxBody: 0, nativeAdminLicenses: true }],
   ["POST /api/admin/licenses", { maxBody: 16 * 1024, nativeAdminLicenseIssue: true }],
+  ["POST /api/admin/licenses/offline-activation", { maxBody: 8 * 1024, nativeAdminOfflineActivation: true }],
   ["PATCH /api/admin/licenses/status", { maxBody: 8 * 1024, nativeAdminLicenseStatus: true }],
   ["GET /api/admin/support", { maxBody: 0, nativeAdminSupport: true }],
   ["PATCH /api/admin/support", { maxBody: 16 * 1024, nativeAdminSupportUpdate: true }],
@@ -1005,6 +1006,173 @@ async function adminLicenseIssueNatively(request, env, route) {
   );
 }
 
+function parseAdminOfflineActivationBody(bytes) {
+  try {
+    const raw = new TextDecoder().decode(bytes || new Uint8Array());
+    const body = JSON.parse(raw);
+    const licenseId = typeof body?.licenseId === "string" ? body.licenseId.trim().slice(0, 201) : "";
+    const deviceId = typeof body?.deviceId === "string" ? body.deviceId.trim().toLowerCase().slice(0, 64) : "";
+    if (!licenseId || licenseId.length > 200 || !DEVICE_RE.test(deviceId)) return null;
+    return { licenseId, deviceId };
+  } catch {
+    return null;
+  }
+}
+
+async function adminOfflineActivationNatively(request, env, route) {
+  const authorization = String(request.headers.get("authorization") || "").trim();
+  if (!authorization.startsWith("Bearer ")) {
+    return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const accessToken = authorization.slice("Bearer ".length).trim();
+  if (accessToken.length < 40 || accessToken.length > 16384 || accessToken.split(".").length !== 3) {
+    return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const contentType = request.headers.get("content-type") || "";
+  if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
+    return json({ ok: false, code: "UNSUPPORTED_MEDIA_TYPE" }, 415, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const body = await readRequestBody(request, route.maxBody);
+  if (body?.tooLarge) {
+    return json({ ok: false, code: "REQUEST_TOO_LARGE" }, 413, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const parsed = parseAdminOfflineActivationBody(body?.bytes);
+  if (!parsed) {
+    return json({ ok: false, code: "INVALID_REQUEST" }, 400, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const authority = signingAuthority(env);
+  const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
+  const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+  if (!authority || !apiOrigin || !publishableKey) {
+    return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  try {
+    const response = await fetch(`${apiOrigin}/rest/v1/rpc/cloudflare_admin_prepare_offline_activation`, {
+      method: "POST",
+      headers: {
+        apikey: publishableKey,
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        p_license_id: parsed.licenseId,
+        p_device_id: parsed.deviceId,
+      }),
+      redirect: "error",
+      signal: AbortSignal.timeout(8_000),
+    });
+
+    if (response.status === 401) {
+      return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
+        "x-minarva-admin-backend": "cloudflare-native",
+      });
+    }
+    if (!response.ok) {
+      return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
+        "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-upstream-status": String(response.status),
+      });
+    }
+
+    const data = await response.json().catch(() => null);
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
+        "x-minarva-admin-backend": "cloudflare-native",
+      });
+    }
+
+    const rawStatus = Number(data.httpStatus);
+    const explicitStatus = Number.isInteger(rawStatus) && rawStatus >= 200 && rawStatus <= 599
+      ? rawStatus
+      : null;
+
+    if (data.ok !== true) {
+      const code = String(data.code || "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE");
+      let fallbackStatus = 503;
+      if (code === "UNAUTHENTICATED") fallbackStatus = 401;
+      else if (["MFA_REQUIRED","ADMIN_NOT_ALLOWED","ADMIN_IDENTITY_MISMATCH","ADMIN_ROLE_INVALID","FORBIDDEN"].includes(code)) fallbackStatus = 403;
+      else if (code === "INVALID_REQUEST") fallbackStatus = 400;
+      else if (code === "NOT_FOUND") fallbackStatus = 404;
+      else if (["ACTIVATION_LIMIT_REACHED","EXPIRED","LICENSE_NOT_ACTIVE"].includes(code)) fallbackStatus = 409;
+      return json({ ok: false, code }, explicitStatus || fallbackStatus, {
+        "x-minarva-admin-backend": "cloudflare-native",
+      });
+    }
+
+    const licenseToken = typeof data.licenseToken === "string" ? data.licenseToken.trim() : "";
+    const licenseId = typeof data.licenseId === "string" ? data.licenseId.trim() : "";
+    const activationId = typeof data.activationId === "string" ? data.activationId.trim() : "";
+    const deviceId = typeof data.deviceId === "string" ? data.deviceId.trim().toLowerCase() : "";
+    const issuedAt = typeof data.issuedAt === "string" ? data.issuedAt.trim() : "";
+    const expiresAt = data.expiresAt == null ? null : String(data.expiresAt).trim();
+
+    if (!licenseToken || licenseToken.length > 2000 || !licenseId || !activationId || !DEVICE_RE.test(deviceId) ||
+        !Number.isFinite(new Date(issuedAt).getTime()) ||
+        (expiresAt !== null && !Number.isFinite(new Date(expiresAt).getTime()))) {
+      return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
+        "x-minarva-admin-backend": "cloudflare-native",
+      });
+    }
+
+    const activationCertificate = await signActivationCertificateNatively({
+      type: "minarvabiz-activation-v1",
+      licenseId,
+      activationId,
+      deviceId,
+      issuedAt,
+      expiresAt,
+    }, authority.privateKey);
+
+    const packageData = {
+      format: "minarvabiz-license-v1",
+      product: "minarvabiz",
+      licenseToken,
+      activationCertificate,
+      licenseId,
+      activationId,
+      deviceId,
+      issuedAt,
+      expiresAt,
+    };
+    const safeLicenseId = licenseId.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 120) || "license";
+
+    return json({
+      ok: true,
+      filename: `MinarvaBiz-${safeLicenseId}-${deviceId.slice(0, 8)}.lic`,
+      content: JSON.stringify(packageData, null, 2),
+      activationId,
+    }, 200, {
+      "x-minarva-admin-backend": "cloudflare-native",
+      "x-minarva-admin-data": "supabase-authenticated-rpc",
+      "x-minarva-license-authority": authority.publicKeyHex,
+    });
+  } catch {
+    return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
+      "x-minarva-admin-backend": "cloudflare-native",
+      "x-minarva-admin-upstream-stage": "offline-activation",
+    });
+  }
+}
+
 function parseAdminLicenseStatusBody(bytes) {
   try {
     const raw = new TextDecoder().decode(bytes || new Uint8Array());
@@ -1314,6 +1482,10 @@ export default {
 
     if (route.nativeAdminLicenseIssue) {
       return adminLicenseIssueNatively(request, env, route);
+    }
+
+    if (route.nativeAdminOfflineActivation) {
+      return adminOfflineActivationNatively(request, env, route);
     }
 
     if (route.nativeAdminLicenseStatus) {
