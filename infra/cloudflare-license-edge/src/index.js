@@ -5,6 +5,7 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/health", { maxBody: 0 }],
   ["GET /api/public-key", { maxBody: 0 }],
   ["GET /api/update/manifest", { maxBody: 0, nativeUpdateManifest: true }],
+  ["GET /api/admin/auth-config", { maxBody: 0, nativeAdminAuthConfig: true }],
   ["GET /api/admin/me", { maxBody: 0, nativeAdminMe: true }],
   ["GET /api/admin/licenses", { maxBody: 0, nativeAdminLicenses: true }],
   ["POST /api/admin/licenses", { maxBody: 16 * 1024, nativeAdminLicenseIssue: true }],
@@ -1686,6 +1687,28 @@ export default {
 
     if (route.nativeUpdateManifest) {
       return updateManifestNatively(signingAuthority(env));
+    }
+
+    if (route.nativeAdminAuthConfig) {
+      const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
+      const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+      if (!apiOrigin || !publishableKey) {
+        return json({ ok: false, code: "ADMIN_AUTH_NOT_CONFIGURED" }, 503, {
+          "x-minarva-admin-backend": "cloudflare-native",
+        });
+      }
+      return json(
+        {
+          ok: true,
+          supabaseUrl: apiOrigin,
+          supabasePublishableKey: publishableKey,
+        },
+        200,
+        {
+          "cache-control": "public, max-age=300",
+          "x-minarva-admin-backend": "cloudflare-native",
+        },
+      );
     }
 
     if (route.nativeAdminMe) {
