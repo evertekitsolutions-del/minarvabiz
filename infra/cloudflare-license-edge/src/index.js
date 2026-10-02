@@ -2,7 +2,7 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/health", { maxBody: 0 }],
   ["GET /api/public-key", { maxBody: 0 }],
   ["GET /api/update/manifest", { maxBody: 0, updateFallback: true }],
-  ["POST /api/license/activate", { maxBody: 64 * 1024 }],
+  ["POST /api/license/activate", { maxBody: 16 * 1024, nativeActivateCandidate: true }],
   ["POST /api/license/validate", { maxBody: 16 * 1024, nativeValidate: true }],
   ["POST /api/license/deactivate", { maxBody: 16 * 1024, nativeDeactivate: true }],
   ["POST /api/trial/register", { maxBody: 16 * 1024, nativeTrial: true }],
@@ -17,6 +17,88 @@ const LICENSE_PUBLIC_KEY_HEX = "2e1e4a5136c118603da5618d21017adf9c8a699e44856efa
 const DEVICE_RE = /^[a-f0-9]{64}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[0-9]{6,50}$/;
+
+function hexToBytes(hex) {
+  const clean = String(hex || "").trim().replace(/^0x/i, "");
+  if (!/^[0-9a-f]+$/i.test(clean) || clean.length % 2 !== 0) return null;
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < bytes.length; i += 1) {
+    bytes[i] = Number.parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+function signingSeedBytes(value) {
+  const raw = String(value || "").trim();
+  const hex = hexToBytes(raw.replace(/\s/g, ""));
+  if (hex?.byteLength === 32) return hex;
+  try {
+    const normalized = raw.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return bytes.byteLength === 32 ? bytes : null;
+  } catch {
+    return null;
+  }
+}
+
+function concatBytes(...parts) {
+  const length = parts.reduce((sum, part) => sum + part.byteLength, 0);
+  const output = new Uint8Array(length);
+  let offset = 0;
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.byteLength;
+  }
+  return output;
+}
+
+function base64Url(data) {
+  const bytes = data instanceof Uint8Array ? data : new TextEncoder().encode(String(data));
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function activationSigner(env) {
+  const seed = signingSeedBytes(env.LICENSE_PRIVATE_KEY);
+  const publicKeyBytes = hexToBytes(LICENSE_PUBLIC_KEY_HEX);
+  if (!seed || !publicKeyBytes || publicKeyBytes.byteLength !== 32) return null;
+
+  try {
+    const pkcs8Prefix = hexToBytes("302e020100300506032b657004220420");
+    if (!pkcs8Prefix) return null;
+    const privateKey = await crypto.subtle.importKey(
+      "pkcs8",
+      concatBytes(pkcs8Prefix, seed),
+      { name: "Ed25519" },
+      false,
+      ["sign"],
+    );
+    const publicKey = await crypto.subtle.importKey(
+      "raw",
+      publicKeyBytes,
+      { name: "Ed25519" },
+      false,
+      ["verify"],
+    );
+    const check = new TextEncoder().encode("minarvabiz-cloudflare-signing-key-check-v1");
+    const signature = await crypto.subtle.sign("Ed25519", privateKey, check);
+    const matchesProductionKey = await crypto.subtle.verify("Ed25519", publicKey, signature, check);
+    return matchesProductionKey ? privateKey : null;
+  } catch {
+    return null;
+  }
+}
+
+async function signActivationCertificateNatively(payload, privateKey) {
+  const body = base64Url(JSON.stringify(payload));
+  const signature = new Uint8Array(
+    await crypto.subtle.sign("Ed25519", privateKey, new TextEncoder().encode(body)),
+  );
+  return `${body}.${base64Url(signature)}`;
+}
 
 function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -143,6 +225,152 @@ function parseTrialBody(bytes) {
     return { email, phone, organizationName, address, deviceId };
   } catch {
     return { error: "Invalid trial registration request." };
+  }
+}
+
+async function activateNatively(request, env, route, privateKey) {
+  const contentType = request.headers.get("content-type") || "";
+  if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
+    return json(
+      { ok: false, code: "UNSUPPORTED_MEDIA_TYPE" },
+      415,
+      { "x-minarva-license-backend": "cloudflare-native" },
+    );
+  }
+
+  const body = await readRequestBody(request, route.maxBody);
+  if (body?.tooLarge) {
+    return json(
+      { ok: false, code: "REQUEST_TOO_LARGE" },
+      413,
+      { "x-minarva-license-backend": "cloudflare-native" },
+    );
+  }
+
+  const parsed = parseValidationBody(body?.bytes);
+  if (!parsed) {
+    return json(
+      { ok: false, code: "INVALID_REQUEST" },
+      400,
+      { "x-minarva-license-backend": "cloudflare-native" },
+    );
+  }
+
+  const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
+  const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+  const edgeSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
+  if (!apiOrigin || !publishableKey || edgeSecret.length < 32) {
+    return json(
+      { ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" },
+      503,
+      { "x-minarva-license-backend": "cloudflare-native" },
+    );
+  }
+
+  const clientIp = String(request.headers.get("cf-connecting-ip") || "unknown").trim().slice(0, 200) || "unknown";
+
+  try {
+    const response = await fetch(`${apiOrigin}/rest/v1/rpc/cloudflare_prepare_license_activation`, {
+      method: "POST",
+      headers: {
+        apikey: publishableKey,
+        authorization: `Bearer ${publishableKey}`,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        p_edge_secret: edgeSecret,
+        p_license_token: parsed.licenseToken,
+        p_device_id: parsed.deviceId,
+        p_client_ip: clientIp,
+      }),
+      redirect: "manual",
+      signal: AbortSignal.timeout(8_000),
+    });
+
+    if (!response.ok) {
+      return json(
+        { ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" },
+        503,
+        {
+          "x-minarva-license-backend": "cloudflare-native",
+          "x-minarva-license-upstream-status": String(response.status),
+          "x-minarva-license-upstream-stage": "supabase-http",
+        },
+      );
+    }
+
+    const data = await response.json().catch(() => null);
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      return json(
+        { ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" },
+        503,
+        {
+          "x-minarva-license-backend": "cloudflare-native",
+          "x-minarva-license-upstream-stage": "supabase-json",
+        },
+      );
+    }
+
+    const rawStatus = Number(data.httpStatus);
+    const status = Number.isInteger(rawStatus) && rawStatus >= 200 && rawStatus <= 599 ? rawStatus : 503;
+    const retryAfter = Number(data.retryAfterSeconds);
+    const output = { ...data };
+    delete output.httpStatus;
+    delete output.retryAfterSeconds;
+
+    if (!output.ok) {
+      const headers = {
+        "x-minarva-license-backend": "cloudflare-native",
+        "x-minarva-license-data": "supabase-rpc",
+      };
+      if (status === 429 && Number.isFinite(retryAfter) && retryAfter > 0) {
+        headers["retry-after"] = String(Math.ceil(retryAfter));
+      }
+      return json(output, status, headers);
+    }
+
+    const licenseId = String(output.licenseId || "");
+    const activationId = String(output.activationId || "");
+    const validatedAt = String(output.validatedAt || "");
+    if (!licenseId || !activationId || !DEVICE_RE.test(parsed.deviceId) || !Number.isFinite(new Date(validatedAt).getTime())) {
+      return json(
+        { ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" },
+        503,
+        { "x-minarva-license-backend": "cloudflare-native" },
+      );
+    }
+
+    const activationCertificate = await signActivationCertificateNatively(
+      {
+        type: "minarvabiz-activation-v1",
+        licenseId,
+        activationId,
+        deviceId: parsed.deviceId,
+        issuedAt: validatedAt,
+        expiresAt: output.expiresAt || null,
+      },
+      privateKey,
+    );
+
+    return json(
+      { ...output, activationCertificate },
+      200,
+      {
+        "x-minarva-license-backend": "cloudflare-native",
+        "x-minarva-license-data": "supabase-rpc",
+        "x-minarva-license-authority": "cloudflare-ed25519",
+      },
+    );
+  } catch {
+    return json(
+      { ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" },
+      503,
+      {
+        "x-minarva-license-backend": "cloudflare-native",
+        "x-minarva-license-upstream-stage": "activation-fetch-or-sign",
+      },
+    );
   }
 }
 
@@ -562,6 +790,7 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/edge/health") {
       const origin = allowedOrigin(env.LICENSE_ORIGIN || DEFAULT_ORIGIN);
+      const nativeActivationSigner = await activationSigner(env);
       const validationRpcConfigured = Boolean(
         supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL) &&
         String(env.SUPABASE_PUBLISHABLE_KEY || "").trim() &&
@@ -575,6 +804,7 @@ export default {
         validationRpcConfigured,
         deactivationRpcConfigured: validationRpcConfigured,
         trialRpcConfigured: validationRpcConfigured,
+        activationSigningConfigured: Boolean(nativeActivationSigner),
         paidDependencyIntroduced: false,
       });
     }
@@ -593,6 +823,7 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/api/health") {
+      const nativeActivationSigner = await activationSigner(env);
       return json(
         {
           status: "ok",
@@ -602,7 +833,8 @@ export default {
           validationBackend: "cloudflare-native-supabase-rpc",
           deactivationBackend: "cloudflare-native-supabase-rpc",
           trialBackend: "cloudflare-native-supabase-rpc",
-          mutationBackend: "origin-transition",
+          activationBackend: nativeActivationSigner ? "cloudflare-native-supabase-rpc" : "origin-transition",
+          mutationBackend: nativeActivationSigner ? "cloudflare-native" : "origin-transition",
           paidDependencyIntroduced: false,
         },
         200,
@@ -623,6 +855,13 @@ export default {
 
     if (route.updateFallback) {
       return updateFallback(env);
+    }
+
+    if (route.nativeActivateCandidate) {
+      const privateKey = await activationSigner(env);
+      if (privateKey) {
+        return activateNatively(request, env, route, privateKey);
+      }
     }
 
     if (route.nativeValidate) {
