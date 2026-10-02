@@ -130,18 +130,6 @@ assert(unauthenticatedOfflineActivation.response.status === 401, `admin offline 
 assert(unauthenticatedOfflineActivation.data?.code === "UNAUTHENTICATED", "admin offline activation unauthenticated code mismatch");
 assert(unauthenticatedOfflineActivation.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin offline activation guard must terminate at Cloudflare");
 
-const unauthenticatedOfflineActivation = await fetchJson("/api/admin/licenses/offline-activation", {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify({
-    licenseId: "00000000-0000-4000-8000-000000000000",
-    deviceId: "a".repeat(64),
-  }),
-});
-assert(unauthenticatedOfflineActivation.response.status === 401, `admin offline activation without bearer expected 401, got ${unauthenticatedOfflineActivation.response.status}`);
-assert(unauthenticatedOfflineActivation.data?.code === "UNAUTHENTICATED", "admin offline activation unauthenticated code mismatch");
-assert(unauthenticatedOfflineActivation.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin offline activation guard must terminate at Cloudflare");
-
 const unauthenticatedLicenseStatus = await fetchJson("/api/admin/licenses/status", {
   method: "PATCH",
   headers: { "content-type": "application/json" },
