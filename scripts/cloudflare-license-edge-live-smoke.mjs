@@ -39,6 +39,7 @@ assert(edge.data?.trialRpcConfigured === true, "Cloudflare-native trial RPC is n
 assert(edge.data?.activationSigningConfigured === true, "Cloudflare activation signing authority is not configured");
 assert(edge.data?.updateSigningConfigured === true, "Cloudflare update signing authority is not configured");
 assert(edge.data?.adminAuthConfigured === true, "Cloudflare admin auth foundation is not configured");
+assert(edge.data?.customerProvisioningConfigured === true, "Cloudflare customer provisioning is not configured");
 assert(edge.data?.renderDependency === false, "license edge must not depend on Render");
 assert(edge.data?.paidDependencyIntroduced === false, "edge must not introduce a paid dependency");
 
@@ -54,6 +55,7 @@ assert(health.data?.activationBackend === "cloudflare-native-supabase-rpc", "act
 assert(health.data?.mutationBackend === "cloudflare-native", "mutation backend is not Cloudflare-native");
 assert(health.data?.renderDependency === false, "API health must report zero Render dependency");
 assert(health.data?.adminAuthBackend === "cloudflare-native-supabase-jwt", "admin auth backend is not Cloudflare-native");
+assert(health.data?.customerProvisioningBackend === "cloudflare-native-supabase-magic-link", "customer provisioning backend is not Cloudflare-native");
 assert(health.response.headers.get("x-minarva-license-edge") === "cloudflare", "edge response marker missing");
 assert(health.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "health must be served natively by Cloudflare");
 
@@ -160,6 +162,19 @@ const unauthenticatedSupportUpdate = await fetchJson("/api/admin/support", {
 assert(unauthenticatedSupportUpdate.response.status === 401, `admin support PATCH without bearer expected 401, got ${unauthenticatedSupportUpdate.response.status}`);
 assert(unauthenticatedSupportUpdate.data?.code === "UNAUTHENTICATED", "admin support PATCH unauthenticated code mismatch");
 assert(unauthenticatedSupportUpdate.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin support PATCH guard must terminate at Cloudflare");
+
+const unauthenticatedCustomerProvision = await fetchJson("/api/admin/customers/provision", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({
+    shopName: "Smoke Shop",
+    adminName: "Smoke Admin",
+    email: "smoke@example.invalid",
+  }),
+});
+assert(unauthenticatedCustomerProvision.response.status === 401, `customer provision without bearer expected 401, got ${unauthenticatedCustomerProvision.response.status}`);
+assert(unauthenticatedCustomerProvision.data?.code === "UNAUTHENTICATED", "customer provision unauthenticated code mismatch");
+assert(unauthenticatedCustomerProvision.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "customer provisioning guard must terminate at Cloudflare");
 
 const invalidValidation = await fetchJson("/api/license/validate", {
   method: "POST",
