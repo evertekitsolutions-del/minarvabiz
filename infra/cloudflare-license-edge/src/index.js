@@ -152,7 +152,7 @@ async function validateNatively(request, env, route) {
         p_device_id: parsed.deviceId,
         p_client_ip: clientIp,
       }),
-      redirect: "error",
+      redirect: "manual",
       signal: AbortSignal.timeout(8_000),
     });
 
@@ -200,7 +200,10 @@ async function validateNatively(request, env, route) {
     return json(
       { ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" },
       503,
-      { "x-minarva-license-backend": "cloudflare-native" },
+      {
+        "x-minarva-license-backend": "cloudflare-native",
+        "x-minarva-license-upstream-stage": "supabase-fetch",
+      },
     );
   }
 }
