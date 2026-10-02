@@ -56,7 +56,7 @@ assert.match(worker, /cloudflare-native/);
 assert.match(worker, /github-release/);
 assert.match(worker, /nativeUpdateManifest: true/);
 assert.match(worker, /async function updateManifestNatively\(authority\)/);
-assert.match(worker, /github\.com\/evertekitsolutions-del\/minarvabiz\/releases\/latest/);
+assert.ok(worker.includes("https://github.com/evertekitsolutions-del/minarvabiz/releases/latest"));
 assert.match(worker, /github-release-signed-at-cloudflare/);
 assert.match(worker, /Stable installer checksum is unavailable/);
 assert.match(worker, /LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE/);
