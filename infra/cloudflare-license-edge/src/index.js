@@ -104,27 +104,6 @@ function supabaseOrigin(value) {
   }
 }
 
-function copyResponseHeaders(source) {
-  const headers = new Headers();
-  for (const name of [
-    "content-type",
-    "cache-control",
-    "retry-after",
-    "access-control-allow-origin",
-    "access-control-allow-methods",
-    "access-control-allow-headers",
-    "access-control-max-age",
-  ]) {
-    const value = source.headers.get(name);
-    if (value) headers.set(name, value);
-  }
-  headers.set("x-content-type-options", "nosniff");
-  headers.set("x-minarva-license-edge", "cloudflare");
-  headers.set("x-minarva-license-backend", "origin-transition");
-  if (!headers.has("cache-control")) headers.set("cache-control", "no-store");
-  return headers;
-}
-
 async function readRequestBody(request, maxBody) {
   if (!maxBody) return null;
   const declared = Number(request.headers.get("content-length") || "0");
