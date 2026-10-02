@@ -11,8 +11,6 @@
     ]
   },
   "vars": {
-    "LICENSE_ORIGIN": "https://minarvabiz-license-admin.onrender.com",
-    "SUPABASE_URL": "https://wmjgefbaliuwmaxyzxkq.supabase.co",
-    "UPDATE_MANIFEST_FALLBACK": "https://github.com/evertekitsolutions-del/minarvabiz/releases/latest/download/MinarvaBiz-update-manifest.json"
+    "SUPABASE_URL": "https://wmjgefbaliuwmaxyzxkq.supabase.co"
   }
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { webcrypto } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, sign, verify } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,11 +24,12 @@ assert.match(worker, /ALLOWED_ROUTES/);
 assert.match(worker, /GET \/api\/public-key/);
 assert.match(worker, /GET \/api\/update\/manifest/);
 assert.match(worker, /POST \/api\/license\/activate/);
-assert.match(worker, /nativeActivateCandidate: true/);
-assert.match(worker, /async function activationSigner\(env\)/);
-assert.match(worker, /env\.LICENSE_PRIVATE_KEY/);
+assert.match(worker, /nativeActivate: true/);
+assert.match(worker, /function signingAuthority\(env\)/);
+assert.match(worker, /SIGNING_KDF_DOMAIN/);
+assert.match(worker, /LICENSE_EDGE_RPC_SECRET/);
 assert.match(worker, /async function signActivationCertificateNatively\(payload, privateKey\)/);
-assert.match(worker, /async function activateNatively\(request, env, route, privateKey\)/);
+assert.match(worker, /async function activateNatively\(request, env, route, authority\)/);
 assert.match(worker, /rest\/v1\/rpc\/cloudflare_prepare_license_activation/);
 assert.match(worker, /x-minarva-license-authority/);
 assert.match(worker, /POST \/api\/license\/validate/);
@@ -53,18 +54,21 @@ assert.match(worker, /x-minarva-license-edge/);
 assert.match(worker, /x-minarva-license-backend/);
 assert.match(worker, /cloudflare-native/);
 assert.match(worker, /github-release/);
-assert.match(worker, /if \(route\.updateFallback\) \{[\s\S]*return updateFallback\(env\)/);
-assert.match(worker, /github\.com\/evertekitsolutions-del\/minarvabiz\/releases\/latest\/download\/MinarvaBiz-update-manifest\.json/);
+assert.match(worker, /nativeUpdateManifest: true/);
+assert.match(worker, /async function updateManifestNatively\(authority\)/);
+assert.match(worker, /github\.com\/evertekitsolutions-del\/minarvabiz\/releases\/latest/);
+assert.match(worker, /github-release-signed-at-cloudflare/);
+assert.match(worker, /Stable installer checksum is unavailable/);
 assert.match(worker, /LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE/);
 assert.doesNotMatch(worker, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY/);
-assert.doesNotMatch(worker, /LICENSE_PRIVATE_KEY\s*[:=]\s*["'][0-9a-f]{64}/i);
+assert.doesNotMatch(worker, /LICENSE_PRIVATE_KEY|LICENSE_ORIGIN|onrender\.com/i);
 
 assert.match(wrangler, /minarva-biz-license-edge/);
-assert.match(wrangler, /LICENSE_ORIGIN/);
+assert.doesNotMatch(wrangler, /LICENSE_ORIGIN|onrender\.com|UPDATE_MANIFEST_FALLBACK/);
 assert.match(wrangler, /SUPABASE_URL/);
 assert.match(wrangler, /SUPABASE_PUBLISHABLE_KEY/);
 assert.match(wrangler, /LICENSE_EDGE_RPC_SECRET/);
-assert.doesNotMatch(wrangler, /LICENSE_PRIVATE_KEY/, "signing key stays optional until the explicit cutover");
+assert.doesNotMatch(wrangler, /LICENSE_PRIVATE_KEY/);
 
 assert.match(desktopLicense, /typeof result\.data\.activationCertificate === "string"[\s\S]*stored\.activationCertificate/);
 
@@ -102,26 +106,25 @@ assert.match(activationBridge, /public\.activate_license_device\(v_license\.id, 
 assert.match(activationBridge, /GRANT EXECUTE ON FUNCTION public\.cloudflare_prepare_license_activation[\s\S]*TO anon/);
 assert.match(activationBridge, /REVOKE ALL ON FUNCTION public\.cloudflare_prepare_license_activation[\s\S]*FROM PUBLIC, authenticated, service_role/);
 
-const rfcSeed = Buffer.from("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", "hex");
-const rfcPkcs8 = Buffer.concat([
-  Buffer.from("302e020100300506032b657004220420", "hex"),
-  rfcSeed,
-]);
-const rfcPrivateKey = await webcrypto.subtle.importKey(
-  "pkcs8",
-  rfcPkcs8,
-  { name: "Ed25519" },
-  false,
-  ["sign"],
-);
-const rfcSignature = Buffer.from(
-  await webcrypto.subtle.sign("Ed25519", rfcPrivateKey, new Uint8Array()),
-).toString("hex");
-assert.equal(
-  rfcSignature,
-  "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b",
-  "Ed25519 PKCS8 seed signing must match RFC 8032",
-);
+const testRootSecret = "test-root-secret-at-least-32-characters-long";
+const seed = createHash("sha256")
+  .update("minarvabiz-ed25519-authority-v1\0", "utf8")
+  .update(testRootSecret, "utf8")
+  .digest();
+const privateKey = createPrivateKey({
+  key: Buffer.concat([
+    Buffer.from("302e020100300506032b657004220420", "hex"),
+    seed,
+  ]),
+  format: "der",
+  type: "pkcs8",
+});
+const publicKey = createPublicKey(privateKey);
+const message = Buffer.from("authority-self-check", "utf8");
+const signature = sign(null, message, privateKey);
+assert.equal(verify(null, message, publicKey, signature), true, "derived Ed25519 authority must sign and verify");
+const publicKeyHex = Buffer.from(publicKey.export({ format: "der", type: "spki" })).subarray(-32).toString("hex");
+assert.match(publicKeyHex, /^[0-9a-f]{64}$/);
 
 assert.ok(release.includes(`VITE_LICENSE_API_URL: "${EDGE}"`));
 assert.ok(release.includes(`MINARVA_UPDATE_MANIFEST_URL: "${EDGE}/api/update/manifest"`));
