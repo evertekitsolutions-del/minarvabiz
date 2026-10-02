@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@minarvabiz/ui";
 import type { Edition, LicenseFeatures } from "@minarvabiz/types";
 import type { LicensePlan } from "@minarvabiz/licensing";
-import { adoptCloudflareAdminSession, createCommercialLicense, createOfflineActivationPackage, loginEmergencyAdmin, logoutAdmin, setLicenseStatus } from "./actions";
+import { adoptCloudflareAdminSession, createCommercialLicense, createOfflineActivationPackage, loginEmergencyAdmin, logoutAdmin,setLicenseStatus } from "./actions";
 import { AdminAuthCard } from "./admin-panel/AdminAuthCard";
 import { AdminHeader } from "./admin-panel/AdminHeader";
 import { LicenseCreateCard } from "./admin-panel/LicenseCreateCard";
@@ -22,21 +22,21 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
   const router=useRouter();
   const [email,setEmail]=React.useState("");
   const [password,setPassword]=React.useState("");
-  const [emergencyPassword, setEmergencyPassword] = React.useState("");
-  const [authStage, setAuthStage] = React.useState<AuthStage>("password");
+  const [emergencyPassword,setEmergencyPassword]=React.useState("");
+  const [authStage,setAuthStage]=React.useState<AuthStage>("password");
   const [mfaCode,setMfaCode]=React.useState("");
-  const [mfaSecret, setMfaSecret] = React.useState("");
-  const [mfaQrCode, setMfaQrCode] = React.useState("");
-  const [pendingBrowserAuth, setPendingBrowserAuth] = React.useState<BrowserAdminPendingAuth | null>(null);
-  const [customerName, setCustomerName] = React.useState("");
-  const [plan, setPlan] = React.useState<LicensePlan>("professional");
-  const [edition, setEdition] = React.useState<Edition>("hybrid");
-  const [expiresAt, setExpiresAt] = React.useState("");
-  const [activationLimit, setActivationLimit] = React.useState("");
-  const [features, setFeatures] = React.useState<LicenseFeatures>(() => defaultFeatures("professional"));
-  const [offlineLicenseId, setOfflineLicenseId] = React.useState("");
-  const [offlineDeviceId, setOfflineDeviceId] = React.useState("");
-  const [lastToken, setLastToken] = React.useState<string | null>(null);
+  const [mfaSecret,setMfaSecret]=React.useState("");
+  const [mfaQrCode,setMfaQrCode]=React.useState("");
+  const [pendingBrowserAuth,setPendingBrowserAuth]=React.useState<BrowserAdminPendingAuth | null>(null);
+  const [customerName,setCustomerName]=React.useState("");
+  const [plan,setPlan]=React.useState<LicensePlan>("professional");
+  const [edition,setEdition]=React.useState<Edition>("hybrid");
+  const [expiresAt,setExpiresAt]=React.useState("");
+  const [activationLimit,setActivationLimit]=React.useState("");
+  const [features,setFeatures]=React.useState<LicenseFeatures>(() => defaultFeatures("professional"));
+  const [offlineLicenseId,setOfflineLicenseId]=React.useState("");
+  const [offlineDeviceId,setOfflineDeviceId]=React.useState("");
+  const [lastToken,setLastToken]=React.useState<string | null>(null);
   const [message,setMessage]=React.useState<string|null>(null);
   const [busy,setBusy]=React.useState(false);
   React.useEffect(() => setFeatures(defaultFeatures(plan)), [plan]);
@@ -67,7 +67,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     const result = await beginBrowserAdminMfaEnrollment(pendingBrowserAuth);
     setBusy(false);
     if (!result.ok) {
-      setMessage(result.error || "MFA setup failed");
+      setMessage(result.error || "MFA setup failed.");
       return;
     }
     setPendingBrowserAuth(result.pending);
@@ -82,7 +82,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     const verified = await verifyBrowserAdminMfa(pendingBrowserAuth, mfaCode);
     if (!verified.ok) {
       setBusy(false);
-      setMessage(verified.error || "MFA verification failed");
+      setMessage(verified.error || "MFA failed.");
       return;
     }
 
@@ -111,7 +111,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     const result = await loginEmergencyAdmin(emergencyPassword);
     setBusy(false);
     if (!result.ok) {
-      setMessage(result.error || "Emergency login failed");
+      setMessage(result.error || "Emergency sign-in failed.");
       return;
     }
     setEmergencyPassword("");
@@ -119,7 +119,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
   }
   async function issue() {
     if (!customerName.trim()) {
-      setMessage("Customer name is required.");
+      setMessage("Enter a customer name.");
       return;
     }
     setBusy(true);
@@ -134,7 +134,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     });
     setBusy(false);
     if (!result.ok) {
-      setMessage(result.error || "License issuance failed");
+      setMessage(result.error || "License issue failed.");
       return;
     }
     setLastToken(result.token || null);
@@ -154,7 +154,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
   }
   async function createOfflinePackage() {
     if (!offlineLicenseId.trim() || !offlineDeviceId.trim()) {
-      setMessage("Enter the license ID and target Windows device ID.");
+      setMessage("Enter license ID and Windows device ID.");
       return;
     }
     setBusy(true);
@@ -165,7 +165,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     });
     setBusy(false);
     if (!result.ok) {
-      setMessage(result.error || "Offline activation package creation failed");
+      setMessage(result.error || "Offline activation failed.");
       return;
     }
     const blob = new Blob([result.content || ""], { type: "application/json" });
@@ -178,7 +178,7 @@ export default function AdminPanel({identity,initialLicenses,initialSupportReque
     setMessage(
       "Offline activation package created for activation " +
         result.activationId +
-        ". Copy the .lic file to the target Windows PC.",
+        ". Copy the .lic file to the Windows PC.",
     );
     router.refresh();
   }
