@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { webcrypto } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,6 +16,7 @@ const desktopLicense = read("apps/desktop/electron/license.ts");
 const validationBridge = read("supabase/migrations/20261002_cloudflare_license_validate_bridge.sql");
 const deactivationBridge = read("supabase/migrations/20261002_cloudflare_license_deactivate_bridge.sql");
 const trialBridge = read("supabase/migrations/20261002_cloudflare_trial_register_bridge.sql");
+const activationBridge = read("supabase/migrations/20261002_cloudflare_license_activate_bridge.sql");
 
 const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
 
@@ -22,6 +24,13 @@ assert.match(worker, /ALLOWED_ROUTES/);
 assert.match(worker, /GET \/api\/public-key/);
 assert.match(worker, /GET \/api\/update\/manifest/);
 assert.match(worker, /POST \/api\/license\/activate/);
+assert.match(worker, /nativeActivateCandidate: true/);
+assert.match(worker, /async function activationSigner\(env\)/);
+assert.match(worker, /env\.LICENSE_PRIVATE_KEY/);
+assert.match(worker, /async function signActivationCertificateNatively\(payload, privateKey\)/);
+assert.match(worker, /async function activateNatively\(request, env, route, privateKey\)/);
+assert.match(worker, /rest\/v1\/rpc\/cloudflare_prepare_license_activation/);
+assert.match(worker, /x-minarva-license-authority/);
 assert.match(worker, /POST \/api\/license\/validate/);
 assert.match(worker, /nativeValidate: true/);
 assert.match(worker, /function parseValidationBody\(bytes\)/);
@@ -47,13 +56,15 @@ assert.match(worker, /github-release/);
 assert.match(worker, /if \(route\.updateFallback\) \{[\s\S]*return updateFallback\(env\)/);
 assert.match(worker, /github\.com\/evertekitsolutions-del\/minarvabiz\/releases\/latest\/download\/MinarvaBiz-update-manifest\.json/);
 assert.match(worker, /LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE/);
-assert.doesNotMatch(worker, /LICENSE_PRIVATE_KEY|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY/);
+assert.doesNotMatch(worker, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY/);
+assert.doesNotMatch(worker, /LICENSE_PRIVATE_KEY\s*[:=]\s*["'][0-9a-f]{64}/i);
 
 assert.match(wrangler, /minarva-biz-license-edge/);
 assert.match(wrangler, /LICENSE_ORIGIN/);
 assert.match(wrangler, /SUPABASE_URL/);
 assert.match(wrangler, /SUPABASE_PUBLISHABLE_KEY/);
 assert.match(wrangler, /LICENSE_EDGE_RPC_SECRET/);
+assert.doesNotMatch(wrangler, /LICENSE_PRIVATE_KEY/, "signing key stays optional until the explicit cutover");
 
 assert.match(desktopLicense, /typeof result\.data\.activationCertificate === "string"[\s\S]*stored\.activationCertificate/);
 
@@ -81,6 +92,36 @@ assert.match(trialBridge, /trial-register-device', v_device_hash, 3, 24 \* 60 \*
 assert.match(trialBridge, /registered_email_pending/);
 assert.match(trialBridge, /GRANT EXECUTE ON FUNCTION public\.cloudflare_register_trial[\s\S]*TO anon/);
 assert.match(trialBridge, /REVOKE ALL ON FUNCTION public\.cloudflare_register_trial[\s\S]*FROM PUBLIC, authenticated, service_role/);
+
+assert.match(activationBridge, /CREATE OR REPLACE FUNCTION public\.cloudflare_prepare_license_activation/);
+assert.match(activationBridge, /SECURITY DEFINER/);
+assert.match(activationBridge, /SET search_path = ''/);
+assert.match(activationBridge, /license-activate-ip', v_ip_hash, 30, 15 \* 60/);
+assert.match(activationBridge, /license-activate-device', v_device_hash, 10, 15 \* 60/);
+assert.match(activationBridge, /public\.activate_license_device\(v_license\.id, v_device_id\)/);
+assert.match(activationBridge, /GRANT EXECUTE ON FUNCTION public\.cloudflare_prepare_license_activation[\s\S]*TO anon/);
+assert.match(activationBridge, /REVOKE ALL ON FUNCTION public\.cloudflare_prepare_license_activation[\s\S]*FROM PUBLIC, authenticated, service_role/);
+
+const rfcSeed = Buffer.from("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", "hex");
+const rfcPkcs8 = Buffer.concat([
+  Buffer.from("302e020100300506032b657004220420", "hex"),
+  rfcSeed,
+]);
+const rfcPrivateKey = await webcrypto.subtle.importKey(
+  "pkcs8",
+  rfcPkcs8,
+  { name: "Ed25519" },
+  false,
+  ["sign"],
+);
+const rfcSignature = Buffer.from(
+  await webcrypto.subtle.sign("Ed25519", rfcPrivateKey, new Uint8Array()),
+).toString("hex");
+assert.equal(
+  rfcSignature,
+  "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b",
+  "Ed25519 PKCS8 seed signing must match RFC 8032",
+);
 
 assert.ok(release.includes(`VITE_LICENSE_API_URL: "${EDGE}"`));
 assert.ok(release.includes(`MINARVA_UPDATE_MANIFEST_URL: "${EDGE}/api/update/manifest"`));
