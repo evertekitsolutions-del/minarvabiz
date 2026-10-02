@@ -29,7 +29,7 @@ assert.match(worker, /function signingAuthority\(env\)/);
 assert.match(worker, /SIGNING_KDF_DOMAIN/);
 assert.match(worker, /LICENSE_EDGE_RPC_SECRET/);
 assert.match(worker, /async function signActivationCertificateNatively\(payload, privateKey\)/);
-assert.match(worker, /async function activateNatively\(request, env, route, privateKey\)/);
+assert.match(worker, /async function activateNatively\\(request, env, route, authority\\)/);
 assert.match(worker, /rest\/v1\/rpc\/cloudflare_prepare_license_activation/);
 assert.match(worker, /x-minarva-license-authority/);
 assert.match(worker, /POST \/api\/license\/validate/);
