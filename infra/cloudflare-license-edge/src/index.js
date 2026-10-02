@@ -3,7 +3,7 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/public-key", { maxBody: 0 }],
   ["GET /api/update/manifest", { maxBody: 0, updateFallback: true }],
   ["POST /api/license/activate", { maxBody: 64 * 1024 }],
-  ["POST /api/license/validate", { maxBody: 64 * 1024 }],
+  ["POST /api/license/validate", { maxBody: 64 * 1024, validatePreflight: true }],
   ["POST /api/license/deactivate", { maxBody: 64 * 1024 }],
   ["POST /api/trial/register", { maxBody: 64 * 1024 }],
   ["OPTIONS /api/trial/register", { maxBody: 0 }],
@@ -13,6 +13,19 @@ const DEFAULT_ORIGIN = "https://minarvabiz-license-admin.onrender.com";
 const DEFAULT_UPDATE_FALLBACK =
   "https://github.com/evertekitsolutions-del/minarvabiz/releases/latest/download/MinarvaBiz-update-manifest.json";
 const LICENSE_PUBLIC_KEY_HEX = "2e1e4a5136c118603da5618d21017adf9c8a699e44856efa3aa127ebe090e6b4";
+const DEVICE_RE = /^[a-f0-9]{64}$/;
+
+function invalidValidationRequest(bytes) {
+  try {
+    const raw = new TextDecoder().decode(bytes || new Uint8Array());
+    const body = JSON.parse(raw);
+    const licenseToken = typeof body?.licenseToken === "string" ? body.licenseToken.trim().slice(0, 2000) : "";
+    const deviceId = typeof body?.deviceId === "string" ? body.deviceId.trim().slice(0, 64).toLowerCase() : "";
+    return !licenseToken || !DEVICE_RE.test(deviceId);
+  } catch {
+    return true;
+  }
+}
 
 function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -69,11 +82,11 @@ async function readRequestBody(request, maxBody) {
   return { tooLarge: false, bytes };
 }
 
-async function fetchOrigin(request, env, route) {
+async function fetchOrigin(request, env, route, preReadBody = null) {
   const origin = allowedOrigin(env.LICENSE_ORIGIN || DEFAULT_ORIGIN);
   if (!origin) return json({ ok: false, code: "EDGE_ORIGIN_NOT_CONFIGURED" }, 503);
 
-  const body = await readRequestBody(request, route.maxBody);
+  const body = preReadBody || (await readRequestBody(request, route.maxBody));
   if (body?.tooLarge) return json({ ok: false, code: "REQUEST_TOO_LARGE" }, 413);
 
   const sourceUrl = new URL(request.url);
@@ -189,7 +202,22 @@ export default {
       return updateFallback(env);
     }
 
-    const proxied = await fetchOrigin(request, env, route);
+    let preReadBody = null;
+    if (route.validatePreflight) {
+      preReadBody = await readRequestBody(request, route.maxBody);
+      if (preReadBody?.tooLarge) {
+        return json({ ok: false, code: "REQUEST_TOO_LARGE" }, 413);
+      }
+      if (invalidValidationRequest(preReadBody?.bytes)) {
+        return json(
+          { ok: false, code: "INVALID_REQUEST" },
+          400,
+          { "x-minarva-license-backend": "cloudflare-native" },
+        );
+      }
+    }
+
+    const proxied = await fetchOrigin(request, env, route, preReadBody);
     if (proxied) return proxied;
 
     return json({ ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503);
