@@ -160,7 +160,11 @@ async function validateNatively(request, env, route) {
       return json(
         { ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" },
         503,
-        { "x-minarva-license-backend": "cloudflare-native" },
+        {
+          "x-minarva-license-backend": "cloudflare-native",
+          "x-minarva-license-upstream-status": String(response.status),
+          "x-minarva-license-upstream-stage": "supabase-http",
+        },
       );
     }
 
@@ -169,7 +173,11 @@ async function validateNatively(request, env, route) {
       return json(
         { ok: false, code: "LICENSE_SERVICE_TEMPORARILY_UNAVAILABLE" },
         503,
-        { "x-minarva-license-backend": "cloudflare-native" },
+        {
+          "x-minarva-license-backend": "cloudflare-native",
+          "x-minarva-license-upstream-status": String(response.status),
+          "x-minarva-license-upstream-stage": "supabase-json",
+        },
       );
     }
 
