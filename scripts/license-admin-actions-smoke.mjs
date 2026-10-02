@@ -41,6 +41,7 @@ for (const authAction of [
   "cancelAdminMfa",
   "loginEmergencyAdmin",
   "logoutAdmin",
+  "adoptCloudflareAdminSession",
 ]) {
   assert.match(actions, new RegExp(`export async function ${authAction}\\b`));
 }
@@ -71,7 +72,17 @@ const panel = await readFile(
   new URL("../apps/license-admin/src/app/AdminPanel.tsx", import.meta.url),
   "utf8",
 );
-assert.match(panel, /loginAdmin\(email, password\)/);
+const browserAuth = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/browser-admin-auth.ts", import.meta.url),
+  "utf8",
+);
+assert.match(browserAuth, /\/token\?grant_type=password/);
+assert.match(browserAuth, /api\/admin\/me/);
+assert.doesNotMatch(browserAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET/);
+assert.match(panel, /beginBrowserNamedAdminLogin\(email, password\)/);
+assert.match(panel, /verifyBrowserAdminMfa\(pendingBrowserAuth, mfaCode\)/);
+assert.match(panel, /adoptCloudflareAdminSession\(verified\.accessToken\)/);
+assert.doesNotMatch(panel, /loginAdmin\(email, password\)/);
 assert.match(panel, /createCommercialLicense\(\{/);
 assert.match(panel, /setLicenseStatus\(licenseId, value\)/);
 assert.match(panel, /createOfflineActivationPackage\(\{/);

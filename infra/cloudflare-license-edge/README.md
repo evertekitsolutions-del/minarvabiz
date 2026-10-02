@@ -15,7 +15,7 @@ Current migration state:
 - `/api/license/deactivate` is also Cloudflare-native through a scoped Supabase RPC; it preserves the existing token/device/activation semantics and adds bounded abuse protection;
 - `/api/trial/register` is Cloudflare-native through a scoped Supabase RPC with public CORS, uniqueness checks, and rate limits; no email provider is required in the zero-cost phase, so notifications remain marked `registered_email_pending`;
 - `/api/license/activate` is Cloudflare-native through the scoped activation RPC. The Worker derives the Ed25519 signing authority from the existing encrypted `LICENSE_EDGE_RPC_SECRET` using a domain-separated SHA-256 KDF, so no additional signing secret or Render fallback is required;
-- `GET /api/admin/me`\n- `POST /api/admin/customers/provision`
+- `GET /api/admin/auth-config` exposes only the public Supabase URL + publishable key required for browser-native administrator authentication;\n- `GET /api/admin/me`\n- `POST /api/admin/customers/provision`
 - `GET /api/admin/licenses`
 - `POST /api/admin/licenses`
 - `POST /api/admin/licenses/offline-activation`
@@ -76,4 +76,4 @@ The Worker holds only the existing Cloudflare-only RPC secret and a Supabase pub
 
 ## Zero-cost / future migration
 
-The Worker uses the Cloudflare Free plan. Customer-facing licensing/update compute is fully on Cloudflare. License Admin migration now also starts at the same edge boundary with user-JWT + MFA authorization. Supabase remains PostgreSQL/Auth, and GitHub remains source plus Windows release storage. The stable public edge endpoint remains unchanged and can later point at Minarva-owned infrastructure.
+The Worker uses the Cloudflare Free plan. Customer-facing licensing/update compute is fully on Cloudflare. License Admin named-user password/TOTP authentication now starts in the browser against Supabase Auth and verifies the resulting AAL2 JWT at the Cloudflare edge; the transitional Next server receives only the already-verified AAL2 token when creating its short legacy UI session. Supabase remains PostgreSQL/Auth, and GitHub remains source plus Windows release storage. The stable public edge endpoint remains unchanged and can later point at Minarva-owned infrastructure.
