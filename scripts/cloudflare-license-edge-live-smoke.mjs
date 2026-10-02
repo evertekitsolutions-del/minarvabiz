@@ -33,13 +33,16 @@ const edge = await fetchJson("/edge/health");
 assert(edge.response.ok, `edge health HTTP ${edge.response.status}`);
 assert(edge.data?.service === "minarva-license-edge", "edge health service marker missing");
 assert(edge.data?.provider === "cloudflare-workers", "edge provider marker missing");
-assert(edge.data?.validationRpcConfigured === true, "Cloudflare-native validation RPC is not configured");\nassert(edge.data?.paidDependencyIntroduced === false, "edge must not introduce a paid dependency");
+assert(edge.data?.validationRpcConfigured === true, "Cloudflare-native validation RPC is not configured");
+assert(edge.data?.paidDependencyIntroduced === false, "edge must not introduce a paid dependency");
 
 const health = await fetchJson("/api/health");
 assert(health.response.ok, `origin health HTTP ${health.response.status}`);
 assert(health.data?.status === "ok", "edge API health did not report ok");
 assert(health.data?.provider === "cloudflare-workers", "edge API health provider mismatch");
-assert(health.data?.updateChannel === "github-release", "edge API health update channel mismatch");\nassert(health.data?.validationBackend === "cloudflare-native-supabase-rpc", "validation backend is not Cloudflare-native");\nassert(health.data?.mutationBackend === "origin-transition", "remaining mutation backend marker mismatch");
+assert(health.data?.updateChannel === "github-release", "edge API health update channel mismatch");
+assert(health.data?.validationBackend === "cloudflare-native-supabase-rpc", "validation backend is not Cloudflare-native");
+assert(health.data?.mutationBackend === "origin-transition", "remaining mutation backend marker mismatch");
 assert(health.response.headers.get("x-minarva-license-edge") === "cloudflare", "edge response marker missing");
 assert(health.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "health must be served natively by Cloudflare");
 
