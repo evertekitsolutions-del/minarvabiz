@@ -19,6 +19,7 @@ const trialBridge = read("supabase/migrations/20261002_cloudflare_trial_register
 const activationBridge = read("supabase/migrations/20261002_cloudflare_license_activate_bridge.sql");
 const adminIdentityBoundary = read("supabase/migrations/20261002_cloudflare_admin_identity_boundary.sql");
 const adminLicenseRegistry = read("supabase/migrations/20261002_cloudflare_admin_license_registry.sql");
+const adminSupportInbox = read("supabase/migrations/20261002_cloudflare_admin_support_inbox.sql");
 
 const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
 
@@ -27,6 +28,10 @@ assert.match(worker, /GET \/api\/public-key/);
 assert.match(worker, /GET \/api\/update\/manifest/);
 assert.match(worker, /GET \/api\/admin\/me/);
 assert.match(worker, /GET \/api\/admin\/licenses/);
+assert.match(worker, /GET \/api\/admin\/support/);
+assert.match(worker, /nativeAdminSupport: true/);
+assert.match(worker, /async function adminSupportNatively\(request, env\)/);
+assert.match(worker, /cloudflare_admin_list_support_requests/);
 assert.match(worker, /nativeAdminLicenses: true/);
 assert.match(worker, /async function adminAuthenticatedRpc\(request, env, rpcName\)/);
 assert.match(worker, /async function adminLicensesNatively\(request, env\)/);
@@ -137,6 +142,13 @@ assert.match(adminLicenseRegistry, /LIMIT 200/);
 assert.doesNotMatch(adminLicenseRegistry, /'token'\s*,|'token_sha256'\s*,/);
 assert.match(adminLicenseRegistry, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_list_licenses\(\)[\s\S]*TO authenticated/);
 assert.match(adminLicenseRegistry, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_list_licenses\(\)[\s\S]*FROM PUBLIC, anon, service_role/);
+
+assert.match(adminSupportInbox, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_list_support_requests\(\)/);
+assert.match(adminSupportInbox, /public\.cloudflare_admin_me\(\)/);
+assert.match(adminSupportInbox, /support\.read/);
+assert.match(adminSupportInbox, /LIMIT 200/);
+assert.match(adminSupportInbox, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_list_support_requests\(\)[\s\S]*TO authenticated/);
+assert.match(adminSupportInbox, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_list_support_requests\(\)[\s\S]*FROM PUBLIC, anon, service_role/);
 
 const testRootSecret = "test-root-secret-at-least-32-characters-long";
 const seed = createHash("sha256")
