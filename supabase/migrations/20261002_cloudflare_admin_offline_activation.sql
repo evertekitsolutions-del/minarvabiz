@@ -2,7 +2,6 @@
 -- Requires AAL2 License Admin permission plus the Cloudflare-only edge secret.
 
 CREATE OR REPLACE FUNCTION public.cloudflare_admin_prepare_offline_activation(
-  p_edge_secret TEXT,
   p_license_id TEXT,
   p_device_id TEXT
 )
@@ -15,7 +14,6 @@ DECLARE
   v_admin JSONB;
   v_permissions JSONB;
   v_identity JSONB;
-  v_secret_hash TEXT;
   v_license_id TEXT := btrim(COALESCE(p_license_id, ''));
   v_device_id TEXT := lower(btrim(COALESCE(p_device_id, '')));
   v_license RECORD;
@@ -32,20 +30,6 @@ BEGIN
   v_permissions := COALESCE(v_admin -> 'permissions', '[]'::jsonb);
   IF NOT (v_permissions ? 'license.offline_activate') THEN
     RETURN jsonb_build_object('ok', false, 'code', 'FORBIDDEN', 'httpStatus', 403);
-  END IF;
-
-  IF p_edge_secret IS NULL OR char_length(p_edge_secret) < 32 OR char_length(p_edge_secret) > 512 THEN
-    RETURN jsonb_build_object('ok', false, 'code', 'SERVICE_UNAVAILABLE', 'httpStatus', 503);
-  END IF;
-
-  v_secret_hash := encode(extensions.digest(p_edge_secret, 'sha256'), 'hex');
-  IF NOT EXISTS (
-    SELECT 1
-    FROM license_private.edge_credentials c
-    WHERE c.active = true
-      AND c.secret_sha256 = v_secret_hash
-  ) THEN
-    RETURN jsonb_build_object('ok', false, 'code', 'SERVICE_UNAVAILABLE', 'httpStatus', 503);
   END IF;
 
   IF char_length(v_license_id) < 1
@@ -185,7 +169,7 @@ EXCEPTION
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.cloudflare_admin_prepare_offline_activation(TEXT, TEXT, TEXT)
+REVOKE ALL ON FUNCTION public.cloudflare_admin_prepare_offline_activation(TEXT, TEXT)
   FROM PUBLIC, anon, service_role;
-GRANT EXECUTE ON FUNCTION public.cloudflare_admin_prepare_offline_activation(TEXT, TEXT, TEXT)
+GRANT EXECUTE ON FUNCTION public.cloudflare_admin_prepare_offline_activation(TEXT, TEXT)
   TO authenticated;
