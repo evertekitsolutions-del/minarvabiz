@@ -9,5 +9,10 @@
     "The dashboard update card shows a clear What's new summary before the customer starts the update.",
     "Software Updates now keeps the release changes visible while downloading and installing the new version.",
     "Update & restart continues to verify the signed installer, create a protected backup, install silently and reopen Minarva Biz automatically."
+  ],
+  "1.0.15": [
+    "Licensing and update verification now use the Minarva Biz Cloudflare edge directly, removing the Render dependency from customer-facing license operations.",
+    "License activation, validation, deactivation and trial registration now run through the same Cloudflare edge with scoped Supabase database calls.",
+    "The Windows installer now trusts the new Cloudflare-derived production signing authority used for activation certificates and signed updates."
   ]
 }
