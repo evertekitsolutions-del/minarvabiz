@@ -105,7 +105,7 @@ const unknownValidation = await fetchJson("/api/license/validate", {
     deviceId: smokeDeviceId,
   }),
 });
-assert(unknownValidation.response.status === 401, `unknown validation expected 401, got ${unknownValidation.response.status}`);
+assert(unknownValidation.response.status === 401, `unknown validation expected 401, got ${unknownValidation.response.status}; upstream=${unknownValidation.response.headers.get("x-minarva-license-upstream-status") || "none"}; stage=${unknownValidation.response.headers.get("x-minarva-license-upstream-stage") || "none"}`);
 assert(unknownValidation.data?.code === "INVALID_LICENSE", "unknown validation response code mismatch");
 assert(unknownValidation.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "valid-shaped validation must bypass the transition origin");
 assert(unknownValidation.response.headers.get("x-minarva-license-data") === "supabase-rpc", "valid-shaped validation must round-trip through the scoped Supabase RPC");
