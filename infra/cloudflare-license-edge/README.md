@@ -13,7 +13,8 @@ Current migration state:
 - `/api/public-key` is served natively by Cloudflare from the already-public production Ed25519 verification key;
 - the complete `/api/license/validate` path is Cloudflare-native: request validation runs in the Worker and valid-shaped requests call one narrowly-scoped Supabase Postgres RPC directly; the RPC returns license state but does not issue a fresh activation certificate, so Windows keeps its already-verified stored certificate;
 - `/api/license/deactivate` is also Cloudflare-native through a scoped Supabase RPC; it preserves the existing token/device/activation semantics and adds bounded abuse protection;
-- `/api/license/activate` and `/api/trial/register` still use the transition origin until their separate migrations are completed.
+- `/api/trial/register` is Cloudflare-native through a scoped Supabase RPC with public CORS, uniqueness checks, and rate limits; no email provider is required in the zero-cost phase, so notifications remain marked `registered_email_pending`;
+- `/api/license/activate` is now the only public licensing route still using the transition origin.
 
 This gives Minarva Biz a replaceable boundary:
 
@@ -29,7 +30,7 @@ Cloudflare License Edge
         |
         +--> Cloudflare-native public verification key
         |
-        +--> scoped Supabase RPC (license validation + deactivation)
+        +--> scoped Supabase RPC (validation + deactivation + trial registration)
         |
         +--> current license origin (remaining mutations/signing, transition)
         |
@@ -51,7 +52,7 @@ The Worker is **not** an open proxy. Only these routes are accepted:
 - `POST /api/trial/register`
 - `OPTIONS /api/trial/register`
 
-Request bodies are bounded. Cookies and arbitrary inbound headers are not forwarded. Native validation and deactivation accept JSON only and have a 16 KiB body ceiling. Validation enforces 600 requests per 15 minutes per IP plus 60 per 15 minutes per device. Deactivation enforces 60 per 15 minutes per IP plus 10 per 15 minutes per device.
+Request bodies are bounded. Cookies and arbitrary inbound headers are not forwarded. Native validation, deactivation, and trial registration accept JSON only and have a 16 KiB body ceiling. Validation enforces 600 requests per 15 minutes per IP plus 60 per 15 minutes per device. Deactivation enforces 60 per 15 minutes per IP plus 10 per 15 minutes per device. Trial registration enforces 10 per hour per IP plus 3 per day per device.
 
 The Worker holds a Cloudflare-only RPC secret and a Supabase publishable key. The plaintext RPC secret is stored only as an encrypted Worker secret; the database stores only its SHA-256 hash in a non-exposed `license_private` schema. The RPC is `SECURITY DEFINER` with an empty search path, is revoked from `PUBLIC`, `authenticated` and `service_role`, and is granted only to `anon` because the Cloudflare-only secret is the additional server-to-server authorization factor. Direct table access remains denied by RLS. The Worker still holds no license signing private key and no Supabase service-role/secret key.
 
