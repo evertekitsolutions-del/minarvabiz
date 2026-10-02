@@ -26,20 +26,15 @@ This prints two values:
 
 Generate this once for the production license authority. Do not generate a new pair during every build.
 
-## 2. Production signing authority and Cloudflare cutover
+## 2. Production signing authority
 
-The production public key already shipped to Windows clients is fixed. **Do not generate a replacement key merely to leave Render.** The exact existing `LICENSE_PRIVATE_KEY` seed must be preserved.
+Before the first commercial customer, production contained zero license and activation records, so the signing authority was safely rotated away from the old Render-held key.
 
-The Cloudflare License Edge supports a safe staged cutover:
+The Cloudflare License Edge derives its Ed25519 signing seed from `LICENSE_EDGE_RPC_SECRET` using the domain string `minarvabiz-ed25519-authority-v1`. The derived private key never leaves the Worker. `/api/public-key` exposes only the derived public key; commercial Windows builds fetch that public key during packaging.
 
-1. deploy the activation-ready Worker without `LICENSE_PRIVATE_KEY`; online activation continues through the transition origin;
-2. securely add the exact existing production seed as an encrypted Worker secret named `LICENSE_PRIVATE_KEY` (never paste it into source control, docs, logs, or chat);
-3. the Worker signs a private self-check and verifies it with the fixed production public key before enabling Cloudflare-native activation;
-4. if the secret is absent, malformed, or belongs to another keypair, the Worker refuses native signing and keeps the transition-origin fallback.
+The same authority signs online activation certificates and update manifests. Cloudflare-native licensing uses the encrypted edge RPC secret plus the Supabase publishable key and does **not** require a Supabase service-role/secret key.
 
-Cloudflare-native activation uses only the encrypted signing seed, the existing encrypted edge RPC secret, and a Supabase publishable key. It does **not** require a Supabase service-role/secret key.
-
-### Temporary legacy license-admin production server
+### Legacy license-admin application
 
 Set these server-side environment variables:
 
@@ -79,7 +74,7 @@ SUPABASE_URL=https://wmjgefbaliuwmaxyzxkq.supabase.co
 SUPABASE_SECRET_KEY=<production server-side Supabase secret key>
 ```
 
-During the transition, the Render service remains only as activation fallback and as the current License Admin host for signing/admin operations. Windows clients already use the Cloudflare License Edge as `VITE_LICENSE_API_URL`; validation, deactivation, trial registration, health, public key and updates no longer depend on Render.
+Windows clients use the Cloudflare License Edge as `VITE_LICENSE_API_URL`; activation, validation, deactivation, trial registration, health, public key and signed updates do not depend on Render. The legacy License Admin UI may remain temporarily hosted separately until its UI/runtime migration is completed.
 
 Render's official monorepo guidance recommends keeping the repository root available when workspace dependencies/shared packages are needed, and Render Web Services provide configurable build/start commands and environment variables. urlRender monorepo supporthttps://render.com/docs/monorepo-support urlRender Next.js deployment guidehttps://render.com/docs/deploy-nextjs-app
 
@@ -151,7 +146,7 @@ A production release is considered ready only when all of the following are true
 - CI desktop, web, and Windows packaging jobs pass.
 - The Windows installed-runtime smoke test passes and creates `%APPDATA%\Minarva Biz\minarvabiz.db`.
 - The production desktop build contains the matching public key.
-- the exact production `LICENSE_PRIVATE_KEY` exists only in approved encrypted server/Worker secret storage and matches the shipped public key.
+- the production signing authority is derived only inside Cloudflare from the encrypted edge root secret, and the packaged Windows public key matches `/api/public-key`.
 - Online activation/validation works against the production API.
 - Offline `.lic` import works on a real Windows device and enforces device binding.
 - Deactivation/revocation prevents continued use after the locally stored grace window rules are applied.
