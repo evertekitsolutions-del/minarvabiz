@@ -20,6 +20,7 @@ const activationBridge = read("supabase/migrations/20261002_cloudflare_license_a
 const adminIdentityBoundary = read("supabase/migrations/20261002_cloudflare_admin_identity_boundary.sql");
 const adminLicenseRegistry = read("supabase/migrations/20261002_cloudflare_admin_license_registry.sql");
 const adminSupportInbox = read("supabase/migrations/20261002_cloudflare_admin_support_inbox.sql");
+const adminSupportUpdate = read("supabase/migrations/20261002_cloudflare_admin_support_update.sql");
 
 const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
 
@@ -29,6 +30,13 @@ assert.match(worker, /GET \/api\/update\/manifest/);
 assert.match(worker, /GET \/api\/admin\/me/);
 assert.match(worker, /GET \/api\/admin\/licenses/);
 assert.match(worker, /GET \/api\/admin\/support/);
+assert.match(worker, /PATCH \/api\/admin\/support/);
+assert.match(worker, /nativeAdminSupportUpdate: true/);
+assert.match(worker, /function parseAdminSupportUpdateBody\(bytes\)/);
+assert.match(worker, /async function adminSupportUpdateNatively\(request, env, route\)/);
+assert.match(worker, /cloudflare_admin_update_support_request/);
+assert.match(worker, /REQUEST_TOO_LARGE/);
+assert.match(worker, /UNSUPPORTED_MEDIA_TYPE/);
 assert.match(worker, /nativeAdminSupport: true/);
 assert.match(worker, /async function adminSupportNatively\(request, env\)/);
 assert.match(worker, /cloudflare_admin_list_support_requests/);
@@ -149,6 +157,16 @@ assert.match(adminSupportInbox, /support\.read/);
 assert.match(adminSupportInbox, /LIMIT 200/);
 assert.match(adminSupportInbox, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_list_support_requests\(\)[\s\S]*TO authenticated/);
 assert.match(adminSupportInbox, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_list_support_requests\(\)[\s\S]*FROM PUBLIC, anon, service_role/);
+
+assert.match(adminSupportUpdate, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_update_support_request/);
+assert.match(adminSupportUpdate, /public\.cloudflare_admin_me\(\)/);
+assert.match(adminSupportUpdate, /support\.manage/);
+assert.match(adminSupportUpdate, /FOR UPDATE/);
+assert.match(adminSupportUpdate, /support\.request\.update/);
+assert.match(adminSupportUpdate, /license_admin_audit_log/);
+assert.match(adminSupportUpdate, /'authority', 'cloudflare'/);
+assert.match(adminSupportUpdate, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_update_support_request[\s\S]*TO authenticated/);
+assert.match(adminSupportUpdate, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_update_support_request[\s\S]*FROM PUBLIC, anon, service_role/);
 
 const testRootSecret = "test-root-secret-at-least-32-characters-long";
 const seed = createHash("sha256")
