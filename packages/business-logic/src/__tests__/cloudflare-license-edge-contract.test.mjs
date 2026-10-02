@@ -11,6 +11,8 @@ const worker = read("infra/cloudflare-license-edge/src/index.js");
 const wrangler = read("infra/cloudflare-license-edge/wrangler.jsonc");
 const release = read(".github/workflows/release-windows.yml");
 const publisher = read(".github/workflows/publish-windows-release.yml");
+const desktopLicense = read("apps/desktop/electron/license.ts");
+const validationBridge = read("supabase/migrations/20261002_cloudflare_license_validate_bridge.sql");
 
 const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
 
@@ -19,10 +21,13 @@ assert.match(worker, /GET \/api\/public-key/);
 assert.match(worker, /GET \/api\/update\/manifest/);
 assert.match(worker, /POST \/api\/license\/activate/);
 assert.match(worker, /POST \/api\/license\/validate/);
-assert.match(worker, /validatePreflight: true/);
-assert.match(worker, /function invalidValidationRequest\(bytes\)/);
-assert.match(worker, /if \(route\.validatePreflight\) \{/);
-assert.match(worker, /invalidValidationRequest\(preReadBody\?\.bytes\)/);
+assert.match(worker, /nativeValidate: true/);
+assert.match(worker, /function parseValidationBody\(bytes\)/);
+assert.match(worker, /async function validateNatively\(request, env, route\)/);
+assert.match(worker, /rest\/v1\/rpc\/cloudflare_validate_license/);
+assert.match(worker, /SUPABASE_PUBLISHABLE_KEY/);
+assert.match(worker, /LICENSE_EDGE_RPC_SECRET/);
+assert.match(worker, /x-minarva-license-data/);
 assert.match(worker, /POST \/api\/license\/deactivate/);
 assert.match(worker, /POST \/api\/trial\/register/);
 assert.match(worker, /REQUEST_TOO_LARGE/);
@@ -37,6 +42,19 @@ assert.doesNotMatch(worker, /LICENSE_PRIVATE_KEY|SUPABASE_SERVICE_ROLE_KEY|SUPAB
 
 assert.match(wrangler, /minarva-biz-license-edge/);
 assert.match(wrangler, /LICENSE_ORIGIN/);
+assert.match(wrangler, /SUPABASE_URL/);
+assert.match(wrangler, /SUPABASE_PUBLISHABLE_KEY/);
+assert.match(wrangler, /LICENSE_EDGE_RPC_SECRET/);
+
+assert.match(desktopLicense, /typeof result\.data\.activationCertificate === "string"[\s\S]*stored\.activationCertificate/);
+
+assert.match(validationBridge, /CREATE SCHEMA IF NOT EXISTS license_private/);
+assert.match(validationBridge, /secret_sha256/);
+assert.match(validationBridge, /CREATE OR REPLACE FUNCTION public\.cloudflare_validate_license/);
+assert.match(validationBridge, /SECURITY DEFINER/);
+assert.match(validationBridge, /SET search_path = ''/);
+assert.match(validationBridge, /GRANT EXECUTE ON FUNCTION public\.cloudflare_validate_license[\s\S]*TO anon/);
+assert.match(validationBridge, /REVOKE ALL ON FUNCTION public\.cloudflare_validate_license[\s\S]*FROM PUBLIC, authenticated, service_role/);
 
 assert.ok(release.includes(`VITE_LICENSE_API_URL: "${EDGE}"`));
 assert.ok(release.includes(`MINARVA_UPDATE_MANIFEST_URL: "${EDGE}/api/update/manifest"`));
