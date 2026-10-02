@@ -6,6 +6,7 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/public-key", { maxBody: 0 }],
   ["GET /api/update/manifest", { maxBody: 0, nativeUpdateManifest: true }],
   ["GET /api/admin/me", { maxBody: 0, nativeAdminMe: true }],
+  ["GET /api/admin/licenses", { maxBody: 0, nativeAdminLicenses: true }],
   ["POST /api/license/activate", { maxBody: 16 * 1024, nativeActivate: true }],
   ["POST /api/license/validate", { maxBody: 16 * 1024, nativeValidate: true }],
   ["POST /api/license/deactivate", { maxBody: 16 * 1024, nativeDeactivate: true }],
@@ -663,7 +664,7 @@ async function registerTrialNatively(request, env, route) {
   }
 }
 
-async function adminMeNatively(request, env) {
+async function adminAuthenticatedRpc(request, env, rpcName) {
   const authorization = String(request.headers.get("authorization") || "").trim();
   if (!authorization.startsWith("Bearer ")) {
     return json(
@@ -693,7 +694,7 @@ async function adminMeNatively(request, env) {
   }
 
   try {
-    const response = await fetch(`${apiOrigin}/rest/v1/rpc/cloudflare_admin_me`, {
+    const response = await fetch(`${apiOrigin}/rest/v1/rpc/${rpcName}`, {
       method: "POST",
       headers: {
         apikey: publishableKey,
@@ -754,7 +755,8 @@ async function adminMeNatively(request, env) {
       code === "MFA_REQUIRED" ||
       code === "ADMIN_NOT_ALLOWED" ||
       code === "ADMIN_IDENTITY_MISMATCH" ||
-      code === "ADMIN_ROLE_INVALID"
+      code === "ADMIN_ROLE_INVALID" ||
+      code === "FORBIDDEN"
     ) {
       return json(
         { ok: false, code },
@@ -778,6 +780,14 @@ async function adminMeNatively(request, env) {
       },
     );
   }
+}
+
+async function adminMeNatively(request, env) {
+  return adminAuthenticatedRpc(request, env, "cloudflare_admin_me");
+}
+
+async function adminLicensesNatively(request, env) {
+  return adminAuthenticatedRpc(request, env, "cloudflare_admin_list_licenses");
 }
 
 async function updateManifestNatively(authority) {
@@ -949,6 +959,10 @@ export default {
 
     if (route.nativeAdminMe) {
       return adminMeNatively(request, env);
+    }
+
+    if (route.nativeAdminLicenses) {
+      return adminLicensesNatively(request, env);
     }
 
     if (route.nativeActivate) {
