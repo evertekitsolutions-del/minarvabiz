@@ -21,6 +21,7 @@ const adminIdentityBoundary = read("supabase/migrations/20261002_cloudflare_admi
 const adminLicenseRegistry = read("supabase/migrations/20261002_cloudflare_admin_license_registry.sql");
 const adminLicenseStatus = read("supabase/migrations/20261002_cloudflare_admin_license_status.sql");
 const adminLicenseIssuance = read("supabase/migrations/20261002_cloudflare_admin_license_issuance.sql");
+const adminOfflineActivation = read("supabase/migrations/20261002_cloudflare_admin_offline_activation_atomic.sql");
 const adminSupportInbox = read("supabase/migrations/20261002_cloudflare_admin_support_inbox.sql");
 const adminSupportUpdate = read("supabase/migrations/20261002_cloudflare_admin_support_update.sql");
 
@@ -32,6 +33,13 @@ assert.match(worker, /GET \/api\/update\/manifest/);
 assert.match(worker, /GET \/api\/admin\/me/);
 assert.match(worker, /GET \/api\/admin\/licenses/);
 assert.match(worker, /POST \/api\/admin\/licenses/);
+assert.match(worker, /POST \/api\/admin\/licenses\/offline-activation/);
+assert.match(worker, /nativeAdminOfflineActivation: true/);
+assert.match(worker, /function parseAdminOfflineActivationBody\(bytes\)/);
+assert.match(worker, /async function adminOfflineActivationNatively\(request, env, route\)/);
+assert.match(worker, /cloudflare_admin_prepare_offline_activation/);
+assert.match(worker, /minarvabiz-license-v1/);
+assert.match(worker, /minarvabiz-activation-v1/);
 assert.match(worker, /nativeAdminLicenseIssue: true/);
 assert.match(worker, /function parseAdminLicenseIssueBody\(bytes\)/);
 assert.match(worker, /async function adminLicenseIssueNatively\(request, env, route\)/);
@@ -191,6 +199,20 @@ assert.match(adminLicenseIssuance, /license_events/);
 assert.match(adminLicenseIssuance, /'authority', 'cloudflare'/);
 assert.match(adminLicenseIssuance, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_issue_license[\s\S]*TO authenticated/);
 assert.match(adminLicenseIssuance, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_issue_license[\s\S]*FROM PUBLIC, anon, service_role/);
+
+assert.match(adminOfflineActivation, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_prepare_offline_activation/);
+assert.match(adminOfflineActivation, /public\.cloudflare_admin_me\(\)/);
+assert.match(adminOfflineActivation, /license\.offline_activate/);
+assert.match(adminOfflineActivation, /license_activations/);
+assert.match(adminOfflineActivation, /v_active_count >= v_license\.activation_limit/);
+assert.match(adminOfflineActivation, /ACTIVATION_LIMIT_REACHED/);
+assert.match(adminOfflineActivation, /offline-package-created/);
+assert.match(adminOfflineActivation, /license_admin_audit_log/);
+assert.match(adminOfflineActivation, /license_events/);
+assert.match(adminOfflineActivation, /'authority', 'cloudflare'/);
+assert.match(adminOfflineActivation, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_prepare_offline_activation[\s\S]*TO authenticated/);
+assert.match(adminOfflineActivation, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_prepare_offline_activation[\s\S]*FROM PUBLIC, anon, service_role/);
+
 
 assert.match(adminSupportInbox, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_list_support_requests\(\)/);
 assert.match(adminSupportInbox, /public\.cloudflare_admin_me\(\)/);
