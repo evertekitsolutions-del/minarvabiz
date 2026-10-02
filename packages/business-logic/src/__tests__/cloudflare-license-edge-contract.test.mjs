@@ -24,6 +24,7 @@ const adminLicenseIssuance = read("supabase/migrations/20261002_cloudflare_admin
 const adminOfflineActivation = read("supabase/migrations/20261002_cloudflare_admin_offline_activation_atomic.sql");
 const adminSupportInbox = read("supabase/migrations/20261002_cloudflare_admin_support_inbox.sql");
 const adminSupportUpdate = read("supabase/migrations/20261002_cloudflare_admin_support_update.sql");
+const adminCustomerProvisioning = read("supabase/migrations/20261002_cloudflare_admin_customer_provisioning.sql");
 
 const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
 
@@ -54,6 +55,17 @@ assert.match(worker, /async function adminLicenseStatusNatively\(request, env, r
 assert.match(worker, /cloudflare_admin_set_license_status/);
 assert.match(worker, /GET \/api\/admin\/support/);
 assert.match(worker, /PATCH \/api\/admin\/support/);
+assert.match(worker, /POST \/api\/admin\/customers\/provision/);
+assert.match(worker, /nativeAdminCustomerProvision: true/);
+assert.match(worker, /function parseAdminCustomerProvisionBody\(bytes\)/);
+assert.match(worker, /async function adminCustomerProvisionNatively\(request, env, route\)/);
+assert.match(worker, /cloudflare_admin_preflight_customer_provision/);
+assert.match(worker, /cloudflare_admin_finalize_customer_provision/);
+assert.match(worker, /auth\/v1\/otp/);
+assert.match(worker, /create_user: true/);
+assert.match(worker, /full_name: parsed\.adminName/);
+assert.match(worker, /shop_name: parsed\.shopName/);
+assert.match(worker, /customerProvisioningBackend: "cloudflare-native-supabase-magic-link"/);
 assert.match(worker, /nativeAdminSupportUpdate: true/);
 assert.match(worker, /function parseAdminSupportUpdateBody\(bytes\)/);
 assert.match(worker, /async function adminSupportUpdateNatively\(request, env, route\)/);
@@ -116,6 +128,7 @@ assert.doesNotMatch(worker, /LICENSE_PRIVATE_KEY|LICENSE_ORIGIN|onrender\.com/i)
 assert.match(wrangler, /minarva-biz-license-edge/);
 assert.doesNotMatch(wrangler, /LICENSE_ORIGIN|onrender\.com|UPDATE_MANIFEST_FALLBACK/);
 assert.match(wrangler, /SUPABASE_URL/);
+assert.match(wrangler, /MINARVA_ONLINE_APP_URL/);
 assert.match(wrangler, /SUPABASE_PUBLISHABLE_KEY/);
 assert.match(wrangler, /LICENSE_EDGE_RPC_SECRET/);
 assert.doesNotMatch(wrangler, /LICENSE_PRIVATE_KEY/);
@@ -230,6 +243,23 @@ assert.match(adminSupportUpdate, /license_admin_audit_log/);
 assert.match(adminSupportUpdate, /'authority', 'cloudflare'/);
 assert.match(adminSupportUpdate, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_update_support_request[\s\S]*TO authenticated/);
 assert.match(adminSupportUpdate, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_update_support_request[\s\S]*FROM PUBLIC, anon, service_role/);
+
+assert.match(adminCustomerProvisioning, /DROP TRIGGER IF EXISTS on_auth_user_created_minvarva_org ON auth\.users/);
+assert.match(adminCustomerProvisioning, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_preflight_customer_provision/);
+assert.match(adminCustomerProvisioning, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_finalize_customer_provision/);
+assert.match(adminCustomerProvisioning, /public\.cloudflare_admin_me\(\)/);
+assert.match(adminCustomerProvisioning, /customer\.provision/);
+assert.match(adminCustomerProvisioning, /FROM auth\.users/);
+assert.match(adminCustomerProvisioning, /organization_members/);
+assert.match(adminCustomerProvisioning, /is_headquarters = true/);
+assert.match(adminCustomerProvisioning, /online_customer\.provision/);
+assert.match(adminCustomerProvisioning, /PROVISION_EMAIL_FAILED/);
+assert.match(adminCustomerProvisioning, /PROVISION_VERIFY_FAILED/);
+assert.match(adminCustomerProvisioning, /'authority', 'cloudflare'/);
+assert.match(adminCustomerProvisioning, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_preflight_customer_provision[\s\S]*TO authenticated/);
+assert.match(adminCustomerProvisioning, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_finalize_customer_provision[\s\S]*TO authenticated/);
+assert.match(adminCustomerProvisioning, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_preflight_customer_provision[\s\S]*FROM PUBLIC, anon, service_role/);
+assert.match(adminCustomerProvisioning, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_finalize_customer_provision[\s\S]*FROM PUBLIC, anon, service_role/);
 
 const testRootSecret = "test-root-secret-at-least-32-characters-long";
 const seed = createHash("sha256")

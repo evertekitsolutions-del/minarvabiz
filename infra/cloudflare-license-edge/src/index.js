@@ -12,6 +12,7 @@ const ALLOWED_ROUTES = new Map([
   ["PATCH /api/admin/licenses/status", { maxBody: 8 * 1024, nativeAdminLicenseStatus: true }],
   ["GET /api/admin/support", { maxBody: 0, nativeAdminSupport: true }],
   ["PATCH /api/admin/support", { maxBody: 16 * 1024, nativeAdminSupportUpdate: true }],
+  ["POST /api/admin/customers/provision", { maxBody: 16 * 1024, nativeAdminCustomerProvision: true }],
   ["POST /api/license/activate", { maxBody: 16 * 1024, nativeActivate: true }],
   ["POST /api/license/validate", { maxBody: 16 * 1024, nativeValidate: true }],
   ["POST /api/license/deactivate", { maxBody: 16 * 1024, nativeDeactivate: true }],
@@ -20,6 +21,7 @@ const ALLOWED_ROUTES = new Map([
 ]);
 
 const DEFAULT_SUPABASE_URL = "https://wmjgefbaliuwmaxyzxkq.supabase.co";
+const DEFAULT_ONLINE_APP_URL = "https://minarvabiz-steel.vercel.app";
 const GITHUB_LATEST_RELEASE =
   "https://github.com/evertekitsolutions-del/minarvabiz/releases/latest";
 const GITHUB_RELEASE_DOWNLOAD_BASE =
@@ -1231,6 +1233,214 @@ async function adminLicenseStatusNatively(request, env, route) {
   );
 }
 
+function parseAdminCustomerProvisionBody(bytes) {
+  try {
+    const raw = new TextDecoder().decode(bytes || new Uint8Array());
+    const body = JSON.parse(raw);
+    const shopName =
+      typeof body?.shopName === "string" ? body.shopName.trim().slice(0, 201) : "";
+    const adminName =
+      typeof body?.adminName === "string" ? body.adminName.trim().slice(0, 201) : "";
+    const email =
+      typeof body?.email === "string" ? body.email.trim().toLowerCase().slice(0, 255) : "";
+
+    if (!shopName || shopName.length > 200) return null;
+    if (!adminName || adminName.length > 200) return null;
+    if (!EMAIL_RE.test(email) || email.length > 254) return null;
+
+    return { shopName, adminName, email };
+  } catch {
+    return null;
+  }
+}
+
+function onlineAppOrigin(env) {
+  return allowedOrigin(env.MINARVA_ONLINE_APP_URL || DEFAULT_ONLINE_APP_URL);
+}
+
+async function fetchAdminProvisionRpc(apiOrigin, publishableKey, accessToken, rpcName, rpcBody) {
+  const response = await fetch(`${apiOrigin}/rest/v1/rpc/${rpcName}`, {
+    method: "POST",
+    headers: {
+      apikey: publishableKey,
+      authorization: `Bearer ${accessToken}`,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify(rpcBody),
+    redirect: "error",
+    signal: AbortSignal.timeout(8_000),
+  });
+
+  const data = await response.json().catch(() => null);
+  return { response, data };
+}
+
+function adminProvisionStatus(data, fallback = 503) {
+  const explicit = Number(data?.httpStatus);
+  if (Number.isInteger(explicit) && explicit >= 200 && explicit <= 599) return explicit;
+  const code = String(data?.code || "");
+  if (code === "UNAUTHENTICATED") return 401;
+  if (["MFA_REQUIRED","ADMIN_NOT_ALLOWED","ADMIN_IDENTITY_MISMATCH","ADMIN_ROLE_INVALID","FORBIDDEN"].includes(code)) return 403;
+  if (code === "INVALID_REQUEST") return 400;
+  if (["CUSTOMER_ALREADY_EXISTS","CUSTOMER_REVIEW_REQUIRED","PROVISION_VERIFY_FAILED"].includes(code)) return 409;
+  if (code === "PROVISION_EMAIL_FAILED") return 502;
+  return fallback;
+}
+
+async function adminCustomerProvisionNatively(request, env, route) {
+  const authorization = String(request.headers.get("authorization") || "").trim();
+  if (!authorization.startsWith("Bearer ")) {
+    return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const accessToken = authorization.slice("Bearer ".length).trim();
+  if (accessToken.length < 40 || accessToken.length > 16384 || accessToken.split(".").length !== 3) {
+    return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const contentType = request.headers.get("content-type") || "";
+  if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
+    return json({ ok: false, code: "UNSUPPORTED_MEDIA_TYPE" }, 415, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const body = await readRequestBody(request, route.maxBody);
+  if (body?.tooLarge) {
+    return json({ ok: false, code: "REQUEST_TOO_LARGE" }, 413, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const parsed = parseAdminCustomerProvisionBody(body?.bytes);
+  if (!parsed) {
+    return json({ ok: false, code: "INVALID_REQUEST" }, 400, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
+  const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+  const onlineOrigin = onlineAppOrigin(env);
+  if (!apiOrigin || !publishableKey || !onlineOrigin) {
+    return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const redirectTo = `${onlineOrigin}/reset-password`;
+
+  try {
+    const preflight = await fetchAdminProvisionRpc(
+      apiOrigin,
+      publishableKey,
+      accessToken,
+      "cloudflare_admin_preflight_customer_provision",
+      {
+        p_email: parsed.email,
+        p_shop_name: parsed.shopName,
+        p_admin_name: parsed.adminName,
+      },
+    );
+
+    if (preflight.response.status === 401) {
+      return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
+        "x-minarva-admin-backend": "cloudflare-native",
+      });
+    }
+    if (!preflight.response.ok || !preflight.data || typeof preflight.data !== "object" || Array.isArray(preflight.data)) {
+      return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
+        "x-minarva-admin-backend": "cloudflare-native",
+      });
+    }
+    if (preflight.data.ok !== true) {
+      const output = { ...preflight.data };
+      delete output.httpStatus;
+      return json(output, adminProvisionStatus(preflight.data), {
+        "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-data": "supabase-authenticated-rpc",
+      });
+    }
+
+    const authResponse = await fetch(
+      `${apiOrigin}/auth/v1/otp?redirect_to=${encodeURIComponent(redirectTo)}`,
+      {
+        method: "POST",
+        headers: {
+          apikey: publishableKey,
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({
+          email: parsed.email,
+          data: {
+            full_name: parsed.adminName,
+            shop_name: parsed.shopName,
+          },
+          create_user: true,
+        }),
+        redirect: "error",
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+
+    let upstreamError = null;
+    if (!authResponse.ok) {
+      const authData = await authResponse.json().catch(() => null);
+      upstreamError = String(
+        authData?.msg ||
+        authData?.message ||
+        authData?.error_description ||
+        authData?.error ||
+        `Supabase Magic Link request failed (${authResponse.status})`,
+      ).slice(0, 500);
+    }
+
+    const finalized = await fetchAdminProvisionRpc(
+      apiOrigin,
+      publishableKey,
+      accessToken,
+      "cloudflare_admin_finalize_customer_provision",
+      {
+        p_email: parsed.email,
+        p_shop_name: parsed.shopName,
+        p_admin_name: parsed.adminName,
+        p_redirect_to: redirectTo,
+        p_upstream_error: upstreamError,
+      },
+    );
+
+    if (finalized.response.status === 401) {
+      return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
+        "x-minarva-admin-backend": "cloudflare-native",
+      });
+    }
+    if (!finalized.response.ok || !finalized.data || typeof finalized.data !== "object" || Array.isArray(finalized.data)) {
+      return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
+        "x-minarva-admin-backend": "cloudflare-native",
+      });
+    }
+
+    const output = { ...finalized.data };
+    delete output.httpStatus;
+    return json(output, adminProvisionStatus(finalized.data, output.ok === true ? 200 : 503), {
+      "x-minarva-admin-backend": "cloudflare-native",
+      "x-minarva-admin-data": "supabase-authenticated-rpc",
+      "x-minarva-customer-provisioning": "supabase-magic-link",
+    });
+  } catch {
+    return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
+      "x-minarva-admin-backend": "cloudflare-native",
+      "x-minarva-admin-upstream-stage": "customer-provision",
+    });
+  }
+}
+
 async function adminSupportNatively(request, env) {
   return adminAuthenticatedRpc(request, env, "cloudflare_admin_list_support_requests");
 }
@@ -1415,6 +1625,11 @@ export default {
           supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL) &&
           String(env.SUPABASE_PUBLISHABLE_KEY || "").trim(),
         ),
+        customerProvisioningConfigured: Boolean(
+          supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL) &&
+          String(env.SUPABASE_PUBLISHABLE_KEY || "").trim() &&
+          onlineAppOrigin(env),
+        ),
         renderDependency: false,
         paidDependencyIntroduced: false,
       });
@@ -1447,6 +1662,7 @@ export default {
           activationBackend: authority ? "cloudflare-native-supabase-rpc" : "unavailable",
           mutationBackend: authority ? "cloudflare-native" : "unavailable",
           adminAuthBackend: "cloudflare-native-supabase-jwt",
+          customerProvisioningBackend: "cloudflare-native-supabase-magic-link",
           renderDependency: false,
           paidDependencyIntroduced: false,
         },
@@ -1498,6 +1714,10 @@ export default {
 
     if (route.nativeAdminSupportUpdate) {
       return adminSupportUpdateNatively(request, env, route);
+    }
+
+    if (route.nativeAdminCustomerProvision) {
+      return adminCustomerProvisionNatively(request, env, route);
     }
 
     if (route.nativeActivate) {
