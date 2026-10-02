@@ -20,6 +20,7 @@ const activationBridge = read("supabase/migrations/20261002_cloudflare_license_a
 const adminIdentityBoundary = read("supabase/migrations/20261002_cloudflare_admin_identity_boundary.sql");
 const adminLicenseRegistry = read("supabase/migrations/20261002_cloudflare_admin_license_registry.sql");
 const adminLicenseStatus = read("supabase/migrations/20261002_cloudflare_admin_license_status.sql");
+const adminLicenseIssuance = read("supabase/migrations/20261002_cloudflare_admin_license_issuance.sql");
 const adminSupportInbox = read("supabase/migrations/20261002_cloudflare_admin_support_inbox.sql");
 const adminSupportUpdate = read("supabase/migrations/20261002_cloudflare_admin_support_update.sql");
 
@@ -30,6 +31,14 @@ assert.match(worker, /GET \/api\/public-key/);
 assert.match(worker, /GET \/api\/update\/manifest/);
 assert.match(worker, /GET \/api\/admin\/me/);
 assert.match(worker, /GET \/api\/admin\/licenses/);
+assert.match(worker, /POST \/api\/admin\/licenses/);
+assert.match(worker, /nativeAdminLicenseIssue: true/);
+assert.match(worker, /function parseAdminLicenseIssueBody\(bytes\)/);
+assert.match(worker, /async function adminLicenseIssueNatively\(request, env, route\)/);
+assert.match(worker, /async function signLicenseTokenNatively\(payload, privateKey\)/);
+assert.match(worker, /cloudflare_admin_issue_license/);
+assert.match(worker, /randomUUID\(\)/);
+assert.match(worker, /tokenSha256/);
 assert.match(worker, /PATCH \/api\/admin\/licenses\/status/);
 assert.match(worker, /nativeAdminLicenseStatus: true/);
 assert.match(worker, /function parseAdminLicenseStatusBody\(bytes\)/);
@@ -168,6 +177,20 @@ assert.match(adminLicenseStatus, /license_events/);
 assert.match(adminLicenseStatus, /'authority', 'cloudflare'/);
 assert.match(adminLicenseStatus, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_set_license_status[\s\S]*TO authenticated/);
 assert.match(adminLicenseStatus, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_set_license_status[\s\S]*FROM PUBLIC, anon, service_role/);
+
+assert.match(adminLicenseIssuance, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_issue_license/);
+assert.match(adminLicenseIssuance, /public\.cloudflare_admin_me\(\)/);
+assert.match(adminLicenseIssuance, /license\.issue/);
+assert.match(adminLicenseIssuance, /license_private\.edge_credentials/);
+assert.match(adminLicenseIssuance, /extensions\.digest\(v_token, 'sha256'\)/);
+assert.match(adminLicenseIssuance, /INVALID_ACTIVATION_LIMIT/);
+assert.match(adminLicenseIssuance, /INVALID_FEATURES/);
+assert.match(adminLicenseIssuance, /'license\.issue'/);
+assert.match(adminLicenseIssuance, /license_admin_audit_log/);
+assert.match(adminLicenseIssuance, /license_events/);
+assert.match(adminLicenseIssuance, /'authority', 'cloudflare'/);
+assert.match(adminLicenseIssuance, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_issue_license[\s\S]*TO authenticated/);
+assert.match(adminLicenseIssuance, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_issue_license[\s\S]*FROM PUBLIC, anon, service_role/);
 
 assert.match(adminSupportInbox, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_list_support_requests\(\)/);
 assert.match(adminSupportInbox, /public\.cloudflare_admin_me\(\)/);
