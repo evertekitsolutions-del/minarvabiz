@@ -21,7 +21,7 @@ const adminIdentityBoundary = read("supabase/migrations/20261002_cloudflare_admi
 const adminLicenseRegistry = read("supabase/migrations/20261002_cloudflare_admin_license_registry.sql");
 const adminLicenseStatus = read("supabase/migrations/20261002_cloudflare_admin_license_status.sql");
 const adminLicenseIssuance = read("supabase/migrations/20261002_cloudflare_admin_license_issuance.sql");
-const adminOfflineActivation = read("supabase/migrations/20261002_cloudflare_admin_offline_activation.sql");
+const adminOfflineActivation = read("supabase/migrations/20261002_cloudflare_admin_offline_activation_atomic.sql");
 const adminOfflineActivation = read("supabase/migrations/20261002_cloudflare_admin_offline_activation.sql");
 const adminSupportInbox = read("supabase/migrations/20261002_cloudflare_admin_support_inbox.sql");
 const adminSupportUpdate = read("supabase/migrations/20261002_cloudflare_admin_support_update.sql");
@@ -211,7 +211,8 @@ assert.match(adminLicenseIssuance, /REVOKE ALL ON FUNCTION public\.cloudflare_ad
 assert.match(adminOfflineActivation, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_prepare_offline_activation/);
 assert.match(adminOfflineActivation, /public\.cloudflare_admin_me\(\)/);
 assert.match(adminOfflineActivation, /license\.offline_activate/);
-assert.match(adminOfflineActivation, /public\.activate_license_device/);
+assert.match(adminOfflineActivation, /license_activations/);
+assert.match(adminOfflineActivation, /v_active_count >= v_license\.activation_limit/);
 assert.match(adminOfflineActivation, /ACTIVATION_LIMIT_REACHED/);
 assert.match(adminOfflineActivation, /offline-package-created/);
 assert.match(adminOfflineActivation, /license_admin_audit_log/);
