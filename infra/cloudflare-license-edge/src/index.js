@@ -979,17 +979,10 @@ async function adminBootstrapStatusNatively(request, env) {
       "x-minarva-admin-backend": "cloudflare-native",
       "x-minarva-admin-data": "supabase-edge-secret-rpc",
     });
-  } catch (error) {
-    const safeMessage = String(error?.message || error || "unknown")
-      .replaceAll(publishableKey, "[publishable-key]")
-      .replaceAll(edgeSecret, "[edge-secret]")
-      .replace(/[\r\n]+/g, " ")
-      .slice(0, 160);
+  } catch {
     return json({ ok: false, code: "BOOTSTRAP_SERVICE_UNAVAILABLE" }, 503, {
       "x-minarva-admin-backend": "cloudflare-native",
       "x-minarva-admin-upstream-stage": "bootstrap-status",
-      "x-minarva-admin-upstream-error": String(error?.name || "Error").slice(0, 40),
-      "x-minarva-admin-upstream-message": safeMessage,
     });
   }
 }
