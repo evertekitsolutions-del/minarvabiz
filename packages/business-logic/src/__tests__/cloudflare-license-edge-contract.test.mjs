@@ -31,6 +31,7 @@ const adminOfflineActivation = read("supabase/migrations/20261002_cloudflare_adm
 const adminSupportInbox = read("supabase/migrations/20261002_cloudflare_admin_support_inbox.sql");
 const adminSupportUpdate = read("supabase/migrations/20261002_cloudflare_admin_support_update.sql");
 const adminCustomerProvisioning = read("supabase/migrations/20261002_cloudflare_admin_customer_provisioning.sql");
+const adminBootstrapAuthority = read("supabase/migrations/20261003_cloudflare_admin_bootstrap_authority.sql");
 
 const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
 
@@ -38,6 +39,21 @@ assert.match(worker, /ALLOWED_ROUTES/);
 assert.match(worker, /GET \/api\/public-key/);
 assert.match(worker, /GET \/api\/update\/manifest/);
 assert.match(worker, /GET \/api\/admin\/auth-config/);
+assert.match(worker, /GET \/api\/admin\/bootstrap\/status/);
+assert.match(worker, /POST \/api\/admin\/bootstrap\/claim/);
+assert.match(worker, /nativeAdminBootstrapStatus: true/);
+assert.match(worker, /nativeAdminBootstrapClaim: true/);
+assert.match(worker, /async function adminBootstrapStatusNatively\(request, env\)/);
+assert.match(worker, /async function adminBootstrapClaimNatively\(request, env\)/);
+assert.match(worker, /cloudflare_admin_bootstrap_status/);
+assert.match(worker, /cloudflare_admin_claim_first_admin/);
+assert.match(worker, /LICENSE_ADMIN_BOOTSTRAP_EMAIL/);
+assert.match(worker, /LICENSE_ADMIN_BOOTSTRAP_NAME/);
+assert.match(worker, /LICENSE_ADMIN_ALLOWED_ORIGINS/);
+assert.match(worker, /function adminCorsHeaders\(request, env, extra = \{\}\)/);
+assert.match(worker, /function withAdminCors\(response, request, env\)/);
+assert.match(worker, /function adminPreflight\(request, env\)/);
+assert.match(worker, /request\.method === "OPTIONS" && url\.pathname\.startsWith\("\/api\/admin\/"\)/);
 assert.match(worker, /nativeAdminAuthConfig: true/);
 assert.match(worker, /supabasePublishableKey/);
 assert.match(worker, /cache-control": "public, max-age=300"/);
@@ -242,6 +258,24 @@ assert.match(adminIdentityBoundary, /v_aal <> 'aal2'/);
 assert.match(adminIdentityBoundary, /license_admin_identities/);
 assert.match(adminIdentityBoundary, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_me\(\) TO authenticated/);
 assert.match(adminIdentityBoundary, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_me\(\) FROM PUBLIC, anon, service_role/);
+
+assert.match(adminBootstrapAuthority, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_bootstrap_status/);
+assert.match(adminBootstrapAuthority, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_claim_first_admin/);
+assert.match(adminBootstrapAuthority, /license_private\.edge_credentials/);
+assert.match(adminBootstrapAuthority, /auth\.uid\(\)/);
+assert.match(adminBootstrapAuthority, /auth\.jwt\(\)/);
+assert.match(adminBootstrapAuthority, /v_aal <> 'aal2'/);
+assert.match(adminBootstrapAuthority, /email_confirmed_at/);
+assert.match(adminBootstrapAuthority, /pg_advisory_xact_lock/);
+assert.match(adminBootstrapAuthority, /organization_members/);
+assert.match(adminBootstrapAuthority, /public\.profiles/);
+assert.match(adminBootstrapAuthority, /admin\.bootstrap\.claim/);
+assert.match(adminBootstrapAuthority, /'authority', 'cloudflare'/);
+assert.match(adminBootstrapAuthority, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_bootstrap_status\(TEXT\)[\s\S]*TO anon/);
+assert.match(adminBootstrapAuthority, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_bootstrap_status\(TEXT\)[\s\S]*FROM PUBLIC, authenticated, service_role/);
+assert.match(adminBootstrapAuthority, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_claim_first_admin\(TEXT, TEXT, TEXT\)[\s\S]*TO authenticated/);
+assert.match(adminBootstrapAuthority, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_claim_first_admin\(TEXT, TEXT, TEXT\)[\s\S]*FROM PUBLIC, anon, service_role/);
+assert.doesNotMatch(adminBootstrapAuthority, /raw_user_meta_data|user_metadata/);
 
 assert.match(adminLicenseRegistry, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_list_licenses\(\)/);
 assert.match(adminLicenseRegistry, /public\.cloudflare_admin_me\(\)/);
