@@ -300,11 +300,11 @@ Authoritative governance:
 Rules:
 
 - Claude is advisory/adversarial review, not final decision authority.
-- Initial Claude access is read-only for repository contents, read-only for Actions/CI, and write-only for PR/issue comments.
+- Initial Claude access is read-only for repository contents, read-only for Actions/CI, and read-only for PR/issues; review output is emitted through the workflow report to preserve the repository's no-write CI hardening policy.
 - Claude receives no deployment/database/cloud secrets and no merge permission.
 - Claude must explicitly review scope integrity, tests, security, local-first/multi-branch impact, self-host portability, reuse opportunities and meaningful AI/innovation ideas.
 - Claude may not recommend feature removal/simplification merely to avoid engineering difficulty.
-- The primary Minarva workflow reads Claude findings, accepts/rejects them based on evidence, fixes justified findings, reruns tests and makes the final merge decision.
+- The primary Minarva workflow reads Claude findings, accepts/rejects them based on evidence, may publish a concise PR disposition comment, fixes justified findings, reruns tests and makes the final merge decision.
 - The workflow is gated by `CLAUDE_REVIEW_ENABLED` and must remain disabled until Anthropic authentication is configured.
 - Under the first-25-customer cost rule, do not introduce paid Anthropic API usage without explicit cost approval. Prefer a no-additional-cost eligible Claude Code OAuth route if the user has access.
 
