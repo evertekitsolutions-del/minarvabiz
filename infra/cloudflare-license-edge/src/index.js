@@ -7,6 +7,7 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/update/manifest", { maxBody: 0, nativeUpdateManifest: true }],
   ["GET /api/admin/auth-config", { maxBody: 0, nativeAdminAuthConfig: true }],
   ["GET /api/admin/bootstrap/status", { maxBody: 0, nativeAdminBootstrapStatus: true }],
+  ["POST /api/admin/bootstrap/signup-reservation", { maxBody: 2 * 1024, nativeAdminBootstrapSignupReservation: true }],
   ["POST /api/admin/bootstrap/claim", { maxBody: 0, nativeAdminBootstrapClaim: true }],
   ["GET /api/admin/me", { maxBody: 0, nativeAdminMe: true }],
   ["GET /api/admin/licenses", { maxBody: 0, nativeAdminLicenses: true }],
@@ -923,6 +924,126 @@ async function adminAuthenticatedRpc(request, env, rpcName, rpcBody = {}) {
         "x-minarva-admin-upstream-stage": "supabase-fetch",
       },
     );
+  }
+}
+
+function parseAdminBootstrapSignupReservationBody(bytes) {
+  try {
+    const raw = new TextDecoder().decode(bytes || new Uint8Array());
+    const body = JSON.parse(raw);
+    const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+    if (!EMAIL_RE.test(email) || email.length > 254) return null;
+    return { email };
+  } catch {
+    return null;
+  }
+}
+
+async function adminBootstrapSignupReservationNatively(request, env, route) {
+  const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
+  const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+  const edgeSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
+  const bootstrapEmail = String(env.LICENSE_ADMIN_BOOTSTRAP_EMAIL || "").trim().toLowerCase();
+  if (
+    !apiOrigin ||
+    !publishableKey ||
+    edgeSecret.length < 32 ||
+    !EMAIL_RE.test(bootstrapEmail)
+  ) {
+    return json({ ok: false, code: "BOOTSTRAP_NOT_CONFIGURED" }, 503, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const body = await readRequestBody(request, route.maxBody);
+  if (body?.tooLarge) {
+    return json({ ok: false, code: "INVALID_REQUEST" }, 413, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+  const parsed = parseAdminBootstrapSignupReservationBody(body?.bytes);
+  if (!parsed) {
+    return json({ ok: false, code: "INVALID_REQUEST" }, 400, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  // Do not disclose the configured bootstrap email. The browser must prove that
+  // it already knows the deployment-configured address before a reservation is issued.
+  if (parsed.email !== bootstrapEmail) {
+    return json({ ok: false, code: "BOOTSTRAP_SIGNUP_NOT_ALLOWED" }, 403, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const signupToken = base64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const tokenSha256 = createHash("sha256").update(signupToken, "utf8").digest("hex");
+
+  try {
+    const response = await fetch(
+      `${apiOrigin}/rest/v1/rpc/cloudflare_admin_prepare_bootstrap_signup`,
+      {
+        method: "POST",
+        headers: {
+          apikey: publishableKey,
+          authorization: `Bearer ${publishableKey}`,
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({
+          p_edge_secret: edgeSecret,
+          p_bootstrap_email: bootstrapEmail,
+          p_token_sha256: tokenSha256,
+        }),
+        redirect: "manual",
+        signal: AbortSignal.timeout(8_000),
+      },
+    );
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || typeof data !== "object" || Array.isArray(data)) {
+      return json({ ok: false, code: "BOOTSTRAP_SERVICE_UNAVAILABLE" }, 503, {
+        "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-upstream-status": String(response.status),
+      });
+    }
+
+    const rawStatus = Number(data.httpStatus);
+    const explicitStatus = Number.isInteger(rawStatus) && rawStatus >= 200 && rawStatus <= 599
+      ? rawStatus
+      : null;
+    if (data.ok === true) {
+      return json(
+        {
+          ok: true,
+          signupToken,
+          expiresAt: typeof data.expiresAt === "string" ? data.expiresAt : null,
+        },
+        200,
+        {
+          "x-minarva-admin-backend": "cloudflare-native",
+          "x-minarva-admin-data": "supabase-edge-secret-rpc",
+        },
+      );
+    }
+
+    const code = String(data.code || "BOOTSTRAP_SERVICE_UNAVAILABLE");
+    let status = explicitStatus || 503;
+    if (code === "INVALID_REQUEST") status = 400;
+    else if (code === "BOOTSTRAP_SIGNUP_NOT_ALLOWED") status = 403;
+    else if (
+      code === "BOOTSTRAP_CLOSED" ||
+      code === "BOOTSTRAP_USER_EXISTS" ||
+      code === "BOOTSTRAP_IDENTITY_IN_USE"
+    ) status = 409;
+
+    return json({ ok: false, code }, status, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  } catch {
+    return json({ ok: false, code: "BOOTSTRAP_SERVICE_UNAVAILABLE" }, 503, {
+      "x-minarva-admin-backend": "cloudflare-native",
+      "x-minarva-admin-upstream-stage": "bootstrap-signup-reservation",
+    });
   }
 }
 
@@ -1956,6 +2077,14 @@ export default {
 
     if (route.nativeAdminBootstrapStatus) {
       return withAdminCors(await adminBootstrapStatusNatively(request, env), request, env);
+    }
+
+    if (route.nativeAdminBootstrapSignupReservation) {
+      return withAdminCors(
+        await adminBootstrapSignupReservationNatively(request, env, route),
+        request,
+        env,
+      );
     }
 
     if (route.nativeAdminBootstrapClaim) {
