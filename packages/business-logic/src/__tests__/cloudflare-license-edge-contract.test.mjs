@@ -331,6 +331,12 @@ assert.match(adminBootstrapSignupReservation, /DELETE FROM license_private\.admi
 assert.match(adminBootstrapSignupReservation, /LICENSE_ADMIN_BOOTSTRAP_RESERVATION_REQUIRED/);
 assert.match(adminBootstrapSignupReservation, /bootstrap_token/);
 assert.match(adminBootstrapSignupReservation, /account_type/);
+assert.match(adminBootstrapSignupReservation, /guard_license_admin_bootstrap_signup/);
+assert.match(adminBootstrapSignupReservation, /BEFORE INSERT ON auth\.users/);
+assert.match(adminBootstrapSignupReservation, /raw_app_meta_data/);
+assert.match(adminBootstrapSignupReservation, /minarva_license_admin_bootstrap/);
+assert.match(adminBootstrapSignupReservation, /raw_user_meta_data\s*:=/);
+assert.match(adminBootstrapSignupReservation, /-\s*'bootstrap_token'/);
 assert.doesNotMatch(
   adminBootstrapSignupReservation,
   /IF COALESCE\(NEW\.raw_user_meta_data ->> 'account_type',[\s\S]{0,180}RETURN NEW;/,
