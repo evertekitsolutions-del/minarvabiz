@@ -19,6 +19,9 @@ const browserAdminAuth = read("apps/license-admin/src/app/admin-panel/browser-ad
 const browserAdminApi = read("apps/license-admin/src/app/admin-panel/browser-admin-api.ts");
 const browserAdminSession = read("apps/license-admin/src/app/admin-panel/browser-admin-session.ts");
 const adminAuthHook = read("apps/license-admin/src/app/admin-panel/useAdminAuthentication.ts");
+const adminBootstrapHook = read("apps/license-admin/src/app/admin-panel/useFirstAdminBootstrap.ts");
+const adminAuthCard = read("apps/license-admin/src/app/admin-panel/AdminAuthCard.tsx");
+const adminPage = read("apps/license-admin/src/app/page.tsx");
 const validationBridge = read("supabase/migrations/20261002_cloudflare_license_validate_bridge.sql");
 const deactivationBridge = read("supabase/migrations/20261002_cloudflare_license_deactivate_bridge.sql");
 const trialBridge = read("supabase/migrations/20261002_cloudflare_trial_register_bridge.sql");
@@ -174,19 +177,38 @@ assert.doesNotMatch(wrangler, /LICENSE_PRIVATE_KEY/);
 assert.match(desktopLicense, /typeof result\.data\.activationCertificate === "string"[\s\S]*stored\.activationCertificate/);
 
 assert.match(browserAdminAuth, /beginBrowserNamedAdminLogin/);
+assert.match(browserAdminAuth, /beginBrowserFirstAdminSignup/);
+assert.match(browserAdminAuth, /resendBrowserFirstAdminConfirmation/);
+assert.match(browserAdminAuth, /getBrowserAdminBootstrapStatus/);
+assert.match(browserAdminAuth, /claimBrowserFirstAdmin/);
 assert.match(browserAdminAuth, /\/token\?grant_type=password/);
+assert.match(browserAdminAuth, /\/signup/);
+assert.match(browserAdminAuth, /\/resend/);
+assert.match(browserAdminAuth, /api\/admin\/bootstrap\/status/);
+assert.match(browserAdminAuth, /api\/admin\/bootstrap\/claim/);
 assert.match(browserAdminAuth, /\/factors\/\$\{encodeURIComponent\(factorId\)\}\/challenge/);
 assert.match(browserAdminAuth, /\/factors\/\$\{encodeURIComponent\(pending\.factorId\)\}\/verify/);
 assert.match(browserAdminAuth, /aal !== "aal2"/);
 assert.match(browserAdminAuth, /api\/admin\/me/);
-assert.doesNotMatch(browserAdminAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET/);
+assert.doesNotMatch(browserAdminAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET|LICENSE_EDGE_RPC_SECRET/);
 
 assert.match(adminAuthHook, /beginBrowserNamedAdminLogin/);
+assert.match(adminAuthHook, /getBrowserAdminBootstrapStatus/);
+assert.match(adminAuthHook, /claimBrowserFirstAdmin/);
 assert.match(adminAuthHook, /beginBrowserAdminMfaEnrollment/);
 assert.match(adminAuthHook, /verifyBrowserAdminMfa/);
 assert.match(adminAuthHook, /activateBrowserAdminSession/);
 assert.match(adminAuthHook, /loadBrowserAdminDashboard/);
 assert.doesNotMatch(adminAuthHook, /adoptCloudflareAdminSession/);
+
+assert.doesNotMatch(adminBootstrapHook, /bootstrapFirstLicenseAdmin|from ["']\.\.\/actions["']/);
+assert.match(adminBootstrapHook, /beginBrowserFirstAdminSignup/);
+assert.match(adminBootstrapHook, /resendBrowserFirstAdminConfirmation/);
+assert.match(adminBootstrapHook, /getBrowserAdminBootstrapStatus/);
+assert.match(adminAuthCard, /Create first administrator/);
+assert.match(adminAuthCard, /Confirm the email/);
+assert.doesNotMatch(adminAuthCard, /Send a one-time setup email/);
+assert.doesNotMatch(adminPage, /firstAdminBootstrapStatus|bootstrapAvailable/);
 
 assert.match(browserAdminSession, /sessionStorage\.setItem/);
 assert.match(browserAdminSession, /aal === "aal2"/);
@@ -209,6 +231,7 @@ assert.doesNotMatch(browserAdminApi, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_
 
 assert.match(adminPanel, /useAdminAuthentication/);
 assert.match(adminPanel, /browserDirect/);
+assert.doesNotMatch(adminPanel, /bootstrapAvailable/);
 assert.match(adminPanel, /issueBrowserLicense/);
 assert.match(adminPanel, /setBrowserLicenseStatus/);
 assert.match(adminPanel, /createBrowserOfflineActivation/);
