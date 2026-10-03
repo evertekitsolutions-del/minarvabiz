@@ -37,6 +37,7 @@ assert.deepEqual(activeIgnores, [
   "928413c12a971a8116c5ea5d77bd39dca47ff327:apps/web/vercel.json:generic-api-key:21",
   "649eb9279698855a2e35bcf54933148e8d38f071:apps/web/vercel.json:generic-api-key:21",
   "apps/web/scripts/vercel-build.mjs:generic-api-key:10",
+  "95e80d0d948bf2166cac2af65f645a3929ea38a3:PROJECT_CONTINUATION.md:generic-api-key:163",
 ]);
 
 console.log("Secret scan gate contract smoke PASS");
