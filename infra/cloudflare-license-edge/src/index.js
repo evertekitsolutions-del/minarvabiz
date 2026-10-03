@@ -6,6 +6,8 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/public-key", { maxBody: 0 }],
   ["GET /api/update/manifest", { maxBody: 0, nativeUpdateManifest: true }],
   ["GET /api/admin/auth-config", { maxBody: 0, nativeAdminAuthConfig: true }],
+  ["GET /api/admin/bootstrap/status", { maxBody: 0, nativeAdminBootstrapStatus: true }],
+  ["POST /api/admin/bootstrap/claim", { maxBody: 0, nativeAdminBootstrapClaim: true }],
   ["GET /api/admin/me", { maxBody: 0, nativeAdminMe: true }],
   ["GET /api/admin/licenses", { maxBody: 0, nativeAdminLicenses: true }],
   ["POST /api/admin/licenses", { maxBody: 16 * 1024, nativeAdminLicenseIssue: true }],
@@ -140,6 +142,69 @@ function json(body, status = 200, headers = {}) {
       "x-minarva-license-edge": "cloudflare",
       ...headers,
     },
+  });
+}
+
+function normalizeAdminOrigin(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    if (url.protocol === "https:") return url.origin;
+    if (
+      url.protocol === "http:" &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+    ) return url.origin;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function adminAllowedOrigins(env) {
+  const configured = String(env.LICENSE_ADMIN_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((value) => normalizeAdminOrigin(value))
+    .filter(Boolean);
+  return new Set(configured);
+}
+
+function adminCorsHeaders(request, env, extra = {}) {
+  const origin = normalizeAdminOrigin(request.headers.get("origin") || "");
+  if (!origin || !adminAllowedOrigins(env).has(origin)) return { ...extra };
+  return {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "GET, POST, PATCH, OPTIONS",
+    "access-control-allow-headers": "Authorization, Content-Type, Accept",
+    "access-control-max-age": "86400",
+    "vary": "Origin",
+    ...extra,
+  };
+}
+
+function withAdminCors(response, request, env) {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(adminCorsHeaders(request, env))) {
+    headers.set(key, value);
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function adminPreflight(request, env) {
+  const origin = normalizeAdminOrigin(request.headers.get("origin") || "");
+  if (!origin || !adminAllowedOrigins(env).has(origin)) {
+    return json({ ok: false, code: "ORIGIN_NOT_ALLOWED" }, 403, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+  return new Response(null, {
+    status: 204,
+    headers: adminCorsHeaders(request, env, {
+      "x-minarva-license-edge": "cloudflare",
+      "x-minarva-admin-backend": "cloudflare-native",
+    }),
   });
 }
 
@@ -760,7 +825,7 @@ async function adminAuthenticatedRpc(request, env, rpcName, rpcBody = {}) {
         accept: "application/json",
       },
       body: JSON.stringify(rpcBody),
-      redirect: "error",
+      redirect: "manual",
       signal: AbortSignal.timeout(8_000),
     });
 
@@ -858,6 +923,170 @@ async function adminAuthenticatedRpc(request, env, rpcName, rpcBody = {}) {
         "x-minarva-admin-upstream-stage": "supabase-fetch",
       },
     );
+  }
+}
+
+async function adminBootstrapStatusNatively(request, env) {
+  const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
+  const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+  const edgeSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
+  if (!apiOrigin || !publishableKey || edgeSecret.length < 32) {
+    return json({ ok: false, code: "BOOTSTRAP_SERVICE_UNAVAILABLE" }, 503, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  try {
+    const response = await fetch(
+      `${apiOrigin}/rest/v1/rpc/cloudflare_admin_bootstrap_status`,
+      {
+        method: "POST",
+        headers: {
+          apikey: publishableKey,
+          authorization: `Bearer ${publishableKey}`,
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({ p_edge_secret: edgeSecret }),
+        redirect: "manual",
+        signal: AbortSignal.timeout(8_000),
+      },
+    );
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || typeof data !== "object" || Array.isArray(data)) {
+      return json({ ok: false, code: "BOOTSTRAP_SERVICE_UNAVAILABLE" }, 503, {
+        "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-upstream-status": String(response.status),
+      });
+    }
+
+    const output = {
+      ok: data.ok === true,
+      required: data.required === true,
+      configured: Boolean(
+        EMAIL_RE.test(String(env.LICENSE_ADMIN_BOOTSTRAP_EMAIL || "").trim().toLowerCase()) &&
+        String(env.LICENSE_ADMIN_BOOTSTRAP_NAME || "").trim(),
+      ),
+    };
+    if (!output.ok) {
+      return json({ ok: false, code: String(data.code || "BOOTSTRAP_SERVICE_UNAVAILABLE") }, 503, {
+        "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-upstream-status": String(response.status),
+        "x-minarva-admin-upstream-code": String(data.code || "UNKNOWN").slice(0, 80),
+      });
+    }
+    return json(output, 200, {
+      "x-minarva-admin-backend": "cloudflare-native",
+      "x-minarva-admin-data": "supabase-edge-secret-rpc",
+    });
+  } catch {
+    return json({ ok: false, code: "BOOTSTRAP_SERVICE_UNAVAILABLE" }, 503, {
+      "x-minarva-admin-backend": "cloudflare-native",
+      "x-minarva-admin-upstream-stage": "bootstrap-status",
+    });
+  }
+}
+
+async function adminBootstrapClaimNatively(request, env) {
+  const authorization = String(request.headers.get("authorization") || "").trim();
+  if (!authorization.startsWith("Bearer ")) {
+    return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const accessToken = authorization.slice("Bearer ".length).trim();
+  if (accessToken.length < 40 || accessToken.length > 16384 || accessToken.split(".").length !== 3) {
+    return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
+  const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+  const edgeSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
+  const bootstrapEmail = String(env.LICENSE_ADMIN_BOOTSTRAP_EMAIL || "").trim().toLowerCase();
+  const displayName = String(env.LICENSE_ADMIN_BOOTSTRAP_NAME || "").trim();
+  if (
+    !apiOrigin ||
+    !publishableKey ||
+    edgeSecret.length < 32 ||
+    !EMAIL_RE.test(bootstrapEmail) ||
+    displayName.length < 1 ||
+    displayName.length > 120
+  ) {
+    return json({ ok: false, code: "BOOTSTRAP_NOT_CONFIGURED" }, 503, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  try {
+    const response = await fetch(
+      `${apiOrigin}/rest/v1/rpc/cloudflare_admin_claim_first_admin`,
+      {
+        method: "POST",
+        headers: {
+          apikey: publishableKey,
+          authorization: `Bearer ${accessToken}`,
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({
+          p_edge_secret: edgeSecret,
+          p_bootstrap_email: bootstrapEmail,
+          p_display_name: displayName,
+        }),
+        redirect: "manual",
+        signal: AbortSignal.timeout(8_000),
+      },
+    );
+    if (response.status === 401) {
+      return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
+        "x-minarva-admin-backend": "cloudflare-native",
+      });
+    }
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || typeof data !== "object" || Array.isArray(data)) {
+      return json({ ok: false, code: "BOOTSTRAP_SERVICE_UNAVAILABLE" }, 503, {
+        "x-minarva-admin-backend": "cloudflare-native",
+      });
+    }
+
+    const rawStatus = Number(data.httpStatus);
+    const explicitStatus = Number.isInteger(rawStatus) && rawStatus >= 200 && rawStatus <= 599
+      ? rawStatus
+      : null;
+    const output = { ...data };
+    delete output.httpStatus;
+
+    if (output.ok === true) {
+      return json(output, 200, {
+        "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-data": "supabase-authenticated-bootstrap-rpc",
+      });
+    }
+
+    const code = String(output.code || "BOOTSTRAP_SERVICE_UNAVAILABLE");
+    let status = explicitStatus || 503;
+    if (code === "UNAUTHENTICATED") status = 401;
+    else if (
+      code === "MFA_REQUIRED" ||
+      code === "BOOTSTRAP_EMAIL_MISMATCH" ||
+      code === "BOOTSTRAP_IDENTITY_NOT_VERIFIED"
+    ) status = 403;
+    else if (
+      code === "BOOTSTRAP_CLOSED" ||
+      code === "BOOTSTRAP_IDENTITY_IN_USE"
+    ) status = 409;
+
+    return json({ ok: false, code }, status, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  } catch {
+    return json({ ok: false, code: "BOOTSTRAP_SERVICE_UNAVAILABLE" }, 503, {
+      "x-minarva-admin-backend": "cloudflare-native",
+      "x-minarva-admin-upstream-stage": "bootstrap-claim",
+    });
   }
 }
 
@@ -1080,7 +1309,7 @@ async function adminOfflineActivationNatively(request, env, route) {
         p_license_id: parsed.licenseId,
         p_device_id: parsed.deviceId,
       }),
-      redirect: "error",
+      redirect: "manual",
       signal: AbortSignal.timeout(8_000),
     });
 
@@ -1269,7 +1498,7 @@ async function fetchAdminProvisionRpc(apiOrigin, publishableKey, accessToken, rp
       accept: "application/json",
     },
     body: JSON.stringify(rpcBody),
-    redirect: "error",
+    redirect: "manual",
     signal: AbortSignal.timeout(8_000),
   });
 
@@ -1385,7 +1614,7 @@ async function adminCustomerProvisionNatively(request, env, route) {
           },
           create_user: true,
         }),
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(10_000),
       },
     );
@@ -1626,6 +1855,7 @@ export default {
           supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL) &&
           String(env.SUPABASE_PUBLISHABLE_KEY || "").trim(),
         ),
+        adminCorsConfigured: adminAllowedOrigins(env).size > 0,
         customerProvisioningConfigured: Boolean(
           supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL) &&
           String(env.SUPABASE_PUBLISHABLE_KEY || "").trim() &&
@@ -1634,6 +1864,10 @@ export default {
         renderDependency: false,
         paidDependencyIntroduced: false,
       });
+    }
+
+    if (request.method === "OPTIONS" && url.pathname.startsWith("/api/admin/")) {
+      return adminPreflight(request, env);
     }
 
     const route = ALLOWED_ROUTES.get(`${request.method} ${url.pathname}`);
@@ -1663,6 +1897,7 @@ export default {
           activationBackend: authority ? "cloudflare-native-supabase-rpc" : "unavailable",
           mutationBackend: authority ? "cloudflare-native" : "unavailable",
           adminAuthBackend: "cloudflare-native-supabase-jwt",
+          adminCorsBackend: "cloudflare-origin-allowlist",
           customerProvisioningBackend: "cloudflare-native-supabase-magic-link",
           renderDependency: false,
           paidDependencyIntroduced: false,
@@ -1693,54 +1928,70 @@ export default {
       const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
       const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
       if (!apiOrigin || !publishableKey) {
-        return json({ ok: false, code: "ADMIN_AUTH_NOT_CONFIGURED" }, 503, {
-          "x-minarva-admin-backend": "cloudflare-native",
-        });
+        return withAdminCors(
+          json({ ok: false, code: "ADMIN_AUTH_NOT_CONFIGURED" }, 503, {
+            "x-minarva-admin-backend": "cloudflare-native",
+          }),
+          request,
+          env,
+        );
       }
-      return json(
-        {
-          ok: true,
-          supabaseUrl: apiOrigin,
-          supabasePublishableKey: publishableKey,
-        },
-        200,
-        {
-          "cache-control": "public, max-age=300",
-          "x-minarva-admin-backend": "cloudflare-native",
-        },
+      return withAdminCors(
+        json(
+          {
+            ok: true,
+            supabaseUrl: apiOrigin,
+            supabasePublishableKey: publishableKey,
+          },
+          200,
+          {
+            "cache-control": "public, max-age=300",
+            "x-minarva-admin-backend": "cloudflare-native",
+          },
+        ),
+        request,
+        env,
       );
     }
 
+    if (route.nativeAdminBootstrapStatus) {
+      return withAdminCors(await adminBootstrapStatusNatively(request, env), request, env);
+    }
+
+    if (route.nativeAdminBootstrapClaim) {
+      return withAdminCors(await adminBootstrapClaimNatively(request, env), request, env);
+    }
+
     if (route.nativeAdminMe) {
-      return adminMeNatively(request, env);
+      return withAdminCors(await adminMeNatively(request, env), request, env);
     }
 
     if (route.nativeAdminLicenses) {
-      return adminLicensesNatively(request, env);
+      return withAdminCors(await adminLicensesNatively(request, env), request, env);
     }
 
     if (route.nativeAdminLicenseIssue) {
-      return adminLicenseIssueNatively(request, env, route);
+      return withAdminCors(await adminLicenseIssueNatively(request, env, route), request, env);
     }
 
     if (route.nativeAdminOfflineActivation) {
-      return adminOfflineActivationNatively(request, env, route);
+      return withAdminCors(await adminOfflineActivationNatively(request, env, route), request, env);
     }
 
     if (route.nativeAdminLicenseStatus) {
-      return adminLicenseStatusNatively(request, env, route);
+      return withAdminCors(await adminLicenseStatusNatively(request, env, route), request, env);
     }
 
     if (route.nativeAdminSupport) {
-      return adminSupportNatively(request, env);
+      return withAdminCors(await adminSupportNatively(request, env), request, env);
     }
 
     if (route.nativeAdminSupportUpdate) {
-      return adminSupportUpdateNatively(request, env, route);
+      return withAdminCors(await adminSupportUpdateNatively(request, env, route), request, env);
     }
 
     if (route.nativeAdminCustomerProvision) {
-      return adminCustomerProvisionNatively(request, env, route);
+      return withAdminCors(await adminCustomerProvisionNatively(request, env, route), request, env);
     }
 
     if (route.nativeActivate) {

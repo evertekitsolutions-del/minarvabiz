@@ -1,6 +1,7 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 
 const base = String(process.env.MINARVA_LICENSE_EDGE_URL || "https://minarva-biz-license-edge.minarva-biz.workers.dev").replace(/\/$/, "");
+const adminOrigin = String(process.env.MINARVA_LICENSE_ADMIN_ORIGIN || "https://minarvabiz-license-admin.onrender.com").replace(/\/$/, "");
 
 function assert(condition, message) {
   if (!condition) throw new Error(`LICENSE EDGE LIVE SMOKE FAILED: ${message}`);
@@ -39,6 +40,7 @@ assert(edge.data?.trialRpcConfigured === true, "Cloudflare-native trial RPC is n
 assert(edge.data?.activationSigningConfigured === true, "Cloudflare activation signing authority is not configured");
 assert(edge.data?.updateSigningConfigured === true, "Cloudflare update signing authority is not configured");
 assert(edge.data?.adminAuthConfigured === true, "Cloudflare admin auth foundation is not configured");
+assert(edge.data?.adminCorsConfigured === true, "Cloudflare admin CORS allowlist is not configured");
 assert(edge.data?.customerProvisioningConfigured === true, "Cloudflare customer provisioning is not configured");
 assert(edge.data?.renderDependency === false, "license edge must not depend on Render");
 assert(edge.data?.paidDependencyIntroduced === false, "edge must not introduce a paid dependency");
@@ -55,6 +57,7 @@ assert(health.data?.activationBackend === "cloudflare-native-supabase-rpc", "act
 assert(health.data?.mutationBackend === "cloudflare-native", "mutation backend is not Cloudflare-native");
 assert(health.data?.renderDependency === false, "API health must report zero Render dependency");
 assert(health.data?.adminAuthBackend === "cloudflare-native-supabase-jwt", "admin auth backend is not Cloudflare-native");
+assert(health.data?.adminCorsBackend === "cloudflare-origin-allowlist", "admin CORS backend is not the explicit allowlist");
 assert(health.data?.customerProvisioningBackend === "cloudflare-native-supabase-magic-link", "customer provisioning backend is not Cloudflare-native");
 assert(health.response.headers.get("x-minarva-license-edge") === "cloudflare", "edge response marker missing");
 assert(health.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "health must be served natively by Cloudflare");
@@ -97,7 +100,9 @@ assert(invalidActivation.response.status === 400, `invalid activation expected 4
 assert(invalidActivation.response.headers.get("x-minarva-license-edge") === "cloudflare", "activation did not traverse Cloudflare edge");
 assert(invalidActivation.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "activation must be Cloudflare-native");
 
-const adminAuthConfig = await fetchJson("/api/admin/auth-config");
+const adminAuthConfig = await fetchJson("/api/admin/auth-config", {
+  headers: { origin: adminOrigin },
+});
 assert(adminAuthConfig.response.ok, `admin auth config HTTP ${adminAuthConfig.response.status}`);
 assert(adminAuthConfig.data?.ok === true, "admin auth config did not report ok");
 assert(/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(String(adminAuthConfig.data?.supabaseUrl || "")), "admin auth config Supabase URL invalid");
@@ -105,6 +110,47 @@ const publicKey = String(adminAuthConfig.data?.supabasePublishableKey || "");
 assert(publicKey.length >= 20, "admin auth publishable key missing");
 assert(!/service_role|sb_secret_/i.test(publicKey), "admin auth config exposed a privileged key");
 assert(adminAuthConfig.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "admin auth config must be Cloudflare-native");
+assert(adminAuthConfig.response.headers.get("access-control-allow-origin") === adminOrigin, "admin auth config CORS origin mismatch");
+
+const adminPreflight = await fetchJson("/api/admin/me", {
+  method: "OPTIONS",
+  headers: {
+    origin: adminOrigin,
+    "access-control-request-method": "GET",
+    "access-control-request-headers": "authorization",
+  },
+});
+assert(adminPreflight.response.status === 204, `admin preflight expected 204, got ${adminPreflight.response.status}`);
+assert(adminPreflight.response.headers.get("access-control-allow-origin") === adminOrigin, "admin preflight CORS origin mismatch");
+assert(String(adminPreflight.response.headers.get("access-control-allow-headers") || "").toLowerCase().includes("authorization"), "admin preflight must allow Authorization header");
+
+const rejectedAdminOrigin = await fetchJson("/api/admin/me", {
+  method: "OPTIONS",
+  headers: {
+    origin: "https://example.invalid",
+    "access-control-request-method": "GET",
+    "access-control-request-headers": "authorization",
+  },
+});
+assert(rejectedAdminOrigin.response.status === 403, `untrusted admin origin expected 403, got ${rejectedAdminOrigin.response.status}`);
+assert(!rejectedAdminOrigin.response.headers.get("access-control-allow-origin"), "untrusted admin origin must not receive CORS allow-origin");
+
+const bootstrapStatus = await fetchJson("/api/admin/bootstrap/status", {
+  headers: { origin: adminOrigin },
+});
+assert(bootstrapStatus.response.ok, `admin bootstrap status HTTP ${bootstrapStatus.response.status}; code=${bootstrapStatus.data?.code || "none"}; upstreamStatus=${bootstrapStatus.response.headers.get("x-minarva-admin-upstream-status") || "none"}; upstreamCode=${bootstrapStatus.response.headers.get("x-minarva-admin-upstream-code") || "none"}; stage=${bootstrapStatus.response.headers.get("x-minarva-admin-upstream-stage") || "none"}`);
+assert(bootstrapStatus.data?.ok === true, "admin bootstrap status did not report ok");
+assert(bootstrapStatus.data?.required === false, "production bootstrap should be closed after first admin exists");
+assert(bootstrapStatus.response.headers.get("access-control-allow-origin") === adminOrigin, "bootstrap status CORS origin mismatch");
+assert(bootstrapStatus.response.headers.get("x-minarva-admin-backend") === "cloudflare-native", "bootstrap status must be Cloudflare-native");
+
+const unauthenticatedBootstrapClaim = await fetchJson("/api/admin/bootstrap/claim", {
+  method: "POST",
+  headers: { origin: adminOrigin },
+});
+assert(unauthenticatedBootstrapClaim.response.status === 401, `bootstrap claim without bearer expected 401, got ${unauthenticatedBootstrapClaim.response.status}`);
+assert(unauthenticatedBootstrapClaim.data?.code === "UNAUTHENTICATED", "bootstrap claim unauthenticated code mismatch");
+assert(unauthenticatedBootstrapClaim.response.headers.get("access-control-allow-origin") === adminOrigin, "bootstrap claim CORS origin mismatch");
 
 const unauthenticatedAdmin = await fetchJson("/api/admin/me");
 assert(unauthenticatedAdmin.response.status === 401, `admin me without bearer expected 401, got ${unauthenticatedAdmin.response.status}`);
