@@ -1851,6 +1851,7 @@ export default {
           supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL) &&
           String(env.SUPABASE_PUBLISHABLE_KEY || "").trim(),
         ),
+        adminCorsConfigured: adminAllowedOrigins(env).size > 0,
         customerProvisioningConfigured: Boolean(
           supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL) &&
           String(env.SUPABASE_PUBLISHABLE_KEY || "").trim() &&
@@ -1892,6 +1893,7 @@ export default {
           activationBackend: authority ? "cloudflare-native-supabase-rpc" : "unavailable",
           mutationBackend: authority ? "cloudflare-native" : "unavailable",
           adminAuthBackend: "cloudflare-native-supabase-jwt",
+          adminCorsBackend: "cloudflare-origin-allowlist",
           customerProvisioningBackend: "cloudflare-native-supabase-magic-link",
           renderDependency: false,
           paidDependencyIntroduced: false,
@@ -1922,9 +1924,13 @@ export default {
       const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
       const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
       if (!apiOrigin || !publishableKey) {
-        return json({ ok: false, code: "ADMIN_AUTH_NOT_CONFIGURED" }, 503, {
-          "x-minarva-admin-backend": "cloudflare-native",
-        });
+        return withAdminCors(
+          json({ ok: false, code: "ADMIN_AUTH_NOT_CONFIGURED" }, 503, {
+            "x-minarva-admin-backend": "cloudflare-native",
+          }),
+          request,
+          env,
+        );
       }
       return withAdminCors(
         json(
