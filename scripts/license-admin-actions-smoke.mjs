@@ -34,7 +34,7 @@ const actions = await readFile(
   "utf8",
 );
 
-for (const authAction of ["loginEmergencyAdmin", "logoutAdmin"]) {
+for (const authAction of ["loginEmergencyAdmin", "logoutEmergencyAdmin"]) {
   assert.match(actions, new RegExp(`export async function ${authAction}\\b`));
 }
 for (const retiredAction of [
@@ -43,10 +43,16 @@ for (const retiredAction of [
   "verifyAdminMfa",
   "cancelAdminMfa",
   "adoptCloudflareAdminSession",
+  "logoutAdmin",
 ]) {
   assert.doesNotMatch(actions, new RegExp(`export async function ${retiredAction}\\b`));
 }
 assert.doesNotMatch(actions, /from ["']\.\.\/lib\/named-admin["']/);
+assert.match(
+  actions,
+  /export async function logoutEmergencyAdmin\(\)[\s\S]*claims\?\.identity\.source === "emergency"/,
+  "Legacy server logout must be explicitly restricted to emergency sessions",
+);
 
 for (const registryAction of [
   "listLicenses",
@@ -151,6 +157,17 @@ assert.doesNotMatch(browserApi, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|L
 
 assert.match(panel, /useAdminAuthentication/);
 assert.match(panel, /browserDirect/);
+assert.match(panel, /await signOutBrowserAdmin\(\);/);
+assert.match(panel, /await logoutEmergencyAdmin\(\);/);
+const browserLogoutBranch = panel.match(
+  /if \(browserDirect\) \{([\s\S]*?)\n\s*return;\n\s*\}/,
+)?.[1] || "";
+assert.match(browserLogoutBranch, /signOutBrowserAdmin\(\)/);
+assert.doesNotMatch(
+  browserLogoutBranch,
+  /logoutEmergencyAdmin\(\)/,
+  "Normal named-admin logout must not call the legacy emergency server action",
+);
 assert.match(panel, /issueBrowserLicense/);
 assert.match(panel, /setBrowserLicenseStatus/);
 assert.match(panel, /createBrowserOfflineActivation/);

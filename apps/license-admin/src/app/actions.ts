@@ -299,13 +299,21 @@ export async function loginEmergencyAdmin(password: string) {
   return { ok: true };
 }
 
-export async function logoutAdmin() {
+export async function logoutEmergencyAdmin() {
   const cookieStore = await cookies();
   const claims = readAdminSessionToken(cookieStore.get(ADMIN_COOKIE)?.value || "");
-  if (claims) {
-    await recordAdminAudit(claims, "admin.session.logout", "success", "admin_session", claims.sessionId);
+
+  if (claims?.identity.source === "emergency") {
+    await recordAdminAudit(
+      claims,
+      "admin.session.logout",
+      "success",
+      "admin_session",
+      claims.sessionId,
+    );
     await revokeRegisteredAdminSession(claims.sessionId, "logout");
   }
+
   cookieStore.delete(ADMIN_COOKIE);
   return { ok: true };
 }
