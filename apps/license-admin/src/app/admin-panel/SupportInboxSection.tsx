@@ -3,16 +3,21 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { updateSupportRequest } from "../actions";
+import { updateBrowserSupportRequest } from "./browser-admin-api";
 import { canManageSupport } from "./model";
 import { SupportInboxCard } from "./SupportInboxCard";
-import type { AdminRole, SupportRequestRow, SupportRequestStatus } from "./types";
+import type { AdminRole, AdminSource, SupportRequestRow, SupportRequestStatus } from "./types";
 
 export function SupportInboxSection({
   role,
+  source,
   requests,
+  onRefresh,
 }: {
   role: AdminRole;
+  source: AdminSource;
   requests: SupportRequestRow[];
+  onRefresh?: () => Promise<void>;
 }) {
   const router = useRouter();
   const [busy, setBusy] = React.useState(false);
@@ -26,14 +31,17 @@ export function SupportInboxSection({
   }) {
     setBusy(true);
     setMessage(null);
-    const result = await updateSupportRequest(input);
+    const result = source === "supabase"
+      ? await updateBrowserSupportRequest(input)
+      : await updateSupportRequest(input);
     setBusy(false);
     if (!result.ok) {
       setMessage(result.error || "Support request update failed");
       return;
     }
     setMessage("Support request updated.");
-    router.refresh();
+    if (source === "supabase" && onRefresh) await onRefresh();
+    else router.refresh();
   }
 
   return (
