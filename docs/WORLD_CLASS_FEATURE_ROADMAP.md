@@ -1,5 +1,7 @@
 # Minarva Biz — World-Class Product Roadmap
 
+> **Superseded scope notice (2026-10-02):** This file is retained as historical/high-level context. The authoritative product scope is now `docs/MASTER_PRODUCT_PLAN.md`, `docs/CAPABILITY_REGISTRY.md`, `docs/AI_CAPABILITY_REGISTRY.md`, and `docs/COMPETITOR_CAPABILITY_BASELINE.md`. When scope conflicts, those newer documents win.
+
 Minarva Biz should compete as a complete retail + tailoring + laundry + service operations platform, not only as a billing application.
 
 ## Product pillars

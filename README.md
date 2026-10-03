@@ -1,15 +1,15 @@
 # MINARVA BIZ
 
-**Commercial Boutique Billing & Management Software**  
+**Global AI-first, local-first business operating platform for SMBs**  
 Online · Offline (Windows) · Hybrid
 
-Built for real boutique, tailoring, and laundry shops.
+Boutique/tailoring/laundry is the first delivered industry focus; the long-term product is one shared multi-industry, multi-country platform. See `docs/MASTER_PRODUCT_PLAN.md`.
 
 ---
 
 ## Current commercial release
 
-**Version 1.0.6** — current customer-delivery release. Automated Windows install/click/deep-smoke gates pass; physical customer-PC UAT remains the final delivery gate.
+**Version 1.0.15** — current stable Windows release. Recent Cloudflare licensing/admin backend migrations do not by themselves require a new Windows release.
 
 ## Editions
 
@@ -63,6 +63,10 @@ packages/
   billing/             Line-item / invoice math
   types/ validation/ utils/
 docs/
+  MASTER_PRODUCT_PLAN.md
+  CAPABILITY_REGISTRY.md
+  AI_CAPABILITY_REGISTRY.md
+  COMPETITOR_CAPABILITY_BASELINE.md
   ARCHITECTURE.md  DATABASE.md  LICENSING.md  PRODUCTION.md
 ```
 
@@ -94,7 +98,7 @@ Or use the helper:
 powershell -ExecutionPolicy Bypass -File .\build-windows.ps1
 ```
 
-For the current release the installer is `apps/desktop/release/MinarvaBiz-Setup-1.0.6.exe`. The helper script is version-independent and discovers `MinarvaBiz-Setup-*.exe` automatically.
+For the current release the installer is `apps/desktop/release/MinarvaBiz-Setup-1.0.15.exe`. The helper script is version-independent and discovers `MinarvaBiz-Setup-*.exe` automatically.
 
 ## Verification commands
 
@@ -117,7 +121,7 @@ node scripts/smoke.mjs
 Required production configuration includes:
 
 - `NODE_ENV=production`
-- `APP_VERSION=1.0.6`
+- `APP_VERSION=1.0.15`
 - `APP_EDITION=online` or `hybrid`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — browser-safe anon key
