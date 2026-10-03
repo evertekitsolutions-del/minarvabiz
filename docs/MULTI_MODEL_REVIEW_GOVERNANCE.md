@@ -287,12 +287,12 @@ For Claude independent PR review, the approved initial integration is Anthropic'
 
 - upstream: `anthropics/claude-code-action`
 - license: MIT
-- pinned commit: `cfc3eb22bfed5c26ef66e3223c982af27e4524de`
+- pinned commit: `ed670b4cf9de2a5a570d130d2f6197b9e543cd64`
 - authentication input: `CLAUDE_CODE_OAUTH_TOKEN`
 - repository workflow: `.github/workflows/claude-independent-review.yml`
 - reviewer instructions: `CLAUDE.md`
 
-The action pin was inspected before adoption. Do not replace it with a floating tag without repeating the supply-chain review.
+The action pin was inspected before adoption. The current pin is 11 upstream commits newer than the initial reviewed pin and includes Anthropic workflow-hardening work plus Claude Code/agent SDK patch updates. Do not replace it with a floating tag without repeating the supply-chain review.
 
 The workflow deliberately:
 
@@ -303,6 +303,7 @@ The workflow deliberately:
 - runs only for non-draft same-repository pull requests;
 - cancels stale in-progress reviews for the same PR;
 - keeps full Claude output disabled;
+- runs Claude Code with `--permission-mode auto` so tool calls outside explicitly allowed behavior receive Claude Code safety review;
 - uses the GitHub Step Summary for review output rather than granting comment-write access;
 - remains disabled unless repository variable `CLAUDE_REVIEW_ENABLED=true`;
 - requires GitHub secret `CLAUDE_CODE_OAUTH_TOKEN`.

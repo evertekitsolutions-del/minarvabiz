@@ -88,9 +88,9 @@ Recent Cloudflare/admin backend work does not by itself require a new Windows re
 
 ## 5. Latest verified development state
 
-After PR #229:
+After PR #231:
 
-- current verified main: **`b463496f71fe2ef3e80473ffcb99de50fd67ae4c`**
+- current verified main: **`317076e2b90a6c225f37659fbb1c533c2acb32de`**
 - open PRs at post-merge verification: **0**
 - open issues at post-merge verification: **0**
 - stable Windows release remains **v1.0.15**
@@ -104,6 +104,7 @@ After PR #229:
 - PR #228 final head: `5ff4b69b56db7e5c62ec2226a241a70acab1a6cf`
 - all **12 workflows triggered by PR #228 were GREEN** before merge
 - PR #229 merged the authoritative multi-model review + innovation governance; all **11 workflows triggered by PR #229 were GREEN** before merge
+- PR #231 merged the governed Claude independent PR-review workflow; all **11 normal workflows were GREEN**, while Claude review was intentionally `SKIPPED` because authentication/enablement is not yet configured
 
 Current normal named-admin behavior:
 
