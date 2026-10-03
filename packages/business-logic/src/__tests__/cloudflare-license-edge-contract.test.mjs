@@ -16,6 +16,9 @@ const desktopLicense = read("apps/desktop/electron/license.ts");
 const adminPanel = read("apps/license-admin/src/app/AdminPanel.tsx");
 const adminActions = read("apps/license-admin/src/app/actions.ts");
 const browserAdminAuth = read("apps/license-admin/src/app/admin-panel/browser-admin-auth.ts");
+const browserAdminApi = read("apps/license-admin/src/app/admin-panel/browser-admin-api.ts");
+const browserAdminSession = read("apps/license-admin/src/app/admin-panel/browser-admin-session.ts");
+const adminAuthHook = read("apps/license-admin/src/app/admin-panel/useAdminAuthentication.ts");
 const validationBridge = read("supabase/migrations/20261002_cloudflare_license_validate_bridge.sql");
 const deactivationBridge = read("supabase/migrations/20261002_cloudflare_license_deactivate_bridge.sql");
 const trialBridge = read("supabase/migrations/20261002_cloudflare_trial_register_bridge.sql");
@@ -150,15 +153,42 @@ assert.match(browserAdminAuth, /aal !== "aal2"/);
 assert.match(browserAdminAuth, /api\/admin\/me/);
 assert.doesNotMatch(browserAdminAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET/);
 
-assert.match(adminPanel, /beginBrowserNamedAdminLogin/);
-assert.match(adminPanel, /beginBrowserAdminMfaEnrollment/);
-assert.match(adminPanel, /verifyBrowserAdminMfa/);
-assert.match(adminPanel, /adoptCloudflareAdminSession/);
+assert.match(adminAuthHook, /beginBrowserNamedAdminLogin/);
+assert.match(adminAuthHook, /beginBrowserAdminMfaEnrollment/);
+assert.match(adminAuthHook, /verifyBrowserAdminMfa/);
+assert.match(adminAuthHook, /activateBrowserAdminSession/);
+assert.match(adminAuthHook, /loadBrowserAdminDashboard/);
+assert.doesNotMatch(adminAuthHook, /adoptCloudflareAdminSession/);
+
+assert.match(browserAdminSession, /sessionStorage\.setItem/);
+assert.match(browserAdminSession, /aal === "aal2"/);
+assert.match(browserAdminSession, /hasTotp/);
+assert.match(browserAdminSession, /\/auth\/v1\/logout\?scope=local/);
+assert.doesNotMatch(browserAdminSession, /localStorage/);
+
+for (const route of [
+  "/api/admin/me",
+  "/api/admin/licenses",
+  "/api/admin/licenses/status",
+  "/api/admin/licenses/offline-activation",
+  "/api/admin/support",
+  "/api/admin/customers/provision",
+]) {
+  assert.ok(browserAdminApi.includes(route), `browser admin API must call ${route}`);
+}
+assert.match(browserAdminApi, /authorization.*Bearer/si);
+assert.doesNotMatch(browserAdminApi, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_PRIVATE_KEY/);
+
+assert.match(adminPanel, /useAdminAuthentication/);
+assert.match(adminPanel, /browserDirect/);
+assert.match(adminPanel, /issueBrowserLicense/);
+assert.match(adminPanel, /setBrowserLicenseStatus/);
+assert.match(adminPanel, /createBrowserOfflineActivation/);
+assert.doesNotMatch(adminPanel, /adoptCloudflareAdminSession/);
 assert.doesNotMatch(adminPanel, /\bloginAdmin\b|\bbeginAdminMfaEnrollment\b|\bverifyAdminMfa\b|\bcancelAdminMfa\b/);
 
-assert.match(adminActions, /export async function adoptCloudflareAdminSession/);
-assert.match(adminActions, /minarva-biz-license-edge\.minarva-biz\.workers\.dev\/api\/admin\/me/);
-assert.match(adminActions, /establishAdminSession[\s\S]*"totp"/);
+assert.match(adminActions, /export async function loginEmergencyAdmin/);
+assert.match(adminActions, /export async function logoutAdmin/);
 
 assert.match(validationBridge, /CREATE SCHEMA IF NOT EXISTS license_private/);
 assert.match(validationBridge, /secret_sha256/);
