@@ -25,7 +25,6 @@ const ALLOWED_ROUTES = new Map([
 
 const DEFAULT_SUPABASE_URL = "https://wmjgefbaliuwmaxyzxkq.supabase.co";
 const DEFAULT_ONLINE_APP_URL = "https://minarvabiz-steel.vercel.app";
-const DEFAULT_ADMIN_APP_ORIGIN = "https://minarvabiz-license-admin.onrender.com";
 const GITHUB_LATEST_RELEASE =
   "https://github.com/evertekitsolutions-del/minarvabiz/releases/latest";
 const GITHUB_RELEASE_DOWNLOAD_BASE =
@@ -161,9 +160,7 @@ function normalizeAdminOrigin(value) {
 }
 
 function adminAllowedOrigins(env) {
-  const configured = String(
-    env.LICENSE_ADMIN_ALLOWED_ORIGINS || DEFAULT_ADMIN_APP_ORIGIN,
-  )
+  const configured = String(env.LICENSE_ADMIN_ALLOWED_ORIGINS || "")
     .split(",")
     .map((value) => normalizeAdminOrigin(value))
     .filter(Boolean);
