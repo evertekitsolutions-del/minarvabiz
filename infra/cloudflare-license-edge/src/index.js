@@ -825,7 +825,7 @@ async function adminAuthenticatedRpc(request, env, rpcName, rpcBody = {}) {
         accept: "application/json",
       },
       body: JSON.stringify(rpcBody),
-      redirect: "error",
+      redirect: "manual",
       signal: AbortSignal.timeout(8_000),
     });
 
@@ -948,7 +948,7 @@ async function adminBootstrapStatusNatively(request, env) {
           accept: "application/json",
         },
         body: JSON.stringify({ p_edge_secret: edgeSecret }),
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(8_000),
       },
     );
@@ -1043,7 +1043,7 @@ async function adminBootstrapClaimNatively(request, env) {
           p_bootstrap_email: bootstrapEmail,
           p_display_name: displayName,
         }),
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(8_000),
       },
     );
@@ -1316,7 +1316,7 @@ async function adminOfflineActivationNatively(request, env, route) {
         p_license_id: parsed.licenseId,
         p_device_id: parsed.deviceId,
       }),
-      redirect: "error",
+      redirect: "manual",
       signal: AbortSignal.timeout(8_000),
     });
 
@@ -1505,7 +1505,7 @@ async function fetchAdminProvisionRpc(apiOrigin, publishableKey, accessToken, rp
       accept: "application/json",
     },
     body: JSON.stringify(rpcBody),
-    redirect: "error",
+    redirect: "manual",
     signal: AbortSignal.timeout(8_000),
   });
 
@@ -1621,7 +1621,7 @@ async function adminCustomerProvisionNatively(request, env, route) {
           },
           create_user: true,
         }),
-        redirect: "error",
+        redirect: "manual",
         signal: AbortSignal.timeout(10_000),
       },
     );
