@@ -88,11 +88,11 @@ Recent Cloudflare/admin backend work does not by itself require a new Windows re
 
 ## 5. Latest verified development state
 
-After PR #228:
+After PR #229:
 
-- current verified main: **`fcffa6787b1c3692462a41e51c3eccb2d19a3c9c`**
-- open PRs at post-merge verification: **0**
-- open issues at post-merge verification: **0**
+- current verified main: **`b463496f71fe2ef3e80473ffcb99de50fd67ae4c`**
+- PR #229 merged the authoritative multi-model review and innovation governance
+- open PRs/issues must always be live-verified before continuing
 - stable Windows release remains **v1.0.15**
 - PR #218 merged the durable global AI-first master plan, capability registry, AI registry, competitor baseline and engineering reuse policy
 - PR #220 routed normal named-admin License Admin operations browser -> Supabase Auth / Cloudflare directly
@@ -287,6 +287,7 @@ Recommended next sequence:
 7. Establish Minarva Intelligence platform foundation before large-scale AI feature rollout.
 8. Continue capability-by-capability implementation from `docs/CAPABILITY_REGISTRY.md` without scope reduction.
 9. For substantial milestones, apply `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md`: automated evidence remains mandatory; independent AI reviewers are advisory and the final decision is based on verified repository/runtime evidence.
+10. Claude read-only GitHub reviewer execution layer is prepared in `.github/workflows/claude-independent-review.yml` + `CLAUDE.md`; keep it disabled until `CLAUDE_REVIEW_ENABLED=true` and a `CLAUDE_CODE_OAUTH_TOKEN` are configured without violating the first-25-customer cost policy.
 
 ## 16. Small-milestone rule
 
