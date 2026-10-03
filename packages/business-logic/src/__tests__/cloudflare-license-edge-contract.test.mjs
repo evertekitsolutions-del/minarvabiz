@@ -51,7 +51,7 @@ assert.match(worker, /POST \/api\/admin\/bootstrap\/signup-reservation/);
 assert.match(worker, /nativeAdminBootstrapSignupReservation: true/);
 assert.match(worker, /async function adminBootstrapSignupReservationNatively\(request, env, route\)/);
 assert.match(worker, /cloudflare_admin_prepare_bootstrap_signup/);
-assert.match(worker, /bootstrap_token/);
+assert.match(worker, /signupToken/);
 assert.match(worker, /token_sha256/);
 assert.match(worker, /nativeAdminBootstrapStatus: true/);
 assert.match(worker, /nativeAdminBootstrapClaim: true/);
