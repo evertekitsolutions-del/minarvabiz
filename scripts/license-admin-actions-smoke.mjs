@@ -68,6 +68,10 @@ assert.match(
 assert.match(actions, /buildOfflineActivationPackage\(\{/);
 assert.match(actions, /filename: `MinarvaBiz-\$\{license\.license_id\}-\$\{deviceId\.slice\(0, 8\)\}\.lic`/);
 
+const page = await readFile(
+  new URL("../apps/license-admin/src/app/page.tsx", import.meta.url),
+  "utf8",
+);
 const panel = await readFile(
   new URL("../apps/license-admin/src/app/AdminPanel.tsx", import.meta.url),
   "utf8",
@@ -87,6 +91,26 @@ const browserSession = await readFile(
 const authHook = await readFile(
   new URL("../apps/license-admin/src/app/admin-panel/useAdminAuthentication.ts", import.meta.url),
   "utf8",
+);
+
+assert.match(page, /readAdminSessionToken/);
+assert.match(page, /claims\?\.identity\.source === "emergency"/);
+assert.match(page, /if \(!emergencySession\)/);
+assert.match(page, /identity=\{null\}/);
+assert.match(page, /initialLicenses=\{\[\]\}/);
+assert.match(page, /initialSupportRequests=\{\[\]\}/);
+assert.ok(
+  page.indexOf("if (!emergencySession)") < page.indexOf("listLicenses()"),
+  "Normal page hydration must return the browser-auth shell before legacy license reads",
+);
+assert.ok(
+  page.indexOf("if (!emergencySession)") < page.indexOf("listSupportRequests()"),
+  "Normal page hydration must return the browser-auth shell before legacy support reads",
+);
+assert.match(
+  page,
+  /const \[licenses, support\] = await Promise\.all\(\[[\s\S]*listLicenses\(\)[\s\S]*listSupportRequests\(\)[\s\S]*\]\)/,
+  "Legacy server hydration must remain isolated to the explicit emergency fallback",
 );
 
 assert.match(browserAuth, /\/token\?grant_type=password/);
