@@ -490,3 +490,12 @@ Every new capability must declare:
 No major feature should be implemented without an ID in this registry or a documented reason to add a new ID.
 
 Quarterly competitor research may add capabilities, but should not silently remove previously committed scope.
+
+## Full-scope / reuse rule
+
+- Difficulty, time, dependency friction or provider limitations are not reasons to silently remove or downgrade a capability already accepted into this registry.
+- Small milestones may deliver the capability incrementally, but the registry item is not complete until the agreed full behavior is implemented and verified.
+- Before writing major functionality from scratch, inspect existing Minarva code, official SDKs/reference implementations and mature open-source options.
+- Third-party code reuse must pass license, security, maintenance, portability and self-hostability review. Public GitHub visibility alone is not permission to copy code.
+- When a reused component is adopted, record upstream source/version/license and the Minarva replacement/migration path.
+- See `docs/ENGINEERING_REUSE_POLICY.md` for the authoritative engineering policy.
