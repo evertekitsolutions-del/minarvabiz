@@ -219,3 +219,10 @@ Whenever a major reusable external component is adopted, add a short record to t
 - replacement/migration path.
 
 This keeps future chats and maintainers from accidentally replacing or removing required behavior.
+
+
+## 15. Multi-model review
+
+Substantial implementation/refactor milestones should also follow `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md`.
+
+Independent AI reviewers may challenge architecture, security, edge cases and product scope, but they do not replace automated tests, runtime verification or the final evidence-based Minarva decision. Reviewer recommendations to reuse external code still require the license/security/maintenance checks in this document.
