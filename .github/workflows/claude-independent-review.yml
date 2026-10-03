@@ -1,0 +1,50 @@
+name: Claude Independent Review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  actions: read
+
+jobs:
+  claude-review:
+    name: Claude Independent Review
+    if: ${{ vars.CLAUDE_REVIEW_ENABLED == 'true' && github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Independent architecture, security and innovation review
+        uses: anthropics/claude-code-action@ed670b4cf9de2a5a570d130d2f6197b9e543cd64 # v1.0.240
+        with:
+          github_token: ${{ github.token }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          additional_permissions: |
+            actions: read
+          use_sticky_comment: "false"
+          track_progress: "false"
+          include_fix_links: "false"
+          display_report: "true"
+          show_full_output: "false"
+          claude_args: "--max-turns 8"
+          prompt: |
+            Act only as the independent read-only adversarial reviewer for Minarva Biz.
+            Read CLAUDE.md and every authoritative project document it references.
+
+            Review the full PR diff, related code paths and available CI evidence.
+            Do not edit files, push commits, approve, merge, or reduce the agreed feature scope as a shortcut.
+
+            Challenge correctness, security, data isolation, data loss, local-first/multi-branch behavior,
+            accounting/inventory idempotency, audit integrity, provider lock-in, self-host portability,
+            first-25-customer recurring-cost impact, missing tests and missing production verification.
+
+            Identify relevant existing Minarva code, official SDKs/standards and clearly licensed maintained OSS
+            worth inspecting before more custom code. Also propose only meaningful AI/innovation ideas that align
+            with the master product and AI registries.
+
+            Finish with exactly one recommendation: BLOCK, REVIEW, or CLEAR.
