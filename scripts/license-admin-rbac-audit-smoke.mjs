@@ -53,8 +53,16 @@ const panelModel = await readFile(new URL("../apps/license-admin/src/app/admin-p
 assert.match(panelTypes, /type AdminRole = "viewer" \| "operator" \| "admin"/);
 assert.match(panelModel, /canIssueLicense/);
 assert.match(panelModel, /canManageLicenseStatus/);
-assert.match(panel, /const canIssue = canIssueLicense\(identity\.role\)/);
-assert.match(panel, /const canManageStatus = canManageLicenseStatus\(identity\.role\)/);
+assert.match(panel, /const canIssue = canIssueLicense\(activeIdentity\.role\)/);
+assert.match(panel, /const canManageStatus = canManageLicenseStatus\(activeIdentity\.role\)/);
+
+const browserApi = await readFile(new URL("../apps/license-admin/src/app/admin-panel/browser-admin-api.ts", import.meta.url), "utf8");
+assert.match(browserApi, /issueBrowserLicense/);
+assert.match(browserApi, /setBrowserLicenseStatus/);
+assert.match(browserApi, /updateBrowserSupportRequest/);
+assert.match(browserApi, /provisionBrowserCustomer/);
+assert.match(browserApi, /authorization.*Bearer/si);
+assert.doesNotMatch(browserApi, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_PRIVATE_KEY/);
 
 const migration = await readFile(new URL("../supabase/migrations/20260924_license_admin_rbac_audit.sql", import.meta.url), "utf8");
 assert.match(migration, /DEFAULT 'viewer'/);
