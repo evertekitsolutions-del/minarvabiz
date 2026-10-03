@@ -88,9 +88,9 @@ Recent Cloudflare/admin backend work does not by itself require a new Windows re
 
 ## 5. Latest verified development state
 
-After PR #226:
+After PR #228:
 
-- current verified main: **`da8e99ea5b1aa481141bde43e7dba42a9146aaac`**
+- current verified main: **`fcffa6787b1c3692462a41e51c3eccb2d19a3c9c`**
 - open PRs at post-merge verification: **0**
 - open issues at post-merge verification: **0**
 - stable Windows release remains **v1.0.15**
@@ -99,8 +99,10 @@ After PR #226:
 - PR #224 removed normal page-hydration dependence on legacy server reads; only explicit emergency fallback still hydrates through legacy server actions
 - PR #225 removed obsolete normal named-admin password/MFA/adoption server paths and kept the legacy server session restricted to emergency access
 - PR #226 moved normal named-admin logout fully browser-side and renamed/restricted the remaining server logout to `logoutEmergencyAdmin`
-- PR #226 final head: `f686040ebb7eb00022ede8fb7a1e0c7013798263`
-- all **11 workflows triggered by PR #226 were GREEN** before merge
+- PR #228 added the Cloudflare first-admin bootstrap authority foundation: bootstrap status/claim routes, strict browser CORS, AAL2 + confirmed-email + configured-email claim gates, Cloudflare-only edge-secret verification, serialized first-claim locking and audit
+- PR #228 production Cloudflare deployment: `b4d4ce3c77b749b38ac66b8ad6986e39`
+- PR #228 final head: `5ff4b69b56db7e5c62ec2226a241a70acab1a6cf`
+- all **12 workflows triggered by PR #228 were GREEN** before merge
 
 Current normal named-admin behavior:
 
@@ -112,7 +114,8 @@ Current normal named-admin behavior:
 - normal identity, license registry, support inbox, license issue, status changes, offline activation, support updates and customer provisioning call Cloudflare directly
 - normal logout clears the browser session and calls Supabase local logout directly; it does **not** call the legacy server logout action
 - legacy server session/logout paths are now explicitly emergency-only
-- first-admin bootstrap and emergency break-glass remain transitional server-side flows
+- first-admin bootstrap authority now exists at Cloudflare, but the browser signup/email-verification/TOTP/claim UX is not yet complete; the old server bootstrap remains only as a verified fallback until that UX is proven
+- emergency break-glass remains transitional server-side
 
 ## 6. Cloudflare License/Admin state
 
@@ -168,10 +171,10 @@ Normal named-admin authentication, business operations, page hydration and logou
 
 Remaining Render/Next migration scope is now limited mainly to:
 
-- first-admin bootstrap, which still requires privileged server-side Auth/DB administration;
+- browser first-admin signup/email-verification -> TOTP AAL2 -> Cloudflare bootstrap claim UX; the authority/backend is already Cloudflare-native, while the legacy server bootstrap remains temporary fallback;
 - emergency break-glass login/session/logout and emergency-only legacy business-operation fallback;
 - License Admin UI hosting itself, which still runs on the transitional Next hosting path;
-- server-side privileged helpers retained only because bootstrap/emergency compatibility still depends on them.
+- server-side privileged helpers retained only because bootstrap/emergency fallback compatibility still depends on them.
 
 Do not remove Render configuration/service until first-admin bootstrap, emergency access and License Admin UI hosting have verified replacements.
 
@@ -275,7 +278,7 @@ Continue Render removal in small verified steps.
 
 Recommended next sequence:
 
-1. **Design and migrate first-admin bootstrap without exposing a service-role/secret key or unrestricted Auth admin capability to the browser/Worker.** Research existing Supabase-supported bootstrap patterns and license-compatible reference implementations before custom coding.
+1. **Complete browser first-admin signup/email verification -> TOTP AAL2 -> Cloudflare bootstrap claim UX on top of the already-merged PR #228 authority foundation.** Keep the legacy service-role bootstrap only as fallback until browser replacement passes end-to-end verification.
 2. Re-evaluate emergency break-glass design for Cloudflare/self-host portability. Preserve a real emergency path; do not delete the capability merely to remove Render.
 3. Verify a Cloudflare-compatible License Admin UI deployment path and migrate the UI hosting while preserving all named-admin/bootstrap/emergency behavior.
 4. Only after all above paths are verified, remove Render configuration/service.
@@ -284,7 +287,28 @@ Recommended next sequence:
 7. Establish Minarva Intelligence platform foundation before large-scale AI feature rollout.
 8. Continue capability-by-capability implementation from `docs/CAPABILITY_REGISTRY.md` without scope reduction.
 
-## 16. Small-milestone rule
+## 16. Independent AI review protocol
+
+A second AI reviewer is being integrated through Anthropic's official Claude Code GitHub Action.
+
+Authoritative governance:
+
+- `CLAUDE.md`
+- `docs/AI_REVIEW_GOVERNANCE.md`
+- `.github/workflows/claude-independent-review.yml`
+
+Rules:
+
+- Claude is advisory/adversarial review, not final decision authority.
+- Initial Claude access is read-only for repository contents, read-only for Actions/CI, and write-only for PR/issue comments.
+- Claude receives no deployment/database/cloud secrets and no merge permission.
+- Claude must explicitly review scope integrity, tests, security, local-first/multi-branch impact, self-host portability, reuse opportunities and meaningful AI/innovation ideas.
+- Claude may not recommend feature removal/simplification merely to avoid engineering difficulty.
+- The primary Minarva workflow reads Claude findings, accepts/rejects them based on evidence, fixes justified findings, reruns tests and makes the final merge decision.
+- The workflow is gated by `CLAUDE_REVIEW_ENABLED` and must remain disabled until Anthropic authentication is configured.
+- Under the first-25-customer cost rule, do not introduce paid Anthropic API usage without explicit cost approval. Prefer a no-additional-cost eligible Claude Code OAuth route if the user has access.
+
+## 17. Small-milestone rule
 
 Do not try to build the entire master plan at once.
 
