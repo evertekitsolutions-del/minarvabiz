@@ -53,6 +53,8 @@ assert.match(worker, /LICENSE_ADMIN_ALLOWED_ORIGINS/);
 assert.match(worker, /function adminCorsHeaders\(request, env, extra = \{\}\)/);
 assert.match(worker, /function withAdminCors\(response, request, env\)/);
 assert.match(worker, /function adminPreflight\(request, env\)/);
+assert.match(worker, /adminCorsConfigured: adminAllowedOrigins\(env\)\.size > 0/);
+assert.match(worker, /adminCorsBackend: "cloudflare-origin-allowlist"/);
 assert.match(worker, /request\.method === "OPTIONS" && url\.pathname\.startsWith\("\/api\/admin\/"\)/);
 assert.match(worker, /nativeAdminAuthConfig: true/);
 assert.match(worker, /supabasePublishableKey/);
