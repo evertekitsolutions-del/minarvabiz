@@ -279,3 +279,40 @@ Merge
 ```
 
 This process should eventually be automated through provider-neutral review adapters so Claude, OpenAI/Codex and other approved models can be added or replaced without changing the core engineering workflow.
+
+
+## 13. Claude GitHub execution profile
+
+The repository includes a gated read-only Claude review workflow:
+
+- workflow: `.github/workflows/claude-independent-review.yml`;
+- reviewer instructions: `CLAUDE.md`;
+- official action: `anthropics/claude-code-action`;
+- reviewed release: **v1.0.240**;
+- immutable pin: `ed670b4cf9de2a5a570d130d2f6197b9e543cd64`;
+- upstream license: MIT.
+
+The workflow preserves Minarva's existing GitHub Actions hardening policy:
+
+- `contents: read`;
+- `pull-requests: read`;
+- `issues: read`;
+- `actions: read`;
+- no repository write permission;
+- no merge/approval permission;
+- no production database/cloud credentials;
+- `show_full_output` disabled.
+
+Claude emits its findings through the workflow report. The primary Minarva workflow reads that evidence, accepts or rejects findings using code/tests/docs/runtime evidence, and makes the final decision.
+
+Activation is intentionally gated by repository variable:
+
+`CLAUDE_REVIEW_ENABLED=true`
+
+and requires GitHub secret:
+
+`CLAUDE_CODE_OAUTH_TOKEN`
+
+Do not add or enable paid Anthropic API usage merely to activate this reviewer while the first-25-customer zero-cost rule is in force. If the user has an eligible Claude Code OAuth route, prefer that. Otherwise leave the reviewer disabled until cost/authentication is explicitly approved.
+
+When the action pin is updated, inspect the new Anthropic source/release, license, permissions and inputs before changing the immutable SHA.
