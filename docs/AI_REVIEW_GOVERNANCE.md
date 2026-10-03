@@ -35,8 +35,8 @@ Initial permission set is deliberately read-oriented:
 
 - repository contents: read;
 - GitHub Actions results: read;
-- pull requests/issues: write only so the reviewer can publish its review comment;
-- no repository contents write permission;
+- pull requests/issues: read;
+- no repository or PR/issue write permission;
 - no deployment/cloud/database credentials;
 - no production secrets;
 - no merge approval.
@@ -88,19 +88,19 @@ When enabled:
 6. rejected findings should have a concrete technical reason;
 7. merge occurs only when required repository checks are green and the primary workflow is satisfied.
 
-Claude review should initially be **advisory, not a required branch-protection check**, because missing external authentication must never block repository development. Once the integration is proven reliable and its access/cost model is accepted, making it a required check can be reconsidered.
+Claude review should initially be **advisory, not a required branch-protection check**, because missing external authentication must never block repository development. Once the integration is proven reliable and its access/cost model is accepted, making the read-only review check required can be reconsidered.
 
 ## Discussion model
 
-The practical "discussion" between AI reviewers happens through the PR:
+The practical "discussion" between AI reviewers happens through auditable CI evidence:
 
-- Claude publishes objections/ideas in the PR;
-- the primary workflow reads them through GitHub;
+- Claude emits objections/ideas in the read-only workflow report;
+- the primary workflow reads that report through GitHub;
 - implementation/tests are updated where justified;
-- new evidence is visible on the PR;
+- the primary workflow can add a concise PR disposition comment summarizing what was accepted or rejected and why;
 - final decision remains with the primary workflow.
 
-This keeps the debate auditable instead of hiding model-to-model reasoning.
+This preserves the repository's no-write CI hardening policy while keeping the review loop auditable.
 
 ## Cost rule
 
