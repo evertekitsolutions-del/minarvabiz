@@ -1,6 +1,4 @@
 import {
-  createCipheriv,
-  createDecipheriv,
   createHash,
   createHmac,
   randomBytes,
@@ -8,12 +6,10 @@ import {
 } from "node:crypto";
 
 export const ADMIN_COOKIE = "minarva-license-admin";
-export const ADMIN_MFA_COOKIE = "minarva-license-admin-mfa";
 const DEFAULT_SESSION_TTL_SECONDS = 30 * 60;
 const MIN_SESSION_TTL_SECONDS = 5 * 60;
 const MAX_SESSION_TTL_SECONDS = 60 * 60;
 const EMERGENCY_SESSION_TTL_SECONDS = 15 * 60;
-const MFA_PENDING_TTL_SECONDS = 5 * 60;
 export const MIN_EMERGENCY_ADMIN_SECRET_LENGTH = 32;
 export const MAX_PREVIOUS_SECRET_GRACE_MS = 24 * 60 * 60 * 1000;
 
@@ -33,13 +29,6 @@ export type AdminSessionClaims = {
   expiresAtMs: number;
 };
 
-export type AdminMfaPendingState = {
-  identity: AdminIdentity;
-  accessToken: string;
-  mode: "enroll" | "challenge";
-  factorId?: string;
-  challengeId?: string;
-};
 
 function envSecret(name: string): string {
   return String(process.env[name] || "").trim();
@@ -201,79 +190,6 @@ export function validateAdminSessionToken(token: string, nowMs = Date.now()): bo
   return Boolean(readAdminSessionToken(token, nowMs));
 }
 
-function pendingEncryptionKey(): Buffer | null {
-  const secret = sessionSecret();
-  return secret ? createHash("sha256").update(secret, "utf8").digest() : null;
-}
-
-function decodeCanonicalBase64Url(value: string): Buffer | null {
-  if (!value || !/^[A-Za-z0-9_-]+$/.test(value)) return null;
-  try {
-    const decoded = Buffer.from(value, "base64url");
-    return decoded.toString("base64url") === value ? decoded : null;
-  } catch {
-    return null;
-  }
-}
-
-function normalizeMfaPendingState(state: AdminMfaPendingState): AdminMfaPendingState | null {
-  const identity = normalizeIdentity(state?.identity);
-  const accessToken = String(state?.accessToken || "");
-  const mode = state?.mode;
-  const factorId = state?.factorId ? String(state.factorId) : undefined;
-  const challengeId = state?.challengeId ? String(state.challengeId) : undefined;
-  if (!identity || accessToken.length < 40 || accessToken.length > 16384) return null;
-  if (mode !== "enroll" && mode !== "challenge") return null;
-  if (mode === "challenge" && (!factorId || !challengeId || !validUuid(factorId) || !validUuid(challengeId))) return null;
-  return { identity, accessToken, mode, factorId, challengeId };
-}
-
-export function createAdminMfaPendingToken(state: AdminMfaPendingState, nowMs = Date.now()): string {
-  const normalized = normalizeMfaPendingState(state);
-  const key = pendingEncryptionKey();
-  if (!normalized || !key) return "";
-  const expiresAtMs = nowMs + MFA_PENDING_TTL_SECONDS * 1000;
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
-  const aad = Buffer.from(`m1.${expiresAtMs}`, "utf8");
-  cipher.setAAD(aad);
-  const encrypted = Buffer.concat([
-    cipher.update(JSON.stringify(normalized), "utf8"),
-    cipher.final(),
-  ]);
-  const tag = cipher.getAuthTag();
-  return [
-    "m1",
-    String(expiresAtMs),
-    iv.toString("base64url"),
-    encrypted.toString("base64url"),
-    tag.toString("base64url"),
-  ].join(".");
-}
-
-export function readAdminMfaPendingToken(token: string, nowMs = Date.now()): AdminMfaPendingState | null {
-  const parts = String(token || "").split(".");
-  if (parts.length !== 5 || parts[0] !== "m1") return null;
-  const expiresAtMs = Number(parts[1]);
-  if (!Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs || expiresAtMs > nowMs + MFA_PENDING_TTL_SECONDS * 1000) return null;
-  const key = pendingEncryptionKey();
-  if (!key) return null;
-  try {
-    const iv = decodeCanonicalBase64Url(parts[2] || "");
-    const encrypted = decodeCanonicalBase64Url(parts[3] || "");
-    const tag = decodeCanonicalBase64Url(parts[4] || "");
-    if (!iv || !encrypted || !tag) return null;
-    if (iv.length !== 12 || !encrypted.length || encrypted.length > 32768 || tag.length !== 16) return null;
-    const decipher = createDecipheriv("aes-256-gcm", key, iv);
-    decipher.setAAD(Buffer.from(`m1.${expiresAtMs}`, "utf8"));
-    decipher.setAuthTag(tag);
-    const plaintext = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
-    return normalizeMfaPendingState(JSON.parse(plaintext) as AdminMfaPendingState);
-  } catch {
-    return null;
-  }
-}
-
 export function adminCookieOptions(source: AdminIdentitySource = "supabase") {
   return {
     httpOnly: true,
@@ -281,15 +197,5 @@ export function adminCookieOptions(source: AdminIdentitySource = "supabase") {
     sameSite: "strict" as const,
     path: "/",
     maxAge: adminSessionTtlSeconds(source),
-  };
-}
-
-export function adminMfaCookieOptions() {
-  return {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict" as const,
-    path: "/",
-    maxAge: MFA_PENDING_TTL_SECONDS,
   };
 }
