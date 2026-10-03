@@ -88,11 +88,12 @@ Recent Cloudflare/admin backend work does not by itself require a new Windows re
 
 ## 5. Latest verified development state
 
-After PR #229:
+After PR #231:
 
-- current verified main: **`b463496f71fe2ef3e80473ffcb99de50fd67ae4c`**
-- open PRs at post-merge verification: **0**
-- open issues at post-merge verification: **0**
+- current verified main before this maintenance milestone: **`317076e2b90a6c225f37659fbb1c533c2acb32de`**
+- PR #231 merged the governed read-only Claude independent PR review execution layer
+- Claude review remains gated/disabled until repository authentication + enable variable are configured
+- stable Windows release remains **v1.0.15**
 - stable Windows release remains **v1.0.15**
 - PR #218 merged the durable global AI-first master plan, capability registry, AI registry, competitor baseline and engineering reuse policy
 - PR #220 routed normal named-admin License Admin operations browser -> Supabase Auth / Cloudflare directly
@@ -289,6 +290,7 @@ Recommended next sequence:
 8. Continue capability-by-capability implementation from `docs/CAPABILITY_REGISTRY.md` without scope reduction.
 9. For substantial milestones, apply `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md`: automated evidence remains mandatory; independent AI reviewers are advisory and the final decision is based on verified repository/runtime evidence.
 10. When the governed Claude workflow is enabled, read and disposition Claude findings before final merge. Claude access stays read-only and must never receive production secrets.
+11. Claude workflow supply-chain pin is maintained against Anthropic's reviewed immutable release; current reviewed target is v1.0.240 / `ed670b4cf9de2a5a570d130d2f6197b9e543cd64`.
 
 ## 16. Small-milestone rule
 
