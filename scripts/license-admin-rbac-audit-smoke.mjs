@@ -30,7 +30,10 @@ assert.doesNotMatch(browserAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|
 
 const identityBoundary = await readFile(new URL("../supabase/migrations/20261002_cloudflare_admin_identity_boundary.sql", import.meta.url), "utf8");
 assert.match(identityBoundary, /license_admin_identities/);
-assert.match(identityBoundary, /v_role NOT IN \('viewer', 'operator', 'admin'\)/);
+assert.match(identityBoundary, /v_identity\.role = 'viewer'/);
+assert.match(identityBoundary, /v_identity\.role = 'operator'/);
+assert.match(identityBoundary, /v_identity\.role = 'admin'/);
+assert.match(identityBoundary, /ADMIN_ROLE_INVALID/);
 assert.match(identityBoundary, /license\.read/);
 assert.match(identityBoundary, /license\.issue/);
 assert.match(identityBoundary, /license\.status_manage/);
