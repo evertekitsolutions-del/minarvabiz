@@ -6,16 +6,16 @@ import { updateSupportRequest } from "../actions";
 import { updateBrowserSupportRequest } from "./browser-admin-api";
 import { canManageSupport } from "./model";
 import { SupportInboxCard } from "./SupportInboxCard";
-import type { AdminRole, AdminSource, SupportRequestRow, SupportRequestStatus } from "./types";
+import type { AdminRole, SupportRequestRow, SupportRequestStatus } from "./types";
 
 export function SupportInboxSection({
   role,
-  source,
+  useBrowserApi,
   requests,
   onRefresh,
 }: {
   role: AdminRole;
-  source: AdminSource;
+  useBrowserApi: boolean;
   requests: SupportRequestRow[];
   onRefresh?: () => Promise<void>;
 }) {
@@ -31,7 +31,7 @@ export function SupportInboxSection({
   }) {
     setBusy(true);
     setMessage(null);
-    const result = source === "supabase"
+    const result = useBrowserApi
       ? await updateBrowserSupportRequest(input)
       : await updateSupportRequest(input);
     setBusy(false);
@@ -40,7 +40,7 @@ export function SupportInboxSection({
       return;
     }
     setMessage("Support request updated.");
-    if (source === "supabase" && onRefresh) await onRefresh();
+    if (useBrowserApi && onRefresh) await onRefresh();
     else router.refresh();
   }
 
