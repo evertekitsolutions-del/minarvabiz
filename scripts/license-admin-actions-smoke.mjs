@@ -159,9 +159,13 @@ assert.match(panel, /useAdminAuthentication/);
 assert.match(panel, /browserDirect/);
 assert.match(panel, /await signOutBrowserAdmin\(\);/);
 assert.match(panel, /await logoutEmergencyAdmin\(\);/);
+const browserLogoutBranch = panel.match(
+  /if \(browserDirect\) \{([\s\S]*?)\n\s*return;\n\s*\}/,
+)?.[1] || "";
+assert.match(browserLogoutBranch, /signOutBrowserAdmin\(\)/);
 assert.doesNotMatch(
-  panel,
-  /if \(browserDirect\)[\s\S]{0,500}signOutBrowserAdmin\(\)[\s\S]{0,500}logoutEmergencyAdmin\(\)/,
+  browserLogoutBranch,
+  /logoutEmergencyAdmin\(\)/,
   "Normal named-admin logout must not call the legacy emergency server action",
 );
 assert.match(panel, /issueBrowserLicense/);
