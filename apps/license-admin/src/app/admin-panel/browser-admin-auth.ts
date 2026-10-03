@@ -196,18 +196,6 @@ async function authFetch<T>(
   }
 }
 
-function browserConfirmationRedirect() {
-  try {
-    const origin = window.location.origin;
-    const url = new URL("/", origin);
-    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
-    if (url.protocol !== "https:" && !(local && url.protocol === "http:")) return "";
-    return url.toString();
-  } catch {
-    return "";
-  }
-}
-
 function bootstrapErrorMessage(code: string) {
   const messages: Record<string, string> = {
     UNAUTHENTICATED: "Administrator session expired. Sign in again.",
@@ -235,13 +223,12 @@ function validAal2Token(token: string, expectedUserId: string) {
       (entry as { method?: unknown }).method === "totp",
     );
   });
+  if (aal !== "aal2" || !usedTotp) return false;
   return (
     token.length >= 40 &&
     token.length <= 16384 &&
     validUuid(expectedUserId) &&
-    subject === expectedUserId &&
-    aal === "aal2" &&
-    usedTotp
+    subject === expectedUserId
   );
 }
 
@@ -283,9 +270,7 @@ export async function beginBrowserFirstAdminSignup(
   const config = await fetchAuthConfig();
   if (!config) return { ok: false, error: "Administrator authentication is unavailable." };
 
-  const redirectTo = browserConfirmationRedirect();
-  const signupPath = redirectTo ? `/signup?redirect_to=${encodeURIComponent(redirectTo)}` : "/signup";
-  const response = await authFetch<PasswordAuthResponse>(config, signupPath, {
+  const response = await authFetch<PasswordAuthResponse>(config, "/signup", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
@@ -320,9 +305,7 @@ export async function resendBrowserFirstAdminConfirmation(
   const config = await fetchAuthConfig();
   if (!config) return { ok: false, error: "Administrator authentication is unavailable." };
 
-  const redirectTo = browserConfirmationRedirect();
-  const resendPath = redirectTo ? `/resend?redirect_to=${encodeURIComponent(redirectTo)}` : "/resend";
-  const response = await authFetch<Record<string, unknown>>(config, resendPath, {
+  const response = await authFetch<Record<string, unknown>>(config, "/resend", {
     method: "POST",
     body: JSON.stringify({ type: "signup", email }),
   });
