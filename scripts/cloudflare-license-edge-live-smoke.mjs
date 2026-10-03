@@ -138,7 +138,7 @@ assert(!rejectedAdminOrigin.response.headers.get("access-control-allow-origin"),
 const bootstrapStatus = await fetchJson("/api/admin/bootstrap/status", {
   headers: { origin: adminOrigin },
 });
-assert(bootstrapStatus.response.ok, `admin bootstrap status HTTP ${bootstrapStatus.response.status}; code=${bootstrapStatus.data?.code || "none"}; upstreamStatus=${bootstrapStatus.response.headers.get("x-minarva-admin-upstream-status") || "none"}; upstreamCode=${bootstrapStatus.response.headers.get("x-minarva-admin-upstream-code") || "none"}; stage=${bootstrapStatus.response.headers.get("x-minarva-admin-upstream-stage") || "none"}`);
+assert(bootstrapStatus.response.ok, `admin bootstrap status HTTP ${bootstrapStatus.response.status}; code=${bootstrapStatus.data?.code || "none"}; upstreamStatus=${bootstrapStatus.response.headers.get("x-minarva-admin-upstream-status") || "none"}; upstreamCode=${bootstrapStatus.response.headers.get("x-minarva-admin-upstream-code") || "none"}; stage=${bootstrapStatus.response.headers.get("x-minarva-admin-upstream-stage") || "none"}; error=${bootstrapStatus.response.headers.get("x-minarva-admin-upstream-error") || "none"}; message=${bootstrapStatus.response.headers.get("x-minarva-admin-upstream-message") || "none"}`);
 assert(bootstrapStatus.data?.ok === true, "admin bootstrap status did not report ok");
 assert(bootstrapStatus.data?.required === false, "production bootstrap should be closed after first admin exists");
 assert(bootstrapStatus.response.headers.get("access-control-allow-origin") === adminOrigin, "bootstrap status CORS origin mismatch");
