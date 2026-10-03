@@ -100,9 +100,22 @@ const authHook = await readFile(
   new URL("../apps/license-admin/src/app/admin-panel/useAdminAuthentication.ts", import.meta.url),
   "utf8",
 );
+const bootstrapHook = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/useFirstAdminBootstrap.ts", import.meta.url),
+  "utf8",
+);
+const authCard = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/AdminAuthCard.tsx", import.meta.url),
+  "utf8",
+);
 
 assert.match(page, /readAdminSessionToken/);
 assert.match(page, /claims\?\.identity\.source === "emergency"/);
+assert.doesNotMatch(
+  page,
+  /firstAdminBootstrapStatus|bootstrapAvailable/,
+  "Normal License Admin page hydration must not depend on the privileged server bootstrap status",
+);
 assert.match(page, /if \(!emergencySession\)/);
 assert.match(page, /identity=\{null\}/);
 assert.match(page, /initialLicenses=\{\[\]\}/);
@@ -122,14 +135,36 @@ assert.match(
 );
 
 assert.match(browserAuth, /\/token\?grant_type=password/);
+assert.match(browserAuth, /\/signup/);
+assert.match(browserAuth, /\/resend/);
+assert.match(browserAuth, /api\/admin\/bootstrap\/status/);
+assert.match(browserAuth, /api\/admin\/bootstrap\/claim/);
 assert.match(browserAuth, /api\/admin\/me/);
-assert.doesNotMatch(browserAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET/);
+assert.match(browserAuth, /beginBrowserFirstAdminSignup/);
+assert.match(browserAuth, /resendBrowserFirstAdminConfirmation/);
+assert.match(browserAuth, /getBrowserAdminBootstrapStatus/);
+assert.match(browserAuth, /claimBrowserFirstAdmin/);
+assert.doesNotMatch(browserAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET|LICENSE_EDGE_RPC_SECRET/);
 
 assert.match(authHook, /beginBrowserNamedAdminLogin/);
+assert.match(authHook, /getBrowserAdminBootstrapStatus/);
+assert.match(authHook, /claimBrowserFirstAdmin/);
 assert.match(authHook, /verifyBrowserAdminMfa/);
 assert.match(authHook, /activateBrowserAdminSession/);
 assert.match(authHook, /loadBrowserAdminDashboard/);
 assert.doesNotMatch(authHook, /adoptCloudflareAdminSession/);
+
+assert.doesNotMatch(
+  bootstrapHook,
+  /bootstrapFirstLicenseAdmin|from ["']\.\.\/actions["']/,
+  "First-admin bootstrap UI must not call the legacy privileged server bootstrap action",
+);
+assert.match(bootstrapHook, /beginBrowserFirstAdminSignup/);
+assert.match(bootstrapHook, /resendBrowserFirstAdminConfirmation/);
+assert.match(bootstrapHook, /getBrowserAdminBootstrapStatus/);
+assert.match(authCard, /Create first administrator/);
+assert.match(authCard, /Confirm the email/);
+assert.doesNotMatch(authCard, /Send a one-time setup email/);
 
 assert.match(browserSession, /sessionStorage\.setItem/);
 assert.match(browserSession, /aal === "aal2"/);
@@ -157,6 +192,7 @@ assert.doesNotMatch(browserApi, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|L
 
 assert.match(panel, /useAdminAuthentication/);
 assert.match(panel, /browserDirect/);
+assert.doesNotMatch(panel, /bootstrapAvailable/);
 assert.match(panel, /await signOutBrowserAdmin\(\);/);
 assert.match(panel, /await logoutEmergencyAdmin\(\);/);
 const browserLogoutBranch = panel.match(
