@@ -3,10 +3,11 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { provisionOnlineCustomer } from "../actions";
+import { provisionBrowserCustomer } from "./browser-admin-api";
 import { canProvisionOnlineCustomer } from "./model";
-import type { AdminRole } from "./types";
+import type { AdminRole, AdminSource } from "./types";
 
-export function useOnlineCustomerProvisioning(role: AdminRole) {
+export function useOnlineCustomerProvisioning(role: AdminRole, source: AdminSource | null) {
   const router = useRouter();
   const [shopName, setShopName] = React.useState("");
   const [adminName, setAdminName] = React.useState("");
@@ -22,7 +23,9 @@ export function useOnlineCustomerProvisioning(role: AdminRole) {
 
     setBusy(true);
     setMessage(null);
-    const result = await provisionOnlineCustomer({ shopName, adminName, email: adminEmail });
+    const result = source === "supabase"
+      ? await provisionBrowserCustomer({ shopName, adminName, email: adminEmail })
+      : await provisionOnlineCustomer({ shopName, adminName, email: adminEmail });
     setBusy(false);
 
     if (!result.ok) {
@@ -34,7 +37,7 @@ export function useOnlineCustomerProvisioning(role: AdminRole) {
     setShopName("");
     setAdminName("");
     setAdminEmail("");
-    router.refresh();
+    if (source === "emergency") router.refresh();
   }
 
   return {
