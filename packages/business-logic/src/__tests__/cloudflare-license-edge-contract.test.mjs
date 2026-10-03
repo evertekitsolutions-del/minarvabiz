@@ -188,14 +188,15 @@ assert.doesNotMatch(adminPanel, /adoptCloudflareAdminSession/);
 assert.doesNotMatch(adminPanel, /\bloginAdmin\b|\bbeginAdminMfaEnrollment\b|\bverifyAdminMfa\b|\bcancelAdminMfa\b/);
 
 assert.match(adminActions, /export async function loginEmergencyAdmin/);
-assert.match(adminActions, /export async function logoutAdmin/);
-assert.match(adminActions, /claims\.identity\.source !== "emergency"/);
+assert.match(adminActions, /export async function logoutEmergencyAdmin/);
+assert.match(adminActions, /claims\?\.identity\.source === "emergency"/);
 assert.match(adminActions, /identity\.source !== "emergency" \|\| authMethod !== "emergency"/);
 assert.doesNotMatch(adminActions, /export async function loginAdmin\b/);
 assert.doesNotMatch(adminActions, /export async function beginAdminMfaEnrollment\b/);
 assert.doesNotMatch(adminActions, /export async function verifyAdminMfa\b/);
 assert.doesNotMatch(adminActions, /export async function cancelAdminMfa\b/);
 assert.doesNotMatch(adminActions, /export async function adoptCloudflareAdminSession\b/);
+assert.doesNotMatch(adminActions, /export async function logoutAdmin\b/);
 assert.doesNotMatch(adminActions, /from ["']\.\.\/lib\/named-admin["']/);
 
 assert.match(validationBridge, /CREATE SCHEMA IF NOT EXISTS license_private/);
