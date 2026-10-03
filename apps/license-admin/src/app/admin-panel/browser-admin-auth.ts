@@ -39,6 +39,13 @@ type BootstrapStatusResponse = {
   code?: string;
 };
 
+type BootstrapSignupReservationResponse = {
+  ok?: boolean;
+  signupToken?: string;
+  expiresAt?: string | null;
+  code?: string;
+};
+
 type BootstrapClaimResponse = {
   ok?: boolean;
   code?: string;
@@ -253,6 +260,54 @@ export async function getBrowserAdminBootstrapStatus(): Promise<BrowserAdminBoot
   }
 }
 
+export async function createBrowserAdminSignupReservation(
+  emailInput: string,
+): Promise<{ ok: true; signupToken: string } | { ok: false; error: string; code?: string }> {
+  const email = normalizeEmail(emailInput);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: "Enter a valid administrator email.", code: "INVALID_REQUEST" };
+  }
+
+  try {
+    const response = await fetch(`${EDGE}/api/admin/bootstrap/signup-reservation`, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ email }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
+    });
+    const data = (await response.json().catch(() => null)) as BootstrapSignupReservationResponse | null;
+    const code = String(data?.code || "");
+    if (!response.ok || data?.ok !== true) {
+      const messages: Record<string, string> = {
+        INVALID_REQUEST: "Enter a valid administrator email.",
+        BOOTSTRAP_SIGNUP_NOT_ALLOWED: "Use the administrator email configured for this deployment.",
+        BOOTSTRAP_CLOSED: "First-administrator setup is already complete.",
+        BOOTSTRAP_USER_EXISTS: "An administrator account already exists for this email. Confirm the email if needed, then sign in.",
+        BOOTSTRAP_IDENTITY_IN_USE: "This email is already attached to a customer or business identity.",
+        BOOTSTRAP_NOT_CONFIGURED: "First-administrator setup is not configured.",
+        BOOTSTRAP_SERVICE_UNAVAILABLE: "First-administrator setup is temporarily unavailable.",
+      };
+      return {
+        ok: false,
+        error: messages[code] || "First-administrator signup could not be authorized.",
+        code: code || undefined,
+      };
+    }
+
+    const signupToken = String(data.signupToken || "");
+    if (signupToken.length < 32 || signupToken.length > 512) {
+      return { ok: false, error: "First-administrator signup reservation is invalid." };
+    }
+    return { ok: true, signupToken };
+  } catch {
+    return { ok: false, error: "First-administrator setup is temporarily unavailable." };
+  }
+}
+
 export async function beginBrowserFirstAdminSignup(
   emailInput: string,
   password: string,
@@ -270,9 +325,19 @@ export async function beginBrowserFirstAdminSignup(
   const config = await fetchAuthConfig();
   if (!config) return { ok: false, error: "Administrator authentication is unavailable." };
 
+  const reservation = await createBrowserAdminSignupReservation(email);
+  if (!reservation.ok) return reservation;
+
   const response = await authFetch<PasswordAuthResponse>(config, "/signup", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email,
+      password,
+      data: {
+        account_type: "license_admin",
+        bootstrap_token: reservation.signupToken,
+      },
+    }),
   });
 
   if (!response.ok) {
