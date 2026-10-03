@@ -160,11 +160,9 @@ Do not delete Render infrastructure until the entire Admin UI/auth/bootstrap/eme
 
 ## 9. Current signing authority
 
-Current Cloudflare-derived Ed25519 public key:
+Current Cloudflare-derived Ed25519 verification key is served by the production Cloudflare `/api/public-key` endpoint and must be live-verified before release/signing checks.
 
-`52d7a8a21cf8b94013f18308d2c6bddb49c05dd525be65cf764ae85d00c22a87`
-
-Do not use the older v1.0.14 key as current.
+Do not hard-code an old verification key into continuation docs or clients; the older v1.0.14 key is historical only.
 
 Commercial licenses and offline activation certificates must use the Cloudflare-derived signing authority.
 
