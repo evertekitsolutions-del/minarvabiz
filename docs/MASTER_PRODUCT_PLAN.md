@@ -18,6 +18,12 @@ The product target is broader than Vyapar parity. Minarva Biz should combine the
 
 These rules are non-negotiable unless explicitly revised in this document.
 
+### Full-scope implementation rule
+Accepted product scope must not be silently reduced because implementation is difficult. Small milestones are sequencing units only. A feature is complete only when its agreed full behavior, edge cases and required Online/Offline/Hybrid, multi-branch, security, audit and portability concerns are implemented and verified. See `docs/ENGINEERING_REUSE_POLICY.md`.
+
+### Reuse-first, license-safe engineering
+Before substantial custom implementation, inspect existing Minarva shared code, official SDK/reference implementations and mature open-source projects. Reuse is preferred when it preserves the full feature and improves quality/speed, but source, license, security, maintenance, portability and vendor-lock-in must be checked first. Publicly visible code with no clear compatible license must not be copied; proprietary competitor code/UI must not be copied.
+
 ### One core, many packs
 Do not fork separate products for boutique, retail, restaurant, pharmacy, manufacturing or other industries. Use:
 
@@ -680,10 +686,15 @@ Every feature must pass these questions before implementation:
 10. Can it move to Minarva-owned infrastructure?
 11. Does it introduce recurring cost before 25 customers?
 12. What automated tests and UAT prove it?
+13. Does an existing Minarva component, official SDK or mature license-compatible open-source implementation already solve part of this safely?
+14. What upstream source/version/license/attribution and replacement path must be recorded if code is reused?
+15. Has any required behavior been weakened merely to make implementation easier? If yes, the milestone is not complete.
 
 Development continues in small verified milestones:
 
-**live state -> branch -> implement -> tests -> PR -> all gates green -> merge -> continuation update**.
+**live state -> research/reuse audit -> branch -> implement -> tests -> PR -> all gates green -> merge -> continuation update**.
+
+If a blocker appears, fix the root cause and add regression coverage; do not permanently disable or simplify an agreed capability to get a green build.
 
 ## 12. Competitive review cadence
 
