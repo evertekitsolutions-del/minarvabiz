@@ -26,8 +26,28 @@ type PasswordAuthResponse = {
   access_token?: string;
   user?: AuthUser | null;
   error?: string;
+  error_code?: string;
   error_description?: string;
+  code?: string;
   msg?: string;
+};
+
+type BootstrapStatusResponse = {
+  ok?: boolean;
+  required?: boolean;
+  configured?: boolean;
+  code?: string;
+};
+
+type BootstrapClaimResponse = {
+  ok?: boolean;
+  code?: string;
+  identity?: {
+    id?: string;
+    email?: string;
+    displayName?: string;
+    role?: string;
+  } | null;
 };
 
 type MfaEnrollResponse = {
@@ -77,8 +97,24 @@ type EnrollmentResult =
   | { ok: false; error: string };
 
 type VerifyResult =
-  | { ok: true; accessToken: string; identity: AdminIdentityView }
+  | { ok: true; accessToken: string; userId: string }
   | { ok: false; error: string };
+
+export type BrowserAdminBootstrapStatusResult =
+  | { ok: true; required: boolean; configured: boolean }
+  | { ok: false; error: string };
+
+type BootstrapActionResult =
+  | { ok: true; message: string }
+  | { ok: false; error: string; code?: string };
+
+export type BrowserAdminIdentityResult =
+  | { ok: true; identity: AdminIdentityView }
+  | { ok: false; error: string; code?: string };
+
+export type BrowserAdminBootstrapClaimResult =
+  | { ok: true; identity: AdminIdentityView }
+  | { ok: false; error: string; code?: string };
 
 function validUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -158,6 +194,143 @@ async function authFetch<T>(
   } catch {
     return { ok: false, status: 503, data: null };
   }
+}
+
+function browserConfirmationRedirect() {
+  try {
+    const origin = window.location.origin;
+    const url = new URL("/", origin);
+    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    if (url.protocol !== "https:" && !(local && url.protocol === "http:")) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+function bootstrapErrorMessage(code: string) {
+  const messages: Record<string, string> = {
+    UNAUTHENTICATED: "Administrator session expired. Sign in again.",
+    MFA_REQUIRED: "Complete administrator MFA before claiming first-admin access.",
+    BOOTSTRAP_EMAIL_MISMATCH: "This account is not the configured first administrator.",
+    BOOTSTRAP_IDENTITY_NOT_VERIFIED: "Confirm the administrator email before continuing.",
+    BOOTSTRAP_CLOSED: "First-administrator setup is already complete.",
+    BOOTSTRAP_IDENTITY_IN_USE: "This account is already attached to a customer or business identity.",
+    BOOTSTRAP_NOT_CONFIGURED: "First-administrator setup is not configured.",
+    BOOTSTRAP_SERVICE_UNAVAILABLE: "First-administrator setup is temporarily unavailable.",
+  };
+  return messages[code] || "First-administrator setup failed.";
+}
+
+function validAal2Token(token: string, expectedUserId: string) {
+  const claims = decodeJwtPayload(token);
+  const aal = String(claims?.aal || "");
+  const subject = String(claims?.sub || "");
+  const amr = Array.isArray(claims?.amr) ? claims.amr : [];
+  const usedTotp = amr.some((entry) => {
+    if (typeof entry === "string") return entry === "totp";
+    return Boolean(
+      entry &&
+      typeof entry === "object" &&
+      (entry as { method?: unknown }).method === "totp",
+    );
+  });
+  return (
+    token.length >= 40 &&
+    token.length <= 16384 &&
+    validUuid(expectedUserId) &&
+    subject === expectedUserId &&
+    aal === "aal2" &&
+    usedTotp
+  );
+}
+
+export async function getBrowserAdminBootstrapStatus(): Promise<BrowserAdminBootstrapStatusResult> {
+  try {
+    const response = await fetch(`${EDGE}/api/admin/bootstrap/status`, {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
+    });
+    const data = (await response.json().catch(() => null)) as BootstrapStatusResponse | null;
+    if (!response.ok || data?.ok !== true) {
+      return { ok: false, error: bootstrapErrorMessage(String(data?.code || "BOOTSTRAP_SERVICE_UNAVAILABLE")) };
+    }
+    return {
+      ok: true,
+      required: data.required === true,
+      configured: data.configured === true,
+    };
+  } catch {
+    return { ok: false, error: "First-administrator setup is temporarily unavailable." };
+  }
+}
+
+export async function beginBrowserFirstAdminSignup(
+  emailInput: string,
+  password: string,
+): Promise<BootstrapActionResult> {
+  const email = normalizeEmail(emailInput);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 8 || password.length > 2048) {
+    return { ok: false, error: "Enter a valid administrator email and a password of at least 8 characters." };
+  }
+
+  const status = await getBrowserAdminBootstrapStatus();
+  if (!status.ok) return status;
+  if (!status.required) return { ok: false, error: "First-administrator setup is already complete.", code: "BOOTSTRAP_CLOSED" };
+  if (!status.configured) return { ok: false, error: "First-administrator setup is not configured.", code: "BOOTSTRAP_NOT_CONFIGURED" };
+
+  const config = await fetchAuthConfig();
+  if (!config) return { ok: false, error: "Administrator authentication is unavailable." };
+
+  const redirectTo = browserConfirmationRedirect();
+  const signupPath = redirectTo ? `/signup?redirect_to=${encodeURIComponent(redirectTo)}` : "/signup";
+  const response = await authFetch<PasswordAuthResponse>(config, signupPath, {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!response.ok) {
+    const code = String(response.data?.error_code || response.data?.code || "");
+    if (code === "over_email_send_rate_limit" || response.status === 429) {
+      return { ok: false, error: "Too many confirmation requests. Try again later.", code };
+    }
+    return { ok: false, error: "Unable to create the first-administrator account.", code: code || undefined };
+  }
+
+  return {
+    ok: true,
+    message: "Administrator account created. Confirm the email, then return here and sign in to enroll MFA.",
+  };
+}
+
+export async function resendBrowserFirstAdminConfirmation(
+  emailInput: string,
+): Promise<BootstrapActionResult> {
+  const email = normalizeEmail(emailInput);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: "Enter a valid administrator email." };
+  }
+
+  const status = await getBrowserAdminBootstrapStatus();
+  if (!status.ok) return status;
+  if (!status.required) return { ok: false, error: "First-administrator setup is already complete.", code: "BOOTSTRAP_CLOSED" };
+  if (!status.configured) return { ok: false, error: "First-administrator setup is not configured.", code: "BOOTSTRAP_NOT_CONFIGURED" };
+
+  const config = await fetchAuthConfig();
+  if (!config) return { ok: false, error: "Administrator authentication is unavailable." };
+
+  const redirectTo = browserConfirmationRedirect();
+  const resendPath = redirectTo ? `/resend?redirect_to=${encodeURIComponent(redirectTo)}` : "/resend";
+  const response = await authFetch<Record<string, unknown>>(config, resendPath, {
+    method: "POST",
+    body: JSON.stringify({ type: "signup", email }),
+  });
+  if (!response.ok) {
+    if (response.status === 429) return { ok: false, error: "Too many confirmation requests. Try again later." };
+    return { ok: false, error: "Unable to resend the confirmation email." };
+  }
+  return { ok: true, message: "Confirmation email resent. Open it before signing in." };
 }
 
 async function beginChallenge(
@@ -304,41 +477,36 @@ export async function verifyBrowserAdminMfa(
   );
 
   const upgradedAccessToken = String(verified.data?.access_token || "");
-  const claims = decodeJwtPayload(upgradedAccessToken);
-  const aal = String(claims?.aal || "");
-  const subject = String(claims?.sub || "");
-  const amr = Array.isArray(claims?.amr) ? claims.amr : [];
-  const usedTotp = amr.some((entry) => {
-    if (typeof entry === "string") return entry === "totp";
-    return Boolean(
-      entry &&
-      typeof entry === "object" &&
-      (entry as { method?: unknown }).method === "totp",
-    );
-  });
-
-  if (
-    !verified.ok ||
-    upgradedAccessToken.length < 40 ||
-    upgradedAccessToken.length > 16384 ||
-    aal !== "aal2" ||
-    subject !== pending.userId ||
-    !usedTotp
-  ) {
+  if (!verified.ok || !validAal2Token(upgradedAccessToken, pending.userId)) {
     return { ok: false, error: "Invalid authenticator code." };
   }
 
+  return {
+    ok: true,
+    accessToken: upgradedAccessToken,
+    userId: pending.userId,
+  };
+}
+
+export async function getBrowserAdminIdentity(
+  accessToken: string,
+  expectedUserId: string,
+): Promise<BrowserAdminIdentityResult> {
+  if (!validAal2Token(accessToken, expectedUserId)) {
+    return { ok: false, error: "Administrator MFA session is invalid.", code: "MFA_REQUIRED" };
+  }
   try {
     const response = await fetch(`${EDGE}/api/admin/me`, {
       headers: {
         accept: "application/json",
-        authorization: `Bearer ${upgradedAccessToken}`,
+        authorization: `Bearer ${accessToken}`,
       },
       cache: "no-store",
       signal: AbortSignal.timeout(8_000),
     });
     const data = await response.json().catch(() => null);
     const identity = data?.identity;
+    const code = String(data?.code || "");
     const role = String(identity?.role || "");
     const identityEmail = normalizeEmail(identity?.email || "");
     const identityId = String(identity?.id || "");
@@ -347,17 +515,22 @@ export async function verifyBrowserAdminMfa(
     if (
       !response.ok ||
       data?.ok !== true ||
-      identityId !== pending.userId ||
+      identityId !== expectedUserId ||
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identityEmail) ||
       !displayName ||
       !["viewer", "operator", "admin"].includes(role)
     ) {
-      return { ok: false, error: "This account is not an active License Admin." };
+      return {
+        ok: false,
+        error: code === "ADMIN_NOT_ALLOWED"
+          ? "This account is not an active License Admin."
+          : "Administrator authorization failed.",
+        code: code || undefined,
+      };
     }
 
     return {
       ok: true,
-      accessToken: upgradedAccessToken,
       identity: {
         id: identityId,
         email: identityEmail,
@@ -368,5 +541,53 @@ export async function verifyBrowserAdminMfa(
     };
   } catch {
     return { ok: false, error: "Administrator authorization is temporarily unavailable." };
+  }
+}
+
+export async function claimBrowserFirstAdmin(
+  accessToken: string,
+  expectedUserId: string,
+): Promise<BrowserAdminBootstrapClaimResult> {
+  if (!validAal2Token(accessToken, expectedUserId)) {
+    return { ok: false, error: bootstrapErrorMessage("MFA_REQUIRED"), code: "MFA_REQUIRED" };
+  }
+  try {
+    const response = await fetch(`${EDGE}/api/admin/bootstrap/claim`, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      body: "{}",
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
+    });
+    const data = (await response.json().catch(() => null)) as BootstrapClaimResponse | null;
+    const code = String(data?.code || "");
+    if (!response.ok || data?.ok !== true) {
+      return { ok: false, error: bootstrapErrorMessage(code || "BOOTSTRAP_SERVICE_UNAVAILABLE"), code: code || undefined };
+    }
+
+    const identity = data.identity;
+    const id = String(identity?.id || "");
+    const email = normalizeEmail(identity?.email || "");
+    const displayName = String(identity?.displayName || "").trim();
+    const role = String(identity?.role || "");
+    if (
+      id !== expectedUserId ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      !displayName ||
+      role !== "admin"
+    ) {
+      return { ok: false, error: "First-administrator identity response is invalid." };
+    }
+
+    return {
+      ok: true,
+      identity: { id, email, displayName, role: "admin", source: "supabase" },
+    };
+  } catch {
+    return { ok: false, error: "First-administrator setup is temporarily unavailable." };
   }
 }
