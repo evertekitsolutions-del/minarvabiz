@@ -40,7 +40,7 @@ const EDITIONS: Edition[] = ["online", "offline", "hybrid"];
 async function currentAdminSession() {
   const token = (await cookies()).get(ADMIN_COOKIE)?.value || "";
   const claims = readAdminSessionToken(token);
-  if (!claims) return null;
+  if (!claims || claims.identity.source !== "emergency") return null;
   if (!(await validateRegisteredAdminSession(claims))) return null;
   return claims;
 }
@@ -82,6 +82,9 @@ async function authorizeAdmin(
 }
 
 async function establishAdminSession(identity: AdminIdentity, authMethod: AdminSessionAuthMethod) {
+  if (identity.source !== "emergency" || authMethod !== "emergency") {
+    return { ok: false as const, error: "Legacy server sessions are restricted to emergency access." };
+  }
   const registered = await registerAdminSession(identity, authMethod);
   if (!registered.ok) return { ok: false as const, error: registered.error };
   const token = createAdminSessionToken(identity, registered.sessionId, registered.expiresAtMs);
