@@ -68,6 +68,9 @@ Required dimensions include:
 - user/staff;
 - transaction/event identity.
 
+### Independent review governance
+Substantial product and engineering milestones should use the multi-model review process in `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md` when additional reviewers are available. Independent AI review is advisory; verified tests, runtime evidence, security, data integrity and the agreed product scope determine the final decision.
+
 ### AI everywhere, but safely
 AI is a platform capability, not a chatbot add-on.
 
