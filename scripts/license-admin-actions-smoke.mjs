@@ -76,16 +76,63 @@ const browserAuth = await readFile(
   new URL("../apps/license-admin/src/app/admin-panel/browser-admin-auth.ts", import.meta.url),
   "utf8",
 );
+const browserApi = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/browser-admin-api.ts", import.meta.url),
+  "utf8",
+);
+const browserSession = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/browser-admin-session.ts", import.meta.url),
+  "utf8",
+);
+const authHook = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/useAdminAuthentication.ts", import.meta.url),
+  "utf8",
+);
+
 assert.match(browserAuth, /\/token\?grant_type=password/);
 assert.match(browserAuth, /api\/admin\/me/);
 assert.doesNotMatch(browserAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET/);
-assert.match(panel, /beginBrowserNamedAdminLogin\(email, password\)/);
-assert.match(panel, /verifyBrowserAdminMfa\(pendingBrowserAuth, mfaCode\)/);
-assert.match(panel, /adoptCloudflareAdminSession\(verified\.accessToken\)/);
-assert.doesNotMatch(panel, /loginAdmin\(email, password\)/);
-assert.match(panel, /createCommercialLicense\(\{/);
-assert.match(panel, /setLicenseStatus\(licenseId, value\)/);
-assert.match(panel, /createOfflineActivationPackage\(\{/);
-assert.match(panel, /JSON\/download|Blob|createObjectURL/);
+
+assert.match(authHook, /beginBrowserNamedAdminLogin/);
+assert.match(authHook, /verifyBrowserAdminMfa/);
+assert.match(authHook, /activateBrowserAdminSession/);
+assert.match(authHook, /loadBrowserAdminDashboard/);
+assert.doesNotMatch(authHook, /adoptCloudflareAdminSession/);
+
+assert.match(browserSession, /sessionStorage\.setItem/);
+assert.match(browserSession, /aal === "aal2"/);
+assert.match(browserSession, /hasTotp/);
+assert.match(browserSession, /\/auth\/v1\/logout\?scope=local/);
+assert.doesNotMatch(browserSession, /localStorage/);
+
+for (const route of [
+  "/api/admin/me",
+  "/api/admin/licenses",
+  "/api/admin/licenses/status",
+  "/api/admin/licenses/offline-activation",
+  "/api/admin/support",
+  "/api/admin/customers/provision",
+]) {
+  assert.ok(browserApi.includes(route), `browser admin API must call ${route}`);
+}
+assert.match(browserApi, /authorization.*Bearer/si);
+assert.match(browserApi, /issueBrowserLicense/);
+assert.match(browserApi, /setBrowserLicenseStatus/);
+assert.match(browserApi, /createBrowserOfflineActivation/);
+assert.match(browserApi, /updateBrowserSupportRequest/);
+assert.match(browserApi, /provisionBrowserCustomer/);
+assert.doesNotMatch(browserApi, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_PRIVATE_KEY/);
+
+assert.match(panel, /useAdminAuthentication/);
+assert.match(panel, /browserDirect/);
+assert.match(panel, /issueBrowserLicense/);
+assert.match(panel, /setBrowserLicenseStatus/);
+assert.match(panel, /createBrowserOfflineActivation/);
+assert.doesNotMatch(panel, /adoptCloudflareAdminSession/);
+assert.doesNotMatch(panel, /beginBrowserNamedAdminLogin|verifyBrowserAdminMfa/);
+assert.match(panel, /createCommercialLicense/);
+assert.match(panel, /setLicenseStatus/);
+assert.match(panel, /createOfflineActivationPackage/);
+assert.match(panel, /Blob|createObjectURL/);
 
 console.log("License-admin auth/CRUD/error/import-export smoke PASS");
