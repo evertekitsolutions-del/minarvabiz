@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Review pull request
-        uses: anthropics/claude-code-action@cfc3eb22bfed5c26ef66e3223c982af27e4524de
+        uses: anthropics/claude-code-action@ed670b4cf9de2a5a570d130d2f6197b9e543cd64
         with:
           github_token: ${{ github.token }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -39,7 +39,7 @@ jobs:
           include_fix_links: "false"
           display_report: "true"
           show_full_output: "false"
-          claude_args: "--max-turns 8"
+          claude_args: "--permission-mode auto --max-turns 8"
           prompt: |
             You are the independent adversarial reviewer for Minarva Biz.
             Read CLAUDE.md and all authoritative project documents it references before judging this PR.
