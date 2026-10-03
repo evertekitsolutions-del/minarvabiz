@@ -250,7 +250,7 @@ export default function AdminPanel({
           role={activeIdentity.role}
           useBrowserApi={browserDirect}
           requests={supportRequests}
-          onRefresh={refreshBrowserDashboard}
+          onRefresh={async () => { await refreshBrowserDashboard(); }}
         />
         <LicenseRegistryCard
           licenses={licenses}
