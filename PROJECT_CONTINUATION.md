@@ -88,27 +88,31 @@ Recent Cloudflare/admin backend work does not by itself require a new Windows re
 
 ## 5. Latest verified development state
 
-After PR #220:
+After PR #226:
 
-- current verified main: **`871d51febb34f807b327b1226688422afcdd779a`**
+- current verified main: **`da8e99ea5b1aa481141bde43e7dba42a9146aaac`**
 - open PRs at post-merge verification: **0**
 - open issues at post-merge verification: **0**
-- stable release remains **v1.0.15**
-- PR #218 merged the durable global AI-first master plan and capability registries.
-- PR #220: **Route normal License Admin UI directly through Cloudflare**
-- PR #220 final head: `37d97612608a5fd7fb19e3dad21f09a0526063a7`
-- all **11 workflows triggered by the PR were GREEN** before merge. The Cloudflare License Edge workflow was not triggered because PR #220 changed no Worker files.
+- stable Windows release remains **v1.0.15**
+- PR #218 merged the durable global AI-first master plan, capability registry, AI registry, competitor baseline and engineering reuse policy
+- PR #220 routed normal named-admin License Admin operations browser -> Supabase Auth / Cloudflare directly
+- PR #224 removed normal page-hydration dependence on legacy server reads; only explicit emergency fallback still hydrates through legacy server actions
+- PR #225 removed obsolete normal named-admin password/MFA/adoption server paths and kept the legacy server session restricted to emergency access
+- PR #226 moved normal named-admin logout fully browser-side and renamed/restricted the remaining server logout to `logoutEmergencyAdmin`
+- PR #226 final head: `f686040ebb7eb00022ede8fb7a1e0c7013798263`
+- all **11 workflows triggered by PR #226 were GREEN** before merge
 
-PR #220 behavior:
+Current normal named-admin behavior:
 
-- normal named-admin password + TOTP remains browser -> Supabase Auth;
-- verified AAL2/TOTP admin session is kept only in browser `sessionStorage` for the current tab/session;
-- no refresh token is persisted in this milestone; expired sessions fail closed and require sign-in again;
-- normal named-admin identity, license registry and support inbox load directly from Cloudflare admin APIs;
-- normal named-admin license issue, status changes, offline activation, support updates and customer provisioning call Cloudflare directly with the AAL2 bearer token;
-- normal named-admin operations no longer require the legacy Next/Render admin session;
-- emergency login and older transitional cookie sessions still use legacy server actions as compatibility fallbacks;
-- first-admin bootstrap remains a transitional server-side flow.
+- password authentication occurs browser -> Supabase Auth
+- TOTP enrollment/challenge/verification occurs browser -> Supabase Auth
+- resulting AAL2 token is verified at Cloudflare `/api/admin/me`
+- verified AAL2 session is kept only in browser `sessionStorage` for the current tab/session
+- no refresh token is persisted in this phase; expiry fails closed and requires sign-in again
+- normal identity, license registry, support inbox, license issue, status changes, offline activation, support updates and customer provisioning call Cloudflare directly
+- normal logout clears the browser session and calls Supabase local logout directly; it does **not** call the legacy server logout action
+- legacy server session/logout paths are now explicitly emergency-only
+- first-admin bootstrap and emergency break-glass remain transitional server-side flows
 
 ## 6. Cloudflare License/Admin state
 
@@ -160,15 +164,16 @@ Maintain PostgreSQL portability for future self-hosting.
 
 Customer-facing license/update traffic is Render-free.
 
-Normal named-admin business operations are now also browser -> Cloudflare direct after AAL2 authentication. Remaining Render/Next migration scope is narrower:
+Normal named-admin authentication, business operations, page hydration and logout are also no longer dependent on the legacy Render/Next server path.
 
-- server-rendered initial page hydration still calls legacy `listLicenses()` / `listSupportRequests()` for emergency/older-cookie compatibility;
-- legacy named-admin session/adoption and old password/MFA server actions remain in source although the normal UI no longer uses them;
-- emergency break-glass login/session remains server-side;
-- first-admin bootstrap still requires privileged server-side Auth/DB administration;
-- License Admin UI hosting itself still runs on the transitional Next hosting path.
+Remaining Render/Next migration scope is now limited mainly to:
 
-Do not remove Render configuration/service until bootstrap, emergency access and UI hosting have verified replacements.
+- first-admin bootstrap, which still requires privileged server-side Auth/DB administration;
+- emergency break-glass login/session/logout and emergency-only legacy business-operation fallback;
+- License Admin UI hosting itself, which still runs on the transitional Next hosting path;
+- server-side privileged helpers retained only because bootstrap/emergency compatibility still depends on them.
+
+Do not remove Render configuration/service until first-admin bootstrap, emergency access and License Admin UI hosting have verified replacements.
 
 ## 9. Current signing authority
 
@@ -270,16 +275,14 @@ Continue Render removal in small verified steps.
 
 Recommended next sequence:
 
-1. **Remove normal page hydration dependence on legacy server sessions.** Make the License Admin page render a browser-auth shell by default; keep only the minimum explicit emergency/bootstrap server fallback.
-2. Remove obsolete normal named-admin legacy session/adoption/password/MFA server paths once code search proves nothing still depends on them.
-3. Move normal logout fully client/Cloudflare-native; keep emergency logout isolated to emergency mode only.
-4. Design/migrate first-admin bootstrap without exposing a service-role/secret key or unrestricted Auth admin capability to the browser/Worker.
-5. Re-evaluate emergency break-glass design for Cloudflare/self-host portability.
-6. Verify a Cloudflare-compatible License Admin UI deployment path, then move UI hosting.
-7. Only after all above paths are verified, remove Render configuration/service.
-8. Start Global Core audit + self-service Subscription/Entitlements foundation.
-9. Then Local-first Sync v2 / multi-branch correctness and formal Vyapar-parity gap audit.
-10. Establish Minarva Intelligence platform foundation before large-scale AI feature rollout.
+1. **Design and migrate first-admin bootstrap without exposing a service-role/secret key or unrestricted Auth admin capability to the browser/Worker.** Research existing Supabase-supported bootstrap patterns and license-compatible reference implementations before custom coding.
+2. Re-evaluate emergency break-glass design for Cloudflare/self-host portability. Preserve a real emergency path; do not delete the capability merely to remove Render.
+3. Verify a Cloudflare-compatible License Admin UI deployment path and migrate the UI hosting while preserving all named-admin/bootstrap/emergency behavior.
+4. Only after all above paths are verified, remove Render configuration/service.
+5. Start Global Core audit + self-service Subscription/Entitlements foundation.
+6. Then Local-first Sync v2 / multi-branch correctness and formal Vyapar-parity gap audit.
+7. Establish Minarva Intelligence platform foundation before large-scale AI feature rollout.
+8. Continue capability-by-capability implementation from `docs/CAPABILITY_REGISTRY.md` without scope reduction.
 
 ## 16. Small-milestone rule
 
