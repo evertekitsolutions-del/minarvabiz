@@ -88,9 +88,9 @@ Recent Cloudflare/admin backend work does not by itself require a new Windows re
 
 ## 5. Latest verified development state
 
-After PR #228:
+After PR #229:
 
-- current verified main: **`fcffa6787b1c3692462a41e51c3eccb2d19a3c9c`**
+- current verified main: **`b463496f71fe2ef3e80473ffcb99de50fd67ae4c`**
 - open PRs at post-merge verification: **0**
 - open issues at post-merge verification: **0**
 - stable Windows release remains **v1.0.15**
@@ -103,6 +103,7 @@ After PR #228:
 - PR #228 added the Cloudflare first-admin bootstrap authority foundation, browser CORS/readiness checks and production diagnostics required for the replacement bootstrap path
 - PR #228 final head: `5ff4b69b56db7e5c62ec2226a241a70acab1a6cf`
 - all **12 workflows triggered by PR #228 were GREEN** before merge
+- PR #229 merged the authoritative multi-model review + innovation governance; all **11 workflows triggered by PR #229 were GREEN** before merge
 
 Current normal named-admin behavior:
 
@@ -195,7 +196,7 @@ Read these before feature planning:
 4. `docs/COMPETITOR_CAPABILITY_BASELINE.md` — Vyapar + global competitor benchmark;
 5. `docs/ZERO_COST_GROWTH_ARCHITECTURE.md` — first-25-customer cost/portability rules;
 6. `docs/ENGINEERING_REUSE_POLICY.md` — no-scope-reduction, root-cause-fix and license-safe reuse rules;
-7. `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md` — independent AI review, innovation review and final-decision governance.
+7. `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md` — independent AI review, innovation review, Claude GitHub review integration rules and final-decision governance.
 
 `docs/WORLD_CLASS_FEATURE_ROADMAP.md` is historical/high-level; the documents above supersede it when scope conflicts.
 
@@ -287,6 +288,7 @@ Recommended next sequence:
 7. Establish Minarva Intelligence platform foundation before large-scale AI feature rollout.
 8. Continue capability-by-capability implementation from `docs/CAPABILITY_REGISTRY.md` without scope reduction.
 9. For substantial milestones, apply `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md`: automated evidence remains mandatory; independent AI reviewers are advisory and the final decision is based on verified repository/runtime evidence.
+10. When the governed Claude workflow is enabled, read and disposition Claude findings before final merge. Claude access stays read-only and must never receive production secrets.
 
 ## 16. Small-milestone rule
 

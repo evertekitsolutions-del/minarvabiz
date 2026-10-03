@@ -1,0 +1,60 @@
+name: Claude Independent Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  actions: read
+
+concurrency:
+  group: claude-independent-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude-review:
+    name: Claude Independent Review
+    if: >-
+      ${{
+        vars.CLAUDE_REVIEW_ENABLED == 'true' &&
+        github.event.pull_request.draft == false &&
+        github.event.pull_request.head.repo.full_name == github.repository
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Review pull request
+        uses: anthropics/claude-code-action@cfc3eb22bfed5c26ef66e3223c982af27e4524de
+        with:
+          github_token: ${{ github.token }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          additional_permissions: |
+            actions: read
+          use_sticky_comment: "false"
+          track_progress: "false"
+          include_fix_links: "false"
+          display_report: "true"
+          show_full_output: "false"
+          claude_args: "--max-turns 8"
+          prompt: |
+            You are the independent adversarial reviewer for Minarva Biz.
+            Read CLAUDE.md and all authoritative project documents it references before judging this PR.
+
+            Review the entire PR diff plus related code paths and available CI results.
+            Do not modify files, push commits, approve, merge, or propose reducing agreed product scope as a shortcut.
+
+            Specifically challenge:
+            - correctness, regressions, security, data isolation and data-loss risks;
+            - Online/Offline/Hybrid behavior and local-first multi-branch implications;
+            - accounting/inventory idempotency and audit integrity when relevant;
+            - provider lock-in and future self-host portability;
+            - recurring-cost impact before 25 paying customers;
+            - missing tests and missing production verification;
+            - opportunities to reuse existing Minarva code, official SDKs or clearly licensed maintained OSS;
+            - meaningful AI integration and innovative ideas that improve the world-class business-platform roadmap.
+
+            End with exactly one recommendation: BLOCK, REVIEW, or CLEAR.
