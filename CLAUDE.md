@@ -29,7 +29,7 @@ Before reviewing a pull request, read:
 
 ## Required PR review output
 
-Return one structured review with these sections:
+Return one structured workflow review with these sections:
 
 1. **Blocking defects** — correctness, security, data-loss, regression, licensing or architecture violations.
 2. **Test gaps** — exact missing tests or verification.
