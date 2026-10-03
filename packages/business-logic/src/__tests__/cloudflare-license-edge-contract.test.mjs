@@ -19,6 +19,9 @@ const browserAdminAuth = read("apps/license-admin/src/app/admin-panel/browser-ad
 const browserAdminApi = read("apps/license-admin/src/app/admin-panel/browser-admin-api.ts");
 const browserAdminSession = read("apps/license-admin/src/app/admin-panel/browser-admin-session.ts");
 const adminAuthHook = read("apps/license-admin/src/app/admin-panel/useAdminAuthentication.ts");
+const adminBootstrapHook = read("apps/license-admin/src/app/admin-panel/useFirstAdminBootstrap.ts");
+const adminAuthCard = read("apps/license-admin/src/app/admin-panel/AdminAuthCard.tsx");
+const adminPage = read("apps/license-admin/src/app/page.tsx");
 const validationBridge = read("supabase/migrations/20261002_cloudflare_license_validate_bridge.sql");
 const deactivationBridge = read("supabase/migrations/20261002_cloudflare_license_deactivate_bridge.sql");
 const trialBridge = read("supabase/migrations/20261002_cloudflare_trial_register_bridge.sql");
@@ -32,6 +35,7 @@ const adminSupportInbox = read("supabase/migrations/20261002_cloudflare_admin_su
 const adminSupportUpdate = read("supabase/migrations/20261002_cloudflare_admin_support_update.sql");
 const adminCustomerProvisioning = read("supabase/migrations/20261002_cloudflare_admin_customer_provisioning.sql");
 const adminBootstrapAuthority = read("supabase/migrations/20261003_cloudflare_admin_bootstrap_authority.sql");
+const adminBootstrapSignupReservation = read("supabase/migrations/20261003_cloudflare_admin_bootstrap_signup_reservation.sql");
 
 const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
 
@@ -43,6 +47,12 @@ assert.match(worker, /GET \/api\/update\/manifest/);
 assert.match(worker, /GET \/api\/admin\/auth-config/);
 assert.match(worker, /GET \/api\/admin\/bootstrap\/status/);
 assert.match(worker, /POST \/api\/admin\/bootstrap\/claim/);
+assert.match(worker, /POST \/api\/admin\/bootstrap\/signup-reservation/);
+assert.match(worker, /nativeAdminBootstrapSignupReservation: true/);
+assert.match(worker, /async function adminBootstrapSignupReservationNatively\(request, env, route\)/);
+assert.match(worker, /cloudflare_admin_prepare_bootstrap_signup/);
+assert.match(worker, /signupToken/);
+assert.match(worker, /token_sha256/);
 assert.match(worker, /nativeAdminBootstrapStatus: true/);
 assert.match(worker, /nativeAdminBootstrapClaim: true/);
 assert.match(worker, /async function adminBootstrapStatusNatively\(request, env\)/);
@@ -174,19 +184,42 @@ assert.doesNotMatch(wrangler, /LICENSE_PRIVATE_KEY/);
 assert.match(desktopLicense, /typeof result\.data\.activationCertificate === "string"[\s\S]*stored\.activationCertificate/);
 
 assert.match(browserAdminAuth, /beginBrowserNamedAdminLogin/);
+assert.match(browserAdminAuth, /beginBrowserFirstAdminSignup/);
+assert.match(browserAdminAuth, /createBrowserAdminSignupReservation/);
+assert.match(browserAdminAuth, /api\/admin\/bootstrap\/signup-reservation/);
+assert.match(browserAdminAuth, /account_type:\s*"license_admin"/);
+assert.match(browserAdminAuth, /bootstrap_token:/);
+assert.match(browserAdminAuth, /resendBrowserFirstAdminConfirmation/);
+assert.match(browserAdminAuth, /getBrowserAdminBootstrapStatus/);
+assert.match(browserAdminAuth, /claimBrowserFirstAdmin/);
 assert.match(browserAdminAuth, /\/token\?grant_type=password/);
+assert.match(browserAdminAuth, /\/signup/);
+assert.match(browserAdminAuth, /\/resend/);
+assert.match(browserAdminAuth, /api\/admin\/bootstrap\/status/);
+assert.match(browserAdminAuth, /api\/admin\/bootstrap\/claim/);
 assert.match(browserAdminAuth, /\/factors\/\$\{encodeURIComponent\(factorId\)\}\/challenge/);
 assert.match(browserAdminAuth, /\/factors\/\$\{encodeURIComponent\(pending\.factorId\)\}\/verify/);
 assert.match(browserAdminAuth, /aal !== "aal2"/);
 assert.match(browserAdminAuth, /api\/admin\/me/);
-assert.doesNotMatch(browserAdminAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET/);
+assert.doesNotMatch(browserAdminAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET|LICENSE_EDGE_RPC_SECRET/);
 
 assert.match(adminAuthHook, /beginBrowserNamedAdminLogin/);
+assert.match(adminAuthHook, /getBrowserAdminBootstrapStatus/);
+assert.match(adminAuthHook, /claimBrowserFirstAdmin/);
 assert.match(adminAuthHook, /beginBrowserAdminMfaEnrollment/);
 assert.match(adminAuthHook, /verifyBrowserAdminMfa/);
 assert.match(adminAuthHook, /activateBrowserAdminSession/);
 assert.match(adminAuthHook, /loadBrowserAdminDashboard/);
 assert.doesNotMatch(adminAuthHook, /adoptCloudflareAdminSession/);
+
+assert.doesNotMatch(adminBootstrapHook, /bootstrapFirstLicenseAdmin|from ["']\.\.\/actions["']/);
+assert.match(adminBootstrapHook, /beginBrowserFirstAdminSignup/);
+assert.match(adminBootstrapHook, /resendBrowserFirstAdminConfirmation/);
+assert.match(adminBootstrapHook, /getBrowserAdminBootstrapStatus/);
+assert.match(adminAuthCard, /Create first administrator/);
+assert.match(adminAuthCard, /Confirm the email/);
+assert.doesNotMatch(adminAuthCard, /Send a one-time setup email/);
+assert.doesNotMatch(adminPage, /firstAdminBootstrapStatus|bootstrapAvailable/);
 
 assert.match(browserAdminSession, /sessionStorage\.setItem/);
 assert.match(browserAdminSession, /aal === "aal2"/);
@@ -209,6 +242,7 @@ assert.doesNotMatch(browserAdminApi, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_
 
 assert.match(adminPanel, /useAdminAuthentication/);
 assert.match(adminPanel, /browserDirect/);
+assert.doesNotMatch(adminPanel, /bootstrapAvailable/);
 assert.match(adminPanel, /issueBrowserLicense/);
 assert.match(adminPanel, /setBrowserLicenseStatus/);
 assert.match(adminPanel, /createBrowserOfflineActivation/);
@@ -288,6 +322,31 @@ assert.match(adminBootstrapAuthority, /REVOKE ALL ON FUNCTION public\.cloudflare
 assert.match(adminBootstrapAuthority, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_claim_first_admin\(TEXT, TEXT, TEXT\)[\s\S]*TO authenticated/);
 assert.match(adminBootstrapAuthority, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_claim_first_admin\(TEXT, TEXT, TEXT\)[\s\S]*FROM PUBLIC, anon, service_role/);
 assert.doesNotMatch(adminBootstrapAuthority, /raw_user_meta_data|user_metadata/);
+
+assert.match(adminBootstrapSignupReservation, /license_private\.admin_bootstrap_signup_reservations/);
+assert.match(adminBootstrapSignupReservation, /cloudflare_admin_prepare_bootstrap_signup/);
+assert.match(adminBootstrapSignupReservation, /token_sha256/);
+assert.match(adminBootstrapSignupReservation, /interval '10 minutes'/);
+assert.match(adminBootstrapSignupReservation, /DELETE FROM license_private\.admin_bootstrap_signup_reservations/);
+assert.match(adminBootstrapSignupReservation, /LICENSE_ADMIN_BOOTSTRAP_RESERVATION_REQUIRED/);
+assert.match(adminBootstrapSignupReservation, /bootstrap_token/);
+assert.match(adminBootstrapSignupReservation, /account_type/);
+assert.match(adminBootstrapSignupReservation, /guard_license_admin_bootstrap_signup/);
+assert.match(adminBootstrapSignupReservation, /BEFORE INSERT ON auth\.users/);
+assert.match(adminBootstrapSignupReservation, /raw_app_meta_data/);
+assert.match(adminBootstrapSignupReservation, /minarva_license_admin_bootstrap/);
+assert.match(adminBootstrapSignupReservation, /raw_user_meta_data\s*:=/);
+assert.match(adminBootstrapSignupReservation, /-\s*'bootstrap_token'/);
+assert.doesNotMatch(
+  adminBootstrapSignupReservation,
+  /IF COALESCE\(NEW\.raw_user_meta_data ->> 'account_type',[\s\S]{0,180}RETURN NEW;/,
+  "User-editable account_type alone must never bypass tenant bootstrap",
+);
+assert.match(
+  adminBootstrapSignupReservation,
+  /token_sha256 = encode\([\s\S]*extensions\.digest\(v_bootstrap_token, 'sha256'\)/,
+  "License-admin tenant-bootstrap bypass must require a one-time token matching a private reservation",
+);
 
 assert.match(adminLicenseRegistry, /CREATE OR REPLACE FUNCTION public\.cloudflare_admin_list_licenses\(\)/);
 assert.match(adminLicenseRegistry, /public\.cloudflare_admin_me\(\)/);

@@ -425,6 +425,10 @@ Legend:
 | CTL-020 | Partner/reseller portal | Control |
 | CTL-021 | Support tiers | Control |
 | CTL-022 | Feature flags/experiments | Control |
+| CTL-023 | Control-plane administrator identity & RBAC | Control |
+| CTL-024 | Administrator MFA / AAL2 enforcement | Control |
+| CTL-025 | First-administrator bootstrap & recovery | Control |
+| CTL-026 | Emergency break-glass administration | Control |
 
 ## Integrations / hardware / developer ecosystem
 

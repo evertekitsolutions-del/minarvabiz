@@ -6,6 +6,9 @@ import { loginEmergencyAdmin } from "../actions";
 import {
   beginBrowserAdminMfaEnrollment,
   beginBrowserNamedAdminLogin,
+  claimBrowserFirstAdmin,
+  getBrowserAdminBootstrapStatus,
+  getBrowserAdminIdentity,
   verifyBrowserAdminMfa,
   type BrowserAdminPendingAuth,
 } from "./browser-admin-auth";
@@ -95,6 +98,27 @@ export function useAdminAuthentication(
     if (!verified.ok) {
       setBusy(false);
       setMessage(verified.error || "MFA verification failed.");
+      return;
+    }
+
+    let authorized = await getBrowserAdminIdentity(verified.accessToken, verified.userId);
+    if (!authorized.ok) {
+      const bootstrap = await getBrowserAdminBootstrapStatus();
+      if (bootstrap.ok && bootstrap.required && bootstrap.configured) {
+        const claimed = await claimBrowserFirstAdmin(verified.accessToken, verified.userId);
+        if (!claimed.ok && claimed.code !== "BOOTSTRAP_CLOSED") {
+          setBusy(false);
+          setMessage(claimed.error);
+          return;
+        }
+        authorized = claimed.ok
+          ? { ok: true, identity: claimed.identity }
+          : await getBrowserAdminIdentity(verified.accessToken, verified.userId);
+      }
+    }
+    if (!authorized.ok) {
+      setBusy(false);
+      setMessage(authorized.error);
       return;
     }
 
