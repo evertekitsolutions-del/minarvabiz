@@ -15,10 +15,12 @@ For every new chat or every user message meaning **Continue**:
 4. read `docs/MASTER_PRODUCT_PLAN.md`;
 5. read `docs/CAPABILITY_REGISTRY.md`;
 6. read `docs/AI_CAPABILITY_REGISTRY.md` when the milestone touches product/AI scope;
-7. never restart already merged work unless live evidence shows a regression;
-8. complete only the next small milestone;
-9. branch -> implement -> test -> PR -> wait all required checks -> fix failures -> merge only when green;
-10. update this continuation file whenever the authoritative next step materially changes.
+7. read `docs/ENGINEERING_REUSE_POLICY.md` before substantial implementation/refactor work;
+8. never restart already merged work unless live evidence shows a regression;
+9. complete only the next small milestone without reducing the agreed final feature scope;
+10. research existing Minarva code, official SDKs and license-compatible open-source implementations before substantial custom coding;
+11. branch -> implement -> test -> PR -> wait all required checks -> fix failures -> merge only when green;
+12. update this continuation file whenever the authoritative next step materially changes.
 
 Do not rely only on chat memory. The repository documents are the durable source of truth.
 
@@ -67,7 +69,12 @@ The master definition is `docs/MASTER_PRODUCT_PLAN.md`.
 - AI must be provider-neutral and later support Minarva-owned inference;
 - no mandatory recurring paid infrastructure dependency before the first 25 paying customers unless explicitly approved;
 - 25 customers is a review point, not automatic permission to spend;
-- any provider integration must define export/migration/replacement behavior.
+- any provider integration must define export/migration/replacement behavior;
+- implementation difficulty must not silently reduce or delete an agreed feature;
+- “small milestone” means sequencing only, not a simplified final product;
+- blockers must be root-cause-fixed rather than hidden by disabling required behavior;
+- external code may be reused only after source, license, security, maintenance and portability checks;
+- publicly visible GitHub code without a clear compatible license must not be copied.
 
 ## 4. Current commercial release
 
@@ -179,7 +186,8 @@ Read these before feature planning:
 2. `docs/CAPABILITY_REGISTRY.md` — full capability inventory/checklist;
 3. `docs/AI_CAPABILITY_REGISTRY.md` — cross-module AI roadmap and safety rules;
 4. `docs/COMPETITOR_CAPABILITY_BASELINE.md` — Vyapar + global competitor benchmark;
-5. `docs/ZERO_COST_GROWTH_ARCHITECTURE.md` — first-25-customer cost/portability rules.
+5. `docs/ZERO_COST_GROWTH_ARCHITECTURE.md` — first-25-customer cost/portability rules;
+6. `docs/ENGINEERING_REUSE_POLICY.md` — no-scope-reduction, root-cause-fix and license-safe reuse rules.
 
 `docs/WORLD_CLASS_FEATURE_ROADMAP.md` is historical/high-level; the documents above supersede it when scope conflicts.
 
@@ -277,6 +285,6 @@ Recommended next sequence:
 
 Do not try to build the entire master plan at once.
 
-Each milestone must be independently reviewable and mergeable. The user explicitly prefers small milestones because long chats can be interrupted.
+Each milestone must be independently reviewable and mergeable. The user explicitly prefers small milestones because long chats can be interrupted. **This is not permission to ship simplified or reduced features.** If a full capability requires many milestones, complete all required milestones and only mark the capability complete when its agreed behavior and verification are satisfied.
 
 If a chat ends, the next chat must continue from live repository state and these documents, not reconstruct the project from memory.
