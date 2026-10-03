@@ -88,9 +88,9 @@ Recent Cloudflare/admin backend work does not by itself require a new Windows re
 
 ## 5. Latest verified development state
 
-After PR #226:
+After PR #228:
 
-- current verified main: **`da8e99ea5b1aa481141bde43e7dba42a9146aaac`**
+- current verified main: **`fcffa6787b1c3692462a41e51c3eccb2d19a3c9c`**
 - open PRs at post-merge verification: **0**
 - open issues at post-merge verification: **0**
 - stable Windows release remains **v1.0.15**
@@ -99,8 +99,10 @@ After PR #226:
 - PR #224 removed normal page-hydration dependence on legacy server reads; only explicit emergency fallback still hydrates through legacy server actions
 - PR #225 removed obsolete normal named-admin password/MFA/adoption server paths and kept the legacy server session restricted to emergency access
 - PR #226 moved normal named-admin logout fully browser-side and renamed/restricted the remaining server logout to `logoutEmergencyAdmin`
-- PR #226 final head: `f686040ebb7eb00022ede8fb7a1e0c7013798263`
-- all **11 workflows triggered by PR #226 were GREEN** before merge
+- PR #227 advanced the durable continuation checkpoint through PR #226
+- PR #228 added the Cloudflare first-admin bootstrap authority foundation, browser CORS/readiness checks and production diagnostics required for the replacement bootstrap path
+- PR #228 final head: `5ff4b69b56db7e5c62ec2226a241a70acab1a6cf`
+- all **12 workflows triggered by PR #228 were GREEN** before merge
 
 Current normal named-admin behavior:
 
@@ -192,7 +194,8 @@ Read these before feature planning:
 3. `docs/AI_CAPABILITY_REGISTRY.md` — cross-module AI roadmap and safety rules;
 4. `docs/COMPETITOR_CAPABILITY_BASELINE.md` — Vyapar + global competitor benchmark;
 5. `docs/ZERO_COST_GROWTH_ARCHITECTURE.md` — first-25-customer cost/portability rules;
-6. `docs/ENGINEERING_REUSE_POLICY.md` — no-scope-reduction, root-cause-fix and license-safe reuse rules.
+6. `docs/ENGINEERING_REUSE_POLICY.md` — no-scope-reduction, root-cause-fix and license-safe reuse rules;
+7. `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md` — independent AI review, innovation review and final-decision governance.
 
 `docs/WORLD_CLASS_FEATURE_ROADMAP.md` is historical/high-level; the documents above supersede it when scope conflicts.
 
@@ -275,7 +278,7 @@ Continue Render removal in small verified steps.
 
 Recommended next sequence:
 
-1. **Design and migrate first-admin bootstrap without exposing a service-role/secret key or unrestricted Auth admin capability to the browser/Worker.** Research existing Supabase-supported bootstrap patterns and license-compatible reference implementations before custom coding.
+1. **Complete the browser/UI cutover for first-admin bootstrap using the Cloudflare bootstrap authority added in PR #228, then retire the legacy privileged server bootstrap path only after end-to-end verification.** Do not redesign the authority foundation again.
 2. Re-evaluate emergency break-glass design for Cloudflare/self-host portability. Preserve a real emergency path; do not delete the capability merely to remove Render.
 3. Verify a Cloudflare-compatible License Admin UI deployment path and migrate the UI hosting while preserving all named-admin/bootstrap/emergency behavior.
 4. Only after all above paths are verified, remove Render configuration/service.
@@ -283,6 +286,7 @@ Recommended next sequence:
 6. Then Local-first Sync v2 / multi-branch correctness and formal Vyapar-parity gap audit.
 7. Establish Minarva Intelligence platform foundation before large-scale AI feature rollout.
 8. Continue capability-by-capability implementation from `docs/CAPABILITY_REGISTRY.md` without scope reduction.
+9. For substantial milestones, apply `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md`: automated evidence remains mandatory; independent AI reviewers are advisory and the final decision is based on verified repository/runtime evidence.
 
 ## 16. Small-milestone rule
 
