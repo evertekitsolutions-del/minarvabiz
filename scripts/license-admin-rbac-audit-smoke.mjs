@@ -23,9 +23,20 @@ assert.match(session, /role: "admin"/);
 assert.match(session, /isAdminIdentityRole/);
 assert.doesNotMatch(session, /from \"\.\/admin-rbac\"/);
 
-const namedAdmin = await readFile(new URL("../apps/license-admin/src/lib/named-admin.ts", import.meta.url), "utf8");
-assert.match(namedAdmin, /display_name%2Cstatus%2Crole/);
-assert.match(namedAdmin, /isAdminRole\(row\.role\)/);
+const browserAuth = await readFile(new URL("../apps/license-admin/src/app/admin-panel/browser-admin-auth.ts", import.meta.url), "utf8");
+assert.match(browserAuth, /api\/admin\/me/);
+assert.match(browserAuth, /role: role as AdminIdentityView\["role"\]/);
+assert.doesNotMatch(browserAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET/);
+
+const identityBoundary = await readFile(new URL("../supabase/migrations/20261002_cloudflare_admin_identity_boundary.sql", import.meta.url), "utf8");
+assert.match(identityBoundary, /license_admin_identities/);
+assert.match(identityBoundary, /v_identity\.role = 'viewer'/);
+assert.match(identityBoundary, /v_identity\.role = 'operator'/);
+assert.match(identityBoundary, /v_identity\.role = 'admin'/);
+assert.match(identityBoundary, /ADMIN_ROLE_INVALID/);
+assert.match(identityBoundary, /license\.read/);
+assert.match(identityBoundary, /license\.issue/);
+assert.match(identityBoundary, /license\.status_manage/);
 
 const store = await readFile(new URL("../apps/license-admin/src/lib/admin-session-store.ts", import.meta.url), "utf8");
 assert.match(store, /actor_role/);
@@ -35,6 +46,8 @@ assert.match(store, /identity\.role !== claims\.identity\.role/);
 const actions = await readFile(new URL("../apps/license-admin/src/app/actions.ts", import.meta.url), "utf8");
 assert.match(actions, /adminRoleAllows/);
 assert.match(actions, /recordAdminAudit/);
+assert.match(actions, /claims\.identity\.source !== "emergency"/);
+assert.doesNotMatch(actions, /from ["']\.\.\/lib\/named-admin["']/);
 assert.match(actions, /"license\.issue"/);
 assert.match(actions, /"license\.offline_activate"/);
 assert.match(actions, /"license\.status_manage"/);

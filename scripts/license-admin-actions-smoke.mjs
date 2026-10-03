@@ -34,17 +34,19 @@ const actions = await readFile(
   "utf8",
 );
 
-for (const authAction of [
+for (const authAction of ["loginEmergencyAdmin", "logoutAdmin"]) {
+  assert.match(actions, new RegExp(`export async function ${authAction}\\b`));
+}
+for (const retiredAction of [
   "loginAdmin",
   "beginAdminMfaEnrollment",
   "verifyAdminMfa",
   "cancelAdminMfa",
-  "loginEmergencyAdmin",
-  "logoutAdmin",
   "adoptCloudflareAdminSession",
 ]) {
-  assert.match(actions, new RegExp(`export async function ${authAction}\\b`));
+  assert.doesNotMatch(actions, new RegExp(`export async function ${retiredAction}\\b`));
 }
+assert.doesNotMatch(actions, /from ["']\.\.\/lib\/named-admin["']/);
 
 for (const registryAction of [
   "listLicenses",

@@ -41,27 +41,50 @@ assert.match(session, /LICENSE_SESSION_SECRET/);
 assert.match(session, /LICENSE_ADMIN_SESSION_TTL_SECONDS/);
 assert.match(session, /createAdminSessionToken/);
 assert.match(session, /readAdminSessionToken/);
-assert.match(session, /createAdminMfaPendingToken/);
 assert.match(session, /v3\./);
 assert.doesNotMatch(session, /minarvabiz-license-admin-session-v1/);
+assert.doesNotMatch(
+  session,
+  /ADMIN_MFA_COOKIE|createAdminMfaPendingToken|readAdminMfaPendingToken|adminMfaCookieOptions|createCipheriv|createDecipheriv/,
+  "Server-side pending MFA state must stay retired after browser AAL2 migration",
+);
 
 const actions = read("apps/license-admin/src/app/actions.ts");
-assert.match(actions, /consumeRateLimit\(requestHeaders, "admin-login", 5, 15 \* 60, subject\)/);
+assert.match(actions, /consumeRateLimit\(requestHeaders, "admin-emergency-login", 5, 15 \* 60, subject\)/);
 assert.match(actions, /registerAdminSession/);
 assert.match(actions, /validateRegisteredAdminSession/);
 assert.match(actions, /revokeRegisteredAdminSession/);
-assert.match(actions, /beginAdminMfaEnrollment/);
-assert.match(actions, /verifyAdminMfa/);
-assert.match(actions, /loginEmergencyAdmin/);
+assert.match(actions, /export async function loginEmergencyAdmin/);
+assert.match(actions, /claims\.identity\.source !== "emergency"/);
+assert.match(actions, /identity\.source !== "emergency" \|\| authMethod !== "emergency"/);
+assert.doesNotMatch(actions, /export async function loginAdmin\b/);
+assert.doesNotMatch(actions, /export async function beginAdminMfaEnrollment\b/);
+assert.doesNotMatch(actions, /export async function verifyAdminMfa\b/);
+assert.doesNotMatch(actions, /export async function cancelAdminMfa\b/);
+assert.doesNotMatch(actions, /export async function adoptCloudflareAdminSession\b/);
+assert.doesNotMatch(actions, /from ["']\.\.\/lib\/named-admin["']/);
 
-const namedAdmin = read("apps/license-admin/src/lib/named-admin.ts");
-assert.match(namedAdmin, /"\/token\?grant_type=password"/);
-assert.match(namedAdmin, /license_admin_identities/);
-assert.match(namedAdmin, /status !== "active"/);
-assert.match(namedAdmin, /verifiedTotpFactorIds/);
-assert.match(namedAdmin, /\/challenge/);
-assert.match(namedAdmin, /\/verify/);
-assert.match(namedAdmin, /aal2/);
+const browserAuth = read("apps/license-admin/src/app/admin-panel/browser-admin-auth.ts");
+assert.match(browserAuth, /"\/token\?grant_type=password"/);
+assert.match(browserAuth, /\/factors\/\$\{encodeURIComponent\(factorId\)\}\/challenge/);
+assert.match(browserAuth, /\/factors\/\$\{encodeURIComponent\(pending\.factorId\)\}\/verify/);
+assert.match(browserAuth, /aal !== "aal2"/);
+assert.match(browserAuth, /method === "totp"/);
+assert.match(browserAuth, /api\/admin\/me/);
+assert.doesNotMatch(browserAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET/);
+
+const browserSession = read("apps/license-admin/src/app/admin-panel/browser-admin-session.ts");
+assert.match(browserSession, /sessionStorage\.setItem/);
+assert.match(browserSession, /aal === "aal2"/);
+assert.match(browserSession, /hasTotp/);
+assert.match(browserSession, /\/auth\/v1\/logout\?scope=local/);
+assert.doesNotMatch(browserSession, /localStorage/);
+
+const adminIdentityBoundary = read("supabase/migrations/20261002_cloudflare_admin_identity_boundary.sql");
+assert.match(adminIdentityBoundary, /auth\.jwt\(\)/);
+assert.match(adminIdentityBoundary, /v_aal <> 'aal2'/);
+assert.match(adminIdentityBoundary, /license_admin_identities/);
+assert.match(adminIdentityBoundary, /status = 'active'/);
 
 const sessionStore = read("apps/license-admin/src/lib/admin-session-store.ts");
 assert.match(sessionStore, /license_admin_sessions/);
