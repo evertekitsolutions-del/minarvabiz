@@ -48,7 +48,14 @@ assert.match(worker, /nativeAdminBootstrapClaim: true/);
 assert.match(worker, /async function adminBootstrapStatusNatively\(request, env\)/);
 assert.match(worker, /async function adminBootstrapClaimNatively\(request, env\)/);
 assert.match(worker, /cloudflare_admin_bootstrap_status/);
-assert.match(worker, /cloudflare_admin_bootstrap_status[\\s\\S]*authorization: `Bearer \\$\\{publishableKey\\}`[\\s\\S]*p_edge_secret: edgeSecret/);
+const bootstrapStatusFn = worker.slice(
+  worker.indexOf("async function adminBootstrapStatusNatively"),
+  worker.indexOf("async function adminBootstrapClaimNatively"),
+);
+assert.match(bootstrapStatusFn, /authorization: `Bearer \$\{publishableKey\}`/);
+assert.match(bootstrapStatusFn, /p_edge_secret: edgeSecret/);
+assert.match(bootstrapStatusFn, /redirect:\s*"manual"/);
+assert.doesNotMatch(bootstrapStatusFn, /redirect:\s*"error"/);
 assert.match(worker, /cloudflare_admin_claim_first_admin/);
 assert.match(worker, /LICENSE_ADMIN_BOOTSTRAP_EMAIL/);
 assert.match(worker, /LICENSE_ADMIN_BOOTSTRAP_NAME/);
