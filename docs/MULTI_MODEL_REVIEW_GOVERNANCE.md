@@ -287,7 +287,8 @@ For Claude independent PR review, the approved initial integration is Anthropic'
 
 - upstream: `anthropics/claude-code-action`
 - license: MIT
-- pinned commit: `cfc3eb22bfed5c26ef66e3223c982af27e4524de`
+- reviewed release: `v1.0.240` (2026-10-02)
+- pinned commit: `ed670b4cf9de2a5a570d130d2f6197b9e543cd64`
 - authentication input: `CLAUDE_CODE_OAUTH_TOKEN`
 - repository workflow: `.github/workflows/claude-independent-review.yml`
 - reviewer instructions: `CLAUDE.md`
