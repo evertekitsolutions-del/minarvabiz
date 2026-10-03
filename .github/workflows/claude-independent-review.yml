@@ -6,8 +6,8 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
+  pull-requests: read
+  issues: read
   actions: read
 
 jobs:
@@ -25,10 +25,10 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           additional_permissions: |
             actions: read
-          use_sticky_comment: "true"
-          track_progress: "true"
+          use_sticky_comment: "false"
+          track_progress: "false"
           include_fix_links: "false"
-          display_report: "false"
+          display_report: "true"
           show_full_output: "false"
           claude_args: "--max-turns 8"
           prompt: |
