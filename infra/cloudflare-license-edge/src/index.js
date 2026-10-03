@@ -956,6 +956,7 @@ async function adminBootstrapStatusNatively(request, env) {
     if (!response.ok || !data || typeof data !== "object" || Array.isArray(data)) {
       return json({ ok: false, code: "BOOTSTRAP_SERVICE_UNAVAILABLE" }, 503, {
         "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-upstream-status": String(response.status),
       });
     }
 
@@ -970,6 +971,8 @@ async function adminBootstrapStatusNatively(request, env) {
     if (!output.ok) {
       return json({ ok: false, code: String(data.code || "BOOTSTRAP_SERVICE_UNAVAILABLE") }, 503, {
         "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-upstream-status": String(response.status),
+        "x-minarva-admin-upstream-code": String(data.code || "UNKNOWN").slice(0, 80),
       });
     }
     return json(output, 200, {
