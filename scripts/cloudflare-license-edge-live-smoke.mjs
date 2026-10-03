@@ -40,6 +40,7 @@ assert(edge.data?.trialRpcConfigured === true, "Cloudflare-native trial RPC is n
 assert(edge.data?.activationSigningConfigured === true, "Cloudflare activation signing authority is not configured");
 assert(edge.data?.updateSigningConfigured === true, "Cloudflare update signing authority is not configured");
 assert(edge.data?.adminAuthConfigured === true, "Cloudflare admin auth foundation is not configured");
+assert(edge.data?.adminCorsConfigured === true, "Cloudflare admin CORS allowlist is not configured");
 assert(edge.data?.customerProvisioningConfigured === true, "Cloudflare customer provisioning is not configured");
 assert(edge.data?.renderDependency === false, "license edge must not depend on Render");
 assert(edge.data?.paidDependencyIntroduced === false, "edge must not introduce a paid dependency");
@@ -56,6 +57,7 @@ assert(health.data?.activationBackend === "cloudflare-native-supabase-rpc", "act
 assert(health.data?.mutationBackend === "cloudflare-native", "mutation backend is not Cloudflare-native");
 assert(health.data?.renderDependency === false, "API health must report zero Render dependency");
 assert(health.data?.adminAuthBackend === "cloudflare-native-supabase-jwt", "admin auth backend is not Cloudflare-native");
+assert(health.data?.adminCorsBackend === "cloudflare-origin-allowlist", "admin CORS backend is not the explicit allowlist");
 assert(health.data?.customerProvisioningBackend === "cloudflare-native-supabase-magic-link", "customer provisioning backend is not Cloudflare-native");
 assert(health.response.headers.get("x-minarva-license-edge") === "cloudflare", "edge response marker missing");
 assert(health.response.headers.get("x-minarva-license-backend") === "cloudflare-native", "health must be served natively by Cloudflare");
