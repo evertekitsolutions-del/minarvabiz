@@ -7,25 +7,14 @@ import type { Edition, LicenseFeatures } from "@minarvabiz/types";
 import { privateKeyHex } from "../lib/signing-key";
 import {
   ADMIN_COOKIE,
-  ADMIN_MFA_COOKIE,
   adminCookieOptions,
-  adminMfaCookieOptions,
-  createAdminMfaPendingToken,
   createAdminSessionToken,
   emergencyAdminCredentialStatus,
   emergencyAdminIdentity,
-  readAdminMfaPendingToken,
   readAdminSessionToken,
   verifyEmergencyAdminCredential,
   type AdminIdentity,
 } from "../lib/admin-session";
-import {
-  authenticateNamedAdmin,
-  beginNamedAdminMfaChallenge,
-  beginNamedAdminTotpEnrollment,
-  normalizeAdminEmail,
-  verifyNamedAdminMfa,
-} from "../lib/named-admin";
 import {
   registerAdminSession,
   revokeRegisteredAdminSession,
@@ -116,22 +105,7 @@ async function establishAdminSession(identity: AdminIdentity, authMethod: AdminS
 
   const cookieStore = await cookies();
   cookieStore.set(ADMIN_COOKIE, token, adminCookieOptions(identity.source));
-  cookieStore.delete(ADMIN_MFA_COOKIE);
   return { ok: true as const };
-}
-
-async function pendingAdminMfaState() {
-  const token = (await cookies()).get(ADMIN_MFA_COOKIE)?.value || "";
-  return readAdminMfaPendingToken(token);
-}
-
-async function storeAdminMfaState(state: Parameters<typeof createAdminMfaPendingToken>[0]) {
-  const token = createAdminMfaPendingToken(state);
-  if (!token) return false;
-  const cookieStore = await cookies();
-  cookieStore.set(ADMIN_MFA_COOKIE, token, adminMfaCookieOptions());
-  cookieStore.delete(ADMIN_COOKIE);
-  return true;
 }
 
 function dbConfig() { const base = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, ""); const key = String(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || ""); return base && key ? { base: `${base}/rest/v1`, key } : null; }
@@ -178,6 +152,7 @@ function onlineAppBaseUrl() {
 }
 
 function clean(value: unknown, max = 2000) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
+function normalizeAdminEmail(value: unknown) { return typeof value === "string" ? value.trim().toLowerCase().slice(0, 254) : ""; }
 
 function firstAdminBootstrapEmail() {
   return normalizeAdminEmail(process.env.LICENSE_ADMIN_BOOTSTRAP_EMAIL || "");
@@ -279,215 +254,6 @@ export async function bootstrapFirstLicenseAdmin() {
   };
 }
 
-export async function loginAdmin(email: string, password: string) {
-  const requestHeaders = await headers();
-  const normalizedEmail = normalizeAdminEmail(email);
-  const subject = `named:${normalizedEmail || "invalid"}`;
-
-  const backoff = await checkAdminLoginBackoff(requestHeaders, subject);
-  if (!backoff.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
-  if (!backoff.allowed) {
-    return { ok: false, error: `Too many sign-in attempts. Try again in ${backoff.retryAfterSeconds} seconds.` };
-  }
-
-  const throttle = await consumeRateLimit(requestHeaders, "admin-login", 5, 15 * 60, subject);
-  if (!throttle.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
-  if (!throttle.allowed) {
-    return { ok: false, error: `Too many sign-in attempts. Try again in ${throttle.retryAfterSeconds} seconds.` };
-  }
-
-  const auth = await authenticateNamedAdmin(normalizedEmail, password);
-  if (!auth.ok) {
-    if (!auth.rejected) return { ok: false, error: auth.error };
-    const failure = await recordAdminLoginFailure(requestHeaders, subject);
-    if (!failure.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
-    return { ok: false, error: `Invalid administrator credentials. Try again in ${failure.retryAfterSeconds} seconds.` };
-  }
-
-  const cleared = await clearAdminLoginFailures(requestHeaders, subject);
-  if (!cleared.ok) return { ok: false, error: "Admin authentication is temporarily unavailable." };
-
-  const factorId = auth.verifiedTotpFactorIds[0] || "";
-  if (factorId) {
-    const challenge = await beginNamedAdminMfaChallenge(auth.accessToken, factorId);
-    if (!challenge.ok) return challenge;
-    const stored = await storeAdminMfaState({
-      identity: auth.identity,
-      accessToken: auth.accessToken,
-      mode: "challenge",
-      factorId,
-      challengeId: challenge.challengeId,
-    });
-    if (!stored) return { ok: false, error: "Administrator MFA session could not be prepared." };
-    return { ok: true, next: "mfa" as const };
-  }
-
-  const stored = await storeAdminMfaState({
-    identity: auth.identity,
-    accessToken: auth.accessToken,
-    mode: "enroll",
-  });
-  if (!stored) return { ok: false, error: "Administrator MFA enrollment could not be prepared." };
-  return { ok: true, next: "enroll" as const };
-}
-
-export async function beginAdminMfaEnrollment() {
-  const pending = await pendingAdminMfaState();
-  if (!pending || pending.identity.source !== "supabase" || pending.mode !== "enroll") {
-    return { ok: false, error: "Administrator MFA enrollment has expired. Sign in again." };
-  }
-
-  const requestHeaders = await headers();
-  const throttle = await consumeRateLimit(
-    requestHeaders,
-    "admin-mfa-enroll",
-    5,
-    60 * 60,
-    pending.identity.id,
-  );
-  if (!throttle.ok) return { ok: false, error: "Administrator MFA is temporarily unavailable." };
-  if (!throttle.allowed) {
-    return { ok: false, error: `Too many MFA setup attempts. Try again in ${throttle.retryAfterSeconds} seconds.` };
-  }
-
-  const enrolled = await beginNamedAdminTotpEnrollment(pending.accessToken);
-  if (!enrolled.ok) return enrolled;
-  const stored = await storeAdminMfaState({
-    identity: pending.identity,
-    accessToken: pending.accessToken,
-    mode: "challenge",
-    factorId: enrolled.factorId,
-    challengeId: enrolled.challengeId,
-  });
-  if (!stored) return { ok: false, error: "Administrator MFA challenge could not be prepared." };
-
-  return {
-    ok: true,
-    secret: enrolled.secret.slice(0, 512),
-    uri: enrolled.uri.slice(0, 4096),
-    qrCode: enrolled.qrCode.slice(0, 100000),
-  };
-}
-
-export async function verifyAdminMfa(code: string) {
-  const pending = await pendingAdminMfaState();
-  if (
-    !pending ||
-    pending.identity.source !== "supabase" ||
-    pending.mode !== "challenge" ||
-    !pending.factorId ||
-    !pending.challengeId
-  ) {
-    return { ok: false, error: "Administrator MFA challenge has expired. Sign in again." };
-  }
-
-  const requestHeaders = await headers();
-  const throttle = await consumeRateLimit(
-    requestHeaders,
-    "admin-mfa-verify",
-    10,
-    5 * 60,
-    pending.identity.id,
-  );
-  if (!throttle.ok) return { ok: false, error: "Administrator MFA is temporarily unavailable." };
-  if (!throttle.allowed) {
-    return { ok: false, error: `Too many MFA verification attempts. Try again in ${throttle.retryAfterSeconds} seconds.` };
-  }
-
-  const verified = await verifyNamedAdminMfa(
-    pending.accessToken,
-    pending.factorId,
-    pending.challengeId,
-    code,
-    pending.identity.id,
-  );
-  if (!verified.ok) return verified;
-
-  const session = await establishAdminSession(pending.identity, "totp");
-  if (!session.ok) return session;
-  return { ok: true };
-}
-
-export async function cancelAdminMfa() {
-  (await cookies()).delete(ADMIN_MFA_COOKIE);
-  return { ok: true };
-}
-
-export async function adoptCloudflareAdminSession(accessTokenInput: string) {
-  const accessToken = String(accessTokenInput || "").trim();
-  if (
-    accessToken.length < 40 ||
-    accessToken.length > 16384 ||
-    accessToken.split(".").length !== 3
-  ) {
-    return { ok: false, error: "Administrator authorization token is invalid." };
-  }
-
-  const requestHeaders = await headers();
-  const tokenSubject = createHash("sha256").update(accessToken, "utf8").digest("hex").slice(0, 32);
-  const throttle = await consumeRateLimit(
-    requestHeaders,
-    "admin-session-adopt",
-    10,
-    5 * 60,
-    tokenSubject,
-  );
-  if (!throttle.ok) {
-    return { ok: false, error: "Administrator authorization is temporarily unavailable." };
-  }
-  if (!throttle.allowed) {
-    return {
-      ok: false,
-      error: `Too many administrator session attempts. Try again in ${throttle.retryAfterSeconds} seconds.`,
-    };
-  }
-
-  try {
-    const response = await fetch(
-      "https://minarva-biz-license-edge.minarva-biz.workers.dev/api/admin/me",
-      {
-        headers: {
-          accept: "application/json",
-          authorization: `Bearer ${accessToken}`,
-        },
-        cache: "no-store",
-        signal: AbortSignal.timeout(8_000),
-      },
-    );
-    const data = await response.json().catch(() => null);
-    const row = data?.identity;
-    const id = String(row?.id || "").trim();
-    const email = normalizeAdminEmail(row?.email || "");
-    const displayName = String(row?.displayName || "").trim();
-    const role = String(row?.role || "");
-
-    if (
-      !response.ok ||
-      data?.ok !== true ||
-      !/^[0-9a-f-]{36}$/i.test(id) ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-      !displayName ||
-      displayName.length > 120 ||
-      (role !== "viewer" && role !== "operator" && role !== "admin")
-    ) {
-      return { ok: false, error: "This account is not an active License Admin." };
-    }
-
-    return establishAdminSession(
-      {
-        id,
-        email,
-        displayName,
-        source: "supabase",
-        role,
-      },
-      "totp",
-    );
-  } catch {
-    return { ok: false, error: "Administrator authorization is temporarily unavailable." };
-  }
-}
-
 export async function loginEmergencyAdmin(password: string) {
   const requestHeaders = await headers();
   const subject = "emergency";
@@ -538,7 +304,6 @@ export async function logoutAdmin() {
     await revokeRegisteredAdminSession(claims.sessionId, "logout");
   }
   cookieStore.delete(ADMIN_COOKIE);
-  cookieStore.delete(ADMIN_MFA_COOKIE);
   return { ok: true };
 }
 
