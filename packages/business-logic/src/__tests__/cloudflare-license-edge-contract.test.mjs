@@ -36,6 +36,8 @@ const adminBootstrapAuthority = read("supabase/migrations/20261003_cloudflare_ad
 const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
 
 assert.match(worker, /ALLOWED_ROUTES/);
+assert.doesNotMatch(worker, /redirect:\s*"error"/);
+assert.match(worker, /redirect:\s*"manual"/);
 assert.match(worker, /GET \/api\/public-key/);
 assert.match(worker, /GET \/api\/update\/manifest/);
 assert.match(worker, /GET \/api\/admin\/auth-config/);
