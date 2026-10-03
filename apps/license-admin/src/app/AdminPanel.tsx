@@ -7,7 +7,7 @@ import type { LicensePlan } from "@minarvabiz/licensing";
 import {
   createCommercialLicense,
   createOfflineActivationPackage,
-  logoutAdmin,
+  logoutEmergencyAdmin,
   setLicenseStatus,
 } from "./actions";
 import { AdminAuthCard } from "./admin-panel/AdminAuthCard";
@@ -189,7 +189,6 @@ export default function AdminPanel({
   async function signOut() {
     if (browserDirect) {
       await signOutBrowserAdmin();
-      await logoutAdmin();
       setBrowserDirect(false);
       setActiveIdentity(null);
       setLicenses([]);
@@ -197,7 +196,8 @@ export default function AdminPanel({
       setLastToken(null);
       return;
     }
-    await logoutAdmin();
+
+    await logoutEmergencyAdmin();
     router.refresh();
   }
 
