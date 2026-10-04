@@ -194,7 +194,12 @@ assert.match(browserAdminAuth, /beginBrowserNamedAdminLogin/);
 assert.match(browserAdminAuth, /beginBrowserFirstAdminSignup/);
 assert.match(browserAdminAuth, /createBrowserAdminSignupReservation/);
 assert.match(browserAdminAuth, /api\/admin\/bootstrap\/signup-reservation/);
-assert.match(browserAdminAuth, /account_type:\s*"license_admin"/);
+assert.doesNotMatch(
+  browserAdminAuth,
+  /account_type:\s*"license_admin"/,
+  "Browser must not carry the privileged bootstrap routing marker",
+);
+assert.match(worker, /account_type:\s*"license_admin"/);
 assert.match(browserAdminAuth, /bootstrap_token:/);
 assert.match(browserAdminAuth, /resendBrowserFirstAdminConfirmation/);
 assert.match(browserAdminAuth, /getBrowserAdminBootstrapStatus/);
