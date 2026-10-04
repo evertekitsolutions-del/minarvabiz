@@ -11,7 +11,7 @@ CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments (customer_id);
 DO $
 BEGIN
   IF to_regclass('public.sync_queue') IS NOT NULL THEN
-    CREATE INDEX IF NOT EXISTS idx_outbox_status
+    CREATE INDEX IF NOT EXISTS idx_sync_queue_status_pending
       ON public.sync_queue (status)
       WHERE status = 'pending';
   END IF;
