@@ -7,6 +7,7 @@ const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
 type AuthConfig = {
   supabaseUrl: string;
   supabasePublishableKey: string;
+  passwordResetUrl: string;
 };
 
 type AuthFactor = {
@@ -41,8 +42,7 @@ type BootstrapStatusResponse = {
 
 type BootstrapSignupReservationResponse = {
   ok?: boolean;
-  signupToken?: string;
-  expiresAt?: string | null;
+  confirmationSent?: boolean;
   code?: string;
 };
 
@@ -164,15 +164,25 @@ async function fetchAuthConfig(): Promise<AuthConfig | null> {
     const data = await response.json().catch(() => null);
     const supabaseUrl = String(data?.supabaseUrl || "").replace(/\/$/, "");
     const supabasePublishableKey = String(data?.supabasePublishableKey || "").trim();
+    const passwordResetUrl = String(data?.passwordResetUrl || "").trim();
+    let resetUrl: URL | null = null;
+    try {
+      resetUrl = new URL(passwordResetUrl);
+    } catch {
+      resetUrl = null;
+    }
     if (
       !response.ok ||
       !supabaseUrl.startsWith("https://") ||
       !supabaseUrl.endsWith(".supabase.co") ||
-      supabasePublishableKey.length < 20
+      supabasePublishableKey.length < 20 ||
+      !resetUrl ||
+      resetUrl.protocol !== "https:" ||
+      resetUrl.pathname !== "/reset-password"
     ) {
       return null;
     }
-    return { supabaseUrl, supabasePublishableKey };
+    return { supabaseUrl, supabasePublishableKey, passwordResetUrl: resetUrl.toString() };
   } catch {
     return null;
   }
@@ -262,7 +272,7 @@ export async function getBrowserAdminBootstrapStatus(): Promise<BrowserAdminBoot
 
 export async function createBrowserAdminSignupReservation(
   emailInput: string,
-): Promise<{ ok: true; signupToken: string } | { ok: false; error: string; code?: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; code?: string }> {
   const email = normalizeEmail(emailInput);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { ok: false, error: "Enter a valid administrator email.", code: "INVALID_REQUEST" };
@@ -277,17 +287,20 @@ export async function createBrowserAdminSignupReservation(
       },
       body: JSON.stringify({ email }),
       cache: "no-store",
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(12_000),
     });
     const data = (await response.json().catch(() => null)) as BootstrapSignupReservationResponse | null;
     const code = String(data?.code || "");
-    if (!response.ok || data?.ok !== true) {
+    if (!response.ok || data?.ok !== true || data?.confirmationSent !== true) {
       const messages: Record<string, string> = {
         INVALID_REQUEST: "Enter a valid administrator email.",
+        RATE_LIMITED: "Too many first-administrator setup attempts. Try again later.",
         BOOTSTRAP_SIGNUP_NOT_ALLOWED: "Use the administrator email configured for this deployment.",
         BOOTSTRAP_CLOSED: "First-administrator setup is already complete.",
-        BOOTSTRAP_USER_EXISTS: "An administrator account already exists for this email. Confirm the email if needed, then sign in.",
+        BOOTSTRAP_USER_EXISTS: "An administrator account already exists for this email. Confirm the email if needed, then use password recovery before signing in.",
         BOOTSTRAP_IDENTITY_IN_USE: "This email is already attached to a customer or business identity.",
+        BOOTSTRAP_RESERVATION_ACTIVE: "A first-administrator setup attempt is already active. Use the email already sent or try again after it expires.",
+        BOOTSTRAP_AUTH_CREATE_FAILED: "The administrator account could not be created safely. Try again after the current setup window expires.",
         BOOTSTRAP_NOT_CONFIGURED: "First-administrator setup is not configured.",
         BOOTSTRAP_SERVICE_UNAVAILABLE: "First-administrator setup is temporarily unavailable.",
       };
@@ -298,11 +311,7 @@ export async function createBrowserAdminSignupReservation(
       };
     }
 
-    const signupToken = String(data.signupToken || "");
-    if (signupToken.length < 32 || signupToken.length > 512) {
-      return { ok: false, error: "First-administrator signup reservation is invalid." };
-    }
-    return { ok: true, signupToken };
+    return { ok: true };
   } catch {
     return { ok: false, error: "First-administrator setup is temporarily unavailable." };
   }
@@ -310,11 +319,10 @@ export async function createBrowserAdminSignupReservation(
 
 export async function beginBrowserFirstAdminSignup(
   emailInput: string,
-  password: string,
 ): Promise<BootstrapActionResult> {
   const email = normalizeEmail(emailInput);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || password.length < 8 || password.length > 2048) {
-    return { ok: false, error: "Enter a valid administrator email and a password of at least 8 characters." };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: "Enter a valid administrator email." };
   }
 
   const status = await getBrowserAdminBootstrapStatus();
@@ -322,35 +330,43 @@ export async function beginBrowserFirstAdminSignup(
   if (!status.required) return { ok: false, error: "First-administrator setup is already complete.", code: "BOOTSTRAP_CLOSED" };
   if (!status.configured) return { ok: false, error: "First-administrator setup is not configured.", code: "BOOTSTRAP_NOT_CONFIGURED" };
 
-  const config = await fetchAuthConfig();
-  if (!config) return { ok: false, error: "Administrator authentication is unavailable." };
-
-  const reservation = await createBrowserAdminSignupReservation(email);
-  if (!reservation.ok) return reservation;
-
-  const response = await authFetch<PasswordAuthResponse>(config, "/signup", {
-    method: "POST",
-    body: JSON.stringify({
-      email,
-      password,
-      data: {
-        account_type: "license_admin",
-        bootstrap_token: reservation.signupToken,
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const code = String(response.data?.error_code || response.data?.code || "");
-    if (code === "over_email_send_rate_limit" || response.status === 429) {
-      return { ok: false, error: "Too many confirmation requests. Try again later.", code };
-    }
-    return { ok: false, error: "Unable to create the first-administrator account.", code: code || undefined };
-  }
+  const prepared = await createBrowserAdminSignupReservation(email);
+  if (!prepared.ok) return prepared;
 
   return {
     ok: true,
-    message: "Administrator account created. Confirm the email, then return here and sign in to enroll MFA.",
+    message: "Confirmation email sent. Confirm the address, then send yourself a password setup link before signing in.",
+  };
+}
+
+export async function requestBrowserAdminPasswordSetup(
+  emailInput: string,
+): Promise<BootstrapActionResult> {
+  const email = normalizeEmail(emailInput);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false, error: "Enter a valid administrator email." };
+  }
+
+  const config = await fetchAuthConfig();
+  if (!config) return { ok: false, error: "Administrator authentication is unavailable." };
+
+  const response = await authFetch<Record<string, unknown>>(
+    config,
+    `/recover?redirect_to=${encodeURIComponent(config.passwordResetUrl)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    },
+  );
+  if (!response.ok) {
+    if (response.status === 429) {
+      return { ok: false, error: "Too many password setup requests. Try again later." };
+    }
+    return { ok: false, error: "Unable to send the password setup email." };
+  }
+  return {
+    ok: true,
+    message: "Password setup link sent. Choose your password, then return here to sign in and enroll MFA.",
   };
 }
 
