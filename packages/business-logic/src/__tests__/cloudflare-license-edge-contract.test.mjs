@@ -56,6 +56,9 @@ assert.match(worker, /p_client_ip: clientIp/);
 assert.match(worker, /BOOTSTRAP_RESERVATION_ACTIVE/);
 assert.match(worker, /RATE_LIMITED/);
 assert.match(worker, /signupToken/);
+assert.match(worker, /\/auth\/v1\/signup/);
+assert.match(worker, /signupPassword/);
+assert.match(worker, /passwordResetUrl/);
 assert.match(worker, /token_sha256/);
 assert.match(worker, /nativeAdminBootstrapStatus: true/);
 assert.match(worker, /nativeAdminBootstrapClaim: true/);
@@ -218,10 +221,13 @@ assert.doesNotMatch(adminAuthHook, /adoptCloudflareAdminSession/);
 
 assert.doesNotMatch(adminBootstrapHook, /bootstrapFirstLicenseAdmin|from ["']\.\.\/actions["']/);
 assert.match(adminBootstrapHook, /beginBrowserFirstAdminSignup/);
-assert.match(adminBootstrapHook, /resendBrowserFirstAdminConfirmation/);
+assert.match(adminBootstrapHook, /requestBrowserAdminPasswordSetup/);
+assert.doesNotMatch(adminBootstrapHook, /bootstrapPassword/);
 assert.match(adminBootstrapHook, /getBrowserAdminBootstrapStatus/);
 assert.match(adminAuthCard, /Create first administrator/);
 assert.match(adminAuthCard, /Confirm the email/);
+assert.match(adminAuthCard, /Send password setup link/);
+assert.doesNotMatch(adminAuthCard, /bootstrapPassword|Create password/);
 assert.doesNotMatch(adminAuthCard, /Send a one-time setup email/);
 assert.doesNotMatch(adminPage, /firstAdminBootstrapStatus|bootstrapAvailable/);
 
