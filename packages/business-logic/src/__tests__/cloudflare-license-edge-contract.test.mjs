@@ -200,12 +200,20 @@ assert.doesNotMatch(
   "Browser must not carry the privileged bootstrap routing marker",
 );
 assert.match(worker, /account_type:\s*"license_admin"/);
-assert.match(browserAdminAuth, /bootstrap_token:/);
+assert.doesNotMatch(
+  browserAdminAuth,
+  /bootstrap_token:/,
+  "Browser must never receive or carry the one-time bootstrap capability",
+);
 assert.match(browserAdminAuth, /resendBrowserFirstAdminConfirmation/);
 assert.match(browserAdminAuth, /getBrowserAdminBootstrapStatus/);
 assert.match(browserAdminAuth, /claimBrowserFirstAdmin/);
 assert.match(browserAdminAuth, /\/token\?grant_type=password/);
-assert.match(browserAdminAuth, /\/signup/);
+assert.doesNotMatch(
+  browserAdminAuth,
+  /authFetch<PasswordAuthResponse>\([\s\S]*?["']\/signup["']/,
+  "Browser must not create the privileged bootstrap Auth user directly",
+);
 assert.match(browserAdminAuth, /\/resend/);
 assert.match(browserAdminAuth, /api\/admin\/bootstrap\/status/);
 assert.match(browserAdminAuth, /api\/admin\/bootstrap\/claim/);
