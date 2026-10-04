@@ -51,6 +51,10 @@ assert.match(worker, /POST \/api\/admin\/bootstrap\/signup-reservation/);
 assert.match(worker, /nativeAdminBootstrapSignupReservation: true/);
 assert.match(worker, /async function adminBootstrapSignupReservationNatively\(request, env, route\)/);
 assert.match(worker, /cloudflare_admin_prepare_bootstrap_signup/);
+assert.match(worker, /cf-connecting-ip/);
+assert.match(worker, /p_client_ip: clientIp/);
+assert.match(worker, /BOOTSTRAP_RESERVATION_ACTIVE/);
+assert.match(worker, /RATE_LIMITED/);
 assert.match(worker, /signupToken/);
 assert.match(worker, /token_sha256/);
 assert.match(worker, /nativeAdminBootstrapStatus: true/);
@@ -327,6 +331,16 @@ assert.match(adminBootstrapSignupReservation, /license_private\.admin_bootstrap_
 assert.match(adminBootstrapSignupReservation, /cloudflare_admin_prepare_bootstrap_signup/);
 assert.match(adminBootstrapSignupReservation, /token_sha256/);
 assert.match(adminBootstrapSignupReservation, /interval '10 minutes'/);
+assert.match(adminBootstrapSignupReservation, /p_client_ip TEXT DEFAULT 'unknown'/);
+assert.match(adminBootstrapSignupReservation, /bootstrap-signup-reservation-ip/);
+assert.match(adminBootstrapSignupReservation, /consume_license_rate_limit/);
+assert.match(adminBootstrapSignupReservation, /RATE_LIMITED/);
+assert.match(adminBootstrapSignupReservation, /BOOTSTRAP_RESERVATION_ACTIVE/);
+assert.doesNotMatch(
+  adminBootstrapSignupReservation,
+  /ON CONFLICT \(email\) DO UPDATE[\s\S]*token_sha256 = EXCLUDED\.token_sha256/,
+  "An active first-admin reservation must not be silently rotated by a second request",
+);
 assert.match(adminBootstrapSignupReservation, /DELETE FROM license_private\.admin_bootstrap_signup_reservations/);
 assert.match(adminBootstrapSignupReservation, /LICENSE_ADMIN_BOOTSTRAP_RESERVATION_REQUIRED/);
 assert.match(adminBootstrapSignupReservation, /bootstrap_token/);
