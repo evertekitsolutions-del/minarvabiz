@@ -96,7 +96,7 @@ export function AdminAuthCard(props: AdminAuthCardProps) {
                   <p className="text-xs font-medium text-slate-700">First-administrator setup</p>
                   <p className="text-xs text-slate-600">
                     No named administrator exists yet. Create the preconfigured first administrator,
-                    confirm the email, then send a password setup link to that same mailbox. After
+                    Confirm the email, then send a password setup link to that same mailbox. After
                     choosing the password, return here to sign in, enroll TOTP MFA, and claim
                     administrator access through Cloudflare.
                   </p>
