@@ -26,5 +26,8 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Verify self-host origin portability
+        run: node scripts/cloudflare-license-edge-self-host-origin-smoke.mjs
+
       - name: Verify Cloudflare license edge
         run: node scripts/cloudflare-license-edge-live-smoke.mjs
