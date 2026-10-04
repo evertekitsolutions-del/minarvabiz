@@ -334,9 +334,25 @@ assert.match(adminBootstrapAuthority, /REVOKE ALL ON FUNCTION public\.cloudflare
 assert.doesNotMatch(adminBootstrapAuthority, /raw_user_meta_data|user_metadata/);
 
 assert.match(adminBootstrapSignupReservation, /license_private\.admin_bootstrap_signup_reservations/);
+assert.equal(
+  (adminBootstrapSignupReservation.match(/CREATE OR REPLACE FUNCTION public\.cloudflare_admin_prepare_bootstrap_signup/g) || []).length,
+  1,
+  "Bootstrap reservation migration must define the public preparation RPC exactly once",
+);
+assert.equal(
+  (adminBootstrapSignupReservation.match(/CREATE OR REPLACE FUNCTION private\.guard_license_admin_bootstrap_signup/g) || []).length,
+  1,
+  "Bootstrap reservation migration must define the Auth guard exactly once",
+);
+assert.equal(
+  (adminBootstrapSignupReservation.match(/CREATE OR REPLACE FUNCTION private\.bootstrap_new_user/g) || []).length,
+  1,
+  "Bootstrap reservation migration must redefine tenant bootstrap exactly once",
+);
 assert.match(adminBootstrapSignupReservation, /cloudflare_admin_prepare_bootstrap_signup/);
 assert.match(adminBootstrapSignupReservation, /token_sha256/);
 assert.match(adminBootstrapSignupReservation, /interval '10 minutes'/);
+assert.match(adminBootstrapSignupReservation, /p_requested_email TEXT/);
 assert.match(adminBootstrapSignupReservation, /p_client_ip TEXT DEFAULT 'unknown'/);
 assert.match(adminBootstrapSignupReservation, /bootstrap-signup-reservation-ip/);
 assert.match(adminBootstrapSignupReservation, /consume_license_rate_limit/);
@@ -346,6 +362,15 @@ assert.doesNotMatch(
   adminBootstrapSignupReservation,
   /ON CONFLICT \(email\) DO UPDATE[\s\S]*token_sha256 = EXCLUDED\.token_sha256/,
   "An active first-admin reservation must not be silently rotated by a second request",
+);
+assert.ok(
+  adminBootstrapSignupReservation.indexOf("consume_license_rate_limit") <
+    adminBootstrapSignupReservation.indexOf("v_requested_email <> v_bootstrap_email"),
+  "Wrong bootstrap-email probes must consume the persistent IP rate-limit budget before comparison",
+);
+assert.match(
+  adminBootstrapSignupReservation,
+  /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_prepare_bootstrap_signup\(TEXT, TEXT, TEXT, TEXT, TEXT\)[\s\S]*TO anon/,
 );
 assert.match(adminBootstrapSignupReservation, /DELETE FROM license_private\.admin_bootstrap_signup_reservations/);
 assert.match(adminBootstrapSignupReservation, /LICENSE_ADMIN_BOOTSTRAP_RESERVATION_REQUIRED/);
