@@ -8,14 +8,15 @@ CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers (phone);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status);
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders (customer_id);
 CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments (customer_id);
-DO $
+DO $sync_queue_guard$
 BEGIN
   IF to_regclass('public.sync_queue') IS NOT NULL THEN
     CREATE INDEX IF NOT EXISTS idx_sync_queue_status_pending
       ON public.sync_queue (status)
       WHERE status = 'pending';
   END IF;
-END $;
+END
+$sync_queue_guard$;
 
 -- Ensure RLS remains enabled on core tables (no-op if already)
 DO $$
