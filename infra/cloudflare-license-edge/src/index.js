@@ -978,6 +978,7 @@ async function adminBootstrapSignupReservationNatively(request, env, route) {
 
   const signupToken = base64Url(crypto.getRandomValues(new Uint8Array(32)));
   const tokenSha256 = createHash("sha256").update(signupToken, "utf8").digest("hex");
+  const clientIp = String(request.headers.get("cf-connecting-ip") || "unknown").trim().slice(0, 200) || "unknown";
 
   try {
     const response = await fetch(
@@ -994,6 +995,7 @@ async function adminBootstrapSignupReservationNatively(request, env, route) {
           p_edge_secret: edgeSecret,
           p_bootstrap_email: bootstrapEmail,
           p_token_sha256: tokenSha256,
+          p_client_ip: clientIp,
         }),
         redirect: "manual",
         signal: AbortSignal.timeout(8_000),
@@ -1029,11 +1031,13 @@ async function adminBootstrapSignupReservationNatively(request, env, route) {
     const code = String(data.code || "BOOTSTRAP_SERVICE_UNAVAILABLE");
     let status = explicitStatus || 503;
     if (code === "INVALID_REQUEST") status = 400;
+    else if (code === "RATE_LIMITED") status = 429;
     else if (code === "BOOTSTRAP_SIGNUP_NOT_ALLOWED") status = 403;
     else if (
       code === "BOOTSTRAP_CLOSED" ||
       code === "BOOTSTRAP_USER_EXISTS" ||
-      code === "BOOTSTRAP_IDENTITY_IN_USE"
+      code === "BOOTSTRAP_IDENTITY_IN_USE" ||
+      code === "BOOTSTRAP_RESERVATION_ACTIVE"
     ) status = 409;
 
     return json({ ok: false, code }, status, {
