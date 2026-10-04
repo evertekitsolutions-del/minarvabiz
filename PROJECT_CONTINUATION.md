@@ -105,9 +105,11 @@ Browser first-admin cutover checkpoint (PR #236 in progress from verified main `
 - all **12 workflows triggered by PR #228 were GREEN** before merge
 - PR #229 merged the authoritative multi-model review + innovation governance; all **11 workflows triggered by PR #229 were GREEN** before merge
 - PR #231 merged the governed Claude independent PR-review workflow; all **11 normal workflows were GREEN**, while Claude review was intentionally `SKIPPED` because authentication/enablement is not yet configured
-- PR #236 completes the browser/UI first-admin bootstrap cutover on top of PR #228: browser Cloudflare status -> reserved Supabase email/password signup -> email confirmation -> existing browser TOTP MFA -> AAL2 -> Cloudflare first-admin claim -> normal `/api/admin/me` verification
+- PR #236 completes the browser/UI first-admin bootstrap cutover on top of PR #228: browser Cloudflare status -> Cloudflare-controlled reserved Supabase signup -> mailbox confirmation -> mailbox-owned password setup/recovery -> existing browser TOTP MFA -> AAL2 -> Cloudflare first-admin claim -> normal `/api/admin/me` verification
 - PR #236 discovered and root-fixed the tenant-bootstrap collision: plain Supabase signup would otherwise run `private.bootstrap_new_user()` and create a customer/org identity that the first-admin authority correctly rejects
-- the replacement signup path uses a short-lived one-time Cloudflare reservation; a BEFORE INSERT Auth guard consumes the reservation, strips the client-carried bootstrap token/account type, stamps server-controlled app metadata, and the AFTER INSERT tenant bootstrap trusts only that marker
+- the replacement signup path uses a short-lived one-time Cloudflare reservation; a BEFORE INSERT Auth guard consumes the reservation, strips the bootstrap routing token/account type before persistence, stamps server-controlled app metadata, and the AFTER INSERT tenant bootstrap trusts only that marker
+- the browser never receives the one-time reservation token and never chooses the initial first-admin password; Cloudflare creates the Auth account with a cryptographically random unknown credential, so email ownership plus the existing recovery flow controls the real password before normal sign-in
+- reservation creation is persistent-IP-rate-limited and an active reservation cannot be silently rotated, reducing bootstrap-email probing and lockout/DoS risk
 - the old user-editable `raw_user_meta_data.account_type = license_admin` shortcut is removed by the PR #236 migration; user metadata alone can no longer bypass tenant creation
 - no new dependency or paid service is introduced; current Supabase organization remains on the Free plan
 - legacy privileged first-admin server helpers are intentionally retained but are no longer called by normal page/UI bootstrap; delete them only after safe fresh-instance end-to-end verification
@@ -122,7 +124,7 @@ Current normal named-admin behavior:
 - normal identity, license registry, support inbox, license issue, status changes, offline activation, support updates and customer provisioning call Cloudflare directly
 - normal logout clears the browser session and calls Supabase local logout directly; it does **not** call the legacy server logout action
 - legacy server session/logout paths are now explicitly emergency-only
-- first-admin bootstrap UI is browser-native in PR #236; bootstrap status/reservation/claim authority is Cloudflare/Postgres and Supabase Auth handles email/password + TOTP
+- first-admin bootstrap UI is browser-native in PR #236; bootstrap status/reservation/account-creation/claim authority is Cloudflare/Postgres, while Supabase Auth provides email confirmation, mailbox-owned password recovery/setup and TOTP
 - legacy privileged first-admin helpers remain code-only transitional fallback pending safe fresh-instance end-to-end verification; normal bootstrap UI/page hydration no longer depends on them
 - emergency break-glass remains a transitional server-side flow
 
