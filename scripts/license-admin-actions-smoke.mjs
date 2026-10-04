@@ -135,7 +135,14 @@ assert.match(
 );
 
 assert.match(browserAuth, /\/token\?grant_type=password/);
-assert.match(browserAuth, /\/signup/);
+assert.doesNotMatch(
+  browserAuth,
+  /authFetch<PasswordAuthResponse>\([\s\S]*?["']\/signup["']/,
+  "Browser must not choose the first administrator password during account creation",
+);
+assert.doesNotMatch(browserAuth, /bootstrap_token:/);
+assert.match(browserAuth, /\/recover/);
+assert.match(browserAuth, /passwordResetUrl/);
 assert.match(browserAuth, /\/resend/);
 assert.match(browserAuth, /api\/admin\/bootstrap\/status/);
 assert.match(browserAuth, /api\/admin\/bootstrap\/claim/);
@@ -160,7 +167,8 @@ assert.doesNotMatch(
   "First-admin bootstrap UI must not call the legacy privileged server bootstrap action",
 );
 assert.match(bootstrapHook, /beginBrowserFirstAdminSignup/);
-assert.match(bootstrapHook, /resendBrowserFirstAdminConfirmation/);
+assert.match(bootstrapHook, /requestBrowserAdminPasswordSetup/);
+assert.doesNotMatch(bootstrapHook, /bootstrapPassword/);
 assert.match(bootstrapHook, /getBrowserAdminBootstrapStatus/);
 assert.match(authCard, /Create first administrator/);
 assert.match(authCard, /Confirm the email/);
