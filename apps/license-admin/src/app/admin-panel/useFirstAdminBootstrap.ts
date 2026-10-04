@@ -45,6 +45,7 @@ export function useFirstAdminBootstrap() {
     if (!result.ok) {
       setBootstrapMessage(result.error || "Administrator setup failed.");
       if (result.code === "BOOTSTRAP_CLOSED") void refreshStatus();
+      if (result.code === "BOOTSTRAP_USER_EXISTS") setBootstrapSent(true);
       return;
     }
     setBootstrapSent(true);
