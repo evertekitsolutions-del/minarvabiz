@@ -30,11 +30,21 @@ jobs:
           set -euo pipefail
           supabase init --force
           node scripts/configure-first-admin-e2e-supabase.mjs
-      - name: Start fresh Supabase stack and apply repository migrations
+      - name: Start fresh Supabase system stack
         shell: bash
         run: |
           set -euo pipefail
+          mv supabase/migrations /tmp/minarva-project-migrations
+          mkdir -p supabase/migrations
           supabase start
+          rm -rf supabase/migrations
+          mv /tmp/minarva-project-migrations supabase/migrations
+      - name: Replay repository SQL migrations transactionally
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v psql
+          node scripts/replay-supabase-migrations-fresh.mjs
       - name: Verify first-admin bootstrap end to end
         shell: bash
         run: |
