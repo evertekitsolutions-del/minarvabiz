@@ -209,26 +209,24 @@ function adminPreflight(request, env) {
   });
 }
 
+function isLoopbackHostname(hostname) {
+  const value = String(hostname || "").toLowerCase();
+  return value === "localhost" || value === "127.0.0.1" || value === "::1" || value === "[::1]";
+}
+
 function allowedOrigin(value) {
   try {
-    const url = new URL(String(value || ""));
-    if (url.protocol !== "https:") return null;
-    return url.origin;
+    const url = new URL(String(value || "").trim());
+    if (url.protocol === "https:") return url.origin;
+    if (url.protocol === "http:" && isLoopbackHostname(url.hostname)) return url.origin;
+    return null;
   } catch {
     return null;
   }
 }
 
 function supabaseOrigin(value) {
-  const origin = allowedOrigin(value);
-  if (!origin) return null;
-  try {
-    const url = new URL(origin);
-    if (!url.hostname.endsWith(".supabase.co")) return null;
-    return origin;
-  } catch {
-    return null;
-  }
+  return allowedOrigin(value);
 }
 
 async function readRequestBody(request, maxBody) {
