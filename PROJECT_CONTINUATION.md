@@ -88,9 +88,9 @@ Recent Cloudflare/admin backend work does not by itself require a new Windows re
 
 ## 5. Latest verified development state
 
-After PR #231:
+Browser first-admin cutover checkpoint (PR #236 in progress from verified main `d2b855d9733fb7e19e306e99ce90dda14e6d6807`):
 
-- current verified main: **`317076e2b90a6c225f37659fbb1c533c2acb32de`**
+- baseline verified main before PR #236: **`d2b855d9733fb7e19e306e99ce90dda14e6d6807`**
 - open PRs at post-merge verification: **0**
 - open issues at post-merge verification: **0**
 - stable Windows release remains **v1.0.15**
@@ -105,6 +105,14 @@ After PR #231:
 - all **12 workflows triggered by PR #228 were GREEN** before merge
 - PR #229 merged the authoritative multi-model review + innovation governance; all **11 workflows triggered by PR #229 were GREEN** before merge
 - PR #231 merged the governed Claude independent PR-review workflow; all **11 normal workflows were GREEN**, while Claude review was intentionally `SKIPPED` because authentication/enablement is not yet configured
+- PR #236 completes the browser/UI first-admin bootstrap cutover on top of PR #228: browser Cloudflare status -> Cloudflare-controlled reserved Supabase signup -> mailbox confirmation -> mailbox-owned password setup/recovery -> existing browser TOTP MFA -> AAL2 -> Cloudflare first-admin claim -> normal `/api/admin/me` verification
+- PR #236 discovered and root-fixed the tenant-bootstrap collision: plain Supabase signup would otherwise run `private.bootstrap_new_user()` and create a customer/org identity that the first-admin authority correctly rejects
+- the replacement signup path uses a short-lived one-time Cloudflare reservation; a BEFORE INSERT Auth guard consumes the reservation, strips the bootstrap routing token/account type before persistence, stamps server-controlled app metadata, and the AFTER INSERT tenant bootstrap trusts only that marker
+- the browser never receives the one-time reservation token and never chooses the initial first-admin password; Cloudflare creates the Auth account with a cryptographically random unknown credential, so email ownership plus the existing recovery flow controls the real password before normal sign-in
+- reservation creation is persistent-IP-rate-limited and an active reservation cannot be silently rotated, reducing bootstrap-email probing and lockout/DoS risk
+- the old user-editable `raw_user_meta_data.account_type = license_admin` shortcut is removed by the PR #236 migration; user metadata alone can no longer bypass tenant creation
+- no new dependency or paid service is introduced; current Supabase organization remains on the Free plan
+- legacy privileged first-admin server helpers are intentionally retained but are no longer called by normal page/UI bootstrap; delete them only after safe fresh-instance end-to-end verification
 
 Current normal named-admin behavior:
 
@@ -116,7 +124,9 @@ Current normal named-admin behavior:
 - normal identity, license registry, support inbox, license issue, status changes, offline activation, support updates and customer provisioning call Cloudflare directly
 - normal logout clears the browser session and calls Supabase local logout directly; it does **not** call the legacy server logout action
 - legacy server session/logout paths are now explicitly emergency-only
-- first-admin bootstrap and emergency break-glass remain transitional server-side flows
+- first-admin bootstrap UI is browser-native in PR #236; bootstrap status/reservation/account-creation/claim authority is Cloudflare/Postgres, while Supabase Auth provides email confirmation, mailbox-owned password recovery/setup and TOTP
+- legacy privileged first-admin helpers remain code-only transitional fallback pending safe fresh-instance end-to-end verification; normal bootstrap UI/page hydration no longer depends on them
+- emergency break-glass remains a transitional server-side flow
 
 ## 6. Cloudflare License/Admin state
 
@@ -146,6 +156,9 @@ Current License Admin Cloudflare-native capabilities include:
 - offline activation package preparation/signing;
 - online customer provisioning through Supabase Magic Link;
 - browser auth config;
+- first-admin bootstrap status;
+- first-admin short-lived signup reservation;
+- first-admin AAL2 claim;
 - admin identity verification.
 
 No new Render dependency should be added.
@@ -172,12 +185,14 @@ Normal named-admin authentication, business operations, page hydration and logou
 
 Remaining Render/Next migration scope is now limited mainly to:
 
-- first-admin bootstrap, which still requires privileged server-side Auth/DB administration;
+- safe fresh-instance end-to-end verification of the new browser-native first-admin bootstrap before deleting the retained legacy privileged bootstrap helpers;
 - emergency break-glass login/session/logout and emergency-only legacy business-operation fallback;
 - License Admin UI hosting itself, which still runs on the transitional Next hosting path;
-- server-side privileged helpers retained only because bootstrap/emergency compatibility still depends on them.
+- server-side privileged helpers retained only for bootstrap fallback until verified retirement, and for emergency compatibility.
 
-Do not remove Render configuration/service until first-admin bootstrap, emergency access and License Admin UI hosting have verified replacements.
+Live production already contains one active License Admin identity, so **do not reset/delete production admin state just to manufacture a first-admin test**. Use a safe fresh-instance/local/self-host E2E harness for the open-registry path, then retire the legacy privileged bootstrap helper.
+
+Do not remove Render configuration/service until first-admin bootstrap fallback retirement, emergency access and License Admin UI hosting have verified replacements.
 
 ## 9. Current signing authority
 
@@ -280,7 +295,7 @@ Continue Render removal in small verified steps.
 
 Recommended next sequence:
 
-1. **Complete the browser/UI cutover for first-admin bootstrap using the Cloudflare bootstrap authority added in PR #228, then retire the legacy privileged server bootstrap path only after end-to-end verification.** Do not redesign the authority foundation again.
+1. **Finish PR #236 verification/deployment, then run a safe fresh-instance/local/self-host end-to-end test of the open-registry first-admin path. Only after that proof, delete the retained legacy privileged first-admin bootstrap helper.** Do not reset production admin state and do not redesign the PR #228 authority foundation.
 2. Re-evaluate emergency break-glass design for Cloudflare/self-host portability. Preserve a real emergency path; do not delete the capability merely to remove Render.
 3. Verify a Cloudflare-compatible License Admin UI deployment path and migrate the UI hosting while preserving all named-admin/bootstrap/emergency behavior.
 4. Only after all above paths are verified, remove Render configuration/service.

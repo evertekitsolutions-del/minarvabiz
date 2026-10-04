@@ -39,14 +39,12 @@ interface AdminPanelProps {
   identity: AdminIdentityView | null;
   initialLicenses: LicenseRegistryRow[];
   initialSupportRequests: SupportRequestRow[];
-  bootstrapAvailable: boolean;
 }
 
 export default function AdminPanel({
   identity,
   initialLicenses,
   initialSupportRequests,
-  bootstrapAvailable,
 }: AdminPanelProps) {
   const router = useRouter();
   const [activeIdentity, setActiveIdentity] = React.useState(identity);
@@ -202,7 +200,7 @@ export default function AdminPanel({
   }
 
   if (!activeIdentity) {
-    return <AdminAuthCard {...auth} bootstrapAvailable={bootstrapAvailable} />;
+    return <AdminAuthCard {...auth} />;
   }
 
   const canIssue = canIssueLicense(activeIdentity.role);
