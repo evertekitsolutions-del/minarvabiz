@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   beginBrowserFirstAdminSignup,
   getBrowserAdminBootstrapStatus,
+  requestBrowserAdminPasswordSetup,
   resendBrowserFirstAdminConfirmation,
 } from "./browser-admin-auth";
 
@@ -14,7 +15,6 @@ export function useFirstAdminBootstrap() {
   const [bootstrapMessage, setBootstrapMessage] = React.useState<string | null>(null);
   const [bootstrapSent, setBootstrapSent] = React.useState(false);
   const [bootstrapEmail, setBootstrapEmail] = React.useState("");
-  const [bootstrapPassword, setBootstrapPassword] = React.useState("");
 
   const refreshStatus = React.useCallback(async () => {
     const result = await getBrowserAdminBootstrapStatus();
@@ -40,14 +40,13 @@ export function useFirstAdminBootstrap() {
   async function run() {
     setBootstrapBusy(true);
     setBootstrapMessage(null);
-    const result = await beginBrowserFirstAdminSignup(bootstrapEmail, bootstrapPassword);
+    const result = await beginBrowserFirstAdminSignup(bootstrapEmail);
     setBootstrapBusy(false);
     if (!result.ok) {
       setBootstrapMessage(result.error || "Administrator setup failed.");
       if (result.code === "BOOTSTRAP_CLOSED") void refreshStatus();
       return;
     }
-    setBootstrapPassword("");
     setBootstrapSent(true);
     setBootstrapMessage(result.message);
   }
@@ -65,6 +64,18 @@ export function useFirstAdminBootstrap() {
     setBootstrapMessage(result.message);
   }
 
+  async function passwordSetup() {
+    setBootstrapBusy(true);
+    setBootstrapMessage(null);
+    const result = await requestBrowserAdminPasswordSetup(bootstrapEmail);
+    setBootstrapBusy(false);
+    if (!result.ok) {
+      setBootstrapMessage(result.error || "Password setup email could not be sent.");
+      return;
+    }
+    setBootstrapMessage(result.message);
+  }
+
   return {
     bootstrapAvailable,
     bootstrapConfigured,
@@ -72,11 +83,10 @@ export function useFirstAdminBootstrap() {
     bootstrapMessage,
     bootstrapSent,
     bootstrapEmail,
-    bootstrapPassword,
     onBootstrapEmailChange: setBootstrapEmail,
-    onBootstrapPasswordChange: setBootstrapPassword,
     onBootstrap: () => void run(),
     onResendBootstrapConfirmation: () => void resend(),
+    onPasswordSetup: () => void passwordSetup(),
     onRefreshBootstrapStatus: () => void refreshStatus(),
   };
 }
