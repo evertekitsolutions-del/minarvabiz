@@ -35,6 +35,7 @@ REVOKE ALL ON TABLE license_private.admin_bootstrap_signup_reservations
 CREATE OR REPLACE FUNCTION public.cloudflare_admin_prepare_bootstrap_signup(
   p_edge_secret TEXT,
   p_bootstrap_email TEXT,
+  p_requested_email TEXT,
   p_token_sha256 TEXT,
   p_client_ip TEXT DEFAULT 'unknown'
 )
@@ -47,6 +48,7 @@ DECLARE
   v_now TIMESTAMPTZ := clock_timestamp();
   v_secret_hash TEXT;
   v_email TEXT := lower(btrim(COALESCE(p_bootstrap_email, '')));
+  v_requested_email TEXT := lower(btrim(COALESCE(p_requested_email, '')));
   v_token_sha256 TEXT := lower(btrim(COALESCE(p_token_sha256, '')));
   v_client_ip TEXT := left(btrim(COALESCE(p_client_ip, 'unknown')), 200);
   v_ip_hash TEXT;
@@ -170,7 +172,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.cloudflare_admin_prepare_bootstrap_signup(TEXT, TEXT, TEXT, TEXT)
+REVOKE ALL ON FUNCTION public.cloudflare_admin_prepare_bootstrap_signup(TEXT, TEXT, TEXT, TEXT, TEXT)
   FROM PUBLIC, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.cloudflare_admin_prepare_bootstrap_signup(TEXT, TEXT, TEXT, TEXT)
   TO anon;
@@ -533,6 +535,14 @@ REVOKE ALL ON FUNCTION private.bootstrap_new_user()
       'code', 'RATE_LIMITED',
       'httpStatus', 429,
       'retryAfterSeconds', v_retry_after
+    );
+  END IF;
+
+  IF v_requested_email <> v_email THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'code', 'BOOTSTRAP_SIGNUP_NOT_ALLOWED',
+      'httpStatus', 403
     );
   END IF;
 
