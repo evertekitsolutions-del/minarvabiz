@@ -968,14 +968,6 @@ async function adminBootstrapSignupReservationNatively(request, env, route) {
     });
   }
 
-  // Do not disclose the configured bootstrap email. The browser must prove that
-  // it already knows the deployment-configured address before a reservation is issued.
-  if (parsed.email !== bootstrapEmail) {
-    return json({ ok: false, code: "BOOTSTRAP_SIGNUP_NOT_ALLOWED" }, 403, {
-      "x-minarva-admin-backend": "cloudflare-native",
-    });
-  }
-
   const signupToken = base64Url(crypto.getRandomValues(new Uint8Array(32)));
   const tokenSha256 = createHash("sha256").update(signupToken, "utf8").digest("hex");
   const clientIp = String(request.headers.get("cf-connecting-ip") || "unknown").trim().slice(0, 200) || "unknown";
@@ -994,6 +986,7 @@ async function adminBootstrapSignupReservationNatively(request, env, route) {
         body: JSON.stringify({
           p_edge_secret: edgeSecret,
           p_bootstrap_email: bootstrapEmail,
+          p_requested_email: parsed.email,
           p_token_sha256: tokenSha256,
           p_client_ip: clientIp,
         }),
@@ -1014,16 +1007,64 @@ async function adminBootstrapSignupReservationNatively(request, env, route) {
       ? rawStatus
       : null;
     if (data.ok === true) {
+      // The requester must never choose or learn the initial password. Otherwise
+      // anyone who knows the configured bootstrap email could pre-create the
+      // account, wait for the real owner to confirm it, and race to claim admin.
+      // A random unknown credential makes email ownership the first real proof.
+      const signupPassword = `Mb!9_${base64Url(crypto.getRandomValues(new Uint8Array(48)))}`;
+      const signupResponse = await fetch(
+        `${apiOrigin}/auth/v1/signup`,
+        {
+          method: "POST",
+          headers: {
+            apikey: publishableKey,
+            "content-type": "application/json",
+            accept: "application/json",
+          },
+          body: JSON.stringify({
+            email: parsed.email,
+            password: signupPassword,
+            data: {
+              account_type: "license_admin",
+              bootstrap_token: signupToken,
+            },
+          }),
+          redirect: "manual",
+          signal: AbortSignal.timeout(10_000),
+        },
+      );
+      const signupData = await signupResponse.json().catch(() => null);
+      if (!signupResponse.ok) {
+        const authCode = String(
+          signupData?.error_code ||
+          signupData?.code ||
+          signupData?.error ||
+          "",
+        ).slice(0, 80);
+        const status = signupResponse.status === 429 ? 429 : 503;
+        return json(
+          {
+            ok: false,
+            code: signupResponse.status === 429 ? "RATE_LIMITED" : "BOOTSTRAP_AUTH_CREATE_FAILED",
+          },
+          status,
+          {
+            "x-minarva-admin-backend": "cloudflare-native",
+            "x-minarva-admin-upstream-stage": "bootstrap-auth-signup",
+            ...(authCode ? { "x-minarva-admin-upstream-code": authCode } : {}),
+          },
+        );
+      }
+
       return json(
         {
           ok: true,
-          signupToken,
-          expiresAt: typeof data.expiresAt === "string" ? data.expiresAt : null,
+          confirmationSent: true,
         },
         200,
         {
           "x-minarva-admin-backend": "cloudflare-native",
-          "x-minarva-admin-data": "supabase-edge-secret-rpc",
+          "x-minarva-admin-data": "supabase-auth-email-owner-bootstrap",
         },
       );
     }
@@ -2052,7 +2093,8 @@ export default {
     if (route.nativeAdminAuthConfig) {
       const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
       const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
-      if (!apiOrigin || !publishableKey) {
+      const onlineAppOrigin = allowedOrigin(env.MINARVA_ONLINE_APP_URL || DEFAULT_ONLINE_APP_URL);
+      if (!apiOrigin || !publishableKey || !onlineAppOrigin) {
         return withAdminCors(
           json({ ok: false, code: "ADMIN_AUTH_NOT_CONFIGURED" }, 503, {
             "x-minarva-admin-backend": "cloudflare-native",
@@ -2067,6 +2109,7 @@ export default {
             ok: true,
             supabaseUrl: apiOrigin,
             supabasePublishableKey: publishableKey,
+            passwordResetUrl: `${onlineAppOrigin}/reset-password`,
           },
           200,
           {
