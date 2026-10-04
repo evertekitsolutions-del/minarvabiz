@@ -53,11 +53,10 @@ export function AdminAuthCard(props: AdminAuthCardProps) {
     bootstrapMessage,
     bootstrapSent,
     bootstrapEmail,
-    bootstrapPassword,
     onBootstrapEmailChange,
-    onBootstrapPasswordChange,
     onBootstrap,
     onResendBootstrapConfirmation,
+    onPasswordSetup,
   } = useFirstAdminBootstrap();
 
   return (
@@ -96,9 +95,10 @@ export function AdminAuthCard(props: AdminAuthCardProps) {
                 <div className="space-y-3 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
                   <p className="text-xs font-medium text-slate-700">First-administrator setup</p>
                   <p className="text-xs text-slate-600">
-                    No named administrator exists yet. Create the preconfigured first administrator with
-                    email and password. Confirm the email before signing in; after confirmation, return
-                    here to enroll TOTP MFA and claim administrator access through Cloudflare.
+                    No named administrator exists yet. Create the preconfigured first administrator,
+                    confirm the email, then send a password setup link to that same mailbox. After
+                    choosing the password, return here to sign in, enroll TOTP MFA, and claim
+                    administrator access through Cloudflare.
                   </p>
                   <input
                     type="email"
@@ -109,23 +109,6 @@ export function AdminAuthCard(props: AdminAuthCardProps) {
                     value={bootstrapEmail}
                     onChange={(event) => onBootstrapEmailChange(event.target.value)}
                   />
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    maxLength={2048}
-                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                    placeholder="Create password (8+ characters)"
-                    value={bootstrapPassword}
-                    onChange={(event) => onBootstrapPasswordChange(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (
-                        event.key === "Enter" &&
-                        bootstrapConfigured &&
-                        bootstrapEmail.trim() &&
-                        bootstrapPassword.length >= 8
-                      ) onBootstrap();
-                    }}
-                  />
                   {bootstrapMessage && <p className="text-xs text-slate-700">{bootstrapMessage}</p>}
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -134,21 +117,29 @@ export function AdminAuthCard(props: AdminAuthCardProps) {
                         bootstrapBusy ||
                         bootstrapSent ||
                         !bootstrapConfigured ||
-                        !bootstrapEmail.trim() ||
-                        bootstrapPassword.length < 8
+                        !bootstrapEmail.trim()
                       }
                       onClick={onBootstrap}
                     >
                       {bootstrapBusy ? "Creating…" : bootstrapSent ? "Confirmation sent" : "Create first administrator"}
                     </Button>
                     {bootstrapSent && (
-                      <Button
-                        variant="outline"
-                        disabled={bootstrapBusy || !bootstrapEmail.trim()}
-                        onClick={onResendBootstrapConfirmation}
-                      >
-                        {bootstrapBusy ? "Sending…" : "Resend confirmation"}
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          disabled={bootstrapBusy || !bootstrapEmail.trim()}
+                          onClick={onResendBootstrapConfirmation}
+                        >
+                          {bootstrapBusy ? "Sending…" : "Resend confirmation"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          disabled={bootstrapBusy || !bootstrapEmail.trim()}
+                          onClick={onPasswordSetup}
+                        >
+                          {bootstrapBusy ? "Sending…" : "Send password setup link"}
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
