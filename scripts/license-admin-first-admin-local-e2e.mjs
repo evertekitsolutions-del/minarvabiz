@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { createHash, createHmac } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import worker from "../infra/cloudflare-license-edge/src/index.js";
@@ -114,6 +115,26 @@ async function authJson(path, options = {}) {
     method: options.method || "POST",
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    redirect: "manual",
+  });
+  return {
+    status: response.status,
+    headers: response.headers,
+    data: await response.json().catch(() => null),
+  };
+}
+
+
+async function rpcJson(name, body) {
+  const response = await fetch(apiUrl + "/rest/v1/rpc/" + encodeURIComponent(name), {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      apikey: publishableKey,
+      authorization: "Bearer " + publishableKey,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
     redirect: "manual",
   });
   return {
@@ -240,13 +261,47 @@ function databaseSnapshot() {
   return JSON.parse(psqlScalar(sql));
 }
 
+
+function customerSnapshot(emailInput) {
+  const email = sqlLiteral(String(emailInput).toLowerCase());
+  const sql =
+    "select json_build_object(" +
+    "'user_count',(select count(*) from auth.users where lower(email)=" + email + ")," +
+    "'profile_count',(select count(*) from public.profiles p join auth.users u on u.id=p.id where lower(u.email)=" + email + ")," +
+    "'member_count',(select count(*) from public.organization_members om join auth.users u on u.id=om.user_id where lower(u.email)=" + email + ")," +
+    "'org_count',(select count(distinct om.org_id) from public.organization_members om join auth.users u on u.id=om.user_id where lower(u.email)=" + email + ")," +
+    "'hq_count',(select count(*) from public.branches b join public.organization_members om on om.org_id=b.org_id join auth.users u on u.id=om.user_id where lower(u.email)=" + email + " and b.code='HQ' and b.is_headquarters=true)," +
+    "'admin_count',(select count(*) from public.license_admin_identities lai where lower(lai.email)=" + email + ")," +
+    "'bootstrap_marker',coalesce((select raw_app_meta_data->>'minarva_license_admin_bootstrap' from auth.users where lower(email)=" + email + " limit 1),'')" +
+    ")::text;";
+  return JSON.parse(psqlScalar(sql));
+}
+
 // 1. Fresh control plane is open but does not reveal configured identity details.
+assert.equal(
+  psqlScalar("select count(*) from public.license_admin_identities;"),
+  "0",
+  "Fresh-instance E2E must begin with an empty License Admin registry.",
+);
+assert.equal(
+  psqlScalar("select count(*) from auth.users;"),
+  "0",
+  "Fresh-instance E2E must begin with no Auth identities.",
+);
 const initialStatus = await workerJson("/api/admin/bootstrap/status");
 assert.equal(initialStatus.status, 200);
 assert.deepEqual(initialStatus.data, { ok: true, required: true, configured: true });
 assert.equal(initialStatus.headers.get("access-control-allow-origin"), adminOrigin);
 
-// 2. Wrong-email probes fail without creating an Auth identity.
+// 2. Malformed/wrong-email probes fail without creating an Auth identity.
+const malformed = await workerJson("/api/admin/bootstrap/signup-reservation", {
+  method: "POST",
+  body: { email: "not-an-email" },
+  ip: "203.0.113.6",
+});
+assert.equal(malformed.status, 400);
+assert.equal(malformed.data?.code, "INVALID_REQUEST");
+
 const wrongEmail = await workerJson("/api/admin/bootstrap/signup-reservation", {
   method: "POST",
   body: { email: "wrong-admin@example.test" },
@@ -259,7 +314,55 @@ assert.equal(
   "0",
 );
 
-// 3. Cloudflare reserves and creates the Auth user; the browser never supplies the password.
+// 3. The reservation is a one-time capability: it cannot be silently rotated,
+// and a normal signup cannot steal the reserved bootstrap email during the race window.
+const reservationTokenA = "e2e-bootstrap-reservation-capability-a-0123456789abcdef";
+const reservationTokenB = "e2e-bootstrap-reservation-capability-b-fedcba9876543210";
+const reserveDirect = await rpcJson("cloudflare_admin_prepare_bootstrap_signup", {
+  p_edge_secret: edgeSecret,
+  p_bootstrap_email: bootstrapEmail,
+  p_requested_email: bootstrapEmail,
+  p_token_sha256: createHash("sha256").update(reservationTokenA, "utf8").digest("hex"),
+  p_client_ip: "198.51.100.90",
+});
+assert.equal(reserveDirect.status, 200);
+assert.equal(reserveDirect.data?.ok, true);
+
+const rotateDirect = await rpcJson("cloudflare_admin_prepare_bootstrap_signup", {
+  p_edge_secret: edgeSecret,
+  p_bootstrap_email: bootstrapEmail,
+  p_requested_email: bootstrapEmail,
+  p_token_sha256: createHash("sha256").update(reservationTokenB, "utf8").digest("hex"),
+  p_client_ip: "198.51.100.90",
+});
+assert.equal(rotateDirect.status, 200);
+assert.equal(rotateDirect.data?.ok, false);
+assert.equal(rotateDirect.data?.code, "BOOTSTRAP_RESERVATION_ACTIVE");
+assert.equal(Number(rotateDirect.data?.httpStatus), 409);
+
+const theftAttempt = await authJson("/signup", {
+  body: {
+    email: bootstrapEmail,
+    password: "Attacker-Controlled-E2E!2026",
+    data: { full_name: "Reservation Theft Probe" },
+  },
+});
+assert.ok(
+  theftAttempt.status >= 400,
+  "Normal signup must fail while the bootstrap email has an active reservation.",
+);
+assert.equal(
+  psqlScalar("select count(*) from auth.users where lower(email)=" + sqlLiteral(bootstrapEmail) + ";"),
+  "0",
+  "Reserved bootstrap email must not be consumed by normal signup.",
+);
+psqlScalar(
+  "delete from license_private.admin_bootstrap_signup_reservations where email=" +
+    sqlLiteral(bootstrapEmail) +
+    ";",
+);
+
+// 4. Cloudflare reserves and creates the Auth user; the browser never supplies the password.
 const beforeConfirmation = await mailboxIds();
 const prepared = await workerJson("/api/admin/bootstrap/signup-reservation", {
   method: "POST",
@@ -281,13 +384,21 @@ assert.equal(db.marker, "true", "Server-controlled bootstrap marker must be stam
 assert.equal(db.account_type, "", "Transient account_type must be stripped before persistence.");
 assert.equal(db.bootstrap_token, "", "Transient bootstrap token must be stripped before persistence.");
 
-// 4. Mailbox ownership confirms the account.
+// 5. Mailbox ownership confirms the account.
 const confirmationLink = await waitForVerificationMail(beforeConfirmation, "signup");
 await followVerificationLink(confirmationLink);
 db = databaseSnapshot();
 assert.equal(db.confirmed, true);
 
-// 5. Mailbox ownership chooses the real password through recovery, not signup.
+// 6. Mailbox ownership chooses the real password through recovery, not signup.
+const preRecoveryLogin = await authJson("/token?grant_type=password", {
+  body: { email: bootstrapEmail, password: chosenPassword },
+});
+assert.ok(
+  preRecoveryLogin.status >= 400,
+  "The eventual owner-selected password must not work before mailbox-owned recovery sets it.",
+);
+
 const beforeRecovery = await mailboxIds();
 const recovery = await authJson(
   "/recover?redirect_to=" + encodeURIComponent(appOrigin + "/reset-password"),
@@ -308,7 +419,7 @@ const passwordUpdate = await authJson("/user", {
 });
 assert.equal(passwordUpdate.status, 200);
 
-// 6. Password sign-in yields AAL1 and AAL1 is explicitly insufficient to claim first admin.
+// 7. Password sign-in yields AAL1 and AAL1 is explicitly insufficient to claim first admin.
 const login = await authJson("/token?grant_type=password", {
   body: { email: bootstrapEmail, password: chosenPassword },
 });
@@ -327,7 +438,7 @@ const prematureClaim = await workerJson("/api/admin/bootstrap/claim", {
 assert.equal(prematureClaim.status, 403);
 assert.equal(prematureClaim.data?.code, "MFA_REQUIRED");
 
-// 7. Enroll and verify real Supabase TOTP, yielding AAL2.
+// 8. Enroll and verify real Supabase TOTP, yielding AAL2.
 const enrollment = await authJson("/factors", {
   token: aal1Token,
   body: {
@@ -368,7 +479,7 @@ assert.ok(
   "AAL2 token must record TOTP authentication.",
 );
 
-// 8. AAL2 + confirmed configured email can claim exactly one first administrator.
+// 9. AAL2 + confirmed configured email can claim exactly one first administrator.
 const claim = await workerJson("/api/admin/bootstrap/claim", {
   method: "POST",
   token: aal2Token,
@@ -406,6 +517,42 @@ assert.equal(Number(db.admin_count), 1);
 assert.equal(Number(db.audit_count), 1);
 assert.equal(Number(db.reservation_count), 0);
 
+// 10. Closing the control-plane bootstrap must not damage normal customer bootstrap.
+const customerEmail = "normal-customer-e2e@example.test";
+const customerSignup = await authJson("/signup", {
+  body: {
+    email: customerEmail,
+    password: "Minarva-E2E-Customer!2026",
+    data: {
+      full_name: "E2E Customer",
+      shop_name: "E2E Customer Shop",
+    },
+  },
+});
+assert.equal(customerSignup.status, 200);
+const customer = customerSnapshot(customerEmail);
+assert.equal(Number(customer.user_count), 1);
+assert.equal(Number(customer.profile_count), 1, "Normal customer signup must create its profile.");
+assert.equal(Number(customer.member_count), 1, "Normal customer signup must create organization membership.");
+assert.equal(Number(customer.org_count), 1, "Normal customer signup must create exactly one organization.");
+assert.equal(Number(customer.hq_count), 1, "Normal customer signup must create exactly one HQ branch.");
+assert.equal(Number(customer.admin_count), 0, "Normal customer must never become a License Admin.");
+assert.equal(customer.bootstrap_marker, "", "Normal customer must not receive the License Admin bootstrap marker.");
+assert.equal(
+  psqlScalar("select count(*) from public.license_admin_identities;"),
+  "1",
+  "Customer bootstrap must not alter the one-admin control-plane registry.",
+);
+
+// 11. Normal UI bootstrap is browser-native; retained privileged server helpers are not imported.
+const bootstrapHookSource = fs.readFileSync(
+  "apps/license-admin/src/app/admin-panel/useFirstAdminBootstrap.ts",
+  "utf8",
+);
+assert.match(bootstrapHookSource, /from ["']\.\/browser-admin-auth["']/);
+assert.doesNotMatch(bootstrapHookSource, /bootstrapFirstLicenseAdmin|firstAdminBootstrapStatus/);
+assert.doesNotMatch(bootstrapHookSource, /from ["'][^"']*actions["']/);
+
 console.log(
-  "Fresh-instance first-admin E2E PASS: reservation -> confirmation -> owner password -> TOTP AAL2 -> Cloudflare claim -> admin/me.",
+  "Fresh-instance first-admin E2E PASS: fresh registry -> guarded reservation/anti-theft -> Cloudflare random credential -> confirmation -> mailbox-owned password -> TOTP AAL2 -> one-time claim -> admin/me -> normal customer tenant bootstrap.",
 );
