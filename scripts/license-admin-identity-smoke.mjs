@@ -53,7 +53,8 @@ try {
 
   const actions = await readFile(new URL("../apps/license-admin/src/app/actions.ts", import.meta.url), "utf8");
   assert.match(actions, /export async function loginEmergencyAdmin/);
-  assert.match(actions, /export async function bootstrapFirstLicenseAdmin/);
+  assert.doesNotMatch(actions, /export async function firstAdminBootstrapStatus\\b/);
+  assert.doesNotMatch(actions, /export async function bootstrapFirstLicenseAdmin\\b/);
   assert.match(actions, /claims\.identity\.source !== "emergency"/);
   assert.match(actions, /identity\.source !== "emergency" \|\| authMethod !== "emergency"/);
   assert.doesNotMatch(actions, /export async function loginAdmin\b/);
