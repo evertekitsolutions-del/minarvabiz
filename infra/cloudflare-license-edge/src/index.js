@@ -2222,7 +2222,7 @@ async function adminCustomerProvisionNatively(request, env, route) {
         p_shop_name: parsed.shopName,
         p_admin_name: parsed.adminName,
         p_redirect_to: redirectTo,
-        p_upstream_error: upstreamError,
+        ...(upstreamError ? { p_upstream_error: upstreamError } : {}),
       },
     );
 
