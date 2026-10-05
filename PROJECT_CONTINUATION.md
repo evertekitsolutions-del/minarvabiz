@@ -121,6 +121,12 @@ Current normal named-admin behavior:
 - the fresh-instance E2E exposed and additively fixed the historical `record_license_admin_login_failure()` PL/pgSQL column/output-name ambiguity; historical migration files remain unchanged
 - defense in depth is explicit: the generic edge RPC secret alone cannot mint an emergency admin session; a matching private emergency credential digest is also required
 - existing Next/Render emergency login/logout remains operational and must stay until the Worker/browser replacement is proven end to end
+- PR #243 merged Cloudflare emergency status/login/me/logout routes; merge commit: **`fb9806194b839b2f342a46ef1237bcea34340df1`**
+- PR #243 final tested head **`e0f00f984eff43aef6a76159e592845ec7b0f6d8`** passed Cloudflare Edge Smoke, 67-migration fresh-instance E2E, Worker emergency route E2E, CI, Windows Deep/Feature Click, SAST, dependency/license/secret/release/staging and coverage gates
+- production Supabase now has `license_admin_bootstrap_metadata_sanitization`, `cloudflare_admin_emergency_authority`, and `cloudflare_admin_emergency_status` applied and verified; private emergency credential registry remains intentionally empty
+- production Cloudflare Worker was updated from merged `main` content only; deployment **`2e61ceb4-92d0-4888-a20c-1370c42e46ba`**, version **`db1ff2c4-7f01-4ee4-a328-4945ff04c020`**, 100% traffic
+- Worker bindings/secrets were preserved exactly; no emergency-enable/actor binding was added, so Cloudflare emergency login remains disabled in production and the existing Next/Render emergency path remains authoritative
+- production post-DDL security advisor has no new critical finding; deny-all private/RBAC tables and edge-secret RPC WARN/INFO findings are intentional architecture findings, while leaked-password protection remains a separate existing configuration warning
 
 ## 6. Cloudflare License/Admin state
 
@@ -285,19 +291,17 @@ The Control Plane must eventually support subscription, plan, add-on, seats, bra
 
 ## 15. Immediate next milestone
 
-Continue Render removal in small verified steps, without reducing emergency/admin capability.
+Continue emergency cutover without reducing or disabling the current break-glass capability.
 
 Recommended next sequence:
 
-1. **Add Cloudflare Worker emergency routes without cutting over the UI yet.** Implement emergency status/login/me/logout on the existing Worker using the merged PostgreSQL authority bridge.
-2. Worker login must accept the plaintext emergency credential only at the edge, hash it before the RPC call, derive a cryptographically random bearer session token, store only its SHA-256 digest server-side, and return only the raw bearer token to the browser.
-3. Preserve existing environment semantics where practical: explicit enable flag, named emergency actor, current/previous credential rotation with bounded grace. Do not expose plaintext secrets through auth-config/status responses.
-4. Add Worker-level security tests for disabled/unconfigured state, invalid credential, backoff/rate limiting, current + previous credential, session me, logout/revocation, origin/CORS rules, token non-disclosure and edge-secret-only bypass resistance.
-5. After Worker routes are verified, cut the emergency UI/session path from Next server cookies/actions to browser -> Cloudflare bearer session while retaining the old path until parity E2E passes.
-6. Only after parity E2E, retire legacy Next emergency helpers/session-cookie machinery that is no longer required.
-7. Verify a Cloudflare-compatible License Admin UI deployment path and then remove transitional Render configuration/service.
-8. Continue Global Core audit + self-service Subscription/Entitlements foundation, Local-first Sync v2, formal Vyapar-parity gap audit and Minarva Intelligence platform foundation per the master plan.
-9. For substantial milestones, apply `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md`; automated evidence remains mandatory and independent AI reviewers are advisory.
+1. **Create a zero-secret-exposure synchronization path for the existing Render emergency credential configuration into the private PostgreSQL digest registry.** The raw current/previous credential must remain inside the existing trusted server process; only SHA-256 digests may cross into PostgreSQL.
+2. Preserve the existing emergency enable flag, named actor identity and previous-credential validity semantics. Do not invent credentials, do not expose values to chat/logs, and do not enable Cloudflare emergency login until the digest registry and edge actor config are proven aligned.
+3. Add deterministic tests proving synchronization is idempotent, rotation-safe, bounded, fail-closed, and cannot accidentally clear a valid current credential on missing/invalid environment configuration.
+4. After safe synchronization proof, configure the Cloudflare emergency actor/enable state and verify live status/login/me/logout with an authorized origin while keeping the old Next/Render path available.
+5. Cut the License Admin emergency UI/session from Next server cookies/actions to browser -> Cloudflare bearer session; keep legacy server helpers until parity E2E passes.
+6. Only after parity E2E, retire the obsolete Next emergency cookie/session/service-role machinery and then verify Cloudflare-compatible License Admin UI hosting before final Render removal.
+7. Continue Global Core, Subscription/Entitlements, Local-first Sync v2, Vyapar-parity and Minarva Intelligence milestones per the master plan.
 
 ## 16. Small-milestone rule
 
