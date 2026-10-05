@@ -449,9 +449,13 @@ BEGIN
   );
 EXCEPTION
   WHEN OTHERS THEN
-    RETURN jsonb_build_object('ok', false, 'code', 'EMERGENCY_CONTROL_UNAVAILABLE');
+    RETURN jsonb_build_object(
+      'ok', false,
+      'code', 'EMERGENCY_CONTROL_UNAVAILABLE',
+      'diagnosticState', SQLSTATE
+    );
 END;
-$$;
+$;
 
 -- Edge-facing safe status now reads PostgreSQL runtime ownership/configuration,
 -- removing the need for Cloudflare emergency actor/enable bindings.
