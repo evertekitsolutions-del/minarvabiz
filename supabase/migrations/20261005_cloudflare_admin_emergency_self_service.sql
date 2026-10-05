@@ -452,7 +452,8 @@ EXCEPTION
     RETURN jsonb_build_object(
       'ok', false,
       'code', 'EMERGENCY_CONTROL_UNAVAILABLE',
-      'diagnosticState', SQLSTATE
+      'diagnosticState', SQLSTATE,
+      'diagnosticMessage', left(SQLERRM, 200)
     );
 END;
 $$;
