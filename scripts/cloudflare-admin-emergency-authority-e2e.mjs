@@ -110,7 +110,7 @@ const failed = await rpc("cloudflare_admin_emergency_record_failure", {
   p_actor_email: actorEmail,
   p_display_name: displayName,
 });
-assert.equal(failed.ok, true);
+assert.equal(failed.ok, true, JSON.stringify(failed));
 assert.equal(failed.allowed, false);
 assert.equal(failed.failureCount, 1);
 assert.ok(failed.retryAfterSeconds >= 2);
