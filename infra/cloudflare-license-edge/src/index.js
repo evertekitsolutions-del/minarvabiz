@@ -2163,6 +2163,8 @@ async function adminCustomerProvisionNatively(request, env, route) {
     if (!preflight.response.ok || !preflight.data || typeof preflight.data !== "object" || Array.isArray(preflight.data)) {
       return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
         "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-upstream-stage": "customer-provision-preflight",
+        "x-minarva-admin-upstream-status": String(preflight.response.status),
       });
     }
     if (preflight.data.ok !== true) {
@@ -2232,6 +2234,8 @@ async function adminCustomerProvisionNatively(request, env, route) {
     if (!finalized.response.ok || !finalized.data || typeof finalized.data !== "object" || Array.isArray(finalized.data)) {
       return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
         "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-upstream-stage": "customer-provision-finalize",
+        "x-minarva-admin-upstream-status": String(finalized.response.status),
       });
     }
 
