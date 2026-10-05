@@ -12,6 +12,9 @@ on:
       - "scripts/license-admin-first-admin-local-e2e.mjs"
       - "scripts/cloudflare-admin-emergency-authority-e2e.mjs"
       - "scripts/cloudflare-admin-emergency-worker-e2e.mjs"
+      - "scripts/license-admin-emergency-authority-sync-e2e.mjs"
+      - "apps/license-admin/scripts/sync-emergency-authority.mjs"
+      - "apps/license-admin/package.json"
       - "scripts/replay-supabase-migrations-fresh.mjs"
       - "supabase/MIGRATION_ORDER.txt"
       - "supabase/migrations/**"
@@ -76,6 +79,12 @@ jobs:
           set -euo pipefail
           command -v psql
           node scripts/cloudflare-admin-emergency-worker-e2e.mjs
+      - name: Verify legacy emergency authority digest sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v psql
+          node scripts/license-admin-emergency-authority-sync-e2e.mjs
       - name: Capture Supabase diagnostics
         if: failure()
         shell: bash

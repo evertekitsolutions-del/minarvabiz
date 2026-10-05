@@ -39,6 +39,22 @@ The private registry supports two slots:
 
 The future Worker cutover must synchronize the private digests with the currently configured emergency credential before traffic moves. The existing Next/Render emergency path remains authoritative until that migration and parity E2E are complete.
 
+## Legacy zero-secret-exposure synchronization
+
+During the transitional Render phase, the existing server remains the source of the raw emergency credential environment variables. Minarva does not need to read, export, or copy those raw values into Cloudflare.
+
+Before each License Admin production server start, `apps/license-admin/scripts/sync-emergency-authority.mjs`:
+
+- validates the existing current credential and named emergency actor locally;
+- applies the same maximum 24-hour previous-credential grace already enforced by the legacy verifier;
+- hashes current/active-previous credentials with SHA-256 inside the Render process;
+- sends only those digests plus safe enable/actor metadata to a service-role-only PostgreSQL RPC;
+- mirrors the private digest registry idempotently and records an audit event only when authority state changes;
+- safely skips without deleting a valid current authority if required legacy configuration is absent or invalid;
+- fails open only with respect to starting the **legacy** License Admin server, so a synchronization outage cannot remove existing break-glass availability. Cloudflare cutover remains disabled until the synchronized state is separately verified.
+
+The sync RPC is not executable by `anon` or `authenticated`, and the private credential/runtime-config tables remain unreadable to browser roles and service-role direct table access.
+
 ## Security invariants
 
 Emergency access must remain:
