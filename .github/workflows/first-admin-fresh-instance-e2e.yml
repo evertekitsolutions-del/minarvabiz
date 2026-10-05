@@ -11,6 +11,7 @@ on:
       - "scripts/configure-first-admin-e2e-supabase.mjs"
       - "scripts/license-admin-first-admin-local-e2e.mjs"
       - "scripts/cloudflare-admin-emergency-authority-e2e.mjs"
+      - "scripts/cloudflare-admin-emergency-worker-e2e.mjs"
       - "scripts/replay-supabase-migrations-fresh.mjs"
       - "supabase/MIGRATION_ORDER.txt"
       - "supabase/migrations/**"
@@ -69,6 +70,12 @@ jobs:
           set -euo pipefail
           command -v psql
           node scripts/cloudflare-admin-emergency-authority-e2e.mjs
+      - name: Verify Cloudflare emergency Worker routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v psql
+          node scripts/cloudflare-admin-emergency-worker-e2e.mjs
       - name: Capture Supabase diagnostics
         if: failure()
         shell: bash

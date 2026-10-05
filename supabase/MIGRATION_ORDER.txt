@@ -69,3 +69,4 @@
 20261003_cloudflare_admin_bootstrap_signup_reservation.sql
 20261005_license_admin_bootstrap_metadata_sanitization.sql
 20261005_cloudflare_admin_emergency_authority.sql
+20261005_cloudflare_admin_emergency_status.sql
