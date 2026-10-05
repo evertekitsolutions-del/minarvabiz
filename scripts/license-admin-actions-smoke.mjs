@@ -98,6 +98,14 @@ const browserSession = await readFile(
   new URL("../apps/license-admin/src/app/admin-panel/browser-admin-session.ts", import.meta.url),
   "utf8",
 );
+const browserEmergencySession = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/browser-emergency-session.ts", import.meta.url),
+  "utf8",
+);
+const browserEmergencyAuth = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/browser-emergency-auth.ts", import.meta.url),
+  "utf8",
+);
 const authHook = await readFile(
   new URL("../apps/license-admin/src/app/admin-panel/useAdminAuthentication.ts", import.meta.url),
   "utf8",
@@ -160,7 +168,11 @@ assert.match(authHook, /getBrowserAdminBootstrapStatus/);
 assert.match(authHook, /claimBrowserFirstAdmin/);
 assert.match(authHook, /verifyBrowserAdminMfa/);
 assert.match(authHook, /activateBrowserAdminSession/);
+assert.match(authHook, /beginBrowserEmergencyLogin/);
+assert.match(authHook, /activateBrowserEmergencySession/);
 assert.match(authHook, /loadBrowserAdminDashboard/);
+assert.doesNotMatch(authHook, /loginEmergencyAdmin|from ["']\.\.\/actions["']/);
+assert.doesNotMatch(authHook, /useRouter|router\.refresh/);
 assert.doesNotMatch(authHook, /adoptCloudflareAdminSession/);
 
 assert.doesNotMatch(
@@ -182,6 +194,19 @@ assert.match(browserSession, /hasTotp/);
 assert.match(browserSession, /\/auth\/v1\/logout\?scope=local/);
 assert.doesNotMatch(browserSession, /localStorage/);
 
+assert.match(browserEmergencySession, /sessionStorage\.setItem/);
+assert.match(browserEmergencySession, /sessionStorage\.removeItem/);
+assert.match(browserEmergencySession, /source === "emergency"/);
+assert.match(browserEmergencySession, /api\/admin\/emergency\/logout/);
+assert.doesNotMatch(browserEmergencySession, /localStorage/);
+assert.doesNotMatch(browserEmergencySession, /LICENSE_EDGE_RPC_SECRET|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY/);
+
+assert.match(browserEmergencyAuth, /api\/admin\/emergency\/login/);
+assert.match(browserEmergencyAuth, /sessionToken/);
+assert.match(browserEmergencyAuth, /source === "emergency"/);
+assert.doesNotMatch(browserEmergencyAuth, /localStorage/);
+assert.doesNotMatch(browserEmergencyAuth, /LICENSE_EDGE_RPC_SECRET|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY/);
+
 for (const route of [
   "/api/admin/me",
   "/api/admin/licenses",
@@ -193,6 +218,10 @@ for (const route of [
   assert.ok(browserApi.includes(route), `browser admin API must call ${route}`);
 }
 assert.match(browserApi, /authorization.*Bearer/si);
+assert.match(browserApi, /readBrowserEmergencySession/);
+assert.match(browserApi, /activateBrowserEmergencySession/);
+assert.match(browserApi, /signOutBrowserEmergencySession/);
+assert.match(browserApi, /me\.identity\.source === "emergency"/);
 assert.match(browserApi, /issueBrowserLicense/);
 assert.match(browserApi, /setBrowserLicenseStatus/);
 assert.match(browserApi, /createBrowserOfflineActivation/);
@@ -205,6 +234,7 @@ assert.match(panel, /browserDirect/);
 assert.doesNotMatch(panel, /bootstrapAvailable/);
 assert.match(panel, /await signOutBrowserAdmin\(\);/);
 assert.match(panel, /await logoutEmergencyAdmin\(\);/);
+assert.match(panel, /type BrowserAdminDashboard/);
 const browserLogoutBranch = panel.match(
   /if \(browserDirect\) \{([\s\S]*?)\n\s*return;\n\s*\}/,
 )?.[1] || "";
