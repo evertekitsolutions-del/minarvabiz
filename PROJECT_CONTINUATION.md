@@ -127,6 +127,13 @@ Current normal named-admin behavior:
 - production Cloudflare Worker was updated from merged `main` content only; deployment **`2e61ceb4-92d0-4888-a20c-1370c42e46ba`**, version **`db1ff2c4-7f01-4ee4-a328-4945ff04c020`**, 100% traffic
 - Worker bindings/secrets were preserved exactly; no emergency-enable/actor binding was added, so Cloudflare emergency login remains disabled in production and the existing Next/Render emergency path remains authoritative
 - production post-DDL security advisor has no new critical finding; deny-all private/RBAC tables and edge-secret RPC WARN/INFO findings are intentional architecture findings, while leaked-password protection remains a separate existing configuration warning
+- PR #245 merged the zero-secret-exposure legacy emergency authority synchronization bridge; merge commit: **`9eb29aa1d9468087937600ebb22c23cc3b56c220`**
+- PR #245 final tested head **`d7aa8f9f7c434c32f880a6f023219d3ec917d7dd`** passed fresh-instance E2E, CI, Windows Deep/Feature Click, Coverage, SAST, Dependency Security, SBOM/License Policy, Secret Scan, Licensing Smoke, Staging Security + Performance and Final Release Audit
+- the sync path hashes the existing Render current/active-previous emergency credentials inside the trusted server process and sends only SHA-256 digests plus safe enable/actor metadata to a service-role-only PostgreSQL RPC
+- synchronization is idempotent, rotation/rollback-safe, bounded to the existing <=24-hour previous-credential grace, audit-safe, and missing/invalid legacy config cannot clear a valid current authority
+- production Supabase migration `license_admin_emergency_legacy_sync` is applied and verified: anon/authenticated cannot execute the sync RPC, service-role can execute it, and direct private-table SELECT remains denied even to service-role
+- Render startup wiring was root-cause-fixed in `render.yaml`: the digest sync script must execute before `next start`; CI has a regression guard for this exact production start contract
+- production private emergency credential/runtime registry is currently still empty, so the Render startup sync has **not yet been observed in production**; Cloudflare emergency login remains disabled and the existing Next/Render emergency path remains authoritative
 
 ## 6. Cloudflare License/Admin state
 
@@ -185,8 +192,9 @@ Normal named-admin authentication, business operations, page hydration, logout a
 
 Remaining Render/Next migration scope is intentionally narrower:
 
-- the PostgreSQL emergency authority foundation is now merged and fresh-instance verified
-- remaining emergency cutover work is Worker routes -> browser emergency-session cutover -> parity E2E -> legacy Next emergency helper retirement
+- the PostgreSQL emergency authority foundation, Cloudflare emergency routes, and zero-secret legacy digest synchronization bridge are merged and fresh-instance verified
+- production sync RPC/schema is live, but the private digest/runtime registry remains empty until the real Render process executes the new startup sync
+- remaining emergency cutover work is production Render digest-sync proof -> Cloudflare emergency actor/enable configuration -> live route proof -> browser emergency-session cutover -> parity E2E -> legacy Next emergency helper retirement
 - current production emergency UI still depends on Next server cookies/actions until that replacement is proven
 - preserve the existing emergency security properties during migration: explicit opt-in, named emergency actor, short revocable session, rate limiting/backoff, audit trail, current/previous secret rotation with bounded grace, defense against edge-secret-only bypass, and fail-closed database/session validation
 - verify a Cloudflare-compatible License Admin UI hosting path while preserving named-admin, bootstrap and emergency behavior
@@ -295,13 +303,14 @@ Continue emergency cutover without reducing or disabling the current break-glass
 
 Recommended next sequence:
 
-1. **Create a zero-secret-exposure synchronization path for the existing Render emergency credential configuration into the private PostgreSQL digest registry.** The raw current/previous credential must remain inside the existing trusted server process; only SHA-256 digests may cross into PostgreSQL.
-2. Preserve the existing emergency enable flag, named actor identity and previous-credential validity semantics. Do not invent credentials, do not expose values to chat/logs, and do not enable Cloudflare emergency login until the digest registry and edge actor config are proven aligned.
-3. Add deterministic tests proving synchronization is idempotent, rotation-safe, bounded, fail-closed, and cannot accidentally clear a valid current credential on missing/invalid environment configuration.
-4. After safe synchronization proof, configure the Cloudflare emergency actor/enable state and verify live status/login/me/logout with an authorized origin while keeping the old Next/Render path available.
-5. Cut the License Admin emergency UI/session from Next server cookies/actions to browser -> Cloudflare bearer session; keep legacy server helpers until parity E2E passes.
-6. Only after parity E2E, retire the obsolete Next emergency cookie/session/service-role machinery and then verify Cloudflare-compatible License Admin UI hosting before final Render removal.
-7. Continue Global Core, Subscription/Entitlements, Local-first Sync v2, Vyapar-parity and Minarva Intelligence milestones per the master plan.
+1. **Verify the real Render service executes the merged startup digest sync.** Production PostgreSQL must show a configured current digest and safe runtime metadata without ever reading/exporting the raw emergency credential.
+2. Render connector workspace selection requires explicit user confirmation. The only visible workspace at this checkpoint is **“My Workspace”** for the connected Render account; do not select or mutate it without confirmation.
+3. After Render sync is proven, compare only safe booleans/metadata: current configured, previous grace active/inactive, emergency enabled state and actor configured state. Do not expose actor email/name or any digest/raw secret in chat/logs.
+4. Configure Cloudflare emergency actor/enable bindings only after the synchronized authority is proven aligned. Keep the existing Next/Render emergency path available.
+5. Verify live Cloudflare emergency status/login/me/logout from the authorized admin origin, including revocation and backoff/rate behavior.
+6. Cut the License Admin emergency UI/session from Next server cookies/actions to browser -> Cloudflare bearer session; keep legacy server helpers until parity E2E passes.
+7. Only after parity E2E, retire obsolete Next emergency cookie/session/service-role machinery, verify Cloudflare-compatible License Admin UI hosting, and then remove transitional Render.
+8. Continue Global Core, Subscription/Entitlements, Local-first Sync v2, Vyapar-parity and Minarva Intelligence milestones per the master plan.
 
 ## 16. Small-milestone rule
 
