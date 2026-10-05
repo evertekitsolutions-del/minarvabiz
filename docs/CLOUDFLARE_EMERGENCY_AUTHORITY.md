@@ -55,6 +55,20 @@ Before each License Admin production server start, `apps/license-admin/scripts/s
 
 The sync RPC is not executable by `anon` or `authenticated`, and the private credential/runtime-config tables remain unreadable to browser roles and service-role direct table access.
 
+## Browser emergency cutover
+
+The License Admin client now supports emergency access without creating a privileged Next.js server session:
+
+- the browser sends the emergency credential directly to the Cloudflare emergency login route;
+- Cloudflare returns only a short-lived revocable bearer token plus the emergency identity and expiry;
+- the token is validated client-side and stored only in `sessionStorage`, never `localStorage` or a persistent cookie;
+- the shared browser admin API uses either the named administrator AAL2 token or the emergency bearer, never both;
+- switching authority clears the other browser session;
+- browser logout revokes the emergency bearer at Cloudflare before/while clearing local tab state;
+- a restored emergency browser session is re-authorized through the generic Cloudflare `/api/admin/me` and business routes.
+
+The historical Next/Render emergency cookie path remains temporarily available as rollback-only compatibility during deployment cutover. It is no longer used by the normal emergency sign-in interaction in the browser. Removal is deferred until production hosting/origin configuration and browser runtime verification are complete.
+
 ## Full emergency business-operation parity
 
 Emergency cutover is not complete if it can only authenticate. A valid emergency session must retain the same operational admin capability that the legacy break-glass path provides.
