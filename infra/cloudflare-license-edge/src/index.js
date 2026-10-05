@@ -928,7 +928,7 @@ function emergencyRpcFailure(data) {
   }
   return json(output, status, {
     "x-minarva-admin-backend": "cloudflare-native",
-    ...(status === 429 && output.retryAfterSeconds
+    ...(output.retryAfterSeconds
       ? { "retry-after": String(output.retryAfterSeconds) }
       : {}),
   });
