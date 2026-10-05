@@ -256,7 +256,9 @@ function databaseSnapshot() {
     "'reservation_count',(select count(*) from license_private.admin_bootstrap_signup_reservations where email=" + email + ")," +
     "'marker',coalesce((select raw_app_meta_data->>'minarva_license_admin_bootstrap' from auth.users where lower(email)=" + email + " limit 1),'')," +
     "'account_type',coalesce((select raw_user_meta_data->>'account_type' from auth.users where lower(email)=" + email + " limit 1),'')," +
-    "'bootstrap_token',coalesce((select raw_user_meta_data->>'bootstrap_token' from auth.users where lower(email)=" + email + " limit 1),'')" +
+    "'bootstrap_token',coalesce((select raw_user_meta_data->>'bootstrap_token' from auth.users where lower(email)=" + email + " limit 1),'')," +
+    "'identity_account_type',coalesce((select identity_data->>'account_type' from auth.identities where user_id=(select id from auth.users where lower(email)=" + email + " limit 1) limit 1),'')," +
+    "'identity_bootstrap_token',coalesce((select identity_data->>'bootstrap_token' from auth.identities where user_id=(select id from auth.users where lower(email)=" + email + " limit 1) limit 1),'')" +
     ")::text;";
   return JSON.parse(psqlScalar(sql));
 }
@@ -381,8 +383,10 @@ assert.equal(Number(db.profile_count), 0, "License Admin bootstrap must not crea
 assert.equal(Number(db.member_count), 0, "License Admin bootstrap must not create tenant membership.");
 assert.equal(Number(db.reservation_count), 0, "One-time signup reservation must be consumed.");
 assert.equal(db.marker, "true", "Server-controlled bootstrap marker must be stamped.");
-assert.equal(db.account_type, "", "Transient account_type must be stripped before persistence.");
-assert.equal(db.bootstrap_token, "", "Transient bootstrap token must be stripped before persistence.");
+assert.equal(db.account_type, "", "Transient account_type must be stripped from durable user metadata.");
+assert.equal(db.bootstrap_token, "", "Transient bootstrap token must be stripped from durable user metadata.");
+assert.equal(db.identity_account_type, "", "Transient account_type must not persist in identity metadata.");
+assert.equal(db.identity_bootstrap_token, "", "Transient bootstrap token must not persist in identity metadata.");
 
 // 5. Mailbox ownership confirms the account.
 const confirmationLink = await waitForVerificationMail(beforeConfirmation, "signup");
