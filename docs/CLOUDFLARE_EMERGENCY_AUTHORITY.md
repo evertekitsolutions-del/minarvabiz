@@ -55,6 +55,32 @@ Before each License Admin production server start, `apps/license-admin/scripts/s
 
 The sync RPC is not executable by `anon` or `authenticated`, and the private credential/runtime-config tables remain unreadable to browser roles and service-role direct table access.
 
+## Full emergency business-operation parity
+
+Emergency cutover is not complete if it can only authenticate. A valid emergency session must retain the same operational admin capability that the legacy break-glass path provides.
+
+The Cloudflare/PostgreSQL boundary therefore supports a **dual administrator authority**:
+
+- named administrators: Supabase Auth + TOTP AAL2 + active allowlisted identity;
+- emergency administrators: Worker-only edge secret + SHA-256 digest of a live, unrevoked emergency bearer session + synchronized enabled emergency runtime identity.
+
+The same existing admin business RPC implementations are reused for both authorities. Emergency business requests are sent by the Worker with the public Supabase key plus two private upstream headers containing the Worker edge secret and the emergency session-token digest. The browser never receives either upstream proof.
+
+Direct anonymous PostgREST calls remain unauthorized unless both proofs validate. Emergency bearer requests are additionally rejected by the Worker when the browser Origin is not in the License Admin allowlist or when emergency access is disabled.
+
+Emergency-authorized audit rows are normalized at the database boundary so the real emergency session ID and `source='emergency'` are retained even though the shared business RPC implementation is reused.
+
+Fresh-instance Worker E2E covers:
+
+- generic `/api/admin/me` with an emergency bearer;
+- license registry read, commercial issuance, status management and offline activation;
+- support inbox read/update;
+- online customer provisioning;
+- strict Origin enforcement and disabled-state rejection;
+- direct PostgREST bypass attempts without Worker proof;
+- emergency session revocation;
+- audit source/session correctness.
+
 ## Security invariants
 
 Emergency access must remain:
