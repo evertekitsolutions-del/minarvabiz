@@ -5,7 +5,7 @@ services:
     plan: 0.5c-512mb
     region: singapore
     buildCommand: corepack enable && corepack prepare pnpm@9.15.0 --activate && pnpm install --frozen-lockfile --ignore-scripts && pnpm --filter @minarvabiz/license-admin build
-    startCommand: pnpm --filter @minarvabiz/license-admin exec next start -p $PORT
+    startCommand: node apps/license-admin/scripts/sync-emergency-authority.mjs && pnpm --filter @minarvabiz/license-admin exec next start -p $PORT
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
