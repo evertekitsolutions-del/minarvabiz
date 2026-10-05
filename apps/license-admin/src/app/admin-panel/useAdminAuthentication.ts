@@ -1,8 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
-import { loginEmergencyAdmin } from "../actions";
 import {
   beginBrowserAdminMfaEnrollment,
   beginBrowserNamedAdminLogin,
@@ -12,9 +10,12 @@ import {
   verifyBrowserAdminMfa,
   type BrowserAdminPendingAuth,
 } from "./browser-admin-auth";
+import { beginBrowserEmergencyLogin } from "./browser-emergency-auth";
 import {
   activateBrowserAdminSession,
+  activateBrowserEmergencySession,
   loadBrowserAdminDashboard,
+  signOutBrowserAdmin,
 } from "./browser-admin-api";
 import type {
   AdminIdentityView,
@@ -23,16 +24,15 @@ import type {
   SupportRequestRow,
 } from "./types";
 
-export interface NamedAdminDashboard {
+export interface BrowserAdminDashboard {
   identity: AdminIdentityView;
   licenses: LicenseRegistryRow[];
   requests: SupportRequestRow[];
 }
 
 export function useAdminAuthentication(
-  onNamedAuthenticated: (dashboard: NamedAdminDashboard) => void,
+  onAuthenticated: (dashboard: BrowserAdminDashboard) => void,
 ) {
-  const router = useRouter();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [emergencyPassword, setEmergencyPassword] = React.useState("");
@@ -141,7 +141,7 @@ export function useAdminAuthentication(
     clearMfa();
     setAuthStage("password");
     setMessage(null);
-    onNamedAuthenticated(dashboard);
+    onAuthenticated(dashboard);
   }
 
   function resetMfa() {
@@ -154,14 +154,40 @@ export function useAdminAuthentication(
   async function emergencyLogin() {
     setBusy(true);
     setMessage(null);
-    const result = await loginEmergencyAdmin(emergencyPassword);
-    setBusy(false);
+    const result = await beginBrowserEmergencyLogin(emergencyPassword);
     if (!result.ok) {
+      setBusy(false);
       setMessage(result.error || "Emergency login failed.");
       return;
     }
+
+    if (!activateBrowserEmergencySession({
+      sessionToken: result.sessionToken,
+      identity: result.identity,
+      expiresAt: result.expiresAt,
+    })) {
+      setBusy(false);
+      setMessage("Emergency browser session could not be stored.");
+      return;
+    }
+
+    const dashboard = await loadBrowserAdminDashboard();
+    if (!dashboard.ok) {
+      await signOutBrowserAdmin();
+      setBusy(false);
+      setMessage(dashboard.error);
+      return;
+    }
+
     setEmergencyPassword("");
-    router.refresh();
+    setPendingBrowserAuth(null);
+    setEmail("");
+    setPassword("");
+    clearMfa();
+    setAuthStage("password");
+    setBusy(false);
+    setMessage(null);
+    onAuthenticated(dashboard);
   }
 
   return {

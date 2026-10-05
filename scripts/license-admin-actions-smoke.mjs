@@ -98,6 +98,14 @@ const browserSession = await readFile(
   new URL("../apps/license-admin/src/app/admin-panel/browser-admin-session.ts", import.meta.url),
   "utf8",
 );
+const browserEmergencySession = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/browser-emergency-session.ts", import.meta.url),
+  "utf8",
+);
+const browserEmergencyAuth = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/browser-emergency-auth.ts", import.meta.url),
+  "utf8",
+);
 const authHook = await readFile(
   new URL("../apps/license-admin/src/app/admin-panel/useAdminAuthentication.ts", import.meta.url),
   "utf8",
@@ -160,7 +168,11 @@ assert.match(authHook, /getBrowserAdminBootstrapStatus/);
 assert.match(authHook, /claimBrowserFirstAdmin/);
 assert.match(authHook, /verifyBrowserAdminMfa/);
 assert.match(authHook, /activateBrowserAdminSession/);
+assert.match(authHook, /beginBrowserEmergencyLogin/);
+assert.match(authHook, /activateBrowserEmergencySession/);
 assert.match(authHook, /loadBrowserAdminDashboard/);
+assert.doesNotMatch(authHook, /loginEmergencyAdmin|from ["']\.\.\/actions["']/);
+assert.doesNotMatch(authHook, /useRouter|router\.refresh/);
 assert.doesNotMatch(authHook, /adoptCloudflareAdminSession/);
 
 assert.doesNotMatch(
@@ -182,6 +194,19 @@ assert.match(browserSession, /hasTotp/);
 assert.match(browserSession, /\/auth\/v1\/logout\?scope=local/);
 assert.doesNotMatch(browserSession, /localStorage/);
 
+assert.match(browserEmergencySession, /sessionStorage\.setItem/);
+assert.match(browserEmergencySession, /sessionStorage\.removeItem/);
+assert.match(browserEmergencySession, /source === "emergency"/);
+assert.match(browserEmergencySession, /api\/admin\/emergency\/logout/);
+assert.doesNotMatch(browserEmergencySession, /localStorage/);
+assert.doesNotMatch(browserEmergencySession, /LICENSE_EDGE_RPC_SECRET|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY/);
+
+assert.match(browserEmergencyAuth, /api\/admin\/emergency\/login/);
+assert.match(browserEmergencyAuth, /sessionToken/);
+assert.match(browserEmergencyAuth, /source === "emergency"/);
+assert.doesNotMatch(browserEmergencyAuth, /localStorage/);
+assert.doesNotMatch(browserEmergencyAuth, /LICENSE_EDGE_RPC_SECRET|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY/);
+
 for (const route of [
   "/api/admin/me",
   "/api/admin/licenses",
@@ -193,6 +218,10 @@ for (const route of [
   assert.ok(browserApi.includes(route), `browser admin API must call ${route}`);
 }
 assert.match(browserApi, /authorization.*Bearer/si);
+assert.match(browserApi, /readBrowserEmergencySession/);
+assert.match(browserApi, /activateBrowserEmergencySession/);
+assert.match(browserApi, /signOutBrowserEmergencySession/);
+assert.match(browserApi, /me\.identity\.source === "emergency"/);
 assert.match(browserApi, /issueBrowserLicense/);
 assert.match(browserApi, /setBrowserLicenseStatus/);
 assert.match(browserApi, /createBrowserOfflineActivation/);
@@ -205,6 +234,7 @@ assert.match(panel, /browserDirect/);
 assert.doesNotMatch(panel, /bootstrapAvailable/);
 assert.match(panel, /await signOutBrowserAdmin\(\);/);
 assert.match(panel, /await logoutEmergencyAdmin\(\);/);
+assert.match(panel, /type BrowserAdminDashboard/);
 const browserLogoutBranch = panel.match(
   /if \(browserDirect\) \{([\s\S]*?)\n\s*return;\n\s*\}/,
 )?.[1] || "";
@@ -223,5 +253,129 @@ assert.match(panel, /createCommercialLicense/);
 assert.match(panel, /setLicenseStatus/);
 assert.match(panel, /createOfflineActivationPackage/);
 assert.match(panel, /Blob|createObjectURL/);
+
+const browserStorage = new Map();
+Object.defineProperty(globalThis, "sessionStorage", {
+  configurable: true,
+  value: {
+    getItem(key) {
+      return browserStorage.has(key) ? browserStorage.get(key) : null;
+    },
+    setItem(key, value) {
+      browserStorage.set(String(key), String(value));
+    },
+    removeItem(key) {
+      browserStorage.delete(String(key));
+    },
+  },
+});
+
+const emergencySessionModule = await import(
+  "../apps/license-admin/src/app/admin-panel/browser-emergency-session.ts"
+);
+const emergencyAuthModule = await import(
+  "../apps/license-admin/src/app/admin-panel/browser-emergency-auth.ts"
+);
+
+const emergencyIdentity = {
+  id: "emergency-browser-smoke",
+  email: "emergency-browser@example.test",
+  displayName: "Emergency Browser Smoke",
+  role: "admin",
+  source: "emergency",
+};
+const emergencyToken = "E".repeat(64);
+const emergencyExpiry = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+assert.equal(
+  emergencySessionModule.persistBrowserEmergencySession({
+    sessionToken: emergencyToken,
+    identity: emergencyIdentity,
+    expiresAt: emergencyExpiry,
+  }),
+  true,
+);
+assert.equal(
+  emergencySessionModule.readBrowserEmergencySession()?.sessionToken,
+  emergencyToken,
+);
+assert.equal(
+  emergencySessionModule.persistBrowserEmergencySession({
+    sessionToken: emergencyToken,
+    identity: { ...emergencyIdentity, source: "supabase" },
+    expiresAt: emergencyExpiry,
+  }),
+  false,
+  "Emergency browser storage must reject non-emergency identities",
+);
+
+let observedLogout = null;
+globalThis.fetch = async (input, init = {}) => {
+  observedLogout = {
+    url: String(input),
+    authorization: new Headers(init.headers).get("authorization"),
+    method: init.method || "GET",
+  };
+  return new Response(JSON.stringify({ ok: true }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+};
+await emergencySessionModule.signOutBrowserEmergencySession("https://edge.example.test");
+assert.deepEqual(observedLogout, {
+  url: "https://edge.example.test/api/admin/emergency/logout",
+  authorization: `Bearer ${emergencyToken}`,
+  method: "POST",
+});
+assert.equal(emergencySessionModule.readBrowserEmergencySession(), null);
+
+let observedLogin = null;
+globalThis.fetch = async (input, init = {}) => {
+  observedLogin = {
+    url: String(input),
+    body: JSON.parse(String(init.body || "{}")),
+    method: init.method || "GET",
+  };
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      sessionToken: emergencyToken,
+      identity: emergencyIdentity,
+      expiresAt: emergencyExpiry,
+    }),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    },
+  );
+};
+const emergencyLogin = await emergencyAuthModule.beginBrowserEmergencyLogin("browser-smoke-credential");
+assert.equal(emergencyLogin.ok, true);
+assert.deepEqual(observedLogin, {
+  url: "https://minarva-biz-license-edge.minarva-biz.workers.dev/api/admin/emergency/login",
+  body: { credential: "browser-smoke-credential" },
+  method: "POST",
+});
+if (emergencyLogin.ok) {
+  assert.equal(emergencyLogin.identity.source, "emergency");
+  assert.equal(emergencyLogin.sessionToken, emergencyToken);
+}
+
+globalThis.fetch = async () =>
+  new Response(
+    JSON.stringify({
+      ok: true,
+      sessionToken: "short",
+      identity: emergencyIdentity,
+      expiresAt: emergencyExpiry,
+    }),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    },
+  );
+const malformedEmergencyLogin =
+  await emergencyAuthModule.beginBrowserEmergencyLogin("browser-smoke-credential");
+assert.equal(malformedEmergencyLogin.ok, false);
 
 console.log("License-admin auth/CRUD/error/import-export smoke PASS");

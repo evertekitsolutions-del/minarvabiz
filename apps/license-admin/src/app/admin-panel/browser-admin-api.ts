@@ -16,6 +16,12 @@ import {
   readBrowserAdminSession,
   signOutBrowserAdminSession,
 } from "./browser-admin-session";
+import {
+  clearBrowserEmergencySession,
+  persistBrowserEmergencySession,
+  readBrowserEmergencySession,
+  signOutBrowserEmergencySession,
+} from "./browser-emergency-session";
 
 const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
 
@@ -55,12 +61,16 @@ async function edgeRequest<T extends object>(
   path: string,
   init: RequestInit = {},
 ): Promise<ApiResult<T>> {
-  const session = readBrowserAdminSession();
-  if (!session) return { ok: false, error: "Administrator session expired. Sign in again.", code: "UNAUTHENTICATED" };
+  const namedSession = readBrowserAdminSession();
+  const emergencySession = namedSession ? null : readBrowserEmergencySession();
+  const bearer = namedSession?.accessToken || emergencySession?.sessionToken || "";
+  if (!bearer) {
+    return { ok: false, error: "Administrator session expired. Sign in again.", code: "UNAUTHENTICATED" };
+  }
 
   const headers = new Headers(init.headers);
   headers.set("accept", "application/json");
-  headers.set("authorization", `Bearer ${session.accessToken}`);
+  headers.set("authorization", `Bearer ${bearer}`);
   if (init.body != null) headers.set("content-type", "application/json");
 
   try {
@@ -73,7 +83,10 @@ async function edgeRequest<T extends object>(
     const data = await response.json().catch(() => null);
     if (!response.ok || data?.ok !== true) {
       const code = String(data?.code || "");
-      if (response.status === 401 || code === "UNAUTHENTICATED") clearBrowserAdminSession();
+      if (response.status === 401 || code === "UNAUTHENTICATED") {
+        if (namedSession) clearBrowserAdminSession();
+        if (emergencySession) clearBrowserEmergencySession();
+      }
       return { ok: false, error: errorMessage(data, response.status), code: code || undefined };
     }
     return data as ApiResult<T>;
@@ -97,12 +110,22 @@ export function activateBrowserAdminSession(
   pending: BrowserAdminPendingAuth | null,
 ) {
   if (!pending) return false;
+  clearBrowserEmergencySession();
   return persistBrowserAdminSession({
     accessToken,
     userId: pending.userId,
     supabaseUrl: pending.config.supabaseUrl,
     supabasePublishableKey: pending.config.supabasePublishableKey,
   });
+}
+
+export function activateBrowserEmergencySession(input: {
+  sessionToken: string;
+  identity: AdminIdentityView;
+  expiresAt: string;
+}) {
+  clearBrowserAdminSession();
+  return persistBrowserEmergencySession(input);
 }
 
 export async function loadBrowserAdminDashboard(): Promise<ApiResult<{
@@ -123,7 +146,10 @@ export async function loadBrowserAdminDashboard(): Promise<ApiResult<{
 
   return {
     ok: true,
-    identity: { ...me.identity, source: "supabase" },
+    identity: {
+      ...me.identity,
+      source: me.identity.source === "emergency" ? "emergency" : "supabase",
+    },
     licenses: Array.isArray(licenses.licenses) ? licenses.licenses : [],
     requests: Array.isArray(support.requests) ? support.requests : [],
   };
@@ -181,5 +207,8 @@ export async function provisionBrowserCustomer(input: {
 }
 
 export async function signOutBrowserAdmin() {
-  await signOutBrowserAdminSession();
+  await Promise.all([
+    signOutBrowserAdminSession(),
+    signOutBrowserEmergencySession(EDGE),
+  ]);
 }
