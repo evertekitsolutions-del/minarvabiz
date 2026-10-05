@@ -10,6 +10,9 @@ const ALLOWED_ROUTES = new Map([
   ["POST /api/admin/emergency/login", { maxBody: 2 * 1024, nativeAdminEmergencyLogin: true }],
   ["GET /api/admin/emergency/me", { maxBody: 0, nativeAdminEmergencyMe: true }],
   ["POST /api/admin/emergency/logout", { maxBody: 0, nativeAdminEmergencyLogout: true }],
+  ["GET /api/admin/emergency/control-status", { maxBody: 0, nativeAdminEmergencyControlStatus: true }],
+  ["POST /api/admin/emergency/rotate", { maxBody: 0, nativeAdminEmergencyRotate: true }],
+  ["POST /api/admin/emergency/disable", { maxBody: 0, nativeAdminEmergencyDisable: true }],
   ["GET /api/admin/bootstrap/status", { maxBody: 0, nativeAdminBootstrapStatus: true }],
   ["POST /api/admin/bootstrap/signup-reservation", { maxBody: 2 * 1024, nativeAdminBootstrapSignupReservation: true }],
   ["POST /api/admin/bootstrap/claim", { maxBody: 0, nativeAdminBootstrapClaim: true }],
@@ -794,23 +797,6 @@ function adminRequestOriginAllowed(request, env) {
   return Boolean(origin && adminAllowedOrigins(env).has(origin));
 }
 
-function emergencyActorConfig(env) {
-  const enabled =
-    String(env.LICENSE_ADMIN_EMERGENCY_LOGIN_ENABLED || "").trim().toLowerCase() === "true";
-  const email = String(env.LICENSE_ADMIN_EMERGENCY_ACTOR_EMAIL || "").trim().toLowerCase();
-  const displayName = String(env.LICENSE_ADMIN_EMERGENCY_ACTOR_NAME || "").trim();
-  return {
-    enabled,
-    email,
-    displayName,
-    actorConfigured:
-      EMAIL_RE.test(email) &&
-      email.length <= 254 &&
-      displayName.length >= 1 &&
-      displayName.length <= 120,
-  };
-}
-
 function adminClientAddress(request) {
   const forwarded = String(request.headers.get("x-forwarded-for") || "")
     .split(",")
@@ -941,31 +927,19 @@ async function adminEmergencyStatusNatively(request, env) {
     });
   }
 
-  const actor = emergencyActorConfig(env);
-  if (!actor.enabled) {
-    return json(
-      { ok: true, enabled: false, configured: false },
-      200,
-      { "x-minarva-admin-backend": "cloudflare-native" },
-    );
-  }
-  if (!actor.actorConfigured) {
-    return json(
-      { ok: true, enabled: true, configured: false },
-      200,
-      { "x-minarva-admin-backend": "cloudflare-native" },
-    );
-  }
-
   const result = await adminEdgeSecretRpc(env, "cloudflare_admin_emergency_status");
   if (!result.ok) return result.response;
   if (result.data.ok !== true) return emergencyRpcFailure(result.data);
 
+  const enabled = result.data.enabled === true;
+  const actorConfigured = result.data.actorConfigured === true;
+  const currentConfigured = result.data.currentConfigured === true;
+
   return json(
     {
       ok: true,
-      enabled: true,
-      configured: result.data.currentConfigured === true,
+      enabled,
+      configured: enabled && actorConfigured && currentConfigured,
       previousCredentialGraceActive: result.data.previousActive === true,
     },
     200,
@@ -983,18 +957,6 @@ async function adminEmergencyLoginNatively(request, env, route) {
     });
   }
 
-  const actor = emergencyActorConfig(env);
-  if (!actor.enabled) {
-    return json({ ok: false, code: "EMERGENCY_DISABLED" }, 403, {
-      "x-minarva-admin-backend": "cloudflare-native",
-    });
-  }
-  if (!actor.actorConfigured) {
-    return json({ ok: false, code: "EMERGENCY_NOT_CONFIGURED" }, 503, {
-      "x-minarva-admin-backend": "cloudflare-native",
-    });
-  }
-
   const body = await readRequestBody(request, route.maxBody);
   if (body?.tooLarge) {
     return json({ ok: false, code: "INVALID_REQUEST" }, 413, {
@@ -1008,31 +970,30 @@ async function adminEmergencyLoginNatively(request, env, route) {
     });
   }
 
-  const credentialSha256 = await sha256Hex(parsed.credential);
   const edgeSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
   if (edgeSecret.length < 32) {
     return json({ ok: false, code: "EMERGENCY_SERVICE_UNAVAILABLE" }, 503, {
       "x-minarva-admin-backend": "cloudflare-native",
     });
   }
+
   const clientIp = adminClientAddress(request);
+  const credentialSha256 = await sha256Hex(parsed.credential);
   const rateKeyHash = await sha256Hex(
-    `minarva-emergency-rate-v1\0${clientIp}\0${edgeSecret}`,
+    `minarva-emergency-rate-v2\0${clientIp}\0${edgeSecret}`,
   );
   const backoffKeyHash = await sha256Hex(
-    `minarva-emergency-backoff-v1\0${clientIp}\0${actor.email}\0${edgeSecret}`,
+    `minarva-emergency-backoff-v2\0${clientIp}\0${edgeSecret}`,
   );
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const sessionToken = base64Url(crypto.getRandomValues(new Uint8Array(48)));
     const tokenSha256 = await sha256Hex(sessionToken);
-    const result = await adminEdgeSecretRpc(env, "cloudflare_admin_emergency_login", {
+    const result = await adminEdgeSecretRpc(env, "cloudflare_admin_emergency_login_v2", {
       p_credential_sha256: credentialSha256,
       p_rate_key_hash: rateKeyHash,
       p_backoff_key_hash: backoffKeyHash,
       p_token_sha256: tokenSha256,
-      p_actor_email: actor.email,
-      p_display_name: actor.displayName,
     });
     if (!result.ok) return result.response;
 
@@ -1066,11 +1027,6 @@ async function adminEmergencyLoginNatively(request, env, route) {
 async function adminEmergencyMeNatively(request, env) {
   if (!adminRequestOriginAllowed(request, env)) {
     return json({ ok: false, code: "ORIGIN_NOT_ALLOWED" }, 403, {
-      "x-minarva-admin-backend": "cloudflare-native",
-    });
-  }
-  if (!emergencyActorConfig(env).enabled) {
-    return json({ ok: false, code: "EMERGENCY_DISABLED" }, 403, {
       "x-minarva-admin-backend": "cloudflare-native",
     });
   }
@@ -1198,28 +1154,6 @@ async function adminRpcAuthContext(request, env) {
     };
   }
 
-  const emergency = emergencyActorConfig(env);
-  if (!emergency.enabled) {
-    return {
-      ok: false,
-      response: json(
-        { ok: false, code: "UNAUTHENTICATED" },
-        401,
-        { "x-minarva-admin-backend": "cloudflare-native" },
-      ),
-    };
-  }
-  if (!emergency.actorConfigured) {
-    return {
-      ok: false,
-      response: json(
-        { ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" },
-        503,
-        { "x-minarva-admin-backend": "cloudflare-native" },
-      ),
-    };
-  }
-
   const edgeSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
   if (edgeSecret.length < 32) {
     return {
@@ -1336,9 +1270,15 @@ async function adminAuthenticatedRpc(request, env, rpcName, rpcBody = {}) {
       code === "INVALID_ACTIVATION_LIMIT" ||
       code === "INVALID_FEATURES" ||
       code === "NOT_FOUND" ||
-      code === "LICENSE_CONFLICT"
+      code === "LICENSE_CONFLICT" ||
+      code === "EMERGENCY_CREDENTIAL_CONFLICT"
     ) {
-      const fallbackStatus = code === "NOT_FOUND" ? 404 : code === "LICENSE_CONFLICT" ? 409 : 400;
+      const fallbackStatus =
+        code === "NOT_FOUND"
+          ? 404
+          : code === "LICENSE_CONFLICT" || code === "EMERGENCY_CREDENTIAL_CONFLICT"
+            ? 409
+            : 400;
       return json(
         { ok: false, code },
         explicitStatus || fallbackStatus,
@@ -1361,6 +1301,84 @@ async function adminAuthenticatedRpc(request, env, rpcName, rpcBody = {}) {
       },
     );
   }
+}
+
+async function adminEmergencyControlStatusNatively(request, env) {
+  if (!adminRequestOriginAllowed(request, env)) {
+    return json({ ok: false, code: "ORIGIN_NOT_ALLOWED" }, 403, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+  return adminAuthenticatedRpc(
+    request,
+    env,
+    "cloudflare_admin_emergency_control_status",
+  );
+}
+
+async function adminEmergencyRotateNatively(request, env) {
+  if (!adminRequestOriginAllowed(request, env)) {
+    return json({ ok: false, code: "ORIGIN_NOT_ALLOWED" }, 403, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const authorization = String(request.headers.get("authorization") || "").trim();
+  const bearer = authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : "";
+  if (bearer.split(".").length !== 3) {
+    return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const credential = base64Url(crypto.getRandomValues(new Uint8Array(48)));
+  const upstream = await adminAuthenticatedRpc(
+    request,
+    env,
+    "cloudflare_admin_rotate_emergency_credential",
+    { p_current_sha256: await sha256Hex(credential) },
+  );
+  const data = await upstream.clone().json().catch(() => null);
+  if (!upstream.ok || data?.ok !== true) return upstream;
+
+  return json(
+    {
+      ...data,
+      credential,
+    },
+    200,
+    {
+      "x-minarva-admin-backend": "cloudflare-native",
+      "x-minarva-admin-data": "supabase-authenticated-rpc",
+      "cache-control": "no-store",
+    },
+  );
+}
+
+async function adminEmergencyDisableNatively(request, env) {
+  if (!adminRequestOriginAllowed(request, env)) {
+    return json({ ok: false, code: "ORIGIN_NOT_ALLOWED" }, 403, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  const authorization = String(request.headers.get("authorization") || "").trim();
+  const bearer = authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length).trim()
+    : "";
+  if (bearer.split(".").length !== 3) {
+    return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+
+  return adminAuthenticatedRpc(
+    request,
+    env,
+    "cloudflare_admin_disable_emergency_access",
+  );
 }
 
 function parseAdminBootstrapSignupReservationBody(bytes) {
@@ -2565,6 +2583,30 @@ export default {
 
     if (route.nativeAdminEmergencyLogout) {
       return withAdminCors(await adminEmergencyLogoutNatively(request, env), request, env);
+    }
+
+    if (route.nativeAdminEmergencyControlStatus) {
+      return withAdminCors(
+        await adminEmergencyControlStatusNatively(request, env),
+        request,
+        env,
+      );
+    }
+
+    if (route.nativeAdminEmergencyRotate) {
+      return withAdminCors(
+        await adminEmergencyRotateNatively(request, env),
+        request,
+        env,
+      );
+    }
+
+    if (route.nativeAdminEmergencyDisable) {
+      return withAdminCors(
+        await adminEmergencyDisableNatively(request, env),
+        request,
+        env,
+      );
     }
 
     if (route.nativeAdminBootstrapStatus) {
