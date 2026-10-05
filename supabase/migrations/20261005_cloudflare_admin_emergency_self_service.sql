@@ -784,7 +784,7 @@ RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
-AS $
+AS $$
 DECLARE
   v_now TIMESTAMPTZ := pg_catalog.clock_timestamp();
   v_config RECORD;
@@ -799,25 +799,7 @@ BEGIN
   END IF;
 
   IF p_token_sha256 IS NULL
-     OR p_token_sha256 !~ '^[0-9a-f]{64}  FROM PUBLIC, anon, service_role;
-REVOKE ALL ON FUNCTION public.cloudflare_admin_rotate_emergency_credential(TEXT)
-  FROM PUBLIC, anon, service_role;
-REVOKE ALL ON FUNCTION public.cloudflare_admin_disable_emergency_access()
-  FROM PUBLIC, anon, service_role;
-REVOKE ALL ON FUNCTION public.cloudflare_admin_emergency_login_v2(
-  TEXT, TEXT, TEXT, TEXT, TEXT
-) FROM PUBLIC, authenticated, service_role;
-
-GRANT EXECUTE ON FUNCTION public.cloudflare_admin_emergency_control_status()
-  TO authenticated;
-GRANT EXECUTE ON FUNCTION public.cloudflare_admin_rotate_emergency_credential(TEXT)
-  TO authenticated;
-GRANT EXECUTE ON FUNCTION public.cloudflare_admin_disable_emergency_access()
-  TO authenticated;
-GRANT EXECUTE ON FUNCTION public.cloudflare_admin_emergency_login_v2(
-  TEXT, TEXT, TEXT, TEXT, TEXT
-) TO anon;
- THEN
+     OR p_token_sha256 !~ '^[0-9a-f]{64}$' THEN
     RETURN jsonb_build_object(
       'ok', false,
       'code', 'UNAUTHENTICATED',
@@ -896,7 +878,7 @@ EXCEPTION
       'httpStatus', 503
     );
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.cloudflare_admin_emergency_control_status()
   FROM PUBLIC, anon, service_role;
