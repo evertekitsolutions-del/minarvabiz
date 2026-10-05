@@ -70,6 +70,7 @@ sql(
   "delete from public.license_admin_sessions where source='emergency';" +
   "delete from public.license_admin_login_backoff;" +
   "delete from public.license_api_rate_limits where bucket='admin-emergency-login';" +
+  "delete from license_private.admin_emergency_runtime_config;" +
   "delete from license_private.admin_emergency_credentials;" +
   "insert into license_private.edge_credentials (id,secret_sha256,active) values (" +
     literal("emergency-worker-e2e") + "," + literal(edgeHash) + ",true) " +
@@ -77,7 +78,10 @@ sql(
   "insert into license_private.admin_emergency_credentials " +
     "(slot,secret_sha256,active,created_at,valid_until) values " +
     "('current'," + literal(currentHash) + ",true,now(),null)," +
-    "('previous'," + literal(previousHash) + ",true,now(),now()+interval '1 hour');",
+    "('previous'," + literal(previousHash) + ",true,now(),now()+interval '1 hour');" +
+  "insert into license_private.admin_emergency_runtime_config " +
+    "(id,enabled,actor_email,display_name,source,updated_at) values (" +
+    "'primary',true," + literal(actorEmail) + "," + literal(actorName) + ",'manual',now());",
 );
 
 const baseEnv = {
@@ -225,6 +229,191 @@ assert.equal(me.data.identity.email, actorEmail);
 assert.equal(me.data.identity.role, "admin");
 assert.equal("sessionToken" in me.data, false);
 
+const directNoProof = await fetch(apiUrl + "/rest/v1/rpc/cloudflare_admin_me", {
+  method: "POST",
+  headers: {
+    apikey: publishableKey,
+    authorization: "Bearer " + publishableKey,
+    "content-type": "application/json",
+  },
+  body: "{}",
+});
+assert.equal(directNoProof.status, 200);
+const directNoProofData = await directNoProof.json();
+assert.equal(directNoProofData.ok, false);
+assert.equal(directNoProofData.code, "UNAUTHENTICATED");
+
+const directTokenOnly = await fetch(apiUrl + "/rest/v1/rpc/cloudflare_admin_me", {
+  method: "POST",
+  headers: {
+    apikey: publishableKey,
+    authorization: "Bearer " + publishableKey,
+    "content-type": "application/json",
+    "x-minarva-emergency-token-sha256": currentTokenHash,
+  },
+  body: "{}",
+});
+assert.equal(directTokenOnly.status, 200);
+const directTokenOnlyData = await directTokenOnly.json();
+assert.equal(directTokenOnlyData.ok, false);
+assert.equal(directTokenOnlyData.code, "UNAUTHENTICATED");
+
+const generalMe = await workerJson("/api/admin/me", { token: currentToken });
+assert.equal(generalMe.status, 200, JSON.stringify(generalMe.data));
+assert.equal(generalMe.data.ok, true);
+assert.equal(generalMe.data.identity.email, actorEmail);
+assert.equal(generalMe.data.identity.role, "admin");
+assert.equal(generalMe.data.identity.source, "emergency");
+assert.equal(generalMe.headers.get("x-minarva-admin-data"), "supabase-emergency-rpc");
+
+const generalBadOrigin = await workerJson("/api/admin/licenses", {
+  token: currentToken,
+  origin: "https://evil.example.test",
+});
+assert.equal(generalBadOrigin.status, 403);
+assert.equal(generalBadOrigin.data.code, "ORIGIN_NOT_ALLOWED");
+
+const generalDisabled = await workerJson("/api/admin/licenses", {
+  token: currentToken,
+  env: { LICENSE_ADMIN_EMERGENCY_LOGIN_ENABLED: "false" },
+});
+assert.equal(generalDisabled.status, 401);
+assert.equal(generalDisabled.data.code, "UNAUTHENTICATED");
+
+const beforeLicenses = await workerJson("/api/admin/licenses", { token: currentToken });
+assert.equal(beforeLicenses.status, 200, JSON.stringify(beforeLicenses.data));
+assert.equal(beforeLicenses.data.ok, true);
+assert.ok(Array.isArray(beforeLicenses.data.licenses));
+
+const issued = await workerJson("/api/admin/licenses", {
+  method: "POST",
+  token: currentToken,
+  body: {
+    customerName: "Emergency Authority Customer",
+    plan: "professional",
+    edition: "hybrid",
+    activationLimit: 2,
+  },
+});
+assert.equal(issued.status, 200, JSON.stringify(issued.data));
+assert.equal(issued.data.ok, true);
+assert.match(String(issued.data.token || ""), /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+const issuedLicenseId = String(issued.data.license?.licenseId || "");
+assert.ok(issuedLicenseId.length >= 10);
+
+const afterLicenses = await workerJson("/api/admin/licenses", { token: currentToken });
+assert.equal(afterLicenses.status, 200, JSON.stringify(afterLicenses.data));
+assert.ok(
+  afterLicenses.data.licenses.some((row) => String(row?.license_id || "") === issuedLicenseId),
+);
+
+const suspended = await workerJson("/api/admin/licenses/status", {
+  method: "PATCH",
+  token: currentToken,
+  body: { licenseId: issuedLicenseId, status: "suspended" },
+});
+assert.equal(suspended.status, 200, JSON.stringify(suspended.data));
+assert.equal(suspended.data.ok, true);
+
+const reactivated = await workerJson("/api/admin/licenses/status", {
+  method: "PATCH",
+  token: currentToken,
+  body: { licenseId: issuedLicenseId, status: "active" },
+});
+assert.equal(reactivated.status, 200, JSON.stringify(reactivated.data));
+assert.equal(reactivated.data.ok, true);
+
+const offline = await workerJson("/api/admin/licenses/offline-activation", {
+  method: "POST",
+  token: currentToken,
+  body: { licenseId: issuedLicenseId, deviceId: "a".repeat(64) },
+});
+assert.equal(offline.status, 200, JSON.stringify(offline.data));
+assert.equal(offline.data.ok, true);
+assert.match(String(offline.data.filename || ""), /\.lic$/);
+assert.ok(String(offline.data.content || "").includes(issuedLicenseId));
+
+const supportId = "11111111-1111-4111-8111-111111111111";
+sql(
+  "insert into public.support_requests (id,request_type,status,priority,title,description) values (" +
+    literal(supportId) + "::uuid,'bug','new','normal','Emergency parity test','Emergency parity request')" +
+    " on conflict (id) do update set status='new',assigned_to=null,admin_notes=null,updated_at=now();",
+);
+
+const support = await workerJson("/api/admin/support", { token: currentToken });
+assert.equal(support.status, 200, JSON.stringify(support.data));
+assert.equal(support.data.ok, true);
+assert.ok(support.data.requests.some((row) => String(row?.id || "") === supportId));
+
+const supportUpdated = await workerJson("/api/admin/support", {
+  method: "PATCH",
+  token: currentToken,
+  body: {
+    id: supportId,
+    status: "in_review",
+    assignedTo: actorEmail,
+    adminNotes: "Emergency bearer parity verified.",
+  },
+});
+assert.equal(supportUpdated.status, 200, JSON.stringify(supportUpdated.data));
+assert.equal(supportUpdated.data.ok, true);
+
+const provisionEmail = "emergency-worker-provision@example.test";
+const provisioned = await workerJson("/api/admin/customers/provision", {
+  method: "POST",
+  token: currentToken,
+  body: {
+    shopName: "Emergency Worker Shop",
+    adminName: "Emergency Customer Admin",
+    email: provisionEmail,
+  },
+});
+assert.equal(
+  provisioned.status,
+  200,
+  JSON.stringify({
+    data: provisioned.data,
+    stage: provisioned.headers.get("x-minarva-admin-upstream-stage"),
+    upstreamStatus: provisioned.headers.get("x-minarva-admin-upstream-status"),
+    upstreamCode: provisioned.headers.get("x-minarva-admin-upstream-code"),
+  }),
+);
+assert.equal(provisioned.data.ok, true);
+assert.equal(provisioned.data.email, provisionEmail);
+assert.match(String(provisioned.data.userId || ""), /^[0-9a-f-]{36}$/i);
+assert.match(String(provisioned.data.orgId || ""), /^[0-9a-f-]{36}$/i);
+
+const emergencySessionId = sql(
+  "select id::text from public.license_admin_sessions where edge_token_sha256=" +
+    literal(currentTokenHash) + " limit 1;",
+);
+assert.match(emergencySessionId, /^[0-9a-f-]{36}$/i);
+
+const parityAudit = JSON.parse(
+  sql(
+    "select json_build_object(" +
+      "'wrong_source',(select count(*) from public.license_admin_audit_log where session_id=" +
+        literal(emergencySessionId) + "::uuid and source<>'emergency')," +
+      "'license_issue',(select count(*) from public.license_admin_audit_log where session_id=" +
+        literal(emergencySessionId) + "::uuid and source='emergency' and action='license.issue')," +
+      "'license_status',(select count(*) from public.license_admin_audit_log where session_id=" +
+        literal(emergencySessionId) + "::uuid and source='emergency' and action='license.status_change')," +
+      "'offline',(select count(*) from public.license_admin_audit_log where session_id=" +
+        literal(emergencySessionId) + "::uuid and source='emergency' and action='license.offline_activate')," +
+      "'support',(select count(*) from public.license_admin_audit_log where session_id=" +
+        literal(emergencySessionId) + "::uuid and source='emergency' and action='support.request.update')," +
+      "'provision',(select count(*) from public.license_admin_audit_log where session_id=" +
+        literal(emergencySessionId) + "::uuid and source='emergency' and action='online_customer.provision')" +
+    ")::text;",
+  ),
+);
+assert.equal(Number(parityAudit.wrong_source), 0);
+assert.equal(Number(parityAudit.license_issue), 1);
+assert.ok(Number(parityAudit.license_status) >= 2);
+assert.equal(Number(parityAudit.offline), 1);
+assert.equal(Number(parityAudit.support), 1);
+assert.ok(Number(parityAudit.provision) >= 2);
+
 const meBadOrigin = await workerJson("/api/admin/emergency/me", {
   token: currentToken,
   origin: "https://evil.example.test",
@@ -246,6 +435,10 @@ assert.deepEqual(logout.data, { ok: true });
 const afterLogout = await workerJson("/api/admin/emergency/me", { token: currentToken });
 assert.equal(afterLogout.status, 401);
 assert.equal(afterLogout.data.code, "UNAUTHENTICATED");
+
+const generalAfterLogout = await workerJson("/api/admin/me", { token: currentToken });
+assert.equal(generalAfterLogout.status, 401);
+assert.equal(generalAfterLogout.data.code, "UNAUTHENTICATED");
 
 const previousLogin = await workerJson("/api/admin/emergency/login", {
   method: "POST",
@@ -324,5 +517,5 @@ const oversized = await worker.fetch(
 assert.equal(oversized.status, 413);
 
 console.log(
-  "Cloudflare emergency Worker E2E PASS: strict origin -> disabled/config status -> edge-only plaintext hashing -> backoff/rate -> current/previous -> hashed revocable bearer session -> me/logout -> bypass resistance.",
+  "Cloudflare emergency Worker E2E PASS: strict origin -> login/backoff/rotation -> dual business authority -> license/support/provision parity -> emergency audit context -> revocation/bypass resistance.",
 );

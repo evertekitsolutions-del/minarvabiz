@@ -1131,41 +1131,130 @@ async function adminEmergencyLogoutNatively(request, env) {
   );
 }
 
-async function adminAuthenticatedRpc(request, env, rpcName, rpcBody = {}) {
+async function adminRpcAuthContext(request, env) {
   const authorization = String(request.headers.get("authorization") || "").trim();
   if (!authorization.startsWith("Bearer ")) {
-    return json(
-      { ok: false, code: "UNAUTHENTICATED" },
-      401,
-      { "x-minarva-admin-backend": "cloudflare-native" },
-    );
+    return {
+      ok: false,
+      response: json(
+        { ok: false, code: "UNAUTHENTICATED" },
+        401,
+        { "x-minarva-admin-backend": "cloudflare-native" },
+      ),
+    };
   }
 
-  const accessToken = authorization.slice("Bearer ".length).trim();
-  if (accessToken.length < 40 || accessToken.length > 16384 || accessToken.split(".").length !== 3) {
-    return json(
-      { ok: false, code: "UNAUTHENTICATED" },
-      401,
-      { "x-minarva-admin-backend": "cloudflare-native" },
-    );
-  }
-
+  const token = authorization.slice("Bearer ".length).trim();
   const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
   const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
   if (!apiOrigin || !publishableKey) {
-    return json(
-      { ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" },
-      503,
-      { "x-minarva-admin-backend": "cloudflare-native" },
-    );
+    return {
+      ok: false,
+      response: json(
+        { ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" },
+        503,
+        { "x-minarva-admin-backend": "cloudflare-native" },
+      ),
+    };
   }
 
-  try {
-    const response = await fetch(`${apiOrigin}/rest/v1/rpc/${rpcName}`, {
-      method: "POST",
+  if (
+    token.length >= 40 &&
+    token.length <= 16384 &&
+    token.split(".").length === 3
+  ) {
+    return {
+      ok: true,
+      mode: "named",
+      apiOrigin,
+      publishableKey,
       headers: {
         apikey: publishableKey,
-        authorization: `Bearer ${accessToken}`,
+        authorization: `Bearer ${token}`,
+      },
+    };
+  }
+
+  const emergencyToken = emergencyBearerToken(request);
+  if (!emergencyToken) {
+    return {
+      ok: false,
+      response: json(
+        { ok: false, code: "UNAUTHENTICATED" },
+        401,
+        { "x-minarva-admin-backend": "cloudflare-native" },
+      ),
+    };
+  }
+
+  if (!adminRequestOriginAllowed(request, env)) {
+    return {
+      ok: false,
+      response: json(
+        { ok: false, code: "ORIGIN_NOT_ALLOWED" },
+        403,
+        { "x-minarva-admin-backend": "cloudflare-native" },
+      ),
+    };
+  }
+
+  const emergency = emergencyActorConfig(env);
+  if (!emergency.enabled) {
+    return {
+      ok: false,
+      response: json(
+        { ok: false, code: "UNAUTHENTICATED" },
+        401,
+        { "x-minarva-admin-backend": "cloudflare-native" },
+      ),
+    };
+  }
+  if (!emergency.actorConfigured) {
+    return {
+      ok: false,
+      response: json(
+        { ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" },
+        503,
+        { "x-minarva-admin-backend": "cloudflare-native" },
+      ),
+    };
+  }
+
+  const edgeSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
+  if (edgeSecret.length < 32) {
+    return {
+      ok: false,
+      response: json(
+        { ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" },
+        503,
+        { "x-minarva-admin-backend": "cloudflare-native" },
+      ),
+    };
+  }
+
+  return {
+    ok: true,
+    mode: "emergency",
+    apiOrigin,
+    publishableKey,
+    headers: {
+      apikey: publishableKey,
+      authorization: `Bearer ${publishableKey}`,
+      "x-minarva-edge-secret": edgeSecret,
+      "x-minarva-emergency-token-sha256": await sha256Hex(emergencyToken),
+    },
+  };
+}
+
+async function adminAuthenticatedRpc(request, env, rpcName, rpcBody = {}) {
+  const auth = await adminRpcAuthContext(request, env);
+  if (!auth.ok) return auth.response;
+
+  try {
+    const response = await fetch(`${auth.apiOrigin}/rest/v1/rpc/${rpcName}`, {
+      method: "POST",
+      headers: {
+        ...auth.headers,
         "content-type": "application/json",
         accept: "application/json",
       },
@@ -1212,7 +1301,10 @@ async function adminAuthenticatedRpc(request, env, rpcName, rpcBody = {}) {
     if (output.ok === true) {
       return json(output, explicitStatus || 200, {
         "x-minarva-admin-backend": "cloudflare-native",
-        "x-minarva-admin-data": "supabase-authenticated-rpc",
+        "x-minarva-admin-data":
+          auth.mode === "emergency"
+            ? "supabase-emergency-rpc"
+            : "supabase-authenticated-rpc",
       });
     }
 
@@ -1762,20 +1854,6 @@ function parseAdminOfflineActivationBody(bytes) {
 }
 
 async function adminOfflineActivationNatively(request, env, route) {
-  const authorization = String(request.headers.get("authorization") || "").trim();
-  if (!authorization.startsWith("Bearer ")) {
-    return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
-      "x-minarva-admin-backend": "cloudflare-native",
-    });
-  }
-
-  const accessToken = authorization.slice("Bearer ".length).trim();
-  if (accessToken.length < 40 || accessToken.length > 16384 || accessToken.split(".").length !== 3) {
-    return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
-      "x-minarva-admin-backend": "cloudflare-native",
-    });
-  }
-
   const contentType = request.headers.get("content-type") || "";
   if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
     return json({ ok: false, code: "UNSUPPORTED_MEDIA_TYPE" }, 415, {
@@ -1798,9 +1876,10 @@ async function adminOfflineActivationNatively(request, env, route) {
   }
 
   const authority = signingAuthority(env);
-  const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
-  const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
-  if (!authority || !apiOrigin || !publishableKey) {
+  const adminAuth = await adminRpcAuthContext(request, env);
+  if (!adminAuth.ok) return adminAuth.response;
+  const apiOrigin = adminAuth.apiOrigin;
+  if (!authority) {
     return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
       "x-minarva-admin-backend": "cloudflare-native",
     });
@@ -1810,8 +1889,7 @@ async function adminOfflineActivationNatively(request, env, route) {
     const response = await fetch(`${apiOrigin}/rest/v1/rpc/cloudflare_admin_prepare_offline_activation`, {
       method: "POST",
       headers: {
-        apikey: publishableKey,
-        authorization: `Bearer ${accessToken}`,
+        ...adminAuth.headers,
         "content-type": "application/json",
         accept: "application/json",
       },
@@ -1904,7 +1982,10 @@ async function adminOfflineActivationNatively(request, env, route) {
       activationId,
     }, 200, {
       "x-minarva-admin-backend": "cloudflare-native",
-      "x-minarva-admin-data": "supabase-authenticated-rpc",
+      "x-minarva-admin-data":
+        adminAuth.mode === "emergency"
+          ? "supabase-emergency-rpc"
+          : "supabase-authenticated-rpc",
       "x-minarva-license-authority": authority.publicKeyHex,
     });
   } catch {
@@ -1998,12 +2079,11 @@ function onlineAppOrigin(env) {
   return allowedOrigin(env.MINARVA_ONLINE_APP_URL || DEFAULT_ONLINE_APP_URL);
 }
 
-async function fetchAdminProvisionRpc(apiOrigin, publishableKey, accessToken, rpcName, rpcBody) {
+async function fetchAdminProvisionRpc(apiOrigin, authHeaders, rpcName, rpcBody) {
   const response = await fetch(`${apiOrigin}/rest/v1/rpc/${rpcName}`, {
     method: "POST",
     headers: {
-      apikey: publishableKey,
-      authorization: `Bearer ${accessToken}`,
+      ...authHeaders,
       "content-type": "application/json",
       accept: "application/json",
     },
@@ -2029,20 +2109,6 @@ function adminProvisionStatus(data, fallback = 503) {
 }
 
 async function adminCustomerProvisionNatively(request, env, route) {
-  const authorization = String(request.headers.get("authorization") || "").trim();
-  if (!authorization.startsWith("Bearer ")) {
-    return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
-      "x-minarva-admin-backend": "cloudflare-native",
-    });
-  }
-
-  const accessToken = authorization.slice("Bearer ".length).trim();
-  if (accessToken.length < 40 || accessToken.length > 16384 || accessToken.split(".").length !== 3) {
-    return json({ ok: false, code: "UNAUTHENTICATED" }, 401, {
-      "x-minarva-admin-backend": "cloudflare-native",
-    });
-  }
-
   const contentType = request.headers.get("content-type") || "";
   if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
     return json({ ok: false, code: "UNSUPPORTED_MEDIA_TYPE" }, 415, {
@@ -2064,10 +2130,12 @@ async function adminCustomerProvisionNatively(request, env, route) {
     });
   }
 
-  const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
-  const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
+  const adminAuth = await adminRpcAuthContext(request, env);
+  if (!adminAuth.ok) return adminAuth.response;
+  const apiOrigin = adminAuth.apiOrigin;
+  const publishableKey = adminAuth.publishableKey;
   const onlineOrigin = onlineAppOrigin(env);
-  if (!apiOrigin || !publishableKey || !onlineOrigin) {
+  if (!onlineOrigin) {
     return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
       "x-minarva-admin-backend": "cloudflare-native",
     });
@@ -2078,8 +2146,7 @@ async function adminCustomerProvisionNatively(request, env, route) {
   try {
     const preflight = await fetchAdminProvisionRpc(
       apiOrigin,
-      publishableKey,
-      accessToken,
+      adminAuth.headers,
       "cloudflare_admin_preflight_customer_provision",
       {
         p_email: parsed.email,
@@ -2096,6 +2163,8 @@ async function adminCustomerProvisionNatively(request, env, route) {
     if (!preflight.response.ok || !preflight.data || typeof preflight.data !== "object" || Array.isArray(preflight.data)) {
       return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
         "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-upstream-stage": "customer-provision-preflight",
+        "x-minarva-admin-upstream-status": String(preflight.response.status),
       });
     }
     if (preflight.data.ok !== true) {
@@ -2103,7 +2172,10 @@ async function adminCustomerProvisionNatively(request, env, route) {
       delete output.httpStatus;
       return json(output, adminProvisionStatus(preflight.data), {
         "x-minarva-admin-backend": "cloudflare-native",
-        "x-minarva-admin-data": "supabase-authenticated-rpc",
+        "x-minarva-admin-data":
+        adminAuth.mode === "emergency"
+          ? "supabase-emergency-rpc"
+          : "supabase-authenticated-rpc",
       });
     }
 
@@ -2143,15 +2215,14 @@ async function adminCustomerProvisionNatively(request, env, route) {
 
     const finalized = await fetchAdminProvisionRpc(
       apiOrigin,
-      publishableKey,
-      accessToken,
+      adminAuth.headers,
       "cloudflare_admin_finalize_customer_provision",
       {
         p_email: parsed.email,
         p_shop_name: parsed.shopName,
         p_admin_name: parsed.adminName,
         p_redirect_to: redirectTo,
-        p_upstream_error: upstreamError,
+        ...(upstreamError ? { p_upstream_error: upstreamError } : {}),
       },
     );
 
@@ -2161,8 +2232,15 @@ async function adminCustomerProvisionNatively(request, env, route) {
       });
     }
     if (!finalized.response.ok || !finalized.data || typeof finalized.data !== "object" || Array.isArray(finalized.data)) {
+      const upstreamCode =
+        typeof finalized.data?.code === "string"
+          ? finalized.data.code.slice(0, 80)
+          : "";
       return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
         "x-minarva-admin-backend": "cloudflare-native",
+        "x-minarva-admin-upstream-stage": "customer-provision-finalize",
+        "x-minarva-admin-upstream-status": String(finalized.response.status),
+        ...(upstreamCode ? { "x-minarva-admin-upstream-code": upstreamCode } : {}),
       });
     }
 
@@ -2170,7 +2248,10 @@ async function adminCustomerProvisionNatively(request, env, route) {
     delete output.httpStatus;
     return json(output, adminProvisionStatus(finalized.data, output.ok === true ? 200 : 503), {
       "x-minarva-admin-backend": "cloudflare-native",
-      "x-minarva-admin-data": "supabase-authenticated-rpc",
+      "x-minarva-admin-data":
+        adminAuth.mode === "emergency"
+          ? "supabase-emergency-rpc"
+          : "supabase-authenticated-rpc",
       "x-minarva-customer-provisioning": "supabase-magic-link",
     });
   } catch {
