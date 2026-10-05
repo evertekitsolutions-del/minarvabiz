@@ -10,7 +10,7 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
-AS $
+AS $$
 BEGIN
   IF COALESCE(NEW.raw_app_meta_data ->> 'minarva_license_admin_bootstrap', '') = 'true' THEN
     NEW.raw_user_meta_data :=
@@ -21,7 +21,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$;
+$$;
 
 REVOKE ALL ON FUNCTION private.sanitize_license_admin_bootstrap_user_metadata()
   FROM PUBLIC, anon, authenticated, service_role;
