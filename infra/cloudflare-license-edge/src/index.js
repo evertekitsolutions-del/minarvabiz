@@ -2232,10 +2232,15 @@ async function adminCustomerProvisionNatively(request, env, route) {
       });
     }
     if (!finalized.response.ok || !finalized.data || typeof finalized.data !== "object" || Array.isArray(finalized.data)) {
+      const upstreamCode =
+        typeof finalized.data?.code === "string"
+          ? finalized.data.code.slice(0, 80)
+          : "";
       return json({ ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE" }, 503, {
         "x-minarva-admin-backend": "cloudflare-native",
         "x-minarva-admin-upstream-stage": "customer-provision-finalize",
         "x-minarva-admin-upstream-status": String(finalized.response.status),
+        ...(upstreamCode ? { "x-minarva-admin-upstream-code": upstreamCode } : {}),
       });
     }
 
