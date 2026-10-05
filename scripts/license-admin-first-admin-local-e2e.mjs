@@ -560,10 +560,10 @@ const serverActionsSource = fs.readFileSync(
   "apps/license-admin/src/app/actions.ts",
   "utf8",
 );
-assert.doesNotMatch(serverActionsSource, /export async function firstAdminBootstrapStatus\\b/);
-assert.doesNotMatch(serverActionsSource, /export async function bootstrapFirstLicenseAdmin\\b/);
-assert.match(serverActionsSource, /export async function loginEmergencyAdmin\\b/);
-assert.match(serverActionsSource, /export async function logoutEmergencyAdmin\\b/);
+assert.doesNotMatch(serverActionsSource, /export async function firstAdminBootstrapStatus\b/);
+assert.doesNotMatch(serverActionsSource, /export async function bootstrapFirstLicenseAdmin\b/);
+assert.match(serverActionsSource, /export async function loginEmergencyAdmin\b/);
+assert.match(serverActionsSource, /export async function logoutEmergencyAdmin\b/);
 
 console.log(
   "Fresh-instance first-admin E2E PASS: fresh registry -> guarded reservation/anti-theft -> Cloudflare random credential -> confirmation -> mailbox-owned password -> TOTP AAL2 -> one-time claim -> admin/me -> normal customer tenant bootstrap.",
