@@ -88,23 +88,21 @@ Recent Cloudflare/admin backend work does not by itself require a new Windows re
 
 ## 5. Latest verified development state
 
-Fresh-instance first-admin verification checkpoint (PR #238 on top of merged PRs #236/#237):
+First-admin browser cutover, fresh-instance proof and privileged server-helper retirement are now merged:
 
-- authoritative merged `main` before PR #238: **`0a3cce3f40f8f619c74a3827e3c8753145f2f1ed`**
 - PR #236 merged the browser-native first-admin bootstrap cutover; merge commit: **`358dacd11f006298e0694bb4cae92c34ee39564e`**
-- PR #237 merged provider-neutral HTTPS / loopback-local Supabase origin portability for Cloudflare; merged `main`: **`0a3cce3f40f8f619c74a3827e3c8753145f2f1ed`**
-- PR #238 is the isolated fresh-instance proof and migration-history recovery milestone; it must merge only after its final-head normal gates are green
-- verified pre-checkpoint PR #238 head **`19346f6a1a227ada9ac910159651c0f652193ae5`** passed the dedicated **First Admin Fresh Instance E2E**
-- that E2E replayed **65 repository SQL migrations** transactionally on a brand-new official Supabase local stack and then passed the complete first-admin path
+- PR #237 merged provider-neutral HTTPS / loopback-local Supabase origin portability for Cloudflare; merge commit: **`0a3cce3f40f8f619c74a3827e3c8753145f2f1ed`**
+- PR #238 merged the isolated fresh-instance proof and migration-history recovery milestone; merge commit: **`420638c824887bfa9a3b4537d881a87297fb540e`**
+- PR #238 final tested head **`d9068071e6786ef534d8304ef1cf597bf7793fe0`** passed all normal gates; the dedicated fresh-instance workflow replayed **65 repository SQL migrations** transactionally on a brand-new official Supabase local stack and passed the complete first-admin path
 - the proof covers: empty admin/Auth state, bootstrap status, invalid/wrong-email rejection, reservation anti-rotation, reserved-email anti-theft, Cloudflare random unknown initial credential, tenant-bootstrap exclusion, mailbox confirmation, mailbox-owned password setup, AAL1 claim rejection, real TOTP enrollment/challenge/verification, AAL2 claim, `/api/admin/me`, second-claim closure, and post-bootstrap normal customer org/profile/membership/HQ creation
-- the E2E also verifies the normal License Admin UI uses the browser-native bootstrap module and does not import the retained privileged server bootstrap actions
 - no production Admin identity was reset or deleted and no production data was used to manufacture an open-registry state
 - no paid dependency or new Minarva runtime dependency was introduced; the E2E uses official Supabase CLI **2.119.0** and immutable-pinned official `supabase/setup-cli` **v3.0.1**
 - fresh replay exposed repository migration-history drift; production migration history was used read-only to restore the missing applied `20260911_rls_security_hardening`, `20260911_rls_policy_cleanup`, and `20260911_performance_cleanup` SQL, restore `006_integrity_indexes.sql` to the SQL actually applied in production, and order tenant bootstrap before the later policy alignment that depends on it
-- the previous synthetic outbox compatibility shim was removed after the exact production-applied RLS cleanup migration that adds `outbox_events.org_id` was restored
-- fresh GoTrue signup also proved that transient bootstrap routing metadata could be re-persisted after the original BEFORE INSERT guard; corrective migration `20261005_license_admin_bootstrap_metadata_sanitization.sql` now enforces the trusted bootstrap metadata invariant across Auth user inserts/updates and strips the transient carrier from Auth identity metadata
-- the dedicated E2E asserts both `auth.users.raw_user_meta_data` and `auth.identities.identity_data` do not retain `account_type` or `bootstrap_token`
-- stable Windows release remains **v1.0.15**; this control-plane verification milestone does not itself require a new Windows release
+- corrective migration `20261005_license_admin_bootstrap_metadata_sanitization.sql` enforces the trusted bootstrap metadata invariant across Auth user inserts/updates and strips transient `account_type` / `bootstrap_token` carriers from both Auth user and identity metadata
+- PR #239 retired the obsolete privileged normal first-admin Next/Render server helpers `firstAdminBootstrapStatus` and `bootstrapFirstLicenseAdmin`, plus private support code used only by those helpers; merge commit: **`59b2cee66461b0928722bc04c2e5c9cee3869dc7`**
+- PR #239 final tested head **`4c18156bfcbde0c8a7c281e054c48083270966a4`** passed **First Admin Fresh Instance E2E**, CI, Windows Feature Click Smoke, Windows Deep Installed Smoke, Licensing Smoke, SAST, Dependency Security, SBOM/License Policy, Coverage Ratchet, Secret Scan, Staging Security + Performance and Final Release Audit; Claude review remained skipped by governance/config
+- the post-retirement fresh-instance E2E explicitly proves the normal bootstrap UI has no server-actions dependency, the retired privileged first-admin exports are absent, and `loginEmergencyAdmin` / `logoutEmergencyAdmin` remain present
+- stable Windows release remains **v1.0.15**; these control-plane milestones do not themselves require a new Windows release
 
 Current normal named-admin behavior:
 
@@ -114,10 +112,10 @@ Current normal named-admin behavior:
 - verified AAL2 session is kept only in browser `sessionStorage` for the current tab/session
 - no refresh token is persisted in this phase; expiry fails closed and requires sign-in again
 - normal identity, license registry, support inbox, license issue, status changes, offline activation, support updates and customer provisioning call Cloudflare directly
-- normal logout clears the browser session and calls Supabase local logout directly; it does **not** call the legacy server logout action
+- normal logout clears the browser session and calls Supabase local logout directly; it does **not** call the emergency server logout action
 - browser-native first-admin setup is Cloudflare/Postgres + Supabase Auth: status -> reserved signup -> email ownership -> mailbox-owned password -> TOTP AAL2 -> first-admin claim -> `/api/admin/me`
-- legacy privileged first-admin server helpers are no longer required by the normal UI and are retained only until PR #238 is merged and the next retirement milestone removes them
-- emergency break-glass remains a separate transitional server-side capability and must not be deleted as collateral damage
+- the obsolete privileged normal first-admin server helpers are removed from `main`
+- emergency break-glass remains a separate transitional server-side capability and must be preserved until a verified Cloudflare/self-host portable replacement exists
 
 ## 6. Cloudflare License/Admin state
 
@@ -172,14 +170,15 @@ Maintain PostgreSQL portability for future self-hosting.
 
 Customer-facing license/update traffic is Render-free.
 
-Normal named-admin authentication, business operations, page hydration, logout and browser-native first-admin bootstrap no longer require the legacy Render/Next privileged path. PR #238 has now established the safe fresh-instance proof for the open-registry bootstrap path without resetting production state.
+Normal named-admin authentication, business operations, page hydration, logout and browser-native first-admin bootstrap no longer require the legacy Render/Next privileged path. Fresh-instance regression proof now exists and the obsolete privileged normal first-admin server helpers have been removed.
 
 Remaining Render/Next migration scope is intentionally narrower:
 
-- retire the retained privileged normal first-admin helper functions now that fresh-instance proof exists;
-- preserve and separately redesign/verify emergency break-glass for Cloudflare/self-host portability rather than deleting emergency access;
-- verify a Cloudflare-compatible License Admin UI hosting path while preserving named-admin, bootstrap and emergency behavior;
-- remove transitional Render configuration/service only after those replacement paths are verified.
+- preserve and redesign/verify emergency break-glass for Cloudflare/self-host portability rather than deleting emergency access
+- current emergency access still depends on Next server cookies, Node-side HMAC/session code, server-only emergency/session/rate-limit secrets, and privileged Supabase database access for session registry, audit and rate/backoff state
+- preserve the existing emergency security properties during migration: explicit opt-in, named emergency actor, short revocable session, rate limiting/backoff, audit trail, current/previous secret rotation with bounded grace, and fail-closed database/session validation
+- verify a Cloudflare-compatible License Admin UI hosting path while preserving named-admin, bootstrap and emergency behavior
+- remove transitional Render configuration/service only after emergency replacement and UI hosting are verified
 
 Live production already contains an active License Admin identity. **Do not reset/delete production admin state for bootstrap testing.** The isolated fresh-instance harness is the authoritative open-registry regression test going forward.
 
@@ -284,17 +283,18 @@ Continue Render removal in small verified steps, without reducing emergency/admi
 
 Recommended next sequence:
 
-1. **Merge PR #238 only after all final-head required checks are green, then remove the retained privileged normal first-admin helpers (`firstAdminBootstrapStatus`, `bootstrapFirstLicenseAdmin`) because the browser-native path now has a real fresh-instance E2E proof.** Preserve emergency break-glass.
-2. Re-run the dedicated fresh-instance E2E after helper retirement and prove the normal UI still has no server bootstrap dependency.
-3. Re-evaluate emergency break-glass design for Cloudflare/self-host portability. Preserve a real emergency path; do not delete the capability merely to remove Render.
-4. Verify a Cloudflare-compatible License Admin UI deployment path and migrate UI hosting while preserving all named-admin/bootstrap/emergency behavior.
-5. Only after all above paths are verified, remove Render configuration/service.
-6. Start Global Core audit + self-service Subscription/Entitlements foundation.
-7. Then Local-first Sync v2 / multi-branch correctness and formal Vyapar-parity gap audit.
-8. Establish Minarva Intelligence platform foundation before large-scale AI feature rollout.
-9. Continue capability-by-capability implementation from `docs/CAPABILITY_REGISTRY.md` without scope reduction.
-10. For substantial milestones, apply `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md`: automated evidence remains mandatory; independent AI reviewers are advisory and final decisions are based on verified repository/runtime evidence.
-11. When the governed Claude workflow is enabled, read and disposition Claude findings before final merge. Claude access stays read-only and must never receive production secrets.
+1. **Design and verify the emergency break-glass portability boundary.** Map the current Next/server dependencies and define a Cloudflare/self-host compatible contract that preserves the existing emergency capability instead of deleting it.
+2. Preserve all emergency invariants: disabled by default, named emergency actor, strong current/previous credential handling with bounded rotation grace, persistent rate limiting/backoff, short revocable sessions, complete audit logging, role=admin only, and fail-closed authorization.
+3. Implement the emergency authority migration in small PRs using provider-neutral HTTPS/PostgreSQL-compatible primitives where practical; no browser/service-role secret exposure and no new mandatory paid dependency.
+4. Add deterministic security tests and an isolated runtime/E2E path proving emergency login, session validation/revocation, audit, backoff and logout before retiring the legacy Next implementation.
+5. Verify a Cloudflare-compatible License Admin UI deployment path and migrate UI hosting while preserving all named-admin/bootstrap/emergency behavior.
+6. Only after all above paths are verified, remove transitional Render configuration/service.
+7. Start Global Core audit + self-service Subscription/Entitlements foundation.
+8. Then Local-first Sync v2 / multi-branch correctness and formal Vyapar-parity gap audit.
+9. Establish Minarva Intelligence platform foundation before large-scale AI feature rollout.
+10. Continue capability-by-capability implementation from `docs/CAPABILITY_REGISTRY.md` without scope reduction.
+11. For substantial milestones, apply `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md`: automated evidence remains mandatory; independent AI reviewers are advisory and final decisions are based on verified repository/runtime evidence.
+12. When the governed Claude workflow is enabled, read and disposition Claude findings before final merge. Claude access stays read-only and must never receive production secrets.
 
 ## 16. Small-milestone rule
 
