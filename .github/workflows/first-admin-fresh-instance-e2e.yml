@@ -2,6 +2,17 @@ name: First Admin Fresh Instance E2E
 
 on:
   pull_request:
+    paths:
+      - ".github/workflows/first-admin-fresh-instance-e2e.yml"
+      - "infra/cloudflare-license-edge/**"
+      - "apps/license-admin/src/app/admin-panel/**"
+      - "apps/license-admin/src/app/actions.ts"
+      - "apps/license-admin/src/lib/**"
+      - "scripts/configure-first-admin-e2e-supabase.mjs"
+      - "scripts/license-admin-first-admin-local-e2e.mjs"
+      - "scripts/replay-supabase-migrations-fresh.mjs"
+      - "supabase/MIGRATION_ORDER.txt"
+      - "supabase/migrations/**"
   workflow_dispatch:
 
 permissions:
