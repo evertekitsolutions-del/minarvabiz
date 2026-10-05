@@ -110,6 +110,23 @@ const failed = await rpc("cloudflare_admin_emergency_record_failure", {
   p_actor_email: actorEmail,
   p_display_name: displayName,
 });
+if (failed.ok !== true) {
+  const actorId = "emergency:" + digest(actorEmail).slice(0, 32);
+  try {
+    sql(
+      "begin;" +
+        "select * from public.record_license_admin_login_failure(" + literal(backoffKey) + ");" +
+        "insert into public.license_admin_audit_log (" +
+        "id,session_id,actor_id,actor_email,display_name,actor_role,source,action,outcome,target_type,target_id,details" +
+        ") values (" +
+        "gen_random_uuid(),null," + literal(actorId) + "," + literal(actorEmail) + "," +
+        literal(displayName) + ",'admin','emergency','admin.emergency.login','denied'," +
+        "'license_admin_session',null,'{}'::jsonb);rollback;"
+    );
+  } catch {
+    // psql writes the root PostgreSQL error to inherited stderr.
+  }
+}
 assert.equal(failed.ok, true, JSON.stringify(failed));
 assert.equal(failed.allowed, false);
 assert.equal(failed.failureCount, 1);
