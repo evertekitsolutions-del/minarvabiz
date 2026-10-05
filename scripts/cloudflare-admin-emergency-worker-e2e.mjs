@@ -375,6 +375,7 @@ assert.equal(
     data: provisioned.data,
     stage: provisioned.headers.get("x-minarva-admin-upstream-stage"),
     upstreamStatus: provisioned.headers.get("x-minarva-admin-upstream-status"),
+    upstreamCode: provisioned.headers.get("x-minarva-admin-upstream-code"),
   }),
 );
 assert.equal(provisioned.data.ok, true);
