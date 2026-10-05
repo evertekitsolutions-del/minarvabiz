@@ -676,6 +676,28 @@ const disabledControl = await workerJson("/api/admin/emergency/disable", {
   body: {},
 });
 if (disabledControl.status !== 200) {
+  const directDisable = await fetch(
+    apiUrl + "/rest/v1/rpc/cloudflare_admin_disable_emergency_access",
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        apikey: publishableKey,
+        authorization: "Bearer " + aal2Token,
+        "content-type": "application/json",
+      },
+      body: "{}",
+      redirect: "manual",
+    },
+  );
+  const directDisableData = await directDisable.json().catch(() => null);
+  console.error(
+    "Emergency disable diagnostic:",
+    JSON.stringify({
+      status: directDisable.status,
+      data: directDisableData,
+    }),
+  );
   try {
     psqlScalar(
       "begin;" +
