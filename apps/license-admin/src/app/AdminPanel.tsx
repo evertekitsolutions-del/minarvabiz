@@ -19,7 +19,7 @@ import { OfflineActivationCard } from "./admin-panel/OfflineActivationCard";
 import { OnlineCustomerProvisionCard } from "./admin-panel/OnlineCustomerProvisionCard";
 import { SupportInboxSection } from "./admin-panel/SupportInboxSection";
 import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerProvisioning";
-import { useAdminAuthentication, type NamedAdminDashboard } from "./admin-panel/useAdminAuthentication";
+import { useAdminAuthentication, type BrowserAdminDashboard } from "./admin-panel/useAdminAuthentication";
 import {
   createBrowserOfflineActivation,
   issueBrowserLicense,
@@ -63,7 +63,7 @@ export default function AdminPanel({
   const [message, setMessage] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
 
-  const applyDashboard = React.useCallback((dashboard: NamedAdminDashboard) => {
+  const applyDashboard = React.useCallback((dashboard: BrowserAdminDashboard) => {
     setActiveIdentity(dashboard.identity);
     setLicenses(dashboard.licenses);
     setSupportRequests(dashboard.requests);
