@@ -455,7 +455,7 @@ EXCEPTION
       'diagnosticState', SQLSTATE
     );
 END;
-$;
+$$;
 
 -- Edge-facing safe status now reads PostgreSQL runtime ownership/configuration,
 -- removing the need for Cloudflare emergency actor/enable bindings.
