@@ -368,7 +368,15 @@ const provisioned = await workerJson("/api/admin/customers/provision", {
     email: provisionEmail,
   },
 });
-assert.equal(provisioned.status, 200, JSON.stringify(provisioned.data));
+assert.equal(
+  provisioned.status,
+  200,
+  JSON.stringify({
+    data: provisioned.data,
+    stage: provisioned.headers.get("x-minarva-admin-upstream-stage"),
+    upstreamStatus: provisioned.headers.get("x-minarva-admin-upstream-status"),
+  }),
+);
 assert.equal(provisioned.data.ok, true);
 assert.equal(provisioned.data.email, provisionEmail);
 assert.match(String(provisioned.data.userId || ""), /^[0-9a-f-]{36}$/i);
