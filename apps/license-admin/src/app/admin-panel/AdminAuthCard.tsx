@@ -154,7 +154,7 @@ export function AdminAuthCard(props: AdminAuthCardProps) {
                 <div className="mt-3 space-y-3">
                   <p className="text-xs text-slate-500">
                     Shared-secret access is disabled by default, requires a named emergency actor,
-                    and creates only a short revocable session.
+                    and creates only a short revocable Cloudflare session stored for this browser tab.
                   </p>
                   <input
                     type="password"
