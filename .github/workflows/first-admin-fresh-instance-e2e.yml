@@ -1,0 +1,74 @@
+name: First Admin Fresh Instance E2E
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/first-admin-fresh-instance-e2e.yml"
+      - "infra/cloudflare-license-edge/**"
+      - "apps/license-admin/src/app/admin-panel/**"
+      - "apps/license-admin/src/app/actions.ts"
+      - "apps/license-admin/src/lib/**"
+      - "scripts/configure-first-admin-e2e-supabase.mjs"
+      - "scripts/license-admin-first-admin-local-e2e.mjs"
+      - "scripts/replay-supabase-migrations-fresh.mjs"
+      - "supabase/MIGRATION_ORDER.txt"
+      - "supabase/migrations/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: first-admin-fresh-instance-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fresh-instance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.119.0
+      - name: Prepare isolated Supabase project
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase init --force
+          node scripts/configure-first-admin-e2e-supabase.mjs
+      - name: Start fresh Supabase system stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          mv supabase/migrations /tmp/minarva-project-migrations
+          mkdir -p supabase/migrations
+          supabase start
+          rm -rf supabase/migrations
+          mv /tmp/minarva-project-migrations supabase/migrations
+      - name: Replay repository SQL migrations transactionally
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v psql
+          node scripts/replay-supabase-migrations-fresh.mjs
+      - name: Verify first-admin bootstrap end to end
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v psql
+          node scripts/license-admin-first-admin-local-e2e.mjs
+      - name: Capture Supabase diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          supabase status -o json || true
+          docker ps -a || true
+      - name: Stop isolated Supabase stack
+        if: always()
+        shell: bash
+        run: supabase stop --no-backup || true

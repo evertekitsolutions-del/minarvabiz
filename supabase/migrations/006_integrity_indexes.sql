@@ -8,7 +8,6 @@ CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers (phone);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status);
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders (customer_id);
 CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments (customer_id);
-CREATE INDEX IF NOT EXISTS idx_outbox_status ON sync_queue (status) WHERE status = 'pending';
 
 -- Ensure RLS remains enabled on core tables (no-op if already)
 DO $$
