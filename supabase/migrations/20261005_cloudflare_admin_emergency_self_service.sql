@@ -776,6 +776,128 @@ EXCEPTION
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.cloudflare_admin_emergency_me(
+  p_edge_secret TEXT,
+  p_token_sha256 TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $
+DECLARE
+  v_now TIMESTAMPTZ := pg_catalog.clock_timestamp();
+  v_config RECORD;
+  v_session RECORD;
+BEGIN
+  IF NOT license_private.cloudflare_edge_secret_valid(p_edge_secret) THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'code', 'EMERGENCY_SERVICE_UNAVAILABLE',
+      'httpStatus', 503
+    );
+  END IF;
+
+  IF p_token_sha256 IS NULL
+     OR p_token_sha256 !~ '^[0-9a-f]{64}  FROM PUBLIC, anon, service_role;
+REVOKE ALL ON FUNCTION public.cloudflare_admin_rotate_emergency_credential(TEXT)
+  FROM PUBLIC, anon, service_role;
+REVOKE ALL ON FUNCTION public.cloudflare_admin_disable_emergency_access()
+  FROM PUBLIC, anon, service_role;
+REVOKE ALL ON FUNCTION public.cloudflare_admin_emergency_login_v2(
+  TEXT, TEXT, TEXT, TEXT, TEXT
+) FROM PUBLIC, authenticated, service_role;
+
+GRANT EXECUTE ON FUNCTION public.cloudflare_admin_emergency_control_status()
+  TO authenticated;
+GRANT EXECUTE ON FUNCTION public.cloudflare_admin_rotate_emergency_credential(TEXT)
+  TO authenticated;
+GRANT EXECUTE ON FUNCTION public.cloudflare_admin_disable_emergency_access()
+  TO authenticated;
+GRANT EXECUTE ON FUNCTION public.cloudflare_admin_emergency_login_v2(
+  TEXT, TEXT, TEXT, TEXT, TEXT
+) TO anon;
+ THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'code', 'UNAUTHENTICATED',
+      'httpStatus', 401
+    );
+  END IF;
+
+  SELECT
+    c.enabled,
+    lower(c.actor_email) AS actor_email,
+    c.display_name
+  INTO v_config
+  FROM license_private.admin_emergency_runtime_config c
+  WHERE c.id = 'primary'
+  LIMIT 1;
+
+  IF NOT FOUND OR v_config.enabled IS NOT TRUE THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'code', 'UNAUTHENTICATED',
+      'httpStatus', 401
+    );
+  END IF;
+
+  SELECT
+    s.id,
+    s.actor_id,
+    lower(s.actor_email) AS actor_email,
+    s.display_name,
+    s.actor_role,
+    s.source,
+    s.expires_at,
+    s.revoked_at
+  INTO v_session
+  FROM public.license_admin_sessions s
+  WHERE s.edge_token_sha256 = p_token_sha256
+    AND s.source = 'emergency'
+    AND s.auth_method = 'emergency'
+    AND s.actor_role = 'admin'
+  LIMIT 1;
+
+  IF NOT FOUND
+     OR v_session.revoked_at IS NOT NULL
+     OR v_session.expires_at <= v_now
+     OR v_session.actor_email <> v_config.actor_email
+     OR v_session.display_name <> v_config.display_name THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'code', 'UNAUTHENTICATED',
+      'httpStatus', 401
+    );
+  END IF;
+
+  UPDATE public.license_admin_sessions
+  SET last_seen_at = v_now
+  WHERE id = v_session.id;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'identity', jsonb_build_object(
+      'id', v_session.actor_id,
+      'email', v_session.actor_email,
+      'displayName', v_session.display_name,
+      'role', 'admin',
+      'source', 'emergency'
+    ),
+    'sessionId', v_session.id,
+    'expiresAt', v_session.expires_at,
+    'httpStatus', 200
+  );
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN jsonb_build_object(
+      'ok', false,
+      'code', 'EMERGENCY_SERVICE_UNAVAILABLE',
+      'httpStatus', 503
+    );
+END;
+$;
+
 REVOKE ALL ON FUNCTION public.cloudflare_admin_emergency_control_status()
   FROM PUBLIC, anon, service_role;
 REVOKE ALL ON FUNCTION public.cloudflare_admin_rotate_emergency_credential(TEXT)
