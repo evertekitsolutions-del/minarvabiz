@@ -14,7 +14,9 @@
 20260901_license_lifecycle.sql
 006_integrity_indexes.sql
 20260911_license_activation_atomicity.sql
-20260911_outbox_events_tenant_scope.sql
+20260911_rls_security_hardening.sql
+20260911_rls_policy_cleanup.sql
+20260911_performance_cleanup.sql
 20260911_production_hardening.sql
 20260915_operations_completion.sql
 20260915_operations_tenant_hardening.sql
