@@ -20,8 +20,8 @@
 20260915_operations_tenant_hardening.sql
 20260915_purchase_payment_method.sql
 20260915_align_phase4_phase5_columns.sql
-20260919_tenant_policy_alignment.sql
 20260916_tenant_bootstrap_and_org_defaults.sql
+20260919_tenant_policy_alignment.sql
 20260919_supplier_contact_fields.sql
 20260919_procurement_purchase_orders.sql
 20260919_goods_receipts.sql
