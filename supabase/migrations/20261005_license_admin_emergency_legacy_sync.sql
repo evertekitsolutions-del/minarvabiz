@@ -116,6 +116,12 @@ BEGIN
       )
     );
 
+  -- Free the new current digest first if it is still occupying the previous
+  -- rotation slot (for example during a deliberate rollback).
+  DELETE FROM license_private.admin_emergency_credentials
+  WHERE slot = 'previous'
+    AND secret_sha256 = p_current_sha256;
+
   INSERT INTO license_private.admin_emergency_credentials (
     slot,
     secret_sha256,
