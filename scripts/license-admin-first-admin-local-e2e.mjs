@@ -675,6 +675,29 @@ const disabledControl = await workerJson("/api/admin/emergency/disable", {
   token: aal2Token,
   body: {},
 });
+if (disabledControl.status !== 200) {
+  try {
+    psqlScalar(
+      "begin;" +
+      "delete from license_private.admin_emergency_credentials;" +
+      "insert into license_private.admin_emergency_runtime_config " +
+        "(id,enabled,actor_email,display_name,source,updated_at) values (" +
+        "'primary',false," + sqlLiteral(bootstrapEmail) + "," + sqlLiteral(bootstrapName) + ",'manual',now()) " +
+        "on conflict (id) do update set enabled=false,actor_email=excluded.actor_email," +
+        "display_name=excluded.display_name,source='manual',updated_at=now();" +
+      "update public.license_admin_sessions set revoked_at=now(),revoke_reason='emergency_disabled'," +
+        "last_seen_at=now() where source='emergency' and revoked_at is null;" +
+      "insert into public.license_admin_audit_log (" +
+        "id,session_id,actor_id,actor_email,display_name,actor_role,source,action,outcome,target_type,target_id,details" +
+        ") values (gen_random_uuid(),null," + sqlLiteral(userId) + "," + sqlLiteral(bootstrapEmail) + "," +
+        sqlLiteral(bootstrapName) + ",'admin','supabase','admin.emergency.disable','success'," +
+        "'emergency_authority','primary',jsonb_build_object('credentialsRemoved',true));" +
+      "rollback;"
+    );
+  } catch {
+    // psql writes the root database error to inherited stderr.
+  }
+}
 assert.equal(disabledControl.status, 200, JSON.stringify(disabledControl.data));
 assert.equal(disabledControl.data?.enabled, false);
 assert.equal(disabledControl.data?.currentConfigured, false);
