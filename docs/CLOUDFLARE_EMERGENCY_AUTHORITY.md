@@ -35,7 +35,7 @@ Primary business data and emergency audit/session state remain PostgreSQL-backed
 The private registry supports two slots:
 
 - `current`: active credential digest with no expiry;
-- `previous`: optional credential digest with an explicit grace expiry, bounded to at most 24 hours from creation.
+- `previous`: optional, distinct credential digest with an explicit grace expiry, bounded to at most 24 hours from creation. Rotation should replace this row rather than extend an old grace window.
 
 The future Worker cutover must synchronize the private digests with the currently configured emergency credential before traffic moves. The existing Next/Render emergency path remains authoritative until that migration and parity E2E are complete.
 
