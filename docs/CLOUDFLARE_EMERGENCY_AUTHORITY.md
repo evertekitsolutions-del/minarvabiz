@@ -30,18 +30,30 @@ The implementation uses PostgreSQL/Supabase primitives already present in Minarv
 
 Primary business data and emergency audit/session state remain PostgreSQL-backed rather than trapped in provider-specific storage.
 
-## Credential rotation
+## Credential rotation and self-service ownership
 
 The private registry supports two slots:
 
 - `current`: active credential digest with no expiry;
-- `previous`: optional, distinct credential digest with an explicit grace expiry, bounded to at most 24 hours from creation. Rotation should replace this row rather than extend an old grace window.
+- `previous`: optional, distinct credential digest with an explicit grace expiry, bounded to at most 24 hours from creation.
 
-The future Worker cutover must synchronize the private digests with the currently configured emergency credential before traffic moves. The existing Next/Render emergency path remains authoritative until that migration and parity E2E are complete.
+The current control-plane design no longer requires copying the transitional Render credential. An active named License Admin with TOTP AAL2 and role `admin` may call the Cloudflare emergency-control route to rotate emergency access. Cloudflare generates a 48-byte random credential, sends only its SHA-256 digest to PostgreSQL, and returns the plaintext credential exactly once to the authenticated browser.
+
+Self-service rotation:
+
+- makes the authenticated named admin the emergency actor;
+- marks runtime ownership as `manual`;
+- preserves the prior current digest for a fixed one-hour grace only;
+- revokes every existing emergency bearer session;
+- audits the rotation without writing either plaintext or digest to the audit log.
+
+Self-service disable deletes all emergency credential digests, marks runtime access disabled, revokes every active emergency session, and audits the action.
+
+Once runtime ownership is `manual`, the legacy Render startup synchronization trigger rejects any attempt to overwrite it. That makes the old Render secret irrelevant to the new authority and removes Render credential migration as a cutover prerequisite.
 
 ## Legacy zero-secret-exposure synchronization
 
-During the transitional Render phase, the existing server remains the source of the raw emergency credential environment variables. Minarva does not need to read, export, or copy those raw values into Cloudflare.
+During the transitional Render phase, the legacy startup sync remains available only as rollback compatibility **until manual self-service ownership is established**. Minarva does not need to read, export, or copy those raw values into Cloudflare.
 
 Before each License Admin production server start, `apps/license-admin/scripts/sync-emergency-authority.mjs`:
 
@@ -99,8 +111,9 @@ Fresh-instance Worker E2E covers:
 
 Emergency access must remain:
 
-- disabled by default at the edge configuration layer;
-- bound to a named emergency actor;
+- disabled by default in the PostgreSQL runtime authority;
+- enabled/rotated/disabled only by a named AAL2 administrator with role `admin`;
+- bound to that named administrator as the emergency actor;
 - protected by a strong current credential and optional bounded previous-credential grace;
 - protected by both coarse rate limiting and progressive backoff;
 - admin-role only;
