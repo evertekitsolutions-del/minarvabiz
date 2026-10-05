@@ -44,6 +44,8 @@ for (const retiredAction of [
   "cancelAdminMfa",
   "adoptCloudflareAdminSession",
   "logoutAdmin",
+  "firstAdminBootstrapStatus",
+  "bootstrapFirstLicenseAdmin",
 ]) {
   assert.doesNotMatch(actions, new RegExp(`export async function ${retiredAction}\\b`));
 }
