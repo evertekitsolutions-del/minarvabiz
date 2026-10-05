@@ -115,7 +115,12 @@ Current normal named-admin behavior:
 - normal logout clears the browser session and calls Supabase local logout directly; it does **not** call the emergency server logout action
 - browser-native first-admin setup is Cloudflare/Postgres + Supabase Auth: status -> reserved signup -> email ownership -> mailbox-owned password -> TOTP AAL2 -> first-admin claim -> `/api/admin/me`
 - the obsolete privileged normal first-admin server helpers are removed from `main`
-- emergency break-glass remains a separate transitional server-side capability and must be preserved until a verified Cloudflare/self-host portable replacement exists
+- PR #241 merged the additive Cloudflare/self-host portable emergency authority foundation; merge commit: **`a6057ebeecfddf8ed29cceb156c68717106dac33`**
+- PR #241 final tested head **`62fe84c26d3a312ca140489d158b8c820cab0e93`** passed the fresh-instance E2E plus all normal CI/security/Windows gates
+- the emergency foundation adds a private current/previous emergency credential SHA-256 registry, bounded previous-credential grace, persistent rate limiting/backoff, admin-only <=15 minute revocable emergency sessions, SHA-256-only session-token storage, and login/logout audit
+- the fresh-instance E2E exposed and additively fixed the historical `record_license_admin_login_failure()` PL/pgSQL column/output-name ambiguity; historical migration files remain unchanged
+- defense in depth is explicit: the generic edge RPC secret alone cannot mint an emergency admin session; a matching private emergency credential digest is also required
+- existing Next/Render emergency login/logout remains operational and must stay until the Worker/browser replacement is proven end to end
 
 ## 6. Cloudflare License/Admin state
 
@@ -174,9 +179,10 @@ Normal named-admin authentication, business operations, page hydration, logout a
 
 Remaining Render/Next migration scope is intentionally narrower:
 
-- preserve and redesign/verify emergency break-glass for Cloudflare/self-host portability rather than deleting emergency access
-- current emergency access still depends on Next server cookies, Node-side HMAC/session code, server-only emergency/session/rate-limit secrets, and privileged Supabase database access for session registry, audit and rate/backoff state
-- preserve the existing emergency security properties during migration: explicit opt-in, named emergency actor, short revocable session, rate limiting/backoff, audit trail, current/previous secret rotation with bounded grace, and fail-closed database/session validation
+- the PostgreSQL emergency authority foundation is now merged and fresh-instance verified
+- remaining emergency cutover work is Worker routes -> browser emergency-session cutover -> parity E2E -> legacy Next emergency helper retirement
+- current production emergency UI still depends on Next server cookies/actions until that replacement is proven
+- preserve the existing emergency security properties during migration: explicit opt-in, named emergency actor, short revocable session, rate limiting/backoff, audit trail, current/previous secret rotation with bounded grace, defense against edge-secret-only bypass, and fail-closed database/session validation
 - verify a Cloudflare-compatible License Admin UI hosting path while preserving named-admin, bootstrap and emergency behavior
 - remove transitional Render configuration/service only after emergency replacement and UI hosting are verified
 
@@ -283,18 +289,15 @@ Continue Render removal in small verified steps, without reducing emergency/admi
 
 Recommended next sequence:
 
-1. **Design and verify the emergency break-glass portability boundary.** Map the current Next/server dependencies and define a Cloudflare/self-host compatible contract that preserves the existing emergency capability instead of deleting it.
-2. Preserve all emergency invariants: disabled by default, named emergency actor, strong current/previous credential handling with bounded rotation grace, persistent rate limiting/backoff, short revocable sessions, complete audit logging, role=admin only, and fail-closed authorization.
-3. Implement the emergency authority migration in small PRs using provider-neutral HTTPS/PostgreSQL-compatible primitives where practical; no browser/service-role secret exposure and no new mandatory paid dependency.
-4. Add deterministic security tests and an isolated runtime/E2E path proving emergency login, session validation/revocation, audit, backoff and logout before retiring the legacy Next implementation.
-5. Verify a Cloudflare-compatible License Admin UI deployment path and migrate UI hosting while preserving all named-admin/bootstrap/emergency behavior.
-6. Only after all above paths are verified, remove transitional Render configuration/service.
-7. Start Global Core audit + self-service Subscription/Entitlements foundation.
-8. Then Local-first Sync v2 / multi-branch correctness and formal Vyapar-parity gap audit.
-9. Establish Minarva Intelligence platform foundation before large-scale AI feature rollout.
-10. Continue capability-by-capability implementation from `docs/CAPABILITY_REGISTRY.md` without scope reduction.
-11. For substantial milestones, apply `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md`: automated evidence remains mandatory; independent AI reviewers are advisory and final decisions are based on verified repository/runtime evidence.
-12. When the governed Claude workflow is enabled, read and disposition Claude findings before final merge. Claude access stays read-only and must never receive production secrets.
+1. **Add Cloudflare Worker emergency routes without cutting over the UI yet.** Implement emergency status/login/me/logout on the existing Worker using the merged PostgreSQL authority bridge.
+2. Worker login must accept the plaintext emergency credential only at the edge, hash it before the RPC call, derive a cryptographically random bearer session token, store only its SHA-256 digest server-side, and return only the raw bearer token to the browser.
+3. Preserve existing environment semantics where practical: explicit enable flag, named emergency actor, current/previous credential rotation with bounded grace. Do not expose plaintext secrets through auth-config/status responses.
+4. Add Worker-level security tests for disabled/unconfigured state, invalid credential, backoff/rate limiting, current + previous credential, session me, logout/revocation, origin/CORS rules, token non-disclosure and edge-secret-only bypass resistance.
+5. After Worker routes are verified, cut the emergency UI/session path from Next server cookies/actions to browser -> Cloudflare bearer session while retaining the old path until parity E2E passes.
+6. Only after parity E2E, retire legacy Next emergency helpers/session-cookie machinery that is no longer required.
+7. Verify a Cloudflare-compatible License Admin UI deployment path and then remove transitional Render configuration/service.
+8. Continue Global Core audit + self-service Subscription/Entitlements foundation, Local-first Sync v2, formal Vyapar-parity gap audit and Minarva Intelligence platform foundation per the master plan.
+9. For substantial milestones, apply `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md`; automated evidence remains mandatory and independent AI reviewers are advisory.
 
 ## 16. Small-milestone rule
 
