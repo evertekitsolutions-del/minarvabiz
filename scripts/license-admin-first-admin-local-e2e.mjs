@@ -463,6 +463,12 @@ const prematureClaim = await workerJson("/api/admin/bootstrap/claim", {
 assert.equal(prematureClaim.status, 403);
 assert.equal(prematureClaim.data?.code, "MFA_REQUIRED");
 
+const prematureEmergencyControl = await workerJson("/api/admin/emergency/control-status", {
+  token: aal1Token,
+});
+assert.equal(prematureEmergencyControl.status, 403);
+assert.equal(prematureEmergencyControl.data?.code, "MFA_REQUIRED");
+
 // 8. Enroll and verify real Supabase TOTP, yielding AAL2.
 const enrollment = await authJson("/factors", {
   token: aal1Token,
@@ -522,6 +528,20 @@ assert.equal(me.status, 200);
 assert.equal(me.data?.ok, true);
 assert.equal(me.data?.identity?.id, userId);
 assert.equal(me.data?.identity?.role, "admin");
+
+psqlScalar(
+  "update public.license_admin_identities set role='operator' where auth_user_id=" +
+    sqlLiteral(userId) + "::uuid;",
+);
+const operatorEmergencyControl = await workerJson("/api/admin/emergency/control-status", {
+  token: aal2Token,
+});
+assert.equal(operatorEmergencyControl.status, 403);
+assert.equal(operatorEmergencyControl.data?.code, "FORBIDDEN");
+psqlScalar(
+  "update public.license_admin_identities set role='admin' where auth_user_id=" +
+    sqlLiteral(userId) + "::uuid;",
+);
 
 const controlBefore = await workerJson("/api/admin/emergency/control-status", {
   token: aal2Token,
