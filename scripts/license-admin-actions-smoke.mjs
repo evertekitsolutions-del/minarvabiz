@@ -119,22 +119,26 @@ const authCard = await readFile(
   "utf8",
 );
 
-assert.doesNotMatch(page, /readAdminSessionToken|cookies\\(|listLicenses\\(|listSupportRequests\\(/);
-assert.match(page, /identity=\\{null\\}/);
-assert.match(page, /initialLicenses=\\{\\[\\]\\}/);
-assert.match(page, /initialSupportRequests=\\{\\[\\]\\}/);
+for (const forbidden of ["readAdminSessionToken", "cookies(", "listLicenses(", "listSupportRequests("]) {
+  assert.equal(page.includes(forbidden), false, `page must not contain ${forbidden}`);
+}
+for (const expected of ["identity={null}", "initialLicenses={[]}", "initialSupportRequests={[]}"]) {
+  assert.equal(page.includes(expected), true, `page must contain ${expected}`);
+}
 
-assert.match(browserAuth, /\\/token\\?grant_type=password/);
+assert.equal(browserAuth.includes("/token?grant_type=password"), true);
 assert.doesNotMatch(browserAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET|LICENSE_EDGE_RPC_SECRET/);
-assert.match(authHook, /beginBrowserNamedAdminLogin/);
-assert.match(authHook, /beginBrowserEmergencyLogin/);
-assert.match(authHook, /activateBrowserAdminSession/);
-assert.match(authHook, /activateBrowserEmergencySession/);
-assert.match(authHook, /loadBrowserAdminDashboard/);
-assert.doesNotMatch(authHook, /loginEmergencyAdmin|from ["']\\.\\.\\/actions["']/);
-assert.match(browserSession, /sessionStorage\\.setItem/);
-assert.match(browserEmergencySession, /sessionStorage\\.setItem/);
-assert.match(browserEmergencyAuth, /api\\/admin\\/emergency\\/login/);
+for (const expected of [
+  "beginBrowserNamedAdminLogin",
+  "beginBrowserEmergencyLogin",
+  "activateBrowserAdminSession",
+  "activateBrowserEmergencySession",
+  "loadBrowserAdminDashboard",
+]) assert.equal(authHook.includes(expected), true, `auth hook must contain ${expected}`);
+assert.equal(authHook.includes("loginEmergencyAdmin"), false);
+assert.equal(browserSession.includes("sessionStorage.setItem"), true);
+assert.equal(browserEmergencySession.includes("sessionStorage.setItem"), true);
+assert.equal(browserEmergencyAuth.includes("/api/admin/emergency/login"), true);
 for (const route of [
   "/api/admin/me",
   "/api/admin/licenses",
@@ -147,7 +151,7 @@ assert.match(panel, /issueBrowserLicense/);
 assert.match(panel, /setBrowserLicenseStatus/);
 assert.match(panel, /createBrowserOfflineActivation/);
 assert.match(panel, /signOutBrowserAdmin/);
-assert.doesNotMatch(panel, /from ["']\\.\\/actions["']/);
+assert.equal(panel.includes('from "./actions"'), false);
 assert.doesNotMatch(panel, /createCommercialLicense|setLicenseStatus|createOfflineActivationPackage|logoutEmergencyAdmin/);
 assert.match(panel, /Blob|createObjectURL/);
 
