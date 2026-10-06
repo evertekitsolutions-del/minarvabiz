@@ -272,8 +272,8 @@ assert.match(adminPanel, /createBrowserOfflineActivation/);
 assert.doesNotMatch(adminPanel, /adoptCloudflareAdminSession/);
 assert.doesNotMatch(adminPanel, /\bloginAdmin\b|\bbeginAdminMfaEnrollment\b|\bverifyAdminMfa\b|\bcancelAdminMfa\b/);
 
-assert.match(worker, /export async function loginEmergencyAdmin/);
-assert.match(worker, /export async function logoutEmergencyAdmin/);
+assert.match(worker, /POST \/api\/admin\/emergency\/login/);
+assert.match(worker, /POST \/api\/admin\/emergency\/logout/);
 assert.match(worker, /claims\?\.identity\.source === "emergency"/);
 assert.match(worker, /identity\.source !== "emergency" \|\| authMethod !== "emergency"/);
 assert.doesNotMatch(worker, /export async function loginAdmin\b/);
