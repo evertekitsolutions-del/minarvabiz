@@ -378,7 +378,8 @@ BEGIN
     pg_catalog.hashtext('minarvabiz-emergency-authority-control-v1')
   );
 
-  DELETE FROM license_private.admin_emergency_credentials;
+  DELETE FROM license_private.admin_emergency_credentials
+  WHERE slot IN ('current', 'previous');
 
   INSERT INTO license_private.admin_emergency_runtime_config (
     id,
