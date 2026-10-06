@@ -171,37 +171,29 @@ jobs:
         run: node --experimental-strip-types scripts/license-admin-modular-ui-smoke.mjs
       - name: Verify license-admin auth/CRUD/error/import-export actions
         run: node --experimental-strip-types scripts/license-admin-actions-smoke.mjs
-      - name: Verify production security configuration
+      - name: Verify portable static security configuration
         shell: bash
         run: |
-          set -e
-          grep -Fq '@minarvabiz/utils/security-headers' apps/license-admin/next.config.ts
-          grep -Fq 'minarvaHttpSecurityHeaders()' apps/license-admin/next.config.ts
-          test -f apps/license-admin/src/middleware.ts
-          ! grep -Fq 'Content-Security-Policy' apps/license-admin/next.config.ts
-          grep -Fq 'Content-Security-Policy' apps/license-admin/src/middleware.ts
-          if grep -E "script-src[^;[:cntrl:]]*'unsafe-inline'" apps/license-admin/src/middleware.ts; then
-            echo "license-admin script-src must not contain unsafe-inline."
-            exit 1
-          fi
-          node --experimental-strip-types scripts/license-admin-csp-smoke.mjs
+          set -euo pipefail
+          grep -Fq 'output: "export"' apps/license-admin/next.config.ts
+          test ! -e apps/license-admin/src/middleware.ts
+          test -f apps/license-admin/public/_headers
+          grep -Fq 'Content-Security-Policy:' apps/license-admin/public/_headers
+          grep -Fq "default-src 'self'" apps/license-admin/public/_headers
+          grep -Fq "object-src 'none'" apps/license-admin/public/_headers
+          grep -Fq "frame-ancestors 'none'" apps/license-admin/public/_headers
+          grep -Fq 'X-Content-Type-Options: nosniff' apps/license-admin/public/_headers
       - run: pnpm --filter @minarvabiz/license-admin build
-      - name: Start license-admin production server
+      - name: Verify portable static artifact
         shell: bash
         run: |
-          set -e
-          nohup pnpm --filter @minarvabiz/license-admin start > /tmp/minarva-license-admin.log 2>&1 &
-          echo $! > /tmp/minarva-license-admin.pid
-          for i in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:3001/ >/dev/null; then exit 0; fi
-            sleep 1
-          done
-          cat /tmp/minarva-license-admin.log || true
-          exit 1
-      - name: Verify production nonce CSP runtime
-        env:
-          LICENSE_ADMIN_BASE_URL: http://127.0.0.1:3001/
-        run: node --experimental-strip-types scripts/license-admin-csp-smoke.mjs
+          set -euo pipefail
+          test -f apps/license-admin/out/index.html
+          test -f apps/license-admin/out/_headers
+          ! grep -R -Fq 'SUPABASE_SECRET_KEY' apps/license-admin/out
+          ! grep -R -Fq 'SUPABASE_SERVICE_ROLE_KEY' apps/license-admin/out
+          ! grep -R -Fq 'LICENSE_EDGE_RPC_SECRET' apps/license-admin/out
+          ! grep -R -Fq 'LICENSE_PRIVATE_KEY' apps/license-admin/out
       - name: Capture license-admin diagnostics
         if: failure()
         shell: bash
