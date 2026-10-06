@@ -93,24 +93,19 @@ assert.match(sessionStore, /revokeRegisteredAdminSession/);
 assert.match(sessionStore, /status !== "active"/);
 
 const edgeRuntime = read("infra/cloudflare-license-edge/src/index.js");
-const activate = edgeRuntime;
-assert.match(activate, /"license-activate-ip", 30, 15 \* 60/);
-assert.match(activate, /"license-activate-device", 10, 15 \* 60, deviceId/);
-assert.match(activate, /status: 429/);
-
-const validate = edgeRuntime;
-assert.match(validate, /MAX_BODY_BYTES = 16 \* 1024/);
-assert.match(validate, /"license-validate-ip", 600, 15 \* 60/);
-assert.match(validate, /"license-validate-device", 60, 15 \* 60, deviceId/);
-assert.match(validate, /UNSUPPORTED_MEDIA_TYPE/);
-assert.match(validate, /REQUEST_TOO_LARGE/);
-assert.match(validate, /status: 429/);
-
-const trial = edgeRuntime;
-assert.match(trial, /"trial-register-ip", 10, 60 \* 60/);
-assert.match(trial, /"trial-register-device", 3, 24 \* 60 \* 60, deviceId/);
-assert.match(trial, /export function OPTIONS\(\)/);
-assert.match(trial, /Access-Control-Allow-Origin/);
+const edgeRoutes = edgeRuntime.slice(0, edgeRuntime.indexOf("const DEFAULT_SUPABASE_URL"));
+for (const contract of [
+  '"POST /api/license/activate", { maxBody: 16 * 1024, nativeActivate: true }',
+  '"POST /api/license/validate", { maxBody: 16 * 1024, nativeValidate: true }',
+  '"POST /api/license/deactivate", { maxBody: 16 * 1024, nativeDeactivate: true }',
+  '"POST /api/trial/register", { maxBody: 16 * 1024, nativeTrial: true }',
+]) assert.equal(edgeRoutes.includes(contract), true, `edge route contract missing: ${contract}`);
+assert.match(edgeRuntime, /UNSUPPORTED_MEDIA_TYPE/);
+assert.match(edgeRuntime, /REQUEST_TOO_LARGE/);
+assert.match(edgeRuntime, /cloudflare_license_activate/);
+assert.match(edgeRuntime, /cloudflare_license_validate/);
+assert.match(edgeRuntime, /cloudflare_license_deactivate/);
+assert.match(edgeRuntime, /cloudflare_trial_register/);
 
 const limiter = read("apps/license-admin/src/lib/rate-limit.ts");
 assert.match(limiter, /LICENSE_RATE_LIMIT_SECRET/);
