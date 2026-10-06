@@ -800,7 +800,7 @@ assert.equal(
   "Customer bootstrap must not alter the one-admin control-plane registry.",
 );
 
-// 11. Normal UI bootstrap is browser-native; retained privileged server helpers are not imported.
+// 11. Normal UI bootstrap is browser-native and the static host contains no privileged server actions.
 const bootstrapHookSource = fs.readFileSync(
   "apps/license-admin/src/app/admin-panel/useFirstAdminBootstrap.ts",
   "utf8",
@@ -808,14 +808,11 @@ const bootstrapHookSource = fs.readFileSync(
 assert.match(bootstrapHookSource, /from ["']\.\/browser-admin-auth["']/);
 assert.doesNotMatch(bootstrapHookSource, /bootstrapFirstLicenseAdmin|firstAdminBootstrapStatus/);
 assert.doesNotMatch(bootstrapHookSource, /from ["'][^"']*actions["']/);
-const serverActionsSource = fs.readFileSync(
-  "apps/license-admin/src/app/actions.ts",
-  "utf8",
+assert.equal(
+  fs.existsSync("apps/license-admin/src/app/actions.ts"),
+  false,
+  "Portable License Admin must not retain privileged Next server actions.",
 );
-assert.doesNotMatch(serverActionsSource, /export async function firstAdminBootstrapStatus\b/);
-assert.doesNotMatch(serverActionsSource, /export async function bootstrapFirstLicenseAdmin\b/);
-assert.match(serverActionsSource, /export async function loginEmergencyAdmin\b/);
-assert.match(serverActionsSource, /export async function logoutEmergencyAdmin\b/);
 
 console.log(
   "Fresh-instance first-admin E2E PASS: fresh registry -> guarded reservation/anti-theft -> Cloudflare random credential -> confirmation -> mailbox-owned password -> TOTP AAL2 -> one-time claim -> admin/me -> normal customer tenant bootstrap.",
