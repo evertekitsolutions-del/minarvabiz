@@ -102,10 +102,10 @@ for (const contract of [
 ]) assert.equal(edgeRoutes.includes(contract), true, `edge route contract missing: ${contract}`);
 assert.match(edgeRuntime, /UNSUPPORTED_MEDIA_TYPE/);
 assert.match(edgeRuntime, /REQUEST_TOO_LARGE/);
-assert.match(edgeRuntime, /cloudflare_license_activate/);
-assert.match(edgeRuntime, /cloudflare_license_validate/);
-assert.match(edgeRuntime, /cloudflare_license_deactivate/);
-assert.match(edgeRuntime, /cloudflare_trial_register/);
+assert.match(edgeRuntime, /cloudflare_prepare_license_activation/);
+assert.match(edgeRuntime, /cloudflare_validate_license/);
+assert.match(edgeRuntime, /cloudflare_deactivate_license/);
+assert.match(edgeRuntime, /cloudflare_register_trial/);
 
 const limiter = read("apps/license-admin/src/lib/rate-limit.ts");
 assert.match(limiter, /LICENSE_RATE_LIMIT_SECRET/);
