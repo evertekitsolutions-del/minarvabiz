@@ -64,6 +64,14 @@ const currentCredentialHash = digest(currentCredential);
 const previousCredentialHash = digest(previousCredential);
 const wrongCredentialHash = digest(wrongCredential);
 
+// This legacy foundation suite runs after the self-service suite, which intentionally
+// leaves manual emergency authority disabled. Reset only test-owned runtime state so
+// this suite can independently exercise current/previous credential semantics.
+sql(
+  "delete from license_private.admin_emergency_runtime_config where id='primary';" +
+  "delete from license_private.admin_emergency_credentials where slot in ('current','previous');"
+);
+
 sql(
   "insert into license_private.edge_credentials (id, secret_sha256, active) values (" +
     literal("emergency-e2e") +
