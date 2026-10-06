@@ -65,7 +65,6 @@ const previousCredentialHash = digest(previousCredential);
 const wrongCredentialHash = digest(wrongCredential);
 
 sql(
-  "insert into license_private.admin_emergency_runtime_config (id,enabled,actor_email,display_name,source,updated_at) values ('primary',true," + literal(actorEmail) + "," + literal(displayName) + ",'legacy-render',now()) on conflict (id) do update set enabled=true,actor_email=excluded.actor_email,display_name=excluded.display_name,source='legacy-render',updated_at=now();" +
   "insert into license_private.edge_credentials (id, secret_sha256, active) values (" +
     literal("emergency-e2e") +
     ", " +
