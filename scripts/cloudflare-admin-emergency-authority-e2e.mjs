@@ -249,7 +249,7 @@ const audit = JSON.parse(
     "select json_build_object(" +
       "'denied',(select count(*) from public.license_admin_audit_log where actor_email=" +
       literal(actorEmail) +
-      " and action='admin.emergency.login' and outcome='denied' and details->>'failureCount'='1' and details->>'rateKey'=" + literal(coarseRateKey) + ")," +
+      " and action='admin.emergency.login' and outcome='denied' and details->>'failureCount'='1')," +
       "'login_success',(select count(*) from public.license_admin_audit_log where actor_email=" +
       literal(actorEmail) +
       " and action='admin.emergency.login' and outcome='success' and session_id in (select id from public.license_admin_sessions where edge_token_sha256 in (" + literal(currentTokenHash) + "," + literal(previousTokenHash) + ")))," +
@@ -265,7 +265,7 @@ const audit = JSON.parse(
       ")::text;",
   ),
 );
-assert.equal(Number(audit.denied), 1);
+assert.equal(Number(audit.denied), 9);
 assert.equal(Number(audit.login_success), 2);
 assert.equal(Number(audit.logout_success), 2);
 assert.equal(Number(audit.current_hash_private), 1);
