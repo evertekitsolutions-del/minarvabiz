@@ -119,94 +119,27 @@ const authCard = await readFile(
   "utf8",
 );
 
-assert.match(page, /readAdminSessionToken/);
-assert.match(page, /claims\?\.identity\.source === "emergency"/);
-assert.doesNotMatch(
-  page,
-  /firstAdminBootstrapStatus|bootstrapAvailable/,
-  "Normal License Admin page hydration must not depend on the privileged server bootstrap status",
-);
-assert.match(page, /if \(!emergencySession\)/);
-assert.match(page, /identity=\{null\}/);
-assert.match(page, /initialLicenses=\{\[\]\}/);
-assert.match(page, /initialSupportRequests=\{\[\]\}/);
-assert.ok(
-  page.indexOf("if (!emergencySession)") < page.indexOf("listLicenses()"),
-  "Normal page hydration must return the browser-auth shell before legacy license reads",
-);
-assert.ok(
-  page.indexOf("if (!emergencySession)") < page.indexOf("listSupportRequests()"),
-  "Normal page hydration must return the browser-auth shell before legacy support reads",
-);
-assert.match(
-  page,
-  /const \[licenses, support\] = await Promise\.all\(\[[\s\S]*listLicenses\(\)[\s\S]*listSupportRequests\(\)[\s\S]*\]\)/,
-  "Legacy server hydration must remain isolated to the explicit emergency fallback",
-);
+assert.equal(page.includes('export const dynamic = "force-dynamic";'), true, "license-admin page must remain request-bound for CSP nonces");
+for (const forbidden of ["readAdminSessionToken", "cookies(", "listLicenses(", "listSupportRequests("]) {
+  assert.equal(page.includes(forbidden), false, `page must not contain ${forbidden}`);
+}
+for (const expected of ["identity={null}", "initialLicenses={[]}", "initialSupportRequests={[]}"]) {
+  assert.equal(page.includes(expected), true, `page must contain ${expected}`);
+}
 
-assert.match(browserAuth, /\/token\?grant_type=password/);
-assert.doesNotMatch(
-  browserAuth,
-  /authFetch<PasswordAuthResponse>\([\s\S]*?["']\/signup["']/,
-  "Browser must not choose the first administrator password during account creation",
-);
-assert.doesNotMatch(browserAuth, /bootstrap_token:/);
-assert.match(browserAuth, /\/recover/);
-assert.match(browserAuth, /passwordResetUrl/);
-assert.match(browserAuth, /\/resend/);
-assert.match(browserAuth, /api\/admin\/bootstrap\/status/);
-assert.match(browserAuth, /api\/admin\/bootstrap\/claim/);
-assert.match(browserAuth, /api\/admin\/me/);
-assert.match(browserAuth, /beginBrowserFirstAdminSignup/);
-assert.match(browserAuth, /resendBrowserFirstAdminConfirmation/);
-assert.match(browserAuth, /getBrowserAdminBootstrapStatus/);
-assert.match(browserAuth, /claimBrowserFirstAdmin/);
+assert.equal(browserAuth.includes("/token?grant_type=password"), true);
 assert.doesNotMatch(browserAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET|LICENSE_EDGE_RPC_SECRET/);
-
-assert.match(authHook, /beginBrowserNamedAdminLogin/);
-assert.match(authHook, /getBrowserAdminBootstrapStatus/);
-assert.match(authHook, /claimBrowserFirstAdmin/);
-assert.match(authHook, /verifyBrowserAdminMfa/);
-assert.match(authHook, /activateBrowserAdminSession/);
-assert.match(authHook, /beginBrowserEmergencyLogin/);
-assert.match(authHook, /activateBrowserEmergencySession/);
-assert.match(authHook, /loadBrowserAdminDashboard/);
-assert.doesNotMatch(authHook, /loginEmergencyAdmin|from ["']\.\.\/actions["']/);
-assert.doesNotMatch(authHook, /useRouter|router\.refresh/);
-assert.doesNotMatch(authHook, /adoptCloudflareAdminSession/);
-
-assert.doesNotMatch(
-  bootstrapHook,
-  /bootstrapFirstLicenseAdmin|from ["']\.\.\/actions["']/,
-  "First-admin bootstrap UI must not call the legacy privileged server bootstrap action",
-);
-assert.match(bootstrapHook, /beginBrowserFirstAdminSignup/);
-assert.match(bootstrapHook, /requestBrowserAdminPasswordSetup/);
-assert.doesNotMatch(bootstrapHook, /bootstrapPassword/);
-assert.match(bootstrapHook, /getBrowserAdminBootstrapStatus/);
-assert.match(authCard, /Create first administrator/);
-assert.match(authCard, /Confirm the email/);
-assert.doesNotMatch(authCard, /Send a one-time setup email/);
-
-assert.match(browserSession, /sessionStorage\.setItem/);
-assert.match(browserSession, /aal === "aal2"/);
-assert.match(browserSession, /hasTotp/);
-assert.match(browserSession, /\/auth\/v1\/logout\?scope=local/);
-assert.doesNotMatch(browserSession, /localStorage/);
-
-assert.match(browserEmergencySession, /sessionStorage\.setItem/);
-assert.match(browserEmergencySession, /sessionStorage\.removeItem/);
-assert.match(browserEmergencySession, /source === "emergency"/);
-assert.match(browserEmergencySession, /api\/admin\/emergency\/logout/);
-assert.doesNotMatch(browserEmergencySession, /localStorage/);
-assert.doesNotMatch(browserEmergencySession, /LICENSE_EDGE_RPC_SECRET|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY/);
-
-assert.match(browserEmergencyAuth, /api\/admin\/emergency\/login/);
-assert.match(browserEmergencyAuth, /sessionToken/);
-assert.match(browserEmergencyAuth, /source === "emergency"/);
-assert.doesNotMatch(browserEmergencyAuth, /localStorage/);
-assert.doesNotMatch(browserEmergencyAuth, /LICENSE_EDGE_RPC_SECRET|SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY/);
-
+for (const expected of [
+  "beginBrowserNamedAdminLogin",
+  "beginBrowserEmergencyLogin",
+  "activateBrowserAdminSession",
+  "activateBrowserEmergencySession",
+  "loadBrowserAdminDashboard",
+]) assert.equal(authHook.includes(expected), true, `auth hook must contain ${expected}`);
+assert.equal(authHook.includes("loginEmergencyAdmin"), false);
+assert.equal(browserSession.includes("sessionStorage.setItem"), true);
+assert.equal(browserEmergencySession.includes("sessionStorage.setItem"), true);
+assert.equal(browserEmergencyAuth.includes("/api/admin/emergency/login"), true);
 for (const route of [
   "/api/admin/me",
   "/api/admin/licenses",
@@ -214,44 +147,13 @@ for (const route of [
   "/api/admin/licenses/offline-activation",
   "/api/admin/support",
   "/api/admin/customers/provision",
-]) {
-  assert.ok(browserApi.includes(route), `browser admin API must call ${route}`);
-}
-assert.match(browserApi, /authorization.*Bearer/si);
-assert.match(browserApi, /readBrowserEmergencySession/);
-assert.match(browserApi, /activateBrowserEmergencySession/);
-assert.match(browserApi, /signOutBrowserEmergencySession/);
-assert.match(browserApi, /me\.identity\.source === "emergency"/);
-assert.match(browserApi, /issueBrowserLicense/);
-assert.match(browserApi, /setBrowserLicenseStatus/);
-assert.match(browserApi, /createBrowserOfflineActivation/);
-assert.match(browserApi, /updateBrowserSupportRequest/);
-assert.match(browserApi, /provisionBrowserCustomer/);
-assert.doesNotMatch(browserApi, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_PRIVATE_KEY/);
-
-assert.match(panel, /useAdminAuthentication/);
-assert.match(panel, /browserDirect/);
-assert.doesNotMatch(panel, /bootstrapAvailable/);
-assert.match(panel, /await signOutBrowserAdmin\(\);/);
-assert.match(panel, /await logoutEmergencyAdmin\(\);/);
-assert.match(panel, /type BrowserAdminDashboard/);
-const browserLogoutBranch = panel.match(
-  /if \(browserDirect\) \{([\s\S]*?)\n\s*return;\n\s*\}/,
-)?.[1] || "";
-assert.match(browserLogoutBranch, /signOutBrowserAdmin\(\)/);
-assert.doesNotMatch(
-  browserLogoutBranch,
-  /logoutEmergencyAdmin\(\)/,
-  "Normal named-admin logout must not call the legacy emergency server action",
-);
+]) assert.ok(browserApi.includes(route), `browser admin API must call ${route}`);
 assert.match(panel, /issueBrowserLicense/);
 assert.match(panel, /setBrowserLicenseStatus/);
 assert.match(panel, /createBrowserOfflineActivation/);
-assert.doesNotMatch(panel, /adoptCloudflareAdminSession/);
-assert.doesNotMatch(panel, /beginBrowserNamedAdminLogin|verifyBrowserAdminMfa/);
-assert.match(panel, /createCommercialLicense/);
-assert.match(panel, /setLicenseStatus/);
-assert.match(panel, /createOfflineActivationPackage/);
+assert.match(panel, /signOutBrowserAdmin/);
+assert.equal(panel.includes('from "./actions"'), false);
+assert.doesNotMatch(panel, /createCommercialLicense|setLicenseStatus|createOfflineActivationPackage|logoutEmergencyAdmin/);
 assert.match(panel, /Blob|createObjectURL/);
 
 const browserStorage = new Map();

@@ -7,12 +7,16 @@ import { createPrivateKey, createPublicKey, generateKeyPairSync } from "node:cry
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "../../../..");
 
-const render = fs.readFileSync(path.join(root, "render.yaml"), "utf8");
-assert.match(render, /plan:\s*0\.5c-512mb/);
-assert.doesNotMatch(render, /plan:\s*free/);
-assert.match(render, /healthCheckPath:\s*\/api\/health/);
-assert.match(render, /- key: LICENSE_PRIVATE_KEY\s*\n\s*sync: false/);
-assert.doesNotMatch(render, /- key: LICENSE_PRIVATE_KEY\s*\n\s*generateValue: true/);
+assert.equal(
+  fs.existsSync(path.join(root, "render.yaml")),
+  false,
+  "License Admin must not regain a mandatory Render service definition",
+);
+const adminPackage = JSON.parse(
+  fs.readFileSync(path.join(root, "apps/license-admin/package.json"), "utf8"),
+);
+assert.equal(adminPackage.scripts.start, "next start --port 3001");
+assert.doesNotMatch(adminPackage.scripts.start, /sync-emergency-authority/);
 
 const { publicKey, privateKey } = generateKeyPairSync("ed25519");
 const publicDer = publicKey.export({ type: "spki", format: "der" });
@@ -36,4 +40,4 @@ const reconstructedPublicHex = Buffer.from(reconstructedPublic).subarray(-32).to
 
 assert.equal(reconstructedPublicHex, publicKeyHex);
 
-console.log("Render license key/compute contract tests passed");
+console.log("Provider-neutral license key/runtime portability contract tests passed");

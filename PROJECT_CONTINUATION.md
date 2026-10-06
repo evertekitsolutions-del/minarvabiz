@@ -1,6 +1,6 @@
 # Minarva Biz — Authoritative Project Continuation
 
-**Last updated:** 2026-10-05  
+**Last updated:** 2026-10-06  
 **Repository:** `evertekitsolutions-del/minarvabiz`
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
@@ -134,6 +134,17 @@ Current normal named-admin behavior:
 - production Supabase migration `license_admin_emergency_legacy_sync` is applied and verified: anon/authenticated cannot execute the sync RPC, service-role can execute it, and direct private-table SELECT remains denied even to service-role
 - Render startup wiring was root-cause-fixed in `render.yaml`: the digest sync script must execute before `next start`; CI has a regression guard for this exact production start contract
 - production private emergency credential/runtime registry is currently still empty, so the Render startup sync has **not yet been observed in production**; Cloudflare emergency login remains disabled and the existing Next/Render emergency path remains authoritative
+
+## 5A. Active Render-retirement cutover milestone
+
+- PR #249 merged the browser-native emergency Cloudflare UI; browser emergency login/session/business operations no longer require the legacy Next/Render cookie interaction.
+- PR #250 merged named AAL2 self-service emergency authority. A named Supabase administrator with TOTP AAL2 and role `admin` can rotate or disable emergency authority through Cloudflare/PostgreSQL; Cloudflare generates the credential, PostgreSQL stores only SHA-256, and plaintext is returned once to the authenticated browser.
+- Manual emergency ownership rejects later legacy Render synchronization, so copying the old Render credential is no longer a cutover prerequisite.
+- **PR #251 is the active milestone**: retire the Render-dependent License Admin runtime definition and active server-side UI hydration/mutation path while preserving browser -> Cloudflare administration, emergency rollback safety, request-bound CSP nonces, Ed25519 license-key portability, and all security/compliance gates.
+- PR #251 removes `render.yaml` from the repository and removes legacy startup synchronization from the License Admin start command. This repository change does **not** authorize deleting/disabling the live production Render service before the named AAL2 manual emergency credential has been established and production Cloudflare emergency login/me/business/logout/revocation/backoff parity is proven.
+- The dependency-security gate discovered the upstream Sharp/libvips advisory during this milestone. The branch pins patched Sharp >=0.35.5 and explicitly reviews the resulting LGPL libvips runtime under the existing distribution-compliance obligations.
+- After PR #251 exact-head gates are green and it is merged, the next operational step is additive production migration/deployment from merged `main`, named AAL2 self-service emergency rotation, live parity proof without exposing the raw credential, and only then retirement of the live Render fallback.
+- Vercel remains a separate mandatory-dependency retirement milestone after Render cutover proof; it must be migrated with provider-neutral/self-host parity rather than simply disabled.
 
 ## 6. Cloudflare License/Admin state
 

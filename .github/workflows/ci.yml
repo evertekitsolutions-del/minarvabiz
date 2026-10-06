@@ -152,12 +152,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @minarvabiz/license-admin typecheck
-      - name: Verify Render emergency digest sync startup contract
+      - name: Verify Render-independent License Admin startup contract
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'node apps/license-admin/scripts/sync-emergency-authority.mjs && pnpm --filter @minarvabiz/license-admin exec next start -p $PORT' render.yaml
-          grep -Fq 'node scripts/sync-emergency-authority.mjs && next start --port 3001' apps/license-admin/package.json
+          test ! -e render.yaml
+          grep -Fq '"start": "next start --port 3001"' apps/license-admin/package.json
+          ! grep -Fq 'sync-emergency-authority.mjs' apps/license-admin/package.json
       - name: Verify emergency shared-secret controls
         run: node --experimental-strip-types scripts/license-admin-security-smoke.mjs
       - name: Verify named administrator identities
