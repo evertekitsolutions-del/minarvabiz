@@ -15,7 +15,7 @@ const feedbackRoute = read("apps/web/src/app/api/support/feedback/route.ts");
 const healthRoute = read("apps/web/src/app/api/support/health/route.ts");
 const broker = read("supabase/functions/minarva-support-broker/index.ts");
 const webMiddleware = read("apps/web/src/middleware.ts");
-const adminActions = read("apps/license-admin/src/app/actions.ts");
+const adminEdge = read("infra/cloudflare-license-edge/src/index.js");
 const adminInbox = read("apps/license-admin/src/app/admin-panel/SupportInboxCard.tsx");
 const migration = read("supabase/migrations/20260927_ai_support_center.sql");
 const runtimeConfigMigration = read("supabase/migrations/20261001_support_runtime_config.sql");
@@ -119,8 +119,8 @@ assert.match(runtimeConfigMigration, /GRANT SELECT, INSERT, UPDATE, DELETE ON TA
 assert.match(runtimeConfigMigration, /cloudflare-workers-ai/);
 assert.match(runtimeConfigMigration, /"enabled", false|'enabled', false/);
 
-assert.match(adminActions, /listSupportRequests/);
-assert.match(adminActions, /updateSupportRequest/);
+assert.match(adminEdge, /cloudflare_admin_list_support_requests/);
+assert.match(adminEdge, /cloudflare_admin_update_support_request/);
 assert.match(adminInbox, /Support Inbox/);
 assert.match(adminInbox, /AI triage/);
 assert.match(adminInbox, /Internal notes/);
