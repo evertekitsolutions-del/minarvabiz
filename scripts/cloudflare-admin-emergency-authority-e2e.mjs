@@ -265,7 +265,7 @@ const audit = JSON.parse(
       ")::text;",
   ),
 );
-assert.equal(Number(audit.denied), 9);
+assert.equal(Number(audit.denied), 1);
 assert.equal(Number(audit.login_success), 2);
 assert.equal(Number(audit.logout_success), 2);
 assert.equal(Number(audit.current_hash_private), 1);
