@@ -92,12 +92,13 @@ assert.match(sessionStore, /validateRegisteredAdminSession/);
 assert.match(sessionStore, /revokeRegisteredAdminSession/);
 assert.match(sessionStore, /status !== "active"/);
 
-const activate = read("apps/license-admin/src/app/api/license/activate/route.ts");
+const edgeRuntime = read("infra/cloudflare-license-edge/src/index.js");
+const activate = edgeRuntime;
 assert.match(activate, /"license-activate-ip", 30, 15 \* 60/);
 assert.match(activate, /"license-activate-device", 10, 15 \* 60, deviceId/);
 assert.match(activate, /status: 429/);
 
-const validate = read("apps/license-admin/src/app/api/license/validate/route.ts");
+const validate = edgeRuntime;
 assert.match(validate, /MAX_BODY_BYTES = 16 \* 1024/);
 assert.match(validate, /"license-validate-ip", 600, 15 \* 60/);
 assert.match(validate, /"license-validate-device", 60, 15 \* 60, deviceId/);
@@ -105,7 +106,7 @@ assert.match(validate, /UNSUPPORTED_MEDIA_TYPE/);
 assert.match(validate, /REQUEST_TOO_LARGE/);
 assert.match(validate, /status: 429/);
 
-const trial = read("apps/license-admin/src/app/api/trial/register/route.ts");
+const trial = edgeRuntime;
 assert.match(trial, /"trial-register-ip", 10, 60 \* 60/);
 assert.match(trial, /"trial-register-device", 3, 24 \* 60 \* 60, deviceId/);
 assert.match(trial, /export function OPTIONS\(\)/);
@@ -143,7 +144,8 @@ assert.match(sessionIndexMigration, /license_admin_sessions\(auth_user_id\)/);
 
 assert.equal(fs.existsSync(path.join(root, "render.yaml")), false, "Render service definition must stay retired after browser-edge cutover");
 const licenseAdminPackage = JSON.parse(read("apps/license-admin/package.json"));
-assert.equal(licenseAdminPackage.scripts.start, "next start --port 3001");
-assert.doesNotMatch(licenseAdminPackage.scripts.start, /sync-emergency-authority/);
+assert.equal(licenseAdminPackage.scripts.build, "next build");
+assert.equal(read("apps/license-admin/next.config.ts").includes('output: "export"'), true);
+assert.equal(fs.existsSync(path.join(root, "apps/license-admin/src/middleware.ts")), false);
 
 console.log("license API isolation/session/rate-limit contract tests passed");
