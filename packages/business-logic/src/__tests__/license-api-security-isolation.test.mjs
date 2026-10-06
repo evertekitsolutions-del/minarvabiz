@@ -141,8 +141,9 @@ const sessionIndexMigration = read("supabase/migrations/20260924_license_admin_s
 assert.match(sessionIndexMigration, /idx_license_admin_sessions_auth_user_id/);
 assert.match(sessionIndexMigration, /license_admin_sessions\(auth_user_id\)/);
 
-const render = read("render.yaml");
-assert.match(render, /LICENSE_SESSION_SECRET[\s\S]*generateValue: true/);
-assert.match(render, /LICENSE_RATE_LIMIT_SECRET[\s\S]*generateValue: true/);
+assert.equal(fs.existsSync(path.join(root, "render.yaml")), false, "Render service definition must stay retired after browser-edge cutover");
+const licenseAdminPackage = JSON.parse(read("apps/license-admin/package.json"));
+assert.equal(licenseAdminPackage.scripts.start, "next start --port 3001");
+assert.doesNotMatch(licenseAdminPackage.scripts.start, /sync-emergency-authority/);
 
 console.log("license API isolation/session/rate-limit contract tests passed");
