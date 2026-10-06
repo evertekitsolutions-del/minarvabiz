@@ -1,15 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import type { Edition, LicenseFeatures } from "@minarvabiz/types";
 import type { LicensePlan } from "@minarvabiz/licensing";
 import {
-  createCommercialLicense,
-  createOfflineActivationPackage,
-  logoutEmergencyAdmin,
-  setLicenseStatus,
-} from "./actions";
 import { AdminAuthCard } from "./admin-panel/AdminAuthCard";
 import { AdminHeader } from "./admin-panel/AdminHeader";
 import { LicenseCreateCard } from "./admin-panel/LicenseCreateCard";
@@ -46,7 +40,6 @@ export default function AdminPanel({
   initialLicenses,
   initialSupportRequests,
 }: AdminPanelProps) {
-  const router = useRouter();
   const [activeIdentity, setActiveIdentity] = React.useState(identity);
   const [licenses, setLicenses] = React.useState(initialLicenses);
   const [supportRequests, setSupportRequests] = React.useState(initialSupportRequests);
@@ -105,8 +98,7 @@ export default function AdminPanel({
   }, [applyDashboard]);
 
   async function refreshAfterMutation() {
-    if (browserDirect) await refreshBrowserDashboard();
-    else router.refresh();
+    await refreshBrowserDashboard();
   }
 
   async function issue() {
@@ -124,9 +116,7 @@ export default function AdminPanel({
     };
     setBusy(true);
     setMessage(null);
-    const result = browserDirect
-      ? await issueBrowserLicense(input)
-      : await createCommercialLicense(input);
+    const result = await issueBrowserLicense(input);
     setBusy(false);
     if (!result.ok) {
       setMessage(result.error || "License issue failed.");
@@ -140,9 +130,7 @@ export default function AdminPanel({
   async function status(licenseId: string, value: LicenseStatusAction) {
     setBusy(true);
     setMessage(null);
-    const result = browserDirect
-      ? await setBrowserLicenseStatus(licenseId, value)
-      : await setLicenseStatus(licenseId, value);
+    const result = await setBrowserLicenseStatus(licenseId, value);
     setBusy(false);
     if (!result.ok) {
       setMessage(result.error || "Status update failed.");
@@ -162,9 +150,7 @@ export default function AdminPanel({
     };
     setBusy(true);
     setMessage(null);
-    const result = browserDirect
-      ? await createBrowserOfflineActivation(input)
-      : await createOfflineActivationPackage(input);
+    const result = await createBrowserOfflineActivation(input);
     setBusy(false);
     if (!result.ok) {
       setMessage(result.error || "Offline activation failed.");
@@ -195,8 +181,6 @@ export default function AdminPanel({
       return;
     }
 
-    await logoutEmergencyAdmin();
-    router.refresh();
   }
 
   if (!activeIdentity) {
