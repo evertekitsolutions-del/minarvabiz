@@ -249,13 +249,13 @@ const audit = JSON.parse(
     "select json_build_object(" +
       "'denied',(select count(*) from public.license_admin_audit_log where actor_email=" +
       literal(actorEmail) +
-      " and action='admin.emergency.login' and outcome='denied')," +
+      " and action='admin.emergency.login' and outcome='denied' and details->>'rateKeyHash'=" + literal(deniedRateKey) + ")," +
       "'login_success',(select count(*) from public.license_admin_audit_log where actor_email=" +
       literal(actorEmail) +
-      " and action='admin.emergency.login' and outcome='success')," +
+      " and action='admin.emergency.login' and outcome='success' and session_id in (select id from public.license_admin_sessions where token_sha256 in (" + literal(currentTokenHash) + "," + literal(previousTokenHash) + ")))," +
       "'logout_success',(select count(*) from public.license_admin_audit_log where actor_email=" +
       literal(actorEmail) +
-      " and action='admin.emergency.logout' and outcome='success')," +
+      " and action='admin.emergency.logout' and outcome='success' and session_id in (select id from public.license_admin_sessions where token_sha256 in (" + literal(currentTokenHash) + "," + literal(previousTokenHash) + ")))," +
       "'current_hash_private',(select count(*) from license_private.admin_emergency_credentials where slot='current' and secret_sha256=" +
       literal(currentCredentialHash) +
       ")," +
