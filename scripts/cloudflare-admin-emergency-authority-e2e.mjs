@@ -100,8 +100,6 @@ function loginBody({
   rateKey = digest("203.0.113.10|" + edgeSecret),
   backoffKey = digest("203.0.113.10|" + actorEmail + "|" + edgeSecret),
   tokenHash = digest("session-default"),
-  email = actorEmail,
-  name = displayName,
 } = {}) {
   return {
     p_edge_secret: edge,
