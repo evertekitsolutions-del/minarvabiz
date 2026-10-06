@@ -1,10 +1,10 @@
 # Cloudflare / Self-host Emergency Authority Foundation
 
-This milestone preserves License Admin emergency break-glass access while creating a provider-portable authority boundary for migration away from the transitional Next/Render server path.
+This design preserves License Admin emergency break-glass access through a provider-portable Cloudflare/PostgreSQL authority boundary while the transitional Next/Render server path is retired.
 
 ## Foundation scope
 
-This is additive. It does not cut over the UI and does not remove the existing emergency server actions.
+The authority foundation began additively. Browser emergency access and business operations have since cut over to Cloudflare; the legacy server actions remain only as rollback compatibility until live production parity is proven.
 
 The PostgreSQL bridge provides:
 
@@ -79,7 +79,7 @@ The License Admin client now supports emergency access without creating a privil
 - browser logout revokes the emergency bearer at Cloudflare before/while clearing local tab state;
 - a restored emergency browser session is re-authorized through the generic Cloudflare `/api/admin/me` and business routes.
 
-The historical Next/Render emergency cookie path remains temporarily available as rollback-only compatibility during deployment cutover. It is no longer used by the normal emergency sign-in interaction in the browser. Removal is deferred until production hosting/origin configuration and browser runtime verification are complete.
+The historical Next/Render emergency cookie path is rollback-only compatibility and is not used by the normal browser emergency sign-in interaction. Repository runtime retirement may remove its hosting definition/startup wiring, but the live production Render fallback must remain available until named AAL2 manual authority is established and production Cloudflare browser/runtime parity is proven.
 
 ## Full emergency business-operation parity
 
@@ -124,4 +124,4 @@ Emergency access must remain:
 - free of plaintext emergency credentials and plaintext session tokens at rest;
 - resistant to an edge-RPC-secret-only bypass.
 
-The existing Next/Render emergency path must not be removed until the Worker/browser replacement proves these invariants end to end.
+The live production Next/Render fallback must not be disabled or deleted until the Worker/browser replacement proves these invariants end to end. Repository-level Render runtime retirement may land earlier, provided production rollback availability is preserved through cutover proof.
