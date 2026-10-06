@@ -115,10 +115,10 @@ assert(releaseWorkflow.includes("MINARVA_RUNTIME_SMOKE") && releaseWorkflow.incl
 assert(builder.includes("productName: Minarva Biz"), "Windows package must identify Minarva Biz");
 assert(activationMigration.includes("CREATE OR REPLACE FUNCTION public.activate_license_device") && activationMigration.includes("FOR UPDATE") && activationMigration.includes("activation_limit <> -1"), "Atomic activation migration is incomplete");
 assert(activationMigration.includes("REVOKE ALL ON FUNCTION public.activate_license_device"), "Atomic activation RPC must not be public");
-assert(activationRoute.includes('"POST /api/license/activate", { maxBody: 16 * 1024, nativeActivate: true }') && activationRoute.includes("cloudflare_license_activate"), "Cloudflare license activation authority is not using the atomic edge RPC path");
+assert(activationRoute.includes('"POST /api/license/activate", { maxBody: 16 * 1024, nativeActivate: true }') && activationRoute.includes("cloudflare_prepare_license_activation"), "Cloudflare license activation authority is not using the atomic edge RPC path");
 assert(!exists("apps/web/src/app/api/license/activate/route.ts") && !exists("apps/web/src/app/api/trial/register/route.ts"), "Secret-bearing license/trial APIs must not be hosted by the public web app");
-assert(activationRoute.includes("cloudflare_license_activate"), "License activation edge authority is missing");
-assert(trialRoute.includes("cloudflare_trial_register"), "Trial registration edge authority is missing");
+assert(activationRoute.includes("cloudflare_prepare_license_activation"), "License activation edge authority is missing");
+assert(trialRoute.includes("cloudflare_register_trial"), "Trial registration edge authority is missing");
 assert(activationRoute.includes('"POST /api/license/activate", { maxBody: 16 * 1024, nativeActivate: true }') && activationRoute.includes("readRequestBody(request, route.maxBody)"), "License activation request size guard is missing");
 assert(trialRoute.includes('"POST /api/trial/register", { maxBody: 16 * 1024, nativeTrial: true }') && trialRoute.includes("readRequestBody(request, route.maxBody)"), "Trial registration request size guard is missing");
 assert(activationRoute.includes("UNSUPPORTED_MEDIA_TYPE") && activationRoute.includes("content-type"), "License activation JSON content-type enforcement is missing");
