@@ -47,12 +47,107 @@ for (const retiredAction of [
   "firstAdminBootstrapStatus",
   "bootstrapFirstLicenseAdmin",
 ]) {
-  assert.match(panel, /issueBrowserLicense/);
+  assert.doesNotMatch(actions, new RegExp(`export async function ${retiredAction}\\b`));
+}
+assert.doesNotMatch(actions, /from ["']\.\.\/lib\/named-admin["']/);
+assert.match(
+  actions,
+  /export async function logoutEmergencyAdmin\(\)[\s\S]*claims\?\.identity\.source === "emergency"/,
+  "Legacy server logout must be explicitly restricted to emergency sessions",
+);
+
+for (const registryAction of [
+  "listLicenses",
+  "createCommercialLicense",
+  "createOfflineActivationPackage",
+  "setLicenseStatus",
+]) {
+  assert.match(actions, new RegExp(`export async function ${registryAction}\\b`));
+}
+
+assert.match(
+  actions,
+  /if \(!activationResult\.ok\) return \{ ok: false, error: activationResult\.error \|\| "License activation lookup failed\.", identity, licenses: \[\] as any\[\] \};/,
+  "Registry read must fail closed when activation lookup fails",
+);
+assert.match(
+  actions,
+  /if \(!cleanLicenseId \|\| !isLicenseStatusAction\(status\)\) return \{ ok: false, error: "Invalid license status\." \};/,
+  "Status writes must validate runtime input before the database PATCH",
+);
+assert.match(actions, /buildOfflineActivationPackage\(\{/);
+assert.match(actions, /filename: `MinarvaBiz-\$\{license\.license_id\}-\$\{deviceId\.slice\(0, 8\)\}\.lic`/);
+
+const page = await readFile(
+  new URL("../apps/license-admin/src/app/page.tsx", import.meta.url),
+  "utf8",
+);
+const panel = await readFile(
+  new URL("../apps/license-admin/src/app/AdminPanel.tsx", import.meta.url),
+  "utf8",
+);
+const browserAuth = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/browser-admin-auth.ts", import.meta.url),
+  "utf8",
+);
+const browserApi = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/browser-admin-api.ts", import.meta.url),
+  "utf8",
+);
+const browserSession = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/browser-admin-session.ts", import.meta.url),
+  "utf8",
+);
+const browserEmergencySession = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/browser-emergency-session.ts", import.meta.url),
+  "utf8",
+);
+const browserEmergencyAuth = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/browser-emergency-auth.ts", import.meta.url),
+  "utf8",
+);
+const authHook = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/useAdminAuthentication.ts", import.meta.url),
+  "utf8",
+);
+const bootstrapHook = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/useFirstAdminBootstrap.ts", import.meta.url),
+  "utf8",
+);
+const authCard = await readFile(
+  new URL("../apps/license-admin/src/app/admin-panel/AdminAuthCard.tsx", import.meta.url),
+  "utf8",
+);
+
+assert.doesNotMatch(page, /readAdminSessionToken|cookies\\(|listLicenses\\(|listSupportRequests\\(/);
+assert.match(page, /identity=\\{null\\}/);
+assert.match(page, /initialLicenses=\\{\\[\\]\\}/);
+assert.match(page, /initialSupportRequests=\\{\\[\\]\\}/);
+
+assert.match(browserAuth, /\\/token\\?grant_type=password/);
+assert.doesNotMatch(browserAuth, /SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY|LICENSE_SESSION_SECRET|LICENSE_EDGE_RPC_SECRET/);
+assert.match(authHook, /beginBrowserNamedAdminLogin/);
+assert.match(authHook, /beginBrowserEmergencyLogin/);
+assert.match(authHook, /activateBrowserAdminSession/);
+assert.match(authHook, /activateBrowserEmergencySession/);
+assert.match(authHook, /loadBrowserAdminDashboard/);
+assert.doesNotMatch(authHook, /loginEmergencyAdmin|from ["']\\.\\.\\/actions["']/);
+assert.match(browserSession, /sessionStorage\\.setItem/);
+assert.match(browserEmergencySession, /sessionStorage\\.setItem/);
+assert.match(browserEmergencyAuth, /api\\/admin\\/emergency\\/login/);
+for (const route of [
+  "/api/admin/me",
+  "/api/admin/licenses",
+  "/api/admin/licenses/status",
+  "/api/admin/licenses/offline-activation",
+  "/api/admin/support",
+  "/api/admin/customers/provision",
+]) assert.ok(browserApi.includes(route), `browser admin API must call ${route}`);
+assert.match(panel, /issueBrowserLicense/);
 assert.match(panel, /setBrowserLicenseStatus/);
 assert.match(panel, /createBrowserOfflineActivation/);
-assert.doesNotMatch(panel, /adoptCloudflareAdminSession/);
-assert.doesNotMatch(panel, /beginBrowserNamedAdminLogin|verifyBrowserAdminMfa/);
-assert.doesNotMatch(panel, /from ["']\.\/actions["']/);
+assert.match(panel, /signOutBrowserAdmin/);
+assert.doesNotMatch(panel, /from ["']\\.\\/actions["']/);
 assert.doesNotMatch(panel, /createCommercialLicense|setLicenseStatus|createOfflineActivationPackage|logoutEmergencyAdmin/);
 assert.match(panel, /Blob|createObjectURL/);
 
