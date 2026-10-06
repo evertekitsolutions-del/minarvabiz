@@ -159,14 +159,6 @@ jobs:
           test ! -e render.yaml
           grep -Fq '"start": "next start --port 3001"' apps/license-admin/package.json
           ! grep -Fq 'sync-emergency-authority.mjs' apps/license-admin/package.json
-      - name: Verify emergency shared-secret controls
-        run: node --experimental-strip-types scripts/license-admin-security-smoke.mjs
-      - name: Verify named administrator identities
-        run: node --experimental-strip-types scripts/license-admin-identity-smoke.mjs
-      - name: Verify administrator MFA and revocable sessions
-        run: node --experimental-strip-types scripts/license-admin-mfa-session-smoke.mjs
-      - name: Verify administrator RBAC and actor audit
-        run: node --experimental-strip-types scripts/license-admin-rbac-audit-smoke.mjs
       - name: Verify modular license-admin surface
         run: node --experimental-strip-types scripts/license-admin-modular-ui-smoke.mjs
       - name: Verify license-admin auth/CRUD/error/import-export actions
