@@ -73,6 +73,7 @@ sql(
 );
 
 sql(
+  "insert into license_private.admin_emergency_runtime_config (id,enabled,actor_email,display_name,source,updated_at) values ('primary',true," + literal(actorEmail) + "," + literal(displayName) + ",'manual',now());" +
   "insert into license_private.edge_credentials (id, secret_sha256, active) values (" +
     literal("emergency-e2e") +
     ", " +
