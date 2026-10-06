@@ -3,7 +3,6 @@
 import * as React from "react";
 import type { Edition, LicenseFeatures } from "@minarvabiz/types";
 import type { LicensePlan } from "@minarvabiz/licensing";
-import {
 import { AdminAuthCard } from "./admin-panel/AdminAuthCard";
 import { AdminHeader } from "./admin-panel/AdminHeader";
 import { LicenseCreateCard } from "./admin-panel/LicenseCreateCard";
