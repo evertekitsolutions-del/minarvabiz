@@ -119,6 +119,7 @@ const authCard = await readFile(
   "utf8",
 );
 
+assert.equal(page.includes('export const dynamic = "force-dynamic";'), true, "license-admin page must remain request-bound for CSP nonces");
 for (const forbidden of ["readAdminSessionToken", "cookies(", "listLicenses(", "listSupportRequests("]) {
   assert.equal(page.includes(forbidden), false, `page must not contain ${forbidden}`);
 }
