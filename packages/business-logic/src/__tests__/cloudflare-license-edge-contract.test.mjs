@@ -274,8 +274,9 @@ assert.doesNotMatch(adminPanel, /\bloginAdmin\b|\bbeginAdminMfaEnrollment\b|\bve
 
 assert.match(worker, /POST \/api\/admin\/emergency\/login/);
 assert.match(worker, /POST \/api\/admin\/emergency\/logout/);
-assert.match(worker, /claims\?\.identity\.source === "emergency"/);
-assert.match(worker, /identity\.source !== "emergency" \|\| authMethod !== "emergency"/);
+assert.match(worker, /async function adminEmergencyLogoutNatively/);
+assert.match(worker, /emergencyBearerToken\(request\)/);
+assert.match(worker, /cloudflare_admin_emergency_logout/);
 assert.doesNotMatch(worker, /export async function loginAdmin\b/);
 assert.doesNotMatch(worker, /export async function beginAdminMfaEnrollment\b/);
 assert.doesNotMatch(worker, /export async function verifyAdminMfa\b/);
