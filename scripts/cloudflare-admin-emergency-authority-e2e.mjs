@@ -64,7 +64,16 @@ const currentCredentialHash = digest(currentCredential);
 const previousCredentialHash = digest(previousCredential);
 const wrongCredentialHash = digest(wrongCredential);
 
+// This legacy foundation suite runs after the self-service suite, which intentionally
+// leaves manual emergency authority disabled. Reset only test-owned runtime state so
+// this suite can independently exercise current/previous credential semantics.
 sql(
+  "delete from license_private.admin_emergency_runtime_config where id='primary';" +
+  "delete from license_private.admin_emergency_credentials where slot in ('current','previous');"
+);
+
+sql(
+  "insert into license_private.admin_emergency_runtime_config (id,enabled,actor_email,display_name,source,updated_at) values ('primary',true," + literal(actorEmail) + "," + literal(displayName) + ",'manual',now());" +
   "insert into license_private.edge_credentials (id, secret_sha256, active) values (" +
     literal("emergency-e2e") +
     ", " +
@@ -100,8 +109,6 @@ function loginBody({
   rateKey = digest("203.0.113.10|" + edgeSecret),
   backoffKey = digest("203.0.113.10|" + actorEmail + "|" + edgeSecret),
   tokenHash = digest("session-default"),
-  email = actorEmail,
-  name = displayName,
 } = {}) {
   return {
     p_edge_secret: edge,
@@ -109,12 +116,10 @@ function loginBody({
     p_rate_key_hash: rateKey,
     p_backoff_key_hash: backoffKey,
     p_token_sha256: tokenHash,
-    p_actor_email: email,
-    p_display_name: name,
   };
 }
 
-const badEdge = await rpc("cloudflare_admin_emergency_login", loginBody({
+const badEdge = await rpc("cloudflare_admin_emergency_login_v2", loginBody({
   edge: "x".repeat(48),
   tokenHash: digest("bad-edge-session"),
 }));
@@ -123,7 +128,7 @@ assert.equal(badEdge.code, "EMERGENCY_SERVICE_UNAVAILABLE");
 
 const deniedRateKey = digest("203.0.113.11|" + edgeSecret);
 const deniedBackoffKey = digest("203.0.113.11|" + actorEmail + "|" + edgeSecret);
-const denied = await rpc("cloudflare_admin_emergency_login", loginBody({
+const denied = await rpc("cloudflare_admin_emergency_login_v2", loginBody({
   credentialHash: wrongCredentialHash,
   rateKey: deniedRateKey,
   backoffKey: deniedBackoffKey,
@@ -134,7 +139,7 @@ assert.equal(denied.code, "INVALID_EMERGENCY_CREDENTIAL");
 assert.equal(denied.failureCount, 1);
 assert.ok(denied.retryAfterSeconds >= 2);
 
-const blocked = await rpc("cloudflare_admin_emergency_login", loginBody({
+const blocked = await rpc("cloudflare_admin_emergency_login_v2", loginBody({
   credentialHash: currentCredentialHash,
   rateKey: deniedRateKey,
   backoffKey: deniedBackoffKey,
@@ -147,7 +152,7 @@ assert.equal(blocked.failureCount, 1);
 const currentToken = "current-browser-session-token-" + "s".repeat(32);
 const currentTokenHash = digest(currentToken);
 const currentBackoffKey = digest("203.0.113.12|" + actorEmail + "|" + edgeSecret);
-const currentLogin = await rpc("cloudflare_admin_emergency_login", loginBody({
+const currentLogin = await rpc("cloudflare_admin_emergency_login_v2", loginBody({
   credentialHash: currentCredentialHash,
   rateKey: digest("203.0.113.12|" + edgeSecret),
   backoffKey: currentBackoffKey,
@@ -199,7 +204,7 @@ assert.equal(currentAfterLogout.ok, false);
 assert.equal(currentAfterLogout.code, "UNAUTHENTICATED");
 
 const previousTokenHash = digest("previous-browser-session-token-" + "q".repeat(32));
-const previousLogin = await rpc("cloudflare_admin_emergency_login", loginBody({
+const previousLogin = await rpc("cloudflare_admin_emergency_login_v2", loginBody({
   credentialHash: previousCredentialHash,
   rateKey: digest("203.0.113.13|" + edgeSecret),
   backoffKey: digest("203.0.113.13|" + actorEmail + "|" + edgeSecret),
@@ -217,7 +222,7 @@ assert.equal(previousLogout.ok, true);
 const coarseEmail = "emergency-rate-limit@example.test";
 const coarseRateKey = digest("198.51.100.77|" + edgeSecret);
 for (let index = 1; index <= 8; index += 1) {
-  const attempt = await rpc("cloudflare_admin_emergency_login", loginBody({
+  const attempt = await rpc("cloudflare_admin_emergency_login_v2", loginBody({
     credentialHash: wrongCredentialHash,
     rateKey: coarseRateKey,
     backoffKey: digest("rate-only-" + index),
@@ -228,7 +233,7 @@ for (let index = 1; index <= 8; index += 1) {
   assert.equal(attempt.ok, false);
   assert.equal(attempt.code, "INVALID_EMERGENCY_CREDENTIAL");
 }
-const ninth = await rpc("cloudflare_admin_emergency_login", loginBody({
+const ninth = await rpc("cloudflare_admin_emergency_login_v2", loginBody({
   credentialHash: wrongCredentialHash,
   rateKey: coarseRateKey,
   backoffKey: digest("rate-only-9"),
@@ -244,13 +249,13 @@ const audit = JSON.parse(
     "select json_build_object(" +
       "'denied',(select count(*) from public.license_admin_audit_log where actor_email=" +
       literal(actorEmail) +
-      " and action='admin.emergency.login' and outcome='denied')," +
+      " and action='admin.emergency.login' and outcome='denied' and details->>'failureCount'='1')," +
       "'login_success',(select count(*) from public.license_admin_audit_log where actor_email=" +
       literal(actorEmail) +
-      " and action='admin.emergency.login' and outcome='success')," +
+      " and action='admin.emergency.login' and outcome='success' and session_id in (select id from public.license_admin_sessions where edge_token_sha256 in (" + literal(currentTokenHash) + "," + literal(previousTokenHash) + ")))," +
       "'logout_success',(select count(*) from public.license_admin_audit_log where actor_email=" +
       literal(actorEmail) +
-      " and action='admin.emergency.logout' and outcome='success')," +
+      " and action='admin.emergency.logout' and outcome='success' and session_id in (select id from public.license_admin_sessions where edge_token_sha256 in (" + literal(currentTokenHash) + "," + literal(previousTokenHash) + ")))," +
       "'current_hash_private',(select count(*) from license_private.admin_emergency_credentials where slot='current' and secret_sha256=" +
       literal(currentCredentialHash) +
       ")," +
@@ -260,7 +265,7 @@ const audit = JSON.parse(
       ")::text;",
   ),
 );
-assert.equal(Number(audit.denied), 1);
+assert.equal(Number(audit.denied), 9);
 assert.equal(Number(audit.login_success), 2);
 assert.equal(Number(audit.logout_success), 2);
 assert.equal(Number(audit.current_hash_private), 1);

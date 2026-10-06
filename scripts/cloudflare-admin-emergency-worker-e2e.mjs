@@ -89,9 +89,6 @@ const baseEnv = {
   SUPABASE_PUBLISHABLE_KEY: publishableKey,
   LICENSE_EDGE_RPC_SECRET: edgeSecret,
   LICENSE_ADMIN_ALLOWED_ORIGINS: adminOrigin,
-  LICENSE_ADMIN_EMERGENCY_LOGIN_ENABLED: "true",
-  LICENSE_ADMIN_EMERGENCY_ACTOR_EMAIL: actorEmail,
-  LICENSE_ADMIN_EMERGENCY_ACTOR_NAME: actorName,
   MINARVA_ONLINE_APP_URL: "http://127.0.0.1:3000",
 };
 
@@ -119,11 +116,14 @@ async function workerJson(path, options = {}) {
   };
 }
 
-const disabled = await workerJson("/api/admin/emergency/status", {
-  env: { LICENSE_ADMIN_EMERGENCY_LOGIN_ENABLED: "false" },
-});
+sql(
+  "update license_private.admin_emergency_runtime_config set enabled=false,updated_at=now() where id='primary';",
+);
+const disabled = await workerJson("/api/admin/emergency/status");
 assert.equal(disabled.status, 200);
-assert.deepEqual(disabled.data, { ok: true, enabled: false, configured: false });
+assert.equal(disabled.data.ok, true);
+assert.equal(disabled.data.enabled, false);
+assert.equal(disabled.data.configured, false);
 assert.equal(JSON.stringify(disabled.data).includes(actorEmail), false);
 
 const badOrigin = await workerJson("/api/admin/emergency/status", {
@@ -133,12 +133,20 @@ assert.equal(badOrigin.status, 403);
 assert.equal(badOrigin.data.code, "ORIGIN_NOT_ALLOWED");
 assert.equal(badOrigin.headers.get("access-control-allow-origin"), null);
 
-const unconfiguredActor = await workerJson("/api/admin/emergency/status", {
-  env: { LICENSE_ADMIN_EMERGENCY_ACTOR_EMAIL: "" },
-});
+sql(
+  "delete from license_private.admin_emergency_runtime_config where id='primary';",
+);
+const unconfiguredActor = await workerJson("/api/admin/emergency/status");
 assert.equal(unconfiguredActor.status, 200);
-assert.deepEqual(unconfiguredActor.data, { ok: true, enabled: true, configured: false });
+assert.equal(unconfiguredActor.data.ok, true);
+assert.equal(unconfiguredActor.data.enabled, false);
+assert.equal(unconfiguredActor.data.configured, false);
 
+sql(
+  "insert into license_private.admin_emergency_runtime_config " +
+    "(id,enabled,actor_email,display_name,source,updated_at) values (" +
+    "'primary',true," + literal(actorEmail) + "," + literal(actorName) + ",'manual',now());",
+);
 const configured = await workerJson("/api/admin/emergency/status");
 assert.equal(configured.status, 200, JSON.stringify(configured.data));
 assert.equal(configured.data.ok, true);
@@ -149,14 +157,19 @@ assert.equal(configured.headers.get("access-control-allow-origin"), adminOrigin)
 assert.equal(JSON.stringify(configured.data).includes(actorEmail), false);
 assert.equal(JSON.stringify(configured.data).includes(currentHash), false);
 
+sql(
+  "update license_private.admin_emergency_runtime_config set enabled=false,updated_at=now() where id='primary';",
+);
 const disabledLogin = await workerJson("/api/admin/emergency/login", {
   method: "POST",
   body: { credential: currentCredential },
-  env: { LICENSE_ADMIN_EMERGENCY_LOGIN_ENABLED: "false" },
   ip: "203.0.113.1",
 });
 assert.equal(disabledLogin.status, 403);
 assert.equal(disabledLogin.data.code, "EMERGENCY_DISABLED");
+sql(
+  "update license_private.admin_emergency_runtime_config set enabled=true,updated_at=now() where id='primary';",
+);
 
 const badLoginOrigin = await workerJson("/api/admin/emergency/login", {
   method: "POST",
@@ -273,12 +286,17 @@ const generalBadOrigin = await workerJson("/api/admin/licenses", {
 assert.equal(generalBadOrigin.status, 403);
 assert.equal(generalBadOrigin.data.code, "ORIGIN_NOT_ALLOWED");
 
+sql(
+  "update license_private.admin_emergency_runtime_config set enabled=false,updated_at=now() where id='primary';",
+);
 const generalDisabled = await workerJson("/api/admin/licenses", {
   token: currentToken,
-  env: { LICENSE_ADMIN_EMERGENCY_LOGIN_ENABLED: "false" },
 });
 assert.equal(generalDisabled.status, 401);
 assert.equal(generalDisabled.data.code, "UNAUTHENTICATED");
+sql(
+  "update license_private.admin_emergency_runtime_config set enabled=true,updated_at=now() where id='primary';",
+);
 
 const beforeLicenses = await workerJson("/api/admin/licenses", { token: currentToken });
 assert.equal(beforeLicenses.status, 200, JSON.stringify(beforeLicenses.data));
@@ -480,7 +498,7 @@ assert.equal(hashAsCredential.data.code, "INVALID_EMERGENCY_CREDENTIAL");
 
 const rateIp = "198.51.100.77";
 const backoffKey = digest(
-  "minarva-emergency-backoff-v1\0" + rateIp + "\0" + actorEmail + "\0" + edgeSecret,
+  "minarva-emergency-backoff-v2\0" + rateIp + "\0" + edgeSecret,
 );
 for (let index = 1; index <= 8; index += 1) {
   const attempt = await workerJson("/api/admin/emergency/login", {
@@ -516,6 +534,10 @@ const oversized = await worker.fetch(
 );
 assert.equal(oversized.status, 413);
 
+assert.equal("LICENSE_ADMIN_EMERGENCY_LOGIN_ENABLED" in baseEnv, false);
+assert.equal("LICENSE_ADMIN_EMERGENCY_ACTOR_EMAIL" in baseEnv, false);
+assert.equal("LICENSE_ADMIN_EMERGENCY_ACTOR_NAME" in baseEnv, false);
+
 console.log(
-  "Cloudflare emergency Worker E2E PASS: strict origin -> login/backoff/rotation -> dual business authority -> license/support/provision parity -> emergency audit context -> revocation/bypass resistance.",
+  "Cloudflare emergency Worker E2E PASS: DB-owned runtime config -> strict origin -> login/backoff/rotation -> dual business authority -> license/support/provision parity -> audit/revocation.",
 );

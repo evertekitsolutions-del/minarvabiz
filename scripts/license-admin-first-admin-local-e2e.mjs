@@ -26,6 +26,7 @@ const apiUrl = String(deepValue(status, "API_URL") || "").replace(/\/$/, "");
 const publishableKey = String(
   deepValue(status, "PUBLISHABLE_KEY") || deepValue(status, "ANON_KEY") || "",
 ).trim();
+const serviceRoleKey = String(deepValue(status, "SERVICE_ROLE_KEY") || "").trim();
 const dbUrl = String(deepValue(status, "DB_URL") || "").trim();
 const mailpitUrl = String(
   deepValue(status, "MAILPIT_URL") || deepValue(status, "INBUCKET_URL") || "",
@@ -33,6 +34,7 @@ const mailpitUrl = String(
 
 assert.match(apiUrl, /^http:\/\/(?:127\.0\.0\.1|localhost):\d+$/);
 assert.ok(publishableKey.length >= 20, "Local Supabase publishable key is missing.");
+assert.ok(serviceRoleKey.length >= 20, "Local Supabase service-role key is missing.");
 assert.match(dbUrl, /^postgres(?:ql)?:\/\//);
 assert.match(mailpitUrl, /^http:\/\/(?:127\.0\.0\.1|localhost):\d+$/);
 
@@ -132,6 +134,25 @@ async function rpcJson(name, body) {
       accept: "application/json",
       apikey: publishableKey,
       authorization: "Bearer " + publishableKey,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(body),
+    redirect: "manual",
+  });
+  return {
+    status: response.status,
+    headers: response.headers,
+    data: await response.json().catch(() => null),
+  };
+}
+
+async function serviceRpcJson(name, body) {
+  const response = await fetch(apiUrl + "/rest/v1/rpc/" + encodeURIComponent(name), {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      apikey: serviceRoleKey,
+      authorization: "Bearer " + serviceRoleKey,
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
@@ -442,6 +463,12 @@ const prematureClaim = await workerJson("/api/admin/bootstrap/claim", {
 assert.equal(prematureClaim.status, 403);
 assert.equal(prematureClaim.data?.code, "MFA_REQUIRED");
 
+const prematureEmergencyControl = await workerJson("/api/admin/emergency/control-status", {
+  token: aal1Token,
+});
+assert.equal(prematureEmergencyControl.status, 403);
+assert.equal(prematureEmergencyControl.data?.code, "MFA_REQUIRED");
+
 // 8. Enroll and verify real Supabase TOTP, yielding AAL2.
 const enrollment = await authJson("/factors", {
   token: aal1Token,
@@ -501,6 +528,231 @@ assert.equal(me.status, 200);
 assert.equal(me.data?.ok, true);
 assert.equal(me.data?.identity?.id, userId);
 assert.equal(me.data?.identity?.role, "admin");
+
+psqlScalar(
+  "update public.license_admin_identities set role='operator' where auth_user_id=" +
+    sqlLiteral(userId) + "::uuid;",
+);
+const operatorEmergencyControl = await workerJson("/api/admin/emergency/control-status", {
+  token: aal2Token,
+});
+assert.equal(operatorEmergencyControl.status, 403);
+assert.equal(operatorEmergencyControl.data?.code, "FORBIDDEN");
+psqlScalar(
+  "update public.license_admin_identities set role='admin' where auth_user_id=" +
+    sqlLiteral(userId) + "::uuid;",
+);
+
+const controlBefore = await workerJson("/api/admin/emergency/control-status", {
+  token: aal2Token,
+});
+assert.equal(controlBefore.status, 200, JSON.stringify(controlBefore.data));
+assert.equal(controlBefore.data?.ok, true);
+assert.equal(controlBefore.data?.enabled, false);
+assert.equal(controlBefore.data?.currentConfigured, false);
+
+const publicBefore = await workerJson("/api/admin/emergency/status");
+assert.equal(publicBefore.status, 200);
+assert.equal(publicBefore.data?.enabled, false);
+assert.equal(publicBefore.data?.configured, false);
+
+const firstRotate = await workerJson("/api/admin/emergency/rotate", {
+  method: "POST",
+  token: aal2Token,
+  body: {},
+});
+assert.equal(firstRotate.status, 200, JSON.stringify(firstRotate.data));
+assert.equal(firstRotate.data?.ok, true);
+const firstEmergencyCredential = String(firstRotate.data?.credential || "");
+assert.match(firstEmergencyCredential, /^[A-Za-z0-9_-]{64}$/);
+assert.equal(JSON.stringify(firstRotate.data).includes(createHash("sha256").update(firstEmergencyCredential).digest("hex")), false);
+
+let emergencyDb = JSON.parse(
+  psqlScalar(
+    "select json_build_object(" +
+      "'source',(select source from license_private.admin_emergency_runtime_config where id='primary')," +
+      "'enabled',(select enabled from license_private.admin_emergency_runtime_config where id='primary')," +
+      "'current_count',(select count(*) from license_private.admin_emergency_credentials where slot='current')," +
+      "'previous_count',(select count(*) from license_private.admin_emergency_credentials where slot='previous')," +
+      "'raw_count',(select count(*) from license_private.admin_emergency_credentials where secret_sha256=" +
+        sqlLiteral(firstEmergencyCredential) + ")" +
+    ")::text;",
+  ),
+);
+assert.equal(emergencyDb.source, "manual");
+assert.equal(emergencyDb.enabled, true);
+assert.equal(Number(emergencyDb.current_count), 1);
+assert.equal(Number(emergencyDb.previous_count), 0);
+assert.equal(Number(emergencyDb.raw_count), 0);
+
+const publicEnabled = await workerJson("/api/admin/emergency/status");
+assert.equal(publicEnabled.status, 200, JSON.stringify(publicEnabled.data));
+assert.equal(publicEnabled.data?.enabled, true);
+assert.equal(publicEnabled.data?.configured, true);
+
+const emergencyLogin = await workerJson("/api/admin/emergency/login", {
+  method: "POST",
+  body: { credential: firstEmergencyCredential },
+  ip: "203.0.113.81",
+});
+assert.equal(emergencyLogin.status, 200, JSON.stringify(emergencyLogin.data));
+const firstEmergencyToken = String(emergencyLogin.data?.sessionToken || "");
+assert.match(firstEmergencyToken, /^[A-Za-z0-9_-]{64}$/);
+assert.equal(emergencyLogin.data?.identity?.email, bootstrapEmail);
+assert.equal(emergencyLogin.data?.identity?.source, "emergency");
+
+const emergencyMe = await workerJson("/api/admin/me", {
+  token: firstEmergencyToken,
+});
+assert.equal(emergencyMe.status, 200, JSON.stringify(emergencyMe.data));
+assert.equal(emergencyMe.data?.identity?.source, "emergency");
+
+const emergencyCannotRotate = await workerJson("/api/admin/emergency/rotate", {
+  method: "POST",
+  token: firstEmergencyToken,
+  body: {},
+});
+assert.equal(emergencyCannotRotate.status, 401);
+
+const secondRotate = await workerJson("/api/admin/emergency/rotate", {
+  method: "POST",
+  token: aal2Token,
+  body: {},
+});
+assert.equal(secondRotate.status, 200, JSON.stringify(secondRotate.data));
+const secondEmergencyCredential = String(secondRotate.data?.credential || "");
+assert.match(secondEmergencyCredential, /^[A-Za-z0-9_-]{64}$/);
+assert.notEqual(secondEmergencyCredential, firstEmergencyCredential);
+assert.equal(secondRotate.data?.previousActive, true);
+
+const revokedAfterRotate = await workerJson("/api/admin/me", {
+  token: firstEmergencyToken,
+});
+assert.equal(revokedAfterRotate.status, 401);
+assert.equal(revokedAfterRotate.data?.code, "UNAUTHENTICATED");
+
+const previousGraceLogin = await workerJson("/api/admin/emergency/login", {
+  method: "POST",
+  body: { credential: firstEmergencyCredential },
+  ip: "203.0.113.82",
+});
+assert.equal(previousGraceLogin.status, 200, JSON.stringify(previousGraceLogin.data));
+assert.equal(previousGraceLogin.data?.identity?.source, "emergency");
+
+const currentCredentialLogin = await workerJson("/api/admin/emergency/login", {
+  method: "POST",
+  body: { credential: secondEmergencyCredential },
+  ip: "203.0.113.83",
+});
+assert.equal(currentCredentialLogin.status, 200, JSON.stringify(currentCredentialLogin.data));
+
+const currentHashBeforeLegacyProbe = psqlScalar(
+  "select secret_sha256 from license_private.admin_emergency_credentials where slot='current';",
+);
+const legacyOverwrite = await serviceRpcJson("sync_license_admin_emergency_authority", {
+  p_current_sha256: "a".repeat(64),
+  p_previous_sha256: null,
+  p_previous_valid_until: null,
+  p_enabled: true,
+  p_actor_email: "legacy-overwrite@example.test",
+  p_display_name: "Legacy Overwrite Attempt",
+});
+assert.equal(legacyOverwrite.status, 200);
+assert.equal(legacyOverwrite.data?.ok, false);
+assert.equal(legacyOverwrite.data?.code, "EMERGENCY_SYNC_UNAVAILABLE");
+assert.equal(
+  psqlScalar("select secret_sha256 from license_private.admin_emergency_credentials where slot='current';"),
+  currentHashBeforeLegacyProbe,
+  "Legacy Render sync must not overwrite manual self-service authority.",
+);
+assert.equal(
+  psqlScalar("select source from license_private.admin_emergency_runtime_config where id='primary';"),
+  "manual",
+);
+
+const disabledControl = await workerJson("/api/admin/emergency/disable", {
+  method: "POST",
+  token: aal2Token,
+  body: {},
+});
+if (disabledControl.status !== 200) {
+  const directDisable = await fetch(
+    apiUrl + "/rest/v1/rpc/cloudflare_admin_disable_emergency_access",
+    {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        apikey: publishableKey,
+        authorization: "Bearer " + aal2Token,
+        "content-type": "application/json",
+      },
+      body: "{}",
+      redirect: "manual",
+    },
+  );
+  const directDisableData = await directDisable.json().catch(() => null);
+  console.error(
+    "Emergency disable diagnostic:",
+    JSON.stringify({
+      status: directDisable.status,
+      data: directDisableData,
+    }),
+  );
+  try {
+    psqlScalar(
+      "begin;" +
+      "delete from license_private.admin_emergency_credentials;" +
+      "insert into license_private.admin_emergency_runtime_config " +
+        "(id,enabled,actor_email,display_name,source,updated_at) values (" +
+        "'primary',false," + sqlLiteral(bootstrapEmail) + "," + sqlLiteral(bootstrapName) + ",'manual',now()) " +
+        "on conflict (id) do update set enabled=false,actor_email=excluded.actor_email," +
+        "display_name=excluded.display_name,source='manual',updated_at=now();" +
+      "update public.license_admin_sessions set revoked_at=now(),revoke_reason='emergency_disabled'," +
+        "last_seen_at=now() where source='emergency' and revoked_at is null;" +
+      "insert into public.license_admin_audit_log (" +
+        "id,session_id,actor_id,actor_email,display_name,actor_role,source,action,outcome,target_type,target_id,details" +
+        ") values (gen_random_uuid(),null," + sqlLiteral(userId) + "," + sqlLiteral(bootstrapEmail) + "," +
+        sqlLiteral(bootstrapName) + ",'admin','supabase','admin.emergency.disable','success'," +
+        "'emergency_authority','primary',jsonb_build_object('credentialsRemoved',true));" +
+      "rollback;"
+    );
+  } catch {
+    // psql writes the root database error to inherited stderr.
+  }
+}
+assert.equal(disabledControl.status, 200, JSON.stringify(disabledControl.data));
+assert.equal(disabledControl.data?.enabled, false);
+assert.equal(disabledControl.data?.currentConfigured, false);
+
+const publicDisabled = await workerJson("/api/admin/emergency/status");
+assert.equal(publicDisabled.status, 200);
+assert.equal(publicDisabled.data?.enabled, false);
+assert.equal(publicDisabled.data?.configured, false);
+
+const disabledCredentialLogin = await workerJson("/api/admin/emergency/login", {
+  method: "POST",
+  body: { credential: secondEmergencyCredential },
+  ip: "203.0.113.84",
+});
+assert.equal(disabledCredentialLogin.status, 403);
+assert.equal(disabledCredentialLogin.data?.code, "EMERGENCY_DISABLED");
+
+emergencyDb = JSON.parse(
+  psqlScalar(
+    "select json_build_object(" +
+      "'credential_count',(select count(*) from license_private.admin_emergency_credentials)," +
+      "'enabled',(select enabled from license_private.admin_emergency_runtime_config where id='primary')," +
+      "'source',(select source from license_private.admin_emergency_runtime_config where id='primary')," +
+      "'rotate_audit',(select count(*) from public.license_admin_audit_log where action='admin.emergency.credential.rotate')," +
+      "'disable_audit',(select count(*) from public.license_admin_audit_log where action='admin.emergency.disable')" +
+    ")::text;",
+  ),
+);
+assert.equal(Number(emergencyDb.credential_count), 0);
+assert.equal(emergencyDb.enabled, false);
+assert.equal(emergencyDb.source, "manual");
+assert.equal(Number(emergencyDb.rotate_audit), 2);
+assert.equal(Number(emergencyDb.disable_audit), 1);
 
 const closedStatus = await workerJson("/api/admin/bootstrap/status");
 assert.equal(closedStatus.status, 200);

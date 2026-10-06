@@ -44,7 +44,8 @@
       "node-gyp"
     ],
     "overrides": {
-      "postcss": "^8.5.18"
+      "postcss": "^8.5.18",
+      "source-map-js": "^1.2.2"
     }
   }
 }

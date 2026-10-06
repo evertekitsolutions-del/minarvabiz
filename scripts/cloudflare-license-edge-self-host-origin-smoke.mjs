@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import worker from "../infra/cloudflare-license-edge/src/index.js";
 
 const publishableKey = "sb_publishable_self_host_origin_test_key";
@@ -54,5 +55,32 @@ const insecureApp = await authConfig({
   LICENSE_ADMIN_ALLOWED_ORIGINS: "https://admin.example.test",
 });
 assert.equal(insecureApp.status, 503, "non-loopback HTTP app origins must fail closed");
+
+const workerSource = await readFile(
+  new URL("../infra/cloudflare-license-edge/src/index.js", import.meta.url),
+  "utf8",
+);
+for (const retiredBinding of [
+  "LICENSE_ADMIN_EMERGENCY_LOGIN_ENABLED",
+  "LICENSE_ADMIN_EMERGENCY_ACTOR_EMAIL",
+  "LICENSE_ADMIN_EMERGENCY_ACTOR_NAME",
+]) {
+  assert.equal(
+    workerSource.includes(retiredBinding),
+    false,
+    `Worker emergency runtime authority must not regress to retired binding ${retiredBinding}`,
+  );
+}
+for (const controlRoute of [
+  "/api/admin/emergency/control-status",
+  "/api/admin/emergency/rotate",
+  "/api/admin/emergency/disable",
+]) {
+  assert.equal(
+    workerSource.includes(controlRoute),
+    true,
+    `Worker must retain self-service emergency control route ${controlRoute}`,
+  );
+}
 
 console.log("Cloudflare self-host origin portability smoke passed.");

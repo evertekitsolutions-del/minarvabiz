@@ -186,21 +186,21 @@ Maintain PostgreSQL portability for future self-hosting.
 
 ## 8. Render removal status
 
-Customer-facing license/update traffic is Render-free.
+Customer-facing license/update traffic and normal named-admin control-plane traffic are Render-free.
 
-Normal named-admin authentication, business operations, page hydration, logout and browser-native first-admin bootstrap no longer require the legacy Render/Next privileged path. Fresh-instance regression proof now exists and the obsolete privileged normal first-admin server helpers have been removed.
+PR #249 merged the browser-native Cloudflare emergency UI/session path. PR #250 establishes the Render-independent emergency self-service authority: a named Supabase administrator at TOTP AAL2 with role `admin` can rotate or disable emergency authority through Cloudflare + PostgreSQL. Cloudflare generates the strong emergency credential, PostgreSQL receives only its SHA-256 digest, and plaintext is returned once to the authenticated browser. Manual ownership prevents later legacy Render startup synchronization from overwriting the authority.
 
-Remaining Render/Next migration scope is intentionally narrower:
+The old Render credential/digest synchronization is therefore **not a production cutover prerequisite**. It remains rollback compatibility only until manual self-service ownership is established and the live replacement is proven.
 
-- the PostgreSQL emergency authority foundation, Cloudflare emergency routes, and zero-secret legacy digest synchronization bridge are merged and fresh-instance verified
-- production sync RPC/schema is live, but the private digest/runtime registry remains empty until the real Render process executes the new startup sync
-- remaining emergency cutover work is production Render digest-sync proof -> Cloudflare emergency actor/enable configuration -> live route proof -> browser emergency-session cutover -> parity E2E -> legacy Next emergency helper retirement
-- current production emergency UI still depends on Next server cookies/actions until that replacement is proven
-- preserve the existing emergency security properties during migration: explicit opt-in, named emergency actor, short revocable session, rate limiting/backoff, audit trail, current/previous secret rotation with bounded grace, defense against edge-secret-only bypass, and fail-closed database/session validation
-- verify a Cloudflare-compatible License Admin UI hosting path while preserving named-admin, bootstrap and emergency behavior
-- remove transitional Render configuration/service only after emergency replacement and UI hosting are verified
+Before removing the legacy Next/Render emergency path:
+- deploy the additive PR #250 database migration and merged Worker from `main`;
+- use the existing named production admin at AAL2 to establish manual emergency authority without exposing the returned credential in chat, logs, docs or source control;
+- prove live Cloudflare emergency status/login/me/business operations/logout, revocation, previous-credential grace, origin enforcement and backoff/rate limiting;
+- regression-prove named AAL2 admin operations;
+- verify the provider-neutral License Admin UI hosting/origin path;
+- only then retire obsolete Next emergency cookie/session/service-role machinery and transitional Render service/configuration.
 
-Live production already contains an active License Admin identity. **Do not reset/delete production admin state for bootstrap testing.** The isolated fresh-instance harness is the authoritative open-registry regression test going forward.
+Live production already contains an active License Admin identity. **Do not reset/delete production admin state for bootstrap testing.** Additive production migrations only. Keep the existing fallback until the replacement has full live parity proof.
 
 ## 9. Current signing authority
 
@@ -299,18 +299,15 @@ The Control Plane must eventually support subscription, plan, add-on, seats, bra
 
 ## 15. Immediate next milestone
 
-Continue emergency cutover without reducing or disabling the current break-glass capability.
+Finish PR #250 and perform the safe production emergency-authority cutover.
 
-Recommended next sequence:
-
-1. **Verify the real Render service executes the merged startup digest sync.** Production PostgreSQL must show a configured current digest and safe runtime metadata without ever reading/exporting the raw emergency credential.
-2. Render connector workspace selection requires explicit user confirmation. The only visible workspace at this checkpoint is **“My Workspace”** for the connected Render account; do not select or mutate it without confirmation.
-3. After Render sync is proven, compare only safe booleans/metadata: current configured, previous grace active/inactive, emergency enabled state and actor configured state. Do not expose actor email/name or any digest/raw secret in chat/logs.
-4. Configure Cloudflare emergency actor/enable bindings only after the synchronized authority is proven aligned. Keep the existing Next/Render emergency path available.
-5. Verify live Cloudflare emergency status/login/me/logout from the authorized admin origin, including revocation and backoff/rate behavior.
-6. Cut the License Admin emergency UI/session from Next server cookies/actions to browser -> Cloudflare bearer session; keep legacy server helpers until parity E2E passes.
-7. Only after parity E2E, retire obsolete Next emergency cookie/session/service-role machinery, verify Cloudflare-compatible License Admin UI hosting, and then remove transitional Render.
-8. Continue Global Core, Subscription/Entitlements, Local-first Sync v2, Vyapar-parity and Minarva Intelligence milestones per the master plan.
+1. Require exact-head CI/security/fresh-instance/Windows gates green and merge PR #250 with current continuation documentation.
+2. Apply the additive PR #250 migration to production PostgreSQL/Supabase and deploy the Cloudflare Worker from merged `main` only.
+3. Through the existing named TOTP-AAL2 admin, establish `manual` emergency ownership using the self-service rotation path. Never expose the one-time plaintext credential or its digest in chat/logs/docs.
+4. Prove live status/login/me/business parity/logout, session revocation, bounded previous-credential grace, origin enforcement, rate limiting/backoff and named-AAL2 regression.
+5. Keep legacy Render/Next fallback until that proof is complete; then retire obsolete emergency cookie/session/service-role machinery and transitional Render service/configuration.
+6. Verify and migrate remaining Vercel-hosting dependencies to the provider-neutral/self-hostable License Admin hosting path before removing Vercel as a mandatory dependency.
+7. Resume Global Core, Subscription/Entitlements, Local-first Sync v2, industry/country packs, Vyapar-plus parity and Minarva Intelligence milestones per the master plan.
 
 ## 16. Small-milestone rule
 
