@@ -619,6 +619,8 @@ BEGIN
       'ok', false,
       'code', 'RATE_LIMITED',
       'retryAfterSeconds', v_retry_after,
+      'remaining', GREATEST(0, COALESCE(v_rate.remaining, 0)),
+      'failureCount', GREATEST(0, COALESCE(v_backoff.failure_count, 0)),
       'httpStatus', 429
     );
   END IF;
