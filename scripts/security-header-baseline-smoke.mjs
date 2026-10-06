@@ -55,8 +55,8 @@ const webMiddleware = await readFile(
   new URL("../apps/web/src/middleware.ts", import.meta.url),
   "utf8",
 );
-const adminMiddleware = await readFile(
-  new URL("../apps/license-admin/src/middleware.ts", import.meta.url),
+const adminStaticHeaders = await readFile(
+  new URL("../apps/license-admin/public/_headers", import.meta.url),
   "utf8",
 );
 const desktopHtml = await readFile(
@@ -66,7 +66,6 @@ const desktopHtml = await readFile(
 
 for (const [label, source] of [
   ["main web config", webConfig],
-  ["license-admin config", adminConfig],
 ]) {
   assert.ok(
     source.includes("@minarvabiz/utils/security-headers"),
@@ -85,7 +84,6 @@ for (const [label, source] of [
 
 for (const [label, source] of [
   ["main web middleware", webMiddleware],
-  ["license-admin middleware", adminMiddleware],
 ]) {
   assert.ok(
     source.includes("@minarvabiz/utils/security-headers"),
@@ -100,6 +98,17 @@ for (const [label, source] of [
     label + " must not keep a local CSP builder",
   );
 }
+
+assert.ok(adminConfig.includes('output: "export"'), "license-admin must remain a portable static export");
+for (const required of [
+  "Content-Security-Policy:",
+  "default-src 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "X-Content-Type-Options: nosniff",
+  "X-Frame-Options: DENY",
+  "Permissions-Policy: camera=(), microphone=(), geolocation=()",
+]) assert.ok(adminStaticHeaders.includes(required), "license-admin static security baseline is missing: " + required);
 
 const desktopCspMatch = desktopHtml.match(
   /<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i,
