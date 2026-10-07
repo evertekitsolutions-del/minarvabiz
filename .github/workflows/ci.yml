@@ -186,7 +186,7 @@ jobs:
           ! grep -R -Fq 'SUPABASE_SERVICE_ROLE_KEY' apps/license-admin/out
           ! grep -R -Fq 'LICENSE_EDGE_RPC_SECRET' apps/license-admin/out
           ! grep -R -Fq 'LICENSE_PRIVATE_KEY' apps/license-admin/out
-          pnpm --dir . --filter @minarvabiz/license-admin verify:static
+          node scripts/license-admin-static-artifact-smoke.mjs
       - name: Capture license-admin diagnostics
         if: failure()
         shell: bash
