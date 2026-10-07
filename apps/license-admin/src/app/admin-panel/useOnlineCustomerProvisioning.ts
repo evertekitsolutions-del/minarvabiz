@@ -5,7 +5,7 @@ import { provisionBrowserCustomer } from "./browser-admin-api";
 import { canProvisionOnlineCustomer } from "./model";
 import type { AdminRole } from "./types";
 
-export function useOnlineCustomerProvisioning(role: AdminRole, useBrowserApi = false) {
+export function useOnlineCustomerProvisioning(role: AdminRole) {
   const [shopName, setShopName] = React.useState("");
   const [adminName, setAdminName] = React.useState("");
   const [adminEmail, setAdminEmail] = React.useState("");
