@@ -1,14 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
-import { provisionOnlineCustomer } from "../actions";
 import { provisionBrowserCustomer } from "./browser-admin-api";
 import { canProvisionOnlineCustomer } from "./model";
 import type { AdminRole } from "./types";
 
-export function useOnlineCustomerProvisioning(role: AdminRole, useBrowserApi = false) {
-  const router = useRouter();
+export function useOnlineCustomerProvisioning(role: AdminRole) {
   const [shopName, setShopName] = React.useState("");
   const [adminName, setAdminName] = React.useState("");
   const [adminEmail, setAdminEmail] = React.useState("");
@@ -23,9 +20,7 @@ export function useOnlineCustomerProvisioning(role: AdminRole, useBrowserApi = f
 
     setBusy(true);
     setMessage(null);
-    const result = useBrowserApi
-      ? await provisionBrowserCustomer({ shopName, adminName, email: adminEmail })
-      : await provisionOnlineCustomer({ shopName, adminName, email: adminEmail });
+    const result = await provisionBrowserCustomer({ shopName, adminName, email: adminEmail });
     setBusy(false);
 
     if (!result.ok) {
@@ -37,7 +32,6 @@ export function useOnlineCustomerProvisioning(role: AdminRole, useBrowserApi = f
     setShopName("");
     setAdminName("");
     setAdminEmail("");
-    if (!useBrowserApi) router.refresh();
   }
 
   return {

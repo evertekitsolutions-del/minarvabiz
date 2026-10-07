@@ -29,55 +29,6 @@ assert.equal(importedPackage.format, "minarvabiz-license-v1");
 assert.equal(importedPackage.product, "minarvabiz");
 assert.equal(importedPackage.deviceId.length, 64);
 
-const actions = await readFile(
-  new URL("../apps/license-admin/src/app/actions.ts", import.meta.url),
-  "utf8",
-);
-
-for (const authAction of ["loginEmergencyAdmin", "logoutEmergencyAdmin"]) {
-  assert.match(actions, new RegExp(`export async function ${authAction}\\b`));
-}
-for (const retiredAction of [
-  "loginAdmin",
-  "beginAdminMfaEnrollment",
-  "verifyAdminMfa",
-  "cancelAdminMfa",
-  "adoptCloudflareAdminSession",
-  "logoutAdmin",
-  "firstAdminBootstrapStatus",
-  "bootstrapFirstLicenseAdmin",
-]) {
-  assert.doesNotMatch(actions, new RegExp(`export async function ${retiredAction}\\b`));
-}
-assert.doesNotMatch(actions, /from ["']\.\.\/lib\/named-admin["']/);
-assert.match(
-  actions,
-  /export async function logoutEmergencyAdmin\(\)[\s\S]*claims\?\.identity\.source === "emergency"/,
-  "Legacy server logout must be explicitly restricted to emergency sessions",
-);
-
-for (const registryAction of [
-  "listLicenses",
-  "createCommercialLicense",
-  "createOfflineActivationPackage",
-  "setLicenseStatus",
-]) {
-  assert.match(actions, new RegExp(`export async function ${registryAction}\\b`));
-}
-
-assert.match(
-  actions,
-  /if \(!activationResult\.ok\) return \{ ok: false, error: activationResult\.error \|\| "License activation lookup failed\.", identity, licenses: \[\] as any\[\] \};/,
-  "Registry read must fail closed when activation lookup fails",
-);
-assert.match(
-  actions,
-  /if \(!cleanLicenseId \|\| !isLicenseStatusAction\(status\)\) return \{ ok: false, error: "Invalid license status\." \};/,
-  "Status writes must validate runtime input before the database PATCH",
-);
-assert.match(actions, /buildOfflineActivationPackage\(\{/);
-assert.match(actions, /filename: `MinarvaBiz-\$\{license\.license_id\}-\$\{deviceId\.slice\(0, 8\)\}\.lic`/);
-
 const page = await readFile(
   new URL("../apps/license-admin/src/app/page.tsx", import.meta.url),
   "utf8",
@@ -119,7 +70,7 @@ const authCard = await readFile(
   "utf8",
 );
 
-assert.equal(page.includes('export const dynamic = "force-dynamic";'), true, "license-admin page must remain request-bound for CSP nonces");
+assert.equal(page.includes('export const dynamic = "force-dynamic";'), false, "portable License Admin page must remain static-exportable");
 for (const forbidden of ["readAdminSessionToken", "cookies(", "listLicenses(", "listSupportRequests("]) {
   assert.equal(page.includes(forbidden), false, `page must not contain ${forbidden}`);
 }

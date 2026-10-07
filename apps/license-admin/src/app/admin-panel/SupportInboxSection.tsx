@@ -1,8 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
-import { updateSupportRequest } from "../actions";
 import { updateBrowserSupportRequest } from "./browser-admin-api";
 import { canManageSupport } from "./model";
 import { SupportInboxCard } from "./SupportInboxCard";
@@ -10,16 +8,13 @@ import type { AdminRole, SupportRequestRow, SupportRequestStatus } from "./types
 
 export function SupportInboxSection({
   role,
-  useBrowserApi,
   requests,
   onRefresh,
 }: {
   role: AdminRole;
-  useBrowserApi: boolean;
   requests: SupportRequestRow[];
   onRefresh?: () => Promise<void>;
 }) {
-  const router = useRouter();
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
 
@@ -31,17 +26,14 @@ export function SupportInboxSection({
   }) {
     setBusy(true);
     setMessage(null);
-    const result = useBrowserApi
-      ? await updateBrowserSupportRequest(input)
-      : await updateSupportRequest(input);
+    const result = await updateBrowserSupportRequest(input);
     setBusy(false);
     if (!result.ok) {
       setMessage(result.error || "Support request update failed");
       return;
     }
     setMessage("Support request updated.");
-    if (useBrowserApi && onRefresh) await onRefresh();
-    else router.refresh();
+    if (onRefresh) await onRefresh();
   }
 
   return (
