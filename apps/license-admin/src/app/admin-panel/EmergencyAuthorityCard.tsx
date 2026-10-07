@@ -3,7 +3,7 @@
 import * as React from "react";
 import { readBrowserAdminSession } from "./browser-admin-session";
 
-const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
+import { licenseEdgeOrigin } from "./license-edge-config";\n\nconst EDGE = licenseEdgeOrigin();
 
 type Status = { enabled: boolean; currentConfigured: boolean; previousActive: boolean; source: string; updatedAt?: string | null };
 
