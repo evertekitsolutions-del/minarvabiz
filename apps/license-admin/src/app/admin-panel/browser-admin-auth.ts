@@ -2,7 +2,9 @@
 
 import type { AdminIdentityView } from "./types";
 
-import { licenseEdgeOrigin } from "./license-edge-config";\n\nconst EDGE = licenseEdgeOrigin();
+import { licenseEdgeOrigin } from "./license-edge-config";
+
+const EDGE = licenseEdgeOrigin();
 
 type AuthConfig = {
   supabaseUrl: string;
