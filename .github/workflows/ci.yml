@@ -416,6 +416,7 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/rls-tenant-integration.sql
 
   windows-package:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: windows-latest
     env:
       MINARVA_RUNTIME_SMOKE: "1"
