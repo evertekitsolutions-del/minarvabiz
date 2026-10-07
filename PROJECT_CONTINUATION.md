@@ -146,6 +146,15 @@ Current normal named-admin behavior:
 - After PR #251 exact-head gates are green and it is merged, the next operational step is additive production migration/deployment from merged `main`, named AAL2 self-service emergency rotation, live parity proof without exposing the raw credential, and only then retirement of the live Render fallback.
 - Vercel remains a separate mandatory-dependency retirement milestone after Render cutover proof; it must be migrated with provider-neutral/self-host parity rather than simply disabled.
 
+## 5C. October 8 License Admin security and portability continuation
+
+- PR #259 merged recovery-token hardening: Supabase recovery bearer credentials are captured only in memory and scrubbed from the browser URL/history before user interaction.
+- Production named-admin authority was verified against `public.license_admin_identities` and `cloudflare_admin_me()`; the active linked identity is role `admin`, and the RPC requires AAL2. The unrelated historical `profiles.role` table is not the License Admin authority.
+- PR #260 merged named-AAL2 emergency self-service UI. It exposes safe status/create/rotate/disable controls only to named admin sessions; one-time raw emergency credentials remain React memory only and require explicit save acknowledgement before dismissal or another destructive control action.
+- Production emergency authority remains intentionally disabled/uninitialized until the named administrator performs the browser-only credential creation step and stores the one-time credential locally without sharing it.
+- PR #261 is the active portability milestone. It replaces source-level Cloudflare Worker endpoint coupling across normal admin, bootstrap/auth, emergency login/control/logout and password recovery with validated client-safe `NEXT_PUBLIC_LICENSE_EDGE_URL`; remote origins require HTTPS and HTTP is accepted only for loopback development. The current Worker remains a transitional default so existing production keeps working.
+- PR #261 first CI attempt exposed a literal escaped-newline insertion in four TypeScript imports; this is a branch implementation defect, not an architecture blocker. It was root-cause-fixed on the same branch and must pass a fresh exact-head gate set before merge.
+
 ## 5B. Provider-neutral License Admin hosting merged
 
 - PR #252 merged on 2026-10-07 with merge SHA `0f3d9d36a24e45e6e526468212f14ca0a0fb215d`.
