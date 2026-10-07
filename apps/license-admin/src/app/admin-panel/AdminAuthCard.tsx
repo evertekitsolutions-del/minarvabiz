@@ -19,6 +19,7 @@ interface AdminAuthCardProps {
   onEmergencyPasswordChange: (value: string) => void;
   onMfaCodeChange: (value: string) => void;
   onLogin: () => void;
+  onRecoverPassword: () => void;
   onEmergencyLogin: () => void;
   onBeginMfaEnrollment: () => void;
   onVerifyMfa: () => void;
@@ -41,6 +42,7 @@ export function AdminAuthCard(props: AdminAuthCardProps) {
     onEmergencyPasswordChange,
     onMfaCodeChange,
     onLogin,
+    onRecoverPassword,
     onEmergencyLogin,
     onBeginMfaEnrollment,
     onVerifyMfa,
@@ -144,6 +146,15 @@ export function AdminAuthCard(props: AdminAuthCardProps) {
                   </div>
                 </div>
               )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  disabled={busy || !email.trim()}
+                  onClick={onRecoverPassword}
+                >
+                  {busy ? "Sending…" : "Forgot password?"}
+                </Button>
+              </div>
               <Button disabled={busy || !email.trim() || !password} onClick={onLogin}>
                 {busy ? "Signing in…" : "Sign in"}
               </Button>
