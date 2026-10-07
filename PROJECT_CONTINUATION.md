@@ -159,6 +159,16 @@ Current normal named-admin behavior:
 - Production emergency runtime configuration was last observed uninitialized; raw emergency credential handling remains an interactive browser-only security boundary and must never be copied into chat, GitHub, logs, or hosting configuration.
 - Next implementation milestone: establish a deployable provider-neutral replacement origin for the merged static artifact, add it to Cloudflare allowed origins without removing Render, run named AAL2 + emergency parity proof, then retire the live Render fallback. After that, remove Vercel as a mandatory online-app dependency using the same additive/provider-neutral method.
 
+## 5C. Provider-neutral static artifact bridge merged
+
+- PR #255 merged on 2026-10-07 with merge SHA `1b94287ee4d5711f1a8957734351511bf4c768ce`.
+- A dedicated `License Admin Static Artifact` workflow now builds `apps/license-admin/out`, runs the static-artifact secret/security contract, and publishes a short-retention provider-neutral artifact on both PR and main workflows.
+- PR #255 exact head `725fb9b4773605c5fbcdb9508cc32c25bf5367df` passed the static-artifact workflow plus CI, Coverage Ratchet, Windows Deep Installed Smoke, Windows Feature Click Smoke, Dependency Security, SAST, SBOM/license policy, Licensing Smoke, Secret Scan, Staging Security + Performance, and Final Release Audit before merge.
+- The verified PR artifact digest was `sha256:47f7aebb5534c9f3d373d0e79749b578bc8c99b7528d88393f8209b8762cd74c`; artifact retention is intentionally short and it contains no privileged server secrets.
+- Cloudflare Pages project `minarvabiz-license-admin` exists and its Direct Upload token endpoint is operational. Automatic GitHub source attachment remains blocked by Cloudflare Pages error 8000011 (internal Git installation issue), not by application code.
+- Do not remove the Render production fallback yet. The next safe live step is to Direct Upload the verified static artifact to the Pages project (or repair the Cloudflare Git installation), then add the new HTTPS origin to `LICENSE_ADMIN_ALLOWED_ORIGINS` while retaining Render, and prove named AAL2 + emergency parity before Render retirement.
+- The connected Cloudflare API can issue the Pages short-lived upload token, but the current connector boundary cannot stream the GitHub artifact bytes into the Pages asset upload API in one operation. Do not create or expose a long-lived Cloudflare API token merely to bypass this boundary.
+
 ## 6. Cloudflare License/Admin state
 
 Production worker:
