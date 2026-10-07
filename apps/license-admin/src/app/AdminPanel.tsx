@@ -63,10 +63,7 @@ export default function AdminPanel({
   }, []);
 
   const auth = useAdminAuthentication(applyDashboard);
-  const onlineProvisioning = useOnlineCustomerProvisioning(
-    activeIdentity?.role || "viewer",
-    browserDirect,
-  );
+  const onlineProvisioning = useOnlineCustomerProvisioning(activeIdentity?.role || "viewer");
 
   React.useEffect(() => setFeatures(defaultFeatures(plan)), [plan]);
   React.useEffect(() => {
@@ -229,7 +226,6 @@ export default function AdminPanel({
         />
         <SupportInboxSection
           role={activeIdentity.role}
-          useBrowserApi={browserDirect}
           requests={supportRequests}
           onRefresh={async () => { await refreshBrowserDashboard(); }}
         />
