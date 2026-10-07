@@ -2536,8 +2536,10 @@ export default {
     if (route.nativeAdminAuthConfig) {
       const apiOrigin = supabaseOrigin(env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
       const publishableKey = String(env.SUPABASE_PUBLISHABLE_KEY || "").trim();
-      const onlineAppOrigin = allowedOrigin(env.MINARVA_ONLINE_APP_URL || DEFAULT_ONLINE_APP_URL);
-      if (!apiOrigin || !publishableKey || !onlineAppOrigin) {
+      const passwordResetOrigin = allowedOrigin(
+        env.LICENSE_ADMIN_PUBLIC_URL || env.MINARVA_ONLINE_APP_URL || DEFAULT_ONLINE_APP_URL,
+      );
+      if (!apiOrigin || !publishableKey || !passwordResetOrigin) {
         return withAdminCors(
           json({ ok: false, code: "ADMIN_AUTH_NOT_CONFIGURED" }, 503, {
             "x-minarva-admin-backend": "cloudflare-native",
@@ -2552,7 +2554,7 @@ export default {
             ok: true,
             supabaseUrl: apiOrigin,
             supabasePublishableKey: publishableKey,
-            passwordResetUrl: `${onlineAppOrigin}/reset-password`,
+            passwordResetUrl: `${passwordResetOrigin}/reset-password`,
           },
           200,
           {
