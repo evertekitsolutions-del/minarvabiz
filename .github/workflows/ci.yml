@@ -152,13 +152,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @minarvabiz/license-admin typecheck
-      - name: Verify Render-independent License Admin startup contract
+      - name: Verify provider-neutral License Admin runtime contract
         shell: bash
         run: |
           set -euo pipefail
           test ! -e render.yaml
-          grep -Fq '"start": "next start --port 3001"' apps/license-admin/package.json
-          ! grep -Fq 'sync-emergency-authority.mjs' apps/license-admin/package.json
+          grep -Fq 'output: "export"' apps/license-admin/next.config.ts
+          test ! -e apps/license-admin/src/app/actions.ts
       - name: Verify modular license-admin surface
         run: node --experimental-strip-types scripts/license-admin-modular-ui-smoke.mjs
       - name: Verify license-admin auth/CRUD/error/import-export actions
