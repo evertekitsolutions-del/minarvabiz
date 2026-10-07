@@ -1,6 +1,6 @@
 # Minarva Biz — Authoritative Project Continuation
 
-**Last updated:** 2026-10-06  
+**Last updated:** 2026-10-07  
 **Repository:** `evertekitsolutions-del/minarvabiz`
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
@@ -145,6 +145,19 @@ Current normal named-admin behavior:
 - The dependency-security gate discovered the upstream Sharp/libvips advisory during this milestone. The branch pins patched Sharp >=0.35.5 and explicitly reviews the resulting LGPL libvips runtime under the existing distribution-compliance obligations.
 - After PR #251 exact-head gates are green and it is merged, the next operational step is additive production migration/deployment from merged `main`, named AAL2 self-service emergency rotation, live parity proof without exposing the raw credential, and only then retirement of the live Render fallback.
 - Vercel remains a separate mandatory-dependency retirement milestone after Render cutover proof; it must be migrated with provider-neutral/self-host parity rather than simply disabled.
+
+## 5B. Provider-neutral License Admin hosting merged
+
+- PR #252 merged on 2026-10-07 with merge SHA `0f3d9d36a24e45e6e526468212f14ca0a0fb215d`.
+- License Admin is now a browser-only Next static export. The deployable artifact is `apps/license-admin/out/`; it can be served from any HTTPS static host or future Minarva-owned server.
+- Obsolete Next server actions, service-role helpers, signing-key server module, License Admin API routes, middleware, and Render-era server smoke contracts were removed from the active License Admin host.
+- License/support/customer-provisioning/admin authentication operations are browser -> Cloudflare/PostgreSQL authority only.
+- Security-header expectations for the static artifact live in `apps/license-admin/public/_headers` and are enforced by CI; no privileged server secrets may appear in the exported artifact.
+- Licensing/update/support contract tests now assert the Cloudflare edge authority rather than deleted Next API routes.
+- PR #252 exact head `371b7c25e27334c2eaf1af8f8f545a3701603f95` passed CI, Coverage Ratchet, First Admin Fresh Instance E2E, Staging Security + Performance, Dependency Security, SAST, SBOM/license policy, Licensing Smoke, Final Release Audit, Secret Scan, Windows Deep Installed Smoke, and Windows Feature Click Smoke before merge.
+- Production Cloudflare `LICENSE_ADMIN_ALLOWED_ORIGINS` still points at the existing Render License Admin origin. Do not remove that live origin/service until the merged static artifact is deployed to a replacement HTTPS origin, that origin is added additively, named AAL2 admin operations are proven, manual emergency authority is established, and emergency parity is proven.
+- Production emergency runtime configuration was last observed uninitialized; raw emergency credential handling remains an interactive browser-only security boundary and must never be copied into chat, GitHub, logs, or hosting configuration.
+- Next implementation milestone: establish a deployable provider-neutral replacement origin for the merged static artifact, add it to Cloudflare allowed origins without removing Render, run named AAL2 + emergency parity proof, then retire the live Render fallback. After that, remove Vercel as a mandatory online-app dependency using the same additive/provider-neutral method.
 
 ## 6. Cloudflare License/Admin state
 
