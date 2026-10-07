@@ -2,7 +2,7 @@
 
 import type { AdminIdentityView } from "./types";
 
-const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
+import { licenseEdgeOrigin } from "./license-edge-config";\n\nconst EDGE = licenseEdgeOrigin();
 
 type EmergencyLoginResponse = {
   ok?: boolean;
