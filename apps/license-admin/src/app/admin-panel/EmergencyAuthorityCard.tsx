@@ -3,7 +3,9 @@
 import * as React from "react";
 import { readBrowserAdminSession } from "./browser-admin-session";
 
-import { licenseEdgeOrigin } from "./license-edge-config";\n\nconst EDGE = licenseEdgeOrigin();
+import { licenseEdgeOrigin } from "./license-edge-config";
+
+const EDGE = licenseEdgeOrigin();
 
 type Status = { enabled: boolean; currentConfigured: boolean; previousActive: boolean; source: string; updatedAt?: string | null };
 
