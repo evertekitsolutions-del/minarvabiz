@@ -9,15 +9,26 @@ type AuthConfig = {
   supabasePublishableKey: string;
 };
 
-function recoveryTokens() {
-  if (typeof window === "undefined") return { accessToken: "", refreshToken: "" };
-  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  const query = new URLSearchParams(window.location.search);
-  const type = hash.get("type") || query.get("type") || "";
-  return {
-    accessToken: type === "recovery" ? hash.get("access_token") || query.get("access_token") || "" : "",
-    refreshToken: type === "recovery" ? hash.get("refresh_token") || query.get("refresh_token") || "" : "",
-  };
+function takeRecoveryAccessToken() {
+  if (typeof window === "undefined") return "";
+  const url = new URL(window.location.href);
+  const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+  const type = hash.get("type") || url.searchParams.get("type") || "";
+  const accessToken =
+    type === "recovery" ? hash.get("access_token") || url.searchParams.get("access_token") || "" : "";
+
+  // Recovery credentials are bearer secrets. Capture the access token in memory and
+  // scrub every auth secret from the address bar/history before the user can interact.
+  for (const key of ["access_token", "refresh_token", "expires_in", "expires_at", "token_type"]) {
+    url.searchParams.delete(key);
+    hash.delete(key);
+  }
+  if (type === "recovery") {
+    url.searchParams.set("type", "recovery");
+  }
+  url.hash = hash.toString() ? `#${hash.toString()}` : "";
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  return accessToken;
 }
 
 export default function ResetPasswordPage() {
@@ -25,13 +36,17 @@ export default function ResetPasswordPage() {
   const [confirm, setConfirm] = React.useState("");
   const [message, setMessage] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [accessToken, setAccessToken] = React.useState("");
+
+  React.useEffect(() => {
+    setAccessToken(takeRecoveryAccessToken());
+  }, []);
 
   async function updatePassword() {
     if (password.length < 12 || password !== confirm) {
       setMessage(password.length < 12 ? "Use at least 12 characters." : "Passwords do not match.");
       return;
     }
-    const { accessToken } = recoveryTokens();
     if (!accessToken) {
       setMessage("This password reset link is invalid or expired. Request a new link from License Admin.");
       return;
@@ -68,8 +83,7 @@ export default function ResetPasswordPage() {
         return;
       }
 
-      // Never persist recovery tokens. Remove them from browser history immediately.
-      window.history.replaceState(null, "", "/reset-password");
+      setAccessToken("");
       setPassword("");
       setConfirm("");
       setMessage("Password updated. Return to License Admin and sign in; MFA setup will continue there.");
@@ -96,7 +110,7 @@ export default function ResetPasswordPage() {
             placeholder="Confirm new password" value={confirm} onChange={(e) => setConfirm(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") void updatePassword(); }} />
           {message && <p className="text-sm text-slate-600">{message}</p>}
-          <button type="button" disabled={busy || !password || !confirm}
+          <button type="button" disabled={busy || !accessToken || !password || !confirm}
             className="h-10 rounded-lg bg-slate-900 px-4 text-sm font-medium text-white disabled:opacity-50"
             onClick={() => void updatePassword()}>
             {busy ? "Updating…" : "Update password"}
