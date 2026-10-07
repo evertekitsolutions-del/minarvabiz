@@ -15,8 +15,8 @@ assert.equal(
 const adminPackage = JSON.parse(
   fs.readFileSync(path.join(root, "apps/license-admin/package.json"), "utf8"),
 );
-assert.equal(adminPackage.scripts.start, "next start --port 3001");
-assert.doesNotMatch(adminPackage.scripts.start, /sync-emergency-authority/);
+assert.equal(adminPackage.scripts.start, undefined, "Static License Admin must not expose a Node server start command");
+assert.equal(adminPackage.scripts.start, undefined, "Static License Admin must not expose a Node server start command");
 
 const { publicKey, privateKey } = generateKeyPairSync("ed25519");
 const publicDer = publicKey.export({ type: "spki", format: "der" });

@@ -11,11 +11,11 @@ if (!process.env.GITHUB_ENV) {
 const endpoint = baseUrl + "/api/public-key";
 let publicKeyHex = "";
 
-for (let attempt = 1; attempt <= 30; attempt += 1) {
+for (let attempt = 1; attempt <= 12; attempt += 1) {
   try {
     const response = await fetch(endpoint, {
       cache: "no-store",
-      signal: AbortSignal.timeout(attempt === 1 ? 70_000 : 15_000),
+      signal: AbortSignal.timeout(15_000),
     });
     if (response.ok) {
       const data = await response.json();
@@ -26,9 +26,9 @@ for (let attempt = 1; attempt <= 30; attempt += 1) {
       }
     }
   } catch {
-    // Render free instances can be asleep or redeploying. Retry below.
+    // The provider-neutral HTTPS authority may be redeploying. Retry below.
   }
-  console.log(`Public-key endpoint not ready (attempt ${attempt}/30).`);
+  console.log(`Public-key endpoint not ready (attempt ${attempt}/12).`);
   await new Promise((resolve) => setTimeout(resolve, 5_000));
 }
 
