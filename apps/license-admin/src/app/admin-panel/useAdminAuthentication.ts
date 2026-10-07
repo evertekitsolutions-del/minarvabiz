@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   beginBrowserAdminMfaEnrollment,
   beginBrowserNamedAdminLogin,
+  requestBrowserAdminPasswordSetup,
   claimBrowserFirstAdmin,
   getBrowserAdminBootstrapStatus,
   getBrowserAdminIdentity,
@@ -50,6 +51,16 @@ export function useAdminAuthentication(
     setMfaSecret("");
     setMfaQrCode("");
   }, []);
+
+  async function recoverPassword() {
+    setBusy(true);
+    setMessage(null);
+    const result = await requestBrowserAdminPasswordSetup(email);
+    setBusy(false);
+    setMessage(result.ok
+      ? "If this administrator account exists, a secure password reset link has been sent."
+      : result.error || "Unable to send password reset link.");
+  }
 
   async function login() {
     setBusy(true);
@@ -205,6 +216,7 @@ export function useAdminAuthentication(
     onEmergencyPasswordChange: setEmergencyPassword,
     onMfaCodeChange: setMfaCode,
     onLogin: () => void login(),
+    onRecoverPassword: () => void recoverPassword(),
     onEmergencyLogin: () => void emergencyLogin(),
     onBeginMfaEnrollment: () => void beginMfaEnrollment(),
     onVerifyMfa: () => void verifyMfa(),
