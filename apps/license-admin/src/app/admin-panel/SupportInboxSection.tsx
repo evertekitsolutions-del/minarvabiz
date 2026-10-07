@@ -8,12 +8,10 @@ import type { AdminRole, SupportRequestRow, SupportRequestStatus } from "./types
 
 export function SupportInboxSection({
   role,
-  useBrowserApi,
   requests,
   onRefresh,
 }: {
   role: AdminRole;
-  useBrowserApi: boolean;
   requests: SupportRequestRow[];
   onRefresh?: () => Promise<void>;
 }) {
