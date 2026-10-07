@@ -23,7 +23,9 @@ import {
   signOutBrowserEmergencySession,
 } from "./browser-emergency-session";
 
-import { licenseEdgeOrigin } from "./license-edge-config";\n\nconst EDGE = licenseEdgeOrigin();
+import { licenseEdgeOrigin } from "./license-edge-config";
+
+const EDGE = licenseEdgeOrigin();
 
 type ApiResult<T extends object = Record<string, never>> =
   | ({ ok: true } & T)
