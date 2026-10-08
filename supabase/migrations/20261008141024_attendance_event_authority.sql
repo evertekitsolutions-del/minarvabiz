@@ -1,6 +1,7 @@
 -- Additive attendance authority: no live rows are rewritten or deleted.
 -- Reuse authoritative organization RBAC; membership alone cannot expose HR data.
 DROP POLICY IF EXISTS staff_attendance_org_access ON public.staff_attendance;
+DROP POLICY IF EXISTS staff_attendance_member_read ON public.staff_attendance;
 CREATE POLICY staff_attendance_manager_select ON public.staff_attendance
  FOR SELECT TO authenticated USING (
  public.user_has_org_role(org_id, ARRAY['super_admin','admin','manager']::text[]));
@@ -75,9 +76,6 @@ BEGIN
  SELECT * INTO member FROM public.staff_members
   WHERE id=target_staff AND org_id=attendance_auth.auth_org_id AND deleted_at IS NULL FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Staff is unavailable in this organization' USING ERRCODE='42501'; END IF;
- IF member.branch_id IS NOT NULL AND target_branch IS DISTINCT FROM member.branch_id THEN
-  RAISE EXCEPTION 'Attendance branch must match the staff branch' USING ERRCODE='42501';
- END IF;
  IF target_branch IS NOT NULL THEN
   PERFORM 1 FROM public.branches WHERE id=target_branch AND org_id=attendance_auth.auth_org_id AND deleted_at IS NULL FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Branch is unavailable in this organization' USING ERRCODE='42501'; END IF;
@@ -86,6 +84,9 @@ BEGIN
  SELECT * INTO previous FROM public.staff_attendance
   WHERE org_id=attendance_auth.auth_org_id AND staff_id=target_staff AND attendance_date=target_date FOR UPDATE;
  IF FOUND THEN
+  IF target_branch IS DISTINCT FROM previous.branch_id THEN
+   RAISE EXCEPTION 'Attendance history branch is immutable' USING ERRCODE='42501';
+  END IF;
   IF previous.id <> target_id OR target_version <> previous.version+1 THEN
    remote_json := jsonb_build_object('id',previous.id,'staffId',previous.staff_id,'date',previous.attendance_date,
     'status',previous.status,'clockIn',previous.clock_in,'clockOut',previous.clock_out,
@@ -99,6 +100,9 @@ BEGIN
    notes=p_record->>'notes',branch_id=target_branch,version=target_version,updated_at=now()
    WHERE id=target_id AND org_id=attendance_auth.auth_org_id;
  ELSE
+  IF member.branch_id IS NOT NULL AND target_branch IS DISTINCT FROM member.branch_id THEN
+   RAISE EXCEPTION 'Attendance branch must match the staff branch' USING ERRCODE='42501';
+  END IF;
   IF target_version <> 1 THEN RETURN jsonb_build_object('accepted',false); END IF;
   INSERT INTO public.staff_attendance(id,org_id,staff_id,attendance_date,status,clock_in,clock_out,
    break_minutes,overtime_minutes,notes,branch_id,version)

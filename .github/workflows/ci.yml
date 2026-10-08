@@ -353,7 +353,10 @@ jobs:
         run: node packages/business-logic/src/__tests__/property-fuzz-invariants.test.mjs
       - run: pnpm --filter @minarvabiz/sync typecheck
       - name: Run Supabase pull cursor regression
-        run: node packages/sync/src/__tests__/supabase-pull-cursors.test.mjs
+        run: |
+          node packages/sync/src/__tests__/supabase-pull-cursors.test.mjs
+          node packages/sync/src/__tests__/attendance-transport.test.mjs
+          node packages/sync/src/__tests__/attendance-ack-retry.test.mjs
       - name: Run complete business logic test suite
         shell: bash
         run: |
@@ -419,6 +422,13 @@ jobs:
           set -e
           command -v psql
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f scripts/rls-tenant-integration.sql
+          set +e
+          psql -h 127.0.0.1 -U postgres -d postgres --single-transaction -v ON_ERROR_STOP=1 -f scripts/attendance-rls-integration.sql > /tmp/attendance-before-hardening.log 2>&1
+          before_status=$?
+          set -e
+          test "$before_status" -ne 0
+          grep -Fq "expected RLS/privilege denial: cross-tenant staff reference" /tmp/attendance-before-hardening.log
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -v attendance_hardening=supabase/migrations/20261008140151_attendance_role_integrity.sql -f scripts/attendance-rls-integration.sql
 
   windows-package:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository

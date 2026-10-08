@@ -15,7 +15,7 @@ Module._load=function(name,...rest){
   pgSelectAll:async (cfg,table)=>{assert.equal(cfg.accessToken,"fixture-session");requested.push(table);return {data:table==="staff_members"?[staff]:table==="staff_attendance"?[attendance]:[],error:null};},
   pgRpc:async (cfg,name,args)=>{assert.equal(cfg.accessToken,"fixture-session");calls.push({name,args});return {data:{accepted:true},error:null};},
  };
- if(name==="@minarvabiz/business-logic")return {phase6Store:phase6,registerRemoteWriter:remote.registerRemoteWriter};
+ if(name==="@minarvabiz/business-logic")return {phase6Store:phase6,phase9Store:require("../phase9-store.ts"),createSupabaseCloudAdapter:require("../../../sync/src/supabase-adapter.ts").createSupabaseCloudAdapter,registerRemoteWriter:remote.registerRemoteWriter};
  return load.call(this,name,...rest);
 };
 const source=require("../../../../apps/web/src/lib/data-source.ts");
@@ -27,8 +27,7 @@ assert.ok(requested.includes("staff_attendance"),"cloud attendance must be fetch
 assert.equal(requested.filter(t=>t==="staff_attendance").length,1,"layout/page hydration must not race or overwrite newer local edits");
 assert.equal(phase6.listAttendance()[0].overtimeMinutes,60);
 assert.equal(phase6.listAttendance()[0].date,"2026-10-08");
-phase6.setAttendance({staffId:staff.id,date:"2026-10-08",status:"half_day"});
-await phase6.flushAttendanceOutbox();
+await phase6.saveAttendance({staffId:staff.id,date:"2026-10-08",status:"half_day"});
 assert.equal(calls[0].name,"apply_staff_attendance_event");
 assert.equal(calls[0].args.p_record.version,2);
 assert.equal(calls[0].args.p_record.overtimeMinutes,60);

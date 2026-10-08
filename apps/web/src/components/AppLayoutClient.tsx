@@ -171,6 +171,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
         });
       }
       refreshHeaderCounts();
+      window.dispatchEvent(new CustomEvent("minarva:data-hydrated",{detail:r}));
     });
 
     return () => {

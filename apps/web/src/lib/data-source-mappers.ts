@@ -13,8 +13,8 @@ import type {
   PurchaseInvoiceLine,
   PurchaseOrder,
   PurchaseOrderLine,
-  StaffMember,
   StaffAttendanceRecord,
+  StaffMember,
   Supplier,
   Warehouse,
   WarehouseLocation,
@@ -309,10 +309,5 @@ export function mapJournalEntry(row: Record<string, unknown>, lines: JournalEntr
 }
 
 export function mapAttendance(row:Record<string,unknown>):StaffAttendanceRecord {
-  return { id:String(row.id),staffId:String(row.staff_id),date:String(row.attendance_date),
-    status:row.status as StaffAttendanceRecord["status"],clockIn:(row.clock_in as string)??null,
-    clockOut:(row.clock_out as string)??null,breakMinutes:Number(row.break_minutes??0),
-    overtimeMinutes:Number(row.overtime_minutes??0),notes:(row.notes as string)??null,
-    branchId:(row.branch_id as string)??null,version:Number(row.version??1),
-    createdAt:String(row.created_at),updatedAt:String(row.updated_at) };
+  return {id:String(row.id),staffId:String(row.staff_id),date:String(row.attendance_date),status:row.status as StaffAttendanceRecord["status"],clockIn:row.clock_in as string|null,clockOut:row.clock_out as string|null,breakMinutes:Number(row.break_minutes??0),overtimeMinutes:Number(row.overtime_minutes??0),notes:row.notes as string|null,branchId:row.branch_id as string|null,version:Number(row.version??1),createdAt:String(row.created_at),updatedAt:String(row.updated_at)};
 }

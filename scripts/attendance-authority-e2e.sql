@@ -58,9 +58,20 @@ BEGIN
  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
 RESET ROLE;
+-- A later staff transfer must not move or make a historic attendance day uncorrectable.
+UPDATE public.staff_members SET branch_id=NULL WHERE id='ab000000-0000-0000-0000-000000000001';
+SET LOCAL ROLE authenticated;
+DO $$ DECLARE p JSONB; r JSONB; BEGIN
+ SELECT jsonb_build_object('id',id,'staffId',staff_id,'date',attendance_date,'status','present',
+ 'clockIn',clock_in,'clockOut',clock_out,'breakMinutes',break_minutes,'overtimeMinutes',overtime_minutes,
+ 'branchId',branch_id,'version',version+1) INTO p FROM public.staff_attendance WHERE id='ac000000-0000-0000-0000-000000000001';
+ r:=public.apply_staff_attendance_event(p,'ad000000-0000-0000-0000-000000000008','fixture-device',6);
+ IF r->>'accepted'<>'true' THEN RAISE EXCEPTION 'Historical branch correction failed after staff transfer'; END IF;
+END $$;
+RESET ROLE;
 DO $$ BEGIN
- IF (SELECT count(*) FROM public.staff_attendance_event_receipts WHERE device_id='fixture-device')<>2 THEN RAISE EXCEPTION 'Replay receipt count incorrect'; END IF;
- IF (SELECT count(*) FROM public.audit_logs WHERE record_id='ac000000-0000-0000-0000-000000000001')<>2 THEN RAISE EXCEPTION 'Atomic audit count incorrect'; END IF;
+ IF (SELECT count(*) FROM public.staff_attendance_event_receipts WHERE device_id='fixture-device')<>3 THEN RAISE EXCEPTION 'Replay receipt count incorrect'; END IF;
+ IF (SELECT count(*) FROM public.audit_logs WHERE record_id='ac000000-0000-0000-0000-000000000001')<>3 THEN RAISE EXCEPTION 'Atomic audit count incorrect'; END IF;
 END $$;
 SELECT set_config('request.jwt.claims','{"sub":"aa000000-0000-0000-0000-000000000002","role":"authenticated"}',true);
 SET LOCAL ROLE authenticated;

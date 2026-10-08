@@ -13,7 +13,8 @@ Date: 2026-10-08. Capability: HR-002, with correction metadata for HR-007/HR-009
 
 `fix/attendance-cloud-parity` preserves the merged grid and completes the missing cloud authority, correction UI and transport behavior.
 
-- Shared Web/Windows grid, including holiday totals and clock/break/overtime/notes editor.
+- Shared Web/Windows grid, including branch filtering, archived history, worked-minute/holiday totals and clock/break/overtime/notes editor.
+- PR #275 implementation is preserved in the integration commit; its pending-change reconciliation, ordered retry, explicit version-reviewed conflict UI and browser unload protection remain. Atomic authority supersedes direct DML without cutting those features.
 - Date/status/time/minute validation before mutation; status-only correction preserves existing metadata.
 - Immutable versioned outbox events, ordered flush, explicit retry and original event identity.
 - Layout/page hydration serialized to prevent two concurrent initial loads from overwriting a later correction; attendance is a separate route hydration domain, so an unapplied attendance schema does not break legacy staff/dashboard hydration.
@@ -40,7 +41,7 @@ Attendance's authority is PostgreSQL-compatible. Desktop persistence remains SQL
 3. Shared UI checks verify real rendered day/editor controls and calendar boundaries.
 4. The isolated Supabase workflow replays all migrations and runs `scripts/attendance-authority-e2e.sql`, proving actual PostgreSQL tenant/role isolation, staff/branch ownership, no direct-DML bypass, replay identity, stale version rejection and atomic audit receipts. Fixtures roll back; never run this script against production.
 5. Require exact-head CI, coverage, security/license/secret, Windows and fresh-instance workflows green before merge.
-6. After merge, apply the existing `20261008_attendance_grid.sql` and additive `20261008141024_attendance_event_authority.sql` together to production. Do not apply only the older membership-write policy and leave it live.
+6. After merge, apply `20261008_attendance_grid.sql`, `20261008140151_attendance_role_integrity.sql` and `20261008141024_attendance_event_authority.sql` together to production. Do not apply only the older membership-write policy and leave it live.
 7. Verify production grants/policies/RPC presence and safe read-only HTTP behavior. Authenticated user UI UAT and a new Windows installer are separate release acceptance evidence; v1.0.15 does not contain these new Attendance changes.
 
 ## Honest limits

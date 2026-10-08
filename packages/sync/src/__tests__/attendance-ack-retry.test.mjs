@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';import fs from 'node:fs';import{createRequire}from'node:module';
+const require=createRequire(import.meta.url),ts=require('typescript');require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,f);
+const {createSupabaseCloudAdapter}=require('../supabase-adapter.ts');
+let remote=null,failBefore=true,loseResponse=false;const ledger=new Map(),calls=[];
+const client={async select(){return{data:[],error:null}},async insert(){throw Error('Attendance must not use direct DML')},async update(){throw Error('Attendance must not use direct DML')},async rpc(name,args){
+ assert.equal(name,'apply_staff_attendance_event');calls.push(args.p_event_id);
+ if(failBefore)return{data:null,error:'transaction unavailable'};
+ const prior=ledger.get(args.p_event_id);if(prior){assert.deepEqual(prior,args);return{data:{accepted:true,replayed:true},error:null}};
+ const row=args.p_record;if(row.version!==(remote?.version??0)+1)return{data:{accepted:false,remote},error:null};
+ remote=structuredClone(row);ledger.set(args.p_event_id,structuredClone(args));
+ if(loseResponse){loseResponse=false;return{data:null,error:'response lost'}};
+ return{data:{accepted:true},error:null};
+}};
+const adapter=createSupabaseCloudAdapter(client,'dev-1');
+const p={id:'a1',staffId:'staff-1',date:'2026-10-08',status:'present',version:1,breakMinutes:0,overtimeMinutes:0};
+const event=(id,version,status)=>({id,aggregateId:'a1',aggregateType:'staff_attendance',eventType:'update',payload:{...p,version,status},sequence:version,occurredAt:'2026-10-08T00:00:00Z'});
+const events=[event('e1',1,'present'),event('e2',2,'absent')];
+let result=await adapter.push(events);assert.equal(remote,null);assert.equal(result.accepted.length,0);assert.deepEqual(calls,['e1'],'failure blocks later revisions');
+failBefore=false;loseResponse=true;result=await adapter.push(events);assert.equal(remote.version,1);assert.equal(result.accepted.length,0);
+result=await adapter.push(events);assert.deepEqual(result.accepted,['e1','e2']);assert.equal(remote.version,2);
+result=await adapter.push(events);assert.deepEqual(result.accepted,['e1','e2'],'private atomic receipts support lost-response replay');assert.equal(remote.version,2);
+const conflict=event('e3',2,'holiday');result=await adapter.push([conflict,event('e4',3,'present')]);assert.equal(result.rejected[0].error,'attendance_version_conflict');assert.equal(result.rejected[0].remote.version,2);assert.equal(result.accepted.length,0);assert.equal(remote.status,'absent');
+const missing=createSupabaseCloudAdapter({...client,rpc:undefined},'dev-1');assert.equal((await missing.push(events)).accepted.length,0);
+console.log('Attendance atomic acknowledgement ordering/replay PASS');

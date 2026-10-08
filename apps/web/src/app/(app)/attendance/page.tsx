@@ -1,31 +1,26 @@
 "use client";
 import * as React from "react";
-import {AttendanceGrid,Button,type AttendanceDetails} from "@minarvabiz/ui";
-import {phase6Store,can,getSessionToken} from "@minarvabiz/business-logic";
-import {isSupabaseConfigured} from "@minarvabiz/database";
-import {hydrateStoresFromSupabase} from "@/lib/data-source";
-import type {AttendanceStatus,StaffAttendanceRecord,StaffMember} from "@minarvabiz/types";
-function todayLocal(){const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);}
+import { AttendanceGrid, Button, Modal } from "@minarvabiz/ui";
+import { can, exportOutbox, getRuntimeMode, phase6Store, phase9Store } from "@minarvabiz/business-logic";
+import type { AttendanceStatus } from "@minarvabiz/types";
+import { isStaffHydrated } from "@/lib/data-source";
 
+function localDate(){const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);}
 export default function AttendancePage(){
- const [month,setMonth]=React.useState(todayLocal().slice(0,7));
- const [staff,setStaff]=React.useState<StaffMember[]>([]),[rows,setRows]=React.useState<StaffAttendanceRecord[]>([]);
- const [ready,setReady]=React.useState(false),[busy,setBusy]=React.useState(false),[message,setMessage]=React.useState("");
- const [conflict,setConflict]=React.useState<StaffAttendanceRecord|null>(null);
- const refresh=React.useCallback(()=>{if(!can("staff.manage"))return;setStaff(phase6Store.listStaff());setRows(phase6Store.listAttendance({from:`${month}-01`,to:`${month}-31`}));},[month]);
- const load=React.useCallback(async()=>{setMessage("");try{if(isSupabaseConfigured()){const result=await hydrateStoresFromSupabase(getSessionToken(),["staff","attendance"]);if(!result.ok)throw new Error(result.message);}refresh();setReady(true);}catch(e){setReady(false);setMessage(e instanceof Error?e.message:"Attendance could not be loaded");}},[refresh]);
- React.useEffect(()=>{void load();},[load]);
- function showError(e:unknown){if(e instanceof phase6Store.AttendanceConflictError)setConflict(e.remote);setMessage(e instanceof Error?e.message:"Attendance could not be saved");}
- async function save(input:Parameters<typeof phase6Store.setAttendance>[0]){setBusy(true);try{phase6Store.setAttendance(input);refresh();await phase6Store.flushAttendanceOutbox();setMessage(isSupabaseConfigured()?"Attendance saved.":"Attendance saved on this device.");}catch(e){showError(e);throw e;}finally{setBusy(false);}}
- async function retry(){setBusy(true);try{await phase6Store.flushAttendanceOutbox();setMessage("Pending attendance changes saved.");}catch(e){showError(e);}finally{setBusy(false);}}
- async function markAll(status:AttendanceStatus){const active=staff.filter(s=>s.status==="active");if(!confirm(`Mark ${active.length} active staff as ${status.replace("_"," ")} for ${todayLocal()}?`))return;setBusy(true);try{for(const member of active)phase6Store.setAttendance({staffId:member.id,date:todayLocal(),status});refresh();await phase6Store.flushAttendanceOutbox();setMessage("Attendance saved.");}catch(e){showError(e);}finally{setBusy(false);}}
- async function resolve(choice:"local"|"remote"){if(!conflict||!confirm(choice==="local"?"Submit your attendance as a new correction to the cloud record?":"Keep the cloud record and discard pending corrections for this staff/day?"))return;setBusy(true);try{phase6Store.resolveAttendanceConflict(conflict,choice);setConflict(null);refresh();await phase6Store.flushAttendanceOutbox();setMessage("Attendance conflict resolved.");}catch(e){showError(e);}finally{setBusy(false);}}
- if(!can("staff.manage"))return <p role="alert">You do not have permission to view or edit staff attendance.</p>;
- return <div className="space-y-4">
-  {message&&<p role="status" className="rounded-lg border p-3 text-sm">{message}</p>}
-  {!ready&&<Button onClick={()=>void load()} disabled={busy}>Reload attendance</Button>}
-  {ready&&<Button variant="outline" onClick={()=>void retry()} disabled={busy}>Retry pending changes</Button>}
-  {conflict&&<div role="alert" className="space-y-2 rounded-lg border p-3"><p>Cloud attendance for {conflict.date}: {conflict.status.replace("_"," ")}, overtime {conflict.overtimeMinutes} minutes. Another device changed this staff/day.</p><Button disabled={busy} onClick={()=>void resolve("remote")}>Keep cloud record</Button><Button disabled={busy} variant="outline" onClick={()=>void resolve("local")}>Submit my correction</Button></div>}
-  <AttendanceGrid staff={staff} rows={rows} month={month} onMonthChange={setMonth} disabled={!ready||busy||Boolean(conflict)} onMark={(staffId,date,status)=>{void save({staffId,date,status}).catch(()=>undefined);}} onMarkAllToday={status=>void markAll(status)} onSaveDetails={(input:AttendanceDetails)=>save(input)}/>
- </div>;
+ const [month,setMonth]=React.useState(localDate().slice(0,7)),[,refresh]=React.useReducer(v=>v+1,0);
+ const [review,setReview]=React.useState<Awaited<ReturnType<typeof phase6Store.reviewAttendanceConflict>>|null>(null);
+ const [resolving,setResolving]=React.useState(false);
+ const [ready,setReady]=React.useState(false),[message,setMessage]=React.useState("");
+ React.useEffect(()=>{setReady(getRuntimeMode()==="demo"||isStaffHydrated());const loaded=(event:Event)=>{const result=(event as CustomEvent).detail;if(result?.ok){setReady(isStaffHydrated());refresh();}else setMessage(result?.message||"Attendance could not load");};window.addEventListener("minarva:data-hydrated",loaded);return()=>window.removeEventListener("minarva:data-hydrated",loaded);},[]);
+ React.useEffect(()=>{const warn=(event:BeforeUnloadEvent)=>{if(exportOutbox().some(e=>e.aggregateType==="staff_attendance"&&(e.status==="pending"||e.status==="failed"))){event.preventDefault();event.returnValue="";}};window.addEventListener("beforeunload",warn);return()=>window.removeEventListener("beforeunload",warn);},[]);
+ if(!can("staff.manage"))return <p role="alert">You do not have access to staff attendance.</p>;
+ const changed=()=>{setMessage("");refresh();};
+ async function mark(staffId:string,date:string,status:AttendanceStatus){try{await phase6Store.saveAttendance({staffId,date,status});changed();}finally{refresh();}}
+ async function markAll(status:AttendanceStatus,staffIds:string[]){const today=localDate();if(!confirm(`Mark ${staffIds.length} active staff as ${status.replace("_"," ")} for ${today}?`))return;try{for(const staffId of staffIds)await phase6Store.saveAttendance({staffId,date:today,status});changed();}finally{refresh();}}
+ const pending=exportOutbox().filter(e=>e.aggregateType==="staff_attendance"&&(e.status==="pending"||e.status==="failed")&&phase6Store.getStaff((e.payload as {staffId:string}).staffId));
+ async function resolve(choice:"local"|"remote"){if(!review||!confirm(choice==="local"?"Apply the displayed local correction over the reviewed cloud entry?":"Keep the reviewed cloud entry and discard queued local corrections?"))return;setResolving(true);try{await phase6Store.resolveAttendanceConflict(review.local.id,choice,review.remote.version??1,review.local.version??1);setReview(null);setMessage("");}catch(e){setMessage(e instanceof Error?e.message:"Resolution failed");}finally{setResolving(false);refresh();}}
+ return <div className="space-y-3">{pending.length>0&&<p role="status">{pending.length} attendance changes pending cloud confirmation. Keep this window open until confirmed. <Button variant="outline" disabled={!can("staff.manage")} onClick={()=>void(async()=>{try{for(const id of new Set(pending.map(e=>e.aggregateId)))await phase6Store.retryAttendance(id);setMessage("");}catch(e){setMessage(e instanceof Error?e.message:"Retry failed");}finally{refresh();}})()}>Retry pending attendance</Button></p>}{!ready&&<p role="status">Loading staff attendance…</p>}{message&&<p role="alert">{message}</p>}{pending.some(e=>e.status==="failed")&&<div className="flex flex-wrap gap-2">{[...new Set(pending.filter(e=>e.status==="failed").map(e=>e.aggregateId))].map(id=><Button key={id} variant="outline" disabled={!can("staff.manage")} onClick={()=>void phase6Store.reviewAttendanceConflict(id).then(setReview).catch(e=>setMessage(e instanceof Error?e.message:"Review failed"))}>Review conflict: {phase6Store.listAttendance().find(r=>r.id===id)?.date}</Button>)}</div>}
+ <Modal open={Boolean(review)} title="Review attendance conflict" onClose={()=>!resolving&&setReview(null)} footer={<div className="flex gap-2"><Button disabled={resolving} variant="outline" onClick={()=>void resolve("remote")}>Keep cloud entry</Button><Button disabled={resolving} onClick={()=>void resolve("local")}>Apply local correction</Button></div>}>
+ {review&&<div className="space-y-3"><p>{phase6Store.getStaff(review.local.staffId)?.name} — {review.local.date}</p><table className="w-full text-sm"><thead><tr><th>Field</th><th>Local correction</th><th>Cloud entry</th></tr></thead><tbody>{(["status","clockIn","clockOut","breakMinutes","overtimeMinutes","notes","version"] as const).map(field=><tr key={field}><th>{{status:"Status",clockIn:"Clock-in",clockOut:"Clock-out",breakMinutes:"Break minutes",overtimeMinutes:"Overtime minutes",notes:"Notes",version:"Revision"}[field]}</th><td>{String(review.local[field]??"—")}</td><td>{String(review.remote[field]??"—")}</td></tr>)}</tbody></table><p>Choose after reviewing both entries. The decision is audited.</p>{message&&<p role="alert">{message}</p>}</div>}
+ </Modal><AttendanceGrid staff={[...phase6Store.listStaff(),...phase6Store.listArchivedStaff()]} rows={phase6Store.listAttendance()} month={month} onMonthChange={setMonth} onMark={mark} onMarkAllToday={markAll} canEdit={ready&&can("staff.manage")} branches={phase9Store.listBranches()} onSaveDetails={async(staffId,date,details)=>{try{await phase6Store.saveAttendance({staffId,date,...details});changed();}finally{refresh();}}}/></div>;
 }
