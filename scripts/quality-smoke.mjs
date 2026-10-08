@@ -96,7 +96,7 @@ assert(licenseConfigWriter.includes("MINARVA_COMMERCIAL_RELEASE"), "Commercial r
 assert(licenseConfigWriter.includes("!configured"), "Commercial build must reject a missing supplied public key");
 assert(licenseConfigWriter.includes("/^[0-9a-f]{64}$/"), "Public key validation must require 64 hex characters");
 assert(!desktopSource.includes("LICENSE_PRIVATE_KEY") && !desktopSource.includes("BEGIN PRIVATE KEY"), "Private signing key material must never ship in desktop source");
-assert(persistence.includes("SNAPSHOT_VERSION = 12"), "Domain snapshot version must include operations, WMS, procurement, goods-receipt, supplier-invoice and accounting state");
+assert(persistence.includes("SNAPSHOT_VERSION = 13"), "Domain snapshot version must include attendance plus operations, WMS, procurement, goods-receipt, supplier-invoice and accounting state");
 assert(persistence.includes("phase10Store.exportPhase10State") && persistence.includes("phase10Store.hydratePhase10"), "Phase-10 state is missing from domain snapshots");
 assert(persistence.includes("warehouseStore.exportWarehouseState") && persistence.includes("warehouseStore.hydrateWarehouseState"), "Warehouse/WMS state is missing from domain snapshots");
 assert(persistence.includes("procurementStore.exportProcurementState") && persistence.includes("procurementStore.hydrateProcurementState"), "Procurement state is missing from domain snapshots");
