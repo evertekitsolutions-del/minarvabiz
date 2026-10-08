@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 const require=createRequire(import.meta.url);const ts=require("typescript");
 require.extensions[".ts"]=(module,filename)=>module._compile(ts.transpileModule(fs.readFileSync(filename,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,filename);
-const permissions=require("../permissions.ts");const phase6=require("../phase6-store.ts");
+const permissions=require("../permissions.ts");const phase6=require("../phase6-store.ts");const persistence=require("../persistence.ts");const phase6Schema=require("../../../database/src/schema/phase6.ts");
 permissions.setCurrentRole("admin");permissions.setRuntimeFeaturePolicy(null);
 const staff={id:"attendance-staff-1",name:"Asha",role:"staff",salary:10000,status:"active",createdAt:"2026-10-01T00:00:00.000Z",updatedAt:"2026-10-01T00:00:00.000Z"};
 phase6.hydratePhase6({staff:[staff],attendance:[],assignments:[],incentiveRules:[],payouts:[],notifications:[]});
@@ -20,4 +20,4 @@ phase6.hydratePhase6({attendance:[]});assert.equal(phase6.listAttendance().lengt
 phase6.hydratePhase6({attendance:snapshot.attendance});assert.equal(phase6.listAttendance().length,2);
 assert.throws(()=>phase6.setAttendance({staffId:staff.id,date:"08-10-2026",status:"present"}),/YYYY-MM-DD/);
 assert.throws(()=>phase6.setAttendance({staffId:"missing",date:"2026-10-08",status:"present"}),/Staff not found/);
-console.log("Attendance runtime behavior PASS");
+assert.equal(persistence.SNAPSHOT_VERSION,13);assert.ok(phase6Schema.PHASE6_TABLES.includes("staff_attendance"));\nconsole.log("Attendance runtime behavior PASS");
