@@ -49,7 +49,6 @@ jobs:
           fi
           title="[CI failure] PR #${pr_number}: ${RUN_NAME}"
           body="$(printf 'Automated CI triage (no code executed and no automatic merge).\n\nPR: #%s\nWorkflow: %s\nFailing run: %s\nHead SHA: %s\n\nNext: inspect failed jobs and logs; reproduce; implement root-cause fix on a branch; rerun all required checks.\n' "$pr_number" "$RUN_NAME" "$RUN_URL" "$HEAD_SHA")"
-          existing="$(gh issue list --state open --limit 100 --json number,title --jq '.[] | select(.title == env.TARGET_TITLE) | .number' TARGET_TITLE="$title" 2>/dev/null || true)"
           # jq env variables are exported explicitly for reliable exact-title matching.
           export TARGET_TITLE="$title"
           existing="$(gh issue list --state open --limit 100 --json number,title --jq '.[] | select(.title == env.TARGET_TITLE) | .number' | head -n 1)"
