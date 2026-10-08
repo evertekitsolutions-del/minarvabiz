@@ -136,6 +136,7 @@ export async function openSqliteDatabase(
       }
     },
   };
-  save();
+  // Opening a database must not write it: the caller may still need to validate
+  // integrity and restore its domain snapshot. Persist only on an explicit commit.
   return api;
 }
