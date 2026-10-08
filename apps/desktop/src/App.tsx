@@ -21,7 +21,6 @@ import { DesktopProcurementPanel } from "./components/DesktopProcurementPanel";
 import { DesktopDayEndPanel } from "./components/DesktopDayEndPanel";
 import { DesktopAttendancePanel } from "./components/DesktopAttendancePanel";
 import { buildProfessionalReportData } from "./lib/report-data";
-
 type CommercialLicenseState = {
   status: "unlicensed" | "active" | "grace" | "expired" | "invalid";
   plan: LicensePlan | null;
@@ -33,17 +32,13 @@ type CommercialLicenseState = {
   licenseId?: string;
   activationId?: string;
 };
-
 const FULL_TRIAL_FEATURES: LicenseFeatures = {
   sales: true, customers: true, inventory: true, tailoring: true, orders: true, laundry: true,
   reports: true, staff: true, advancedReports: true, cloudSync: true, multiUser: true,
   multiBranch: true, apiAccess: true,
 };
-
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
-
 const errorMessage=(error:unknown):string=>error instanceof Error?error.message:String(error);
-
 const NAV_FEATURE: Partial<Record<NavItemId, keyof LicenseFeatures>> = {
   sales: "sales",
   products: "inventory",
@@ -65,7 +60,6 @@ const NAV_FEATURE: Partial<Record<NavItemId, keyof LicenseFeatures>> = {
   "day-end": "reports",
   audit: "advancedReports",
 };
-
 function featuresForLicense(state: CommercialLicenseState | null, trial: TrialState | null): LicenseFeatures | null {
   if (state && (state.status === "active" || state.status === "grace") && state.features) {
     const features = { ...state.features };
@@ -81,7 +75,6 @@ function featuresForLicense(state: CommercialLicenseState | null, trial: TrialSt
   if (trial?.status === "active") return FULL_TRIAL_FEATURES;
   return null;
 }
-
 export function App() {
   const [dbReady, setDbReady] = React.useState(false);
   const [dbError, setDbError] = React.useState<string | null>(null);
@@ -147,7 +140,6 @@ export function App() {
   const [purchaseForm, setPurchaseForm] = React.useState({ date:todayLocal(), supplierId:"", description:"", amount:"", paidAmount:"", paymentMethod:"cash" as PaymentMethod, kind:"general" as "general"|"order_specific", orderId:"", notes:"" });
   const [staffForm, setStaffForm] = React.useState({ name:"", phone:"", email:"", role:"staff" as RoleName, salary:"", joiningDate:todayLocal(), status:"active" as "active"|"inactive"|"on_leave", notes:"" });
   const autoBackupInFlight = React.useRef(false);
-
   const refreshAll = React.useCallback(() => {
     setCustomers(store.listCustomers());
     setProducts(store.listProducts({ query: productQuery || undefined, categoryId: productCategoryId || undefined, lowStockOnly }));
@@ -167,13 +159,11 @@ export function App() {
     setProfiles(selectedOrder ? ordersStore.listMeasurementProfiles(selectedOrder.customerId) : []);
     setModuleTick((v) => v + 1);
   }, [lowStockOnly, productQuery, productCategoryId, orderQuery, orderStatus, orderType, orderCustomerId, orderDateFrom, orderDateTo, orderDeliveryDateFrom, orderDeliveryDateTo, selectedOrder]);
-
   const persistAndRefresh = React.useCallback(async () => {
     refreshAll();
     try { const persisted = await persistDomainToSqlite(); if (!persisted) scheduleAutoSave(250); }
     catch { scheduleAutoSave(250); }
   }, [refreshAll]);
-
   React.useEffect(() => { let cancelled=false; (async()=>{ for(let i=0;i<50&&!window.minarvaDesktop;i++) await new Promise(r=>setTimeout(r,20)); if(!window.minarvaDesktop){if(!cancelled)setDbError("Electron bridge missing. Reinstall Minarva Biz desktop.");return;} const result=await bootstrapDesktopSqlite(); if(cancelled)return; if(!result.ok){setDbError(result.error||"SQLite failed to initialize");return;} const [state, license, deviceId] = await Promise.all([window.minarvaDesktop.getTrialState(), window.minarvaDesktop.getLicenseState(), window.minarvaDesktop.getDeviceId?.() ?? Promise.resolve("")]); if(cancelled)return; setTrialState(state); setCommercialLicense(license as CommercialLicenseState); setDeviceFingerprint(deviceId || ""); setDbReady(true); fetchDashboardData().then(setDash); })(); return()=>{cancelled=true;}; }, []);
   React.useEffect(() => {
     if (!dbReady) return;
@@ -193,13 +183,10 @@ export function App() {
   React.useEffect(() => {
     setRuntimeFeaturePolicy(featuresForLicense(commercialLicense, trialState));
   }, [commercialLicense, trialState]);
-
   React.useEffect(() => { if(!dbReady)return; try { const result=purgeExpiredRecycleBinItems(); if(result.purged>0)void persistDomainToSqlite(); } catch {/* role may not allow maintenance yet */} }, [dbReady]);
   React.useEffect(() => { if(!dbReady)return; fetchDashboardData().then(setDash); const reminders=runAutomatedCustomerReminders(); if(reminders.deliveryRemindersQueued||reminders.paymentRemindersQueued)void persistDomainToSqlite(); if(!window.minarvaDesktop||!shouldRunAutoBackup()||autoBackupInFlight.current)return; autoBackupInFlight.current=true; let cancelled=false; (async()=>{try{const settings=getAutoBackupSettings();const result=await window.minarvaDesktop!.createAutomaticBackup(settings.retentionCount);if(cancelled||result.cancelled)return;if(!result.ok){recordBackupFailure(result.error||"Automatic backup failed");return;}if(result.path)recordBackupSuccess(result.path,"auto",result.sizeBytes);await window.minarvaDesktop!.pruneAutomaticBackups(settings.retentionCount);if(!cancelled)void persistDomainToSqlite();}catch(error){if(!cancelled)recordBackupFailure(errorMessage(error));}finally{autoBackupInFlight.current=false;}})(); return()=>{cancelled=true;}; }, [dbReady,moduleTick]);
   React.useEffect(() => { if(!trialState?.activated||trialState.synced||!trialState.registration)return; const apiUrl=import.meta.env.VITE_LICENSE_API_URL as string|undefined; if(!apiUrl||!window.minarvaDesktop)return; let cancelled=false; (async()=>{try{const deviceId=await window.minarvaDesktop!.getDeviceId!();const response=await fetch(`${apiUrl.replace(/\/$/,"")}/api/trial/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...trialState.registration,deviceId})});const payload=await response.json().catch(()=>({}));if(!cancelled&&response.ok&&payload.ok){await window.minarvaDesktop!.markTrialSynced();setTrialState(await window.minarvaDesktop!.getTrialState());}}catch{/* offline retry */}})(); return()=>{cancelled=true;}; }, [trialState]);
-
   async function activateTrial(registration: TrialRegistration): Promise<{ok:boolean;error?:string}>{ if(!window.minarvaDesktop)return{ok:false,error:"Desktop security bridge is unavailable."}; const apiUrl=import.meta.env.VITE_LICENSE_API_URL as string|undefined; if(apiUrl){try{const deviceId=await window.minarvaDesktop.getDeviceId!();const response=await fetch(`${apiUrl.replace(/\/$/,"")}/api/trial/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...registration,deviceId})});const payload=await response.json().catch(()=>({}));if(!response.ok||!payload.ok)return{ok:false,error:payload.error||"Trial registration was not accepted."};const local=await window.minarvaDesktop.activateTrial(registration);if(!local.ok)return local;if(payload.ok&&window.minarvaDesktop.markTrialSynced)await window.minarvaDesktop.markTrialSynced();setTrialState(await window.minarvaDesktop.getTrialState());return{ok:true};}catch{/* offline activation below */}} const local=await window.minarvaDesktop.activateTrial(registration);if(!local.ok)return local;setTrialState(await window.minarvaDesktop.getTrialState());return{ok:true}; }
-
   function resetCustomerForm(){setCustForm({name:"",phone:"",whatsapp:"",email:"",address:"",birthday:"",notes:""});}
   function resetProductForm(){setEditingProductId(null);setProductForm({name:"",sku:"",barcode:"",categoryId:"",brand:"",size:"",color:"",fabric:"",unit:"pcs",costPrice:"",sellingPrice:"",discount:"0",taxRate:"0",stockQuantity:"",minimumStock:"0",supplierId:"",imageUrl:"",notes:"",hasVariants:false});}
   function openProductEditor(p:Product){setEditingProductId(p.id);setProductForm({name:p.name,sku:p.sku||"",barcode:p.barcode||"",categoryId:p.categoryId||"",brand:p.brand||"",size:p.size||"",color:p.color||"",fabric:p.fabric||"",unit:p.unit||"pcs",costPrice:String(p.costPrice??0),sellingPrice:String(p.sellingPrice??0),discount:String(p.discount??0),taxRate:String(p.taxRate??0),stockQuantity:String(p.stockQuantity??0),minimumStock:String(p.minimumStock??0),supplierId:p.supplierId||"",imageUrl:p.imageUrl||"",notes:p.notes||"",hasVariants:Boolean(p.hasVariants)});setProductOpen(true);}
@@ -212,16 +199,13 @@ export function App() {
   function handleSaveProduct(){try{if(!productForm.name.trim())throw new Error("Product name is required");const payload={name:productForm.name.trim(),sku:productForm.sku||null,barcode:productForm.barcode||null,categoryId:productForm.categoryId||null,brand:productForm.brand||null,size:productForm.size||null,color:productForm.color||null,fabric:productForm.fabric||null,unit:productForm.unit||"pcs",costPrice:Number(productForm.costPrice)||0,sellingPrice:Number(productForm.sellingPrice)||0,discount:Number(productForm.discount)||0,taxRate:Number(productForm.taxRate)||0,stockQuantity:Number(productForm.stockQuantity)||0,minimumStock:Number(productForm.minimumStock)||0,supplierId:productForm.supplierId||null,imageUrl:productForm.imageUrl||null,notes:productForm.notes||null,isActive:true};if(editingProductId){const patch:Partial<Product>={...payload};delete patch.stockQuantity;store.updateProduct(editingProductId,patch);}else store.createProduct(payload);setProducts(store.listProducts({query:productQuery||undefined,categoryId:productCategoryId||undefined,lowStockOnly}));setProductOpen(false);resetProductForm();setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
   function handleAdjustStock(){try{if(!stockAdjustProduct)return;const next=Math.max(0,Number(stockAdjustQty)||0);const delta=next-stockAdjustProduct.stockQuantity;if(delta!==0)store.adjustStock(stockAdjustProduct.id,"adjustment",delta,"Manual stock correction");setStockAdjustProduct(null);setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
   function handleArchiveProduct(p:Product,reason:string){try{const r=store.archiveProduct(p.id,reason);if(r.error)return{error:r.error};setModuleError(null);void persistAndRefresh();return{success:true};}catch(error){return{error:errorMessage(error)};}}
-
   if(dbError)return <div style={{padding:32,fontFamily:"system-ui",maxWidth:560}}><h1>Database required</h1><p>Minarva Biz Offline cannot start without SQLite.</p><pre>{dbError}</pre></div>;
   if(!dbReady||!trialState||!commercialLicense)return <div style={{padding:48,fontFamily:"system-ui",textAlign:"center"}}><p>Initializing Minarva Biz…</p></div>;
   const licenseFeatures = featuresForLicense(commercialLicense, trialState);
   const commercialActive = commercialLicense.status==="active"||commercialLicense.status==="grace";
   const licenseDaysForDashboard = effectiveLicenseDaysRemaining(commercialLicense, trialState);
-
   if(!commercialActive&&trialState.status!=="active")return <TrialGate state={trialState} onActivate={activateTrial}/>;
   if(!licenseFeatures)return <TrialGate state={trialState} onActivate={activateTrial}/>;
-
   const allowedNav = MAIN_NAV.filter((item)=>{const feature=NAV_FEATURE[item.id];return !feature||Boolean(licenseFeatures[feature]);});
   const actions:QuickAction[]=[];
   if(licenseFeatures.sales) actions.push({id:"sale",label:"New Sale",description:"Create Invoice",icon:<span>🛒</span>,tone:"blue",onClick:()=>{setActiveNav("sales");setSalesTab("pos");}});
@@ -262,11 +246,8 @@ export function App() {
   function saveSettings(){void persistAndRefresh();setModuleTick(v=>v+1);}
   const navTo=(id:NavItemId)=>{const feature=NAV_FEATURE[id];if(feature&&!licenseFeatures[feature]){setModuleError(`Feature not included in current license: ${feature}`);setActiveNav("dashboard");setSelectedOrder(null);return;}setModuleError(null);setActiveNav(id);setSelectedOrder(null);};
   const handleInsightAction=(action:string)=>{const targets:Record<string,NavItemId>={"Review low stock":"products","Open outstanding payments":"payments","Review pending orders":"services","Open ready orders":"services","Open reports":"reports","Review expenses":"expenses"};const target=targets[action];if(target)navTo(target);};
-
   const laundry=phase5Store.listLaundryOrders(), expenses=phase5Store.listExpenses(), purchases=phase5Store.listPurchases(), staff=phase6Store.listStaff(), assignments=phase6Store.listAssignments(), notifications=phase6Store.listNotifications(), reportSales=phase7Store.salesReport(reportFrom||undefined,reportTo?`${reportTo}T23:59:59.999Z`:undefined), reportDayEnd=phase7Store.dayEndReport(), reportStock=phase7Store.stockReport(), reportOutstanding=phase7Store.outstandingPaymentsReport(), backups=phase7Store.listBackups(), suppliers=phase5Store.listSuppliers(), expenseCategories=phase5Store.listExpenseCategories(), profile=getShopProfile(), tax=getTaxConfig(), backupSettings=getAutoBackupSettings(), printSettings=getPrintSettings(), view=activeNav as string;
   const professionalReports=buildProfessionalReportData(reportFrom||undefined,reportTo||undefined);
-
-
   return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} desktopModuleContext={{customerId:crmCustomerId,staffId:staffDetailId,returnSaleId,onReturnSaleHandled:()=>setReturnSaleId("")}} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png",navItems:allowedNav}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:listCustomerCommunicationQueue().filter(row=>row.status==="pending"||row.status==="failed").length,onMessagesClick:()=>navTo("messages"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("agenda"),onSearch:setGlobalSearchQuery}}>
     <DesktopEntitlementMonitor enabled={dbReady} onTrialStateChange={setTrialState} onLicenseStateChange={setCommercialLicense}/>
     {view==="dashboard"&&dash&&<div className="space-y-4"><DesktopLicenseExpiryBanner commercialActive={commercialActive} trialState={trialState} daysRemaining={licenseDaysForDashboard} onManage={()=>navTo("license")}/><Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/></div>}
@@ -275,7 +256,6 @@ export function App() {
     {view==="products"&&<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={()=>setLowStockOnly(v=>!v)} onSearch={setProductQuery} onFilterCategory={setProductCategoryId} onAddCategory={()=>{setCategoryForm({name:"",description:""});setCategoryOpen(true);}} onAdd={()=>{resetProductForm();setProductOpen(true);}} onEdit={openProductEditor} onAdjustStock={openStockAdjust} onArchive={handleArchiveProduct} onPrintBarcode={openBarcodeLabel}/>} 
     {view==="warehouse"&&<WarehousePanel/>}
     {view==="accounting"&&<AccountingPanel/>}
-
         {view==="quotations"&&<QuotationsPanel/>}
     {view==="sales"&&<div className="space-y-4"><div className="flex flex-wrap gap-2"><Button variant={salesTab==="pos"?"primary":"outline"} onClick={()=>setSalesTab("pos")}>POS Billing</Button><Button variant={salesTab==="normal"?"primary":"outline"} onClick={()=>setSalesTab("normal")}>Normal Billing</Button><Button variant={salesTab==="history"?"primary":"outline"} onClick={()=>setSalesTab("history")}>Sales History</Button></div>{salesTab==="pos"?<PosBilling products={store.listProducts()} customers={customers} onFindByBarcode={store.getProductByBarcode} onAddCustomer={openCustomerCreator} onAddProduct={()=>{resetProductForm();setProductOpen(true);}} heldSales={heldSales} onHoldSale={payload=>{try{const result=store.holdSale(payload);if(result.errors.length||!result.heldSale)return{success:false,errors:result.errors.length?result.errors:["Unable to hold sale"]};void persistAndRefresh();return{success:true,holdNumber:result.heldSale.holdNumber};}catch(error){return{success:false,errors:[errorMessage(error)]};}}} onRemoveHeldSale={id=>{try{store.removeHeldSale(id);void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}} onCompleteSale={handleSale} onPrintSale={(id,paper)=>{const sale=store.getSale(id);if(sale)printSaleInvoice(sale,paper);}}/>:salesTab==="normal"?<NormalBilling products={store.listProducts()} customers={customers} onAddCustomer={openCustomerCreator} onAddProduct={()=>{resetProductForm();setProductOpen(true);}} onCompleteSale={handleSale} onPrintSale={(id,paper)=>{const sale=store.getSale(id);if(sale)printSaleInvoice(sale,paper);}}/>:<SalesList sales={sales} customers={customers} buildPreviewHtml={(sale,paper)=>buildSaleInvoiceHtml(sale,{paper,autoPrint:false})} onPrintA4={sale=>printSaleInvoice(sale,"a4")} onPrintThermal={sale=>printSaleInvoice(sale,"thermal")} onCreateReturn={sale=>{setReturnSaleId(sale.id);navTo("returns");}}/>}</div>}
     {view==="services"&&<div className="space-y-4"><div className="flex flex-wrap items-center gap-2"><Button variant={orderView==="table"?"primary":"outline"} onClick={()=>{setSelectedOrder(null);setOrderView("table");}}>Orders Table</Button><Button variant={orderView==="production"?"primary":"outline"} onClick={()=>setOrderView("production")}>Production Board</Button>{selectedOrder&&<Button onClick={()=>{setForm(emptyOrderForm());setCreateOpen(true);}}>+ New Order</Button>}</div>{orderView==="production"?<ProductionBoard orders={orders} staff={staff} assignments={assignments} onSelect={setSelectedOrder} onStatusChange={handleOrderStatusChange} onAssignStaff={handleAssignStaff}/>:<>{!selectedOrder&&<OrderList orders={orders} customers={customers} onSearch={setOrderQuery} onFilterStatus={setOrderStatus} onFilterType={setOrderType} onFilterCustomer={setOrderCustomerId} onFilterOrderDateFrom={setOrderDateFrom} onFilterOrderDateTo={setOrderDateTo} onFilterDeliveryDateFrom={setOrderDeliveryDateFrom} onFilterDeliveryDateTo={setOrderDeliveryDateTo} onAdd={()=>{setForm(emptyOrderForm());setCreateOpen(true);}} onSelect={order=>{setSelectedOrder(order);setProfiles(ordersStore.listMeasurementProfiles(order.customerId));}}/>}</>}{selectedOrder&&<OrderDetail onClose={()=>setSelectedOrder(null)} order={selectedOrder} measurementProfiles={profiles} expenseCategories={expenseCategories} onStatusChange={handleOrderStatusChange.bind(null,selectedOrder.id)} onQualityCheck={handleQualityCheck} onAddExpense={handleOrderDetailExpense} onUpdateOperationalDetails={handleOrderOperationalUpdate} auditHistory={phase7Store.listAuditLogs(500).filter(entry=>entry.tableName==="orders"&&entry.recordId===selectedOrder.id)}/>}<Modal open={createOpen} title="New Service Order" onClose={()=>setCreateOpen(false)}><OrderForm value={form} customers={customers} profiles={profiles} onChange={setForm} onLoadProfiles={customerId=>setProfiles(ordersStore.listMeasurementProfiles(customerId))} onAddCustomer={openCustomerCreator} onSubmit={handleCreateOrder} onCancel={()=>setCreateOpen(false)} error={formError}/></Modal></div>}
@@ -290,7 +270,6 @@ export function App() {
     {view==="license"&&<DesktopLicenseView state={commercialLicense} trialState={trialState} deviceFingerprint={deviceFingerprint} customerCount={customers.length} productCount={products.length} onStateChange={setCommercialLicense} onTrialStateChange={setTrialState}/>} 
     {view==="settings"&&<SettingsPanel profile={profile} tax={tax} backup={backupSettings} printing={printSettings} onSaveProfile={v=>{updateShopProfile(v);if(v.gstin!==undefined)updateTaxConfig({gstin:v.gstin});saveSettings();}} onSaveTax={v=>{updateTaxConfig(v);saveSettings();}} onSaveBackup={v=>{setAutoBackupSettings(v);saveSettings();}} onSavePrinting={v=>{updatePrintSettings(v);saveSettings();}}/>}
     {view==="support"&&<SupportCenter apiBaseUrl={(import.meta.env.VITE_SUPPORT_API_URL as string|undefined)||"https://minarvabiz-steel.vercel.app"} organizationName={profile.shopName||""} currentModule={view} edition={commercialLicense?.edition || (trialState?.status === "active" ? "offline" : "")}/>}
-
     <Modal open={!!laundryMode} title={laundryMode==="outsourced"?"Outsourced Laundry":"In-house Ironing"} onClose={()=>setLaundryMode(null)}><LaundryForm mode={laundryMode||"outsourced"} customers={customers} suppliers={suppliers} onAddCustomer={openCustomerCreator} onAddSupplier={()=>{setSupplierForm({name:"",company:"",phone:"",email:"",address:"",category:"laundry",openingBalance:"",notes:""});setSupplierOpen(true);}} onSubmit={handleCreateLaundry} onCancel={()=>setLaundryMode(null)} error={laundryError}/></Modal>
     <Modal open={!!laundryCancelOrder} title="Cancel laundry ticket" onClose={()=>{setLaundryCancelOrder(null);setLaundryCancelError(null);}}>{laundryCancelOrder&&<LaundryCancellationForm order={laundryCancelOrder} error={laundryCancelError} onSubmit={handleLaundryCancel} onCancel={()=>{setLaundryCancelOrder(null);setLaundryCancelError(null);}}/>}</Modal>
     <Modal open={custOpen} title="Add Customer" onClose={()=>setCustOpen(false)} footer={<><Button type="button" variant="outline" onClick={()=>setCustOpen(false)}>Cancel</Button><Button type="button" onClick={handleCreateCustomer}>Save Customer</Button></>}><div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><FormField label="Name *"><input className={inputClass} value={custForm.name} onChange={e=>setCustForm({...custForm,name:e.target.value})}/></FormField><FormField label="Phone"><input className={inputClass} value={custForm.phone} onChange={e=>setCustForm({...custForm,phone:e.target.value})}/></FormField><FormField label="WhatsApp"><input className={inputClass} value={custForm.whatsapp} onChange={e=>setCustForm({...custForm,whatsapp:e.target.value})}/></FormField><FormField label="Email"><input className={inputClass} type="email" value={custForm.email} onChange={e=>setCustForm({...custForm,email:e.target.value})}/></FormField><FormField label="Address"><textarea className={inputClass} value={custForm.address} onChange={e=>setCustForm({...custForm,address:e.target.value})}/></FormField><FormField label="Birthday"><input className={inputClass} type="date" value={custForm.birthday} onChange={e=>setCustForm({...custForm,birthday:e.target.value})}/></FormField><FormField label="Notes"><textarea className={inputClass} value={custForm.notes} onChange={e=>setCustForm({...custForm,notes:e.target.value})}/></FormField></div></Modal>
