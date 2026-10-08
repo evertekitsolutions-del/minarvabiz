@@ -3,6 +3,7 @@ import {
   consumeSupportRateLimit,
   createSupportRequest,
   supportCorsHeaders,
+  supportServiceCredential,
   triageSupportRequest,
   type SupportChatMessage,
   type SupportClientContext,
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
   }
 
   const clientId = clean(body?.context?.clientId, 160);
-  const oidcToken = clean(process.env.MINARVA_SUPPORT_SERVICE_TOKEN || headers.get("x-vercel-oidc-token"), 12000);
+  const oidcToken = clean(supportServiceCredential(headers), 12000);
   const rate = await consumeSupportRateLimit(headers, "support-submit-day", 20, 86400);
   if (!rate.ok) {
     return NextResponse.json({ ok: false, error: rate.error || "Support submission service is unavailable." }, { status: 503, headers: supportCorsHeaders() });
