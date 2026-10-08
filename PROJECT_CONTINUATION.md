@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 9027)
+Total output lines: 404
+
 # Minarva Biz — Authoritative Project Continuation
 
 **Last updated:** 2026-10-07  
@@ -143,95 +146,7 @@ Current normal named-admin behavior:
 - **PR #251 is the active milestone**: retire the Render-dependent License Admin runtime definition and active server-side UI hydration/mutation path while preserving browser -> Cloudflare administration, emergency rollback safety, request-bound CSP nonces, Ed25519 license-key portability, and all security/compliance gates.
 - PR #251 removes `render.yaml` from the repository and removes legacy startup synchronization from the License Admin start command. This repository change does **not** authorize deleting/disabling the live production Render service before the named AAL2 manual emergency credential has been established and production Cloudflare emergency login/me/business/logout/revocation/backoff parity is proven.
 - The dependency-security gate discovered the upstream Sharp/libvips advisory during this milestone. The branch pins patched Sharp >=0.35.5 and explicitly reviews the resulting LGPL libvips runtime under the existing distribution-compliance obligations.
-- After PR #251 exact-head gates are green and it is merged, the next operational step is additive production migration/deployment from merged `main`, named AAL2 self-service emergency rotation, live parity proof without exposing the raw credential, and only then retirement of the live Render fallback.
-- Vercel remains a separate mandatory-dependency retirement milestone after Render cutover proof; it must be migrated with provider-neutral/self-host parity rather than simply disabled.
-
-## 5C. October 8 License Admin security and portability continuation
-
-- PR #259 merged recovery-token hardening: Supabase recovery bearer credentials are captured only in memory and scrubbed from the browser URL/history before user interaction.
-- Production named-admin authority was verified against `public.license_admin_identities` and `cloudflare_admin_me()`; the active linked identity is role `admin`, and the RPC requires AAL2. The unrelated historical `profiles.role` table is not the License Admin authority.
-- PR #260 merged named-AAL2 emergency self-service UI. It exposes safe status/create/rotate/disable controls only to named admin sessions; one-time raw emergency credentials remain React memory only and require explicit save acknowledgement before dismissal or another destructive control action.
-- Production emergency authority remains intentionally disabled/uninitialized until the named administrator performs the browser-only credential creation step and stores the one-time credential locally without sharing it.
-- PR #261 is the active portability milestone. It replaces source-level Cloudflare Worker endpoint coupling across normal admin, bootstrap/auth, emergency login/control/logout and password recovery with validated client-safe `NEXT_PUBLIC_LICENSE_EDGE_URL`; remote origins require HTTPS and HTTP is accepted only for loopback development. The current Worker remains a transitional default so existing production keeps working.
-- PR #261 first CI attempt exposed a literal escaped-newline insertion in four TypeScript imports; this is a branch implementation defect, not an architecture blocker. It was root-cause-fixed on the same branch and must pass a fresh exact-head gate set before merge.
-
-## 5B. Provider-neutral License Admin hosting merged
-
-- PR #252 merged on 2026-10-07 with merge SHA `0f3d9d36a24e45e6e526468212f14ca0a0fb215d`.
-- License Admin is now a browser-only Next static export. The deployable artifact is `apps/license-admin/out/`; it can be served from any HTTPS static host or future Minarva-owned server.
-- Obsolete Next server actions, service-role helpers, signing-key server module, License Admin API routes, middleware, and Render-era server smoke contracts were removed from the active License Admin host.
-- License/support/customer-provisioning/admin authentication operations are browser -> Cloudflare/PostgreSQL authority only.
-- Security-header expectations for the static artifact live in `apps/license-admin/public/_headers` and are enforced by CI; no privileged server secrets may appear in the exported artifact.
-- Licensing/update/support contract tests now assert the Cloudflare edge authority rather than deleted Next API routes.
-- PR #252 exact head `371b7c25e27334c2eaf1af8f8f545a3701603f95` passed CI, Coverage Ratchet, First Admin Fresh Instance E2E, Staging Security + Performance, Dependency Security, SAST, SBOM/license policy, Licensing Smoke, Final Release Audit, Secret Scan, Windows Deep Installed Smoke, and Windows Feature Click Smoke before merge.
-- Production Cloudflare `LICENSE_ADMIN_ALLOWED_ORIGINS` still points at the existing Render License Admin origin. Do not remove that live origin/service until the merged static artifact is deployed to a replacement HTTPS origin, that origin is added additively, named AAL2 admin operations are proven, manual emergency authority is established, and emergency parity is proven.
-- Production emergency runtime configuration was last observed uninitialized; raw emergency credential handling remains an interactive browser-only security boundary and must never be copied into chat, GitHub, logs, or hosting configuration.
-- Next implementation milestone: establish a deployable provider-neutral replacement origin for the merged static artifact, add it to Cloudflare allowed origins without removing Render, run named AAL2 + emergency parity proof, then retire the live Render fallback. After that, remove Vercel as a mandatory online-app dependency using the same additive/provider-neutral method.
-
-## 5C. Provider-neutral static artifact bridge merged
-
-- PR #255 merged on 2026-10-07 with merge SHA `1b94287ee4d5711f1a8957734351511bf4c768ce`.
-- A dedicated `License Admin Static Artifact` workflow now builds `apps/license-admin/out`, runs the static-artifact secret/security contract, and publishes a short-retention provider-neutral artifact on both PR and main workflows.
-- PR #255 exact head `725fb9b4773605c5fbcdb9508cc32c25bf5367df` passed the static-artifact workflow plus CI, Coverage Ratchet, Windows Deep Installed Smoke, Windows Feature Click Smoke, Dependency Security, SAST, SBOM/license policy, Licensing Smoke, Secret Scan, Staging Security + Performance, and Final Release Audit before merge.
-- The verified PR artifact digest was `sha256:47f7aebb5534c9f3d373d0e79749b578bc8c99b7528d88393f8209b8762cd74c`; artifact retention is intentionally short and it contains no privileged server secrets.
-- Cloudflare Pages project `minarvabiz-license-admin` exists and its Direct Upload token endpoint is operational. Automatic GitHub source attachment remains blocked by Cloudflare Pages error 8000011 (internal Git installation issue), not by application code.
-- Do not remove the Render production fallback yet. The next safe live step is to Direct Upload the verified static artifact to the Pages project (or repair the Cloudflare Git installation), then add the new HTTPS origin to `LICENSE_ADMIN_ALLOWED_ORIGINS` while retaining Render, and prove named AAL2 + emergency parity before Render retirement.
-- The connected Cloudflare API can issue the Pages short-lived upload token, but the current connector boundary cannot stream the GitHub artifact bytes into the Pages asset upload API in one operation. Do not create or expose a long-lived Cloudflare API token merely to bypass this boundary.
-
-## 6. Cloudflare License/Admin state
-
-Production worker:
-
-- name: `minarva-biz-license-edge`
-- public front door: `https://minarva-biz-license-edge.minarva-biz.workers.dev`
-
-Current customer-facing Cloudflare-native routes include:
-
-- health;
-- public verification key;
-- signed update manifest;
-- commercial activation;
-- validation;
-- deactivation;
-- trial registration.
-
-Current License Admin Cloudflare-native capabilities include:
-
-- admin identity/AAL2 authorization;
-- license registry read;
-- support inbox read;
-- support request update;
-- license status management;
-- commercial license issuance with Cloudflare signing authority;
-- offline activation package preparation/signing;
-- online customer provisioning through Supabase Magic Link;
-- browser auth config;
-- first-admin bootstrap status;
-- first-admin short-lived signup reservation;
-- first-admin AAL2 claim;
-- admin identity verification.
-
-No new Render dependency should be added.
-
-## 7. Supabase role
-
-Supabase remains the current PostgreSQL/Auth data layer. Do not remove it merely to reduce provider count.
-
-Current design intentionally uses:
-
-- PostgreSQL/RLS;
-- Supabase Auth;
-- publishable-key + caller JWT for scoped authenticated admin RPCs;
-- narrow SECURITY DEFINER functions that validate AAL2/admin permissions;
-- no service-role/secret key in the Cloudflare admin read/write paths already migrated.
-
-Maintain PostgreSQL portability for future self-hosting.
-
-## 8. Render removal status
-
-Customer-facing license/update traffic and normal named-admin control-plane traffic are Render-free.
-
-PR #249 merged the browser-native Cloudflare emergency UI/session path. PR #250 establishes the Render-independent emergency self-service authority: a named Supabase administrator at TOTP AAL2 with role `admin` can rotate or disable emergency authority through Cloudflare + PostgreSQL. Cloudflare generates the strong emergency credential, PostgreSQL receives only its SHA-256 digest, and plaintext is returned once to the authenticated browser. Manual ownership prevents later legacy Render startup synchronization from overwriting the authority.
+- After PR #251 exact-head gates are green and it is merged, the next operational step is additive production migration/deployment from merged `main`, named AAL2 self-service emergency rotation, live parity proof without exposing the raw credential, and only then retirement of the live Render fallb…2027 tokens truncated… synchronization from overwriting the authority.
 
 The old Render credential/digest synchronization is therefore **not a production cutover prerequisite**. It remains rollback compatibility only until manual self-service ownership is established and the live replacement is proven.
 
@@ -393,12 +308,12 @@ If a chat ends, the next chat must continue from live repository state and these
 - Status-only edits retain existing metadata. Domain validation rejects impossible dates/statuses, fractional/negative minutes and invalid clock/break ranges before mutation. Immutable versioned event snapshots preserve prior revisions.
 - `/attendance` participates in lazy cloud hydration. Staff, attendance and branch reads are paginated; selected branch survives refresh. Attendance cloud transport lives in `apps/web/src/lib/data-source-attendance.ts` so the main data-source stays within its existing 900-line audit budget.
 - Cloud writes await actual mutation and durable event acknowledgement. Ordered per-record draining, per-aggregate failure blocking, event-id replay and optimistic revision checks prevent silent overwrite or acknowledgement of empty updates.
-- Pending corrections survive in-session cloud rehydration. Managers can retry or explicitly review local/cloud values and choose a cloud copy or audited local correction rebased on the current remote revision. Superseded events remain in local history as `discarded`.
+- Pending corrections survive in-session cloud rehydration. Managers can retry or explicitly review local/cloud values and choose a cloud copy or audited local correction rebased on the current remote revision. Superseded events remain in local history as `discarded`. Deferred-read review rejects newer local edits; same-day different-device creations use a staff/date lookup and explicit canonical-ID rebase without duplicate-day totals.
 - Online production browser persistence remains the existing session-only policy; do not claim failed changes survive browser closure. The UI warns to keep the window open until confirmed and installs a pending-change unload guard. Windows uses the existing SQLite snapshot v13 persistence.
 - Additive migration `20261008140151_attendance_role_integrity.sql` restricts writes to organization super-admin/admin/manager roles, checks staff/branch tenant relations, protects immutable attendance identity and monotonic revisions, and constrains clock/break ranges without rewriting historical records.
 - CI includes a real PostgreSQL red/green isolation test: the original policy must fail the cross-tenant-reference denial assertion; hardened policies must pass role, relation, update and tenant-read cases. Browser deep smoke exercises actual time entry and metadata retention.
 - Reuse: existing Minarva grid, Modal/FormField, phase6 store, snapshot/outbox, authenticated PostgREST, and PostgreSQL RLS primitives; no third-party source copied and no recurring paid dependency introduced. Upstream PostgreSQL/Supabase RLS documentation and changelog reviewed.
-- Independent review findings addressed: individual/bulk hidden-branch mutation, archived history loss, selected-branch reset, pending-hydration loss, acknowledgement replay ordering and genuine conflict resolution. Exact-head CI and follow-up review remain mandatory before merge.
+- Independent review findings addressed: individual/bulk hidden-branch mutation, archived history loss, selected-branch reset, pending-hydration loss, acknowledgement replay ordering and genuine conflict resolution. Final independent review found no remaining verified critical/important defects after executable regression checks. Exact-head CI remains mandatory before merge.
 - Full MASTER VISION estimate entered this batch at approximately **50%**. PR #275's implemented daily attendance/time-entry/cloud-parity scope is the batch's proposed additional percentage point; count approximately **51% only after its required exact-head gates pass and it is merged**. This is a full-master estimate, not a measured milestone ratio.
 - HR shifts/rosters, leave-policy management, holiday calendars, late/early rules, biometric/geofence adapters, payroll/statutory packs and full employee self-service remain unfinished master scope. Do not mark those registry entries complete merely because the grid supports daily leave/holiday statuses or manual clock entry.
 - Production attendance migrations/deployment and customer UAT must be separately verified; merged source is not a new Windows stable release. Keep v1.0.15 and existing infrastructure fallbacks until replacement/release parity is proven.
