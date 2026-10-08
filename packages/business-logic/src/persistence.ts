@@ -5,7 +5,7 @@
 import type {
   Customer, Product, Category, Sale, Payment, ServiceOrder, MeasurementProfile,
   LaundryOrder, Expense, Purchase, Supplier, ExpenseCategory,
-  StaffMember, StaffAssignment, IncentiveRuleRecord, StaffIncentivePayout, StaffAttendanceRecord,
+  StaffMember, StaffAssignment, IncentiveRuleRecord, StaffIncentivePayout,
   AppNotification, SaleReturn, AuditLogEntry, Branch,
 } from "@minarvabiz/types";
 import * as store from "./store";
@@ -52,7 +52,7 @@ export interface DomainSnapshot {
   suppliers: Supplier[];
   expenseCategories: ExpenseCategory[];
   staff: StaffMember[];
-  attendance?: StaffAttendanceRecord[];
+  attendance?: ReturnType<typeof phase6Store.exportPhase6State>["attendance"];
   assignments: StaffAssignment[];
   incentiveRules: IncentiveRuleRecord[];
   payouts: StaffIncentivePayout[];
