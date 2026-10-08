@@ -40,3 +40,19 @@ assert.match(migration,/FORCE ROW LEVEL SECURITY/);
 assert.match(migration,/user_org_ids\(\)/);
 assert.match(migration,/CHECK \(status IN \('present','absent','half_day','leave','holiday'\)\)/);
 console.log("Attendance Grid contract PASS");
+
+assert.match(desktop,/onChanged=\{persistAttendanceAndRefresh\}/,"Attendance save must use a persistence callback that reports failures");
+assert.match(desktop,/Attendance changes are not yet saved to SQLite/);
+
+const persistenceBody=desktop.match(/const persistAttendanceAndRefresh = React\.useCallback\(async \(\) => \{([\s\S]*?)\}, \[refreshAll\]\)/)?.[1];
+assert.ok(persistenceBody,"Strict attendance persistence callback must exist");
+const makePersist=new Function("refreshAll","persistDomainToSqlite","scheduleAutoSave",`return async()=>{${persistenceBody}}`);
+let refreshes=0,retries=0;
+const successful=makePersist(()=>refreshes++,async()=>true,()=>retries++);
+await successful();assert.equal(refreshes,1);assert.equal(retries,0);
+await assert.rejects(makePersist(()=>refreshes++,async()=>false,()=>retries++),/not yet saved/);
+assert.equal(retries,1,"unconfirmed save keeps autosave retry");
+const diskError=new Error("disk write failed");
+await assert.rejects(makePersist(()=>refreshes++,async()=>{throw diskError},()=>retries++),e=>e===diskError);
+assert.equal(retries,2,"disk errors remain visible and retryable");
+console.log("Attendance SQLite confirmation/failure behavior PASS");
