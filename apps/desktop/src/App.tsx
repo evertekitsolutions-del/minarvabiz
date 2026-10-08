@@ -22,15 +22,15 @@ import { DesktopDayEndPanel } from "./components/DesktopDayEndPanel";
 import { DesktopAttendancePanel } from "./components/DesktopAttendancePanel";
 import { buildProfessionalReportData } from "./lib/report-data";
 type CommercialLicenseState = {
-  status: "unlicensed" | "active" | "grace" | "expired" | "invalid";
-  plan: LicensePlan | null;
-  edition: Edition | null;
-  features: LicenseFeatures | null;
-  daysRemaining: number | null;
-  graceDaysRemaining: number | null;
-  reason?: string;
-  licenseId?: string;
-  activationId?: string;
+status: "unlicensed" | "active" | "grace" | "expired" | "invalid";
+plan: LicensePlan | null;
+edition: Edition | null;
+features: LicenseFeatures | null;
+daysRemaining: number | null;
+graceDaysRemaining: number | null;
+reason?: string;
+licenseId?: string;
+activationId?: string;
 };
 const FULL_TRIAL_FEATURES: LicenseFeatures = {
   sales: true, customers: true, inventory: true, tailoring: true, orders: true, laundry: true,
