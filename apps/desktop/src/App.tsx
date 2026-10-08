@@ -2,14 +2,14 @@ import * as React from "react";
 import {
   AppShell, Dashboard, ProductList, PosBilling, NormalBilling, SalesList,
   OrderList, OrderForm, emptyOrderForm, OrderDetail, ProductionBoard, LaundryList, LaundryForm, LaundryCancellationForm,
-  ExpenseList, PurchaseList, StaffList, NotificationCenter, ReportsPanel,
+  ExpenseList, PurchaseList, StaffList, AttendanceGrid, NotificationCenter, ReportsPanel,
   BackupPanel, SettingsPanel, SupportCenter, WarehousePanel, AccountingPanel, QuotationsPanel, Modal, Button, FormField, inputClass, selectClass, GlobalSearchPalette,
   TrialGate, MAIN_NAV,
   type QuickAction, type NavItemId, type DashboardData, type OrderFormValues, type LaundryCancellationValues,
   type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
 import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printBarcodeLabels, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue, can, purgeExpiredRecycleBinItems } from "@minarvabiz/business-logic";
-import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName, LicenseFeatures, LicensePlan, Edition } from "@minarvabiz/types";
+import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName, AttendanceStatus, LicenseFeatures, LicensePlan, Edition } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
@@ -54,6 +54,7 @@ const NAV_FEATURE: Partial<Record<NavItemId, keyof LicenseFeatures>> = {
   customers: "customers",
   "customer-crm": "customers",
   staff: "staff",
+  attendance: "staff",
   "staff-detail": "staff",
   suppliers: "inventory",
   payments: "sales",
@@ -139,6 +140,7 @@ export function App() {
   const [expenseOpen, setExpenseOpen] = React.useState(false);
   const [purchaseOpen, setPurchaseOpen] = React.useState(false);
   const [staffOpen, setStaffOpen] = React.useState(false);
+  const [attendanceMonth, setAttendanceMonth] = React.useState(todayLocal().slice(0,7));
   const [editingStaffId, setEditingStaffId] = React.useState<string | null>(null);
   const [moduleError, setModuleError] = React.useState<string | null>(null);
   const [expenseForm, setExpenseForm] = React.useState({ date:todayLocal(), categoryId:"", amount:"", paymentMethod:"cash" as PaymentMethod, description:"", reference:"", receiptUrl:"", staffId:"", orderId:"" });
@@ -281,6 +283,7 @@ export function App() {
     {view==="expenses"&&<ExpenseList expenses={expenses} categories={expenseCategories} onAdd={()=>{setModuleError(null);setExpenseForm(v=>({...v,date:v.date||todayLocal(),categoryId:v.categoryId||expenseCategories[0]?.id||""}));setExpenseOpen(true);}} onReverse={handleReverseExpense}/>} 
     {view==="purchases"&&<div className="space-y-4"><PurchaseList purchases={purchases} suppliers={suppliers} onAdd={()=>{setModuleError(null);setPurchaseForm(v=>({...v,date:v.date||todayLocal()}));setPurchaseOpen(true);}}/><DesktopProcurementPanel suppliers={suppliers} products={products} onChanged={persistAndRefresh}/></div>} 
     {view==="staff"&&<StaffList staff={staff} onAdd={()=>{resetStaffForm();setModuleError(null);setStaffOpen(true);}} onEdit={openStaffEditor} onArchive={(m,reason)=>{try{const r=phase6Store.archiveStaff(m.id,reason);if(r.error)return{error:r.error};void persistAndRefresh();return{success:true};}catch(error){return{error:errorMessage(error)};}}} onSelect={member=>{setStaffDetailId(member.id);navTo("staff-detail");}}/>} 
+    {view==="attendance"&&<AttendanceGrid staff={staff.filter(m=>m.status==="active")} rows={phase6Store.listAttendance({from:`${attendanceMonth}-01`,to:`${attendanceMonth}-31`})} month={attendanceMonth} onMonthChange={setAttendanceMonth} onMark={(staffId,date,status)=>{try{phase6Store.setAttendance({staffId,date,status});void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}} onMarkAllToday={(status:AttendanceStatus)=>{if(!window.confirm(`Mark all active staff as ${status.replace("_"," ")} today?`))return;try{for(const member of staff.filter(m=>m.status==="active"))phase6Store.setAttendance({staffId:member.id,date:todayLocal(),status});void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}}/>} 
     {view==="notifications"&&<NotificationCenter notifications={notifications} onMarkAllRead={()=>{phase6Store.markAllNotificationsRead();void persistAndRefresh();}} onMarkRead={id=>{phase6Store.markNotificationRead(id);void persistAndRefresh();}} onNavigate={(href)=>{const target=href.startsWith("/services")?"services":href.startsWith("/reports")?"reports":href.startsWith("/inventory")?"products":href.startsWith("/sales")?"sales":"dashboard";navTo(target as NavItemId);}}/>} 
     {view==="reports"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} payables={professionalReports.payables} financial={professionalReports.financial} taxReport={professionalReports.taxReport} reportError={professionalReports.error||undefined} onRefresh={()=>{refreshAll();}} from={reportFrom} to={reportTo} onFromChange={setReportFrom} onToChange={setReportTo}/>} 
     {view==="day-end"&&<DesktopDayEndPanel onChanged={()=>{void persistAndRefresh();}}/>}
