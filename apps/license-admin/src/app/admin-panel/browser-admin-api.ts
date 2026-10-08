@@ -23,7 +23,7 @@ import {
   signOutBrowserEmergencySession,
 } from "./browser-emergency-session";
 
-import { licenseEdgeOrigin } from "./license-edge-config";
+import { licenseEdgeOrigin } from "./license-edge-config.ts";
 
 const EDGE = licenseEdgeOrigin();
 
