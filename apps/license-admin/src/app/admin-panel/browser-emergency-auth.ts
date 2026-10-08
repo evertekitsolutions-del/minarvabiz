@@ -2,7 +2,7 @@
 
 import type { AdminIdentityView } from "./types";
 
-import { licenseEdgeOrigin } from "./license-edge-config";
+import { licenseEdgeOrigin } from "./license-edge-config.ts";
 
 const EDGE = licenseEdgeOrigin();
 
