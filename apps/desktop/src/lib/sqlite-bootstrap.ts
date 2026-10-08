@@ -147,7 +147,7 @@ async function initializeDesktopSqlite(): Promise<{ ok: boolean; error?: string 
     }
 
     const snap = loadSnap(db);
-    console.info("[minarvabiz] SQLite bootstrap snapshot", { fileBytes: bytes?.byteLength ?? 0, hasSnapshot: Boolean(snap), staffCount: Array.isArray((snap as { staff?: unknown[] } | null)?.staff) ? (snap as { staff: unknown[] }).staff.length : null, attendanceCount: Array.isArray((snap as { attendance?: unknown[] } | null)?.attendance) ? (snap as { attendance: unknown[] }).attendance.length : null });
+    console.info("[minarvabiz] SQLite bootstrap snapshot", JSON.stringify({ fileBytes: bytes?.byteLength ?? 0, hasSnapshot: Boolean(snap), staffCount: Array.isArray((snap as { staff?: unknown[] } | null)?.staff) ? (snap as { staff: unknown[] }).staff.length : null, attendanceCount: Array.isArray((snap as { attendance?: unknown[] } | null)?.attendance) ? (snap as { attendance: unknown[] }).attendance.length : null }));
     if (snap) {
       // Import reports validation/hydration failures as a result instead of throwing.
       // Never mark the database ready or overwrite a failed import with seeded data.
