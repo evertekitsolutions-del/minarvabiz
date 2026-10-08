@@ -10,6 +10,7 @@ if (files.length === 0) throw new Error("No GitHub Actions workflows found.");
 
 const failures = [];
 const publisher = "publish-windows-release.yml";
+const triage = "automated-ci-triage.yml";
 
 for (const file of files) {
   const fullPath = path.join(workflowsDir, file);
@@ -32,8 +33,18 @@ for (const file of files) {
       if (!/workflow_run\.head_branch == 'main'/.test(source)) failures.push(`${file}: must require source branch main`);
       if (/actions\/checkout@/i.test(source)) failures.push(`${file}: privileged publisher must not checkout repository code`);
       if (/pull_request_target:|workflow_dispatch:/m.test(source)) failures.push(`${file}: privileged publisher must not expose alternate triggers`);
+    } else if (file === triage) {
+      if (!/^\s+contents:\s+read\s*$/m.test(block)) failures.push(`${file}: must use contents: read`);
+      if (!/^\s+issues:\s+write\s*$/m.test(block)) failures.push(`${file}: requires issues: write only`);
+      for (const match of block.matchAll(/^\s+([A-Za-z0-9_-]+):\s+write\s*$/gm)) {
+        if (match[1] !== "issues") failures.push(`${file}: only issues: write is allowed`);
+      }
+      if (!/workflow_run:\s*\n\s+workflows:/m.test(source)) failures.push(`${file}: must use workflow_run`);
+      if (!/workflow_run.conclusion == 'failure'/.test(source)) failures.push(`${file}: must require failed source run`);
+      if (!/workflow_run.event == 'pull_request'/.test(source)) failures.push(`${file}: must require pull_request source run`);
+      if (/actions\/checkout@|pull_request_target:|workflow_dispatch:/m.test(source)) failures.push(`${file}: must not checkout untrusted code or expose alternate triggers`);
     } else {
-      if (!/^\s+contents:\s+read\s*$/m.test(block)) failures.push(`${file}: top-level permissions must include contents: read`);
+      if (!/^\\s+contents:\\s+read\\s*$/m.test(block)) failures.push(`${file}: top-level permissions must include contents: read`);
       if (/^\s+[A-Za-z0-9_-]+:\s+write\s*$/m.test(block)) failures.push(`${file}: write permission is not allowed`);
     }
   }
