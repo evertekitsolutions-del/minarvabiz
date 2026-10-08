@@ -20,4 +20,5 @@ phase6.hydratePhase6({attendance:[]});assert.equal(phase6.listAttendance().lengt
 phase6.hydratePhase6({attendance:snapshot.attendance});assert.equal(phase6.listAttendance().length,2);
 assert.throws(()=>phase6.setAttendance({staffId:staff.id,date:"08-10-2026",status:"present"}),/YYYY-MM-DD/);
 assert.throws(()=>phase6.setAttendance({staffId:"missing",date:"2026-10-08",status:"present"}),/Staff not found/);
-assert.equal(persistence.SNAPSHOT_VERSION,13);assert.ok(phase6Schema.PHASE6_TABLES.includes("staff_attendance"));\nconsole.log("Attendance runtime behavior PASS");
+assert.equal(persistence.SNAPSHOT_VERSION,13);assert.ok(phase6Schema.PHASE6_TABLES.includes("staff_attendance"));
+console.log("Attendance runtime behavior PASS");
