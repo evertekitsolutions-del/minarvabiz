@@ -535,7 +535,11 @@ async function main() {
       if (present) { attendanceRestored = true; break; }
       await sleep(500);
     }
-    if (!attendanceRestored) await assertMain(ws,"ATTENDANCE_SQLITE_TOTALS",["QA Tailor","510m","45m"]);
+    if (!attendanceRestored) {
+      const diagnosis = await evalIn(ws,`JSON.stringify({main:(document.querySelector("main")?.innerText||"").slice(-5000),ready:document.documentElement.dataset.minarvaRendererReady,error:document.documentElement.dataset.minarvaRendererError,attendanceCells:[...document.querySelectorAll("select[aria-label*=attendance]")].filter(e=>e.getAttribute("aria-label")?.includes("QA Tailor")).slice(0,4).map(e=>({label:e.getAttribute("aria-label"),value:e.value}))})`);
+      console.error("ATTENDANCE_SQLITE_RESTORE_DIAGNOSTIC",diagnosis);
+      await assertMain(ws,"ATTENDANCE_SQLITE_TOTALS",["QA Tailor","510m","45m"]);
+    }
     console.log("ATTENDANCE_SQLITE_TOTALS PASS");
     const restoredStatus=await evalIn(ws,`document.querySelector('select[aria-label="QA Tailor attendance ${attendanceDate}"]').value`);
     if(restoredStatus!=="half_day")throw new Error("Attendance status did not survive SQLite reload");
