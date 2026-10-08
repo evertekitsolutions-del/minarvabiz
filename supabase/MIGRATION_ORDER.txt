@@ -74,3 +74,4 @@
 20261005_cloudflare_admin_customer_provision_uuid_fix.sql
 20261005_cloudflare_admin_dual_authority.sql
 20261005_cloudflare_admin_emergency_self_service.sql
+20261008_attendance_grid.sql

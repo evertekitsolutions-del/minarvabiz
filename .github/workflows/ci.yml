@@ -35,6 +35,8 @@ jobs:
       - name: Verify cross-app security header baseline
         run: node --experimental-strip-types scripts/security-header-baseline-smoke.mjs
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
+      - name: Verify Attendance Grid contract
+        run: node packages/business-logic/src/__tests__/attendance-grid-contract.test.mjs
       - name: Verify provider-neutral web hosting contract
         run: node scripts/provider-neutral-web-hosting-smoke.mjs
       - name: Verify production build rejects missing Supabase env

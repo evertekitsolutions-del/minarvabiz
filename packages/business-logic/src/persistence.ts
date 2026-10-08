@@ -32,7 +32,7 @@ import type { ShopProfile } from "./shop-profile";
 import type { TaxConfig } from "./tax-config";
 import type { AutoBackupSettings, BackupMeta } from "./auto-backup";
 
-export const SNAPSHOT_VERSION = 12;
+export const SNAPSHOT_VERSION = 13;
 
 export interface DomainSnapshot {
   version: number;
@@ -52,6 +52,7 @@ export interface DomainSnapshot {
   suppliers: Supplier[];
   expenseCategories: ExpenseCategory[];
   staff: StaffMember[];
+  attendance?: ReturnType<typeof phase6Store.exportPhase6State>["attendance"];
   assignments: StaffAssignment[];
   incentiveRules: IncentiveRuleRecord[];
   payouts: StaffIncentivePayout[];
@@ -98,6 +99,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     suppliers: phase5.suppliers,
     expenseCategories: phase5.expenseCategories,
     staff: phase6.staff,
+    attendance: phase6.attendance,
     assignments: phase6.assignments,
     incentiveRules: phase6.incentiveRules,
     payouts: phase6.payouts,
@@ -130,7 +132,7 @@ export function exportDomainSnapshotFull(): DomainSnapshot {
 }
 export function exportDomainSnapshotJson(): string { return JSON.stringify(exportDomainSnapshotFull(), null, 2); }
 
-const SUPPORTED_SNAPSHOT_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+const SUPPORTED_SNAPSHOT_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
 
 function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
   const collection = <T>(value: T[] | undefined, field: string): T[] => {
@@ -165,6 +167,7 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     suppliers: collection(input.suppliers, "suppliers"),
     expenseCategories: collection(input.expenseCategories, "expenseCategories"),
     staff: collection(input.staff, "staff"),
+    attendance: collection(input.attendance, "attendance"),
     assignments: collection(input.assignments, "assignments"),
     incentiveRules: collection(input.incentiveRules, "incentiveRules"),
     payouts: collection(input.payouts, "payouts"),
@@ -205,6 +208,7 @@ function applyDomainSnapshot(snap: DomainSnapshot): void {
   });
   phase6Store.hydratePhase6({
     staff: snap.staff,
+    attendance: snap.attendance,
     assignments: snap.assignments,
     incentiveRules: snap.incentiveRules,
     payouts: snap.payouts,

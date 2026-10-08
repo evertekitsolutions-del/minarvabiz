@@ -621,6 +621,24 @@ export interface StaffMember {
   branchId?: UUID | null;
 }
 
+export type AttendanceStatus = "present" | "absent" | "half_day" | "leave" | "holiday";
+
+export interface StaffAttendanceRecord {
+  id: UUID;
+  staffId: UUID;
+  staffName?: string | null;
+  date: ISODateString;
+  status: AttendanceStatus;
+  clockIn?: ISODateString | null;
+  clockOut?: ISODateString | null;
+  breakMinutes: number;
+  overtimeMinutes: number;
+  notes?: string | null;
+  branchId?: UUID | null;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+}
+
 export interface StaffAssignment {
   id: UUID;
   staffId: UUID;
