@@ -44,7 +44,7 @@ for (const file of files) {
       if (!/workflow_run.event == 'pull_request'/.test(source)) failures.push(`${file}: must require pull_request source run`);
       if (/actions\/checkout@|pull_request_target:|workflow_dispatch:/m.test(source)) failures.push(`${file}: must not checkout untrusted code or expose alternate triggers`);
     } else {
-      if (!/^\\s+contents:\\s+read\\s*$/m.test(block)) failures.push(`${file}: top-level permissions must include contents: read`);
+      if (!/^\s+contents:\s+read\s*$/m.test(block)) failures.push(`${file}: top-level permissions must include contents: read`);
       if (/^\s+[A-Za-z0-9_-]+:\s+write\s*$/m.test(block)) failures.push(`${file}: write permission is not allowed`);
     }
   }
