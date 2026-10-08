@@ -18,6 +18,8 @@ const componentPaths = [
   "../apps/license-admin/src/app/admin-panel/LicenseRegistryCard.tsx",
   "../apps/license-admin/src/app/admin-panel/AdminHeader.tsx",
   "../apps/license-admin/src/app/admin-panel/SupportInboxCard.tsx",
+  "../apps/license-admin/src/app/admin-panel/MfaRotationCard.tsx",
+  "../apps/license-admin/src/app/admin-panel/browser-admin-auth.ts",
   "../apps/license-admin/src/app/admin-panel/types.ts",
 ];
 
@@ -36,6 +38,16 @@ assert.match(panel, /LicenseRegistryCard/);
 assert.match(panel, /LicenseSummaryCard/);
 assert.match(panel, /AdminHeader/);
 assert.match(panel, /SupportInboxSection/);
+assert.match(panel, /MfaRotationCard/);
+const mfaContract = components.slice(-2).join("\n");
+assert.match(mfaContract, /replacement authenticator/i);
+assert.match(mfaContract, /verified\.length <= 1/);
+assert.match(mfaContract, /beginBrowserAdminMfaEnrollment/);
+assert.match(mfaContract, /verifyBrowserAdminMfa/);
+assert.match(mfaContract, /unenrollBrowserAdminMfaFactor/);
+assert.doesNotMatch(mfaContract, /localStorage\.setItem/);
+assert.doesNotMatch(mfaContract, /sessionStorage\.setItem\([^)]*(secret|qr)/i);
+assert.doesNotMatch(mfaContract, /console\.(log|info|warn|error)\([^)]*(secret|qr)/i);
 assert.doesNotMatch(combined, /type\s+LicenseRow\s*=\s*any/);
 assert.doesNotMatch(combined, /\([^)]*:\s*any\b/);
 assert.doesNotMatch(
