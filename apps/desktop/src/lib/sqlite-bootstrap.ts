@@ -133,7 +133,12 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
 
     const snap = loadSnap(db);
     if (snap) {
-      importDomainSnapshot(snap as Parameters<typeof importDomainSnapshot>[0]);
+      // Import reports validation/hydration failures as a result instead of throwing.
+      // Never mark the database ready or overwrite a failed import with seeded data.
+      const imported = importDomainSnapshot(snap as Parameters<typeof importDomainSnapshot>[0]);
+      if (!imported.ok) {
+        throw new Error(`SQLite domain snapshot restore failed: ${imported.error || "unknown import error"}`);
+      }
     }
 
     ready = true;
