@@ -40,11 +40,15 @@ async function loadSqlJs(): Promise<SqlJsStatic> {
 
 function rowsFromExec(db: SqlJsDb, sql: string, params: unknown[] = []): Record<string, unknown>[] {
   const stmt = db.prepare(sql);
-  stmt.bind(params);
-  const out: Record<string, unknown>[] = [];
-  while (stmt.step()) out.push(stmt.getAsObject());
-  stmt.free();
-  return out;
+  try {
+    stmt.bind(params);
+    const out: Record<string, unknown>[] = [];
+    while (stmt.step()) out.push(stmt.getAsObject());
+    return out;
+  } finally {
+    // sql.js statements hold native heap allocations even when a query throws.
+    stmt.free();
+  }
 }
 
 export interface SqliteDatabase {
