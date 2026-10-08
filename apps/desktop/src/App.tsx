@@ -9,7 +9,7 @@ type QuickAction, type NavItemId, type DashboardData, type OrderFormValues, type
 type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
 import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printBarcodeLabels, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue, can, purgeExpiredRecycleBinItems } from "@minarvabiz/business-logic";
-import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName, LicenseFeatures, LicensePlan, Edition } from "@minarvabiz/types";
+import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
