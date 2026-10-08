@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { licenseEdgeOrigin } from "../admin-panel/license-edge-config";
+import { licenseEdgeOrigin } from "../admin-panel/license-edge-config.ts";
 
 const EDGE = licenseEdgeOrigin();
 
