@@ -17,9 +17,9 @@ assert.match(workflow, /workflow_dispatch:/);
 assert.match(workflow, /pull_request:/);
 assert.match(workflow, /push:/);
 
-assert.match(nextConfig, /process\.env\.VERCEL_ENV === "preview"/);
-assert.match(nextConfig, /NEXT_PUBLIC_MINARVA_MODE: "demo"/);
-assert.match(nextConfig, /NEXT_PUBLIC_REQUIRE_AUTH: "false"/);
+assert.doesNotMatch(nextConfig, /VERCEL_ENV|VERCEL_URL|vercel\\.app/i);
+assert.match(nextConfig, /runtimeMode === "demo"/);
+assert.match(nextConfig, /NEXT_PUBLIC_MINARVA_MODE/);
 assert.match(nextConfig, /poweredByHeader: false/);
 assert.match(middleware, /const method = request\.method\.toUpperCase\(\)/);
 assert.match(middleware, /request\.nextUrl\.pathname\.startsWith\("\/api\/support\/"\)/);
