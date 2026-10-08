@@ -33,31 +33,31 @@ licenseId?: string;
 activationId?: string;
 };
 const FULL_TRIAL_FEATURES: LicenseFeatures = {
-  sales: true, customers: true, inventory: true, tailoring: true, orders: true, laundry: true,
-  reports: true, staff: true, advancedReports: true, cloudSync: true, multiUser: true,
-  multiBranch: true, apiAccess: true,
+sales: true, customers: true, inventory: true, tailoring: true, orders: true, laundry: true,
+reports: true, staff: true, advancedReports: true, cloudSync: true, multiUser: true,
+multiBranch: true, apiAccess: true,
 };
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
 const errorMessage=(error:unknown):string=>error instanceof Error?error.message:String(error);
 const NAV_FEATURE: Partial<Record<NavItemId, keyof LicenseFeatures>> = {
-  sales: "sales",
-  products: "inventory",
-  warehouse: "inventory",
-  services: "orders",
-  laundry: "laundry",
-  expenses: "inventory",
-  purchases: "inventory",
-  customers: "customers",
-  "customer-crm": "customers",
-  staff: "staff",
-  attendance: "staff",
-  "staff-detail": "staff",
-  suppliers: "inventory",
-  payments: "sales",
-  accounting: "advancedReports",
-  returns: "sales",
-  reports: "reports",
-  "day-end": "reports",
+sales: "sales",
+products: "inventory",
+warehouse: "inventory",
+services: "orders",
+laundry: "laundry",
+expenses: "inventory",
+purchases: "inventory",
+customers: "customers",
+"customer-crm": "customers",
+staff: "staff",
+attendance: "staff",
+"staff-detail": "staff",
+suppliers: "inventory",
+payments: "sales",
+accounting: "advancedReports",
+returns: "sales",
+reports: "reports",
+"day-end": "reports",
   audit: "advancedReports",
 };
 function featuresForLicense(state: CommercialLicenseState | null, trial: TrialState | null): LicenseFeatures | null {
