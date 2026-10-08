@@ -84,7 +84,17 @@ function checkSqliteIntegrity(db: SqliteDatabase): { ok: boolean; result: string
   }
 }
 
-export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: string }> {
+let bootstrapPromise: Promise<{ ok: boolean; error?: string }> | null = null;
+
+// React StrictMode mounts effects twice in development and packaged smoke builds.
+// Concurrent bootstrap calls must never independently hydrate and persist snapshots:
+// the second initializer can overwrite newer records with its stale initial read.
+export function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: string }> {
+  if (!bootstrapPromise) bootstrapPromise = initializeDesktopSqlite();
+  return bootstrapPromise;
+}
+
+async function initializeDesktopSqlite(): Promise<{ ok: boolean; error?: string }> {
   try {
     setRuntimeMode("production");
 
