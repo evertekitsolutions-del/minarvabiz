@@ -1,0 +1,31 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const read=(p)=>fs.readFileSync(p,"utf8");
+const types=read("packages/types/src/index.ts");
+const store=read("packages/business-logic/src/phase6-store.ts");
+const nav=read("packages/ui/src/lib/nav.ts");
+const page=read("apps/web/src/app/(app)/attendance/page.tsx");
+const migration=read("supabase/migrations/20261008_attendance_grid.sql");
+
+assert.match(types,/StaffAttendanceRecord/);
+assert.match(types,/present.*absent.*half_day.*leave.*holiday/);
+assert.match(store,/setAttendance/);
+assert.match(store,/listAttendance/);
+assert.match(store,/attendanceSummary/);
+assert.match(store,/enqueueOutbox\("staff_attendance"/);
+assert.match(store,/auditAction\("attendance\.(?:create|update)"/);
+assert.match(store,/attendance:\[\.\.\.attendance\]/);
+assert.match(store,/input\.attendance/);
+assert.match(nav,/Attendance Grid/);
+assert.match(page,/All present today/);
+assert.match(page,/Holiday today/);
+assert.match(page,/Offline-first daily attendance/);
+assert.match(page,/overtimeMinutes/);
+assert.match(migration,/CREATE TABLE IF NOT EXISTS public\.staff_attendance/);
+assert.match(migration,/UNIQUE \(org_id, staff_id, attendance_date\)/);
+assert.match(migration,/ENABLE ROW LEVEL SECURITY/);
+assert.match(migration,/FORCE ROW LEVEL SECURITY/);
+assert.match(migration,/user_org_ids\(\)/);
+assert.match(migration,/CHECK \(status IN \('present','absent','half_day','leave','holiday'\)\)/);
+console.log("Attendance Grid contract PASS");
