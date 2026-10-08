@@ -359,3 +359,12 @@ Do not try to build the entire master plan at once.
 Each milestone must be independently reviewable and mergeable. The user explicitly prefers small milestones because long chats can be interrupted. **This is not permission to ship simplified or reduced features.** If a full capability requires many milestones, complete all required milestones and only mark the capability complete when its agreed behavior and verification are satisfied.
 
 If a chat ends, the next chat must continue from live repository state and these documents, not reconstruct the project from memory.
+
+## 5D. October 8 MFA rotation milestone closed
+
+- PR #261 merged as `f6dcd3bc6f24ebd6a4d054db9c53cc3e7dca6af3`: License Admin browser flows now use validated `NEXT_PUBLIC_LICENSE_EDGE_URL` with the current Cloudflare Worker only as a transitional default. Exact-head CI/security/static/Windows/fresh-instance gates passed and the production Pages deployment succeeded.
+- PR #262 merged as `b4b64d66d1e818cf18ef72693ad2ee222c9f2617`: named AAL2 administrators can inventory TOTP factors and perform fail-safe rotation. The UI requires a replacement enrollment and successful verification in the current session before old-factor removal; the client refuses to remove the final verified factor; emergency sessions cannot access the control.
+- PR #263 merged as `04385898512cff143efc6f327433e6543253379c`: CI now enforces the MFA rotation safety contract, including replacement-before-removal and no QR/secret persistence or logging patterns.
+- Production Pages successfully deployed the #262 merge. #263 production deployment was triggered after merge and should be verified before any browser rotation.
+- Production currently reports exactly one verified MFA factor. Because an earlier authenticator enrollment secret was exposed outside the intended local-only flow, treat the current factor as potentially compromised until the administrator uses the production Pages rotation UI. Never paste the replacement QR, secret, or TOTP code into chat or tooling.
+- Rotation is an intentional browser-only boundary: after the #263 production deployment succeeds, sign in normally with AAL2, enroll and verify a fresh replacement authenticator, then remove the old factor. Repository automation must not create or retrieve that replacement secret.
