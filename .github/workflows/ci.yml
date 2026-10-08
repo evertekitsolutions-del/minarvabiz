@@ -32,6 +32,8 @@ jobs:
         run: node scripts/coverage-workflow-smoke.mjs
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @minarvabiz/utils typecheck
+      - name: Verify provider-neutral commercial entitlement contract
+        run: node --experimental-strip-types scripts/commercial-entitlement-contract-smoke.mjs
       - name: Verify cross-app security header baseline
         run: node --experimental-strip-types scripts/security-header-baseline-smoke.mjs
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
