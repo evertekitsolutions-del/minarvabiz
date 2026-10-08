@@ -22,3 +22,4 @@ assert.throws(()=>phase6.setAttendance({staffId:staff.id,date:"08-10-2026",statu
 assert.throws(()=>phase6.setAttendance({staffId:"missing",date:"2026-10-08",status:"present"}),/Staff not found/);
 assert.equal(persistence.SNAPSHOT_VERSION,13);assert.ok(phase6Schema.PHASE6_TABLES.includes("staff_attendance"));
 console.log("Attendance runtime behavior PASS");
+
