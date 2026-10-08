@@ -55,7 +55,7 @@ async function verifySupportCaller(req: Request) {
   if (!token) throw new Error("Missing support service credential.");
 
   const serviceToken = String(Deno.env.get("MINARVA_SUPPORT_SERVICE_TOKEN") || "").trim();
-  if (serviceToken && await constantTimeEqual(token, serviceToken)) {
+  if (serviceToken.length >= 32 && await constantTimeEqual(token, serviceToken)) {
     return { kind: "portable-service-token" as const };
   }
 
