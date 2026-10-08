@@ -1,7 +1,10 @@
 \set ON_ERROR_STOP on
 CREATE ROLE service_role NOLOGIN;
--- Baseline operation-schema prerequisite; the minimal tenant harness omits its default helper.
-CREATE FUNCTION public.current_org_id() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT public.user_org_ids() LIMIT 1 $$;
+-- Legacy helpers required by the original attendance migration; minimal tenant harness omits them.
+CREATE FUNCTION public.user_org_ids() RETURNS SETOF uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$ SELECT org_id FROM public.organization_members WHERE user_id=auth.uid() $$;
+REVOKE ALL ON FUNCTION public.user_org_ids() FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.user_org_ids() TO authenticated;
+CREATE FUNCTION public.current_org_id() RETURNS uuid LANGUAGE sql STABLE SECURITY INVOKER SET search_path=public AS $$ SELECT org_id FROM public.organization_members WHERE user_id=auth.uid() ORDER BY org_id LIMIT 1 $$;
 REVOKE ALL ON FUNCTION public.current_org_id() FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.current_org_id() TO authenticated;
 CREATE FUNCTION test.expect_attendance_error(command text, expected_state text) RETURNS void LANGUAGE plpgsql SECURITY INVOKER AS $$
