@@ -12,6 +12,7 @@ import { OfflineActivationCard } from "./admin-panel/OfflineActivationCard";
 import { OnlineCustomerProvisionCard } from "./admin-panel/OnlineCustomerProvisionCard";
 import { SupportInboxSection } from "./admin-panel/SupportInboxSection";
 import { EmergencyAuthorityCard } from "./admin-panel/EmergencyAuthorityCard";
+import { MfaRotationCard } from "./admin-panel/MfaRotationCard";
 import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerProvisioning";
 import { useAdminAuthentication, type BrowserAdminDashboard } from "./admin-panel/useAdminAuthentication";
 import {
@@ -225,7 +226,7 @@ export default function AdminPanel({
           onDeviceIdChange={setOfflineDeviceId}
           onCreate={() => void createOfflinePackage()}
         />
-        {activeIdentity.role === "admin" && activeIdentity.source !== "emergency" && <EmergencyAuthorityCard />}
+        {activeIdentity.role === "admin" && activeIdentity.source !== "emergency" && <><MfaRotationCard /><EmergencyAuthorityCard /></>}
         <SupportInboxSection
           role={activeIdentity.role}
           requests={supportRequests}

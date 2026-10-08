@@ -82,6 +82,8 @@ type MfaVerifyResponse = {
   message?: string;
 };
 
+type MfaUnenrollResponse = { id?: string; error?: string; message?: string };
+
 export type BrowserAdminPendingAuth = {
   config: AuthConfig;
   accessToken: string;
@@ -476,7 +478,7 @@ export async function beginBrowserNamedAdminLogin(
 export async function beginBrowserAdminMfaEnrollment(
   pending: BrowserAdminPendingAuth | null,
 ): Promise<EnrollmentResult> {
-  if (!pending || pending.mode !== "enroll") {
+  if (!pending || (pending.mode !== "enroll" && pending.mode !== "challenge")) {
     return { ok: false, error: "Administrator MFA enrollment has expired. Sign in again." };
   }
 
@@ -656,4 +658,37 @@ export async function claimBrowserFirstAdmin(
   } catch {
     return { ok: false, error: "First-administrator setup is temporarily unavailable." };
   }
+}
+
+
+export type BrowserAdminMfaFactor = { id: string; status: "verified" | "unverified" };
+
+export async function listBrowserAdminMfaFactors(accessToken: string): Promise<{ ok: true; factors: BrowserAdminMfaFactor[] } | { ok: false; error: string }> {
+  const claims = decodeJwtPayload(accessToken);
+  const userId = String(claims?.sub || "");
+  if (!validAal2Token(accessToken, userId)) return { ok: false, error: "Administrator MFA session is invalid." };
+  const config = await fetchAuthConfig();
+  if (!config) return { ok: false, error: "Administrator authentication is unavailable." };
+  const response = await authFetch<{ all?: AuthFactor[]; totp?: AuthFactor[] }>(config, "/factors", { method: "GET" }, accessToken);
+  if (!response.ok) return { ok: false, error: "Unable to read administrator authenticators." };
+  const raw = Array.isArray(response.data?.totp) ? response.data?.totp : Array.isArray(response.data?.all) ? response.data?.all : [];
+  const factors = raw.filter((factor) => String(factor?.factor_type || factor?.type || "").toLowerCase() === "totp")
+    .map((factor) => ({ id: String(factor?.id || ""), status: factor?.status === "verified" ? "verified" as const : "unverified" as const }))
+    .filter((factor) => validUuid(factor.id));
+  return { ok: true, factors };
+}
+
+export async function unenrollBrowserAdminMfaFactor(accessToken: string, factorId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const claims = decodeJwtPayload(accessToken);
+  const userId = String(claims?.sub || "");
+  if (!validAal2Token(accessToken, userId) || !validUuid(factorId)) return { ok: false, error: "Administrator MFA session is invalid." };
+  const config = await fetchAuthConfig();
+  if (!config) return { ok: false, error: "Administrator authentication is unavailable." };
+  const listed = await listBrowserAdminMfaFactors(accessToken);
+  if (!listed.ok) return listed;
+  const verified = listed.factors.filter((factor) => factor.status === "verified");
+  if (!verified.some((factor) => factor.id === factorId)) return { ok: false, error: "Authenticator is not an active verified factor." };
+  if (verified.length <= 1) return { ok: false, error: "Enroll and verify a replacement authenticator before removing the current factor." };
+  const response = await authFetch<MfaUnenrollResponse>(config, `/factors/${encodeURIComponent(factorId)}`, { method: "DELETE" }, accessToken);
+  return response.ok ? { ok: true } : { ok: false, error: "Unable to remove administrator authenticator." };
 }
