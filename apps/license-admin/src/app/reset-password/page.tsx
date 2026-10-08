@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { licenseEdgeOrigin } from "../admin-panel/license-edge-config.ts";
 
-const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
+const EDGE = licenseEdgeOrigin();
 
 type AuthConfig = {
   supabaseUrl: string;

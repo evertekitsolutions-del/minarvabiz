@@ -23,7 +23,9 @@ import {
   signOutBrowserEmergencySession,
 } from "./browser-emergency-session";
 
-const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
+import { licenseEdgeOrigin } from "./license-edge-config.ts";
+
+const EDGE = licenseEdgeOrigin();
 
 type ApiResult<T extends object = Record<string, never>> =
   | ({ ok: true } & T)
