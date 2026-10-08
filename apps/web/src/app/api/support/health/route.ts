@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const status = await supportConfigurationStatus(request.headers.get("x-vercel-oidc-token") || "");
+  const status = await supportConfigurationStatus(process.env.MINARVA_SUPPORT_SERVICE_TOKEN || request.headers.get("x-vercel-oidc-token") || "");
   const ready =
     status.aiConfigured &&
     status.aiOperational &&
