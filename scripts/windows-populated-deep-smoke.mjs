@@ -522,6 +522,9 @@ async function main() {
     await clickDialogButton(ws,"SAVE_ATTENDANCE","Attendance details","Save attendance");
     await assertMain(ws,"ATTENDANCE_WORKED_TIME",["510m","45m"]);
     await setByAriaLabel(ws,`QA Tailor attendance ${attendanceDate}`,"Half day");await sleep(800);
+    // Verify the native SQLite write has completed before deliberately reloading the renderer.
+    const flushed = await evalIn(ws,`window.__minarvaDesktopFlush?.()`);
+    if (flushed !== true) throw new Error(`Attendance SQLite flush failed before reload: ${String(flushed)}`);
     await evalIn(ws,`(()=>{location.reload();return true})()`);await sleep(1200);await ready(ws);
     await click(ws,"ATTENDANCE_RESTORED",["attendance grid"]);
     await setByAriaLabel(ws,"Attendance month",attendanceMonth);await sleep(300);
