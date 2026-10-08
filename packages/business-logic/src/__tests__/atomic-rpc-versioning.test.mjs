@@ -9,6 +9,10 @@ const dataSource = fs.readFileSync(
   new URL("../../../../apps/web/src/lib/data-source.ts", import.meta.url),
   "utf8"
 );
+const versionedWrite = fs.readFileSync(
+  new URL("../../../../apps/web/src/lib/data-source-versioned-write.ts", import.meta.url),
+  "utf8"
+);
 const remoteWrite = fs.readFileSync(
   new URL("../remote-write.ts", import.meta.url),
   "utf8"
@@ -39,8 +43,8 @@ assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.create_sale[\s\S]*TO 
 assert.match(dataSource, /pgRpc<Record<string, unknown>>\(cfg, "create_sale"/);
 assert.match(dataSource, /pgRpc<Record<string, unknown>>\(cfg, "record_payment"/);
 assert.match(dataSource, /pgRpc<Record<string, unknown>>\(cfg, "adjust_stock"/);
-assert.match(dataSource, /id=eq\.\$\{id\}&version=eq\.\$\{expectedVersion\}/);
-assert.match(dataSource, /version conflict/);
+assert.match(versionedWrite, /id=eq\.\$\{id\}&version=eq\.\$\{expectedVersion\}/);
+assert.match(versionedWrite, /version conflict/);
 assert.doesNotMatch(
   dataSource,
   /updateSaleSettlement:[\s\S]{0,500}pgUpdate<Record<string, unknown>>\(cfg, "sales", `id=eq\.\$\{sale\.id\}`/
