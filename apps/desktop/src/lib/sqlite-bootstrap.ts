@@ -67,8 +67,10 @@ function loadSnap(db: SqliteDatabase): unknown | null {
   if (!rows[0]?.value) return null;
   try {
     return JSON.parse(String(rows[0].value));
-  } catch {
-    return null;
+  } catch (error) {
+    // Corrupt persisted data must never be interpreted as a fresh installation:
+    // doing so would overwrite the only recoverable snapshot on next save.
+    throw new Error(`SQLite domain snapshot JSON is invalid: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
