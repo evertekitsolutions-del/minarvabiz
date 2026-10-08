@@ -3,7 +3,7 @@
   "compilerOptions": {
     "jsx": "preserve", "lib": ["DOM","DOM.Iterable","ES2022"],
     "module": "ESNext", "moduleResolution": "bundler",
-    "allowJs": true, "noEmit": true, "plugins": [{ "name": "next" }],
+    "allowJs": true, "allowImportingTsExtensions": true, "noEmit": true, "plugins": [{ "name": "next" }],
     "paths": { "@/*": ["./src/*"] }, "strict": true, "skipLibCheck": true
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
