@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {createRequire} from 'node:module';
-const source=fs.readFileSync('apps/web/src/lib/data-source.ts','utf8');
+const source=fs.readFileSync('apps/web/src/lib/data-source.ts','utf8')+fs.readFileSync('apps/web/src/lib/data-source-attendance.ts','utf8');
 assert.match(source,/"\/attendance"/, 'attendance loads real staff on direct navigation');
 const require=createRequire(import.meta.url),ts=require('typescript');
 require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,f);

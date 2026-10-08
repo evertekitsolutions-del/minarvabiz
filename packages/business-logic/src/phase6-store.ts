@@ -1,6 +1,6 @@
 import { assertPermission } from "./permissions";
 import { getRemoteWriter } from "./remote-write";
-import { exportOutbox, markOutboxSynced, markOutboxFailed } from "./outbox-bridge";
+import { exportOutbox, discardAttendanceOutbox, markOutboxSynced, markOutboxFailed } from "./outbox-bridge";
 import { enqueueOutbox } from "./outbox-bridge";
 import { touchPersistence } from "./autosave";
 import { auditAction } from "./audit-actions";
@@ -55,10 +55,11 @@ export function setAttendance(input:AttendanceInput):StaffAttendanceRecord {
 }
 /** Preserve queued corrections when cloud data reloads; only current tenant's hydrated staff qualify. */
 export function hydrateAttendanceFromCloud(rows:StaffAttendanceRecord[]):void {
-  const reconciled=new Map(rows.map(row=>[row.id,{...row}]));
-  for(const event of exportOutbox().filter(e=>e.aggregateType==="staff_attendance"&&e.status!=="synced").sort((a,b)=>a.sequence-b.sequence)){
+  const dayKey=(row:StaffAttendanceRecord)=>`${row.staffId}:${row.date}`;
+  const reconciled=new Map(rows.map(row=>[dayKey(row),{...row}]));
+  for(const event of exportOutbox().filter(e=>e.aggregateType==="staff_attendance"&&(e.status==="pending"||e.status==="failed")).sort((a,b)=>a.sequence-b.sequence)){
     const local=event.payload as StaffAttendanceRecord;
-    if(local?.id&&getStaff(local.staffId))reconciled.set(local.id,{...local});
+    if(local?.id&&staff.some(m=>m.id===local.staffId))reconciled.set(dayKey(local),{...local});
   }
   attendance.length=0;attendance.push(...reconciled.values());
 }
@@ -71,7 +72,7 @@ export async function saveAttendance(input:AttendanceInput):Promise<StaffAttenda
 export async function retryAttendance(id:UUID):Promise<StaffAttendanceRecord> {
   assertPermission("staff.manage");
   const record=attendance.find(r=>r.id===id);
-  if(!record||!getStaff(record.staffId))throw new Error("Staff attendance not found");
+  if(!record||!staff.some(m=>m.id===record.staffId))throw new Error("Staff attendance not found");
   return persistAttendanceRecord(record);
 }
 async function persistAttendanceRecord(record:StaffAttendanceRecord):Promise<StaffAttendanceRecord> {
@@ -79,7 +80,7 @@ async function persistAttendanceRecord(record:StaffAttendanceRecord):Promise<Sta
   if(!writer)return record;
   const previous=attendanceWrites.get(record.id)??Promise.resolve();
   const next=previous.catch(()=>{}).then(async()=>{
-    for(const event of exportOutbox().filter(e=>e.aggregateType==="staff_attendance"&&e.aggregateId===record.id&&e.status!=="synced").sort((a,b)=>a.sequence-b.sequence)){
+    for(const event of exportOutbox().filter(e=>e.aggregateType==="staff_attendance"&&e.aggregateId===record.id&&(e.status==="pending"||e.status==="failed")).sort((a,b)=>a.sequence-b.sequence)){
       try{await writer({...event.payload as StaffAttendanceRecord},event);markOutboxSynced([event.id]);}
       catch(error){markOutboxFailed(event.id,error instanceof Error?error.message:String(error));throw error;}
     }
@@ -87,6 +88,33 @@ async function persistAttendanceRecord(record:StaffAttendanceRecord):Promise<Sta
   attendanceWrites.set(record.id,next);
   try{await next;}finally{if(attendanceWrites.get(record.id)===next)attendanceWrites.delete(record.id);}
   return record;
+}
+export async function reviewAttendanceConflict(id:UUID){
+  assertPermission("staff.manage");
+  const local=attendance.find(r=>r.id===id);
+  const reader=getRemoteWriter()?.getAttendance;
+  if(!local||!staff.some(m=>m.id===local.staffId)||!reader)throw new Error("Online attendance review is unavailable");
+  const localSnapshot={...local};
+  const remote=await reader(id,localSnapshot.staffId,localSnapshot.date);
+  if(!remote)throw new Error("Remote attendance entry is unavailable; retry the pending creation");
+  if(remote.staffId!==localSnapshot.staffId||remote.date!==localSnapshot.date)throw new Error("Remote attendance identity does not match the reviewed day");
+  return {local:localSnapshot,remote:{...remote}};
+}
+export async function resolveAttendanceConflict(id:UUID,choice:"local"|"remote",expectedRemoteVersion:number,expectedLocalVersion:number){
+  assertPermission("staff.manage");
+  if(choice!=="local"&&choice!=="remote")throw new Error("Invalid attendance resolution choice");
+  if(attendanceWrites.has(id))throw new Error("Wait for the current attendance save before resolving");
+  const {local,remote}=await reviewAttendanceConflict(id);
+  if((local.version??1)!==expectedLocalVersion)throw new Error("Local attendance changed since review; review it again");
+  if((remote.version??1)!==expectedRemoteVersion)throw new Error("Remote attendance changed; review it again before resolving");
+  if(choice==="local"&&!getStaff(remote.staffId))throw new Error("Restore the archived staff member before applying a new correction");
+  if(attendanceWrites.has(id)||attendance.find(r=>r.id===id)?.version!==local.version)throw new Error("Local attendance changed; review it again before resolving");
+  discardAttendanceOutbox(id);
+  for(let i=attendance.length-1;i>=0;i--)if(attendance[i].staffId===remote.staffId&&attendance[i].date===remote.date)attendance.splice(i,1);
+  attendance.push({...remote});
+  auditAction("attendance.resolve","staff_attendance",id,{local,remote},{choice,expectedRemoteVersion});touchPersistence();
+  if(choice==="local")return saveAttendance({staffId:remote.staffId,date:remote.date,status:local.status,clockIn:local.clockIn,clockOut:local.clockOut,breakMinutes:local.breakMinutes,overtimeMinutes:local.overtimeMinutes,notes:local.notes,branchId:local.branchId});
+  return {...remote};
 }
 export function attendanceSummary(from:string,to:string){const rows=listAttendance({from,to});const summary=new Map<UUID,{present:number;absent:number;halfDay:number;leave:number;holiday:number;overtimeMinutes:number}>();for(const row of rows){const v=summary.get(row.staffId)??{present:0,absent:0,halfDay:0,leave:0,holiday:0,overtimeMinutes:0};if(row.status==="present")v.present++;else if(row.status==="absent")v.absent++;else if(row.status==="half_day")v.halfDay++;else if(row.status==="leave")v.leave++;else if(row.status==="holiday")v.holiday++;v.overtimeMinutes+=row.overtimeMinutes;summary.set(row.staffId,v);}return summary;}
 

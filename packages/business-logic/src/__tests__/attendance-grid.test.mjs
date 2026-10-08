@@ -76,3 +76,38 @@ assert.equal(phase6.listAttendance({staffId:'staff-2'}).find(r=>r.date==='2026-1
 await phase6.saveAttendance({staffId:'staff-2',date:'2026-10-10',status:'half_day'});
 assert.equal(phase6.listAttendance({staffId:'staff-2'}).find(r=>r.date==='2026-10-10').version,3);
 console.log('Attendance pending hydration reconciliation PASS');
+const remoteEntry={...phase6.listAttendance({staffId:'staff-2'}).find(r=>r.date==='2026-10-10'),status:'holiday',version:3};
+remote.registerRemoteWriter({getAttendance:async()=>structuredClone(remoteEntry),upsertAttendance:async r=>{remoteEntry.status=r.status;remoteEntry.version=r.version;}});
+const review=await phase6.reviewAttendanceConflict(remoteEntry.id);
+assert.equal(review.remote.status,'holiday');assert.equal(review.local.status,'half_day');
+await assert.rejects(()=>phase6.resolveAttendanceConflict(remoteEntry.id,'local',2,3),/changed/);
+await phase6.resolveAttendanceConflict(remoteEntry.id,'local',3,3);
+assert.equal(remoteEntry.status,'half_day');assert.equal(remoteEntry.version,4);
+assert.ok(outbox.exportOutbox().some(e=>e.aggregateId===remoteEntry.id&&e.status==='discarded'));
+remoteEntry.status='holiday';remoteEntry.version=5;
+await phase6.resolveAttendanceConflict(remoteEntry.id,'remote',5,4);
+assert.equal(phase6.listAttendance({staffId:'staff-2'}).find(r=>r.date==='2026-10-10').status,'holiday');
+remote.registerRemoteWriter(null);
+console.log('Attendance explicit conflict review/rebase PASS');
+
+phase6.setAttendance({staffId:'staff-2',date:'2026-10-10',status:'absent'});
+let completeRead;remote.registerRemoteWriter({getAttendance:()=>new Promise(r=>{completeRead=r;})});
+const resolution=phase6.resolveAttendanceConflict(remoteEntry.id,'remote',5,6);
+phase6.setAttendance({staffId:'staff-2',date:'2026-10-10',status:'half_day',notes:'Newer correction must survive'});
+completeRead({...remoteEntry});
+await assert.rejects(()=>resolution,/changed/);
+assert.equal(phase6.listAttendance({staffId:'staff-2'}).find(r=>r.id===remoteEntry.id).notes,'Newer correction must survive');
+assert.equal(outbox.exportOutbox().filter(e=>e.aggregateId===remoteEntry.id&&e.status==='pending').length,2);
+remote.registerRemoteWriter(null);
+console.log('Attendance conflict review concurrent edit protection PASS');
+
+const collisionLocal=phase6.setAttendance({staffId:'staff-2',date:'2026-10-11',status:'present'});
+const collisionRemote={...collisionLocal,id:'other-device-attendance',status:'holiday',version:1};
+phase6.hydrateAttendanceFromCloud([collisionRemote]);
+assert.equal(phase6.listAttendance({staffId:'staff-2'}).filter(r=>r.date==='2026-10-11').length,1,'pending collision must not double-count cloud day');
+remote.registerRemoteWriter({getAttendance:async(id,staffId,date)=>{assert.equal(staffId,'staff-2');assert.equal(date,'2026-10-11');return collisionRemote;},upsertAttendance:async r=>{assert.equal(r.id,collisionRemote.id);assert.equal(r.version,2);}});
+await phase6.resolveAttendanceConflict(collisionLocal.id,'local',1,1);
+assert.equal(phase6.listAttendance({staffId:'staff-2'}).filter(r=>r.date==='2026-10-11').length,1);
+assert.equal(phase6.listAttendance({staffId:'staff-2'}).find(r=>r.date==='2026-10-11').id,collisionRemote.id);
+remote.registerRemoteWriter(null);
+console.log('Attendance different-device natural key conflict resolution PASS');

@@ -14,10 +14,10 @@
 Impossible dates, invalid clock ranges, metadata erased by status changes, stale/concurrent writes, direct API attempts by non-managers.
 
 ## Delivery
-- [ ] Reproduce metadata loss and invalid input acceptance with executable store tests.
-- [ ] Preserve optional fields, validate dates/status/minutes/clocks, snapshot immutable outbox payloads and increment attendance versions.
-- [ ] Test and implement attendance route hydration, row mapping, awaited cloud writes and conflict feedback.
-- [ ] Use one shared grid on web/desktop with day detail editor, history visibility and branch filtering.
-- [ ] Add role/relation RLS enforcement migration and executable PostgreSQL tests.
+- [x] Reproduce metadata loss and invalid input acceptance with executable store tests.
+- [x] Preserve optional fields, validate dates/status/minutes/clocks, snapshot immutable outbox payloads and increment attendance versions.
+- [x] Test and implement attendance route hydration, row mapping, awaited cloud writes and conflict feedback.
+- [x] Use one shared grid on web/desktop with day detail editor, history visibility and branch filtering.
+- [x] Add role/relation RLS enforcement migration and executable PostgreSQL tests.
 - [ ] Run behavior, integration, type/build and exact-head CI gates; resolve defects before merge.
 - [ ] Update continuation evidence and master-scope progress only after verified merge.

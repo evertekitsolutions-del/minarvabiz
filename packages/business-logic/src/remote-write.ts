@@ -29,6 +29,7 @@ import type { LocalOutboxEvent } from "./outbox-bridge";
 import { enqueueOutbox } from "./outbox-bridge";
 
 export interface RemoteWriter {
+  getAttendance?: (id: string, staffId?: string, date?: string) => Promise<StaffAttendanceRecord | null>;
   upsertAttendance?: (record: StaffAttendanceRecord, event?: LocalOutboxEvent) => Promise<void>;
   upsertCustomer?: (c: Customer) => Promise<void>;
   upsertCategory?: (c: Category) => Promise<void>;

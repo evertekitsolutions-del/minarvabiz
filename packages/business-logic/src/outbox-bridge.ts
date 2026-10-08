@@ -16,7 +16,7 @@ export interface LocalOutboxEvent {
   occurredAt: string;
   deviceId: string;
   sequence: number;
-  status: "pending" | "synced" | "failed";
+  status: "pending" | "synced" | "failed" | "discarded";
   attempts: number;
   lastError: string | null;
 }
@@ -84,4 +84,10 @@ export function hydrateOutbox(events: LocalOutboxEvent[]) {
 
 export function exportOutbox(): LocalOutboxEvent[] {
   return [...queue];
+}
+
+/** Retain superseded attendance event history after explicit human conflict resolution. */
+export function discardAttendanceOutbox(aggregateId:string){
+  for(const event of queue)if(event.aggregateType==="staff_attendance"&&event.aggregateId===aggregateId&&(event.status==="pending"||event.status==="failed"))event.status="discarded";
+  touchPersistence();
 }
