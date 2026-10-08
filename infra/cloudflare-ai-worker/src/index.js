@@ -130,7 +130,7 @@ async function constantTimeEqual(left, right) {
 
 async function verifyServiceIdentity(token, env) {
   const portable = clean(env.MINARVA_SUPPORT_SERVICE_TOKEN, 12000);
-  if (portable && await constantTimeEqual(token, portable)) return "portable-service-token";
+  if (portable.length >= 32 && await constantTimeEqual(token, portable)) return "portable-service-token";
   await verifyOidcToken(token);
   return "vercel-oidc";
 }
