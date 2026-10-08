@@ -112,8 +112,11 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
       readFile: (_p: string): Uint8Array | null => cached,
       writeFile: (_p: string, data: Uint8Array) => {
         cached = data;
-        const write = pendingWrite.catch(() => false).then(() => api.writeSqliteBinary(data));
-        pendingWrite = write.catch(() => false);
+        // Keep one outstanding native write: intermediate snapshots are superseded by
+        // the latest committed snapshot. Retain the bytes until the IPC write settles.
+        // Do not silently convert a failed write into success.
+        const write = pendingWrite.then(() => api.writeSqliteBinary(data));
+        pendingWrite = write;
       },
       exists: (_p: string) => cached != null && cached.length > 0,
       mkdirp: (_dir: string) => {
