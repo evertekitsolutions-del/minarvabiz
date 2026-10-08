@@ -46,6 +46,7 @@ export * from "./components/purchases/ProcurementPanel";
 export * from "./components/suppliers/SupplierList";
 export * from "./components/staff/StaffList";
 export * from "./components/staff/StaffDetail";
+export * from "./components/staff/AttendanceGrid";
 export * from "./components/notifications/NotificationCenter";
 export * from "./components/notifications/CustomerCommunicationCenter";
 export * from "./components/notifications/CustomerMessagesPanel";
