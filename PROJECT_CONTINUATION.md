@@ -375,3 +375,13 @@ If a chat ends, the next chat must continue from live repository state and these
 - CI enforces a provider-neutral hosting contract: no Vercel host/runtime branching in `next.config.ts` or middleware, standard `next build` / `next start`, explicit production Supabase configuration, and explicit demo mode only.
 - Existing `vercel.json` files remain deployment adapters during the safe migration window; they are not runtime business-logic dependencies. Do not delete the live Vercel online app until a replacement host is deployed and parity-tested.
 - Production License Edge still has `MINARVA_ONLINE_APP_URL` pointing at the current Vercel online app. Change that binding only after the provider-neutral replacement URL is live and verified.
+
+
+## 5F. Attendance Grid HR core candidate
+
+- PR #273 is the HR-002 Attendance Grid delivery candidate.
+- Shared Online + Offline + Hybrid domain now includes tenant-aware daily attendance statuses: present, absent, half-day, leave and holiday; per-day break/overtime metadata; staff/month summaries; and audited, outbox-backed upserts.
+- Web and Windows desktop use the shared Attendance Grid UI with month navigation, per-staff daily marking and bulk today actions.
+- Domain snapshot format is v13 and includes attendance so offline backup/restore and desktop persistence do not silently lose HR state.
+- PostgreSQL/Supabase migration adds tenant-isolated `staff_attendance` with organization/staff/date uniqueness, branch/device/version fields, RLS + FORCE RLS and authenticated organization policy.
+- Executable attendance behavior tests and source/security contracts are wired into CI. Do not mark HR-002 merged until PR #273 exact-head gates are green.
