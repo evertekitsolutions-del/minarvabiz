@@ -528,7 +528,15 @@ async function main() {
     await evalIn(ws,`(()=>{location.reload();return true})()`);await sleep(1200);await ready(ws);
     await click(ws,"ATTENDANCE_RESTORED",["attendance grid"]);
     await setByAriaLabel(ws,"Attendance month",attendanceMonth);await sleep(300);
-    await assertMain(ws,"ATTENDANCE_SQLITE_TOTALS",["QA Tailor","510m","45m"]);
+    // Renderer-ready precedes React hydration; wait for the persisted staff and totals, not just the page heading.
+    let attendanceRestored = false;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const present = await evalIn(ws,`(()=>{const text=document.querySelector("main")?.innerText||"";return ["QA Tailor","510m","45m"].every(marker=>text.includes(marker))})()`);
+      if (present) { attendanceRestored = true; break; }
+      await sleep(500);
+    }
+    if (!attendanceRestored) await assertMain(ws,"ATTENDANCE_SQLITE_TOTALS",["QA Tailor","510m","45m"]);
+    console.log("ATTENDANCE_SQLITE_TOTALS PASS");
     const restoredStatus=await evalIn(ws,`document.querySelector('select[aria-label="QA Tailor attendance ${attendanceDate}"]').value`);
     if(restoredStatus!=="half_day")throw new Error("Attendance status did not survive SQLite reload");
     await click(ws,"ATTENDANCE_RESTORED_DETAILS",[`QA Tailor details ${attendanceDate}`]);
