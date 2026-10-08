@@ -43,12 +43,9 @@ function supportBrokerUrl() {
 }
 
 function requestServiceToken(headers?: Headers | null) {
-  return String(
-    process.env.MINARVA_SUPPORT_SERVICE_TOKEN ||
-      headers?.get("x-vercel-oidc-token") ||
-      process.env.VERCEL_OIDC_TOKEN ||
-      "",
-  ).trim();
+  const portable = String(process.env.MINARVA_SUPPORT_SERVICE_TOKEN || "").trim();
+  if (portable.length >= 32) return portable;
+  return String(headers?.get("x-vercel-oidc-token") || process.env.VERCEL_OIDC_TOKEN || "").trim();
 }
 
 function clientAddress(headers: Headers) {
