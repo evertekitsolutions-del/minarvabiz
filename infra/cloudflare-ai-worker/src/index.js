@@ -118,6 +118,23 @@ async function verifyOidcToken(token) {
   return payload;
 }
 
+async function constantTimeEqual(left, right) {
+  const encoder = new TextEncoder();
+  const a = encoder.encode(left);
+  const b = encoder.encode(right);
+  const max = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let index = 0; index < max; index += 1) diff |= (a[index] || 0) ^ (b[index] || 0);
+  return diff === 0;
+}
+
+async function verifyServiceIdentity(token, env) {
+  const portable = clean(env.MINARVA_SUPPORT_SERVICE_TOKEN, 12000);
+  if (portable && await constantTimeEqual(token, portable)) return "portable-service-token";
+  await verifyOidcToken(token);
+  return "vercel-oidc";
+}
+
 function imageDataUrl(value) {
   if (typeof value !== "string" || value.length > MAX_IMAGE_CHARS) return null;
   return /^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(value) ? value : null;
@@ -173,7 +190,7 @@ export default {
     const auth = request.headers.get("authorization") || "";
     const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
     try {
-      await verifyOidcToken(token);
+      await verifyServiceIdentity(token, env);
     } catch {
       return json({ ok: false, error: "Unauthorized AI request." }, 401);
     }
