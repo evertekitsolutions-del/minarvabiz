@@ -3,7 +3,7 @@
 import * as React from "react";
 import { readBrowserAdminSession } from "./browser-admin-session";
 
-import { licenseEdgeOrigin } from "./license-edge-config";
+import { licenseEdgeOrigin } from "./license-edge-config.ts";
 
 const EDGE = licenseEdgeOrigin();
 
