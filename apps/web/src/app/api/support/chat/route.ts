@@ -3,6 +3,7 @@ import {
   answerTechnicalSupport,
   consumeSupportRateLimit,
   supportCorsHeaders,
+  supportServiceCredential,
   type SupportChatMessage,
   type SupportClientContext,
 } from "@/lib/support-server";
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
 
   const message = clean(body?.message, 4000);
   const clientId = clean(body?.context?.clientId, 160);
-  const oidcToken = clean(headers.get("x-vercel-oidc-token"), 12000);
+  const oidcToken = clean(supportServiceCredential(headers), 12000);
   if (!message) {
     return NextResponse.json({ ok: false, error: "Enter a Minarva Biz support question." }, { status: 400, headers: supportCorsHeaders() });
   }

@@ -37,10 +37,30 @@ function clean(value: unknown, max: number) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
-async function verifyVercelOidc(req: Request) {
+async function constantTimeEqual(left: string, right: string) {
+  const encoder = new TextEncoder();
+  const a = encoder.encode(left);
+  const b = encoder.encode(right);
+  const max = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let index = 0; index < max; index += 1) {
+    diff |= (a[index] || 0) ^ (b[index] || 0);
+  }
+  return diff === 0;
+}
+
+async function verifySupportCaller(req: Request) {
   const header = req.headers.get("authorization") || "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-  if (!token) throw new Error("Missing Vercel OIDC token.");
+  if (!token) throw new Error("Missing support service credential.");
+
+  const serviceToken = String(Deno.env.get("MINARVA_SUPPORT_SERVICE_TOKEN") || "").trim();
+  if (serviceToken.length >= 32 && await constantTimeEqual(token, serviceToken)) {
+    return { kind: "portable-service-token" as const };
+  }
+
+  // Transitional compatibility only. Remove after the replacement host is
+  // live, the portable service identity is proven, and Vercel is retired.
 
   const { payload } = await jwtVerify(token, JWKS, {
     issuer: [TEAM_ISSUER, GLOBAL_ISSUER],
@@ -56,6 +76,7 @@ async function verifyVercelOidc(req: Request) {
   ) {
     throw new Error("OIDC project identity mismatch.");
   }
+  return { kind: "vercel-oidc" as const };
 }
 
 async function hmacHex(secret: string, value: string) {
@@ -85,7 +106,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json({ ok: false, error: "Method not allowed." }, 405);
 
   try {
-    await verifyVercelOidc(req);
+    await verifySupportCaller(req);
   } catch {
     return json({ ok: false, error: "Unauthorized support broker request." }, 401);
   }

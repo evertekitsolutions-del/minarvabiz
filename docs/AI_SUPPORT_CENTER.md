@@ -19,11 +19,11 @@ Technical conversations can also be escalated to the Support Inbox for human rev
 - Windows client: calls the production web support API over HTTPS.
 - Online client: calls the same API locally through the web deployment.
 
-Production uses a **provider-neutral AI adapter**. During the zero-cost phase, Minarva Biz prefers a Cloudflare Workers AI endpoint protected by the same short-lived Vercel OIDC identity already used by the support backend.
+Production uses a **provider-neutral AI adapter**. During the zero-cost phase, Minarva Biz prefers a Cloudflare Workers AI endpoint. The primary server-to-server identity is the provider-neutral `MINARVA_SUPPORT_SERVICE_TOKEN`; Vercel OIDC remains a temporary migration fallback until the old host is retired.
 
 The private Supabase `support_runtime_config` table selects the active AI endpoint. This lets Minarva Biz move from Cloudflare to a future self-hosted inference server without changing the Windows client or customer Support Center UI.
 
-Database writes, runtime routing and persistent rate limiting are delegated to the Supabase Edge Function `minarva-support-broker`. That broker validates the Vercel OIDC issuer, audience, production subject, team ID and project ID before using Supabase's built-in service-role credential. The service-role credential never leaves Supabase and is never bundled into the Windows client, browser JavaScript or Vercel project settings.
+Database writes, runtime routing and persistent rate limiting are delegated to the Supabase Edge Function `minarva-support-broker`. That broker first accepts a constant-time-verified provider-neutral service credential. During the migration window it also accepts the existing tightly scoped Vercel OIDC identity. Only after caller authentication does it use Supabase's built-in service-role credential. The service-role credential never leaves Supabase and is never bundled into the Windows client, browser JavaScript or Vercel project settings.
 
 ## Knowledge freshness
 
@@ -69,7 +69,7 @@ It intentionally excludes customer records, database contents, license tokens an
 
 ## Rate and cost controls
 
-The Vercel API forwards the request to the OIDC-authenticated Supabase support broker, which applies the persistent Supabase rate-limit RPC:
+The web API forwards the request to the authenticated Supabase support broker, which applies the persistent Supabase rate-limit RPC:
 
 - chat: 8 requests/minute and 40/hour per network origin;
 - support/feedback submissions: 20/day.
@@ -110,7 +110,11 @@ Roles:
 
 The zero-cost production path is designed to require **no OpenAI API key and no paid AI account**.
 
-Existing values:
+Required values for the provider-neutral path:
+
+- `MINARVA_SUPPORT_SERVICE_TOKEN` — high-entropy server-only credential configured identically in the web runtime, Supabase broker runtime and Cloudflare AI Worker; never expose it to browser/Windows bundles;
+
+Transitional fallback while Vercel remains live:
 
 - request-bound Vercel OIDC identity;
 - `NEXT_PUBLIC_SUPABASE_URL`;
@@ -132,11 +136,11 @@ Windows production build:
 
 The pre-25-customer policy requires `MINARVA_ALLOW_PAID_AI_FALLBACK` to stay unset/false. Reaching a free quota must degrade to Help Center + Support Inbox rather than create a charge.
 
-## OIDC request flow and broker deployment
+## Provider-neutral service identity and migration fallback
 
-For Vercel-hosted support API requests, the server reads the current request-bound `x-vercel-oidc-token` injected by Vercel. It forwards that token to `minarva-support-broker` and, when enabled, to the Cloudflare AI Worker as `Authorization: Bearer <token>`.
+The web runtime prefers its server-only `MINARVA_SUPPORT_SERVICE_TOKEN` and forwards it to `minarva-support-broker` and, when enabled, to the Cloudflare AI Worker as `Authorization: Bearer <token>`. The broker and Worker compare the portable credential without persisting or logging it. During zero-downtime migration, a Vercel deployment that has not yet received the portable credential may continue using its request-bound `x-vercel-oidc-token`.
 
-The Cloudflare Worker independently validates the RSA signature, issuer, audience, exact production subject, team ID, project ID/name, environment and token lifetime before any Workers AI inference is run. No long-lived shared secret is stored in the Windows app or browser.
+The Cloudflare Worker independently accepts the same provider-neutral server identity before inference. Its legacy OIDC verifier remains available only as a migration fallback and still validates RSA signature, issuer, audience, exact production subject, team ID, project ID/name, environment and token lifetime. No server credential is stored in the Windows app or browser.
 
 The broker validates:
 
@@ -147,7 +151,7 @@ The broker validates:
 - project ID and project name;
 - production environment claim.
 
-The Supabase function must be deployed with Supabase JWT verification disabled because the incoming bearer token is a **Vercel OIDC token**, not a Supabase Auth JWT. The broker performs its own signature and claim verification with Vercel's JWKS.
+The Supabase function must be deployed with Supabase JWT verification disabled because its bearer credential is a service identity (portable token or transitional Vercel OIDC), not a Supabase Auth JWT. The function performs its own authentication before any privileged database operation.
 
 CLI equivalent:
 
@@ -155,7 +159,7 @@ CLI equivalent:
 supabase functions deploy minarva-support-broker --no-verify-jwt
 ```
 
-Do not change this to a publicly trusted unauthenticated broker: `verify_jwt=false` is safe here only because the function itself rejects any request that fails the Vercel OIDC checks.
+Do not change this to a publicly trusted unauthenticated broker: `verify_jwt=false` is safe here only because the function itself rejects requests that fail both the portable service-credential check and the tightly scoped migration OIDC check.
 
 ## Operational readiness
 
