@@ -86,3 +86,5 @@ export * from "./print-templates";
 export * from "./print-document-render";
 
 export * from "./recycle-bin";
+
+export { writeAttendanceRow, createSupabaseCloudAdapter } from "@minarvabiz/sync";

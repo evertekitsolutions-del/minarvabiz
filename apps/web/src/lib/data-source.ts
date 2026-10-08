@@ -17,8 +17,8 @@ import {
   pgRpc,
   type UnitOfWork,
 } from "@minarvabiz/database";
-import type { RoleName } from "@minarvabiz/types";
-import { store, ordersStore, phase5Store, phase6Store, warehouseStore, procurementStore, accountingStore, registerRemoteWriter, getRuntimeMode } from "@minarvabiz/business-logic";
+import type { RoleName, Branch, OutboxEvent } from "@minarvabiz/types";
+import { store, ordersStore, phase5Store, phase6Store, phase9Store, warehouseStore, procurementStore, accountingStore, registerRemoteWriter, createSupabaseCloudAdapter, getRuntimeMode } from "@minarvabiz/business-logic";
 import {
   mapCategory,
   mapSupplier,
@@ -26,6 +26,7 @@ import {
   mapExpense,
   mapPurchase,
   mapStaff,
+  mapAttendance,
   mapPayment,
   mapWarehouse,
   mapWarehouseLocation,
@@ -139,6 +140,7 @@ const ALL_SUPABASE_HYDRATION_DOMAINS: SupabaseHydrationDomain[] = [
 
 let hydrationIdentity: string | null = null;
 const hydratedDomains = new Set<SupabaseHydrationDomain>();
+export function isStaffHydrated(){return hydratedDomains.has("staff");}
 
 export function supabaseHydrationDomainsForPath(pathname: string): SupabaseHydrationDomain[] {
   const route = String(pathname || "/dashboard").split("?")[0] || "/dashboard";
@@ -148,7 +150,7 @@ export function supabaseHydrationDomainsForPath(pathname: string): SupabaseHydra
   if (matches(["/dashboard", "/laundry", "/expenses", "/purchases", "/suppliers", "/returns", "/reports", "/day-end"])) {
     domains.add("operations");
   }
-  if (matches(["/dashboard", "/staff", "/staff-detail", "/services/production", "/reports"])) {
+  if (matches(["/dashboard", "/staff", "/attendance", "/staff-detail", "/services/production", "/reports"])) {
     domains.add("staff");
   }
   if (matches(["/warehouse", "/stock-take", "/purchases"])) {
@@ -208,6 +210,7 @@ export async function hydrateStoresFromSupabase(
     let suppliersRows: Record<string, unknown>[] = [];
     let laundryRows: Record<string, unknown>[] = [];
     let staffRows: Record<string, unknown>[] = [];
+    let attendanceRows: Record<string, unknown>[] = [];
     let paymentsRows: Record<string, unknown>[] = [];
     let warehousesRows: Record<string, unknown>[] = [];
     let warehouseLocationsRows: Record<string, unknown>[] = [];
@@ -259,9 +262,15 @@ export async function hydrateStoresFromSupabase(
     }
 
     if (loadStaff) {
-      const staffRes = await pgSelectAll<Record<string, unknown>>(cfg, "staff_members", "select=*&deleted_at=is.null&order=name.asc,id.asc");
+      const staffRes = await pgSelectAll<Record<string, unknown>>(cfg, "staff_members", "select=*&order=name.asc,id.asc");
       if (staffRes.error) throw new Error(staffRes.error.message);
       staffRows = staffRes.data || [];
+      const attendanceRes=await pgSelectAll<Record<string,unknown>>(cfg,"staff_attendance","select=*&order=attendance_date.desc,id.asc");
+      if(attendanceRes.error)throw new Error(attendanceRes.error.message);
+      attendanceRows=attendanceRes.data||[];
+      const branchRes=await pgSelectAll<Record<string,unknown>>(cfg,"branches","select=*&deleted_at=is.null&order=name.asc,id.asc");
+      if(branchRes.error)throw new Error(branchRes.error.message);
+      phase9Store.hydratePhase9({activeBranchId:phase9Store.getActiveBranch()?.id,branches:(branchRes.data||[]).map(row=>({id:String(row.id),name:String(row.name),code:row.code as string|null,address:row.address as string|null,phone:row.phone as string|null,isHeadquarters:row.is_headquarters===true,isActive:row.is_active!==false,createdAt:String(row.created_at),updatedAt:String(row.updated_at)} as Branch))});
     }
 
     if (loadWarehouse) {
@@ -336,6 +345,7 @@ export async function hydrateStoresFromSupabase(
 
     if (loadStaff) {
       phase6Store.hydratePhase6({ staff: staffRows.map(mapStaff) });
+      phase6Store.hydrateAttendanceFromCloud(attendanceRows.map(mapAttendance));
     }
 
     if (loadWarehouse) {
@@ -407,6 +417,16 @@ export async function hydrateStoresFromSupabase(
     });
 
     registerRemoteWriter({
+      upsertAttendance: async (_record,event) => {
+        if(!event)throw new Error("Attendance requires its durable event identity");
+        const adapter=createSupabaseCloudAdapter({
+          select: async (table,query) => {const r=await pgSelect<Record<string,unknown>>(cfg,table,query);return {data:r.data,error:r.error?.message??null};},
+          insert: async (table,row) => {const r=await pgInsert<Record<string,unknown>>(cfg,table,row);return {error:r.error?.message??null};},
+          update: async (table,match,patch) => {const r=await pgUpdate<Record<string,unknown>>(cfg,table,match,patch);return {error:r.error?.message??null};},
+        },event.deviceId);
+        const result=await adapter.push([{...event,payload:event.payload as Record<string,unknown>} as OutboxEvent]);
+        if(!result.accepted.includes(event.id))throw new Error(result.rejected[0]?.error||"Attendance write was not acknowledged");
+      },
       upsertCustomer: async (customer) => {
         const row = {
           name: customer.name,

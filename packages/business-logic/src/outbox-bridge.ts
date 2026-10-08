@@ -23,7 +23,7 @@ export interface LocalOutboxEvent {
 
 const queue: LocalOutboxEvent[] = [];
 let sequence = 1;
-let deviceId = "device-local";
+let deviceId = generateId();
 
 export function setOutboxDeviceId(id: string) {
   deviceId = id;

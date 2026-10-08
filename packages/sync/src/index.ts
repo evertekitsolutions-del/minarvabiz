@@ -42,3 +42,5 @@ export * from "./outbox";
 export * from "./conflict";
 export * from "./engine";
 export * from "./supabase-adapter";
+
+export { writeAttendanceRow, attendanceRemoteRow } from "./attendance-transport";

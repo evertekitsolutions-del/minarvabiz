@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url),ts=require('typescript');
+require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText,f);
+const {writeAttendanceRow,attendanceRemoteRow}=require('../attendance-transport.ts');
+const payload={staffId:'staff-1',date:'2026-10-08',status:'present',breakMinutes:0,overtimeMinutes:0,version:1,createdAt:'2026-10-08T00:00:00Z',updatedAt:'2026-10-08T00:00:00Z'};
+let stored=null,insertError=null,updateNoop=false;
+const client={async select(){return{data:stored?[structuredClone(stored)]:[],error:null}},async insert(t,row){if(insertError)return{error:insertError};stored=structuredClone(row);return{error:null}},async update(t,match,row){assert.match(match,/version=eq\.1/);if(!updateNoop)stored={...stored,...row};return{error:null}}};
+await writeAttendanceRow(client,'a1',payload);
+assert.equal(stored.staff_id,'staff-1');
+await writeAttendanceRow(client,'a1',payload); // retry
+await assert.rejects(()=>writeAttendanceRow(client,'a1',{...payload,status:'absent'}),/conflict/);
+await writeAttendanceRow(client,'a1',{...payload,status:'half_day',version:2});
+assert.equal(stored.version,2);
+await assert.rejects(()=>writeAttendanceRow(client,'a1',payload),/conflict/);
+stored=attendanceRemoteRow('a1',payload);updateNoop=true;
+await assert.rejects(()=>writeAttendanceRow(client,'a1',{...payload,status:'absent',version:2}),/conflict/,'zero-row update is never acknowledged');
+stored=null;insertError='duplicate staff/day';
+await assert.rejects(()=>writeAttendanceRow(client,'a1',payload),/duplicate staff\/day/);
+await assert.rejects(()=>writeAttendanceRow(client,'a1',{...payload,version:0}),/version/);
+console.log('Attendance transport retry/conflict PASS');

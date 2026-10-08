@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';import fs from 'node:fs';import{createRequire}from'node:module';
+const require=createRequire(import.meta.url),ts=require('typescript');require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,f);
+const {createSupabaseCloudAdapter}=require('../supabase-adapter.ts');
+let remote=null,failAck=true;const ledger=new Map();
+const client={async select(table,query){if(table==='outbox_events'){const id=/id=eq\.([^&]+)/.exec(query)?.[1];return{data:ledger.has(id)?[ledger.get(id)]:[],error:null}}return{data:remote?[structuredClone(remote)]:[],error:null}},async insert(table,row){if(table==='outbox_events'){if(failAck)return{error:'ack failed'};ledger.set(row.id,structuredClone(row));return{error:null}}remote=structuredClone(row);return{error:null}},async update(table,query,row){remote={...remote,...row};return{error:null}}};
+const adapter=createSupabaseCloudAdapter(client,'dev-1');
+const p={staffId:'staff-1',date:'2026-10-08',status:'present',version:1,breakMinutes:0,overtimeMinutes:0};
+const event=(id,version,status)=>({id,aggregateId:'a1',aggregateType:'staff_attendance',eventType:'update',payload:{...p,version,status},sequence:version,occurredAt:'2026-10-08T00:00:00Z'});
+const events=[event('e1',1,'present'),event('e2',2,'absent')];
+let result=await adapter.push(events);assert.equal(remote.version,1,'ack failure blocks later versions');assert.equal(result.accepted.length,0);
+failAck=false;result=await adapter.push(events);assert.deepEqual(result.accepted,['e1','e2']);assert.equal(remote.version,2);
+result=await adapter.push(events);assert.deepEqual(result.accepted,['e1','e2'],'durable event ids support lost-response replay');assert.equal(remote.version,2);
+console.log('Attendance acknowledgement ordering/replay PASS');

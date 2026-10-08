@@ -58,6 +58,21 @@ async function run(){const ws=await connect();try{
   await waitFor(ws,['Record Supplier Payment']); await setDialogField(ws,'Record Supplier Payment','Amount','510'); await clickDialog(ws,'Record Supplier Payment',['record payment'],600);
   await clickText(ws,'SUPPLIER_SETTLED_PURCHASES',['purchases']); await assertSupplierInvoice(ws,0,'paid'); await assertPayableLedger(ws,0);
   await clickText(ws,'STAFF',['staff management']); await waitFor(ws,['Staff Management','Add Staff']); await clickText(ws,'ADD_STAFF',['add staff']); await setDialogField(ws,'Add Staff','Name','QA Web Tailor'); await setDialogField(ws,'Add Staff','Salary','15000'); await clickDialog(ws,'Add Staff',['save'],600); await waitFor(ws,['QA Web Tailor']);
+  await clickText(ws,'ATTENDANCE',['attendance grid']); await waitFor(ws,['Attendance Grid','QA Web Tailor']);
+  const attendanceMonth=await evalIn(ws,`document.querySelector('input[aria-label="Attendance month"]').value`);
+  const attendanceDate=`${attendanceMonth}-08`;
+  await setMainByAriaLabel(ws,`QA Web Tailor attendance ${attendanceDate}`,'Present'); await sleep(300);
+  async function openAttendanceDetails(){const opened=await evalIn(ws,`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===${JSON.stringify(`QA Web Tailor details ${attendanceDate}`)});if(!b||b.disabled)return false;b.click();return true;})()`);if(!opened)throw new Error('Attendance details action missing');await waitFor(ws,['Clock-in (your device timezone)']);}
+  await openAttendanceDetails();
+  await setDialogField(ws,'Attendance details','Clock-in',`${attendanceDate}T09:00`);await setDialogField(ws,'Attendance details','Clock-out',`${attendanceDate}T18:00`);await setDialogField(ws,'Attendance details','Break minutes','30');await setDialogField(ws,'Attendance details','Overtime minutes','45');await setDialogField(ws,'Attendance details','Notes','QA attendance detail retained');
+  await clickDialog(ws,'Attendance details',['save attendance'],600);await waitFor(ws,['510m','45m']);
+  await setMainByAriaLabel(ws,`QA Web Tailor attendance ${attendanceDate}`,'Half day');await sleep(300);await openAttendanceDetails();
+  const attendanceDetails=JSON.parse(await evalIn(ws,`JSON.stringify([...document.querySelector('[role="dialog"]').querySelectorAll('input,textarea')].map(e=>e.value))`));
+  if(!attendanceDetails.includes('30')||!attendanceDetails.includes('45')||!attendanceDetails.includes('QA attendance detail retained'))throw new Error('Attendance status edit erased daily details');
+  await clickDialog(ws,'Attendance details',['close'],200);
+  console.log('ATTENDANCE_CLOCK_METADATA_UI PASS');
+  await clickText(ws,'RETURN_TO_STAFF',['staff management']);await waitFor(ws,['Staff Management','QA Web Tailor']);
+
   await clickText(ws,'LAUNDRY',['laundry & ironing']); await waitFor(ws,['Laundry & Ironing','Outsourced Laundry']); await clickText(ws,'ADD_LAUNDRY',['outsourced laundry']); await selectDialogOption(ws,'Outsourced Laundry','Customer','QA Web Customer'); await setDialogField(ws,'Outsourced Laundry','Garment','QA Web Shirt'); await setDialogField(ws,'Outsourced Laundry','Customer rate','150'); await selectDialogOption(ws,'Outsourced Laundry','Laundry supplier','City Laundry Works'); await setDialogField(ws,'Outsourced Laundry','Supplier rate','100'); await setDialogField(ws,'Outsourced Laundry','Paid now','50'); await selectDialogOption(ws,'Outsourced Laundry','Payment method','UPI'); await clickDialog(ws,'Outsourced Laundry',['save'],600); await waitFor(ws,['QA Web Customer','QA Web Shirt']);
   await clickButtonText(ws,'LAUNDRY_MARK_SENT',['mark sent']); await waitFor(ws,['Mark Received']); await clickButtonText(ws,'LAUNDRY_MARK_RECEIVED',['mark received']); await waitFor(ws,['Mark Delivered']); await clickButtonText(ws,'LAUNDRY_MARK_DELIVERED',['mark delivered']); await waitFor(ws,['delivered']);
   await clickText(ws,'LAUNDRY_VERIFY_PAYMENT',['payments']); await waitFor(ws,['Laundry receipt:','laundry','upi','₹50.00']);

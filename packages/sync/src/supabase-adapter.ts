@@ -1,3 +1,4 @@
+import { attendanceRemoteRow, attendanceRowsMatch, writeAttendanceRow } from "./attendance-transport";
 /**
  * CloudAdapter implementation using PostgREST outbox + pull.
  */
@@ -13,6 +14,7 @@ export interface PgClient {
 
 function remoteRow(table: string, aggregateId: UUID, payload: Record<string, unknown>): Record<string, unknown> {
   switch (table) {
+    case "staff_attendance": return attendanceRemoteRow(aggregateId,payload);
     case "laundry_orders":
       return {
         id: aggregateId,
@@ -391,13 +393,26 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
     async push(events: OutboxEvent[]) {
       const accepted: UUID[] = [];
       const rejected: Array<{ id: UUID; error: string; remote?: VersionedRecord }> = [];
+      const blockedAttendance=new Set<string>();
       for (const ev of events) {
         try {
           const payload = typeof ev.payload === "string" ? JSON.parse(ev.payload) : ev.payload;
           const table = ev.aggregateType;
           const row = remoteRow(table, ev.aggregateId, payload as Record<string, unknown>);
           // Remote outbox acknowledgement is written only after the domain mutation succeeds.
-          if (ev.eventType === "delete") {
+          if (table === "staff_attendance") {
+            if(blockedAttendance.has(ev.aggregateId))throw new Error("Attendance queued behind an unacknowledged revision");
+            const ack=await client.select("outbox_events",`select=*&id=eq.${encodeURIComponent(ev.id)}&limit=1`);
+            if(ack.error)throw new Error(ack.error);
+            const prior=ack.data?.[0];
+            if(prior){
+              if(prior.aggregate_type!==table||prior.aggregate_id!==ev.aggregateId||prior.status!=="synced"||!attendanceRowsMatch(attendanceRemoteRow(ev.aggregateId,prior.payload_json as Record<string,unknown>),row))throw new Error("Attendance event acknowledgement conflict");
+              accepted.push(ev.id);continue;
+            }
+            if(ev.eventType === "delete") throw new Error("Attendance deletion is not supported; use an audited correction");
+            await writeAttendanceRow(client,ev.aggregateId,payload as Record<string,unknown>);
+            accepted.push(ev.id);
+          } else if (ev.eventType === "delete") {
             const r = await client.update(table, matchQuery(table, ev.aggregateId), {
               deleted_at: new Date().toISOString(),
             });
@@ -430,8 +445,10 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
             const acceptedIndex = accepted.indexOf(ev.id);
             if (acceptedIndex >= 0) accepted.splice(acceptedIndex, 1);
             rejected.push({ id: ev.id, error: `outbox acknowledgement failed: ${outboxResult.error}` });
+            if(table==="staff_attendance")blockedAttendance.add(ev.aggregateId);
           }
         } catch (e) {
+          if(ev.aggregateType==="staff_attendance")blockedAttendance.add(ev.aggregateId);
           rejected.push({ id: ev.id, error: e instanceof Error ? e.message : String(e) });
         }
       }
@@ -442,7 +459,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         "branches", "customers", "categories", "products", "inventory_transactions",
         "sales", "payments", "measurement_profiles", "orders",
         "order_expenses", "laundry_orders", "expenses", "purchases", "suppliers",
-        "staff_members", "sale_returns", "audit_logs",
+        "staff_members", "staff_attendance", "sale_returns", "audit_logs",
         "production_workflows", "production_stage_events", "material_rolls", "material_consumptions",
         "warehouses", "warehouse_locations", "warehouse_stock", "warehouse_transfers",
         "purchase_orders", "purchase_order_lines", "goods_receipts", "goods_receipt_lines",

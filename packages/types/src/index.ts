@@ -624,6 +624,7 @@ export interface StaffMember {
 export type AttendanceStatus = "present" | "absent" | "half_day" | "leave" | "holiday";
 
 export interface StaffAttendanceRecord {
+  version?: number;
   id: UUID;
   staffId: UUID;
   staffName?: string | null;
