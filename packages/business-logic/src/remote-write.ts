@@ -24,9 +24,10 @@ import type {
   AccountingAccount,
   JournalEntry,
 } from "@minarvabiz/types";
-import { enqueueOutbox } from "./outbox-bridge";
+import { enqueueOutbox, type LocalOutboxEvent } from "./outbox-bridge";
 
 export interface RemoteWriter {
+  applyAttendanceEvent?: (event: LocalOutboxEvent) => Promise<void>;
   upsertCustomer?: (c: Customer) => Promise<void>;
   upsertCategory?: (c: Category) => Promise<void>;
   upsertProduct?: (p: Product) => Promise<void>;

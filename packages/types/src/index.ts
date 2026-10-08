@@ -637,6 +637,7 @@ export interface StaffAttendanceRecord {
   branchId?: UUID | null;
   createdAt: ISODateString;
   updatedAt: ISODateString;
+  version?: number;
 }
 
 export interface StaffAssignment {

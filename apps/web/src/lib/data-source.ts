@@ -26,6 +26,7 @@ import {
   mapExpense,
   mapPurchase,
   mapStaff,
+  mapAttendance,
   mapPayment,
   mapWarehouse,
   mapWarehouseLocation,
@@ -124,6 +125,7 @@ export type SupabaseHydrationDomain =
   | "core"
   | "operations"
   | "staff"
+  | "attendance"
   | "warehouse"
   | "procurement"
   | "accounting";
@@ -132,6 +134,7 @@ const ALL_SUPABASE_HYDRATION_DOMAINS: SupabaseHydrationDomain[] = [
   "core",
   "operations",
   "staff",
+  "attendance",
   "warehouse",
   "procurement",
   "accounting",
@@ -148,9 +151,10 @@ export function supabaseHydrationDomainsForPath(pathname: string): SupabaseHydra
   if (matches(["/dashboard", "/laundry", "/expenses", "/purchases", "/suppliers", "/returns", "/reports", "/day-end"])) {
     domains.add("operations");
   }
-  if (matches(["/dashboard", "/staff", "/staff-detail", "/services/production", "/reports"])) {
+  if (matches(["/dashboard", "/staff", "/staff-detail", "/attendance", "/services/production", "/reports"])) {
     domains.add("staff");
   }
+  if (matches(["/attendance"])) domains.add("attendance");
   if (matches(["/warehouse", "/stock-take", "/purchases"])) {
     domains.add("warehouse");
   }
@@ -164,7 +168,18 @@ export function supabaseHydrationDomainsForPath(pathname: string): SupabaseHydra
   return ALL_SUPABASE_HYDRATION_DOMAINS.filter((domain) => domains.has(domain));
 }
 
+// Serialize domain hydration so layout and page requests cannot overwrite a later edit.
+let hydrationQueue:Promise<unknown>=Promise.resolve();
 export async function hydrateStoresFromSupabase(
+ accessToken:string|null=null,
+ requestedDomains:SupabaseHydrationDomain[]=ALL_SUPABASE_HYDRATION_DOMAINS
+):Promise<{ok:boolean;message:string;counts?:Record<string,number>}>{
+ const task=hydrationQueue.then(()=>hydrateRequestedStores(accessToken,requestedDomains));
+ hydrationQueue=task.catch(()=>undefined);
+ return task;
+}
+
+async function hydrateRequestedStores(
   accessToken: string | null = null,
   requestedDomains: SupabaseHydrationDomain[] = ALL_SUPABASE_HYDRATION_DOMAINS
 ): Promise<{ ok: boolean; message: string; counts?: Record<string, number> }> {
@@ -192,6 +207,7 @@ export async function hydrateStoresFromSupabase(
   const loadCore = domains.includes("core");
   const loadOperations = domains.includes("operations");
   const loadStaff = domains.includes("staff");
+  const loadAttendance = domains.includes("attendance");
   const loadWarehouse = domains.includes("warehouse");
   const loadProcurement = domains.includes("procurement");
   const loadAccounting = domains.includes("accounting");
@@ -208,6 +224,7 @@ export async function hydrateStoresFromSupabase(
     let suppliersRows: Record<string, unknown>[] = [];
     let laundryRows: Record<string, unknown>[] = [];
     let staffRows: Record<string, unknown>[] = [];
+    let attendanceRows: Record<string, unknown>[] = [];
     let paymentsRows: Record<string, unknown>[] = [];
     let warehousesRows: Record<string, unknown>[] = [];
     let warehouseLocationsRows: Record<string, unknown>[] = [];
@@ -262,6 +279,12 @@ export async function hydrateStoresFromSupabase(
       const staffRes = await pgSelectAll<Record<string, unknown>>(cfg, "staff_members", "select=*&deleted_at=is.null&order=name.asc,id.asc");
       if (staffRes.error) throw new Error(staffRes.error.message);
       staffRows = staffRes.data || [];
+    }
+
+    if (loadAttendance) {
+      const result = await pgSelectAll<Record<string, unknown>>(cfg, "staff_attendance", "select=*&order=attendance_date.desc,id.asc");
+      if (result.error) throw new Error(result.error.message);
+      attendanceRows = result.data || [];
     }
 
     if (loadWarehouse) {
@@ -338,6 +361,8 @@ export async function hydrateStoresFromSupabase(
       phase6Store.hydratePhase6({ staff: staffRows.map(mapStaff) });
     }
 
+    if (loadAttendance) phase6Store.hydratePhase6({ attendance: attendanceRows.map(mapAttendance) });
+
     if (loadWarehouse) {
       warehouseStore.hydrateWarehouseState({
         warehouses: warehousesRows.map(mapWarehouse),
@@ -390,6 +415,7 @@ export async function hydrateStoresFromSupabase(
       laundry: laundryRows.length,
     });
     if (loadStaff) counts.staff = staffRows.length;
+    if (loadAttendance) counts.attendance = attendanceRows.length;
     if (loadWarehouse) Object.assign(counts, {
       warehouses: warehousesRows.length,
       warehouseLocations: warehouseLocationsRows.length,
@@ -407,6 +433,16 @@ export async function hydrateStoresFromSupabase(
     });
 
     registerRemoteWriter({
+      applyAttendanceEvent: async (event) => {
+        const result = await pgRpc<Record<string, unknown>>(cfg, "apply_staff_attendance_event", {
+          p_record: event.payload, p_event_id: event.id, p_device_id: event.deviceId, p_sequence: event.sequence,
+        });
+        if (result.error) throw new Error(result.error.message);
+        if (result.data?.accepted !== true) {
+          if (result.data?.remote) throw new phase6Store.AttendanceConflictError(result.data.remote as Parameters<typeof phase6Store.resolveAttendanceConflict>[0]);
+          throw new Error("Attendance version is unavailable. Reload and review this record.");
+        }
+      },
       upsertCustomer: async (customer) => {
         const row = {
           name: customer.name,

@@ -75,3 +75,4 @@
 20261005_cloudflare_admin_dual_authority.sql
 20261005_cloudflare_admin_emergency_self_service.sql
 20261008_attendance_grid.sql
+20261008141024_attendance_event_authority.sql

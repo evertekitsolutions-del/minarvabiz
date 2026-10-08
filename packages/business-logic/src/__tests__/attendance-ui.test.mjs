@@ -1,0 +1,13 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import {createRequire} from "node:module";
+const require=createRequire(import.meta.url),ts=require("typescript");
+for(const ext of [".ts",".tsx"])require.extensions[ext]=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,f);
+const React=require("react"),{renderToStaticMarkup}=require("react-dom/server");
+const {AttendanceGrid}=require("../../../ui/src/components/staff/AttendanceGrid.tsx");
+const html=renderToStaticMarkup(React.createElement(AttendanceGrid,{staff:[{id:"fixture",name:"Fixture Employee",status:"active"}],rows:[],month:"2026-02",onMonthChange:()=>{},onMark:()=>{},onMarkAllToday:()=>{},onSaveDetails:()=>{},disabled:true}));
+assert.match(html,/Edit Fixture Employee attendance 2026-02-01/,"each day must expose clock, break and overtime correction editor");
+assert.match(html,/disabled/);
+assert.doesNotMatch(html,/attendance 2026-02-29/);
+assert.match(html,/>Holiday<|>H<\/th>/,"holiday totals must be shown alongside leave and overtime");
+console.log("Shared Attendance UI contract PASS");

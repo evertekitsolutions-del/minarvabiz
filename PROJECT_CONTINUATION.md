@@ -1,9 +1,22 @@
 # Minarva Biz — Authoritative Project Continuation
 
-**Last updated:** 2026-10-07  
+**Last updated:** 2026-10-08  
 **Repository:** `evertekitsolutions-del/minarvabiz`
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
+
+## Active continuation — October 8 Attendance cloud parity
+
+This section supersedes older active/next-step descriptions below; retain them as historical evidence.
+
+- Verified main baseline: `27bed7c3a44a4643653c7e3ae0fc86b4f0856bdd`. Attendance PR #273 is merged; its head `cb826200fa1af98b87488ac90cc149ed6cf0dfd1` passed all deterministic workflows. PR #274 is closed, unmerged.
+- Current continuation branch: `fix/attendance-cloud-parity`. Preserve the existing Attendance implementation; do not restart or reopen #274.
+- Read `docs/ATTENDANCE_GRID_DELIVERY.md` for identified gaps, implemented corrections, rollout gates and explicit remaining limitations.
+- Production was checked read-only: Attendance table/event RPC were absent. New schema must be applied additively only after merged verification; do not report a live grid from code merge alone.
+- Next: complete exact-head gates and isolated attendance SQL proof, merge the correction, apply the two attendance migrations together, verify production authority, then complete authenticated browser and Windows release acceptance.
+- Stable Windows remains v1.0.15. Newly merged Attendance source is not automatically installed in existing v1.0.15 clients.
+- Full MASTER VISION baseline is approximately 50%; CI/audit/PR creation alone do not increase it. Honor the user's minimum verified full-scope increment per Continue batch, with only mandatory user-owned credential/approval blockers as an exception.
+- Preserve live Vercel/Render fallbacks until their replacement parity is proven. No paid infrastructure addition is authorized.
 
 ## 1. Mandatory continuation protocol
 
