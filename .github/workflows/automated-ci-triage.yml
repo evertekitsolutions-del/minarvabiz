@@ -1,0 +1,60 @@
+name: Automated CI Failure Triage
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Windows Feature Click Smoke
+      - Windows Deep Installed Smoke
+      - Final Release Audit
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: ci-triage-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'failure' &&
+        github.event.workflow_run.repository.full_name == github.repository &&
+        github.event.workflow_run.event == 'pull_request'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      RUN_NAME: ${{ github.event.workflow_run.name }}
+      RUN_URL: ${{ github.event.workflow_run.html_url }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Create or update failure issue without executing PR code
+        shell: bash
+        run: |
+          set -euo pipefail
+          # All untrusted event strings remain data, never interpolated as shell code.
+          pr_number="$(gh api "repos/$GH_REPO/actions/runs/$RUN_ID/pulls" --jq '.[0].number // empty' 2>/dev/null || true)"
+          if [[ ! "$pr_number" =~ ^[0-9]+$ ]]; then
+            echo "No associated PR; no issue created."
+            exit 0
+          fi
+          title="[CI failure] PR #${pr_number}: ${RUN_NAME}"
+          body="$(printf 'Automated CI triage (no code executed and no automatic merge).\n\nPR: #%s\nWorkflow: %s\nFailing run: %s\nHead SHA: %s\n\nNext: inspect failed jobs and logs; reproduce; implement root-cause fix on a branch; rerun all required checks.\n' "$pr_number" "$RUN_NAME" "$RUN_URL" "$HEAD_SHA")"
+          existing="$(gh issue list --state open --limit 100 --json number,title --jq '.[] | select(.title == env.TARGET_TITLE) | .number' TARGET_TITLE="$title" 2>/dev/null || true)"
+          # jq env variables are exported explicitly for reliable exact-title matching.
+          export TARGET_TITLE="$title"
+          existing="$(gh issue list --state open --limit 100 --json number,title --jq '.[] | select(.title == env.TARGET_TITLE) | .number' | head -n 1)"
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
