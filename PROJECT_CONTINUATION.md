@@ -375,3 +375,12 @@ If a chat ends, the next chat must continue from live repository state and these
 - CI enforces a provider-neutral hosting contract: no Vercel host/runtime branching in `next.config.ts` or middleware, standard `next build` / `next start`, explicit production Supabase configuration, and explicit demo mode only.
 - Existing `vercel.json` files remain deployment adapters during the safe migration window; they are not runtime business-logic dependencies. Do not delete the live Vercel online app until a replacement host is deployed and parity-tested.
 - Production License Edge still has `MINARVA_ONLINE_APP_URL` pointing at the current Vercel online app. Change that binding only after the provider-neutral replacement URL is live and verified.
+## 5F. Attendance Grid capability
+
+- Added the master-vision Attendance Grid across Online, Offline and Hybrid shared core.
+- Daily states: present, absent, half-day, leave and holiday, with break/overtime fields and monthly staff summaries.
+- Shared web/desktop grid supports per-day marking and guarded bulk present/holiday actions.
+- Offline state participates in domain snapshot v13, audit logging and outbox sync.
+- Cloud authority is `public.staff_attendance` with tenant RLS, branch/device/version fields and one row per organization/staff/day.
+- Fresh-instance replay order and runtime/contract coverage include the attendance schema and behavior.
+- No paid dependency was introduced.
