@@ -368,3 +368,10 @@ If a chat ends, the next chat must continue from live repository state and these
 - Production Pages successfully deployed the #262 merge. #263 production deployment was triggered after merge and should be verified before any browser rotation.
 - Production currently reports exactly one verified MFA factor. Because an earlier authenticator enrollment secret was exposed outside the intended local-only flow, treat the current factor as potentially compromised until the administrator uses the production Pages rotation UI. Never paste the replacement QR, secret, or TOTP code into chat or tooling.
 - Rotation is an intentional browser-only boundary: after the #263 production deployment succeeds, sign in normally with AAL2, enroll and verify a fresh replacement authenticator, then remove the old factor. Repository automation must not create or retrieve that replacement secret.
+
+## 5E. Provider-neutral main web runtime cutover started
+
+- The main Next.js web runtime no longer changes security/runtime mode based on `VERCEL_ENV`. Demo mode is now explicit through `MINARVA_MODE` / `NEXT_PUBLIC_MINARVA_MODE`; a provider preview can no longer implicitly disable authentication.
+- CI enforces a provider-neutral hosting contract: no Vercel host/runtime branching in `next.config.ts` or middleware, standard `next build` / `next start`, explicit production Supabase configuration, and explicit demo mode only.
+- Existing `vercel.json` files remain deployment adapters during the safe migration window; they are not runtime business-logic dependencies. Do not delete the live Vercel online app until a replacement host is deployed and parity-tested.
+- Production License Edge still has `MINARVA_ONLINE_APP_URL` pointing at the current Vercel online app. Change that binding only after the provider-neutral replacement URL is live and verified.
