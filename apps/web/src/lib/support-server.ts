@@ -42,8 +42,13 @@ function supportBrokerUrl() {
   return base ? `${base}/functions/v1/minarva-support-broker` : "";
 }
 
-function requestOidcToken(headers?: Headers | null) {
-  return String(headers?.get("x-vercel-oidc-token") || process.env.VERCEL_OIDC_TOKEN || "").trim();
+function requestServiceToken(headers?: Headers | null) {
+  return String(
+    process.env.MINARVA_SUPPORT_SERVICE_TOKEN ||
+      headers?.get("x-vercel-oidc-token") ||
+      process.env.VERCEL_OIDC_TOKEN ||
+      "",
+  ).trim();
 }
 
 function clientAddress(headers: Headers) {
@@ -61,7 +66,7 @@ function clientAddress(headers: Headers) {
 
 async function brokerFetch(body: Record<string, unknown>, oidcToken = "") {
   const url = supportBrokerUrl();
-  const token = oidcToken || requestOidcToken();
+  const token = oidcToken || requestServiceToken();
   if (!url || !token) {
     return { ok: false, data: null as any, error: "Support broker is not configured for this deployment." };
   }
@@ -99,7 +104,7 @@ export async function consumeSupportRateLimit(
     op: "rate-limit",
     bucket,
     clientAddress: clientAddress(headers),
-  }, requestOidcToken(headers));
+  }, requestServiceToken(headers));
   const row = response.data;
   if (!response.ok || !row) {
     return {
