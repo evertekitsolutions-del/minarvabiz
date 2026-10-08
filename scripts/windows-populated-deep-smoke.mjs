@@ -512,7 +512,17 @@ async function main() {
     await assertMain(ws,"ATTENDANCE",["Attendance Grid","QA Tailor"]);
     const attendanceMonth=await evalIn(ws,`document.querySelector('input[aria-label="Attendance month"]').value`);
     const attendanceDate=`${attendanceMonth}-08`;
-    await setByAriaLabel(ws,`QA Tailor attendance ${attendanceDate}`,"Present");await sleep(300);
+    async function waitAttendanceIdle() {
+      for(let attempt=0;attempt<120;attempt++) {
+        const state=JSON.parse(await evalIn(ws,`JSON.stringify((()=>{const main=document.querySelector('[data-testid="app-content"]');const select=document.querySelector('select[aria-label="QA Tailor attendance ${attendanceDate}"]');return {ready:Boolean(select&&!select.disabled&&!document.querySelector('[role="dialog"]')),error:[...(main?.querySelectorAll('[role="alert"]')||[])].map(e=>e.innerText).join(" ")};})())`));
+        if(state.error)throw new Error(`Attendance UI error: ${state.error}`);
+        if(state.ready)return;
+        await sleep(250);
+      }
+      throw new Error("Attendance did not finish its SQLite save/restore");
+    }
+
+    await setByAriaLabel(ws,`QA Tailor attendance ${attendanceDate}`,"Present");await sleep(50);await waitAttendanceIdle();
     await click(ws,"ATTENDANCE_DETAILS",[`QA Tailor details ${attendanceDate}`]);
     await setField(ws,"Attendance details","Clock-in",`${attendanceDate}T09:00`);
     await setField(ws,"Attendance details","Clock-out",`${attendanceDate}T18:00`);
@@ -520,11 +530,14 @@ async function main() {
     await setField(ws,"Attendance details","Overtime minutes","45");
     await setField(ws,"Attendance details","Notes","QA SQLite attendance retained");
     await clickDialogButton(ws,"SAVE_ATTENDANCE","Attendance details","Save attendance");
+    await waitAttendanceIdle();
     await assertMain(ws,"ATTENDANCE_WORKED_TIME",["510m","45m"]);
-    await setByAriaLabel(ws,`QA Tailor attendance ${attendanceDate}`,"Half day");await sleep(800);
+    await setByAriaLabel(ws,`QA Tailor attendance ${attendanceDate}`,"Half day");await sleep(50);await waitAttendanceIdle();
+    const attendanceFlushed=await evalIn(ws,`(async()=>await window.__minarvaDesktopFlush())()`);
+    if(attendanceFlushed!==true)throw new Error("Attendance SQLite disk flush was not confirmed");
     await evalIn(ws,`(()=>{location.reload();return true})()`);await sleep(1200);await ready(ws);
     await click(ws,"ATTENDANCE_RESTORED",["attendance grid"]);
-    await setByAriaLabel(ws,"Attendance month",attendanceMonth);await sleep(300);
+    await setByAriaLabel(ws,"Attendance month",attendanceMonth);await sleep(50);await waitAttendanceIdle();
     await assertMain(ws,"ATTENDANCE_SQLITE_TOTALS",["QA Tailor","510m","45m"]);
     const restoredStatus=await evalIn(ws,`document.querySelector('select[aria-label="QA Tailor attendance ${attendanceDate}"]').value`);
     if(restoredStatus!=="half_day")throw new Error("Attendance status did not survive SQLite reload");

@@ -20,6 +20,7 @@ import { DesktopEntitlementMonitor } from "./components/DesktopEntitlementMonito
 import { DesktopProcurementPanel } from "./components/DesktopProcurementPanel";
 import { DesktopDayEndPanel } from "./components/DesktopDayEndPanel";
 import { DesktopAttendancePanel } from "./components/DesktopAttendancePanel";
+import { createPersistenceHandlers } from "./lib/attendance-persistence";
 import { buildProfessionalReportData } from "./lib/report-data";
 type CommercialLicenseState = {
 status: "unlicensed" | "active" | "grace" | "expired" | "invalid";
@@ -159,20 +160,7 @@ export function App() {
     setProfiles(selectedOrder ? ordersStore.listMeasurementProfiles(selectedOrder.customerId) : []);
     setModuleTick((v) => v + 1);
   }, [lowStockOnly, productQuery, productCategoryId, orderQuery, orderStatus, orderType, orderCustomerId, orderDateFrom, orderDateTo, orderDeliveryDateFrom, orderDeliveryDateTo, selectedOrder]);
-  const persistAndRefresh = React.useCallback(async () => {
-    refreshAll();
-    try { const persisted = await persistDomainToSqlite(); if (!persisted) scheduleAutoSave(250); }
-    catch { scheduleAutoSave(250); }
-  }, [refreshAll]);
-  const persistAttendanceAndRefresh = React.useCallback(async () => {
-    refreshAll();
-    try {
-      if (!await persistDomainToSqlite()) throw new Error("Attendance changes are not yet saved to SQLite. Keep the app open and retry.");
-    } catch (error) {
-      scheduleAutoSave(250);
-      throw error;
-    }
-  }, [refreshAll]);
+  const {persistAndRefresh,persistAttendanceAndRefresh} = React.useMemo(()=>createPersistenceHandlers(refreshAll,persistDomainToSqlite,scheduleAutoSave),[refreshAll]);
   React.useEffect(() => { let cancelled=false; (async()=>{ for(let i=0;i<50&&!window.minarvaDesktop;i++) await new Promise(r=>setTimeout(r,20)); if(!window.minarvaDesktop){if(!cancelled)setDbError("Electron bridge missing. Reinstall Minarva Biz desktop.");return;} const result=await bootstrapDesktopSqlite(); if(cancelled)return; if(!result.ok){setDbError(result.error||"SQLite failed to initialize");return;} const [state, license, deviceId] = await Promise.all([window.minarvaDesktop.getTrialState(), window.minarvaDesktop.getLicenseState(), window.minarvaDesktop.getDeviceId?.() ?? Promise.resolve("")]); if(cancelled)return; setTrialState(state); setCommercialLicense(license as CommercialLicenseState); setDeviceFingerprint(deviceId || ""); setDbReady(true); fetchDashboardData().then(setDash); })(); return()=>{cancelled=true;}; }, []);
   React.useEffect(() => {
     if (!dbReady) return;
