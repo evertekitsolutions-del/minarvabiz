@@ -478,7 +478,7 @@ export async function beginBrowserNamedAdminLogin(
 export async function beginBrowserAdminMfaEnrollment(
   pending: BrowserAdminPendingAuth | null,
 ): Promise<EnrollmentResult> {
-  if (!pending || pending.mode !== "enroll") {
+  if (!pending || (pending.mode !== "enroll" && pending.mode !== "challenge")) {
     return { ok: false, error: "Administrator MFA enrollment has expired. Sign in again." };
   }
 
