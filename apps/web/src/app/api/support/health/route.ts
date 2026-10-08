@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supportConfigurationStatus } from "@/lib/support-server";
+import { supportConfigurationStatus, supportServiceCredential } from "@/lib/support-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const status = await supportConfigurationStatus(process.env.MINARVA_SUPPORT_SERVICE_TOKEN || request.headers.get("x-vercel-oidc-token") || "");
+  const status = await supportConfigurationStatus(supportServiceCredential(request.headers));
   const ready =
     status.aiConfigured &&
     status.aiOperational &&
