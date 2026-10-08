@@ -32,7 +32,7 @@ CREATE OR REPLACE FUNCTION public.apply_staff_attendance_event(
  SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
- authorization RECORD;
+ attendance_auth RECORD;
  member public.staff_members;
  previous public.staff_attendance;
  receipt public.staff_attendance_event_receipts;
@@ -47,8 +47,8 @@ DECLARE
  target_overtime INTEGER := (p_record->>'overtimeMinutes')::integer;
  remote_json JSONB;
 BEGIN
- SELECT * INTO STRICT authorization FROM public.current_user_authorization();
- IF authorization.auth_role NOT IN ('super_admin','admin','manager') THEN
+ SELECT * INTO STRICT attendance_auth FROM public.current_user_authorization();
+ IF attendance_auth.auth_role NOT IN ('super_admin','admin','manager') THEN
   RAISE EXCEPTION 'Attendance permission denied' USING ERRCODE='42501';
  END IF;
  IF p_event_id IS NULL OR p_device_id IS NULL OR length(p_device_id) NOT BETWEEN 1 AND 200
@@ -66,25 +66,25 @@ BEGIN
  PERFORM pg_advisory_xact_lock(hashtextextended(p_event_id::text, 0));
  SELECT * INTO receipt FROM public.staff_attendance_event_receipts WHERE event_id=p_event_id;
  IF FOUND THEN
-  IF receipt.org_id <> authorization.auth_org_id OR receipt.request_json <> p_record
+  IF receipt.org_id <> attendance_auth.auth_org_id OR receipt.request_json <> p_record
     OR receipt.device_id <> p_device_id OR receipt.sequence <> p_sequence THEN
    RAISE EXCEPTION 'Attendance event identity conflict';
   END IF;
   RETURN jsonb_build_object('accepted',true,'replayed',true);
  END IF;
  SELECT * INTO member FROM public.staff_members
-  WHERE id=target_staff AND org_id=authorization.auth_org_id AND deleted_at IS NULL FOR SHARE;
+  WHERE id=target_staff AND org_id=attendance_auth.auth_org_id AND deleted_at IS NULL FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Staff is unavailable in this organization' USING ERRCODE='42501'; END IF;
  IF member.branch_id IS NOT NULL AND target_branch IS DISTINCT FROM member.branch_id THEN
   RAISE EXCEPTION 'Attendance branch must match the staff branch' USING ERRCODE='42501';
  END IF;
  IF target_branch IS NOT NULL THEN
-  PERFORM 1 FROM public.branches WHERE id=target_branch AND org_id=authorization.auth_org_id AND deleted_at IS NULL FOR SHARE;
+  PERFORM 1 FROM public.branches WHERE id=target_branch AND org_id=attendance_auth.auth_org_id AND deleted_at IS NULL FOR SHARE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Branch is unavailable in this organization' USING ERRCODE='42501'; END IF;
  END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(authorization.auth_org_id::text||target_staff::text||target_date::text, 0));
+ PERFORM pg_advisory_xact_lock(hashtextextended(attendance_auth.auth_org_id::text||target_staff::text||target_date::text, 0));
  SELECT * INTO previous FROM public.staff_attendance
-  WHERE org_id=authorization.auth_org_id AND staff_id=target_staff AND attendance_date=target_date FOR UPDATE;
+  WHERE org_id=attendance_auth.auth_org_id AND staff_id=target_staff AND attendance_date=target_date FOR UPDATE;
  IF FOUND THEN
   IF previous.id <> target_id OR target_version <> previous.version+1 THEN
    remote_json := jsonb_build_object('id',previous.id,'staffId',previous.staff_id,'date',previous.attendance_date,
@@ -97,18 +97,18 @@ BEGIN
   UPDATE public.staff_attendance SET status=p_record->>'status', clock_in=target_clock_in,
    clock_out=target_clock_out,break_minutes=target_break,overtime_minutes=target_overtime,
    notes=p_record->>'notes',branch_id=target_branch,version=target_version,updated_at=now()
-   WHERE id=target_id AND org_id=authorization.auth_org_id;
+   WHERE id=target_id AND org_id=attendance_auth.auth_org_id;
  ELSE
   IF target_version <> 1 THEN RETURN jsonb_build_object('accepted',false); END IF;
   INSERT INTO public.staff_attendance(id,org_id,staff_id,attendance_date,status,clock_in,clock_out,
    break_minutes,overtime_minutes,notes,branch_id,version)
-  VALUES(target_id,authorization.auth_org_id,target_staff,target_date,p_record->>'status',target_clock_in,
+  VALUES(target_id,attendance_auth.auth_org_id,target_staff,target_date,p_record->>'status',target_clock_in,
    target_clock_out,target_break,target_overtime,p_record->>'notes',target_branch,1);
  END IF;
  INSERT INTO public.staff_attendance_event_receipts(event_id,org_id,record_id,device_id,sequence,request_json)
- VALUES(p_event_id,authorization.auth_org_id,target_id,p_device_id,p_sequence,p_record);
+ VALUES(p_event_id,attendance_auth.auth_org_id,target_id,p_device_id,p_sequence,p_record);
  INSERT INTO public.audit_logs(org_id,user_id,action,table_name,record_id,old_value,new_value)
- VALUES(authorization.auth_org_id,authorization.auth_user_id,
+ VALUES(attendance_auth.auth_org_id,attendance_auth.auth_user_id,
   CASE WHEN previous.id IS NULL THEN 'attendance.create' ELSE 'attendance.update' END,
   'staff_attendance',target_id,CASE WHEN previous.id IS NULL THEN NULL ELSE to_jsonb(previous) END,p_record);
  RETURN jsonb_build_object('accepted',true,'replayed',false);
