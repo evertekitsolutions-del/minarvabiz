@@ -35,6 +35,8 @@ jobs:
       - name: Verify cross-app security header baseline
         run: node --experimental-strip-types scripts/security-header-baseline-smoke.mjs
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
+      - name: Verify provider-neutral web hosting contract
+        run: node scripts/provider-neutral-web-hosting-smoke.mjs
       - name: Verify production build rejects missing Supabase env
         shell: bash
         run: |
