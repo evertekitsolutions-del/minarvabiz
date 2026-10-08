@@ -9,6 +9,7 @@ const page=read("apps/web/src/app/(app)/attendance/page.tsx");
 const migration=read("supabase/migrations/20261008_attendance_grid.sql");
 const persistence=read("packages/business-logic/src/persistence.ts");
 const desktop=read("apps/desktop/src/App.tsx");
+const desktopPanel=read("apps/desktop/src/components/DesktopAttendancePanel.tsx");
 
 assert.match(types,/StaffAttendanceRecord/);
 assert.match(types,/present.*absent.*half_day.*leave.*holiday/);
@@ -21,7 +22,9 @@ assert.match(store,/attendance:\[\.\.\.attendance\]/);
 assert.match(store,/input\.attendance/);
 assert.match(nav,/Attendance Grid/);
 assert.match(desktop,/view==="attendance"/);
-assert.match(desktop,/AttendanceGrid/);
+assert.match(desktop,/DesktopAttendancePanel/);
+assert.match(desktopPanel,/AttendanceGrid/);
+assert.match(desktopPanel,/setAttendance/);
 assert.match(persistence,/SNAPSHOT_VERSION = 13/);
 assert.match(persistence,/attendance: phase6\.attendance/);
 assert.match(persistence,/attendance: snap\.attendance/);
