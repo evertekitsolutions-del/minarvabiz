@@ -46,6 +46,7 @@ assert.match(server, /runtime-config/);
 assert.match(server, /ai-gateway\.vercel\.sh\/v1\/responses/);
 assert.match(server, /api\.openai\.com\/v1\/responses/);
 assert.match(server, /input_image/);
+assert.match(server, /MINARVA_SUPPORT_SERVICE_TOKEN/);
 assert.match(server, /VERCEL_OIDC_TOKEN/);
 assert.match(server, /OPENAI_API_KEY/);
 assert.match(server, /MINARVA_SUPPORT_AI_MODEL/);
@@ -67,6 +68,9 @@ assert.doesNotMatch(server, /SUPABASE_SERVICE_ROLE_KEY/);
 assert.match(server, /Never ask for or expose license tokens/);
 assert.equal(server.includes("NEXT_PUBLIC_OPENAI"), false);
 
+assert.match(broker, /MINARVA_SUPPORT_SERVICE_TOKEN/);
+assert.match(broker, /portable-service-token/);
+assert.match(broker, /constantTimeEqual/);
 assert.match(broker, /createRemoteJWKSet/);
 assert.match(broker, /jwtVerify/);
 assert.match(broker, /team_I74uWi3aeWhymbb4apEZ3nnq/);
@@ -143,6 +147,9 @@ assert.match(docs, /Cloudflare Workers AI/i);
 
 assert.match(freeAiWorker, /@cf\/zai-org\/glm-4\.7-flash/);
 assert.match(freeAiWorker, /@cf\/google\/gemma-4-26b-a4b-it/);
+assert.match(freeAiWorker, /MINARVA_SUPPORT_SERVICE_TOKEN/);
+assert.match(freeAiWorker, /portable-service-token/);
+assert.match(freeAiWorker, /constantTimeEqual/);
 assert.match(freeAiWorker, /RSASSA-PKCS1-v1_5/);
 assert.match(freeAiWorker, /EXPECTED_SUBJECT/);
 assert.match(freeAiWorker, /PROJECT_ID/);
