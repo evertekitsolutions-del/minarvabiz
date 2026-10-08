@@ -10,8 +10,12 @@ import {
   type BrowserAdminPendingAuth,
   type BrowserAdminMfaFactor,
 } from "./browser-admin-auth.ts";
+import { readBrowserAdminSession } from "./browser-admin-session";
 
-export function MfaRotationCard({ accessToken, userId }: { accessToken: string; userId: string }) {
+export function MfaRotationCard() {
+  const session = readBrowserAdminSession();
+  const accessToken = session?.accessToken || "";
+  const userId = session?.userId || "";
   const [factors, setFactors] = React.useState<BrowserAdminMfaFactor[]>([]);
   const [pending, setPending] = React.useState<BrowserAdminPendingAuth | null>(null);
   const [secret, setSecret] = React.useState("");
@@ -32,7 +36,7 @@ export function MfaRotationCard({ accessToken, userId }: { accessToken: string; 
   async function enrollReplacement() {
     setBusy(true); setMessage(null);
     const result = await beginBrowserAdminMfaEnrollment({
-      config: { supabaseUrl: "", supabasePublishableKey: "", passwordResetUrl: "" },
+      config: { supabaseUrl: session?.supabaseUrl || "", supabasePublishableKey: session?.supabasePublishableKey || "", passwordResetUrl: "https://invalid.local/reset-password" },
       accessToken, userId, mode: "challenge",
     });
     setBusy(false);
@@ -60,6 +64,8 @@ export function MfaRotationCard({ accessToken, userId }: { accessToken: string; 
     setBusy(false); setMessage(result.ok ? "Old authenticator removed." : result.error);
     if (result.ok) await refresh();
   }
+
+  if (!session) return null;
 
   return <Card>
     <CardHeader><CardTitle>Authenticator security</CardTitle></CardHeader>
