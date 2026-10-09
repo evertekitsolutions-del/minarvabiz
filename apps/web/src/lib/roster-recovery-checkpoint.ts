@@ -76,7 +76,16 @@ export async function checkpointUnconfirmedRosterEvents(
   const pendingIds = new Set(pending.map(e=>e.id));
   const resolved = new Set(resolvedEventIds);
   for (const old of previous) {
-    if (pendingIds.has(old.id)) continue;
+    if (pendingIds.has(old.id)) {
+      const same=history.find(e=>e.id===old.id);
+      if (!same || same.aggregateType!==old.aggregateType || same.aggregateId!==old.aggregateId ||
+          same.eventType!==old.eventType || same.deviceId!==old.deviceId ||
+          same.sequence!==old.sequence ||
+          JSON.stringify(same.payload)!==JSON.stringify(old.payload)) {
+        throw new Error("Immutable encrypted roster event differs from memory; reviewed recovery is required");
+      }
+      continue;
+    }
     const evidence = history.find(e=>e.id===old.id);
     if (!resolved.has(old.id) || !evidence ||
         (evidence.status!=="synced"&&evidence.status!=="discarded")) {
