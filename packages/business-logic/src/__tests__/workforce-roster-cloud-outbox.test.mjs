@@ -57,6 +57,10 @@ assert.throws(()=>phase.flushWorkforceRosterOutbox(),/Permission denied: staff.m
 
 /** Revoking the user session during an in-flight write must fail closed. */
 permissions.setCurrentRole("admin");
+// Drain previously failed regression fixtures with an explicit authorized retry.
+remote.registerRemoteWriter({upsertRosterEvent:async()=>{}});
+assert.equal(await phase.flushWorkforceRosterOutbox(),2);
+remote.registerRemoteWriter(null);
 const rotating=phase.createShiftRule({name:"Stale response must not confirm",startTime:"06:00",endTime:"09:00",unpaidBreakMinutes:0,branchId:null,active:true});
 phase.assignRosterSlot({staffId:"staff-1",workDate:"2026-10-11",shiftRuleId:rotating.id,branchId:null,status:"scheduled"});
 const revocationEvents=rosterEvents().filter(e=>e.status==="pending");
