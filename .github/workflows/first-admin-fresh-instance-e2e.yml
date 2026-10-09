@@ -17,6 +17,7 @@ on:
       - "apps/license-admin/package.json"
       - "scripts/replay-supabase-migrations-fresh.mjs"
       - "scripts/attendance-authority-e2e.*"
+      - "scripts/hr-roster-authority-e2e.*"
       - "supabase/MIGRATION_ORDER.txt"
       - "supabase/migrations/**"
   workflow_dispatch:
