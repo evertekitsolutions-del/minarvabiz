@@ -15,6 +15,7 @@ export default function RosterPage() {
   const [ready, setReady] = React.useState(false);
   const [problem, setProblem] = React.useState("");
   const [syncProblem, setSyncProblem] = React.useState("");
+  const [resolutionMessage, setResolutionMessage] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [review, setReview] = React.useState<
     Awaited<ReturnType<typeof phase6Store.reviewWorkforceRosterConflict>> | null
@@ -32,7 +33,7 @@ export default function RosterPage() {
       const detail = (event as CustomEvent<{ok?:boolean; message?:string}>).detail;
       if (detail?.ok) {
         setReady(getRuntimeMode() === "demo" || isRosterHydrated());
-        setProblem(""); setSyncProblem(""); setReview(null); redraw();
+        setProblem(""); setSyncProblem(""); setReview(null); setResolutionMessage(""); redraw();
       } else {
         setReady(false); setReview(null);
         setProblem(detail?.message || "Roster cloud hydration failed");
@@ -67,7 +68,7 @@ export default function RosterPage() {
       (e.status === "pending" || e.status === "failed"))) {
       throw new Error("Review or retry the existing unconfirmed roster events first");
     }
-    inFlight.current = true; setBusy(true); setSyncProblem(""); setReview(null);
+    inFlight.current = true; setBusy(true); setSyncProblem(""); setResolutionMessage(""); setReview(null);
     try {
       action();
       redraw(); // Make the unconfirmed local version visibly pending immediately.
@@ -84,7 +85,7 @@ export default function RosterPage() {
     if (!ready || !isRosterHydrated() || !can("staff.manage") ||
         !getRemoteWriter()?.upsertRosterEvent || inFlight.current) return;
     if (!window.confirm("Retry the original unconfirmed roster events in order? No conflicting cloud revision will be overwritten.")) return;
-    inFlight.current = true; setBusy(true); setSyncProblem(""); setReview(null);
+    inFlight.current = true; setBusy(true); setSyncProblem(""); setResolutionMessage(""); setReview(null);
     try {
       await phase6Store.flushWorkforceRosterOutbox();
     } catch (error) {
@@ -96,7 +97,7 @@ export default function RosterPage() {
 
   async function reviewPendingEvent(eventId: string) {
     if (!isRosterHydrated() || !can("staff.manage") || inFlight.current) return;
-    inFlight.current = true; setBusy(true); setSyncProblem(""); setReview(null);
+    inFlight.current = true; setBusy(true); setSyncProblem(""); setResolutionMessage(""); setReview(null);
     try {
       const compared = await phase6Store.reviewWorkforceRosterConflict(eventId);
       setReview(compared);
@@ -104,6 +105,24 @@ export default function RosterPage() {
       setSyncProblem(error instanceof Error ? error.message : String(error));
     } finally {
       inFlight.current = false; setBusy(false);
+    }
+  }
+
+  async function acceptCloudVersion() {
+    if (!review || !isRosterHydrated() || !can("staff.manage") || inFlight.current) return;
+    const warning = review.remote
+      ? "Keep the current Cloud version and discard this one unconfirmed local change? The original event and audit history are retained. Other dependent events are blocked."
+      : "No Cloud record exists. Discard this unconfirmed local creation? The original event history is retained. This cannot be undone.";
+    if (!window.confirm(warning)) return;
+    inFlight.current = true; setBusy(true); setSyncProblem(""); setResolutionMessage("");
+    try {
+      await phase6Store.keepCloudWorkforceRosterConflict(review);
+      setReview(null);
+      setResolutionMessage("Cloud version retained after reviewed conflict resolution. The original local event remains in history as discarded.");
+    } catch (error) {
+      setSyncProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      inFlight.current = false; setBusy(false); redraw();
     }
   }
 
@@ -140,7 +159,14 @@ export default function RosterPage() {
         <div><h4>Unconfirmed local version</h4><pre className="max-h-64 overflow-auto text-xs">{JSON.stringify(review.local,null,2)}</pre></div>
         <div><h4>Current authorized Cloud version</h4><pre className="max-h-64 overflow-auto text-xs">{review.remote ? JSON.stringify(review.remote,null,2) : "No remote record; creation may not have reached the server."}</pre></div>
       </div>
+      <button className="mt-3 rounded border px-3 py-2" type="button"
+        disabled={busy || unsent.length !== 1 || !isRosterHydrated()}
+        onClick={() => void acceptCloudVersion()}>
+        {review.remote ? "Keep current Cloud version" : "Discard unsynced local creation"}
+      </button>
+      <p className="mt-2 text-sm">Applying the local correction over Cloud remains disabled until an audited rebase workflow is verified.</p>
     </section>}
+    {resolutionMessage && <p role="status" className="rounded border p-3 text-sm">{resolutionMessage}</p>}
     {syncProblem && <p role="alert" className="rounded border border-rose-300 p-3 text-sm">{syncProblem}</p>}
     <p role="status" className="text-sm text-slate-600">
       {writerReady

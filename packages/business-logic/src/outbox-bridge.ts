@@ -91,3 +91,17 @@ export function discardAttendanceOutbox(aggregateId:string){
   for(const event of queue)if(event.aggregateType==="staff_attendance"&&event.aggregateId===aggregateId&&(event.status==="pending"||event.status==="failed"))event.status="discarded";
   touchPersistence();
 }
+
+/**
+ * Explicit human-reviewed workforce conflict resolution only.
+ * Retain immutable event payload and diagnostics for audit/backup.
+ * Never mark a rejected roster event synced or delete its history.
+ */
+export function discardWorkforceRosterConflictEvent(eventId: string): void {
+  const event = queue.find(e => e.id === eventId &&
+    (e.aggregateType === "staff_shift_rules" || e.aggregateType === "staff_roster_slots") &&
+    (e.status === "failed" || e.status === "pending"));
+  if (!event) throw new Error("Unconfirmed roster event unavailable for reviewed discard");
+  event.status = "discarded";
+  touchPersistence();
+}
