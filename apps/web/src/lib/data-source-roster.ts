@@ -103,8 +103,29 @@ export async function loadCloudRoster(cfg: Config): Promise<{shiftRules: ShiftRu
  * This does not mark local events as synced; the domain flush does that only
  * after the exact event has been acknowledged.
  */
-export function createRosterRemoteWriter(cfg: Config): Pick<RemoteWriter, "upsertRosterEvent"> {
+/** An exact ID filter only: never interpolate arbitrary user text into PostgREST queries. */
+async function readAuthorizedRosterRecord<T extends ShiftRule | RosterSlot>(
+  cfg: Config, kind: "shift" | "roster", id: string,
+): Promise<T | null> {
+  if (!cfg.accessToken) throw new Error("Authenticated roster conflict review requires a valid session");
+  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) {
+    throw new Error("Invalid roster conflict record ID");
+  }
+  const table = kind === "shift" ? "staff_shift_rules" : "staff_roster_slots";
+  const result = await pgSelect<Row>(cfg, table, `select=*&id=eq.${id}&limit=1`);
+  if (result.error) throw new Error("Authorized roster conflict read failed: " + result.error.message);
+  if (!Array.isArray(result.data) || result.data.length > 1) throw new Error("Invalid roster conflict read response");
+  const row = result.data[0];
+  if (!row) return null; // An uncommitted creation has no remote state to compare.
+  const parsed = kind === "shift" ? mapCloudShiftRule(row) : mapCloudRosterSlot(row);
+  if (parsed.id !== id) throw new Error("Remote roster identity mismatch");
+  return parsed as T;
+}
+
+export function createRosterRemoteWriter(cfg: Config): Pick<RemoteWriter, "upsertRosterEvent" | "getRosterShift" | "getRosterSlot"> {
   return {
+    getRosterShift: id => readAuthorizedRosterRecord<ShiftRule>(cfg, "shift", id),
+    getRosterSlot: id => readAuthorizedRosterRecord<RosterSlot>(cfg, "roster", id),
     upsertRosterEvent: async (event) => {
       if (!cfg.accessToken) throw new Error("Authenticated roster write requires a valid session");
       if (!event || (event.aggregateType !== "staff_shift_rules" &&
