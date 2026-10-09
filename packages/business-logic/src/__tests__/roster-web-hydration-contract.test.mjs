@@ -30,7 +30,7 @@ assert.match(page,/phase6Store\.assignRosterSlot\(input, policy\)/,"Slot writes 
 assert.match(page,/phase6Store\.updateShiftRule\(id, input\)/,"Shift writes use audited domain");
 assert.match(page,/beforeunload/,"Pending browser events need unload protection");
 assert.match(page,/Retry original events/,"Explicit replay keeps original immutable event identity");
-assert.match(page,/reviewWorkforceRosterConflict\\(eventId\\)/,"Review must use the permission-checked shared domain");
+assert.match(page,/reviewWorkforceRosterConflict\(eventId\)/,"Review must use the permission-checked shared domain");
 assert.match(page,/Review local vs Cloud/,"Web shows an explicit comparison affordance");
 assert.match(page,/Read-only tenant-scoped comparison/,"Conflict review must not claim a resolution");
 assert.match(code,/getRosterShift:/,"Cloud reader must be registered on authenticated writer");
