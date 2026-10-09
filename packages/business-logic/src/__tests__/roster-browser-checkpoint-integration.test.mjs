@@ -181,8 +181,8 @@ currentUser=user;
 assert.deepEqual(sealed.get(key),oldVault);
 assert.equal(writes.length,writesBeforeReview,"No Cloud comparison may send or save an event");
 
-assert.match(page,/Compare saved changes with Cloud \\(read only\\)/);
-assert.match(page,/compareSealedRosterCheckpointWithCloud\\(\\)/);
+assert.match(page,/Compare saved changes with Cloud \(read only\)/);
+assert.match(page,/compareSealedRosterCheckpointWithCloud\(\)/);
 assert.match(page,/No events were imported, discarded, sent or acknowledged/);
 
 console.log("HR-004B Web integration: RPC-authorized scope, prewrite, acknowledgement, revoked session and crash quarantine PASS");
