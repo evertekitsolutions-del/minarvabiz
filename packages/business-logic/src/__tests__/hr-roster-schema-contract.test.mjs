@@ -3,7 +3,11 @@ import fs from "node:fs";
 
 const sql=fs.readFileSync("supabase/migrations/20261009_hr_roster_schema_authority.sql","utf8");
 const order=fs.readFileSync("supabase/MIGRATION_ORDER.txt","utf8").trim().split(/\r?\n/).filter(Boolean);
-assert.equal(order.at(-1),"20261009_hr_roster_schema_authority.sql","Apply roster schema after attendance and its foreign-key indexes");
+const schemaIndex=order.indexOf("20261009_hr_roster_schema_authority.sql");
+const attendanceIndex=order.indexOf("20261009_attendance_foreign_key_indexes.sql");
+const eventsIndex=order.indexOf("20261009_hr_roster_event_authority.sql");
+assert.ok(schemaIndex>attendanceIndex,"Apply roster schema after attendance and its foreign-key indexes");
+assert.ok(eventsIndex===-1||eventsIndex>schemaIndex,"Roster event RPC must follow its schema");
 assert.match(sql,/CREATE TABLE IF NOT EXISTS public\.staff_shift_rules/);
 assert.match(sql,/CREATE TABLE IF NOT EXISTS public\.staff_roster_slots/);
 assert.match(sql,/CONSTRAINT roster_shift_break_valid CHECK/);
