@@ -91,7 +91,7 @@ assert.deepEqual(schedule.entries.map(s => s.workDate), [
 ], "Weekly recurrence follows ISO weekdays and includes both date boundaries");
 assert.equal(schedule.entries.every(s => s.version === 1 && s.branchId === "branch-1"), true);
 assert.equal(recur().entries.length, 6, "Planning never mutates the source roster");
-const weeklyConflict = recur({ slots: [first] });
+const weeklyConflict = recur({ slots: [{ ...first, shiftRuleId: "day" }] });
 denied(weeklyConflict, /2026-10-09: Shift overlaps/);
 assert.equal("entries" in weeklyConflict, false, "Conflicting batches are never partially approved");
 denied(recur({ weekdays: [0, 8] }), /ISO weekdays/);
