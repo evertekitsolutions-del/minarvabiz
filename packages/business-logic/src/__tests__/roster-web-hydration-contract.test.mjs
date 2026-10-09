@@ -66,7 +66,7 @@ failTable="staff_roster_slots";
 await assert.rejects(()=>runtime.loadCloudRoster({accessToken:"authorized"}),/RLS denied/);
 
 
-assert.match(source,/createRosterRemoteWriter\\(cfg\\)/,"Hydration must register only the authenticated roster writer");
+assert.ok(source.includes("createRosterRemoteWriter(cfg)"),"Hydration must register the authenticated roster writer");
 assert.match(code,/createSupabaseCloudAdapter/,"Workforce cloud writes reuse the existing atomic adapter");
 assert.match(code,/Roster RPC did not acknowledge the original event ID/,"Missing acknowledgements are errors");
 console.log("HR-004 authenticated Web roster read + atomic writer registration contract PASS");
