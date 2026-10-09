@@ -72,6 +72,25 @@ export function RosterPlanner({ staff, shifts, slots, branches, canEdit, onSaveS
       setEditingShift(null); setName("");
     }, "Shift template saved and queued for durable persistence");
   }
+
+  /** An audited soft lifecycle action: never delete historical shift templates. */
+  async function toggleShiftActive(shift: ShiftRule) {
+    if (!canEdit || busy) return;
+    const nextActive = !shift.active;
+    const action = nextActive ? "reactivate" : "deactivate";
+    const message = nextActive
+      ? `Reactivate "${shift.name}" for future assignments? Historical rosters will remain unchanged.`
+      : `Deactivate "${shift.name}"? New assignments will be blocked, but existing rosters and audit history will be retained.`;
+    if (!window.confirm(message)) return;
+    await run(() => onSaveShift({
+      name: shift.name,
+      startTime: shift.startTime,
+      endTime: shift.endTime,
+      unpaidBreakMinutes: shift.unpaidBreakMinutes,
+      branchId: shift.branchId,
+      active: nextActive,
+    }, shift.id), `Shift template ${action}d; existing roster history retained.`);
+  }
   async function saveSlot(event: React.FormEvent) {
     event.preventDefault(); if (!canEdit || busy) return;
     await run(async () => {
@@ -134,7 +153,7 @@ export function RosterPlanner({ staff, shifts, slots, branches, canEdit, onSaveS
       <div className="flex flex-wrap gap-2"><Button disabled={!canEdit || busy} type="submit">{editingShift ? "Save template correction" : "Add shift template"}</Button>
         {editingShift && <Button type="button" variant="outline" onClick={() => { setEditingShift(null); setName(""); }}>Cancel editing</Button>}</div>
       {shifts.length > 0 && <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-2">Template</th><th className="p-2">Hours</th><th className="p-2">Break</th><th className="p-2">Branch</th><th className="p-2">Revision</th><th className="p-2">Actions</th></tr></thead><tbody>
-        {shifts.map(s => <tr key={s.id} className="border-t"><td className="p-2">{s.name}{!s.active ? " (inactive)" : ""}</td><td className="p-2">{s.startTime}–{s.endTime}{s.endTime <= s.startTime ? " (+1 day)" : ""}</td><td className="p-2">{s.unpaidBreakMinutes} min</td><td className="p-2">{branchLabel(s.branchId)}</td><td className="p-2">{s.version ?? 1}</td><td className="p-2"><Button size="sm" variant="outline" type="button" disabled={!canEdit || busy} onClick={() => { clearFeedback(); setEditingShift(s.id); setName(s.name); setStartTime(s.startTime); setEndTime(s.endTime); setBreakMinutes(String(s.unpaidBreakMinutes)); setTemplateBranchId(s.branchId ?? ""); }}>Edit</Button></td></tr>)}
+        {shifts.map(s => <tr key={s.id} className="border-t"><td className="p-2">{s.name}{!s.active ? " (inactive)" : ""}</td><td className="p-2">{s.startTime}–{s.endTime}{s.endTime <= s.startTime ? " (+1 day)" : ""}</td><td className="p-2">{s.unpaidBreakMinutes} min</td><td className="p-2">{branchLabel(s.branchId)}</td><td className="p-2">{s.version ?? 1}</td><td className="p-2"><Button size="sm" variant="outline" type="button" disabled={!canEdit || busy} onClick={() => { clearFeedback(); setEditingShift(s.id); setName(s.name); setStartTime(s.startTime); setEndTime(s.endTime); setBreakMinutes(String(s.unpaidBreakMinutes)); setTemplateBranchId(s.branchId ?? ""); }}>Edit</Button>{" "}<Button size="sm" variant="outline" type="button" disabled={!canEdit || busy} aria-label={`${s.active ? "Deactivate" : "Reactivate"} shift ${s.name}`} onClick={() => void toggleShiftActive(s)}>{s.active ? "Deactivate" : "Reactivate"}</Button></td></tr>)}
       </tbody></table></div>}
     </form>
     <div className="space-y-3 rounded-xl border p-4">
