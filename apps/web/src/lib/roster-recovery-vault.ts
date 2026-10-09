@@ -76,8 +76,8 @@ function safePayload(kind: RosterRecoveryEvent["aggregateType"], unknownPayload:
   }
   if (kind === "staff_shift_rules") {
     if (typeof payload.name !== "string" || !payload.name.trim() ||
-        typeof payload.startTime !== "string" || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(payload.startTime) ||
-        typeof payload.endTime !== "string" || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(payload.endTime) ||
+        typeof payload.startTime !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(payload.startTime) ||
+        typeof payload.endTime !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(payload.endTime) ||
         typeof payload.active !== "boolean" ||
         !Number.isSafeInteger(payload.unpaidBreakMinutes) ||
         (payload.unpaidBreakMinutes as number) < 0 || (payload.unpaidBreakMinutes as number) > 1440) {
@@ -85,7 +85,7 @@ function safePayload(kind: RosterRecoveryEvent["aggregateType"], unknownPayload:
     }
   } else if (typeof payload.staffId !== "string" || !payload.staffId ||
              typeof payload.shiftRuleId !== "string" || !payload.shiftRuleId ||
-             typeof payload.workDate !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(payload.workDate) ||
+             typeof payload.workDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(payload.workDate) ||
              !["scheduled","cancelled"].includes(String(payload.status))) {
     throw new Error("Invalid roster slot recovery payload");
   }
