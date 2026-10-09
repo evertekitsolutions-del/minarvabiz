@@ -9,10 +9,14 @@ import { generateId, nowISO } from "@minarvabiz/utils";
 import { calculateIncentive } from "./incentives";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
+import * as phase9Store from "./phase9-store";
+import { checkRosterSlot, rosterRange, validateShiftRule, type ShiftRule, type RosterSlot, type RosterPolicy } from "./workforce-roster";
 
 const staff:StaffMember[]=[{id:"staff-1",name:"Ravi Kumar",phone:"9876511111",role:"tailor",salary:18000,status:"active",joiningDate:"2024-01-15",createdAt:nowISO(),updatedAt:nowISO()},{id:"staff-2",name:"Meena Devi",phone:"9876522222",role:"tailor",salary:16000,status:"active",joiningDate:"2024-03-01",createdAt:nowISO(),updatedAt:nowISO()},{id:"staff-3",name:"Suresh Nair",phone:"9876533333",role:"cashier",salary:14000,status:"active",joiningDate:"2023-11-10",createdAt:nowISO(),updatedAt:nowISO()}];
 const assignments:StaffAssignment[]=[];
 const attendance:StaffAttendanceRecord[]=[];
+const shiftRules: ShiftRule[] = [];
+const rosterSlots: RosterSlot[] = [];
 const incentiveRules:IncentiveRuleRecord[]=[{id:"rule-1",name:"Ladies tailoring fixed",serviceType:"ladies_tailoring",type:"fixed",value:100,isActive:true,createdAt:nowISO(),updatedAt:nowISO()},{id:"rule-2",name:"Wedding dress 5%",serviceType:"wedding_dress",type:"percentage",value:5,isActive:true,createdAt:nowISO(),updatedAt:nowISO()},{id:"rule-3",name:"T-shirt printing fixed",serviceType:"tshirt_printing",type:"fixed",value:20,isActive:true,createdAt:nowISO(),updatedAt:nowISO()}];
 const payouts:StaffIncentivePayout[]=[];
 const notifications:AppNotification[]=[{id:"n-1",kind:"low_stock",title:"Low stock alert",body:"Cotton Thread (White) is below minimum (5 left)",href:"/inventory",read:false,createdAt:nowISO()},{id:"n-2",kind:"order_ready",title:"Order ready",body:"An order is ready for delivery",href:"/services",read:false,createdAt:nowISO()}];
@@ -24,7 +28,7 @@ export function updateStaff(id:UUID,patch:Partial<StaffMember>):StaffMember|null
 export function archiveStaff(id:UUID,reason:string):{staff:StaffMember|null;error?:string}{assertPermission("staff.manage");const m=getStaff(id);if(!m)return{staff:null,error:"Staff not found"};const archiveReason=reason.trim();if(archiveReason.length<3)return{staff:null,error:"Archive reason is required"};const active=assignments.some(a=>a.staffId===id&&a.status!=="completed"&&a.status!=="cancelled");if(active)return{staff:null,error:"Complete or cancel active staff assignments before archiving"};const before={...m};m.status="inactive";m.deletedAt=nowISO();m.updatedAt=m.deletedAt;enqueueOutbox("staff_members",m.id,"update",m);auditAction("staff.archive","staff_members",m.id,before,{...m,archiveReason});touchPersistence();return{staff:m};}
 export function listArchivedStaff():StaffMember[]{return staff.filter(member=>Boolean(member.deletedAt)).sort((a,b)=>(b.deletedAt??"").localeCompare(a.deletedAt??""));}
 export function restoreArchivedStaff(id:UUID):{staff:StaffMember|null;error?:string}{assertPermission("staff.manage");const m=staff.find(member=>member.id===id&&Boolean(member.deletedAt));if(!m)return{staff:null,error:"Staff member is not in Trash"};const before={...m};m.deletedAt=null;m.status="active";m.updatedAt=nowISO();enqueueOutbox("staff_members",m.id,"update",{...m});auditAction("staff.restore","staff_members",m.id,before,{...m});touchPersistence();return{staff:m};}
-export function purgeArchivedStaff(id:UUID):{purged:boolean;error?:string}{assertPermission("staff.manage");const index=staff.findIndex(member=>member.id===id&&Boolean(member.deletedAt));if(index<0)return{purged:false,error:"Staff member is not in Trash"};const [member]=staff.splice(index,1);const purgedAt=nowISO();enqueueOutbox("staff_members",member.id,"delete",{id:member.id,deletedAt:member.deletedAt??null,purgedAt});auditAction("staff.purge","staff_members",member.id,{...member},{id:member.id,purgedAt});touchPersistence();return{purged:true};}
+export function purgeArchivedStaff(id:UUID):{purged:boolean;error?:string}{assertPermission("staff.manage");if(rosterSlots.some(slot=>slot.staffId===id))return{purged:false,error:"Cannot purge staff with roster history; retain archived record for audit"};const index=staff.findIndex(member=>member.id===id&&Boolean(member.deletedAt));if(index<0)return{purged:false,error:"Staff member is not in Trash"};const [member]=staff.splice(index,1);const purgedAt=nowISO();enqueueOutbox("staff_members",member.id,"delete",{id:member.id,deletedAt:member.deletedAt??null,purgedAt});auditAction("staff.purge","staff_members",member.id,{...member},{id:member.id,purgedAt});touchPersistence();return{purged:true};}
 
 export function listAttendance(opts?:{staffId?:UUID;from?:string;to?:string}):StaffAttendanceRecord[]{assertPermission("staff.manage");let list=attendance.map(r=>({...r}));if(opts?.staffId)list=list.filter(r=>r.staffId===opts.staffId);if(opts?.from)list=list.filter(r=>r.date>=opts.from!);if(opts?.to)list=list.filter(r=>r.date<=opts.to!);return list.sort((a,b)=>b.date.localeCompare(a.date)||a.staffId.localeCompare(b.staffId));}
 export type AttendanceInput = {staffId:UUID;date:string;status:AttendanceStatus;clockIn?:string|null;clockOut?:string|null;breakMinutes?:number;overtimeMinutes?:number;notes?:string|null;branchId?:UUID|null};
@@ -127,10 +131,110 @@ export function upsertIncentiveRule(input:{id?:UUID;name:string;serviceType?:str
 export function listIncentivePayouts(staffId?:UUID){let list=[...payouts];if(staffId)list=list.filter(p=>p.staffId===staffId);return list.sort((a,b)=>b.calculatedAt.localeCompare(a.calculatedAt));}
 export function markIncentivePaid(id:UUID){assertPermission("staff.manage");const p=payouts.find(x=>x.id===id);if(!p)return null;p.paid=true;p.paidAt=nowISO();enqueueOutbox("staff_incentive_payouts",p.id,"update",p);touchPersistence();return p;}
 
-/** Restore Phase 6 state from a persisted snapshot without emitting outbox events. */
-export function exportPhase6State(){return{staff:[...staff],attendance:[...attendance],assignments:[...assignments],incentiveRules:[...incentiveRules],payouts:[...payouts],notifications:[...notifications]};}
 
-export function hydratePhase6(input:{staff?:StaffMember[];attendance?:StaffAttendanceRecord[];assignments?:StaffAssignment[];incentiveRules?:IncentiveRuleRecord[];payouts?:StaffIncentivePayout[];notifications?:AppNotification[]}):void{
+/** HR-004 roster domain, independent of the attendance ledger. All mutations
+ * require staff.manage and emit audit + outbox, including cancellations. */
+export function listShiftRules(includeInactive = false): ShiftRule[] {
+  assertPermission("staff.manage");
+  return shiftRules.filter(rule => includeInactive || rule.active).map(rule => ({ ...rule }));
+}
+export function listRosterSlots(from?: string, to?: string, staffId?: string): RosterSlot[] {
+  assertPermission("staff.manage");
+  if (from || to) {
+    if (!from || !to) throw new Error("Roster listing needs both range boundaries");
+    return rosterRange(rosterSlots, from, to, staffId);
+  }
+  return rosterSlots.filter(slot => !staffId || slot.staffId === staffId).map(slot => ({ ...slot }));
+}
+export function createShiftRule(input: Omit<ShiftRule, "id">): ShiftRule {
+  assertPermission("staff.manage");
+  const next: ShiftRule = { ...input, id: generateId(), name: input.name.trim() };
+  validateShiftRule(next);
+  if (next.branchId && !phase9Store.listBranches().some(branch => branch.id === next.branchId)) throw new Error("Shift branch does not exist");
+  if (shiftRules.some(rule => rule.branchId === next.branchId && rule.name.toLowerCase() === next.name.toLowerCase())) throw new Error("Shift name is already used in this branch");
+  shiftRules.push(next);
+  enqueueOutbox("staff_shift_rules", next.id, "insert", { ...next });
+  auditAction("roster.shift.create", "staff_shift_rules", next.id, null, { ...next });
+  touchPersistence();
+  return { ...next };
+}
+export function updateShiftRule(id: UUID, changes: Partial<Omit<ShiftRule, "id">>): ShiftRule {
+  assertPermission("staff.manage");
+  const old = shiftRules.find(rule => rule.id === id);
+  if (!old) throw new Error("Shift template not found");
+  const next: ShiftRule = { ...old, ...changes, id: old.id, name: (changes.name ?? old.name).trim() };
+  validateShiftRule(next);
+  if (next.branchId && !phase9Store.listBranches().some(branch => branch.id === next.branchId)) throw new Error("Shift branch does not exist");
+  if (shiftRules.some(rule => rule.id !== id && rule.branchId === next.branchId && rule.name.toLowerCase() === next.name.toLowerCase())) throw new Error("Shift name is already used in this branch");
+  if (rosterSlots.some(slot => slot.shiftRuleId === id) && (
+    old.startTime !== next.startTime || old.endTime !== next.endTime ||
+    old.unpaidBreakMinutes !== next.unpaidBreakMinutes || old.branchId !== next.branchId
+  )) throw new Error("Historical shift timing and branch cannot change; create a new shift template");
+  const previous = { ...old };
+  Object.assign(old, next);
+  enqueueOutbox("staff_shift_rules", id, "update", { ...old });
+  auditAction("roster.shift.update", "staff_shift_rules", id, previous, { ...old });
+  touchPersistence();
+  return { ...old };
+}
+export function assignRosterSlot(input: Omit<RosterSlot, "id" | "version"> & { id?: UUID; expectedVersion?: number }, policy?: RosterPolicy): RosterSlot {
+  assertPermission("staff.manage");
+  const old = input.id ? rosterSlots.find(slot => slot.id === input.id) : undefined;
+  if (input.id && !old) throw new Error("Roster assignment not found");
+  if (old && input.expectedVersion !== old.version) throw new Error("Roster revision conflict");
+  const next: RosterSlot = {
+    id: old?.id ?? generateId(),
+    staffId: input.staffId, workDate: input.workDate, shiftRuleId: input.shiftRuleId,
+    branchId: input.branchId, status: input.status,
+    version: old ? old.version + 1 : 1,
+  };
+  if (next.branchId && !phase9Store.listBranches().some(branch => branch.id === next.branchId)) {
+    throw new Error("Roster branch does not exist");
+  }
+  const checked = checkRosterSlot({ candidate: next, slots: rosterSlots, shifts: shiftRules, staff: staff.find(member => member.id === input.staffId) ?? null, policy });
+  if (!checked.ok) throw new Error(checked.errors.join("; "));
+  const previous = old ? { ...old } : null;
+  if (old) Object.assign(old, next);
+  else rosterSlots.push({ ...next });
+  enqueueOutbox("staff_roster_slots", next.id, old ? "update" : "insert", { ...next });
+  auditAction(old ? "roster.slot.update" : "roster.slot.create", "staff_roster_slots", next.id, previous, { ...next });
+  touchPersistence();
+  return { ...next };
+}
+
+/** Restore Phase 6 state from a persisted snapshot without emitting outbox events. */
+export function exportPhase6State(){return{staff:[...staff],attendance:[...attendance],shiftRules:shiftRules.map(rule=>({...rule})),rosterSlots:rosterSlots.map(slot=>({...slot})),assignments:[...assignments],incentiveRules:[...incentiveRules],payouts:[...payouts],notifications:[...notifications]};}
+
+export function hydratePhase6(input:{staff?:StaffMember[];attendance?:StaffAttendanceRecord[];shiftRules?:ShiftRule[];rosterSlots?:RosterSlot[];assignments?:StaffAssignment[];incentiveRules?:IncentiveRuleRecord[];payouts?:StaffIncentivePayout[];notifications?:AppNotification[]}):void{
+  if(input.shiftRules || input.rosterSlots) {
+    const rules = input.shiftRules ?? shiftRules;
+    const slots = input.rosterSlots ?? rosterSlots;
+    const ruleIds = new Set<string>();
+    for (const rule of rules) {
+      validateShiftRule(rule);
+      if (ruleIds.has(rule.id)) throw new Error("Duplicate shift rule ID in snapshot");
+      ruleIds.add(rule.id);
+    }
+    const seenSlots = new Set<string>();
+    const visited: RosterSlot[] = [];
+    for (const slot of slots) {
+      if (seenSlots.has(slot.id)) throw new Error("Duplicate roster slot ID in snapshot");
+      seenSlots.add(slot.id);
+      const member = (input.staff ?? staff).find(m => m.id === slot.staffId);
+      // Historic slots retain their original branch even after a staff transfer.
+      const originalContext = member ? { id: member.id, status: "active", branchId: slot.branchId } : null;
+      const check = checkRosterSlot({
+        candidate: { ...slot, version: 1 }, slots: visited, shifts: rules.map(rule => ({ ...rule, active: true })),
+        staff: originalContext,
+      });
+      if (!check.ok || !Number.isSafeInteger(slot.version) || slot.version < 1) {
+        throw new Error("Invalid roster snapshot: " + (!check.ok ? check.errors.join("; ") : "version"));
+      }
+      visited.push(slot);
+    }
+    if(input.shiftRules){shiftRules.length=0;shiftRules.push(...input.shiftRules.map(rule=>({...rule})));}
+    if(input.rosterSlots){rosterSlots.length=0;rosterSlots.push(...input.rosterSlots.map(slot=>({...slot})));}
+  }
   if(input.staff){staff.length=0;staff.push(...input.staff);}
   if(input.attendance){attendance.length=0;attendance.push(...input.attendance);}
   if(input.assignments){assignments.length=0;assignments.push(...input.assignments);}
