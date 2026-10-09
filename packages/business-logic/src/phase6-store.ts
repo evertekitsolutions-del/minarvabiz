@@ -435,17 +435,30 @@ export async function reapplyLocalWorkforceRosterConflict(
       JSON.stringify(fresh.local) !== JSON.stringify(approved.local) ||
       JSON.stringify(fresh.remote) !== JSON.stringify(approved.remote))
     throw new Error("Cloud or local roster revision changed; review again before rebasing");
+  const remoteVersion = Number(fresh.remote?.version);
   if (!fresh.remote || fresh.remote.id !== event.aggregateId ||
-      !Number.isSafeInteger(fresh.remote.version) ||
-      !Number.isSafeInteger(fresh.remote.version + 1))
+      !Number.isSafeInteger(remoteVersion) || remoteVersion < 1 ||
+      !Number.isSafeInteger(remoteVersion + 1))
     throw new Error("Cloud revision is missing or unsafe for an authorized correction");
   if (workforceFlush || event.status === "synced" || event.status === "discarded" ||
       exportOutbox().filter(e =>
         (e.aggregateType === "staff_shift_rules" || e.aggregateType === "staff_roster_slots") &&
         (e.status === "pending" || e.status === "failed")).length !== 1)
     throw new Error("Roster event status changed while reviewing; retry after reconciliation");
+  const stillLocal = event.aggregateType === "staff_shift_rules"
+    ? shiftRules.find(rule => rule.id === event.aggregateId)
+    : rosterSlots.find(slot => slot.id === event.aggregateId);
+  if (!stillLocal || JSON.stringify(stillLocal) !== JSON.stringify(approved.local))
+    throw new Error("Local roster changed during Cloud review; review again");
+  if (exportOutbox().some(other => other.id !== event.id &&
+    other.sequence > event.sequence &&
+    ((other.aggregateType === event.aggregateType && other.aggregateId === event.aggregateId) ||
+      (event.aggregateType === "staff_shift_rules" &&
+       other.aggregateType === "staff_roster_slots" &&
+       (other.payload as RosterSlot | null)?.shiftRuleId === event.aggregateId))))
+    throw new Error("Later dependent roster events require ordered conflict recovery");
 
-  const candidate = { ...fresh.local, version: fresh.remote.version + 1 };
+  const candidate = { ...fresh.local, version: remoteVersion + 1 };
   const nextRules = shiftRules.map(rule => ({ ...rule }));
   const nextSlots = rosterSlots.map(slot => ({ ...slot }));
   if (event.aggregateType === "staff_shift_rules") {
@@ -495,7 +508,7 @@ export async function reapplyLocalWorkforceRosterConflict(
   discardWorkforceRosterConflictEvent(event.id);
   auditAction("roster.conflict.reapply_local", event.aggregateType, event.aggregateId,
     {oldEventId:event.id,local:fresh.local,remote:fresh.remote},
-    {newEventId:replacement.id,desired:candidate,reviewedRemoteVersion:fresh.remote.version});
+    {newEventId:replacement.id,desired:candidate,reviewedRemoteVersion:remoteVersion});
   touchPersistence();
   // The regular sequenced sender confirms only the original replacement ID.
   // An unsuccessful RPC leaves that ID visible in the outbox for retry.
