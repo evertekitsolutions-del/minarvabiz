@@ -1,4 +1,4 @@
-import { createSupabaseCloudAdapter, type workforceRoster, type RemoteWriter } from "@minarvabiz/business-logic";
+import { createSupabaseCloudAdapter, workforceRoster, type RemoteWriter } from "@minarvabiz/business-logic";
 type ShiftRule = workforceRoster.ShiftRule;
 type RosterSlot = workforceRoster.RosterSlot;
 import { configFromEnv, pgSelectAll, pgSelect, pgRpc, pgInsert, pgUpdate } from "@minarvabiz/database";
@@ -20,6 +20,26 @@ function readClock(value: unknown): string {
   if (!/^(?:[01]\d|2[0-3]):[0-5]\d(?::00(?:\.0+)?)?$/.test(text)) throw new Error("Invalid cloud shift clock");
   return text.slice(0, 5);
 }
+/** Fail closed on corrupt/unscoped cloud identities instead of coercing null to "null". */
+function readIdentity(value: unknown, field: string): string {
+  if (typeof value !== "string" || !value.trim()) throw new Error("Invalid cloud " + field);
+  return value;
+}
+function readBranchId(value: unknown): string | null {
+  return value === null ? null : readIdentity(value, "branch ID");
+}
+function readWorkDate(value: unknown): string {
+  if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) {
+    throw new Error("Invalid cloud roster work date");
+  }
+  const [year,month,day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year,month-1,day));
+  if (year < 1900 || year > 9999 || date.getUTCFullYear() !== year ||
+      date.getUTCMonth() !== month-1 || date.getUTCDate() !== day) {
+    throw new Error("Invalid cloud roster work date");
+  }
+  return value;
+}
 function readVersion(value: unknown): number {
   const version = Number(value);
   if (!Number.isSafeInteger(version) || version < 1) throw new Error("Invalid cloud roster revision");
@@ -27,19 +47,26 @@ function readVersion(value: unknown): number {
 }
 /** Separate pure mappers make cloud row consistency verifiable without network or test tenants. */
 export function mapCloudShiftRule(row: Row): ShiftRule {
-  return {
-    id: String(row.id), name: String(row.name), startTime: readClock(row.start_time),
-    endTime: readClock(row.end_time), unpaidBreakMinutes: Number(row.unpaid_break_minutes),
-    branchId: row.branch_id == null ? null : String(row.branch_id),
-    active: row.active === true, version: readVersion(row.version),
+  // PostgreSQL invariants are checked again at the browser hydration boundary.
+  // Malformed responses must not become editable domain state or appear in CSV.
+  if (typeof row.name !== "string" || !row.name.trim()) throw new Error("Invalid cloud shift name");
+  if (typeof row.active !== "boolean") throw new Error("Invalid cloud shift active flag");
+  if (!Number.isSafeInteger(row.unpaid_break_minutes)) throw new Error("Invalid cloud shift break");
+  const shift: ShiftRule = {
+    id: readIdentity(row.id, "shift ID"), name: row.name, startTime: readClock(row.start_time),
+    endTime: readClock(row.end_time), unpaidBreakMinutes: row.unpaid_break_minutes as number,
+    branchId: readBranchId(row.branch_id),
+    active: row.active, version: readVersion(row.version),
   };
+  workforceRoster.validateShiftRule(shift);
+  return shift;
 }
 export function mapCloudRosterSlot(row: Row): RosterSlot {
   if (row.status !== "scheduled" && row.status !== "cancelled") throw new Error("Invalid cloud roster status");
   return {
-    id: String(row.id), staffId: String(row.staff_id),
-    shiftRuleId: String(row.shift_rule_id), branchId: row.branch_id == null ? null : String(row.branch_id),
-    workDate: String(row.work_date).slice(0, 10),
+    id: readIdentity(row.id, "roster ID"), staffId: readIdentity(row.staff_id, "staff ID"),
+    shiftRuleId: readIdentity(row.shift_rule_id, "shift ID"), branchId: readBranchId(row.branch_id),
+    workDate: readWorkDate(row.work_date),
     status: row.status, version: readVersion(row.version),
   };
 }
@@ -53,7 +80,19 @@ export async function loadCloudRoster(cfg: Config): Promise<{shiftRules: ShiftRu
   if (rules.error) throw new Error("Unable to read authorized shift templates: " + rules.error.message);
   if (slots.error) throw new Error("Unable to read authorized roster assignments: " + slots.error.message);
   if (!Array.isArray(rules.data) || !Array.isArray(slots.data)) throw new Error("Cloud roster result is unavailable");
-  return { shiftRules: rules.data.map(mapCloudShiftRule), rosterSlots: slots.data.map(mapCloudRosterSlot) };
+  const shiftRules = rules.data.map(mapCloudShiftRule);
+  const rosterSlots = slots.data.map(mapCloudRosterSlot);
+  const shiftById = new Map(shiftRules.map(shift => [shift.id, shift]));
+  if (shiftById.size !== shiftRules.length || new Set(rosterSlots.map(slot => slot.id)).size !== rosterSlots.length) {
+    throw new Error("Duplicate cloud roster identities; refusing partial hydration");
+  }
+  for (const slot of rosterSlots) {
+    const shift = shiftById.get(slot.shiftRuleId);
+    if (!shift || (shift.branchId !== null && shift.branchId !== slot.branchId)) {
+      throw new Error("Cloud roster references an unavailable or mismatched shift template");
+    }
+  }
+  return { shiftRules, rosterSlots };
 }
 
 
