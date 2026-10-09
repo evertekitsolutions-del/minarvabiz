@@ -29,7 +29,7 @@ function readBranchId(value: unknown): string | null {
   return value === null ? null : readIdentity(value, "branch ID");
 }
 function readWorkDate(value: unknown): string {
-  if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new Error("Invalid cloud roster work date");
   }
   const [year,month,day] = value.split("-").map(Number);
