@@ -8,7 +8,7 @@ TrialGate, MAIN_NAV,
 type QuickAction, type NavItemId, type DashboardData, type OrderFormValues, type LaundryCancellationValues,
 type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printBarcodeLabels, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue, can, purgeExpiredRecycleBinItems } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printBarcodeLabels, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue, can, purgeExpiredRecycleBinItems } from "@minarvabiz/business-logic";
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
@@ -110,14 +110,20 @@ export function App() {
   }, [lowStockOnly, productQuery, productCategoryId, orderQuery, orderStatus, orderType, orderCustomerId, orderDateFrom, orderDateTo, orderDeliveryDateFrom, orderDeliveryDateTo, selectedOrder]);
   const persistAndRefresh = React.useCallback(async () => {
     refreshAll();
-    try { const persisted = await persistDomainToSqlite(); if (!persisted) scheduleAutoSave(250); }
-    catch { scheduleAutoSave(250); }
+    try {
+      if (!await persistDomainToSqlite()) throw new Error("The native SQLite write was rejected");
+    } catch (error) {
+      // Offline production requires a durable SQLite write. A localStorage
+      // fallback would conceal data loss on the next Windows restart.
+      setModuleError(`SQLite save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
+      console.error("[minarvabiz] SQLite save failed", error);
+    }
   }, [refreshAll]);
   const persistAttendanceAndRefresh = React.useCallback(async () => {
     try {
       if (!await persistDomainToSqlite()) throw new Error("Attendance changes are not yet saved to SQLite. Keep the app open and retry.");
     } catch (error) {
-      scheduleAutoSave(250);
+      // Attendance edits must not silently fall back to transient browser data.
       throw error;
     } finally {
       refreshAll();
