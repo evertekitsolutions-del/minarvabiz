@@ -28,7 +28,7 @@ export function updateStaff(id:UUID,patch:Partial<StaffMember>):StaffMember|null
 export function archiveStaff(id:UUID,reason:string):{staff:StaffMember|null;error?:string}{assertPermission("staff.manage");const m=getStaff(id);if(!m)return{staff:null,error:"Staff not found"};const archiveReason=reason.trim();if(archiveReason.length<3)return{staff:null,error:"Archive reason is required"};const active=assignments.some(a=>a.staffId===id&&a.status!=="completed"&&a.status!=="cancelled");if(active)return{staff:null,error:"Complete or cancel active staff assignments before archiving"};const before={...m};m.status="inactive";m.deletedAt=nowISO();m.updatedAt=m.deletedAt;enqueueOutbox("staff_members",m.id,"update",m);auditAction("staff.archive","staff_members",m.id,before,{...m,archiveReason});touchPersistence();return{staff:m};}
 export function listArchivedStaff():StaffMember[]{return staff.filter(member=>Boolean(member.deletedAt)).sort((a,b)=>(b.deletedAt??"").localeCompare(a.deletedAt??""));}
 export function restoreArchivedStaff(id:UUID):{staff:StaffMember|null;error?:string}{assertPermission("staff.manage");const m=staff.find(member=>member.id===id&&Boolean(member.deletedAt));if(!m)return{staff:null,error:"Staff member is not in Trash"};const before={...m};m.deletedAt=null;m.status="active";m.updatedAt=nowISO();enqueueOutbox("staff_members",m.id,"update",{...m});auditAction("staff.restore","staff_members",m.id,before,{...m});touchPersistence();return{staff:m};}
-export function purgeArchivedStaff(id:UUID):{purged:boolean;error?:string}{assertPermission("staff.manage");const index=staff.findIndex(member=>member.id===id&&Boolean(member.deletedAt));if(index<0)return{purged:false,error:"Staff member is not in Trash"};const [member]=staff.splice(index,1);const purgedAt=nowISO();enqueueOutbox("staff_members",member.id,"delete",{id:member.id,deletedAt:member.deletedAt??null,purgedAt});auditAction("staff.purge","staff_members",member.id,{...member},{id:member.id,purgedAt});touchPersistence();return{purged:true};}
+export function purgeArchivedStaff(id:UUID):{purged:boolean;error?:string}{assertPermission("staff.manage");if(rosterSlots.some(slot=>slot.staffId===id))return{purged:false,error:"Cannot purge staff with roster history; retain archived record for audit"};const index=staff.findIndex(member=>member.id===id&&Boolean(member.deletedAt));if(index<0)return{purged:false,error:"Staff member is not in Trash"};const [member]=staff.splice(index,1);const purgedAt=nowISO();enqueueOutbox("staff_members",member.id,"delete",{id:member.id,deletedAt:member.deletedAt??null,purgedAt});auditAction("staff.purge","staff_members",member.id,{...member},{id:member.id,purgedAt});touchPersistence();return{purged:true};}
 
 export function listAttendance(opts?:{staffId?:UUID;from?:string;to?:string}):StaffAttendanceRecord[]{assertPermission("staff.manage");let list=attendance.map(r=>({...r}));if(opts?.staffId)list=list.filter(r=>r.staffId===opts.staffId);if(opts?.from)list=list.filter(r=>r.date>=opts.from!);if(opts?.to)list=list.filter(r=>r.date<=opts.to!);return list.sort((a,b)=>b.date.localeCompare(a.date)||a.staffId.localeCompare(b.staffId));}
 export type AttendanceInput = {staffId:UUID;date:string;status:AttendanceStatus;clockIn?:string|null;clockOut?:string|null;breakMinutes?:number;overtimeMinutes?:number;notes?:string|null;branchId?:UUID|null};
@@ -188,6 +188,9 @@ export function assignRosterSlot(input: Omit<RosterSlot, "id" | "version"> & { i
     branchId: input.branchId, status: input.status,
     version: old ? old.version + 1 : 1,
   };
+  if (next.branchId && !phase9Store.listBranches().some(branch => branch.id === next.branchId)) {
+    throw new Error("Roster branch does not exist");
+  }
   const checked = checkRosterSlot({ candidate: next, slots: rosterSlots, shifts: shiftRules, staff: staff.find(member => member.id === input.staffId) ?? null, policy });
   if (!checked.ok) throw new Error(checked.errors.join("; "));
   const previous = old ? { ...old } : null;
@@ -203,8 +206,6 @@ export function assignRosterSlot(input: Omit<RosterSlot, "id" | "version"> & { i
 export function exportPhase6State(){return{staff:[...staff],attendance:[...attendance],shiftRules:shiftRules.map(rule=>({...rule})),rosterSlots:rosterSlots.map(slot=>({...slot})),assignments:[...assignments],incentiveRules:[...incentiveRules],payouts:[...payouts],notifications:[...notifications]};}
 
 export function hydratePhase6(input:{staff?:StaffMember[];attendance?:StaffAttendanceRecord[];shiftRules?:ShiftRule[];rosterSlots?:RosterSlot[];assignments?:StaffAssignment[];incentiveRules?:IncentiveRuleRecord[];payouts?:StaffIncentivePayout[];notifications?:AppNotification[]}):void{
-  if(input.staff){staff.length=0;staff.push(...input.staff);}
-  if(input.attendance){attendance.length=0;attendance.push(...input.attendance);}
   if(input.shiftRules || input.rosterSlots) {
     const rules = input.shiftRules ?? shiftRules;
     const slots = input.rosterSlots ?? rosterSlots;
@@ -219,7 +220,7 @@ export function hydratePhase6(input:{staff?:StaffMember[];attendance?:StaffAtten
     for (const slot of slots) {
       if (seenSlots.has(slot.id)) throw new Error("Duplicate roster slot ID in snapshot");
       seenSlots.add(slot.id);
-      const member = staff.find(m => m.id === slot.staffId);
+      const member = (input.staff ?? staff).find(m => m.id === slot.staffId);
       // Historic slots retain their original branch even after a staff transfer.
       const originalContext = member ? { id: member.id, status: "active", branchId: slot.branchId } : null;
       const check = checkRosterSlot({
@@ -234,6 +235,8 @@ export function hydratePhase6(input:{staff?:StaffMember[];attendance?:StaffAtten
     if(input.shiftRules){shiftRules.length=0;shiftRules.push(...input.shiftRules.map(rule=>({...rule})));}
     if(input.rosterSlots){rosterSlots.length=0;rosterSlots.push(...input.rosterSlots.map(slot=>({...slot})));}
   }
+  if(input.staff){staff.length=0;staff.push(...input.staff);}
+  if(input.attendance){attendance.length=0;attendance.push(...input.attendance);}
   if(input.assignments){assignments.length=0;assignments.push(...input.assignments);}
   if(input.incentiveRules){incentiveRules.length=0;incentiveRules.push(...input.incentiveRules);}
   if(input.payouts){payouts.length=0;payouts.push(...input.payouts);}
