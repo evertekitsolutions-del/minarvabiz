@@ -74,3 +74,40 @@ subset[0].status = "cancelled";
 assert.equal(original[2].status, "scheduled", "Read-only previews never mutate stored slots");
 assert.throws(() => rosterRange(original, "2026-10-10", "2026-10-09"), /ordered/);
 console.log("HR shift/roster core validation, overnight overlap, rest, branches, revisions and read-only previews PASS");
+
+
+const { planRecurringRoster } = require("../workforce-roster.ts");
+const recur = (overrides = {}) => planRecurringRoster({
+  staffId: "staff-1", branchId: "branch-1", shiftRuleId: "day",
+  startDate: "2026-10-05", endDate: "2026-10-18", weekdays: [1, 3, 5],
+  slots: [], shifts, staff: activeStaff,
+  idForDate: date => `repeat-${date}`, ...overrides,
+});
+const schedule = recur();
+assert.equal(schedule.ok, true);
+assert.deepEqual(schedule.entries.map(s => s.workDate), [
+  "2026-10-05", "2026-10-07", "2026-10-09",
+  "2026-10-12", "2026-10-14", "2026-10-16",
+], "Weekly recurrence follows ISO weekdays and includes both date boundaries");
+assert.equal(schedule.entries.every(s => s.version === 1 && s.branchId === "branch-1"), true);
+assert.equal(recur().entries.length, 6, "Planning never mutates the source roster");
+const weeklyConflict = recur({ slots: [first] });
+denied(weeklyConflict, /2026-10-09: Shift overlaps/);
+assert.equal("entries" in weeklyConflict, false, "Conflicting batches are never partially approved");
+denied(recur({ weekdays: [0, 8] }), /ISO weekdays/);
+denied(recur({ weekdays: [1, 1] }), /unique ISO/);
+denied(recur({ weekdays: [] }), /Select unique/);
+denied(recur({ startDate: "2026-02-30" }), /real ordered/);
+denied(recur({ endDate: "2026-10-04" }), /real ordered/);
+denied(recur({ startDate: "2026-01-01", endDate: "2027-12-31" }), /366 days/);
+denied(recur({ idForDate: () => "same" }), /already used/);
+denied(recur({ idForDate: () => "repeat-2026-10-05", slots: [{
+  ...first, id: "repeat-2026-10-05", status: "cancelled",
+}] }), /already used/);
+denied(recur({ staff: { ...activeStaff, status: "inactive" } }), /Only active/);
+denied(recur({ shiftRuleId: "night", weekdays: [5, 6], startDate: "2026-10-09",
+  endDate: "2026-10-10", policy: { minimumRestMinutes: 1200 } }), /2026-10-10: Minimum rest/);
+assert.deepEqual(recur({ weekdays: [7], startDate: "2026-10-05", endDate: "2026-10-05" }), {
+  ok: true, entries: [],
+}, "No matching weekdays is an empty, valid plan");
+console.log("HR recurring roster preview: weekly windows, atomic conflicts, identities, rest and date validation PASS");

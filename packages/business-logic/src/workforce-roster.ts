@@ -141,3 +141,79 @@ export function rosterRange(slots: readonly RosterSlot[], from: string, to: stri
     .map(slot => ({ ...slot }))
     .sort((a, b) => a.workDate.localeCompare(b.workDate) || a.staffId.localeCompare(b.staffId) || a.id.localeCompare(b.id));
 }
+
+
+/**
+ * Build a deterministic branch-local recurring roster *preview* without writing
+ * to any store. Reuses the authoritative single-slot overlap/rest validator.
+ * The caller supplies stable, unique IDs when it later chooses to commit a
+ * reviewed plan; neither this function nor its result implies cloud approval.
+ * IANA timezone/DST instant resolution is a separate required HR-004 gate.
+ */
+export function planRecurringRoster(input: {
+  staffId: string;
+  shiftRuleId: string;
+  branchId: string | null;
+  startDate: string;
+  endDate: string;
+  weekdays: readonly number[]; // ISO weekdays: Monday=1, Sunday=7
+  slots: readonly RosterSlot[];
+  shifts: readonly ShiftRule[];
+  staff: StaffRosterContext | null;
+  policy?: RosterPolicy;
+  idForDate: (date: string) => string;
+}): { ok: true; entries: RosterSlot[] } | { ok: false; errors: string[] } {
+  const { startDate, endDate, weekdays, slots, shifts, staff, policy } = input;
+  const errors: string[] = [];
+  if (!isRecordDate(startDate) || !isRecordDate(endDate) || startDate > endDate) {
+    errors.push("Recurring roster needs real ordered branch-local dates");
+  }
+  if (!Array.isArray(weekdays) || weekdays.length === 0 ||
+      weekdays.some(d => !Number.isInteger(d) || d < 1 || d > 7) ||
+      new Set(weekdays).size !== weekdays.length) {
+    errors.push("Select unique ISO weekdays from Monday (1) to Sunday (7)");
+  }
+  if (typeof input.idForDate !== "function") errors.push("A roster ID factory is required");
+  if (errors.length) return { ok: false, errors };
+  const first = Date.parse(startDate + "T00:00:00Z");
+  const last = Date.parse(endDate + "T00:00:00Z");
+  // Bound each atomic preview to one calendar year; longer plans can be
+  // submitted in reviewed consecutive windows without losing features.
+  if ((last - first) / 86400000 >= 366) {
+    return { ok: false, errors: ["Recurring roster preview spans at most 366 days per batch"] };
+  }
+
+  const entries: RosterSlot[] = [];
+  const usedIds = new Set(slots.map(slot => slot.id));
+  const selected = new Set(weekdays);
+  for (let day = first; day <= last; day += 86400000) {
+    const d = new Date(day);
+    const weekday = d.getUTCDay() || 7;
+    if (!selected.has(weekday)) continue;
+    const date = d.toISOString().slice(0, 10);
+    let id: string;
+    try {
+      id = input.idForDate(date);
+    } catch (error) {
+      errors.push(`${date}: roster ID generation failed: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+    if (typeof id !== "string" || !id.trim() || usedIds.has(id)) {
+      errors.push(`${date}: roster ID is blank or already used`);
+      continue;
+    }
+    usedIds.add(id);
+    const candidate: RosterSlot = {
+      id, staffId: input.staffId, shiftRuleId: input.shiftRuleId,
+      branchId: input.branchId, workDate: date, version: 1, status: "scheduled",
+    };
+    const decision = checkRosterSlot({
+      candidate, slots: [...slots, ...entries], shifts, staff, policy,
+    });
+    if (!decision.ok) errors.push(...decision.errors.map(message => `${date}: ${message}`));
+    else entries.push(decision.entry);
+  }
+  // A conflict on any planned date rejects the entire reviewed set. Never
+  // return a partial "success" that a UI might accidentally commit.
+  return errors.length ? { ok: false, errors } : { ok: true, entries };
+}
