@@ -25,17 +25,20 @@ assert.match(postgrest, /pgSelectAll query must not include limit or offset/);
 for (const table of ["customers", "products", "sales", "orders"]) {
   assert.match(
     adapter,
-    new RegExp(`pgSelectAll<Record<string, unknown>>\\(cfg, "${table}"`)
+    new RegExp(`pgSelectAll<Record<string,\\s*unknown>>\\(cfg,\\s*"${table}"`)
   );
 }
 
+const attendanceSource=fs.readFileSync(new URL("../../../../apps/web/src/lib/data-source-attendance.ts",import.meta.url),"utf8");
+assert.match(dataSource,/import \{ createAttendanceRemoteWriter, loadAttendanceStaff \} from "\.\/data-source-attendance"/);
+assert.match(dataSource,/await loadAttendanceStaff\(cfg,loadAttendance\)/);
 const hydrationBlock = dataSource.slice(
-  dataSource.indexOf("export async function hydrateStoresFromSupabase"),
+  dataSource.indexOf("export function hydrateStoresFromSupabase"),
   dataSource.indexOf("registerRemoteWriter({")
-);
+)+attendanceSource.slice(attendanceSource.indexOf("export async function loadAttendanceStaff"));
 for (const table of [
   "categories", "expenses", "purchases", "suppliers", "laundry_orders",
-  "staff_members", "payments", "warehouses", "warehouse_locations",
+  "staff_members", "staff_attendance", "branches", "payments", "warehouses", "warehouse_locations",
   "warehouse_stock", "warehouse_transfers", "purchase_orders",
   "purchase_order_lines", "goods_receipts", "goods_receipt_lines",
   "purchase_invoices", "purchase_invoice_lines", "accounts",
@@ -43,11 +46,11 @@ for (const table of [
 ]) {
   assert.match(
     hydrationBlock,
-    new RegExp(`pgSelectAll<Record<string, unknown>>\\(cfg, "${table}"`)
+    new RegExp(`pgSelectAll<Record<string,\\s*unknown>>\\(cfg,\\s*"${table}"`)
   );
   assert.doesNotMatch(
     hydrationBlock,
-    new RegExp(`pgSelect<Record<string, unknown>>\\(cfg, "${table}"`)
+    new RegExp(`pgSelect<Record<string,\\s*unknown>>\\(cfg,\\s*"${table}"`)
   );
 }
 

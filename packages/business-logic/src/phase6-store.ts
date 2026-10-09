@@ -1,4 +1,6 @@
 import { assertPermission } from "./permissions";
+import { getRemoteWriter } from "./remote-write";
+import { exportOutbox, discardAttendanceOutbox, markOutboxSynced, markOutboxFailed } from "./outbox-bridge";
 import { enqueueOutbox } from "./outbox-bridge";
 import { touchPersistence } from "./autosave";
 import { auditAction } from "./audit-actions";
@@ -24,8 +26,97 @@ export function listArchivedStaff():StaffMember[]{return staff.filter(member=>Bo
 export function restoreArchivedStaff(id:UUID):{staff:StaffMember|null;error?:string}{assertPermission("staff.manage");const m=staff.find(member=>member.id===id&&Boolean(member.deletedAt));if(!m)return{staff:null,error:"Staff member is not in Trash"};const before={...m};m.deletedAt=null;m.status="active";m.updatedAt=nowISO();enqueueOutbox("staff_members",m.id,"update",{...m});auditAction("staff.restore","staff_members",m.id,before,{...m});touchPersistence();return{staff:m};}
 export function purgeArchivedStaff(id:UUID):{purged:boolean;error?:string}{assertPermission("staff.manage");const index=staff.findIndex(member=>member.id===id&&Boolean(member.deletedAt));if(index<0)return{purged:false,error:"Staff member is not in Trash"};const [member]=staff.splice(index,1);const purgedAt=nowISO();enqueueOutbox("staff_members",member.id,"delete",{id:member.id,deletedAt:member.deletedAt??null,purgedAt});auditAction("staff.purge","staff_members",member.id,{...member},{id:member.id,purgedAt});touchPersistence();return{purged:true};}
 
-export function listAttendance(opts?:{staffId?:UUID;from?:string;to?:string}):StaffAttendanceRecord[]{let list=[...attendance];if(opts?.staffId)list=list.filter(r=>r.staffId===opts.staffId);if(opts?.from)list=list.filter(r=>r.date>=opts.from!);if(opts?.to)list=list.filter(r=>r.date<=opts.to!);return list.sort((a,b)=>b.date.localeCompare(a.date)||a.staffId.localeCompare(b.staffId));}
-export function setAttendance(input:{staffId:UUID;date:string;status:AttendanceStatus;clockIn?:string|null;clockOut?:string|null;breakMinutes?:number;overtimeMinutes?:number;notes?:string|null;branchId?:UUID|null}):StaffAttendanceRecord{assertPermission("staff.manage");const member=getStaff(input.staffId);if(!member)throw new Error("Staff not found");if(!/^\d{4}-\d{2}-\d{2}$/.test(input.date))throw new Error("Attendance date must be YYYY-MM-DD");const breakMinutes=Math.max(0,Math.floor(Number(input.breakMinutes??0)));const overtimeMinutes=Math.max(0,Math.floor(Number(input.overtimeMinutes??0)));if(!Number.isFinite(breakMinutes)||!Number.isFinite(overtimeMinutes))throw new Error("Attendance minutes must be finite");const existing=attendance.find(r=>r.staffId===input.staffId&&r.date===input.date);if(existing){const before={...existing};Object.assign(existing,{status:input.status,clockIn:input.clockIn??null,clockOut:input.clockOut??null,breakMinutes,overtimeMinutes,notes:input.notes?.trim()||null,branchId:input.branchId??existing.branchId??null,staffName:member.name,updatedAt:nowISO()});enqueueOutbox("staff_attendance",existing.id,"update",existing);auditAction("attendance.update","staff_attendance",existing.id,before,{...existing});touchPersistence();return existing;}const record:StaffAttendanceRecord={id:generateId(),staffId:member.id,staffName:member.name,date:input.date,status:input.status,clockIn:input.clockIn??null,clockOut:input.clockOut??null,breakMinutes,overtimeMinutes,notes:input.notes?.trim()||null,branchId:input.branchId??member.branchId??null,createdAt:nowISO(),updatedAt:nowISO()};attendance.push(record);enqueueOutbox("staff_attendance",record.id,"insert",record);auditAction("attendance.create","staff_attendance",record.id,null,{...record});touchPersistence();return record;}
+export function listAttendance(opts?:{staffId?:UUID;from?:string;to?:string}):StaffAttendanceRecord[]{assertPermission("staff.manage");let list=attendance.map(r=>({...r}));if(opts?.staffId)list=list.filter(r=>r.staffId===opts.staffId);if(opts?.from)list=list.filter(r=>r.date>=opts.from!);if(opts?.to)list=list.filter(r=>r.date<=opts.to!);return list.sort((a,b)=>b.date.localeCompare(a.date)||a.staffId.localeCompare(b.staffId));}
+export type AttendanceInput = {staffId:UUID;date:string;status:AttendanceStatus;clockIn?:string|null;clockOut?:string|null;breakMinutes?:number;overtimeMinutes?:number;notes?:string|null;branchId?:UUID|null};
+
+export function setAttendance(input:AttendanceInput):StaffAttendanceRecord {
+  assertPermission("staff.manage");
+  const member=getStaff(input.staffId);
+  if(!member) throw new Error("Staff not found");
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !Number.isFinite(Date.parse(input.date)) || new Date(input.date).toISOString().slice(0,10)!==input.date) throw new Error("Attendance date must be a valid YYYY-MM-DD date");
+  if(!["present","absent","half_day","leave","holiday"].includes(input.status)) throw new Error("Invalid attendance status");
+  const existing=attendance.find(r=>r.staffId===input.staffId&&r.date===input.date);
+  const breakMinutes=input.breakMinutes??existing?.breakMinutes??0;
+  const overtimeMinutes=input.overtimeMinutes??existing?.overtimeMinutes??0;
+  if(!Number.isInteger(breakMinutes)||breakMinutes<0||breakMinutes>2147483647||!Number.isInteger(overtimeMinutes)||overtimeMinutes<0||overtimeMinutes>2147483647) throw new Error("Attendance minutes must be non-negative integers");
+  const clockIn=input.clockIn===undefined?existing?.clockIn??null:input.clockIn;
+  const clockOut=input.clockOut===undefined?existing?.clockOut??null:input.clockOut;
+  for(const clock of [clockIn,clockOut]) if(clock!==null && (!/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(clock)||!Number.isFinite(Date.parse(clock)))) throw new Error("Attendance clock must include a valid date and timezone");
+  if(clockOut&&!clockIn) throw new Error("Clock-in is required before clock-out");
+  if(clockIn&&clockOut && (Date.parse(clockOut)<Date.parse(clockIn)||breakMinutes*60000>Date.parse(clockOut)-Date.parse(clockIn))) throw new Error("Attendance clock range or break duration is invalid");
+  if(input.branchId!==undefined && (existing ? input.branchId !== (existing.branchId??null) : member.branchId && input.branchId!==member.branchId))throw new Error("Attendance branch must match the staff branch");
+  const before=existing?{...existing}:null;
+  const patch={status:input.status,clockIn,clockOut,breakMinutes,overtimeMinutes,notes:input.notes===undefined?existing?.notes??null:input.notes?.trim()||null,branchId:input.branchId===undefined?existing?.branchId??member.branchId??null:input.branchId,staffName:member.name,version:(existing?.version??(existing?1:0))+1,updatedAt:nowISO()};
+  const record:StaffAttendanceRecord=existing?Object.assign(existing,patch):{id:generateId(),staffId:member.id,date:input.date,createdAt:nowISO(),...patch};
+  if(!existing) attendance.push(record);
+  enqueueOutbox("staff_attendance",record.id,existing?"update":"insert",{...record});
+  auditAction(existing?"attendance.update":"attendance.create","staff_attendance",record.id,before,{...record});
+  touchPersistence();
+  return record;
+}
+/** Preserve queued corrections when cloud data reloads; only current tenant's hydrated staff qualify. */
+export function hydrateAttendanceFromCloud(rows:StaffAttendanceRecord[]):void {
+  const dayKey=(row:StaffAttendanceRecord)=>`${row.staffId}:${row.date}`;
+  const reconciled=new Map(rows.map(row=>[dayKey(row),{...row}]));
+  for(const event of exportOutbox().filter(e=>e.aggregateType==="staff_attendance"&&(e.status==="pending"||e.status==="failed")).sort((a,b)=>a.sequence-b.sequence)){
+    const local=event.payload as StaffAttendanceRecord;
+    if(local?.id&&staff.some(m=>m.id===local.staffId))reconciled.set(dayKey(local),{...local});
+  }
+  attendance.length=0;attendance.push(...reconciled.values());
+}
+const attendanceWrites=new Map<string,Promise<void>>();
+/** Save locally first, then drain immutable versions in order when a cloud writer is registered. */
+export async function saveAttendance(input:AttendanceInput):Promise<StaffAttendanceRecord> {
+  const record=setAttendance(input);
+  return persistAttendanceRecord(record);
+}
+export async function retryAttendance(id:UUID):Promise<StaffAttendanceRecord> {
+  assertPermission("staff.manage");
+  const record=attendance.find(r=>r.id===id);
+  if(!record||!staff.some(m=>m.id===record.staffId))throw new Error("Staff attendance not found");
+  return persistAttendanceRecord(record);
+}
+async function persistAttendanceRecord(record:StaffAttendanceRecord):Promise<StaffAttendanceRecord> {
+  const writer=getRemoteWriter()?.upsertAttendance;
+  if(!writer)return record;
+  const previous=attendanceWrites.get(record.id)??Promise.resolve();
+  const next=previous.catch(()=>{}).then(async()=>{
+    for(const event of exportOutbox().filter(e=>e.aggregateType==="staff_attendance"&&e.aggregateId===record.id&&(e.status==="pending"||e.status==="failed")).sort((a,b)=>a.sequence-b.sequence)){
+      try{await writer({...event.payload as StaffAttendanceRecord},event);markOutboxSynced([event.id]);}
+      catch(error){markOutboxFailed(event.id,error instanceof Error?error.message:String(error));throw error;}
+    }
+  });
+  attendanceWrites.set(record.id,next);
+  try{await next;}finally{if(attendanceWrites.get(record.id)===next)attendanceWrites.delete(record.id);}
+  return record;
+}
+export async function reviewAttendanceConflict(id:UUID){
+  assertPermission("staff.manage");
+  const local=attendance.find(r=>r.id===id);
+  const reader=getRemoteWriter()?.getAttendance;
+  if(!local||!staff.some(m=>m.id===local.staffId)||!reader)throw new Error("Online attendance review is unavailable");
+  const localSnapshot={...local};
+  const remote=await reader(id,localSnapshot.staffId,localSnapshot.date);
+  if(!remote)throw new Error("Remote attendance entry is unavailable; retry the pending creation");
+  if(remote.staffId!==localSnapshot.staffId||remote.date!==localSnapshot.date)throw new Error("Remote attendance identity does not match the reviewed day");
+  return {local:localSnapshot,remote:{...remote}};
+}
+export async function resolveAttendanceConflict(id:UUID,choice:"local"|"remote",expectedRemoteVersion:number,expectedLocalVersion:number){
+  assertPermission("staff.manage");
+  if(choice!=="local"&&choice!=="remote")throw new Error("Invalid attendance resolution choice");
+  if(attendanceWrites.has(id))throw new Error("Wait for the current attendance save before resolving");
+  const {local,remote}=await reviewAttendanceConflict(id);
+  if((local.version??1)!==expectedLocalVersion)throw new Error("Local attendance changed since review; review it again");
+  if((remote.version??1)!==expectedRemoteVersion)throw new Error("Remote attendance changed; review it again before resolving");
+  if(choice==="local"&&!getStaff(remote.staffId))throw new Error("Restore the archived staff member before applying a new correction");
+  if(attendanceWrites.has(id)||attendance.find(r=>r.id===id)?.version!==local.version)throw new Error("Local attendance changed; review it again before resolving");
+  discardAttendanceOutbox(id);
+  for(let i=attendance.length-1;i>=0;i--)if(attendance[i].staffId===remote.staffId&&attendance[i].date===remote.date)attendance.splice(i,1);
+  attendance.push({...remote});
+  auditAction("attendance.resolve","staff_attendance",id,{local,remote},{choice,expectedRemoteVersion});touchPersistence();
+  if(choice==="local")return saveAttendance({staffId:remote.staffId,date:remote.date,status:local.status,clockIn:local.clockIn,clockOut:local.clockOut,breakMinutes:local.breakMinutes,overtimeMinutes:local.overtimeMinutes,notes:local.notes,branchId:local.branchId});
+  return {...remote};
+}
 export function attendanceSummary(from:string,to:string){const rows=listAttendance({from,to});const summary=new Map<UUID,{present:number;absent:number;halfDay:number;leave:number;holiday:number;overtimeMinutes:number}>();for(const row of rows){const v=summary.get(row.staffId)??{present:0,absent:0,halfDay:0,leave:0,holiday:0,overtimeMinutes:0};if(row.status==="present")v.present++;else if(row.status==="absent")v.absent++;else if(row.status==="half_day")v.halfDay++;else if(row.status==="leave")v.leave++;else if(row.status==="holiday")v.holiday++;v.overtimeMinutes+=row.overtimeMinutes;summary.set(row.staffId,v);}return summary;}
 
 export function listAssignments(opts?:{staffId?:UUID;orderId?:UUID}){let list=[...assignments];if(opts?.staffId)list=list.filter(a=>a.staffId===opts.staffId);if(opts?.orderId)list=list.filter(a=>a.orderId===opts.orderId);return list.sort((a,b)=>b.assignedAt.localeCompare(a.assignedAt));}

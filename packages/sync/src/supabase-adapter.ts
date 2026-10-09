@@ -1,3 +1,4 @@
+import { attendanceRemoteRow } from "./attendance-transport";
 /**
  * CloudAdapter implementation using PostgREST outbox + pull.
  */
@@ -6,6 +7,7 @@ import type { CloudAdapter } from "./engine";
 import type { VersionedRecord } from "./conflict";
 
 export interface PgClient {
+  rpc?: (name: string, args: Record<string, unknown>) => Promise<{ data: Record<string, unknown> | null; error: string | null }>;
   insert: (table: string, row: Record<string, unknown> | Record<string, unknown>[]) => Promise<{ error: string | null }>;
   select: (table: string, query: string) => Promise<{ data: Record<string, unknown>[] | null; error: string | null }>;
   update: (table: string, match: string, patch: Record<string, unknown>) => Promise<{ error: string | null }>;
@@ -13,6 +15,7 @@ export interface PgClient {
 
 function remoteRow(table: string, aggregateId: UUID, payload: Record<string, unknown>): Record<string, unknown> {
   switch (table) {
+    case "staff_attendance": return attendanceRemoteRow(aggregateId,payload);
     case "laundry_orders":
       return {
         id: aggregateId,
@@ -391,10 +394,25 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
     async push(events: OutboxEvent[]) {
       const accepted: UUID[] = [];
       const rejected: Array<{ id: UUID; error: string; remote?: VersionedRecord }> = [];
+      const blockedAttendance=new Set<string>();
       for (const ev of events) {
         try {
           const payload = typeof ev.payload === "string" ? JSON.parse(ev.payload) : ev.payload;
           const table = ev.aggregateType;
+          if (table === "staff_attendance") {
+            if(blockedAttendance.has(ev.aggregateId))throw new Error("Attendance queued behind an unacknowledged revision");
+            if(ev.eventType === "delete")throw new Error("Attendance deletion is not supported; use an audited correction");
+            if (!client.rpc) throw new Error("Attendance requires atomic RPC support");
+            const applied = await client.rpc("apply_staff_attendance_event", {
+              p_record: payload, p_event_id: ev.id, p_device_id: deviceId, p_sequence: ev.sequence,
+            });
+            if (applied.error) throw new Error(applied.error);
+            if (applied.data?.accepted !== true) {
+              rejected.push({ id: ev.id, error: "attendance_version_conflict", remote: applied.data?.remote as VersionedRecord | undefined });
+              blockedAttendance.add(ev.aggregateId);
+            } else accepted.push(ev.id);
+            continue; // The RPC commits attendance, audit and event acknowledgement together.
+          }
           const row = remoteRow(table, ev.aggregateId, payload as Record<string, unknown>);
           // Remote outbox acknowledgement is written only after the domain mutation succeeds.
           if (ev.eventType === "delete") {
@@ -430,8 +448,10 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
             const acceptedIndex = accepted.indexOf(ev.id);
             if (acceptedIndex >= 0) accepted.splice(acceptedIndex, 1);
             rejected.push({ id: ev.id, error: `outbox acknowledgement failed: ${outboxResult.error}` });
+            if(table==="staff_attendance")blockedAttendance.add(ev.aggregateId);
           }
         } catch (e) {
+          if(ev.aggregateType==="staff_attendance")blockedAttendance.add(ev.aggregateId);
           rejected.push({ id: ev.id, error: e instanceof Error ? e.message : String(e) });
         }
       }
@@ -442,7 +462,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         "branches", "customers", "categories", "products", "inventory_transactions",
         "sales", "payments", "measurement_profiles", "orders",
         "order_expenses", "laundry_orders", "expenses", "purchases", "suppliers",
-        "staff_members", "sale_returns", "audit_logs",
+        "staff_members", "staff_attendance", "sale_returns", "audit_logs",
         "production_workflows", "production_stage_events", "material_rolls", "material_consumptions",
         "warehouses", "warehouse_locations", "warehouse_stock", "warehouse_transfers",
         "purchase_orders", "purchase_order_lines", "goods_receipts", "goods_receipt_lines",
@@ -466,6 +486,12 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
               tableName: table,
               record: {
                 ...row,
+                ...(table === "staff_attendance" ? {
+                  staffId: String(row.staff_id), date: String(row.attendance_date),
+                  clockIn: row.clock_in ?? null, clockOut: row.clock_out ?? null,
+                  breakMinutes: Number(row.break_minutes ?? 0), overtimeMinutes: Number(row.overtime_minutes ?? 0),
+                  branchId: row.branch_id ?? null, createdAt: String(row.created_at),
+                } : {}),
                 id: recordId,
                 version: Number(row.version || 1),
                 updatedAt,

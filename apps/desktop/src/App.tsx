@@ -8,8 +8,8 @@ TrialGate, MAIN_NAV,
 type QuickAction, type NavItemId, type DashboardData, type OrderFormValues, type LaundryCancellationValues,
 type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, scheduleAutoSave, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printBarcodeLabels, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue, can, purgeExpiredRecycleBinItems } from "@minarvabiz/business-logic";
-import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName, LicenseFeatures, LicensePlan, Edition } from "@minarvabiz/types";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printBarcodeLabels, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue, can, purgeExpiredRecycleBinItems } from "@minarvabiz/business-logic";
+import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
@@ -21,60 +21,9 @@ import { DesktopProcurementPanel } from "./components/DesktopProcurementPanel";
 import { DesktopDayEndPanel } from "./components/DesktopDayEndPanel";
 import { DesktopAttendancePanel } from "./components/DesktopAttendancePanel";
 import { buildProfessionalReportData } from "./lib/report-data";
-type CommercialLicenseState = {
-status: "unlicensed" | "active" | "grace" | "expired" | "invalid";
-plan: LicensePlan | null;
-edition: Edition | null;
-features: LicenseFeatures | null;
-daysRemaining: number | null;
-graceDaysRemaining: number | null;
-reason?: string;
-licenseId?: string;
-activationId?: string;
-};
-const FULL_TRIAL_FEATURES: LicenseFeatures = {
-sales: true, customers: true, inventory: true, tailoring: true, orders: true, laundry: true,
-reports: true, staff: true, advancedReports: true, cloudSync: true, multiUser: true,
-multiBranch: true, apiAccess: true,
-};
+import { NAV_FEATURE, featuresForLicense, type CommercialLicenseState } from "./lib/desktop-license-policy";
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
 const errorMessage=(error:unknown):string=>error instanceof Error?error.message:String(error);
-const NAV_FEATURE: Partial<Record<NavItemId, keyof LicenseFeatures>> = {
-sales: "sales",
-products: "inventory",
-warehouse: "inventory",
-services: "orders",
-laundry: "laundry",
-expenses: "inventory",
-purchases: "inventory",
-customers: "customers",
-"customer-crm": "customers",
-staff: "staff",
-attendance: "staff",
-"staff-detail": "staff",
-suppliers: "inventory",
-payments: "sales",
-accounting: "advancedReports",
-returns: "sales",
-reports: "reports",
-"day-end": "reports",
-  audit: "advancedReports",
-};
-function featuresForLicense(state: CommercialLicenseState | null, trial: TrialState | null): LicenseFeatures | null {
-  if (state && (state.status === "active" || state.status === "grace") && state.features) {
-    const features = { ...state.features };
-    if (state.status === "grace") {
-      features.advancedReports = false;
-      features.cloudSync = false;
-      features.multiUser = false;
-      features.multiBranch = false;
-      features.apiAccess = false;
-    }
-    return features;
-  }
-  if (trial?.status === "active") return FULL_TRIAL_FEATURES;
-  return null;
-}
 export function App() {
   const [dbReady, setDbReady] = React.useState(false);
   const [dbError, setDbError] = React.useState<string | null>(null);
@@ -161,8 +110,24 @@ export function App() {
   }, [lowStockOnly, productQuery, productCategoryId, orderQuery, orderStatus, orderType, orderCustomerId, orderDateFrom, orderDateTo, orderDeliveryDateFrom, orderDeliveryDateTo, selectedOrder]);
   const persistAndRefresh = React.useCallback(async () => {
     refreshAll();
-    try { const persisted = await persistDomainToSqlite(); if (!persisted) scheduleAutoSave(250); }
-    catch { scheduleAutoSave(250); }
+    try {
+      if (!await persistDomainToSqlite()) throw new Error("The native SQLite write was rejected");
+    } catch (error) {
+      // Offline production requires a durable SQLite write. A localStorage
+      // fallback would conceal data loss on the next Windows restart.
+      setModuleError(`SQLite save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
+      console.error("[minarvabiz] SQLite save failed", error);
+    }
+  }, [refreshAll]);
+  const persistAttendanceAndRefresh = React.useCallback(async () => {
+    try {
+      if (!await persistDomainToSqlite()) throw new Error("Attendance changes are not yet saved to SQLite. Keep the app open and retry.");
+    } catch (error) {
+      // Attendance edits must not silently fall back to transient browser data.
+      throw error;
+    } finally {
+      refreshAll();
+    }
   }, [refreshAll]);
   React.useEffect(() => { let cancelled=false; (async()=>{ for(let i=0;i<50&&!window.minarvaDesktop;i++) await new Promise(r=>setTimeout(r,20)); if(!window.minarvaDesktop){if(!cancelled)setDbError("Electron bridge missing. Reinstall Minarva Biz desktop.");return;} const result=await bootstrapDesktopSqlite(); if(cancelled)return; if(!result.ok){setDbError(result.error||"SQLite failed to initialize");return;} const [state, license, deviceId] = await Promise.all([window.minarvaDesktop.getTrialState(), window.minarvaDesktop.getLicenseState(), window.minarvaDesktop.getDeviceId?.() ?? Promise.resolve("")]); if(cancelled)return; setTrialState(state); setCommercialLicense(license as CommercialLicenseState); setDeviceFingerprint(deviceId || ""); setDbReady(true); fetchDashboardData().then(setDash); })(); return()=>{cancelled=true;}; }, []);
   React.useEffect(() => {
@@ -263,7 +228,7 @@ export function App() {
     {view==="expenses"&&<ExpenseList expenses={expenses} categories={expenseCategories} onAdd={()=>{setModuleError(null);setExpenseForm(v=>({...v,date:v.date||todayLocal(),categoryId:v.categoryId||expenseCategories[0]?.id||""}));setExpenseOpen(true);}} onReverse={handleReverseExpense}/>} 
     {view==="purchases"&&<div className="space-y-4"><PurchaseList purchases={purchases} suppliers={suppliers} onAdd={()=>{setModuleError(null);setPurchaseForm(v=>({...v,date:v.date||todayLocal()}));setPurchaseOpen(true);}}/><DesktopProcurementPanel suppliers={suppliers} products={products} onChanged={persistAndRefresh}/></div>} 
     {view==="staff"&&<StaffList staff={staff} onAdd={()=>{resetStaffForm();setModuleError(null);setStaffOpen(true);}} onEdit={openStaffEditor} onArchive={(m,reason)=>{try{const r=phase6Store.archiveStaff(m.id,reason);if(r.error)return{error:r.error};void persistAndRefresh();return{success:true};}catch(error){return{error:errorMessage(error)};}}} onSelect={member=>{setStaffDetailId(member.id);navTo("staff-detail");}}/>} 
-    {view==="attendance"&&<DesktopAttendancePanel staff={staff} onChanged={persistAndRefresh} onError={setModuleError}/>} \n    {view==="notifications"&&<NotificationCenter notifications={notifications} onMarkAllRead={()=>{phase6Store.markAllNotificationsRead();void persistAndRefresh();}} onMarkRead={id=>{phase6Store.markNotificationRead(id);void persistAndRefresh();}} onNavigate={(href)=>{const target=href.startsWith("/services")?"services":href.startsWith("/reports")?"reports":href.startsWith("/inventory")?"products":href.startsWith("/sales")?"sales":"dashboard";navTo(target as NavItemId);}}/>} 
+    {view==="attendance"&&<DesktopAttendancePanel staff={staff} onChanged={persistAttendanceAndRefresh} onError={setModuleError}/>} \n    {view==="notifications"&&<NotificationCenter notifications={notifications} onMarkAllRead={()=>{phase6Store.markAllNotificationsRead();void persistAndRefresh();}} onMarkRead={id=>{phase6Store.markNotificationRead(id);void persistAndRefresh();}} onNavigate={(href)=>{const target=href.startsWith("/services")?"services":href.startsWith("/reports")?"reports":href.startsWith("/inventory")?"products":href.startsWith("/sales")?"sales":"dashboard";navTo(target as NavItemId);}}/>} 
     {view==="reports"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} payables={professionalReports.payables} financial={professionalReports.financial} taxReport={professionalReports.taxReport} reportError={professionalReports.error||undefined} onRefresh={()=>{refreshAll();}} from={reportFrom} to={reportTo} onFromChange={setReportFrom} onToChange={setReportTo}/>} 
     {view==="day-end"&&<DesktopDayEndPanel onChanged={()=>{void persistAndRefresh();}}/>}
     {view==="backup"&&<BackupPanel backups={backups} canManage={can("backup.manage")} retentionCount={backupSettings.retentionCount}/>} 

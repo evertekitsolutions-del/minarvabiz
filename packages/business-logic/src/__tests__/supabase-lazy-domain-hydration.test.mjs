@@ -22,6 +22,7 @@ const dashboardRule = dataSource.slice(
 );
 assert.match(dashboardRule, /"\/dashboard", "\/laundry", "\/expenses"/);
 assert.match(dashboardRule, /"\/dashboard", "\/staff"/);
+assert.match(dashboardRule, /"\/attendance"/, "direct attendance navigation must hydrate its staff domain");
 assert.doesNotMatch(dashboardRule, /"\/dashboard", "\/warehouse"/);
 assert.doesNotMatch(dashboardRule, /"\/dashboard", "\/accounting"/);
 

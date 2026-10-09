@@ -507,6 +507,48 @@ async function main() {
     await click(ws, "STAFF_ROW", ["QA Tailor"]);
     await assertMain(ws, "STAFF_DETAIL", ["Staff Details", "QA Tailor"]);
 
+    // Attendance daily detail must survive status edits and a renderer reload from SQLite.
+    await click(ws,"ATTENDANCE",["attendance grid"]);
+    await assertMain(ws,"ATTENDANCE",["Attendance Grid","QA Tailor"]);
+    const attendanceMonth=await evalIn(ws,`document.querySelector('input[aria-label="Attendance month"]').value`);
+    const attendanceDate=`${attendanceMonth}-08`;
+    await setByAriaLabel(ws,`QA Tailor attendance ${attendanceDate}`,"Present");await sleep(300);
+    await click(ws,"ATTENDANCE_DETAILS",[`QA Tailor details ${attendanceDate}`]);
+    await setField(ws,"Attendance details","Clock-in",`${attendanceDate}T09:00`);
+    await setField(ws,"Attendance details","Clock-out",`${attendanceDate}T18:00`);
+    await setField(ws,"Attendance details","Break minutes","30");
+    await setField(ws,"Attendance details","Overtime minutes","45");
+    await setField(ws,"Attendance details","Notes","QA SQLite attendance retained");
+    await clickDialogButton(ws,"SAVE_ATTENDANCE","Attendance details","Save attendance");
+    await assertMain(ws,"ATTENDANCE_WORKED_TIME",["510m","45m"]);
+    await setByAriaLabel(ws,`QA Tailor attendance ${attendanceDate}`,"Half day");await sleep(800);
+    // Verify the native SQLite write has completed before deliberately reloading the renderer.
+    const flushed = await evalIn(ws,`window.__minarvaDesktopFlush?.()`);
+    if (flushed !== true) throw new Error(`Attendance SQLite flush failed before reload: ${String(flushed)}`);
+    await evalIn(ws,`(()=>{location.reload();return true})()`);await sleep(1200);await ready(ws);
+    await click(ws,"ATTENDANCE_RESTORED",["attendance grid"]);
+    await setByAriaLabel(ws,"Attendance month",attendanceMonth);await sleep(300);
+    // Renderer-ready precedes React hydration; wait for the persisted staff and totals, not just the page heading.
+    let attendanceRestored = false;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const present = await evalIn(ws,`(()=>{const text=document.querySelector("main")?.innerText||"";return ["QA Tailor","510m","45m"].every(marker=>text.includes(marker))})()`);
+      if (present) { attendanceRestored = true; break; }
+      await sleep(500);
+    }
+    if (!attendanceRestored) {
+      const diagnosis = await evalIn(ws,`JSON.stringify({main:(document.querySelector("main")?.innerText||"").slice(-5000),ready:document.documentElement.dataset.minarvaRendererReady,error:document.documentElement.dataset.minarvaRendererError,attendanceCells:[...document.querySelectorAll("select[aria-label*=attendance]")].filter(e=>e.getAttribute("aria-label")?.includes("QA Tailor")).slice(0,4).map(e=>({label:e.getAttribute("aria-label"),value:e.value}))})`);
+      console.error("ATTENDANCE_SQLITE_RESTORE_DIAGNOSTIC",diagnosis);
+      await assertMain(ws,"ATTENDANCE_SQLITE_TOTALS",["QA Tailor","510m","45m"]);
+    }
+    console.log("ATTENDANCE_SQLITE_TOTALS PASS");
+    const restoredStatus=await evalIn(ws,`document.querySelector('select[aria-label="QA Tailor attendance ${attendanceDate}"]').value`);
+    if(restoredStatus!=="half_day")throw new Error("Attendance status did not survive SQLite reload");
+    await click(ws,"ATTENDANCE_RESTORED_DETAILS",[`QA Tailor details ${attendanceDate}`]);
+    const restoredDetails=JSON.parse(await evalIn(ws,`JSON.stringify([...document.querySelector('[role="dialog"]').querySelectorAll('input,textarea')].map(e=>e.value))`));
+    if(!restoredDetails.includes("30")||!restoredDetails.includes("45")||!restoredDetails.includes("QA SQLite attendance retained"))throw new Error("Attendance details did not survive SQLite reload");
+    await clickDialogButton(ws,"CLOSE_ATTENDANCE","Attendance details","Close");
+    console.log("ATTENDANCE_SQLITE_RELOAD PASS");
+
     // Laundry action must open a real data-entry modal.
     await click(ws, "LAUNDRY", ["laundry & ironing"]);
     await assertMain(ws, "LAUNDRY", ["Laundry & Ironing", "Outsourced Laundry"]);

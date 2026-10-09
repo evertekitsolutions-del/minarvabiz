@@ -1,9 +1,23 @@
 # Minarva Biz — Authoritative Project Continuation
 
-**Last updated:** 2026-10-07  
+**Last updated:** 2026-10-08  
 **Repository:** `evertekitsolutions-del/minarvabiz`
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
+
+## Active continuation — October 8 Attendance cloud parity
+
+This section supersedes older active/next-step descriptions below; retain them as historical evidence.
+
+- Verified main baseline: `27bed7c3a44a4643653c7e3ae0fc86b4f0856bdd`. Attendance PR #273 is merged; its head `cb826200fa1af98b87488ac90cc149ed6cf0dfd1` passed all deterministic workflows. PR #274 is closed, unmerged.
+- PR #276 integrates PR #275 branch filtering, worked-time totals, archived history, pending cloud overlay and reviewed conflict UI with atomic PostgreSQL attendance/event/audit authority.
+- Current continuation branch: `fix/attendance-cloud-parity`. Preserve the existing Attendance implementation; do not restart or reopen #274.
+- Read `docs/ATTENDANCE_GRID_DELIVERY.md` for identified gaps, implemented corrections, rollout gates and explicit remaining limitations.
+- Production was checked read-only: Attendance table/event RPC were absent. New schema must be applied additively only after merged verification; do not report a live grid from code merge alone.
+- Next: complete exact-head gates and isolated attendance SQL proof, merge the correction, apply all three attendance migrations together, verify production authority, then complete authenticated browser and Windows release acceptance.
+- Stable Windows remains v1.0.15. Newly merged Attendance source is not automatically installed in existing v1.0.15 clients.
+- Full MASTER VISION baseline is approximately 50%; CI/audit/PR creation alone do not increase it. Honor the user's minimum verified full-scope increment per Continue batch, with only mandatory user-owned credential/approval blockers as an exception.
+- Preserve live Vercel/Render fallbacks until their replacement parity is proven. No paid infrastructure addition is authorized.
 
 ## 1. Mandatory continuation protocol
 
@@ -385,3 +399,20 @@ If a chat ends, the next chat must continue from live repository state and these
 - Domain snapshot format is v13 and includes attendance so offline backup/restore and desktop persistence do not silently lose HR state.
 - PostgreSQL/Supabase migration adds tenant-isolated `staff_attendance` with organization/staff/date uniqueness, branch/device/version fields, RLS + FORCE RLS and authenticated organization policy.
 - Executable attendance behavior tests and source/security contracts are wired into CI. Do not mark HR-002 merged until PR #273 exact-head gates are green.
+
+## 5G. Attendance Grid parity / daily time details — PR #275
+
+- Live baseline was main `27bed7c3a44a4643653c7e3ae0fc86b4f0856bdd`: Attendance PR #273 had already merged with all exact-head required gates green. Duplicate PR #274 was closed unmerged; do not restart either branch.
+- PR #275 continues that implementation: one shared Web/Windows grid, clock-in/out editor with timezone-bearing timestamps, break/overtime/notes, worked-minute and holiday summaries, branch filtering, archived history and guarded bulk actions.
+- Status-only edits retain existing metadata. Domain validation rejects impossible dates/statuses, fractional/negative minutes and invalid clock/break ranges before mutation. Immutable versioned event snapshots preserve prior revisions.
+- `/attendance` participates in lazy cloud hydration. Staff, attendance and branch reads are paginated; selected branch survives refresh. Attendance cloud transport lives in `apps/web/src/lib/data-source-attendance.ts` so the main data-source stays within its existing 900-line audit budget.
+- Cloud writes await actual mutation and durable event acknowledgement. Ordered per-record draining, per-aggregate failure blocking, event-id replay and optimistic revision checks prevent silent overwrite or acknowledgement of empty updates.
+- Pending corrections survive in-session cloud rehydration. Managers can retry or explicitly review local/cloud values and choose a cloud copy or audited local correction rebased on the current remote revision. Superseded events remain in local history as `discarded`. Deferred-read review rejects newer local edits; same-day different-device creations use a staff/date lookup and explicit canonical-ID rebase without duplicate-day totals.
+- Online production browser persistence remains the existing session-only policy; do not claim failed changes survive browser closure. The UI warns to keep the window open until confirmed and installs a pending-change unload guard. Windows uses the existing SQLite snapshot v13 persistence. Attendance-specific persistence failures are surfaced while retaining the existing scheduled autosave retry; the details modal does not report success before SQLite confirmation.
+- Additive migration `20261008140151_attendance_role_integrity.sql` restricts writes to organization super-admin/admin/manager roles, checks staff/branch tenant relations, protects immutable attendance identity and monotonic revisions, and constrains clock/break ranges without rewriting historical records.
+- CI includes a real PostgreSQL red/green isolation test: the original policy must fail the cross-tenant-reference denial assertion; hardened policies must pass role, relation, update and tenant-read cases. Browser deep smoke exercises actual time entry and metadata retention. Installed Windows smoke additionally exercises the shared details editor and verifies status/clock/break/overtime/notes survive a renderer reload from SQLite.
+- Reuse: existing Minarva grid, Modal/FormField, phase6 store, snapshot/outbox, authenticated PostgREST, and PostgreSQL RLS primitives; no third-party source copied and no recurring paid dependency introduced. Upstream PostgreSQL/Supabase RLS documentation and changelog reviewed.
+- Independent review findings addressed: individual/bulk hidden-branch mutation, archived history loss, selected-branch reset, pending-hydration loss, acknowledgement replay ordering and genuine conflict resolution. Final independent review found no remaining verified critical/important defects after executable regression checks. Exact-head CI remains mandatory before merge.
+- Full MASTER VISION estimate entered this batch at approximately **50%**. PR #275's implemented daily attendance/time-entry/cloud-parity scope is the batch's proposed additional percentage point; count approximately **51% only after its required exact-head gates pass and it is merged**. This is a full-master estimate, not a measured milestone ratio.
+- HR shifts/rosters, leave-policy management, holiday calendars, late/early rules, biometric/geofence adapters, payroll/statutory packs and full employee self-service remain unfinished master scope. Do not mark those registry entries complete merely because the grid supports daily leave/holiday statuses or manual clock entry.
+- Production attendance migrations/deployment and customer UAT must be separately verified; merged source is not a new Windows stable release. Keep v1.0.15 and existing infrastructure fallbacks until replacement/release parity is proven.

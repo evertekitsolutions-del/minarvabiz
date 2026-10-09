@@ -28,6 +28,24 @@ let initError: string | null = null;
 let integrityOk = false;
 let integrityResult: string[] = [];
 let pendingWrite: Promise<boolean> = Promise.resolve(true);
+let newestBinary: Uint8Array | null = null;
+let writeDrain: Promise<boolean> | null = null;
+let scheduledPersist: ReturnType<typeof setTimeout> | null = null;
+
+// Domain mutations may touch audit logs and outbox entries in the same UI action.
+// Group the automatic notifications; explicit user saves still persist immediately.
+function scheduleDomainPersistence(): void {
+  if (scheduledPersist !== null) clearTimeout(scheduledPersist);
+  scheduledPersist = setTimeout(() => {
+    scheduledPersist = null;
+    void persistDomainToSqlite().then((saved) => {
+      if (!saved) throw new Error("The native SQLite write was rejected");
+    }).catch((error) => {
+      console.error("[minarvabiz] SQLite automatic persistence failed", error);
+    });
+  }, 350);
+}
+
 
 export function isDesktopSqliteReady() {
   return ready;
@@ -67,8 +85,10 @@ function loadSnap(db: SqliteDatabase): unknown | null {
   if (!rows[0]?.value) return null;
   try {
     return JSON.parse(String(rows[0].value));
-  } catch {
-    return null;
+  } catch (error) {
+    // Corrupt persisted data must never be interpreted as a fresh installation:
+    // doing so would overwrite the only recoverable snapshot on next save.
+    throw new Error(`SQLite domain snapshot JSON is invalid: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -82,7 +102,17 @@ function checkSqliteIntegrity(db: SqliteDatabase): { ok: boolean; result: string
   }
 }
 
-export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: string }> {
+let bootstrapPromise: Promise<{ ok: boolean; error?: string }> | null = null;
+
+// React StrictMode mounts effects twice in development and packaged smoke builds.
+// Concurrent bootstrap calls must never independently hydrate and persist snapshots:
+// the second initializer can overwrite newer records with its stale initial read.
+export function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: string }> {
+  if (!bootstrapPromise) bootstrapPromise = initializeDesktopSqlite();
+  return bootstrapPromise;
+}
+
+async function initializeDesktopSqlite(): Promise<{ ok: boolean; error?: string }> {
   try {
     setRuntimeMode("production");
 
@@ -112,8 +142,24 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
       readFile: (_p: string): Uint8Array | null => cached,
       writeFile: (_p: string, data: Uint8Array) => {
         cached = data;
-        const write = pendingWrite.catch(() => false).then(() => api.writeSqliteBinary(data));
-        pendingWrite = write.catch(() => false);
+        // Snapshots are complete images of the domain. Bound native IPC memory to
+        // one in-flight image and the newest queued image, not every intermediate one.
+        newestBinary = data;
+        if (!writeDrain) {
+          const drain = async (): Promise<boolean> => {
+            while (newestBinary) {
+              const latest = newestBinary;
+              newestBinary = null;
+              // Never report a failed IPC write as successful; the caller can
+              // retry a fresh complete snapshot without replacing the saved file.
+              if (await api.writeSqliteBinary(latest) !== true) return false;
+            }
+            return true;
+          };
+          const operation = Promise.resolve().then(drain);
+          writeDrain = operation;
+          pendingWrite = operation.finally(() => { writeDrain = null; });
+        }
       },
       exists: (_p: string) => cached != null && cached.length > 0,
       mkdirp: (_dir: string) => {
@@ -133,7 +179,12 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
 
     const snap = loadSnap(db);
     if (snap) {
-      importDomainSnapshot(snap as Parameters<typeof importDomainSnapshot>[0]);
+      // Import reports validation/hydration failures as a result instead of throwing.
+      // Never mark the database ready or overwrite a failed import with seeded data.
+      const imported = importDomainSnapshot(snap as Parameters<typeof importDomainSnapshot>[0]);
+      if (!imported.ok) {
+        throw new Error(`SQLite domain snapshot restore failed: ${imported.error || "unknown import error"}`);
+      }
     }
 
     ready = true;
@@ -150,8 +201,8 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
       recordBackupFailure(e instanceof Error ? e.message : String(e));
     }
 
-    (window as unknown as { __minarvaDesktopPersist?: () => Promise<boolean>; __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopPersist =
-      persistDomainToSqlite;
+    (window as unknown as { __minarvaDesktopPersist?: () => void; __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopPersist =
+      scheduleDomainPersistence;
     (window as unknown as { __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopFlush =
       flushDesktopSqlitePersistence;
 
@@ -170,6 +221,10 @@ export async function bootstrapDesktopSqlite(): Promise<{ ok: boolean; error?: s
 }
 
 export async function persistDomainToSqlite(): Promise<boolean> {
+  if (scheduledPersist !== null) {
+    clearTimeout(scheduledPersist);
+    scheduledPersist = null;
+  }
   if (!sqlite) {
     throw new Error("Cannot persist business data: SQLite not initialized");
   }
@@ -177,11 +232,14 @@ export async function persistDomainToSqlite(): Promise<boolean> {
     throw new Error("Cannot persist business data: SQLite integrity check is not healthy");
   }
   const snap = exportDomainSnapshotFull();
+  // saveSnap commits through the adapter transaction, which already exports and queues
+  // the SQLite binary. Exporting again here doubles peak ASM.js heap usage and IPC writes.
   saveSnap(sqlite, snap);
-  sqlite.save();
   return pendingWrite;
 }
 
 export async function flushDesktopSqlitePersistence(): Promise<boolean> {
+  // A scheduled automatic mutation must not be lost when a consumer flushes.
+  if (scheduledPersist !== null) return persistDomainToSqlite();
   return pendingWrite;
 }

@@ -59,7 +59,7 @@ export function createConflict(input: {
 }): ConflictRecord {
   const strategy: ConflictStrategy =
     input.strategy ??
-    (isFinancialTable(input.tableName) ? "manual" : "last_write_wins");
+    (isFinancialTable(input.tableName) || input.tableName === "staff_attendance" ? "manual" : "last_write_wins");
 
   return {
     id: generateId(),

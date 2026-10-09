@@ -113,11 +113,20 @@ async function run() {
   }
 
   try {
-    await waitFor(
-      ws,
-      `location.pathname==="/login" && (document.body?.innerText||"").includes("Sign in to continue")`,
-      "unauthenticated protected-route redirect",
-    );
+    // The initial protected-route redirect can destroy the CDP execution context.
+    // Reattach to the same app origin before asserting the settled login page.
+    try {
+      await waitFor(
+        ws,
+        `location.pathname==="/login" && (document.body?.innerText||"").includes("Sign in to continue")`,
+        "unauthenticated protected-route redirect",
+      );
+    } catch (error) {
+      if (!isNavigationDisconnect(error)) throw error;
+      try { ws.close(); } catch {}
+      ws = await connect();
+      await waitFor(ws, `location.pathname==="/login" && (document.body?.innerText||"").includes("Sign in to continue")`, "unauthenticated protected-route redirect after navigation");
+    }
     console.log("BROWSER_AUTH_NEGATIVE unauthenticated redirect PASS");
 
     await reconnectAfterNavigation( `sessionStorage.setItem("minarva_session","forged-token");sessionStorage.setItem("minarva_user","not-json");location.href=${JSON.stringify(appBase + "/dashboard")}`);
