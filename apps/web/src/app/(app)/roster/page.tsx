@@ -5,6 +5,7 @@ import {
   can, exportOutbox, getRemoteWriter, getRuntimeMode, phase6Store, phase9Store,
 } from "@minarvabiz/business-logic";
 import { isRosterHydrated } from "@/lib/data-source";
+import { checkpointUnconfirmedRosterEvents, inspectSealedRosterCheckpoint } from "@/lib/roster-recovery-checkpoint";
 
 /**
  * Authorized browser roster editor. Mutations stay on the shared domain/outbox,
@@ -17,6 +18,9 @@ export default function RosterPage() {
   const [syncProblem, setSyncProblem] = React.useState("");
   const [resolutionMessage, setResolutionMessage] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [recoveryState, setRecoveryState] = React.useState<"checking" | "ready" | "blocked" | "unavailable">("checking");
+  const [recoveryCount, setRecoveryCount] = React.useState(0);
+  const [hydrationEpoch, setHydrationEpoch] = React.useState(0);
   const [review, setReview] = React.useState<
     Awaited<ReturnType<typeof phase6Store.reviewWorkforceRosterConflict>> | null
   >(null);
@@ -33,9 +37,9 @@ export default function RosterPage() {
       const detail = (event as CustomEvent<{ok?:boolean; message?:string}>).detail;
       if (detail?.ok) {
         setReady(getRuntimeMode() === "demo" || isRosterHydrated());
-        setProblem(""); setSyncProblem(""); setReview(null); setResolutionMessage(""); redraw();
+        setProblem(""); setSyncProblem(""); setReview(null); setResolutionMessage(""); setRecoveryState("checking"); setHydrationEpoch(n=>n+1); redraw();
       } else {
-        setReady(false); setReview(null);
+        setReady(false); setReview(null); setRecoveryState("checking"); setHydrationEpoch(n=>n+1);
         setProblem(detail?.message || "Roster cloud hydration failed");
       }
     };
@@ -43,7 +47,25 @@ export default function RosterPage() {
     return () => window.removeEventListener("minarva:data-hydrated", hydrated);
   }, []);
 
-  // Web outbox currently survives only for the current browser session.
+  // Current user+organization are resolved through the authenticated RPC.
+  // A sealed unconfirmed event is quarantined on reload, never auto-replayed.
+  React.useEffect(() => {
+    if (!ready || !isRosterHydrated()) return;
+    let cancelled=false;
+    setRecoveryState("checking");
+    void inspectSealedRosterCheckpoint().then(result=>{
+      if (cancelled) return;
+      setRecoveryCount(result.events.length);
+      setRecoveryState(result.events.length ? "blocked" : "ready");
+    }).catch(error=>{
+      if (cancelled) return;
+      setRecoveryState("unavailable");
+      setSyncProblem(error instanceof Error?error.message:String(error));
+    });
+    return ()=>{cancelled=true;};
+  }, [ready,hydrationEpoch]);
+
+  // Warn before closing until the confirmed identity has been durably cleared.
   // Keep the warning active until the exact events are acknowledged by RPC.
   React.useEffect(() => {
     if (!unsent.length) return;
@@ -57,10 +79,10 @@ export default function RosterPage() {
 
   const writerReady = Boolean(getRemoteWriter()?.upsertRosterEvent);
   const scopedReady = ready && (getRuntimeMode() === "demo" || isRosterHydrated());
-  const editable = scopedReady && isRosterHydrated() && can("staff.manage") && writerReady && !busy && unsent.length === 0;
+  const editable = scopedReady && isRosterHydrated() && recoveryState === "ready" && can("staff.manage") && writerReady && !busy && unsent.length === 0;
 
   async function commit(action: () => void): Promise<void> {
-    if (!ready || !isRosterHydrated() || !can("staff.manage") || !getRemoteWriter()?.upsertRosterEvent) {
+    if (!ready || !isRosterHydrated() || recoveryState !== "ready" || !can("staff.manage") || !getRemoteWriter()?.upsertRosterEvent) {
       throw new Error("An authorized roster session and atomic cloud writer are required");
     }
     if (inFlight.current || exportOutbox().some(e =>
@@ -70,9 +92,20 @@ export default function RosterPage() {
     }
     inFlight.current = true; setBusy(true); setSyncProblem(""); setResolutionMessage(""); setReview(null);
     try {
+      const pinnedWriter=getRemoteWriter();
+      const restored=await inspectSealedRosterCheckpoint();
+      if (restored.events.length || !isRosterHydrated() || getRemoteWriter()!==pinnedWriter) {
+        setRecoveryState("blocked");
+        throw new Error("An earlier sealed roster event or changed session requires reviewed recovery");
+      }
       action();
       redraw(); // Make the unconfirmed local version visibly pending immediately.
+      // Do not send a cloud RPC before its original immutable event is sealed.
+      const originalIds=exportOutbox().filter(e=>(e.aggregateType==="staff_shift_rules"||
+        e.aggregateType==="staff_roster_slots")&&(e.status==="pending"||e.status==="failed")).map(e=>e.id);
+      await checkpointUnconfirmedRosterEvents();
       await phase6Store.flushWorkforceRosterOutbox();
+      await checkpointUnconfirmedRosterEvents(originalIds);
     } catch (error) {
       setSyncProblem(error instanceof Error ? error.message : String(error));
       throw error; // The planner reports failure; no false save acknowledgement.
