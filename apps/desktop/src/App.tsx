@@ -20,6 +20,7 @@ import { DesktopEntitlementMonitor } from "./components/DesktopEntitlementMonito
 import { DesktopProcurementPanel } from "./components/DesktopProcurementPanel";
 import { DesktopDayEndPanel } from "./components/DesktopDayEndPanel";
 import { DesktopAttendancePanel } from "./components/DesktopAttendancePanel";
+import { DesktopRosterPanel } from "./components/DesktopRosterPanel";
 import { buildProfessionalReportData } from "./lib/report-data";
 import { NAV_FEATURE, featuresForLicense, type CommercialLicenseState } from "./lib/desktop-license-policy";
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
@@ -56,6 +57,7 @@ export function App() {
   const [formError, setFormError] = React.useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = React.useState<ServiceOrder | null>(null);
   const [crmCustomerId, setCrmCustomerId] = React.useState("");
+  const [rosterOpen, setRosterOpen] = React.useState(false);
   const [staffDetailId, setStaffDetailId] = React.useState("");
   const [returnSaleId, setReturnSaleId] = React.useState("");
   const [productQuery, setProductQuery] = React.useState("");
@@ -117,6 +119,13 @@ export function App() {
       // fallback would conceal data loss on the next Windows restart.
       setModuleError(`SQLite save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
       console.error("[minarvabiz] SQLite save failed", error);
+    }
+  }, [refreshAll]);
+  const persistRosterAndRefresh = React.useCallback(async () => {
+    try {
+      if (!await persistDomainToSqlite()) throw new Error("Roster changes are not yet saved to SQLite. Keep the application open and retry.");
+    } finally {
+      refreshAll();
     }
   }, [refreshAll]);
   const persistAttendanceAndRefresh = React.useCallback(async () => {
@@ -227,7 +236,7 @@ export function App() {
     {view==="laundry"&&<LaundryList orders={laundry} auditLogs={phase7Store.listAuditLogs(500)} onUpdateDetails={handleLaundryDetailsUpdate} onAddIroning={()=>setLaundryMode("in_house_ironing")} onAddOutsourced={()=>setLaundryMode("outsourced")} onStatusChange={handleLaundryStatusChange} onCancel={order=>{setLaundryCancelError(null);setLaundryCancelOrder(order);}}/>} 
     {view==="expenses"&&<ExpenseList expenses={expenses} categories={expenseCategories} onAdd={()=>{setModuleError(null);setExpenseForm(v=>({...v,date:v.date||todayLocal(),categoryId:v.categoryId||expenseCategories[0]?.id||""}));setExpenseOpen(true);}} onReverse={handleReverseExpense}/>} 
     {view==="purchases"&&<div className="space-y-4"><PurchaseList purchases={purchases} suppliers={suppliers} onAdd={()=>{setModuleError(null);setPurchaseForm(v=>({...v,date:v.date||todayLocal()}));setPurchaseOpen(true);}}/><DesktopProcurementPanel suppliers={suppliers} products={products} onChanged={persistAndRefresh}/></div>} 
-    {view==="staff"&&<StaffList staff={staff} onAdd={()=>{resetStaffForm();setModuleError(null);setStaffOpen(true);}} onEdit={openStaffEditor} onArchive={(m,reason)=>{try{const r=phase6Store.archiveStaff(m.id,reason);if(r.error)return{error:r.error};void persistAndRefresh();return{success:true};}catch(error){return{error:errorMessage(error)};}}} onSelect={member=>{setStaffDetailId(member.id);navTo("staff-detail");}}/>} 
+    {view==="staff"&&<div className="space-y-4"><Button variant="outline" onClick={()=>setRosterOpen(v=>!v)}>{rosterOpen?"Back to staff list":"Open Shift & Roster Planner"}</Button>{rosterOpen?<DesktopRosterPanel staff={staff} onChanged={persistRosterAndRefresh} onError={setModuleError}/>:<StaffList staff={staff} onAdd={()=>{resetStaffForm();setModuleError(null);setStaffOpen(true);}} onEdit={openStaffEditor} onArchive={(m,reason)=>{try{const r=phase6Store.archiveStaff(m.id,reason);if(r.error)return{error:r.error};void persistAndRefresh();return{success:true};}catch(error){return{error:errorMessage(error)};}}} onSelect={member=>{setStaffDetailId(member.id);navTo("staff-detail");}}/>}</div>} 
     {view==="attendance"&&<DesktopAttendancePanel staff={staff} onChanged={persistAttendanceAndRefresh} onError={setModuleError}/>} \n    {view==="notifications"&&<NotificationCenter notifications={notifications} onMarkAllRead={()=>{phase6Store.markAllNotificationsRead();void persistAndRefresh();}} onMarkRead={id=>{phase6Store.markNotificationRead(id);void persistAndRefresh();}} onNavigate={(href)=>{const target=href.startsWith("/services")?"services":href.startsWith("/reports")?"reports":href.startsWith("/inventory")?"products":href.startsWith("/sales")?"sales":"dashboard";navTo(target as NavItemId);}}/>} 
     {view==="reports"&&<ReportsPanel salesRows={reportSales} dayEnd={reportDayEnd} stock={reportStock} outstanding={reportOutstanding} payables={professionalReports.payables} financial={professionalReports.financial} taxReport={professionalReports.taxReport} reportError={professionalReports.error||undefined} onRefresh={()=>{refreshAll();}} from={reportFrom} to={reportTo} onFromChange={setReportFrom} onToChange={setReportTo}/>} 
     {view==="day-end"&&<DesktopDayEndPanel onChanged={()=>{void persistAndRefresh();}}/>}
