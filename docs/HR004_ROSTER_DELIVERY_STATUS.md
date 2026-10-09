@@ -1,7 +1,7 @@
 # HR-004 Shift/Roster — Delivery and Remaining Acceptance
 
 **Status:** Partial implementation; not production-complete  
-**Verified baseline:** main `7c8695bf5d541d163e008892659967d45d9f8fd1`, merged PR #299  
+**Verified baseline:** main `f2fc468728172b20588de10e548a430165f71dd6`, merged PR #302  
 **Updated:** 2026-10-09  
 **Scope:** Shared Web, Windows SQLite, hybrid PostgreSQL/cloud authority
 
@@ -18,13 +18,15 @@
 | #297 | Authorized Web roster edit/correct/cancel and explicit original-event retry | Shared-domain write, tenant-authenticated RPC, unload warning and stop-on-error |
 | #298 | Read-only per-event local/Cloud conflict comparison | Tenant-scoped RLS reads, exact UUID queries, role/session consistency |
 | #299 | Explicit Keep Cloud conflict decision | Cloud re-fetch; rejects stale UI, multiple pending or later dependent events; discard marker retains original immutable payload |
+| #301 | Reviewed Reapply Local for one isolated same-ID Cloud conflict | New immutable revisioned event, audited supersession and awaited atomic RPC; rejected/uncertain result retryable |
+| #302 | Actual sql.js SQLite binary backup, corruption/restore and event replay regression | Archived `discarded`, `synced`, `failed` events and immutable event identity preserved; corrupt restore rolls back |
 
-The exact-head #299 merge gate concluded with **19 success, 2 optional skipped, 0 failure**, including CI, SAST, dependency/license, secrets, coverage, Web, Windows packaged/feature-click/deep installed smoke. An initial test-code syntax defect was corrected before green exact-head validation.
+The exact-head #299, #301 and #302 merge gates each concluded with **19 success, 2 optional skipped, 0 failure**, including CI, SAST, dependency/license, secrets, coverage, Web, Windows packaged/feature-click/deep installed smoke. An initial test-code syntax defect was corrected before green exact-head validation.
 
 ## Important limits — do not misreport as complete
 
 1. **Web pending queue durability:** new Web roster events survive the current browser session only. `beforeunload` warns but does not guarantee recovery after a crashed/closed tab, browser restart or device switch. Windows SQLite v14 snapshot/backup remains separate.
-2. **Conflict reconciliation:** review and **Keep Cloud** are implemented for a safely isolated reviewed event. **Reapply Local** requires a fresh approved remote revision, durable supersession of the original queued event, dependent event sequencing, canonical identity resolution and audit. Do not auto-discard, auto-rebase or last-write-win.
+2. **Conflict reconciliation:** reviewed **Keep Cloud** and **Reapply Local** are implemented for one isolated same-canonical-ID event. Reapply Local re-fetches the current revision and creates a NEW immutable event under the existing audited RPC. Cross-device conflicting staff/day creations with **different IDs**, multi-event dependency recovery, and durable browser crash recovery remain incomplete. No silent last-write-wins.
 3. **Timezone/DST:** shared `checkZonedRosterSlot` resolves actual UTC instants with explicit branch IANA rules. PostgreSQL trigger currently validates wall-clock overlap and does not yet provide tenant-owned branch timezone/DST branch-policy enforcement or UTC minimum-rest on the server.
 4. **Minimum rest and labor policy:** current local planner numeric minimum-rest input is not a centrally versioned approved organizational policy. A server-authoritative configurable rest policy, statutory pack integration and migration-safe history remain outstanding.
 5. **Recurring rosters:** weekly/monthly previews exist. Manager review, approval/rejection, atomic batch submit, conflict analysis, timezone checks, approvals audit and server rollback semantics are not complete.
@@ -34,11 +36,11 @@ The exact-head #299 merge gate concluded with **19 success, 2 optional skipped, 
 
 ## Required next engineering slices
 
-- HR-004A: complete **Reapply Local** reconciliation for shift and slot corrections: explicit reviewed user decision, immutable fresh local/Cloud snapshots, stable tenant and event identity, monotonic version rebase, preflight of historic dependencies, atomic outbox supersession, secure replay and CI fault injection. Separate canonical different-ID same-staff/day conflict workflow.
+- HR-004A (partially complete): one-event same-ID **Reapply Local** reviewed, audited and exact-head verified in #301. Next extend canonical different-ID same-staff/day identity review and ordered dependent-event recovery; never discard third-party changes or bypass tenant authority.
 - HR-004B: durable, tenant-partitioned Web pending HR outbox compatible with portability/privacy policy; test restart, auth swap, logout, corruption, interrupted update and recovery with no credential exposure.
 - HR-004C: tenant-owned IANA timezone and DST fold/gap policy + centrally approved minimum rest; additive PostgreSQL migration with authorization, server enforced UTC overlap/rest and cross-branch historic shifts; reproducible PostgreSQL E2E.
 - HR-004D: shift templates and recurring roster approvals including review, versioned policy, audit, batch atomicity, correction/cancellation and explicit conflicts.
-- HR-004E: browser and **real installed** Windows UI feature UAT, SQLite backup/restore disaster recovery, PostgreSQL production integration and legitimate authenticated customer UAT; separately verify new signed installer and updater. No synthetic customer production fixtures.
+- HR-004E: browser and **real installed** Windows UI feature UAT, further customer-grade native SQLite/backup disaster recovery (engine-level regression is verified in #302), PostgreSQL production integration and legitimate authenticated customer UAT; separately verify new signed installer and updater. No synthetic customer production fixtures.
 - Then continue HR-005 Holidays, HR-006 Leave, HR-008 Late/Early, HR-009 Break, Payroll and Employee Self-Service per authoritative Master Plan.
 
 ## Engineering invariants
