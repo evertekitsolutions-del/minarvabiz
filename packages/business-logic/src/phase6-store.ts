@@ -203,6 +203,41 @@ export function assignRosterSlot(input: Omit<RosterSlot, "id" | "version"> & { i
   return { ...next };
 }
 
+
+/** Serialize roster cloud confirmation across templates and assignments.
+ * Never acknowledge later dependent revisions after an earlier RPC failure.
+ * Local outbox events and error diagnostics remain available for explicit retry.
+ * Browser event durability remains session-only until local-first Web persistence
+ * and manual conflict reconciliation are separately delivered.
+ */
+let workforceFlush: Promise<number> | null = null;
+export function flushWorkforceRosterOutbox(): Promise<number> {
+  assertPermission("staff.manage");
+  const writer = getRemoteWriter()?.upsertRosterEvent;
+  if (!writer) return Promise.reject(new Error("Authenticated workforce RPC writer is unavailable; queued roster changes remain local"));
+  if (workforceFlush) return workforceFlush;
+  const operation = (async () => {
+    let confirmed = 0;
+    const queue = exportOutbox()
+      .filter(e => (e.aggregateType === "staff_shift_rules" || e.aggregateType === "staff_roster_slots") &&
+        (e.status === "pending" || e.status === "failed"))
+      .sort((a,b) => a.sequence - b.sequence);
+    for (const event of queue) {
+      try {
+        await writer(event);
+        markOutboxSynced([event.id]);
+        confirmed++;
+      } catch (error) {
+        markOutboxFailed(event.id, error instanceof Error ? error.message : String(error));
+        throw error; // Never advance to later revisions or dependent slots.
+      }
+    }
+    return confirmed;
+  })();
+  workforceFlush = operation;
+  return operation.finally(() => { if (workforceFlush === operation) workforceFlush = null; });
+}
+
 /** Restore Phase 6 state from a persisted snapshot without emitting outbox events. */
 export function exportPhase6State(){return{staff:[...staff],attendance:[...attendance],shiftRules:shiftRules.map(rule=>({...rule})),rosterSlots:rosterSlots.map(slot=>({...slot})),assignments:[...assignments],incentiveRules:[...incentiveRules],payouts:[...payouts],notifications:[...notifications]};}
 
