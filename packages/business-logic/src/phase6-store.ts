@@ -1,6 +1,6 @@
 import { assertPermission } from "./permissions";
 import { getRemoteWriter, getRemoteWriterGeneration } from "./remote-write";
-import { exportOutbox, discardAttendanceOutbox, markOutboxSynced, markOutboxFailed } from "./outbox-bridge";
+import { exportOutbox, discardAttendanceOutbox, discardWorkforceRosterConflictEvent, markOutboxSynced, markOutboxFailed } from "./outbox-bridge";
 import { enqueueOutbox } from "./outbox-bridge";
 import { touchPersistence } from "./autosave";
 import { auditAction } from "./audit-actions";
@@ -299,6 +299,87 @@ export async function reviewWorkforceRosterConflict(eventId: string): Promise<{
     aggregateType: event.aggregateType as "staff_shift_rules" | "staff_roster_slots",
     local: { ...snapshot }, remote: remote ? { ...remote } : null, error: event.lastError,
   };
+}
+
+/**
+ * HR-004 reviewed resolution: accept the *currently authenticated* Cloud copy
+ * only after the manager explicitly chose it from an unchanged comparison.
+ * This never issues server DML, rewrites earlier event payloads, or force bumps
+ * optimistic revisions. More complex event dependency chains remain blocked
+ * pending an ordered, audited supersession protocol.
+ */
+export async function keepCloudWorkforceRosterConflict(
+  approved: Awaited<ReturnType<typeof reviewWorkforceRosterConflict>>,
+): Promise<void> {
+  assertPermission("staff.manage");
+  if (workforceFlush) throw new Error("Wait for roster sync before resolving a conflict");
+  const relevant = exportOutbox().filter(e =>
+    (e.aggregateType === "staff_shift_rules" || e.aggregateType === "staff_roster_slots") &&
+    (e.status === "pending" || e.status === "failed"));
+  if (relevant.length !== 1 || relevant[0]?.id !== approved.eventId) {
+    throw new Error("Dependent or multiple unconfirmed roster events need ordered manual recovery");
+  }
+  const event = relevant[0];
+  if (event.aggregateType !== approved.aggregateType ||
+      event.aggregateId !== approved.local?.id ||
+      JSON.stringify(event.payload) !== JSON.stringify(approved.local)) {
+    throw new Error("Local roster event changed since review; review again");
+  }
+  const local = event.aggregateType === "staff_shift_rules"
+    ? shiftRules.find(rule => rule.id === event.aggregateId)
+    : rosterSlots.find(slot => slot.id === event.aggregateId);
+  if (!local || JSON.stringify(local) !== JSON.stringify(approved.local)) {
+    throw new Error("Local roster changed since review; review again");
+  }
+  // Never discard a pending shift correction if a *later* roster revision
+  // (even previously synced) uses it. Event order is a safety boundary.
+  const dependent = exportOutbox().some(other => other.id !== event.id &&
+    other.sequence > event.sequence &&
+    ((other.aggregateType === event.aggregateType && other.aggregateId === event.aggregateId) ||
+      (event.aggregateType === "staff_shift_rules" &&
+       other.aggregateType === "staff_roster_slots" &&
+       (other.payload as RosterSlot | null)?.shiftRuleId === event.aggregateId)));
+  if (dependent) throw new Error("Later dependent roster events require ordered conflict recovery");
+
+  // Re-read through current authenticated RLS; reject stale UI snapshots.
+  const fresh = await reviewWorkforceRosterConflict(approved.eventId);
+  if (fresh.aggregateType !== approved.aggregateType ||
+      JSON.stringify(fresh.local) !== JSON.stringify(approved.local) ||
+      JSON.stringify(fresh.remote) !== JSON.stringify(approved.remote)) {
+    throw new Error("Cloud or local roster revision changed; review again before resolution");
+  }
+  assertPermission("staff.manage");
+  if (workforceFlush || exportOutbox().filter(e =>
+    (e.aggregateType === "staff_shift_rules" || e.aggregateType === "staff_roster_slots") &&
+    (e.status === "pending" || e.status === "failed")).length !== 1 ||
+    event.status !== "pending" && event.status !== "failed" ||
+    JSON.stringify(event.payload) !== JSON.stringify(approved.local)) {
+    throw new Error("Roster event status changed during conflict resolution");
+  }
+  const nextRules = shiftRules.map(x => ({...x}));
+  const nextSlots = rosterSlots.map(x => ({...x}));
+  if (event.aggregateType === "staff_shift_rules") {
+    const index = nextRules.findIndex(x => x.id === event.aggregateId);
+    if (index < 0) throw new Error("Local shift no longer exists");
+    if (fresh.remote) {
+      validateShiftRule(fresh.remote as ShiftRule);
+      nextRules[index] = {...fresh.remote as ShiftRule};
+    } else nextRules.splice(index, 1);
+  } else {
+    const index = nextSlots.findIndex(x => x.id === event.aggregateId);
+    if (index < 0) throw new Error("Local roster assignment no longer exists");
+    if (fresh.remote) {
+      nextSlots[index] = {...fresh.remote as RosterSlot};
+    } else nextSlots.splice(index, 1);
+  }
+  // The existing snapshot validation is transactional in-memory: all records
+  // are validated before arrays are replaced, including historic references.
+  hydratePhase6({shiftRules:nextRules,rosterSlots:nextSlots});
+  discardWorkforceRosterConflictEvent(event.id);
+  auditAction("roster.conflict.keep_cloud", event.aggregateType, event.aggregateId,
+    {eventId:event.id,local:approved.local},
+    {remote:fresh.remote,decision:"keep_cloud",reviewedVersion:fresh.remote?.version ?? null});
+  touchPersistence();
 }
 
 /** Restore Phase 6 state from a persisted snapshot without emitting outbox events. */
