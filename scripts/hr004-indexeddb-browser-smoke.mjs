@@ -119,7 +119,7 @@ try{
   assert.equal(restored.name,event.payload.name);
   assert.equal(restored.otherAccount,null,"Different tenant cannot read this scope");
 
-  // Real browser offline storage read: no network or WebSocket RPC is used.
+  // Read directly from IndexedDB with no application network request; explicit offline-disconnect acceptance remains separate.
   const offline=await evaluate(ws,script(`
     const scope=${JSON.stringify(scopeA)};
     const driver=vault.createIndexedDbRosterRecoveryDriver();
