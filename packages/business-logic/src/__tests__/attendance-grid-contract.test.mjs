@@ -25,7 +25,7 @@ assert.match(desktop,/view==="attendance"/);
 assert.match(desktop,/DesktopAttendancePanel/);
 assert.match(desktopPanel,/AttendanceGrid/);
 assert.match(desktopPanel,/setAttendance/);
-assert.match(persistence,/SNAPSHOT_VERSION = 13/);
+assert.match(persistence,/SNAPSHOT_VERSION = 14/);
 assert.match(persistence,/attendance: phase6\.attendance/);
 assert.match(persistence,/attendance: snap\.attendance/);
 assert.match(page,/All present today/);
