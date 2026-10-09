@@ -11,6 +11,11 @@ const user="11111111-1111-4111-8111-111111111111";
 const organization="22222222-2222-4222-8222-222222222222";
 let token="verified-token",generation=1,role=true,currentUser=user,authorized=true;
 let events=[],authCalls=0,pausedAuthorization=null;
+let cloudReads=[],cloudReply=null,pausedCloudRead=null,cloudStarted=null;
+let currentReader={
+  getRosterShift:async id=>{cloudReads.push({kind:"shift",id});if(cloudStarted)cloudStarted();if(pausedCloudRead)await pausedCloudRead;return cloudReply;},
+  getRosterSlot:async id=>{cloudReads.push({kind:"slot",id});if(cloudStarted)cloudStarted();if(pausedCloudRead)await pausedCloudRead;return cloudReply;},
+};
 const sealed=new Map();
 const writes=[];
 const vault={
@@ -25,6 +30,7 @@ const business={
   can:permission=>permission==="staff.manage"&&role,
   exportOutbox:()=>events,
   getRemoteWriterGeneration:()=>generation,
+  getRemoteWriter:()=>currentReader,
   getSessionToken:()=>token,
   getSessionUser:()=>currentUser?{id:currentUser}:null,
 };
@@ -117,4 +123,66 @@ assert.match(page,/await checkpointUnconfirmedRosterEvents\(\);\s*await phase6St
 assert.match(page,/No automatic replay or overwrite was performed/);
 assert.match(core,/if \(beforeFlush\) await beforeFlush\(\);/);
 assert.ok(authCalls>3);
+
+// Read-only post-crash Cloud comparison NEVER imports or submits a sealed event.
+// Its organization is resolved by the authoritative RPC for the active user.
+currentUser=user;token="verified-token";role=true;authorized=true;generation=4;
+sealed.set(key,[{...event,status:"failed"}]);
+const oldVault=structuredClone(sealed.get(key));
+cloudReply={id:event.aggregateId,version:7,name:"Cloud template",active:true};
+const report=await checkpoints.compareSealedRosterCheckpointWithCloud();
+assert.equal(report.scope.organizationId,organization);
+assert.equal(report.comparisons.length,1);
+assert.equal(report.comparisons[0].eventId,event.id);
+assert.equal(report.comparisons[0].localVersion,2);
+assert.equal(report.comparisons[0].remoteVersion,7);
+assert.equal(report.comparisons[0].remotePresence,"visible");
+assert.deepEqual(cloudReads.at(-1),{kind:"shift",id:event.aggregateId});
+assert.deepEqual(sealed.get(key),oldVault,"Read-only review preserves source bytes");
+const writesBeforeReview=writes.length;
+assert.equal(writes.length,writesBeforeReview,"Cloud comparison cannot trigger a local checkpoint");
+
+cloudReply=null;
+const hidden=await checkpoints.compareSealedRosterCheckpointWithCloud();
+assert.equal(hidden.comparisons[0].remotePresence,"missing-or-hidden");
+assert.equal(hidden.comparisons[0].remoteVersion,null,
+  "Hidden under RLS must NOT imply permission to create or delete");
+cloudReply={id:"00000000-0000-4000-8000-000000000000",version:3};
+await assert.rejects(()=>checkpoints.compareSealedRosterCheckpointWithCloud(),
+  /Cloud record identity or version is invalid/);
+cloudReply={id:event.aggregateId,version:7};
+await assert.rejects(()=>checkpoints.compareSealedRosterCheckpointWithCloud(26),/batch size/);
+await assert.rejects(()=>checkpoints.compareSealedRosterCheckpointWithCloud(0),/batch size/);
+
+// A mid-flight tenant switch must not return a previous tenant's Cloud data.
+let releaseRead;
+pausedCloudRead=new Promise(resolve=>{releaseRead=resolve;});
+let signalRead;
+const didStart=new Promise(resolve=>{signalRead=resolve;});
+cloudStarted=signalRead;
+const interrupted=checkpoints.compareSealedRosterCheckpointWithCloud();
+await didStart;
+generation=5;
+releaseRead();pausedCloudRead=null;cloudStarted=null;
+await assert.rejects(interrupted,/identity changed/);
+assert.deepEqual(sealed.get(key),oldVault);
+generation=6;
+currentReader=null;
+await assert.rejects(()=>checkpoints.compareSealedRosterCheckpointWithCloud(),
+  /Authenticated roster conflict readers/);
+currentReader={getRosterShift:async()=>cloudReply,getRosterSlot:async()=>cloudReply};
+
+// Different active account must not open prior user's event backup.
+currentUser="66666666-6666-4666-8666-666666666666";
+const other=await checkpoints.compareSealedRosterCheckpointWithCloud();
+assert.equal(other.comparisons.length,0);
+assert.equal(other.total,0);
+currentUser=user;
+assert.deepEqual(sealed.get(key),oldVault);
+assert.equal(writes.length,writesBeforeReview,"No Cloud comparison may send or save an event");
+
+assert.match(page,/Compare saved changes with Cloud \(read only\)/);
+assert.match(page,/compareSealedRosterCheckpointWithCloud\(\)/);
+assert.match(page,/No events were imported, discarded, sent or acknowledged/);
+
 console.log("HR-004B Web integration: RPC-authorized scope, prewrite, acknowledgement, revoked session and crash quarantine PASS");

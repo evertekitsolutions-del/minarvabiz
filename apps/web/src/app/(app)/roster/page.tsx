@@ -5,7 +5,7 @@ import {
   can, exportOutbox, getRemoteWriter, getRuntimeMode, phase6Store, phase9Store,
 } from "@minarvabiz/business-logic";
 import { isRosterHydrated } from "@/lib/data-source";
-import { checkpointUnconfirmedRosterEvents, inspectSealedRosterCheckpoint } from "@/lib/roster-recovery-checkpoint";
+import { checkpointUnconfirmedRosterEvents, inspectSealedRosterCheckpoint, compareSealedRosterCheckpointWithCloud } from "@/lib/roster-recovery-checkpoint";
 
 /**
  * Authorized browser roster editor. Mutations stay on the shared domain/outbox,
@@ -20,6 +20,9 @@ export default function RosterPage() {
   const [busy, setBusy] = React.useState(false);
   const [recoveryState, setRecoveryState] = React.useState<"checking" | "ready" | "blocked" | "unavailable">("checking");
   const [recoveryCount, setRecoveryCount] = React.useState(0);
+  const [sealedReview, setSealedReview] = React.useState<
+    Awaited<ReturnType<typeof compareSealedRosterCheckpointWithCloud>> | null
+  >(null);
   const [hydrationEpoch, setHydrationEpoch] = React.useState(0);
   const [review, setReview] = React.useState<
     Awaited<ReturnType<typeof phase6Store.reviewWorkforceRosterConflict>> | null
@@ -37,9 +40,9 @@ export default function RosterPage() {
       const detail = (event as CustomEvent<{ok?:boolean; message?:string}>).detail;
       if (detail?.ok) {
         setReady(getRuntimeMode() === "demo" || isRosterHydrated());
-        setProblem(""); setSyncProblem(""); setReview(null); setResolutionMessage(""); setRecoveryState("checking"); setHydrationEpoch(n=>n+1); redraw();
+        setProblem(""); setSyncProblem(""); setReview(null); setResolutionMessage(""); setRecoveryState("checking"); setSealedReview(null); setHydrationEpoch(n=>n+1); redraw();
       } else {
-        setReady(false); setReview(null); setRecoveryState("checking"); setHydrationEpoch(n=>n+1);
+        setReady(false); setReview(null); setRecoveryState("checking"); setSealedReview(null); setHydrationEpoch(n=>n+1);
         setProblem(detail?.message || "Roster cloud hydration failed");
       }
     };
@@ -80,6 +83,22 @@ export default function RosterPage() {
   const writerReady = Boolean(getRemoteWriter()?.upsertRosterEvent);
   const scopedReady = ready && (getRuntimeMode() === "demo" || isRosterHydrated());
   const editable = scopedReady && isRosterHydrated() && recoveryState === "ready" && can("staff.manage") && writerReady && !busy && unsent.length === 0;
+
+  async function compareSavedRecovery() {
+    if (!ready || !isRosterHydrated() || recoveryState !== "blocked" ||
+        !can("staff.manage") || !getRemoteWriter()?.getRosterShift ||
+        !getRemoteWriter()?.getRosterSlot || inFlight.current) return;
+    inFlight.current = true; setBusy(true); setSyncProblem(""); setSealedReview(null);
+    try {
+      // Only read a fresh RLS-scoped snapshot. Never hydrate queue or auto-RPC.
+      const report = await compareSealedRosterCheckpointWithCloud();
+      setSealedReview(report);
+    } catch (error) {
+      setSyncProblem(error instanceof Error ? error.message : String(error));
+    } finally {
+      inFlight.current = false; setBusy(false);
+    }
+  }
 
   async function commit(action: () => void): Promise<void> {
     if (!ready || !isRosterHydrated() || recoveryState !== "ready" || !can("staff.manage") || !getRemoteWriter()?.upsertRosterEvent) {
@@ -203,7 +222,34 @@ export default function RosterPage() {
       Encrypted recovery contains {recoveryCount} unconfirmed roster event(s) for this authorized account.
       New edits are blocked to preserve the original records. No automatic replay or overwrite was performed.
       Keep this browser profile for an explicit recovery/import review.
+      <button type="button" className="ml-3 rounded border px-3 py-1"
+        disabled={busy || !getRemoteWriter()?.getRosterShift || !getRemoteWriter()?.getRosterSlot}
+        onClick={() => void compareSavedRecovery()}>
+        {busy ? "Comparing…" : "Compare saved changes with Cloud (read only)"}
+      </button>
     </div>}
+    {recoveryState === "blocked" && sealedReview && <section
+      aria-label="Saved roster recovery comparison" className="rounded border p-3">
+      <h3 className="font-semibold">Saved roster events versus current authorized Cloud records</h3>
+      <p className="text-sm">Read-only comparison of {sealedReview.comparisons.length} of {sealedReview.total} event(s).
+        Missing or hidden records cannot be distinguished under RLS. No events were imported, discarded, sent or acknowledged.
+        The saved encrypted backup is unchanged; reviewed restoration needs a separate explicit decision.</p>
+      <div className="space-y-3">
+        {sealedReview.comparisons.map(item => <article key={item.eventId} className="rounded border p-2 text-sm">
+          <p>Event {item.eventId} · {item.aggregateType} · local {item.localStatus}</p>
+          <p>Saved revision {item.localVersion} · Cloud {item.remotePresence === "visible"
+            ? `revision ${item.remoteVersion}` : "missing or not visible to this account"}</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div><strong>Saved local correction</strong>
+              <pre className="max-h-48 overflow-auto text-xs">{JSON.stringify(item.localPayload,null,2)}</pre></div>
+            <div><strong>Current authorized Cloud record</strong>
+              <pre className="max-h-48 overflow-auto text-xs">
+                {item.remotePayload ? JSON.stringify(item.remotePayload,null,2) : "No authorized Cloud row visible"}
+              </pre></div>
+          </div>
+        </article>)}
+      </div>
+    </section>}
     {recoveryState === "unavailable" && <p role="alert">Roster recovery storage or authorization is unavailable; Web editing is disabled to prevent silent data loss.</p>}
     {unsent.length > 0 && <div role="alert" className="rounded border border-amber-300 p-3 text-sm">
       {unsent.length} unconfirmed roster event(s); original identities retained. Pending events are encrypted before the Cloud RPC;
