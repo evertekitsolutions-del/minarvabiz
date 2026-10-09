@@ -170,9 +170,10 @@ export function updateShiftRule(id: UUID, changes: Partial<Omit<ShiftRule, "id">
     old.startTime !== next.startTime || old.endTime !== next.endTime ||
     old.unpaidBreakMinutes !== next.unpaidBreakMinutes || old.branchId !== next.branchId
   )) throw new Error("Historical shift timing and branch cannot change; create a new shift template");
+  const previous = { ...old };
   Object.assign(old, next);
   enqueueOutbox("staff_shift_rules", id, "update", { ...old });
-  auditAction("roster.shift.update", "staff_shift_rules", id, { ...old, ...changes, name: old.name }, { ...old });
+  auditAction("roster.shift.update", "staff_shift_rules", id, previous, { ...old });
   touchPersistence();
   return { ...old };
 }
@@ -187,12 +188,13 @@ export function assignRosterSlot(input: Omit<RosterSlot, "id" | "version"> & { i
     branchId: input.branchId, status: input.status,
     version: old ? old.version + 1 : 1,
   };
-  const checked = checkRosterSlot({ candidate: next, slots: rosterSlots, shifts: shiftRules, staff: getStaff(input.staffId) ?? null, policy });
+  const checked = checkRosterSlot({ candidate: next, slots: rosterSlots, shifts: shiftRules, staff: staff.find(member => member.id === input.staffId) ?? null, policy });
   if (!checked.ok) throw new Error(checked.errors.join("; "));
+  const previous = old ? { ...old } : null;
   if (old) Object.assign(old, next);
   else rosterSlots.push({ ...next });
   enqueueOutbox("staff_roster_slots", next.id, old ? "update" : "insert", { ...next });
-  auditAction(old ? "roster.slot.update" : "roster.slot.create", "staff_roster_slots", next.id, old ? { ...old, ...input, version: old.version - 1 } : null, { ...next });
+  auditAction(old ? "roster.slot.update" : "roster.slot.create", "staff_roster_slots", next.id, previous, { ...next });
   touchPersistence();
   return { ...next };
 }
