@@ -1,11 +1,26 @@
 # Minarva Biz — Authoritative Project Continuation
 
-**Last updated:** 2026-10-08  
+**Last updated:** 2026-10-09  
 **Repository:** `evertekitsolutions-del/minarvabiz`
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
-## Active continuation — October 8 Attendance cloud parity
+## Active continuation — October 9 HR-004 shift/roster
+
+This section supersedes the historical October 8 Attendance instructions below. Always verify live GitHub main/PR/issue/exact-head CI first; never treat these SHAs as guaranteed current in a later session.
+
+- Latest verified merged main at this documentation update: `7c8695bf5d541d163e008892659967d45d9f8fd1` (PR #299).
+- HR-002 Attendance Grid parity was previously merged; do not restart it. HR-004 shift/roster groundwork #280–#291 was merged before this batch.
+- Later HR-004 milestones merged: #292 shift activate/deactivate with history, #293 roster CSV export, #294 session-revoked cloud outbox protection, #295 IANA-aware actual UTC DST validation foundation.
+- #296 `b6880ff59c02c926af076a61f474dfd9fcf385c6` hardened authenticated Web roster hydration; #297 `7e3d1f915e5e29108d68f4fc52f15370a3aa69ec` enabled role-gated atomic RPC Web writes and retry; #298 `05b5b61bd1f8417a5238721fe85abe58469e8131` added read-only local/Cloud comparisons; #299 `7c8695bf5d541d163e008892659967d45d9f8fd1` added explicitly confirmed Keep Cloud resolution with event preservation and stale review/dependency guards. For #296–#299 all exact-head check runs finished 19 successful, 2 optional skipped, 0 failed before merges.
+- Read `docs/HR004_ROSTER_DELIVERY_STATUS.md` for verified behaviors, outstanding high-risk safety gaps, production acceptance and authoritative next steps. Web browser pending outbox is **session-only**, NOT durable offline browser storage; do not claim production Online/Offline/Hybrid parity or complete conflict recovery.
+- Real Supabase metadata was verified read-only: roster tables and private receipts exist, RLS + FORCE RLS are enabled, anonymous atomic RPC execution is denied, authenticated RPC execution is allowed under server organization-membership authority. No real authenticated tenant production UAT was performed in this batch; customer fixtures were not invented.
+- Stable customer Windows installer last separately verified remains `v1.0.15`. GitHub source Windows smoke passing is not a newly published installer; verify newer release artifacts live before claiming any upgrade.
+- **Full MASTER VISION estimate remains approximately 51%** until materially larger whole-product functionality and required Online/Offline/Hybrid/release acceptance are complete. Small PRs, documentation or green CI alone must not fabricate an extra 1 percentage point.
+- **Next implementation:** conflict **Reapply Local** with exact identity/revision, explicit human approval, dependency-safe version rebasing, audited superseded events and durable retry. Then configurable organization/branch timezone and rest policy enforced by PostgreSQL authority; recurring roster batch approval; Web + installed Windows parity; production authenticated UAT with a legitimate tenant; tested installer release. No scope deletion, bypassed RLS, fake test success or new paid recurring dependency.
+- Preserve Vercel/Render transitional fallbacks until verified replacement parity; avoid new lock-in and maintain PostgreSQL/S3/self-host AI portability. First ~25 paying customers is a review checkpoint, not automatic spending authorization.
+
+## Historical continuation — October 8 Attendance cloud parity
 
 This section supersedes older active/next-step descriptions below; retain them as historical evidence.
 
@@ -441,3 +456,14 @@ If a chat ends, the next chat must continue from live repository state and these
 - Stable Windows release is still **v1.0.15** unless a later separate verified release proves otherwise. Source merge is not a published customer installer. Continue the existing no-recurring-paid-service policy until the first ~25 paying customers' review checkpoint, and preserve provider-neutral/self-host portability.
 - **Full MASTER VISION scope estimate stays about 51%**; 4 merged incremental HR-004 PRs are partial capability delivery and must not be arbitrarily counted as a full +1% or full HR-004 completion. Reconcile delivered UI/Offline/Online/Hybrid scope and release acceptance before increasing the whole-project percentage.
 - **Next small milestone:** wire an explicit multi-user-permission HR roster page and shared desktop panel using the already merged roster domain, and connect authorized cloud event transport without dropping local SQLite persistence or conflict/approval policy. Test one coherent slice across Online, Offline and Hybrid before merging; production account UAT remains separately blocked until a legitimate tenant is provisioned.
+
+## 5J. HR-004 UI, cloud writer, conflict review and Keep Cloud — 2026-10-09
+
+- HR-004 source after PR #299: `7c8695bf5d541d163e008892659967d45d9f8fd1`. Prior PRs #284–#291 provided docs, recurring previews, cloud sync adapter, revisions, Windows planner, IANA/DST resolver, authenticated Web reads and atomic outbox writer.
+- PRs #292–#299 now also cover soft shift lifecycle, monthly export, auth session revocation, UTC-aware DST client validation, strict cloud record validation, Web edit/retry, read-only conflict compare and confirmed Keep Cloud. All are partial HR-004 implementation, not a full completion claim.
+- Exact-head #299 gate: 21 checks, 19 success, 2 optional skipped, 0 failed. Initial test syntax error was fixed on the branch; fresh exact-head CI, browser Web UI, Windows installed deep and feature-click smoke were green before merge.
+- Current Web conflicted event recovery: original immutable queued event remains pending/failed until server RPC ack; read-only tenant-specific comparison; Keep Cloud requires explicit human confirmation, re-fetches current cloud state, rejects changed local/remote/revoked session and dependent events, preserves event as discarded (not synced). Reapply Local and durable browser queue are still missing.
+- PostgreSQL authority still uses wall-clock overlap checks, so new shared `checkZonedRosterSlot` is not sufficient for server-side DST or configured minimum-rest enforcement. Do not claim worldwide branch-timezone compliance.
+- Source and CI do not establish production customer UAT. The last production inspection found no provisioned real organization/staff; no fake production tenant may be created. A separately verified Windows installer release is also outstanding. Until completed, full Master Vision estimate remains approximately 51%.
+- Details and pending acceptance are in `docs/HR004_ROSTER_DELIVERY_STATUS.md`; next code milestone is reviewed Reapply Local with safe domain/event sequencing, followed by server-authoritative policy/recurrence gates.
+
