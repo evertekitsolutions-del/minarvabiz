@@ -146,8 +146,10 @@ export async function compareSealedRosterCheckpointWithCloud(
     ensureCurrent(identity);
     if (getRemoteWriter() !== currentWriter)
       throw new Error("Roster reader changed during recovery review; restart with current session");
+    const remoteRevision = remote?.version;
     if (remote && (remote.id !== event.aggregateId ||
-        !Number.isSafeInteger(remote.version) || remote.version < 1))
+        typeof remoteRevision !== "number" ||
+        !Number.isSafeInteger(remoteRevision) || remoteRevision < 1))
       throw new Error("Authorized Cloud record identity or version is invalid");
     const localVersion = Number(event.payload.version);
     if (!Number.isSafeInteger(localVersion) || localVersion < 1)
@@ -155,7 +157,7 @@ export async function compareSealedRosterCheckpointWithCloud(
     comparisons.push({
       eventId:event.id, aggregateId:event.aggregateId, aggregateType:event.aggregateType,
       localStatus:event.status as "pending"|"failed",
-      localVersion,remoteVersion:remote?.version ?? null,
+      localVersion,remoteVersion:remoteRevision ?? null,
       remotePresence:remote?"visible":"missing-or-hidden",
       localPayload:{...event.payload},
       remotePayload:remote?{...remote}:null,
