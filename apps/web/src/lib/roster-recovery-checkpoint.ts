@@ -7,7 +7,7 @@
  * This module does not auto-replay recovery events or merge cross-device state.
  */
 import {
-  can, exportOutbox, getRemoteWriterGeneration, getSessionToken, getSessionUser,
+  can, exportOutbox, getRemoteWriter, getRemoteWriterGeneration, getSessionToken, getSessionUser,
 } from "@minarvabiz/business-logic";
 import { resolveOnlineAuthorization } from "./data-source";
 import {
@@ -98,4 +98,69 @@ export async function checkpointUnconfirmedRosterEvents(
   await saveSealedRosterRecovery(storage(),identity.scope,pending);
   ensureCurrent(identity);
   return pending.length;
+}
+
+/**
+ * Browser restart recovery REVIEW ONLY. No hydration, queue mutation, RPC write,
+ * discard, or automatic retry is permitted here. The manager must review a
+ * new Cloud snapshot after authenticating with the same user+organization.
+ *
+ * RLS-filtered missing records are intentionally labelled "missing-or-hidden":
+ * an unauthorized/missing record must never be treated as permission to create
+ * a duplicate assignment or to force a replacement.
+ */
+export interface SealedRosterCloudComparison {
+  eventId: string;
+  aggregateId: string;
+  aggregateType: RosterRecoveryEvent["aggregateType"];
+  localStatus: "pending" | "failed";
+  localVersion: number;
+  remoteVersion: number | null;
+  remotePresence: "visible" | "missing-or-hidden";
+  localPayload: Record<string, unknown>;
+  remotePayload: Record<string, unknown> | null;
+}
+
+export async function compareSealedRosterCheckpointWithCloud(
+  limit = 25,
+): Promise<{comparisons: SealedRosterCloudComparison[]; total: number; scope: RosterRecoveryScope}> {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 25)
+    throw new Error("Roster recovery comparison batch size must be between 1 and 25");
+  const identity = await authorizedScope();
+  const pending = (await loadSealedRosterRecovery(storage(),identity.scope) ?? [])
+    .filter(e=>e.status==="pending"||e.status==="failed");
+  ensureCurrent(identity);
+  const currentWriter = getRemoteWriter();
+  if (!currentWriter?.getRosterShift || !currentWriter.getRosterSlot)
+    throw new Error("Authenticated roster conflict readers are required for recovery comparison");
+  const comparisons: SealedRosterCloudComparison[] = [];
+  // Sequential RLS reads: cap requests and verify identity after EVERY await.
+  // No auto-paging on failure: the original sealed events stay untouched.
+  for (const event of pending.slice(0,limit)) {
+    ensureCurrent(identity);
+    if (getRemoteWriter() !== currentWriter)
+      throw new Error("Roster reader changed during recovery review; restart with current session");
+    const reader = event.aggregateType==="staff_shift_rules"
+      ? currentWriter.getRosterShift : currentWriter.getRosterSlot;
+    const remote = await reader(event.aggregateId);
+    ensureCurrent(identity);
+    if (getRemoteWriter() !== currentWriter)
+      throw new Error("Roster reader changed during recovery review; restart with current session");
+    if (remote && (remote.id !== event.aggregateId ||
+        !Number.isSafeInteger(remote.version) || remote.version < 1))
+      throw new Error("Authorized Cloud record identity or version is invalid");
+    const localVersion = Number(event.payload.version);
+    if (!Number.isSafeInteger(localVersion) || localVersion < 1)
+      throw new Error("Sealed roster local revision is invalid; preserve backup for manual review");
+    comparisons.push({
+      eventId:event.id, aggregateId:event.aggregateId, aggregateType:event.aggregateType,
+      localStatus:event.status as "pending"|"failed",
+      localVersion,remoteVersion:remote?.version ?? null,
+      remotePresence:remote?"visible":"missing-or-hidden",
+      localPayload:{...event.payload},
+      remotePayload:remote?{...remote}:null,
+    });
+  }
+  ensureCurrent(identity);
+  return {comparisons,total:pending.length,scope:identity.scope};
 }
