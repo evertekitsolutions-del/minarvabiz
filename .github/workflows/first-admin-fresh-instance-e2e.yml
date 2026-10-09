@@ -64,6 +64,8 @@ jobs:
           node scripts/replay-supabase-migrations-fresh.mjs
       - name: Verify attendance authority, replay, conflicts and tenant RBAC
         run: node scripts/attendance-authority-e2e.mjs
+      - name: Verify HR-004 roster relations and overnight overlap in isolated PostgreSQL
+        run: node scripts/hr-roster-authority-e2e.mjs
       - name: Verify first-admin bootstrap end to end
         shell: bash
         run: |
