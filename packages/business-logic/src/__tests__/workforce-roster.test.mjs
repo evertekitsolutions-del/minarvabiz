@@ -202,4 +202,27 @@ denied(checkZonedRosterSlot({...opts(ukNew,[],0),policyForBranch:()=>({timeZone:
 denied(checkZonedRosterSlot({...opts(ukNew,[],0),policyForBranch:null}),/resolver is required/);
 assert.equal(checkZonedRosterSlot(opts({...ukNew,status:"cancelled",version:2},[ukNew],0)).ok,true, "Audited cancellation still allowed"); 
 
+
+const overlapUk = { ...earlyUk, id: "overlap-uk", startTime: "00:15", endTime: "00:45" };
+const ukOverlap = { ...ukNew, shiftRuleId: "overlap-uk" };
+denied(checkZonedRosterSlot({
+  ...opts(ukOverlap,[ukExisting],0), shifts:[earlyUk,lateUk,overlapUk],
+}),/Shift overlaps existing assignment .* in UTC/);
+denied(checkZonedRosterSlot(opts(ukNew,[{...ukExisting,shiftRuleId:"missing"}],0)),
+  /shift template is unavailable/);
+denied(checkZonedRosterSlot(opts(ukExisting,[ukNew],60)),
+  /Minimum rest.*UTC/, "Rest before a later scheduled shift must be checked in UTC too");
+const postGap = {...lateUk, id:"post-gap", startTime:"03:30", endTime:"04:30"};
+const priorGap = {...gap, id:"prior-gap"};
+denied(checkZonedRosterSlot({
+  ...opts({...ukNew, shiftRuleId:"post-gap"},[
+    {...ukExisting,shiftRuleId:"prior-gap"}
+  ],0),
+  shifts:[earlyUk,lateUk,postGap,priorGap],
+}),/Assignment uk-old: Nonexistent.*DST gap/,
+  "Corrupt historical DST gap must be surfaced, not silently ignored");
+denied(checkZonedRosterSlot(opts({...ukNew, version:0},[],0)),
+  /Roster version/, "Version validation must run before timezone resolution");
+console.log("HR-004 coverage: earlier/later rest, true UTC overlap, bad historic DST and revision failures PASS");
+
 console.log("HR-004 UTC-aware branch roster validation: DST gap, fold, rest, overlap and correction checks PASS");
