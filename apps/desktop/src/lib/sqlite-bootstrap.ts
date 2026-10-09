@@ -38,7 +38,9 @@ function scheduleDomainPersistence(): void {
   if (scheduledPersist !== null) clearTimeout(scheduledPersist);
   scheduledPersist = setTimeout(() => {
     scheduledPersist = null;
-    void persistDomainToSqlite().catch((error) => {
+    void persistDomainToSqlite().then((saved) => {
+      if (!saved) throw new Error("The native SQLite write was rejected");
+    }).catch((error) => {
       console.error("[minarvabiz] SQLite automatic persistence failed", error);
     });
   }, 350);
