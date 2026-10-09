@@ -69,6 +69,9 @@ assert.throws(() => roster.assignRosterSlot({
   branchId: null, status: "scheduled",
 }), /inactive/);
 
+// auditAction loads the audit store dynamically; wait for queued audit microtasks
+// before exporting the canonical domain snapshot.
+await new Promise(resolve => setImmediate(resolve));
 const snapshot = persistence.exportDomainSnapshotFull();
 assert.equal(snapshot.version, 14);
 assert.equal(snapshot.shiftRules.length, 2);
