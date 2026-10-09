@@ -166,7 +166,7 @@ console.log("HR-004 branch IANA/DST normalization: gap, fold, overnight, offsets
 const { checkZonedRosterSlot } = require("../roster-timezone.ts");
 const london = () => ({ timeZone: "Europe/London", ambiguousTime: "reject" });
 const londonStaff = { id: "london-staff", status: "active", branchId: "uk-branch" };
-const earlyUk = { ...day, id: "early-uk", startTime: "00:00", endTime: "00:30", branchId: "uk-branch" };
+const earlyUk = { ...day, id: "early-uk", startTime: "00:00", endTime: "00:30", unpaidBreakMinutes: 0, branchId: "uk-branch" };
 const lateUk = { ...day, id: "late-uk", startTime: "02:00", endTime: "03:00", unpaidBreakMinutes: 0, branchId: "uk-branch" };
 const ukExisting = { id: "uk-old", staffId: "london-staff", shiftRuleId: "early-uk",
   workDate: "2026-03-29", branchId: "uk-branch", status: "scheduled", version: 1 };
