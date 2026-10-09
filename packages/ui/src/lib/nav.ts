@@ -8,7 +8,7 @@
 
 export type NavItemId =
   | "dashboard" | "sales" | "quotations" | "products" | "warehouse" | "services" | "laundry" | "expenses" | "purchases"
-  | "customers" | "customer-crm" | "staff" | "attendance" | "staff-detail" | "suppliers" | "payments" | "accounting" | "returns"
+  | "customers" | "customer-crm" | "staff" | "attendance" | "roster" | "staff-detail" | "suppliers" | "payments" | "accounting" | "returns"
   | "reports" | "day-end" | "audit" | "notifications" | "messages" | "agenda" | "support" | "settings" | "backup" | "license";
 
 export type NavSectionId =
@@ -62,6 +62,7 @@ export const MAIN_NAV: NavItem[] = [
 
   { id: "staff", label: "Staff Management", href: "/staff", icon: "user-cog", section: "team-communication" },
   { id: "attendance", label: "Attendance Grid", href: "/attendance", icon: "user-cog", section: "team-communication" },
+  { id: "roster", label: "Shift & Roster Planner", href: "/roster", icon: "calendar-days", section: "team-communication" },
   { id: "notifications", label: "Alerts & Notifications", href: "/notifications", icon: "message-circle", section: "team-communication" },
   { id: "messages", label: "Customer Messages", href: "/messages", icon: "message-circle", section: "team-communication" },
   { id: "agenda", label: "Business Agenda", href: "/agenda", icon: "bar-chart-3", section: "team-communication" },

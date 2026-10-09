@@ -1,5 +1,6 @@
 import {optimisticVersionUpdate,optimisticVersionUpsert} from "./data-source-versioned-write";
 import { createAttendanceRemoteWriter, loadAttendanceStaff } from "./data-source-attendance";
+import { loadCloudRoster, ensureNoUnconfirmedRosterEvents } from "./data-source-roster";
 /**
  * Data source bootstrap — Supabase when configured, else in-memory domain stores.
  */
@@ -20,7 +21,7 @@ import {
   type UnitOfWork,
 } from "@minarvabiz/database";
 import type { RoleName, StaffAttendanceRecord } from "@minarvabiz/types";
-import { store, ordersStore, phase5Store, phase6Store, phase9Store, warehouseStore, procurementStore, accountingStore, registerRemoteWriter, getRuntimeMode } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase9Store, warehouseStore, procurementStore, accountingStore, registerRemoteWriter, getRuntimeMode, exportOutbox } from "@minarvabiz/business-logic";
 import {
   mapCategory,
   mapSupplier,
@@ -71,6 +72,7 @@ export type SupabaseHydrationDomain =
   | "core"
   | "operations"
   | "attendance"
+  | "roster"
   | "staff"
   | "warehouse"
   | "procurement"
@@ -81,6 +83,7 @@ const ALL_SUPABASE_HYDRATION_DOMAINS: SupabaseHydrationDomain[] = [
   "operations",
   "staff",
   "attendance",
+  "roster",
   "warehouse",
   "procurement",
   "accounting",
@@ -89,6 +92,7 @@ const ALL_SUPABASE_HYDRATION_DOMAINS: SupabaseHydrationDomain[] = [
 let hydrationIdentity: string | null = null;
 const hydratedDomains = new Set<SupabaseHydrationDomain>();
 export function isStaffHydrated(){return hydratedDomains.has("staff")&&hydratedDomains.has("attendance");}
+export function isRosterHydrated(){return hydratedDomains.has("roster") && hydratedDomains.has("staff");}
 
 export function supabaseHydrationDomainsForPath(pathname: string): SupabaseHydrationDomain[] {
   const route = String(pathname || "/dashboard").split("?")[0] || "/dashboard";
@@ -98,10 +102,11 @@ export function supabaseHydrationDomainsForPath(pathname: string): SupabaseHydra
   if (matches(["/dashboard", "/laundry", "/expenses", "/purchases", "/suppliers", "/returns", "/reports", "/day-end"])) {
     domains.add("operations");
   }
-  if (matches(["/dashboard", "/staff", "/attendance", "/staff-detail", "/services/production", "/reports"])) {
+  if (matches(["/dashboard", "/staff", "/attendance", "/roster", "/staff-detail", "/services/production", "/reports"])) {
     domains.add("staff");
   }
   if (matches(["/attendance"])) domains.add("attendance");
+  if (matches(["/roster"])) domains.add("roster");
   if (matches(["/warehouse", "/stock-take", "/purchases"])) {
     domains.add("warehouse");
   }
@@ -134,6 +139,8 @@ async function hydrateRequestedStores(
   if (hydrationIdentity !== identity) {
     hydrationIdentity = identity;
     hydratedDomains.clear();
+    // A prior session writer is not allowed to keep posting HR events after the auth identity changes.
+    registerRemoteWriter(null);
   }
 
   const requested = ALL_SUPABASE_HYDRATION_DOMAINS.filter((domain) => requestedDomains.includes(domain));
@@ -149,7 +156,8 @@ async function hydrateRequestedStores(
   const loadCore = domains.includes("core");
   const loadOperations = domains.includes("operations");
   const loadAttendance = domains.includes("attendance");
-  const loadStaff = domains.includes("staff") || loadAttendance;
+  const loadRoster = domains.includes("roster");
+  const loadStaff = domains.includes("staff") || loadAttendance || loadRoster;
   const loadWarehouse = domains.includes("warehouse");
   const loadProcurement = domains.includes("procurement");
   const loadAccounting = domains.includes("accounting");
@@ -167,6 +175,7 @@ async function hydrateRequestedStores(
     let laundryRows: Record<string, unknown>[] = [];
     let staffRows: Record<string, unknown>[] = [];
     let attendanceRows: StaffAttendanceRecord[] = [];
+    let rosterRows: Awaited<ReturnType<typeof loadCloudRoster>> | null = null;
     let paymentsRows: Record<string, unknown>[] = [];
     let warehousesRows: Record<string, unknown>[] = [];
     let warehouseLocationsRows: Record<string, unknown>[] = [];
@@ -221,6 +230,12 @@ async function hydrateRequestedStores(
       const domain=await loadAttendanceStaff(cfg,loadAttendance);
       staffRows=domain.staff;attendanceRows=domain.attendance;
       phase9Store.hydratePhase9({activeBranchId:phase9Store.getActiveBranch()?.id,branches:domain.branches});
+    }
+
+    if (loadRoster) {
+      // Never hide unsent revisions or combine a previous tenant\'s pending roster with a new cloud identity.
+      ensureNoUnconfirmedRosterEvents(exportOutbox());
+      rosterRows = await loadCloudRoster(cfg);
     }
 
     if (loadWarehouse) {
@@ -294,7 +309,10 @@ async function hydrateRequestedStores(
     }
 
     if (loadStaff) {
-      phase6Store.hydratePhase6({ staff: staffRows.map(mapStaff) });
+      phase6Store.hydratePhase6({
+        staff: staffRows.map(mapStaff),
+        ...(rosterRows ? { shiftRules: rosterRows.shiftRules, rosterSlots: rosterRows.rosterSlots } : {}),
+      });
       if(loadAttendance)phase6Store.hydrateAttendanceFromCloud(attendanceRows);
     }
 
@@ -350,6 +368,7 @@ async function hydrateRequestedStores(
       laundry: laundryRows.length,
     });
     if (loadStaff) counts.staff = staffRows.length;
+    if (rosterRows) { counts.shiftRules = rosterRows.shiftRules.length; counts.rosterSlots = rosterRows.rosterSlots.length; }
     if (loadWarehouse) Object.assign(counts, {
       warehouses: warehousesRows.length,
       warehouseLocations: warehouseLocationsRows.length,
