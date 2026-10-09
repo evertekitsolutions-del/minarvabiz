@@ -111,3 +111,37 @@ assert.deepEqual(recur({ weekdays: [7], startDate: "2026-10-05", endDate: "2026-
   ok: true, entries: [],
 }, "No matching weekdays is an empty, valid plan");
 console.log("HR recurring roster preview: weekly windows, atomic conflicts, identities, rest and date validation PASS");
+
+
+const { resolveRosterShiftInstants } = require("../roster-timezone.ts");
+const instant = (date, start, end, zone, ambiguousTime) => resolveRosterShiftInstants(
+  { workDate: date },
+  { ...day, startTime: start, endTime: end },
+  { timeZone: zone, ambiguousTime },
+);
+const india = instant("2026-10-09", "09:00", "17:00", "Asia/Kolkata");
+assert.equal(india.startUtc, "2026-10-09T03:30:00.000Z");
+assert.equal(india.endUtc, "2026-10-09T11:30:00.000Z");
+assert.equal(india.elapsedMinutes, 480);
+assert.equal(india.dstAdjustmentMinutes, 0);
+const omanOvernight = instant("2026-10-09", "22:00", "06:00", "Asia/Muscat");
+assert.equal(omanOvernight.startUtc, "2026-10-09T18:00:00.000Z");
+assert.equal(omanOvernight.endUtc, "2026-10-10T02:00:00.000Z");
+assert.equal(omanOvernight.overnight, true);
+assert.throws(() => instant("2026-03-29", "01:30", "03:00", "Europe/London"), /Nonexistent.*DST gap/);
+assert.throws(() => instant("2026-10-25", "01:30", "03:00", "Europe/London"), /Ambiguous.*DST overlap/);
+const foldEarlier = instant("2026-10-25", "01:30", "03:00", "Europe/London", "earlier");
+const foldLater = instant("2026-10-25", "01:30", "03:00", "Europe/London", "later");
+assert.equal(foldEarlier.startUtc, "2026-10-25T00:30:00.000Z");
+assert.equal(foldLater.startUtc, "2026-10-25T01:30:00.000Z");
+assert.equal(foldEarlier.elapsedMinutes, 150);
+assert.equal(foldLater.elapsedMinutes, 90);
+const spring = instant("2026-03-29", "00:30", "02:30", "Europe/London");
+const autumn = instant("2026-10-25", "00:30", "02:30", "Europe/London");
+assert.equal(spring.dstAdjustmentMinutes, -60);
+assert.equal(autumn.dstAdjustmentMinutes, 60);
+assert.throws(() => instant("2026-02-30", "09:00", "17:00", "UTC"), /not a real/);
+assert.throws(() => instant("2026-10-09", "09:00", "17:00", "Invalid\/NotAZone"), /Invalid branch IANA/);
+assert.throws(() => instant("2026-10-09", "09:00", "17:00", ""), /IANA timezone is required/);
+assert.throws(() => instant("2026-10-09", "09:00", "17:00", "Asia/Kolkata", "unspecified"), /Invalid DST ambiguity/);
+console.log("HR-004 branch IANA/DST normalization: gap, fold, overnight, offsets and fail-closed policy PASS");
