@@ -115,12 +115,16 @@ export default function RosterPage() {
   }
 
   async function retryPending() {
-    if (!ready || !isRosterHydrated() || !can("staff.manage") ||
+    if (!ready || !isRosterHydrated() || recoveryState !== "ready" || !can("staff.manage") ||
         !getRemoteWriter()?.upsertRosterEvent || inFlight.current) return;
     if (!window.confirm("Retry the original unconfirmed roster events in order? No conflicting cloud revision will be overwritten.")) return;
     inFlight.current = true; setBusy(true); setSyncProblem(""); setResolutionMessage(""); setReview(null);
     try {
+      const originals=exportOutbox().filter(e=>(e.aggregateType==="staff_shift_rules"||
+        e.aggregateType==="staff_roster_slots")&&(e.status==="pending"||e.status==="failed")).map(e=>e.id);
+      await checkpointUnconfirmedRosterEvents();
       await phase6Store.flushWorkforceRosterOutbox();
+      await checkpointUnconfirmedRosterEvents(originals);
     } catch (error) {
       setSyncProblem(error instanceof Error ? error.message : String(error));
     } finally {
@@ -142,7 +146,7 @@ export default function RosterPage() {
   }
 
   async function acceptCloudVersion() {
-    if (!review || !isRosterHydrated() || !can("staff.manage") || inFlight.current) return;
+    if (!review || !isRosterHydrated() || recoveryState !== "ready" || !can("staff.manage") || inFlight.current) return;
     const warning = review.remote
       ? "Keep the current Cloud version and discard this one unconfirmed local change? The original event and audit history are retained. Other dependent events are blocked."
       : "No Cloud record exists. Discard this unconfirmed local creation? The original event history is retained. This cannot be undone.";
@@ -150,6 +154,7 @@ export default function RosterPage() {
     inFlight.current = true; setBusy(true); setSyncProblem(""); setResolutionMessage("");
     try {
       await phase6Store.keepCloudWorkforceRosterConflict(review);
+      await checkpointUnconfirmedRosterEvents([review.eventId]);
       setReview(null);
       setResolutionMessage("Cloud version retained after reviewed conflict resolution. The original local event remains in history as discarded.");
     } catch (error) {
@@ -160,8 +165,8 @@ export default function RosterPage() {
   }
 
   async function reapplyReviewedLocal() {
-    if (!review || !review.remote || !isRosterHydrated() || !can("staff.manage") ||
-        !getRemoteWriter()?.upsertRosterEvent || inFlight.current) return;
+    if (!review || !review.remote || !isRosterHydrated() || recoveryState !== "ready" ||
+        !can("staff.manage") || !getRemoteWriter()?.upsertRosterEvent || inFlight.current) return;
     if (!window.confirm(
       "Submit the reviewed local correction as a NEW revision over the current Cloud version? " +
       "This will retain the original rejected event in history. A changed Cloud revision, " +
@@ -169,7 +174,9 @@ export default function RosterPage() {
     )) return;
     inFlight.current = true; setBusy(true); setSyncProblem(""); setResolutionMessage("");
     try {
-      const confirmed = await phase6Store.reapplyLocalWorkforceRosterConflict(review);
+      const confirmed = await phase6Store.reapplyLocalWorkforceRosterConflict(review,
+        async () => { await checkpointUnconfirmedRosterEvents([review.eventId]); });
+      await checkpointUnconfirmedRosterEvents([review.eventId,confirmed.eventId]);
       setReview(null);
       setResolutionMessage(
         "Reviewed local correction confirmed by the audited Cloud RPC at revision " +
@@ -191,8 +198,15 @@ export default function RosterPage() {
   if (!scopedReady) return <p role={problem ? "alert" : "status"}>{problem || "Loading authorized shift and roster data…"}</p>;
 
   return <div className="space-y-3">
+    {recoveryState === "checking" && <p role="status">Checking encrypted organization-scoped roster recovery before editing…</p>}
+    {recoveryState === "blocked" && <div role="alert" className="rounded border border-amber-400 p-3">
+      Encrypted recovery contains {recoveryCount} unconfirmed roster event(s) for this authorized account.
+      New edits are blocked to preserve the original records. No automatic replay or overwrite was performed.
+      Keep this browser profile for an explicit recovery/import review.
+    </div>}
+    {recoveryState === "unavailable" && <p role="alert">Roster recovery storage or authorization is unavailable; Web editing is disabled to prevent silent data loss.</p>}
     {unsent.length > 0 && <div role="alert" className="rounded border border-amber-300 p-3 text-sm">
-      {unsent.length} unconfirmed roster event(s); original identities retained. Browser pending changes are session-only:
+      {unsent.length} unconfirmed roster event(s); original identities retained. Pending events are encrypted before the Cloud RPC;
       do not close or reload this tab. Version conflicts require explicit reviewed resolution, never automatic overwrite.
       <button className="ml-3 rounded border px-3 py-1" type="button"
         disabled={busy || !writerReady} onClick={() => void retryPending()}>
