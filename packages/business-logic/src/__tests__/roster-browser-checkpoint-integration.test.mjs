@@ -58,6 +58,12 @@ assert.equal(writes[0].scope.organizationId,organization);
 assert.equal(writes[0].events[0].id,event.id);
 assert.equal((await checkpoints.inspectSealedRosterCheckpoint()).events.length,1);
 
+// An event ID cannot be reused for a different immutable payload/sequence.
+events=[{...event,payload:{...event.payload,version:3}}];
+await assert.rejects(()=>checkpoints.checkpointUnconfirmedRosterEvents(),/Immutable encrypted roster event differs/);
+assert.equal(sealed.get(key)[0].payload.version,2);
+events=[{...event}];
+
 // A truncated/reloaded memory queue must NOT overwrite the sealed pending event.
 events=[];
 await assert.rejects(()=>checkpoints.checkpointUnconfirmedRosterEvents(),/reviewed recovery/);
