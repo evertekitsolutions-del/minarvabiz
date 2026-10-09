@@ -38,6 +38,22 @@ for (const invalid of [
   { ...day, branchId: "" },
 ]) assert.throws(() => validateShiftRule(invalid));
 assert.equal(option(first).ok, true);
+
+const retired = { ...day, active: false };
+const disabled = checkRosterSlot({
+  candidate: { ...first, id: "retired-new", shiftRuleId: "day" },
+  slots: [], shifts: [retired, night, split, early], staff: activeStaff,
+});
+denied(disabled, /inactive shift template/i);
+const originalRetiredSlot = { ...first, id: "retired-history", shiftRuleId: "day" };
+const historicalCancellation = checkRosterSlot({
+  candidate: { ...originalRetiredSlot, status: "cancelled", version: 2 },
+  slots: [originalRetiredSlot], shifts: [retired, night, split, early], staff: activeStaff,
+});
+assert.equal(historicalCancellation.ok, true, "Deactivation cannot prevent an audited historical cancellation");
+assert.equal(validateShiftRule({ ...retired, active: true }).workedMinutes, 450,
+  "Reactivation restores scheduling without altering historic clock details");
+
 assert.equal(option({ ...first, id: "r2", shiftRuleId: "day" }).ok, true, "Organization-wide rule is reusable in a branch");
 
 const nextDayMorning = { ...first, id: "r2", workDate: "2026-10-10", shiftRuleId: "early" };
