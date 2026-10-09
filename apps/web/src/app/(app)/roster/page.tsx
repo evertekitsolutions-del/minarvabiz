@@ -52,7 +52,7 @@ export default function RosterPage() {
   }, [unsent.length]);
 
   const writerReady = Boolean(getRemoteWriter()?.upsertRosterEvent);
-  const editable = ready && can("staff.manage") && writerReady && !busy && unsent.length === 0;
+  const editable = ready && isRosterHydrated() && can("staff.manage") && writerReady && !busy && unsent.length === 0;
 
   async function commit(action: () => void): Promise<void> {
     if (!ready || !isRosterHydrated() || !can("staff.manage") || !getRemoteWriter()?.upsertRosterEvent) {
