@@ -137,7 +137,7 @@ BEGIN
       OR jsonb_typeof(p_record->'shiftRuleId') IS DISTINCT FROM 'string'
       OR jsonb_typeof(p_record->'workDate') IS DISTINCT FROM 'string'
       OR jsonb_typeof(p_record->'status') IS DISTINCT FROM 'string'
-      OR p_record->>'workDate' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}
+      OR p_record->>'workDate' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN
       RAISE EXCEPTION 'Invalid roster assignment fields' USING ERRCODE='22023';
     END IF;
     v_staff := (p_record->>'staffId')::uuid;
@@ -162,66 +162,6 @@ BEGIN
         OR v_branch IS DISTINCT FROM previous_slot.branch_id THEN
         RAISE EXCEPTION 'Roster identity, work date and branch are immutable' USING ERRCODE='23514';
       END IF;
-      IF v_version <> previous_slot.version + 1 THEN
-        RETURN jsonb_build_object('accepted',false,'remote',v_prior);
-      END IF;
-      UPDATE public.staff_roster_slots SET
-        shift_rule_id=v_template,status=v_status,version=v_version
-        WHERE id=v_id AND org_id=authority.auth_org_id
-        RETURNING to_jsonb(public.staff_roster_slots.*) INTO v_saved;
-      v_action := 'roster.slot.update';
-    ELSE
-      IF v_version <> 1 THEN RETURN jsonb_build_object('accepted',false); END IF;
-      -- Conflicting same-day identities are reviewable rather than silently
-      -- treated as a second copy of the same assignment.
-      SELECT to_jsonb(slot) INTO v_prior FROM public.staff_roster_slots slot
-        WHERE slot.org_id=authority.auth_org_id AND slot.staff_id=v_staff
-          AND slot.work_date=v_date AND slot.shift_rule_id=v_template LIMIT 1;
-      IF v_prior IS NOT NULL THEN
-        RETURN jsonb_build_object('accepted',false,'remote',v_prior);
-      END IF;
-      INSERT INTO public.staff_roster_slots
-        (id,org_id,staff_id,shift_rule_id,branch_id,work_date,status,version)
-      VALUES (v_id,authority.auth_org_id,v_staff,v_template,v_branch,v_date,v_status,1)
-        RETURNING to_jsonb(public.staff_roster_slots.*) INTO v_saved;
-      v_action := 'roster.slot.create';
-    END IF;
-  END IF;
-
-  INSERT INTO public.staff_roster_event_receipts
-    (event_id,org_id,event_kind,record_id,device_id,sequence,request_json)
-  VALUES (p_event_id,authority.auth_org_id,p_kind,v_id,p_device_id,p_sequence,p_record);
-  INSERT INTO public.audit_logs(org_id,user_id,action,table_name,record_id,old_value,new_value)
-  VALUES (authority.auth_org_id,authority.auth_user_id,v_action,v_table,v_id,v_prior,v_saved);
-
-  RETURN jsonb_build_object('accepted',true,'replayed',false,'record',v_saved);
-END;
-$roster$;
-
-REVOKE ALL ON FUNCTION public.apply_staff_roster_event(TEXT,JSONB,UUID,TEXT,BIGINT)
-  FROM PUBLIC, anon, service_role;
-GRANT EXECUTE ON FUNCTION public.apply_staff_roster_event(TEXT,JSONB,UUID,TEXT,BIGINT)
-  TO authenticated;
- THEN
-      RAISE EXCEPTION 'Invalid roster assignment fields' USING ERRCODE='22023';
-    END IF;
-    v_staff := (p_record->>'staffId')::uuid;
-    v_template := (p_record->>'shiftRuleId')::uuid;
-    v_date := (p_record->>'workDate')::date;
-    v_status := p_record->>'status';
-    IF v_status NOT IN ('scheduled','cancelled') THEN
-      RAISE EXCEPTION 'Invalid roster status' USING ERRCODE='22023';
-    END IF;
-    v_table := 'staff_roster_slots';
-
-    -- This lock also prevents duplicate staff/day creates from another
-    -- device while a previous request is being inspected.
-    PERFORM pg_advisory_xact_lock(
-      hashtextextended(authority.auth_org_id::text||v_staff::text,0));
-    SELECT * INTO previous_slot FROM public.staff_roster_slots
-      WHERE id=v_id AND org_id=authority.auth_org_id FOR UPDATE;
-    IF FOUND THEN
-      v_prior := to_jsonb(previous_slot);
       IF v_version <> previous_slot.version + 1 THEN
         RETURN jsonb_build_object('accepted',false,'remote',v_prior);
       END IF;
