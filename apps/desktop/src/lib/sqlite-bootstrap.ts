@@ -176,7 +176,6 @@ async function initializeDesktopSqlite(): Promise<{ ok: boolean; error?: string 
     }
 
     const snap = loadSnap(db);
-    console.info("[minarvabiz] SQLite bootstrap snapshot", JSON.stringify({ fileBytes: bytes?.byteLength ?? 0, hasSnapshot: Boolean(snap), staffCount: Array.isArray((snap as { staff?: unknown[] } | null)?.staff) ? (snap as { staff: unknown[] }).staff.length : null, attendanceCount: Array.isArray((snap as { attendance?: unknown[] } | null)?.attendance) ? (snap as { attendance: unknown[] }).attendance.length : null }));
     if (snap) {
       // Import reports validation/hydration failures as a result instead of throwing.
       // Never mark the database ready or overwrite a failed import with seeded data.
@@ -231,7 +230,6 @@ export async function persistDomainToSqlite(): Promise<boolean> {
     throw new Error("Cannot persist business data: SQLite integrity check is not healthy");
   }
   const snap = exportDomainSnapshotFull();
-  console.info("[minarvabiz] SQLite persist snapshot", JSON.stringify({ staffCount: snap.staff?.length ?? null, attendanceCount: snap.attendance?.length ?? null }));
   // saveSnap commits through the adapter transaction, which already exports and queues
   // the SQLite binary. Exporting again here doubles peak ASM.js heap usage and IPC writes.
   saveSnap(sqlite, snap);
