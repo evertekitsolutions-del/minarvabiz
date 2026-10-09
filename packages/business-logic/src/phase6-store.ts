@@ -223,7 +223,7 @@ export function hydratePhase6(input:{staff?:StaffMember[];attendance?:StaffAtten
       // Historic slots retain their original branch even after a staff transfer.
       const originalContext = member ? { id: member.id, status: "active", branchId: slot.branchId } : null;
       const check = checkRosterSlot({
-        candidate: { ...slot, version: 1 }, slots: visited, shifts: rules,
+        candidate: { ...slot, version: 1 }, slots: visited, shifts: rules.map(rule => ({ ...rule, active: true })),
         staff: originalContext,
       });
       if (!check.ok || !Number.isSafeInteger(slot.version) || slot.version < 1) {
