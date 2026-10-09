@@ -1,5 +1,5 @@
 import { assertPermission } from "./permissions";
-import { getRemoteWriter } from "./remote-write";
+import { getRemoteWriter, getRemoteWriterGeneration } from "./remote-write";
 import { exportOutbox, discardAttendanceOutbox, markOutboxSynced, markOutboxFailed } from "./outbox-bridge";
 import { enqueueOutbox } from "./outbox-bridge";
 import { touchPersistence } from "./autosave";
@@ -216,6 +216,16 @@ export function flushWorkforceRosterOutbox(): Promise<number> {
   const writer = getRemoteWriter()?.upsertRosterEvent;
   if (!writer) return Promise.reject(new Error("Authenticated workforce RPC writer is unavailable; queued roster changes remain local"));
   if (workforceFlush) return workforceFlush;
+  // Pin the writer generation for the *entire* drain. Auth transitions must
+  // not let an old in-flight RPC confirm events into a new tenant/session.
+  const writerGeneration = getRemoteWriterGeneration();
+  const assertWriterCurrent = () => {
+    assertPermission("staff.manage");
+    if (getRemoteWriterGeneration() !== writerGeneration ||
+        getRemoteWriter()?.upsertRosterEvent !== writer) {
+      throw new Error("Workforce session changed during sync; event is unconfirmed and requires explicit recovery");
+    }
+  };
   const operation = (async () => {
     let confirmed = 0;
     const queue = exportOutbox()
@@ -224,7 +234,12 @@ export function flushWorkforceRosterOutbox(): Promise<number> {
       .sort((a,b) => a.sequence - b.sequence);
     for (const event of queue) {
       try {
+        assertWriterCurrent();
         await writer(event);
+        // RPC may already have committed before the session was revoked.
+        // Leave the original replay-safe event FAILED instead of inventing
+        // an acknowledgement; a future authorized review can reconcile it.
+        assertWriterCurrent();
         markOutboxSynced([event.id]);
         confirmed++;
       } catch (error) {

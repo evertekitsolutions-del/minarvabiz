@@ -61,9 +61,17 @@ export interface RemoteWriter {
 }
 
 let writer: RemoteWriter | null = null;
+/** Revocation generation advances for every session-bound writer replacement. */
+let writerGeneration = 0;
 
 export function registerRemoteWriter(w: RemoteWriter | null) {
   writer = w;
+  writerGeneration += 1;
+}
+
+/** A sender must reject stale confirmations after logout or tenant switch. */
+export function getRemoteWriterGeneration(): number {
+  return writerGeneration;
 }
 
 export function getRemoteWriter(): RemoteWriter | null {

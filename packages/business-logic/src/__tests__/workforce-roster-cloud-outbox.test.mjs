@@ -54,5 +54,39 @@ await assert.rejects(()=>phase.flushWorkforceRosterOutbox(),/RPC writer is unava
 assert.equal(newEvents[1].status,"pending","Missing auth does not silently acknowledge queued writes");
 permissions.setCurrentRole("cashier");
 assert.throws(()=>phase.flushWorkforceRosterOutbox(),/Permission denied: staff.manage/);
+
+/** Revoking the user session during an in-flight write must fail closed. */
+permissions.setCurrentRole("admin");
+const rotating=phase.createShiftRule({name:"Stale response must not confirm",startTime:"06:00",endTime:"09:00",unpaidBreakMinutes:0,branchId:null,active:true});
+phase.assignRosterSlot({staffId:"staff-1",workDate:"2026-10-11",shiftRuleId:rotating.id,branchId:null,status:"scheduled"});
+const revocationEvents=rosterEvents().filter(e=>e.status==="pending");
+assert.equal(revocationEvents.length,2);
+let completeRpc;
+let startedRpc;
+const started=new Promise(resolve=>{startedRpc=resolve;});
+const inflight=new Promise(resolve=>{completeRpc=resolve;});
+let sends=0;
+remote.registerRemoteWriter({upsertRosterEvent:async()=>{
+  sends++;
+  startedRpc();
+  await inflight;
+}});
+const draining=phase.flushWorkforceRosterOutbox();
+await started;
 remote.registerRemoteWriter(null);
+completeRpc();
+await assert.rejects(draining,/Workforce session changed during sync/);
+assert.equal(sends,1,"Do not submit dependent revision after credential revocation");
+assert.equal(revocationEvents[0].status,"failed","In-flight acknowledgement is retained as uncertain");
+assert.equal(revocationEvents[1].status,"pending","Subsequent changes remain queued");
+assert.equal(revocationEvents[0].attempts,1);
+assert.match(revocationEvents[0].lastError,/session changed/);
+// Fresh login must explicitly retry the original idempotent event IDs.
+let replays=[];
+remote.registerRemoteWriter({upsertRosterEvent:async event=>{replays.push(event.id);}});
+assert.equal(await phase.flushWorkforceRosterOutbox(),2);
+assert.deepEqual(replays,revocationEvents.map(event=>event.id));
+assert.ok(revocationEvents.every(event=>event.status==="synced"));
+remote.registerRemoteWriter(null);
+
 console.log("HR roster ordered outbox: atomic acknowledgement, explicit retry, stop-on-error, no writer and RBAC PASS");
