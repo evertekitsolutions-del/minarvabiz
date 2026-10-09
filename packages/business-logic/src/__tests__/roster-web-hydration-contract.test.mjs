@@ -33,9 +33,9 @@ assert.match(page,/Retry original events/,"Explicit replay keeps original immuta
 assert.match(page,/reviewWorkforceRosterConflict\(eventId\)/,"Review must use the permission-checked shared domain");
 assert.match(page,/Review local vs Cloud/,"Web shows an explicit comparison affordance");
 assert.match(page,/Read-only tenant-scoped comparison/,"Conflict review must not claim a resolution");
-assert.match(page,/keepCloudWorkforceRosterConflict\\(review\\)/,"Approved Cloud resolution uses shared audited domain guard");
-assert.match(page,/window\\.confirm\\(warning\\)/,"Cloud replacement requires explicit confirmation");
-assert.match(page,/unsent\\.length !== 1/,"Dependent events cannot be dropped from the UI");
+assert.match(page,/keepCloudWorkforceRosterConflict\(review\)/,"Approved Cloud resolution uses shared audited domain guard");
+assert.match(page,/window\.confirm\(warning\)/,"Cloud replacement requires explicit confirmation");
+assert.match(page,/unsent\.length !== 1/,"Dependent events cannot be dropped from the UI");
 assert.match(page,/Applying the local correction over Cloud remains disabled/,"Unsafe local rebase stays gated");
 
 assert.match(code,/getRosterShift:/,"Cloud reader must be registered on authenticated writer");
