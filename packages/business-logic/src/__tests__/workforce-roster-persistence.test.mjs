@@ -5,7 +5,8 @@ const require = createRequire(import.meta.url);
 const ts = require("typescript");
 require.extensions[".ts"] = (module, filename) => module._compile(
   ts.transpileModule(fs.readFileSync(filename, "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+    fileName: filename,
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true, inlineSourceMap: true, inlineSources: true },
   }).outputText, filename,
 );
 const permissions = require("../permissions.ts");
