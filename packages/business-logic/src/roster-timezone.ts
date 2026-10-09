@@ -37,7 +37,7 @@ function branchDate(date: string): number {
 }
 
 function localParts(formatter: Intl.DateTimeFormat, utcMs: number) {
-  const map = new Map(formatter.formatToParts(new Date(utcMs)).map(part => [part.type, part.value]));
+  const map = new Map<string, string>(formatter.formatToParts(new Date(utcMs)).map(part => [part.type, part.value]));
   const number = (key: string) => Number(map.get(key));
   return {
     year: number("year"), month: number("month"), day: number("day"),
