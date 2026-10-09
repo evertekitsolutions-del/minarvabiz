@@ -9,10 +9,14 @@ import { generateId, nowISO } from "@minarvabiz/utils";
 import { calculateIncentive } from "./incentives";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
+import * as phase9Store from "./phase9-store";
+import { checkRosterSlot, rosterRange, validateShiftRule, type ShiftRule, type RosterSlot, type RosterPolicy } from "./workforce-roster";
 
 const staff:StaffMember[]=[{id:"staff-1",name:"Ravi Kumar",phone:"9876511111",role:"tailor",salary:18000,status:"active",joiningDate:"2024-01-15",createdAt:nowISO(),updatedAt:nowISO()},{id:"staff-2",name:"Meena Devi",phone:"9876522222",role:"tailor",salary:16000,status:"active",joiningDate:"2024-03-01",createdAt:nowISO(),updatedAt:nowISO()},{id:"staff-3",name:"Suresh Nair",phone:"9876533333",role:"cashier",salary:14000,status:"active",joiningDate:"2023-11-10",createdAt:nowISO(),updatedAt:nowISO()}];
 const assignments:StaffAssignment[]=[];
 const attendance:StaffAttendanceRecord[]=[];
+const shiftRules: ShiftRule[] = [];
+const rosterSlots: RosterSlot[] = [];
 const incentiveRules:IncentiveRuleRecord[]=[{id:"rule-1",name:"Ladies tailoring fixed",serviceType:"ladies_tailoring",type:"fixed",value:100,isActive:true,createdAt:nowISO(),updatedAt:nowISO()},{id:"rule-2",name:"Wedding dress 5%",serviceType:"wedding_dress",type:"percentage",value:5,isActive:true,createdAt:nowISO(),updatedAt:nowISO()},{id:"rule-3",name:"T-shirt printing fixed",serviceType:"tshirt_printing",type:"fixed",value:20,isActive:true,createdAt:nowISO(),updatedAt:nowISO()}];
 const payouts:StaffIncentivePayout[]=[];
 const notifications:AppNotification[]=[{id:"n-1",kind:"low_stock",title:"Low stock alert",body:"Cotton Thread (White) is below minimum (5 left)",href:"/inventory",read:false,createdAt:nowISO()},{id:"n-2",kind:"order_ready",title:"Order ready",body:"An order is ready for delivery",href:"/services",read:false,createdAt:nowISO()}];
@@ -126,6 +130,72 @@ export function listIncentiveRules(){return incentiveRules.filter(r=>r.isActive)
 export function upsertIncentiveRule(input:{id?:UUID;name:string;serviceType?:string|null;type:"fixed"|"percentage";value:number}){assertPermission("staff.manage");if(input.id){const existing=incentiveRules.find(r=>r.id===input.id);if(existing){Object.assign(existing,input,{updatedAt:nowISO()});enqueueOutbox("incentive_rules",existing.id,"update",existing);touchPersistence();return existing;}}const r:IncentiveRuleRecord={id:generateId(),name:input.name,serviceType:input.serviceType??null,type:input.type,value:input.value,isActive:true,createdAt:nowISO(),updatedAt:nowISO()};incentiveRules.push(r);enqueueOutbox("incentive_rules",r.id,"insert",r);touchPersistence();return r;}
 export function listIncentivePayouts(staffId?:UUID){let list=[...payouts];if(staffId)list=list.filter(p=>p.staffId===staffId);return list.sort((a,b)=>b.calculatedAt.localeCompare(a.calculatedAt));}
 export function markIncentivePaid(id:UUID){assertPermission("staff.manage");const p=payouts.find(x=>x.id===id);if(!p)return null;p.paid=true;p.paidAt=nowISO();enqueueOutbox("staff_incentive_payouts",p.id,"update",p);touchPersistence();return p;}
+
+
+/** HR-004 roster domain, independent of the attendance ledger. All mutations
+ * require staff.manage and emit audit + outbox, including cancellations. */
+export function listShiftRules(includeInactive = false): ShiftRule[] {
+  assertPermission("staff.manage");
+  return shiftRules.filter(rule => includeInactive || rule.active).map(rule => ({ ...rule }));
+}
+export function listRosterSlots(from?: string, to?: string, staffId?: string): RosterSlot[] {
+  assertPermission("staff.manage");
+  if (from || to) {
+    if (!from || !to) throw new Error("Roster listing needs both range boundaries");
+    return rosterRange(rosterSlots, from, to, staffId);
+  }
+  return rosterSlots.filter(slot => !staffId || slot.staffId === staffId).map(slot => ({ ...slot }));
+}
+export function createShiftRule(input: Omit<ShiftRule, "id">): ShiftRule {
+  assertPermission("staff.manage");
+  const next: ShiftRule = { ...input, id: generateId(), name: input.name.trim() };
+  validateShiftRule(next);
+  if (next.branchId && !phase9Store.listBranches().some(branch => branch.id === next.branchId)) throw new Error("Shift branch does not exist");
+  if (shiftRules.some(rule => rule.branchId === next.branchId && rule.name.toLowerCase() === next.name.toLowerCase())) throw new Error("Shift name is already used in this branch");
+  shiftRules.push(next);
+  enqueueOutbox("staff_shift_rules", next.id, "insert", { ...next });
+  auditAction("roster.shift.create", "staff_shift_rules", next.id, null, { ...next });
+  touchPersistence();
+  return { ...next };
+}
+export function updateShiftRule(id: UUID, changes: Partial<Omit<ShiftRule, "id">>): ShiftRule {
+  assertPermission("staff.manage");
+  const old = shiftRules.find(rule => rule.id === id);
+  if (!old) throw new Error("Shift template not found");
+  const next: ShiftRule = { ...old, ...changes, id: old.id, name: (changes.name ?? old.name).trim() };
+  validateShiftRule(next);
+  if (next.branchId && !phase9Store.listBranches().some(branch => branch.id === next.branchId)) throw new Error("Shift branch does not exist");
+  if (shiftRules.some(rule => rule.id !== id && rule.branchId === next.branchId && rule.name.toLowerCase() === next.name.toLowerCase())) throw new Error("Shift name is already used in this branch");
+  if (rosterSlots.some(slot => slot.shiftRuleId === id) && (
+    old.startTime !== next.startTime || old.endTime !== next.endTime ||
+    old.unpaidBreakMinutes !== next.unpaidBreakMinutes || old.branchId !== next.branchId
+  )) throw new Error("Historical shift timing and branch cannot change; create a new shift template");
+  Object.assign(old, next);
+  enqueueOutbox("staff_shift_rules", id, "update", { ...old });
+  auditAction("roster.shift.update", "staff_shift_rules", id, { ...old, ...changes, name: old.name }, { ...old });
+  touchPersistence();
+  return { ...old };
+}
+export function assignRosterSlot(input: Omit<RosterSlot, "id" | "version"> & { id?: UUID; expectedVersion?: number }, policy?: RosterPolicy): RosterSlot {
+  assertPermission("staff.manage");
+  const old = input.id ? rosterSlots.find(slot => slot.id === input.id) : undefined;
+  if (input.id && !old) throw new Error("Roster assignment not found");
+  if (old && input.expectedVersion !== old.version) throw new Error("Roster revision conflict");
+  const next: RosterSlot = {
+    id: old?.id ?? generateId(),
+    staffId: input.staffId, workDate: input.workDate, shiftRuleId: input.shiftRuleId,
+    branchId: input.branchId, status: input.status,
+    version: old ? old.version + 1 : 1,
+  };
+  const checked = checkRosterSlot({ candidate: next, slots: rosterSlots, shifts: shiftRules, staff: getStaff(input.staffId) ?? null, policy });
+  if (!checked.ok) throw new Error(checked.errors.join("; "));
+  if (old) Object.assign(old, next);
+  else rosterSlots.push({ ...next });
+  enqueueOutbox("staff_roster_slots", next.id, old ? "update" : "insert", { ...next });
+  auditAction(old ? "roster.slot.update" : "roster.slot.create", "staff_roster_slots", next.id, old ? { ...old, ...input, version: old.version - 1 } : null, { ...next });
+  touchPersistence();
+  return { ...next };
+}
 
 /** Restore Phase 6 state from a persisted snapshot without emitting outbox events. */
 export function exportPhase6State(){return{staff:[...staff],attendance:[...attendance],assignments:[...assignments],incentiveRules:[...incentiveRules],payouts:[...payouts],notifications:[...notifications]};}
