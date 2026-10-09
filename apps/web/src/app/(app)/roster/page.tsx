@@ -126,6 +126,33 @@ export default function RosterPage() {
     }
   }
 
+  async function reapplyReviewedLocal() {
+    if (!review || !review.remote || !isRosterHydrated() || !can("staff.manage") ||
+        !getRemoteWriter()?.upsertRosterEvent || inFlight.current) return;
+    if (!window.confirm(
+      "Submit the reviewed local correction as a NEW revision over the current Cloud version? " +
+      "This will retain the original rejected event in history. A changed Cloud revision, " +
+      "dependent events, staff/date identity mismatch or historical shift change will be refused."
+    )) return;
+    inFlight.current = true; setBusy(true); setSyncProblem(""); setResolutionMessage("");
+    try {
+      const confirmed = await phase6Store.reapplyLocalWorkforceRosterConflict(review);
+      setReview(null);
+      setResolutionMessage(
+        "Reviewed local correction confirmed by the audited Cloud RPC at revision " +
+        confirmed.version + ". Superseded event retained in the local history."
+      );
+    } catch (error) {
+      // The old event may already be superseded by a new failed/pending event.
+      // Clear the now-stale comparison so the current event can be reviewed.
+      setReview(null);
+      setSyncProblem((error instanceof Error ? error.message : String(error)) +
+        " If a revised event is pending, keep this tab open and use Review or Retry.");
+    } finally {
+      inFlight.current = false; setBusy(false); redraw();
+    }
+  }
+
   if (!can("staff.manage")) return <p role="alert">You do not have permission to view workforce rosters.</p>;
   // Do not expose stale previous-tenant data when authenticated hydration failed.
   if (!scopedReady) return <p role={problem ? "alert" : "status"}>{problem || "Loading authorized shift and roster data…"}</p>;
@@ -164,7 +191,14 @@ export default function RosterPage() {
         onClick={() => void acceptCloudVersion()}>
         {review.remote ? "Keep current Cloud version" : "Discard unsynced local creation"}
       </button>
-      <p className="mt-2 text-sm">Applying the local correction over Cloud remains disabled until an audited rebase workflow is verified.</p>
+      {review.remote && <button className="mt-3 ml-2 rounded border px-3 py-2" type="button"
+        disabled={busy || unsent.length !== 1 || !isRosterHydrated() || !writerReady}
+        onClick={() => void reapplyReviewedLocal()}>
+        Reapply reviewed local correction
+      </button>}
+      <p className="mt-2 text-sm">Reapply Local creates a new audited revision and retains the rejected event.
+        Missing Cloud records, different-ID same-day assignments, dependent events and unreviewed changes
+        require separate manual recovery; no automatic force overwrite.</p>
     </section>}
     {resolutionMessage && <p role="status" className="rounded border p-3 text-sm">{resolutionMessage}</p>}
     {syncProblem && <p role="alert" className="rounded border border-rose-300 p-3 text-sm">{syncProblem}</p>}
