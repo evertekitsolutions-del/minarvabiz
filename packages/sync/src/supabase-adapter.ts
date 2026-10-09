@@ -395,6 +395,8 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
       const accepted: UUID[] = [];
       const rejected: Array<{ id: UUID; error: string; remote?: VersionedRecord }> = [];
       const blockedAttendance=new Set<string>();
+      const blockedRoster=new Set<string>();
+      const blockedShiftRules=new Set<string>();
       for (const ev of events) {
         try {
           const payload = typeof ev.payload === "string" ? JSON.parse(ev.payload) : ev.payload;
@@ -412,6 +414,41 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
               blockedAttendance.add(ev.aggregateId);
             } else accepted.push(ev.id);
             continue; // The RPC commits attendance, audit and event acknowledgement together.
+          }
+          if (table === "staff_shift_rules" || table === "staff_roster_slots") {
+            // Workforce authority is PostgreSQL RPC only. Never fall through to
+            // direct DML (which is forbidden by RLS and cannot audit atomically).
+            const kind = table === "staff_shift_rules" ? "shift" : "roster";
+            const record = payload as Record<string, unknown>;
+            if (blockedRoster.has(ev.aggregateId)) throw new Error("Roster event queued behind an unacknowledged revision");
+            if (kind === "roster" && typeof record?.shiftRuleId === "string" &&
+                blockedShiftRules.has(record.shiftRuleId)) {
+              throw new Error("Roster assignment blocked by an unacknowledged shift template");
+            }
+            if (ev.eventType === "delete") throw new Error("Roster hard deletion is forbidden; cancel assignments or deactivate shifts");
+            if (!record || Array.isArray(record) || typeof record !== "object" ||
+                record.id !== ev.aggregateId || !Number.isSafeInteger(record.version) ||
+                (record.version as number) < 1 || !Number.isSafeInteger(ev.sequence) ||
+                ev.sequence < 1) throw new Error("Invalid immutable workforce roster event");
+            if (!client.rpc) throw new Error("Workforce roster requires authenticated atomic RPC support");
+            const response = await client.rpc("apply_staff_roster_event", {
+              p_kind: kind, p_record: record, p_event_id: ev.id,
+              p_device_id: deviceId, p_sequence: ev.sequence,
+            });
+            if (response.error) throw new Error(response.error);
+            if (response.data?.accepted !== true) {
+              blockedRoster.add(ev.aggregateId);
+              if (kind === "shift") blockedShiftRules.add(ev.aggregateId);
+              rejected.push({ id: ev.id, error: "roster_version_conflict",
+                remote: response.data?.remote as VersionedRecord | undefined });
+              continue;
+            }
+            // Both fresh and replay replies include the committed aggregate ID.
+            const recordedId = response.data.record && typeof response.data.record === "object"
+              ? (response.data.record as Record<string, unknown>).id : response.data.id;
+            if (recordedId !== ev.aggregateId) throw new Error("Roster RPC acknowledgement identity mismatch");
+            accepted.push(ev.id);
+            continue; // RPC commits roster data, private receipt and audit atomically.
           }
           const row = remoteRow(table, ev.aggregateId, payload as Record<string, unknown>);
           // Remote outbox acknowledgement is written only after the domain mutation succeeds.
@@ -452,6 +489,10 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
           }
         } catch (e) {
           if(ev.aggregateType==="staff_attendance")blockedAttendance.add(ev.aggregateId);
+          if(ev.aggregateType==="staff_shift_rules" || ev.aggregateType==="staff_roster_slots") {
+            blockedRoster.add(ev.aggregateId);
+            if(ev.aggregateType==="staff_shift_rules")blockedShiftRules.add(ev.aggregateId);
+          }
           rejected.push({ id: ev.id, error: e instanceof Error ? e.message : String(e) });
         }
       }
@@ -462,7 +503,7 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
         "branches", "customers", "categories", "products", "inventory_transactions",
         "sales", "payments", "measurement_profiles", "orders",
         "order_expenses", "laundry_orders", "expenses", "purchases", "suppliers",
-        "staff_members", "staff_attendance", "sale_returns", "audit_logs",
+        "staff_members", "staff_attendance", "staff_shift_rules", "staff_roster_slots", "sale_returns", "audit_logs",
         "production_workflows", "production_stage_events", "material_rolls", "material_consumptions",
         "warehouses", "warehouse_locations", "warehouse_stock", "warehouse_transfers",
         "purchase_orders", "purchase_order_lines", "goods_receipts", "goods_receipt_lines",
