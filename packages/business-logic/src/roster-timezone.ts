@@ -7,7 +7,7 @@
  * Missing clock times (spring-forward gaps) fail closed. Repeated local clock
  * times (fall-back folds) require an explicit earlier/later policy.
  */
-import { validateShiftRule, type RosterSlot, type ShiftRule } from "./workforce-roster";
+import { checkRosterSlot, validateShiftRule, type RosterSlot, type ShiftRule, type RosterPolicy, type RosterDecision, type StaffRosterContext } from "./workforce-roster";
 
 export interface BranchShiftTimePolicy {
   timeZone: string; // IANA identifier, e.g. Asia/Kolkata or Europe/London
@@ -121,4 +121,64 @@ export function resolveRosterShiftInstants(
     overnight, wallMinutes: spanMinutes,
     elapsedMinutes, dstAdjustmentMinutes: elapsedMinutes - spanMinutes,
   };
+}
+
+
+/**
+ * HR-004 opt-in *instant-aware* validation. The caller must supply a current,
+ * tenant-approved policy for each relevant branch (including historical slots).
+ * Never assume the operating system's timezone or silently coerce DST folds.
+ *
+ * Reuse core identity, revision, branch, inactive and cancellation validation,
+ * then compare actual UTC instants rather than wall-clock arithmetic.
+ * This function does not persist or bypass PostgreSQL server authority.
+ */
+export function checkZonedRosterSlot(input: {
+  candidate: RosterSlot;
+  slots: readonly RosterSlot[];
+  shifts: readonly ShiftRule[];
+  staff: StaffRosterContext | null;
+  policy?: RosterPolicy;
+  policyForBranch: (branchId: string | null) => BranchShiftTimePolicy;
+}): RosterDecision {
+  const { candidate, slots, shifts, staff, policy, policyForBranch } = input;
+  if (typeof policyForBranch !== "function") {
+    return { ok: false, errors: ["A branch IANA timezone policy resolver is required"] };
+  }
+  // Validate the proposed revision against its own previous identity only.
+  // Other employees' unrelated assignments must not affect the result.
+  const previous = slots.filter(slot => slot.id === candidate.id);
+  const base = checkRosterSlot({ candidate, slots: previous, shifts, staff, policy });
+  if (!base.ok || candidate.status !== "scheduled") return base;
+  const errors: string[] = [];
+  const rule = shifts.find(shift => shift.id === candidate.shiftRuleId);
+  if (!rule) return { ok: false, errors: ["Shift template is unavailable"] };
+  let own: ResolvedShiftInstants;
+  try {
+    own = resolveRosterShiftInstants(candidate, rule, policyForBranch(candidate.branchId));
+  } catch (error) {
+    return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
+  }
+  const start = Date.parse(own.startUtc), end = Date.parse(own.endUtc);
+  const rest = (policy?.minimumRestMinutes ?? 0) * 60_000;
+  for (const other of slots) {
+    if (other.id === candidate.id || other.status !== "scheduled" || other.staffId !== candidate.staffId) continue;
+    const otherRule = shifts.find(shift => shift.id === other.shiftRuleId);
+    if (!otherRule) {
+      errors.push(`Assignment ${other.id}: shift template is unavailable`);
+      continue;
+    }
+    try {
+      const resolved = resolveRosterShiftInstants(other, otherRule, policyForBranch(other.branchId));
+      const otherStart = Date.parse(resolved.startUtc), otherEnd = Date.parse(resolved.endUtc);
+      if (start < otherEnd && otherStart < end) {
+        errors.push(`Shift overlaps existing assignment ${other.id} in UTC`);
+      } else if (rest > 0 && (start >= otherEnd ? start - otherEnd : otherStart - end) < rest) {
+        errors.push(`Minimum rest would be violated by assignment ${other.id} in UTC`);
+      }
+    } catch (error) {
+      errors.push(`Assignment ${other.id}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return errors.length ? { ok: false, errors } : base;
 }

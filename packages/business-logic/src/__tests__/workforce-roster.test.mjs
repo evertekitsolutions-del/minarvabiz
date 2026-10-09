@@ -161,3 +161,45 @@ assert.throws(() => instant("2026-10-09", "09:00", "17:00", "Invalid\/NotAZone")
 assert.throws(() => instant("2026-10-09", "09:00", "17:00", ""), /IANA timezone is required/);
 assert.throws(() => instant("2026-10-09", "09:00", "17:00", "Asia/Kolkata", "unspecified"), /Invalid DST ambiguity/);
 console.log("HR-004 branch IANA/DST normalization: gap, fold, overnight, offsets and fail-closed policy PASS");
+
+
+const { checkZonedRosterSlot } = require("../roster-timezone.ts");
+const london = () => ({ timeZone: "Europe/London", ambiguousTime: "reject" });
+const londonStaff = { id: "london-staff", status: "active", branchId: "uk-branch" };
+const earlyUk = { ...day, id: "early-uk", startTime: "00:00", endTime: "00:30", branchId: "uk-branch" };
+const lateUk = { ...day, id: "late-uk", startTime: "02:00", endTime: "03:00", unpaidBreakMinutes: 0, branchId: "uk-branch" };
+const ukExisting = { id: "uk-old", staffId: "london-staff", shiftRuleId: "early-uk",
+  workDate: "2026-03-29", branchId: "uk-branch", status: "scheduled", version: 1 };
+const ukNew = { ...ukExisting, id: "uk-next", shiftRuleId: "late-uk" };
+const opts = (candidate, entries, rest, policyForBranch = london) => ({
+  candidate, slots: entries, shifts: [earlyUk, lateUk], staff: londonStaff,
+  policy: { minimumRestMinutes: rest }, policyForBranch,
+});
+assert.equal(checkRosterSlot({candidate:ukNew,slots:[ukExisting],shifts:[earlyUk,lateUk],
+  staff:londonStaff,policy:{minimumRestMinutes:60}}).ok,true,
+  "Wall-clock-only planning may miss the spring-forward loss of one rest hour");
+denied(checkZonedRosterSlot(opts(ukNew,[ukExisting],60)), /Minimum rest.*UTC/,
+  "Instant-aware rule must reject actual 30-minute rest");
+assert.equal(checkZonedRosterSlot(opts(ukNew,[ukExisting],30)).ok,true,
+  "30 actual minutes satisfy an explicit 30-minute minimum");
+const autumnOld = { ...ukExisting, workDate:"2026-10-25" };
+const autumnNew = { ...ukNew, workDate:"2026-10-25" };
+denied(checkRosterSlot({candidate:autumnNew,slots:[autumnOld],shifts:[earlyUk,lateUk],
+  staff:londonStaff,policy:{minimumRestMinutes:120}}), /Minimum rest/,
+  "Wall-clock arithmetic may falsely reject a valid autumn rest period");
+assert.equal(checkZonedRosterSlot(opts(autumnNew,[autumnOld],120)).ok,true,
+  "150 elapsed UTC minutes satisfy a 120-minute minimum across autumn transition");
+const gap = { ...lateUk, id:"gap-uk", startTime:"01:30", endTime:"03:00" };
+denied(checkZonedRosterSlot({...opts({...ukNew,shiftRuleId:"gap-uk"},[],0),
+  shifts:[...opts(ukNew,[],0).shifts,gap]}),/Nonexistent.*DST gap/);
+const fold = { ...gap, id:"fold-uk" };
+denied(checkZonedRosterSlot({...opts({...autumnNew,shiftRuleId:"fold-uk"},[],0),
+  shifts:[earlyUk,lateUk,fold]}),/Ambiguous.*DST overlap/);
+assert.equal(checkZonedRosterSlot({...opts({...autumnNew,shiftRuleId:"fold-uk"},[],0),
+  shifts:[earlyUk,lateUk,fold],policyForBranch:()=>({timeZone:"Europe/London",ambiguousTime:"later"})}).ok,true,
+  "Explicitly reviewed later fold is permitted");
+denied(checkZonedRosterSlot({...opts(ukNew,[],0),policyForBranch:()=>({timeZone:"Not/AZone"})}),/Invalid branch IANA/);
+denied(checkZonedRosterSlot({...opts(ukNew,[],0),policyForBranch:null}),/resolver is required/);
+assert.equal(checkZonedRosterSlot(opts({...ukNew,status:"cancelled",version:2},[ukNew],0)).ok,true, "Audited cancellation still allowed"); 
+
+console.log("HR-004 UTC-aware branch roster validation: DST gap, fold, rest, overlap and correction checks PASS");
