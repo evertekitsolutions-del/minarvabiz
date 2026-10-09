@@ -22,6 +22,7 @@ const day = roster.createShiftRule({
   unpaidBreakMinutes: 30, branchId: null, active: true,
 });
 assert.equal(roster.listShiftRules().length, 1);
+assert.equal(day.version, 1, "New shift events must carry the server-required first revision");
 assert.throws(() => roster.createShiftRule({
   name: "production DAY", startTime: "09:00", endTime: "17:00",
   unpaidBreakMinutes: 30, branchId: null, active: true,
@@ -39,6 +40,8 @@ assert.throws(() => roster.assignRosterSlot({
 assert.throws(() => roster.updateShiftRule(day.id, { startTime: "10:00" }), /Historical shift timing/);
 assert.equal(roster.listShiftRules(true)[0].startTime, "09:00", "Rejected changes never mutate templates");
 
+const recordedShift = outbox.exportOutbox().find(e => e.aggregateType === "staff_shift_rules" && e.aggregateId === day.id);
+assert.equal(recordedShift.payload.version, 1, "Pending immutable shift event can be accepted by server RPC");
 const historyBefore = outbox.exportOutbox().find(e => e.aggregateType === "staff_roster_slots" && e.aggregateId === scheduled.id);
 const cancelled = roster.assignRosterSlot({
   id: scheduled.id, expectedVersion: 1, staffId: "staff-1", workDate: "2026-10-09",
@@ -62,7 +65,8 @@ const overnight = roster.assignRosterSlot({
   branchId: null, status: "scheduled",
 });
 assert.equal(overnight.version, 1);
-roster.updateShiftRule(night.id, { active: false });
+const disabledNight = roster.updateShiftRule(night.id, { active: false });
+assert.equal(disabledNight.version, 2, "Shift updates must increment the optimistic PostgreSQL revision");
 assert.equal(roster.listShiftRules().some(s => s.id === night.id), false);
 assert.equal(roster.listShiftRules(true).some(s => s.id === night.id), true);
 assert.throws(() => roster.assignRosterSlot({
@@ -85,6 +89,7 @@ assert.equal(roster.listRosterSlots().length, 0);
 assert.equal(persistence.importDomainSnapshot(snapshot).ok, true, "SQLite/browser domain snapshot restores roster");
 assert.equal(roster.listRosterSlots().length, 2);
 assert.equal(roster.listShiftRules(true).find(s => s.id === night.id).active, false, "Historic inactive shift still restores");
+assert.equal(roster.listShiftRules(true).find(s => s.id === night.id).version, 2, "Shift revision survives backup and restore");
 assert.equal(roster.listRosterSlots().find(s => s.id === overnight.id).workDate, "2026-10-10");
 
 const corrupt = structuredClone(snapshot);
@@ -99,6 +104,16 @@ delete oldSnapshot.shiftRules;
 delete oldSnapshot.rosterSlots;
 assert.equal(persistence.importDomainSnapshot(oldSnapshot).ok, true, "Previous v13 snapshots remain importable");
 assert.equal(roster.listRosterSlots().length, 0, "Old snapshots do not retain unrelated tenant roster state");
+// A v14 pre-revision backup may have shiftRules without version; importing
+// must preserve the original templates and assign their first safe revision.
+const legacy = structuredClone(snapshot);
+for (const rule of legacy.shiftRules) delete rule.version;
+assert.equal(persistence.importDomainSnapshot(legacy).ok, true, "Legacy v14 shifts remain importable");
+assert.equal(roster.listShiftRules(true).every(rule => rule.version === 1), true, "Legacy shift revision normalized");
+const fixed = roster.updateShiftRule(night.id, { name: "Night updated" });
+assert.equal(fixed.version, 2, "First post-migration correction increments from revision one");
+assert.equal(outbox.exportOutbox().filter(e => e.aggregateType === "staff_shift_rules" && e.aggregateId === night.id).at(-1).payload.version, 2);
+assert.throws(() => roster.updateShiftRule(night.id, { version: 900 }), /server-managed/);
 
 permissions.setCurrentRole("cashier");
 assert.throws(() => roster.createShiftRule({
