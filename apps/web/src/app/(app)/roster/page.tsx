@@ -6,6 +6,7 @@ import {
 } from "@minarvabiz/business-logic";
 import { isRosterHydrated } from "@/lib/data-source";
 import { checkpointUnconfirmedRosterEvents, inspectSealedRosterCheckpoint, compareSealedRosterCheckpointWithCloud } from "@/lib/roster-recovery-checkpoint";
+import { restoreReviewedSealedRosterEventToMemory } from "@/lib/roster-recovery-restore";
 
 /**
  * Authorized browser roster editor. Mutations stay on the shared domain/outbox,
@@ -97,6 +98,30 @@ export default function RosterPage() {
       setSyncProblem(error instanceof Error ? error.message : String(error));
     } finally {
       inFlight.current = false; setBusy(false);
+    }
+  }
+
+  async function restoreSavedEventForReview() {
+    if (!sealedReview || !ready || !isRosterHydrated() ||
+        recoveryState !== "blocked" || !can("staff.manage") ||
+        !getRemoteWriter()?.upsertRosterEvent || inFlight.current) return;
+    if (!window.confirm(
+      "Restore this ONE previously encrypted roster event into current browser memory? " +
+      "The authorized Cloud record must still be exactly one revision behind. " +
+      "This will NOT submit or acknowledge anything in Cloud. You must separately review and press Retry."
+    )) return;
+    inFlight.current=true;setBusy(true);setSyncProblem("");setResolutionMessage("");
+    try {
+      const restored=await restoreReviewedSealedRosterEventToMemory(sealedReview);
+      setSealedReview(null);setRecoveryState("ready");setRecoveryCount(0);
+      setResolutionMessage(
+        "Original saved roster event "+restored.eventId+
+        " restored locally only. Review the unconfirmed event below and explicitly select Retry when appropriate."
+      );
+    } catch(error) {
+      setSyncProblem(error instanceof Error?error.message:String(error));
+    } finally {
+      inFlight.current=false;setBusy(false);redraw();
     }
   }
 
@@ -249,6 +274,18 @@ export default function RosterPage() {
           </div>
         </article>)}
       </div>
+      {sealedReview.total === 1 && sealedReview.comparisons.length === 1 &&
+       sealedReview.comparisons[0].remotePresence === "visible" &&
+       sealedReview.comparisons[0].remoteVersion !== null &&
+       sealedReview.comparisons[0].localVersion === sealedReview.comparisons[0].remoteVersion + 1 &&
+       <button type="button" className="mt-3 rounded border px-3 py-2"
+         disabled={busy || !isRosterHydrated() || !getRemoteWriter()?.upsertRosterEvent}
+         onClick={() => void restoreSavedEventForReview()}>
+         Restore reviewed original event locally (no Cloud write)
+       </button>}
+      <p className="mt-2 text-sm">Only a single same-ID update whose Cloud version is exactly one behind
+        can be restored by this action. Conflicting, missing, hidden or dependent events remain
+        quarantined for separate recovery. Cloud synchronization is never automatic.</p>
     </section>}
     {recoveryState === "unavailable" && <p role="alert">Roster recovery storage or authorization is unavailable; Web editing is disabled to prevent silent data loss.</p>}
     {unsent.length > 0 && <div role="alert" className="rounded border border-amber-300 p-3 text-sm">
