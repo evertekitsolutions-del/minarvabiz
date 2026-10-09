@@ -200,11 +200,40 @@ export function assignRosterSlot(input: Omit<RosterSlot, "id" | "version"> & { i
 }
 
 /** Restore Phase 6 state from a persisted snapshot without emitting outbox events. */
-export function exportPhase6State(){return{staff:[...staff],attendance:[...attendance],assignments:[...assignments],incentiveRules:[...incentiveRules],payouts:[...payouts],notifications:[...notifications]};}
+export function exportPhase6State(){return{staff:[...staff],attendance:[...attendance],shiftRules:shiftRules.map(rule=>({...rule})),rosterSlots:rosterSlots.map(slot=>({...slot})),assignments:[...assignments],incentiveRules:[...incentiveRules],payouts:[...payouts],notifications:[...notifications]};}
 
-export function hydratePhase6(input:{staff?:StaffMember[];attendance?:StaffAttendanceRecord[];assignments?:StaffAssignment[];incentiveRules?:IncentiveRuleRecord[];payouts?:StaffIncentivePayout[];notifications?:AppNotification[]}):void{
+export function hydratePhase6(input:{staff?:StaffMember[];attendance?:StaffAttendanceRecord[];shiftRules?:ShiftRule[];rosterSlots?:RosterSlot[];assignments?:StaffAssignment[];incentiveRules?:IncentiveRuleRecord[];payouts?:StaffIncentivePayout[];notifications?:AppNotification[]}):void{
   if(input.staff){staff.length=0;staff.push(...input.staff);}
   if(input.attendance){attendance.length=0;attendance.push(...input.attendance);}
+  if(input.shiftRules || input.rosterSlots) {
+    const rules = input.shiftRules ?? shiftRules;
+    const slots = input.rosterSlots ?? rosterSlots;
+    const ruleIds = new Set<string>();
+    for (const rule of rules) {
+      validateShiftRule(rule);
+      if (ruleIds.has(rule.id)) throw new Error("Duplicate shift rule ID in snapshot");
+      ruleIds.add(rule.id);
+    }
+    const seenSlots = new Set<string>();
+    const visited: RosterSlot[] = [];
+    for (const slot of slots) {
+      if (seenSlots.has(slot.id)) throw new Error("Duplicate roster slot ID in snapshot");
+      seenSlots.add(slot.id);
+      const member = staff.find(m => m.id === slot.staffId);
+      // Historic slots retain their original branch even after a staff transfer.
+      const originalContext = member ? { id: member.id, status: "active", branchId: slot.branchId } : null;
+      const check = checkRosterSlot({
+        candidate: { ...slot, version: 1 }, slots: visited, shifts: rules,
+        staff: originalContext,
+      });
+      if (!check.ok || !Number.isSafeInteger(slot.version) || slot.version < 1) {
+        throw new Error("Invalid roster snapshot: " + (!check.ok ? check.errors.join("; ") : "version"));
+      }
+      visited.push(slot);
+    }
+    if(input.shiftRules){shiftRules.length=0;shiftRules.push(...input.shiftRules.map(rule=>({...rule})));}
+    if(input.rosterSlots){rosterSlots.length=0;rosterSlots.push(...input.rosterSlots.map(slot=>({...slot})));}
+  }
   if(input.assignments){assignments.length=0;assignments.push(...input.assignments);}
   if(input.incentiveRules){incentiveRules.length=0;incentiveRules.push(...input.incentiveRules);}
   if(input.payouts){payouts.length=0;payouts.push(...input.payouts);}
