@@ -28,6 +28,20 @@ let initError: string | null = null;
 let integrityOk = false;
 let integrityResult: string[] = [];
 let pendingWrite: Promise<boolean> = Promise.resolve(true);
+let scheduledPersist: ReturnType<typeof setTimeout> | null = null;
+
+// Domain mutations may touch audit logs and outbox entries in the same UI action.
+// Group the automatic notifications; explicit user saves still persist immediately.
+function scheduleDomainPersistence(): void {
+  if (scheduledPersist !== null) clearTimeout(scheduledPersist);
+  scheduledPersist = setTimeout(() => {
+    scheduledPersist = null;
+    void persistDomainToSqlite().catch((error) => {
+      console.error("[minarvabiz] SQLite automatic persistence failed", error);
+    });
+  }, 350);
+}
+
 
 export function isDesktopSqliteReady() {
   return ready;
@@ -171,8 +185,8 @@ async function initializeDesktopSqlite(): Promise<{ ok: boolean; error?: string 
       recordBackupFailure(e instanceof Error ? e.message : String(e));
     }
 
-    (window as unknown as { __minarvaDesktopPersist?: () => Promise<boolean>; __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopPersist =
-      persistDomainToSqlite;
+    (window as unknown as { __minarvaDesktopPersist?: () => void; __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopPersist =
+      scheduleDomainPersistence;
     (window as unknown as { __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopFlush =
       flushDesktopSqlitePersistence;
 
@@ -191,6 +205,10 @@ async function initializeDesktopSqlite(): Promise<{ ok: boolean; error?: string 
 }
 
 export async function persistDomainToSqlite(): Promise<boolean> {
+  if (scheduledPersist !== null) {
+    clearTimeout(scheduledPersist);
+    scheduledPersist = null;
+  }
   if (!sqlite) {
     throw new Error("Cannot persist business data: SQLite not initialized");
   }
@@ -206,5 +224,7 @@ export async function persistDomainToSqlite(): Promise<boolean> {
 }
 
 export async function flushDesktopSqlitePersistence(): Promise<boolean> {
+  // A scheduled automatic mutation must not be lost when a consumer flushes.
+  if (scheduledPersist !== null) return persistDomainToSqlite();
   return pendingWrite;
 }
