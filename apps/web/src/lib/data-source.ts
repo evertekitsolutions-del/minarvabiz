@@ -1,6 +1,6 @@
 import {optimisticVersionUpdate,optimisticVersionUpsert} from "./data-source-versioned-write";
 import { createAttendanceRemoteWriter, loadAttendanceStaff } from "./data-source-attendance";
-import { loadCloudRoster, ensureNoUnconfirmedRosterEvents } from "./data-source-roster";
+import { loadCloudRoster, ensureNoUnconfirmedRosterEvents, createRosterRemoteWriter } from "./data-source-roster";
 /**
  * Data source bootstrap — Supabase when configured, else in-memory domain stores.
  */
@@ -387,6 +387,7 @@ async function hydrateRequestedStores(
 
     registerRemoteWriter({
       ...createAttendanceRemoteWriter(cfg),
+      ...((loadRoster || hydratedDomains.has("roster")) ? createRosterRemoteWriter(cfg) : {}),
       upsertCustomer: async (customer) => {
         const row = {
           name: customer.name,

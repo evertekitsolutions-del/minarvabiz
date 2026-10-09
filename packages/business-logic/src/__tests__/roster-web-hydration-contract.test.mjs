@@ -41,6 +41,7 @@ const database={
 };
 Module._load=function(name,parent,isMain){
   if(name==="@minarvabiz/database")return database;
+  if(name==="@minarvabiz/business-logic")return { createSupabaseCloudAdapter: () => ({push:async () => ({accepted:[],rejected:[]})}) };
   return originalLoad.call(this,name,parent,isMain);
 };
 let runtime;try{runtime=require("../../../../apps/web/src/lib/data-source-roster.ts");}finally{Module._load=originalLoad;}
@@ -64,4 +65,8 @@ assert.equal(loaded.rosterSlots[0].workDate,"2026-10-09");
 failTable="staff_roster_slots";
 await assert.rejects(()=>runtime.loadCloudRoster({accessToken:"authorized"}),/RLS denied/);
 
-console.log("HR-004 authenticated Web roster mapping, permission failures, pending safety and Windows navigation PASS");
+
+assert.ok(source.includes("createRosterRemoteWriter(cfg)"),"Hydration must register the authenticated roster writer");
+assert.match(code,/createSupabaseCloudAdapter/,"Workforce cloud writes reuse the existing atomic adapter");
+assert.match(code,/Roster RPC did not acknowledge the original event ID/,"Missing acknowledgements are errors");
+console.log("HR-004 authenticated Web roster read + atomic writer registration contract PASS");
