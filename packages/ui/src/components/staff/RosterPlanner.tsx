@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { StaffMember } from "@minarvabiz/types";
-import { workforceRoster } from "@minarvabiz/business-logic";
+import { workforceRoster, rosterExport } from "@minarvabiz/business-logic";
 type ShiftRule = workforceRoster.ShiftRule;
 type RosterSlot = workforceRoster.RosterSlot;
 type RosterPolicy = workforceRoster.RosterPolicy;
@@ -134,6 +134,29 @@ export function RosterPlanner({ staff, shifts, slots, branches, canEdit, onSaveS
       setMessage(`${result.entries.length} proposed dates validated. Preview only: no changes were saved.`);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
+  function downloadRosterCsv() {
+    clearFeedback();
+    if (!monthValid || visibleSlots.length === 0) {
+      setError("Select a valid month containing roster entries before exporting.");
+      return;
+    }
+    let url: string | null = null;
+    try {
+      const content = rosterExport.buildRosterCsv({slots: visibleSlots, shifts, staff, branches});
+      url = URL.createObjectURL(new Blob(["\uFEFF", content],{type:"text/csv;charset=utf-8"}));
+      const link=document.createElement("a");
+      link.href=url;
+      link.download="minarva-roster-"+month+(staffId?"-employee":"")+".csv";
+      link.style.display="none";
+      document.body.appendChild(link);
+      try {link.click();} finally {link.remove();}
+      setMessage("Visible roster downloaded; no roster, attendance or payroll data was changed.");
+    } catch(error) {
+      setError(error instanceof Error?error.message:String(error));
+    } finally {
+      if(url){const objectUrl=url;window.setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);}
+    }
+  }
   return <section className="space-y-5" aria-label="Shift and roster planner">
     <header><h2 className="text-xl font-semibold text-slate-900">Shift & Roster Planner</h2>
       <p className="text-sm text-slate-600">Branch-local dates and times. Overnight shifts are supported; DST and statutory payroll rules require a configured country/time-zone policy.</p>
@@ -157,7 +180,7 @@ export function RosterPlanner({ staff, shifts, slots, branches, canEdit, onSaveS
       </tbody></table></div>}
     </form>
     <div className="space-y-3 rounded-xl border p-4">
-      <h3 className="font-semibold">Employee roster</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Employee roster</h3><Button type="button" variant="outline" disabled={!monthValid || visibleSlots.length === 0} onClick={downloadRosterCsv}>Export visible roster CSV</Button></div>
       <div className="grid gap-3 md:grid-cols-3">
         <label className="text-sm">Employee<select className={selectClass} value={staffId} onChange={e => {setStaffId(e.target.value);setEditingSlot(null);setPreview([]);}}><option value="">All staff</option>{staff.map(s => <option key={s.id} value={s.id}>{s.name}{s.status !== "active" ? " (inactive)" : ""}</option>)}</select></label>
         <label className="text-sm">Planning month<input className={inputClass} type="month" value={month} onChange={e => {setMonth(e.target.value);setPreview([]);}} /></label>
