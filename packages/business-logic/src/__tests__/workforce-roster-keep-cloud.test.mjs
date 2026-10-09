@@ -43,8 +43,8 @@ assert.equal(phase.listShiftRules(true).find(s=>s.id===shift.id).name,"Offline c
 
 // A failed RPC and a second pending dependent correction must be reviewed in order.
 phase.updateShiftRule(shift.id,{name:"Another correction"});
-await assert.rejects(()=>phase.keepCloudWorkforceRosterConflict(
-  await phase.reviewWorkforceRosterConflict(nextEvent.id)),/multiple unconfirmed/);
+const multipleReview=await phase.reviewWorkforceRosterConflict(nextEvent.id);
+await assert.rejects(()=>phase.keepCloudWorkforceRosterConflict(multipleReview),/multiple unconfirmed/);
 const second=pending().at(-1);
 assert.equal(second.status,"pending");
 const before=structuredClone(pending());
