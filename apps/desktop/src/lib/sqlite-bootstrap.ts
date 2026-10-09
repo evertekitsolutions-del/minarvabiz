@@ -198,6 +198,7 @@ export async function persistDomainToSqlite(): Promise<boolean> {
     throw new Error("Cannot persist business data: SQLite integrity check is not healthy");
   }
   const snap = exportDomainSnapshotFull();
+  console.info("[minarvabiz] SQLite persist snapshot", JSON.stringify({ staffCount: snap.staff?.length ?? null, attendanceCount: snap.attendance?.length ?? null }));
   // saveSnap commits through the adapter transaction, which already exports and queues
   // the SQLite binary. Exporting again here doubles peak ASM.js heap usage and IPC writes.
   saveSnap(sqlite, snap);
