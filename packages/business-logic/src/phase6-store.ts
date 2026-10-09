@@ -396,6 +396,7 @@ export async function keepCloudWorkforceRosterConflict(
  */
 export async function reapplyLocalWorkforceRosterConflict(
   approved: Awaited<ReturnType<typeof reviewWorkforceRosterConflict>>,
+  beforeFlush?: () => Promise<void>,
 ): Promise<{ eventId: string; version: number }> {
   assertPermission("staff.manage");
   if (workforceFlush) throw new Error("Roster sync is active; finish it before resolving a conflict");
@@ -510,6 +511,10 @@ export async function reapplyLocalWorkforceRosterConflict(
     {oldEventId:event.id,local:fresh.local,remote:fresh.remote},
     {newEventId:replacement.id,desired:candidate,reviewedRemoteVersion:remoteVersion});
   touchPersistence();
+  // Online shells must durably checkpoint the newly minted event BEFORE
+  // attempting the atomic RPC. A checkpoint failure leaves it unconfirmed.
+  // Windows SQLite still uses its existing synchronous snapshot auto-persist.
+  if (beforeFlush) await beforeFlush();
   // The regular sequenced sender confirms only the original replacement ID.
   // An unsuccessful RPC leaves that ID visible in the outbox for retry.
   await flushWorkforceRosterOutbox();

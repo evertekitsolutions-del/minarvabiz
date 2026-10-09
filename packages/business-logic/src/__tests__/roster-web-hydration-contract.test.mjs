@@ -36,7 +36,7 @@ assert.match(page,/Read-only tenant-scoped comparison/,"Conflict review must not
 assert.match(page,/keepCloudWorkforceRosterConflict\(review\)/,"Approved Cloud resolution uses shared audited domain guard");
 assert.match(page,/window\.confirm\(warning\)/,"Cloud replacement requires explicit confirmation");
 assert.match(page,/unsent\.length !== 1/,"Dependent events cannot be dropped from the UI");
-assert.match(page,/phase6Store\.reapplyLocalWorkforceRosterConflict\(review\)/,"Reapply Local uses shared conflict resolution domain");
+assert.match(page,/phase6Store\.reapplyLocalWorkforceRosterConflict\(review,\s*async\s*\(\)\s*=>\s*\{\s*await checkpointUnconfirmedRosterEvents\(/,"Reapply Local must checkpoint its new immutable event before RPC");
 assert.match(page,/Reapply reviewed local correction/,"Only reviewed local correction may be submitted");
 assert.match(page,/review\.remote &&/,"Missing Cloud identity must not expose force-creation action");
 assert.match(page,/window\.confirm\(/,"Explicitly confirm a reviewed rebase");
