@@ -382,6 +382,140 @@ export async function keepCloudWorkforceRosterConflict(
   touchPersistence();
 }
 
+/**
+ * Explicit HR-004 "Reapply Local" decision after the manager has reviewed
+ * both versions. Rebase the desired fields onto the *current* authenticated
+ * remote revision and submit a NEW immutable event through the same audited
+ * atomic RPC. Never rewrite/replay a rejected event with a changed payload.
+ *
+ * The original event remains in the history as discarded. If the new RPC
+ * fails or its acknowledgement is ambiguous, the replacement remains
+ * pending/failed with its original identity for manual retry/review.
+ * Different-ID same-day creations and event dependency chains are deliberately
+ * blocked until their own audited canonical-identity reconciliation exists.
+ */
+export async function reapplyLocalWorkforceRosterConflict(
+  approved: Awaited<ReturnType<typeof reviewWorkforceRosterConflict>>,
+): Promise<{ eventId: string; version: number }> {
+  assertPermission("staff.manage");
+  if (workforceFlush) throw new Error("Roster sync is active; finish it before resolving a conflict");
+  const writer = getRemoteWriter()?.upsertRosterEvent;
+  if (!writer) throw new Error("Authenticated atomic roster writer is unavailable");
+  const writerGeneration = getRemoteWriterGeneration();
+  const relevant = exportOutbox().filter(e =>
+    (e.aggregateType === "staff_shift_rules" || e.aggregateType === "staff_roster_slots") &&
+    (e.status === "pending" || e.status === "failed"));
+  if (relevant.length !== 1 || relevant[0].id !== approved.eventId)
+    throw new Error("Multiple or dependent unconfirmed roster events require ordered review");
+  const event = relevant[0];
+  if (event.aggregateType !== approved.aggregateType ||
+      event.aggregateId !== approved.local?.id ||
+      JSON.stringify(event.payload) !== JSON.stringify(approved.local))
+    throw new Error("Local event no longer matches the reviewed roster correction");
+  const existing = event.aggregateType === "staff_shift_rules"
+    ? shiftRules.find(rule => rule.id === event.aggregateId)
+    : rosterSlots.find(slot => slot.id === event.aggregateId);
+  if (!existing || JSON.stringify(existing) !== JSON.stringify(approved.local))
+    throw new Error("Local roster changed; review again before rebasing");
+  if (!approved.remote || approved.remote.id !== event.aggregateId)
+    throw new Error("Missing or different-ID Cloud record: retry the original creation or perform canonical identity review");
+  if (exportOutbox().some(other => other.id !== event.id &&
+    other.sequence > event.sequence &&
+    ((other.aggregateType === event.aggregateType && other.aggregateId === event.aggregateId) ||
+      (event.aggregateType === "staff_shift_rules" &&
+       other.aggregateType === "staff_roster_slots" &&
+       (other.payload as RosterSlot | null)?.shiftRuleId === event.aggregateId))))
+    throw new Error("Later dependent roster events require ordered conflict recovery");
+
+  const fresh = await reviewWorkforceRosterConflict(event.id);
+  if (getRemoteWriterGeneration() !== writerGeneration ||
+      getRemoteWriter()?.upsertRosterEvent !== writer)
+    throw new Error("Roster authentication changed; review again");
+  if (fresh.aggregateType !== approved.aggregateType ||
+      JSON.stringify(fresh.local) !== JSON.stringify(approved.local) ||
+      JSON.stringify(fresh.remote) !== JSON.stringify(approved.remote))
+    throw new Error("Cloud or local roster revision changed; review again before rebasing");
+  const remoteVersion = Number(fresh.remote?.version);
+  if (!fresh.remote || fresh.remote.id !== event.aggregateId ||
+      !Number.isSafeInteger(remoteVersion) || remoteVersion < 1 ||
+      !Number.isSafeInteger(remoteVersion + 1))
+    throw new Error("Cloud revision is missing or unsafe for an authorized correction");
+  if (workforceFlush || event.status === "synced" || event.status === "discarded" ||
+      exportOutbox().filter(e =>
+        (e.aggregateType === "staff_shift_rules" || e.aggregateType === "staff_roster_slots") &&
+        (e.status === "pending" || e.status === "failed")).length !== 1)
+    throw new Error("Roster event status changed while reviewing; retry after reconciliation");
+  const stillLocal = event.aggregateType === "staff_shift_rules"
+    ? shiftRules.find(rule => rule.id === event.aggregateId)
+    : rosterSlots.find(slot => slot.id === event.aggregateId);
+  if (!stillLocal || JSON.stringify(stillLocal) !== JSON.stringify(approved.local))
+    throw new Error("Local roster changed during Cloud review; review again");
+  if (exportOutbox().some(other => other.id !== event.id &&
+    other.sequence > event.sequence &&
+    ((other.aggregateType === event.aggregateType && other.aggregateId === event.aggregateId) ||
+      (event.aggregateType === "staff_shift_rules" &&
+       other.aggregateType === "staff_roster_slots" &&
+       (other.payload as RosterSlot | null)?.shiftRuleId === event.aggregateId))))
+    throw new Error("Later dependent roster events require ordered conflict recovery");
+
+  const candidate = { ...fresh.local, version: remoteVersion + 1 };
+  const nextRules = shiftRules.map(rule => ({ ...rule }));
+  const nextSlots = rosterSlots.map(slot => ({ ...slot }));
+  if (event.aggregateType === "staff_shift_rules") {
+    const remote = fresh.remote as ShiftRule, desired = candidate as ShiftRule;
+    // Historic assignments must never be retroactively reinterpreted as a
+    // new time/branch. PostgreSQL also rejects historical template mutation.
+    if (rosterSlots.some(slot => slot.shiftRuleId === event.aggregateId) &&
+        (desired.startTime !== remote.startTime || desired.endTime !== remote.endTime ||
+         desired.unpaidBreakMinutes !== remote.unpaidBreakMinutes ||
+         desired.branchId !== remote.branchId))
+      throw new Error("Historical shift time or branch cannot be rebased; create a new template");
+    validateShiftRule(desired);
+    if (desired.branchId && !phase9Store.listBranches().some(branch => branch.id === desired.branchId))
+      throw new Error("Shift branch is unavailable for reviewed rebase");
+    if (nextRules.some(rule => rule.id !== desired.id && rule.branchId === desired.branchId &&
+        rule.name.toLowerCase() === desired.name.toLowerCase()))
+      throw new Error("Rebased shift name already exists in this branch");
+    const index = nextRules.findIndex(rule => rule.id === event.aggregateId);
+    if (index < 0) throw new Error("Local shift disappeared after conflict review");
+    nextRules[index] = { ...desired };
+  } else {
+    const remote = fresh.remote as RosterSlot, desired = candidate as RosterSlot;
+    if (remote.staffId !== desired.staffId || remote.workDate !== desired.workDate ||
+        remote.branchId !== desired.branchId)
+      throw new Error("Different staff, date or branch needs explicit canonical identity recovery");
+    if (desired.branchId && !phase9Store.listBranches().some(branch => branch.id === desired.branchId))
+      throw new Error("Roster branch is unavailable for reviewed rebase");
+    const checked = checkRosterSlot({
+      candidate: desired,
+      slots: [...rosterSlots.filter(slot => slot.id !== desired.id), remote],
+      shifts: shiftRules,
+      staff: staff.find(member => member.id === desired.staffId) ?? null,
+    });
+    if (!checked.ok) throw new Error("Rebased roster violates current rules: " + checked.errors.join("; "));
+    const index = nextSlots.findIndex(slot => slot.id === event.aggregateId);
+    if (index < 0) throw new Error("Local roster disappeared after conflict review");
+    nextSlots[index] = { ...desired };
+  }
+  // hydratePhase6 validates the complete proposed snapshot before replacing
+  // either array. No authorization/network calls occur in this synchronous
+  // transition; the historical event is preserved before any awaited RPC.
+  assertPermission("staff.manage");
+  if (getRemoteWriterGeneration() !== writerGeneration || workforceFlush)
+    throw new Error("Roster session or sync changed during conflict resolution");
+  hydratePhase6({shiftRules:nextRules,rosterSlots:nextSlots});
+  const replacement = enqueueOutbox(event.aggregateType, event.aggregateId, "update", { ...candidate });
+  discardWorkforceRosterConflictEvent(event.id);
+  auditAction("roster.conflict.reapply_local", event.aggregateType, event.aggregateId,
+    {oldEventId:event.id,local:fresh.local,remote:fresh.remote},
+    {newEventId:replacement.id,desired:candidate,reviewedRemoteVersion:remoteVersion});
+  touchPersistence();
+  // The regular sequenced sender confirms only the original replacement ID.
+  // An unsuccessful RPC leaves that ID visible in the outbox for retry.
+  await flushWorkforceRosterOutbox();
+  return {eventId:replacement.id, version:candidate.version};
+}
+
 /** Restore Phase 6 state from a persisted snapshot without emitting outbox events. */
 export function exportPhase6State(){return{staff:[...staff],attendance:[...attendance],shiftRules:shiftRules.map(rule=>({...rule})),rosterSlots:rosterSlots.map(slot=>({...slot})),assignments:[...assignments],incentiveRules:[...incentiveRules],payouts:[...payouts],notifications:[...notifications]};}
 
