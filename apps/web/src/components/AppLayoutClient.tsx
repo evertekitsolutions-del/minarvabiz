@@ -46,6 +46,7 @@ const pathToNav: Record<string, NavItemId> = {
   "/customer-crm": "customer-crm",
   "/staff": "staff",
   "/attendance": "attendance",
+  "/roster": "roster",
   "/staff-detail": "staff-detail",
   "/suppliers": "suppliers",
   "/returns": "returns",
