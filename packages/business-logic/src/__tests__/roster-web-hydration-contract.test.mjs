@@ -26,4 +26,42 @@ assert.match(nav,/href: "\/roster"/);
 assert.match(layout,/"\/roster": "roster"/);
 assert.doesNotMatch(code,/service_role|SUPABASE_SECRET|SUPABASE_SERVICE_ROLE_KEY/);
 assert.doesNotMatch(page,/pgInsert|pgUpdate|pgRpc/);
-console.log("HR-004 authenticated web roster hydration/read-only route contract PASS");
+
+const desktop=fs.readFileSync("apps/desktop/src/App.tsx","utf8");
+const desktopPolicy=fs.readFileSync("apps/desktop/src/lib/desktop-license-policy.ts","utf8");
+assert.match(desktop,/view==="roster"&&<DesktopRosterPanel/,"Windows roster navigation must have real destination");
+assert.match(desktopPolicy,/roster: "staff"/,"Desktop roster respects staff entitlement");
+const Module=require("node:module"), originalLoad=Module._load;
+let failTable="";
+const row={id:"shift-1",name:"Day",start_time:"09:00:00",end_time:"17:00:00",unpaid_break_minutes:30,branch_id:null,active:true,version:2};
+const slot={id:"roster-1",staff_id:"person-1",shift_rule_id:"shift-1",branch_id:null,work_date:"2026-10-09",status:"scheduled",version:3};
+const database={
+  configFromEnv:()=>({accessToken:"authorized"}),
+  pgSelectAll:async(_cfg,table)=>table===failTable?{data:null,error:{message:"RLS denied"}}:{data:table==="staff_shift_rules"?[row]:[slot],error:null},
+};
+Module._load=function(name,parent,isMain){
+  if(name==="@minarvabiz/database")return database;
+  return originalLoad.call(this,name,parent,isMain);
+};
+let runtime;try{runtime=require("../../../../apps/web/src/lib/data-source-roster.ts");}finally{Module._load=originalLoad;}
+assert.deepEqual(runtime.mapCloudShiftRule(row),{
+  id:"shift-1",name:"Day",startTime:"09:00",endTime:"17:00",
+  unpaidBreakMinutes:30,branchId:null,active:true,version:2,
+});
+assert.deepEqual(runtime.mapCloudRosterSlot(slot),{
+  id:"roster-1",staffId:"person-1",shiftRuleId:"shift-1",
+  branchId:null,workDate:"2026-10-09",status:"scheduled",version:3,
+});
+assert.throws(()=>runtime.mapCloudShiftRule({...row,start_time:"09:33:21"}),/Invalid cloud shift clock/);
+assert.throws(()=>runtime.mapCloudRosterSlot({...slot,version:0}),/Invalid cloud roster revision/);
+assert.throws(()=>runtime.ensureNoUnconfirmedRosterEvents([{aggregateType:"staff_shift_rules",status:"failed"}]),/Unconfirmed roster/);
+assert.throws(()=>runtime.ensureNoUnconfirmedRosterEvents([{aggregateType:"staff_roster_slots",status:"pending"}]),/Unconfirmed roster/);
+runtime.ensureNoUnconfirmedRosterEvents([{aggregateType:"staff_attendance",status:"pending"}]);
+await assert.rejects(()=>runtime.loadCloudRoster({accessToken:null}),/Authenticated organization/);
+const loaded=await runtime.loadCloudRoster({accessToken:"authorized"});
+assert.equal(loaded.shiftRules.length,1);
+assert.equal(loaded.rosterSlots[0].workDate,"2026-10-09");
+failTable="staff_roster_slots";
+await assert.rejects(()=>runtime.loadCloudRoster({accessToken:"authorized"}),/RLS denied/);
+
+console.log("HR-004 authenticated Web roster mapping, permission failures, pending safety and Windows navigation PASS");

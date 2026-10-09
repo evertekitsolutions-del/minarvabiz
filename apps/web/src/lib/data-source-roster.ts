@@ -16,7 +16,7 @@ export function ensureNoUnconfirmedRosterEvents(events: readonly LocalEvent[]): 
 }
 function readClock(value: unknown): string {
   const text = String(value ?? "");
-  if (!/^(?:[01]\\d|2[0-3]):[0-5]\\d(?::00(?:\\.0+)?)?$/.test(text)) throw new Error("Invalid cloud shift clock");
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d(?::00(?:\.0+)?)?$/.test(text)) throw new Error("Invalid cloud shift clock");
   return text.slice(0, 5);
 }
 function readVersion(value: unknown): number {
