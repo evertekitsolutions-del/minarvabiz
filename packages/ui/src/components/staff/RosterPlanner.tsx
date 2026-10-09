@@ -3,7 +3,9 @@
 import * as React from "react";
 import type { StaffMember } from "@minarvabiz/types";
 import { workforceRoster } from "@minarvabiz/business-logic";
-import type { ShiftRule, RosterSlot, RosterPolicy } from "@minarvabiz/business-logic";
+type ShiftRule = workforceRoster.ShiftRule;
+type RosterSlot = workforceRoster.RosterSlot;
+type RosterPolicy = workforceRoster.RosterPolicy;
 import { Button } from "../Button";
 import { inputClass, selectClass } from "../forms/FormField";
 
