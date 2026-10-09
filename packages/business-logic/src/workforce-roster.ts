@@ -14,6 +14,8 @@ export interface ShiftRule {
   unpaidBreakMinutes: number;
   branchId: string | null;
   active: boolean;
+  /** Optimistic cloud revision. Legacy v14 offline snapshots may omit it. */
+  version?: number;
 }
 export interface RosterSlot {
   id: string;
@@ -60,6 +62,7 @@ export function validateShiftRule(rule: ShiftRule): { spanMinutes: number; worke
   if (!rule.id || !rule.id.trim() || !rule.name || !rule.name.trim() || rule.name.trim().length > 120) throw new Error("Shift id and name (max 120 chars) are required");
   if (rule.branchId !== null && (!rule.branchId || !rule.branchId.trim())) throw new Error("Shift branch must be a valid identifier or null");
   if (typeof rule.active !== "boolean") throw new Error("Shift active flag is invalid");
+  if (rule.version !== undefined && (!Number.isSafeInteger(rule.version) || rule.version < 1)) throw new Error("Shift revision must be a positive integer");
   const start = minuteOfDay(rule.startTime), end = minuteOfDay(rule.endTime);
   const overnight = end <= start;
   const spanMinutes = end - start + (overnight ? 1440 : 0);

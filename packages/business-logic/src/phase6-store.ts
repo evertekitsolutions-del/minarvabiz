@@ -146,9 +146,9 @@ export function listRosterSlots(from?: string, to?: string, staffId?: string): R
   }
   return rosterSlots.filter(slot => !staffId || slot.staffId === staffId).map(slot => ({ ...slot }));
 }
-export function createShiftRule(input: Omit<ShiftRule, "id">): ShiftRule {
+export function createShiftRule(input: Omit<ShiftRule, "id" | "version">): ShiftRule {
   assertPermission("staff.manage");
-  const next: ShiftRule = { ...input, id: generateId(), name: input.name.trim() };
+  const next: ShiftRule = { ...input, id: generateId(), name: input.name.trim(), version: 1 };
   validateShiftRule(next);
   if (next.branchId && !phase9Store.listBranches().some(branch => branch.id === next.branchId)) throw new Error("Shift branch does not exist");
   if (shiftRules.some(rule => rule.branchId === next.branchId && rule.name.toLowerCase() === next.name.toLowerCase())) throw new Error("Shift name is already used in this branch");
@@ -158,11 +158,12 @@ export function createShiftRule(input: Omit<ShiftRule, "id">): ShiftRule {
   touchPersistence();
   return { ...next };
 }
-export function updateShiftRule(id: UUID, changes: Partial<Omit<ShiftRule, "id">>): ShiftRule {
+export function updateShiftRule(id: UUID, changes: Partial<Omit<ShiftRule, "id" | "version">>): ShiftRule {
   assertPermission("staff.manage");
   const old = shiftRules.find(rule => rule.id === id);
   if (!old) throw new Error("Shift template not found");
-  const next: ShiftRule = { ...old, ...changes, id: old.id, name: (changes.name ?? old.name).trim() };
+  if (Object.prototype.hasOwnProperty.call(changes, "version") || Object.prototype.hasOwnProperty.call(changes, "id")) throw new Error("Shift revision and ID are server-managed");
+  const next: ShiftRule = { ...old, ...changes, id: old.id, name: (changes.name ?? old.name).trim(), version: (old.version ?? 1) + 1 };
   validateShiftRule(next);
   if (next.branchId && !phase9Store.listBranches().some(branch => branch.id === next.branchId)) throw new Error("Shift branch does not exist");
   if (shiftRules.some(rule => rule.id !== id && rule.branchId === next.branchId && rule.name.toLowerCase() === next.name.toLowerCase())) throw new Error("Shift name is already used in this branch");
@@ -207,7 +208,7 @@ export function exportPhase6State(){return{staff:[...staff],attendance:[...atten
 
 export function hydratePhase6(input:{staff?:StaffMember[];attendance?:StaffAttendanceRecord[];shiftRules?:ShiftRule[];rosterSlots?:RosterSlot[];assignments?:StaffAssignment[];incentiveRules?:IncentiveRuleRecord[];payouts?:StaffIncentivePayout[];notifications?:AppNotification[]}):void{
   if(input.shiftRules || input.rosterSlots) {
-    const rules = input.shiftRules ?? shiftRules;
+    const rules = (input.shiftRules ?? shiftRules).map(rule => ({ ...rule, version: rule.version ?? 1 }));
     const slots = input.rosterSlots ?? rosterSlots;
     const ruleIds = new Set<string>();
     for (const rule of rules) {
@@ -232,7 +233,7 @@ export function hydratePhase6(input:{staff?:StaffMember[];attendance?:StaffAtten
       }
       visited.push(slot);
     }
-    if(input.shiftRules){shiftRules.length=0;shiftRules.push(...input.shiftRules.map(rule=>({...rule})));}
+    if(input.shiftRules){shiftRules.length=0;shiftRules.push(...rules.map(rule=>({...rule})));}
     if(input.rosterSlots){rosterSlots.length=0;rosterSlots.push(...input.rosterSlots.map(slot=>({...slot})));}
   }
   if(input.staff){staff.length=0;staff.push(...input.staff);}
