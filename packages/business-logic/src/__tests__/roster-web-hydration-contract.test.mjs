@@ -33,15 +33,20 @@ assert.match(desktop,/view==="roster"&&<DesktopRosterPanel/,"Windows roster navi
 assert.match(desktopPolicy,/roster: "staff"/,"Desktop roster respects staff entitlement");
 const Module=require("node:module"), originalLoad=Module._load;
 let failTable="";
+let shiftRows, rosterRows;
 const row={id:"shift-1",name:"Day",start_time:"09:00:00",end_time:"17:00:00",unpaid_break_minutes:30,branch_id:null,active:true,version:2};
 const slot={id:"roster-1",staff_id:"person-1",shift_rule_id:"shift-1",branch_id:null,work_date:"2026-10-09",status:"scheduled",version:3};
+shiftRows=[row]; rosterRows=[slot];
 const database={
   configFromEnv:()=>({accessToken:"authorized"}),
-  pgSelectAll:async(_cfg,table)=>table===failTable?{data:null,error:{message:"RLS denied"}}:{data:table==="staff_shift_rules"?[row]:[slot],error:null},
+  pgSelectAll:async(_cfg,table)=>table===failTable?{data:null,error:{message:"RLS denied"}}:{data:table==="staff_shift_rules"?shiftRows:rosterRows,error:null},
 };
 Module._load=function(name,parent,isMain){
   if(name==="@minarvabiz/database")return database;
-  if(name==="@minarvabiz/business-logic")return { createSupabaseCloudAdapter: () => ({push:async () => ({accepted:[],rejected:[]})}) };
+  if(name==="@minarvabiz/business-logic")return {
+    workforceRoster:require("../workforce-roster.ts"),
+    createSupabaseCloudAdapter: () => ({push:async () => ({accepted:[],rejected:[]})}),
+  };
   return originalLoad.call(this,name,parent,isMain);
 };
 let runtime;try{runtime=require("../../../../apps/web/src/lib/data-source-roster.ts");}finally{Module._load=originalLoad;}
@@ -64,6 +69,37 @@ assert.equal(loaded.shiftRules.length,1);
 assert.equal(loaded.rosterSlots[0].workDate,"2026-10-09");
 failTable="staff_roster_slots";
 await assert.rejects(()=>runtime.loadCloudRoster({accessToken:"authorized"}),/RLS denied/);
+failTable="";
+
+// Fail-closed cloud mapping: null coercion, forged hours, invalid calendar dates,
+// missing foreign templates, duplicates, and branch mismatches must not hydrate.
+for(const mutation of [
+  {id:null}, {id:""}, {name:null}, {name:" "}, {name:"X".repeat(121)},
+  {active:null}, {active:0}, {unpaid_break_minutes:null}, {unpaid_break_minutes:"30"},
+  {unpaid_break_minutes:999}, {branch_id:""}, {start_time:"25:00:00"},
+  {end_time:"09:22:07"}, {version:0},
+]) {
+  assert.throws(()=>runtime.mapCloudShiftRule({...row,...mutation}),/Invalid cloud|Shift |Unpaid break/);
+}
+for(const mutation of [
+  {id:null}, {id:""}, {staff_id:null}, {staff_id:""}, {shift_rule_id:null},
+  {shift_rule_id:""}, {branch_id:""}, {work_date:null}, {work_date:"2026-02-30"},
+  {work_date:"2026-13-09"}, {work_date:"2026-10-09T00:00:00+05:30"},
+  {work_date:"1800-01-01"}, {status:"approved"}, {version:0},
+]) {
+  assert.throws(()=>runtime.mapCloudRosterSlot({...slot,...mutation}),/Invalid cloud/);
+}
+shiftRows=[row,row];
+await assert.rejects(()=>runtime.loadCloudRoster({accessToken:"authorized"}),/Duplicate cloud roster identities/);
+shiftRows=[row]; rosterRows=[slot,slot];
+await assert.rejects(()=>runtime.loadCloudRoster({accessToken:"authorized"}),/Duplicate cloud roster identities/);
+rosterRows=[{...slot,shift_rule_id:"missing-shift"}];
+await assert.rejects(()=>runtime.loadCloudRoster({accessToken:"authorized"}),/unavailable or mismatched/);
+shiftRows=[{...row,branch_id:"one-branch"}];rosterRows=[{...slot,branch_id:"other-branch"}];
+await assert.rejects(()=>runtime.loadCloudRoster({accessToken:"authorized"}),/unavailable or mismatched/);
+shiftRows=[row];rosterRows=[slot];
+assert.equal((await runtime.loadCloudRoster({accessToken:"authorized"})).rosterSlots.length,1);
+
 
 
 assert.ok(source.includes("createRosterRemoteWriter(cfg)"),"Hydration must register the authenticated roster writer");
