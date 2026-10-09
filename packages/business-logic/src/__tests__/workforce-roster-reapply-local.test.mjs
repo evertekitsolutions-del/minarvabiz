@@ -123,8 +123,9 @@ remoteWriter.registerRemoteWriter({
   getRosterShift: async () => null,
   upsertRosterEvent: async () => { throw new Error("Must not reach server"); },
 });
-await assert.rejects(() => phase.reapplyLocalWorkforceRosterConflict(
-  await phase.reviewWorkforceRosterConflict(creationEvent.id)), /Missing or different-ID Cloud record/);
+const uncommittedReview = await phase.reviewWorkforceRosterConflict(creationEvent.id);
+await assert.rejects(() => phase.reapplyLocalWorkforceRosterConflict(uncommittedReview),
+  /Missing or different-ID Cloud record/);
 assert.equal(creationEvent.status, "pending");
 assert.ok(phase.listShiftRules(true).find(x=>x.id===created.id));
 for(const e of outstanding()) outbox.discardWorkforceRosterConflictEvent(e.id);
