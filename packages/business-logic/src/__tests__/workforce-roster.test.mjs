@@ -15,7 +15,8 @@ const activeStaff = { id: "staff-1", status: "active", branchId: "branch-1" };
 const day = { id: "day", name: "Day shift", startTime: "09:00", endTime: "17:00", unpaidBreakMinutes: 30, branchId: null, active: true };
 const night = { id: "night", name: "Night shift", startTime: "22:00", endTime: "06:00", unpaidBreakMinutes: 45, branchId: "branch-1", active: true };
 const split = { id: "split", name: "Split shift", startTime: "18:00", endTime: "23:00", unpaidBreakMinutes: 0, branchId: null, active: true };
-const shifts = [day, night, split];
+const early = { id: "early", name: "Early shift", startTime: "04:00", endTime: "12:00", unpaidBreakMinutes: 30, branchId: null, active: true };
+const shifts = [day, night, split, early];
 const first = { id: "r1", staffId: "staff-1", workDate: "2026-10-09", shiftRuleId: "night", branchId: "branch-1", status: "scheduled", version: 1 };
 const option = (candidate, slots = [], staff = activeStaff, policy) => checkRosterSlot({ candidate, slots, shifts, staff, policy });
 const denied = (response, pattern) => {
@@ -39,7 +40,7 @@ for (const invalid of [
 assert.equal(option(first).ok, true);
 assert.equal(option({ ...first, id: "r2", shiftRuleId: "day" }).ok, true, "Organization-wide rule is reusable in a branch");
 
-const nextDayMorning = { ...first, id: "r2", workDate: "2026-10-10", shiftRuleId: "day" };
+const nextDayMorning = { ...first, id: "r2", workDate: "2026-10-10", shiftRuleId: "early" };
 denied(option(nextDayMorning, [first]), /overlaps/);
 const nextDayEvening = { ...first, id: "r3", workDate: "2026-10-10", shiftRuleId: "split" };
 denied(option(nextDayEvening, [first], activeStaff, { minimumRestMinutes: 780 }), /Minimum rest/);
