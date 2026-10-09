@@ -1,7 +1,7 @@
 # HR-004 Shift/Roster — Delivery and Remaining Acceptance
 
 **Status:** Partial implementation; not production-complete  
-**Verified baseline:** main `7eae7c7000e9fef1b459336c530cc4ef8ff5cd76`, merged PR #305  
+**Verified baseline:** main `fbc7827d16b3f5bd9402775d7b3525adb45c6616`, merged PR #308  
 **Updated:** 2026-10-09  
 **Scope:** Shared Web, Windows SQLite, hybrid PostgreSQL/cloud authority
 
@@ -22,12 +22,14 @@
 | #302 | Actual sql.js SQLite binary backup, corruption/restore and event replay regression | Archived `discarded`, `synced`, `failed` events and immutable event identity preserved; corrupt restore rolls back |
 | #304 | AES-GCM browser recovery-vault foundation | Strict roster event-only envelope, user/organization partition, no JWT storage, tamper detection and simulated reload |
 | #305 | Authenticated pre-RPC encrypted Web checkpoint and post-reload quarantine | Current organization/role via PostgreSQL RPC, no cross-tenant event replacement, confirmation/retry checkpoint, explicit fail-closed recovery block |
+| #307 | RLS-scoped read-only comparison of sealed crash-recovery event vs current Cloud | Bound 25 records; remote missing/hidden is ambiguous, no automatic import/replay |
+| #308 | Explicit manager-reviewed single-event Web restore to local memory only | One same-ID update, current remote revision N-1, original immutable ID/device/sequence, full roster validation and separate manual Retry |
 
-The exact-head #299, #301, #302, #304 and #305 merge gates each concluded with **19 success, 2 optional skipped, 0 failure**, including CI, SAST, dependency/license, secrets, coverage, Web, Windows packaged/feature-click/deep installed smoke. An initial test-code syntax defect was corrected before green exact-head validation.
+The exact-head #299, #301, #302, #304, #305, #307 and #308 merge gates each concluded with **19 success, 2 optional skipped, 0 failure**, including CI, SAST, dependency/license, secrets, coverage, Web, Windows packaged/feature-click/deep installed smoke. An initial test-code syntax defect was corrected before green exact-head validation.
 
 ## Important limits — do not misreport as complete
 
-1. **Web pending queue durability:** #304–#305 now seal unconfirmed event payloads to tenant/user-partitioned encrypted IndexedDB **before Cloud RPC** and detect them after reload. However a sealed pending event is *quarantined*; **reviewed restoration/import into live domain after restart is not implemented**. The browser editor blocks new changes, never auto-replays; this is not complete crash recovery or customer UAT. Windows SQLite v14 snapshot/backup is separate.
+1. **Web pending queue durability:** #304–#305 seal unconfirmed events to user/org-partitioned encrypted IndexedDB before RPC. #307 permits read-only authorized comparison, and #308 permits a confirmed single safe same-ID update restore **to browser memory only**. The original sealed event remains intact; **Retry is a separate explicit action**, not auto-RPC. Multi-event dependencies, hidden/different-ID Cloud records, browser eviction and real authenticated browser restart/tenant-swap UAT remain incomplete. Windows SQLite v14 snapshot/backup is separate.
 2. **Conflict reconciliation:** reviewed **Keep Cloud** and **Reapply Local** are implemented for one isolated same-canonical-ID event. Reapply Local re-fetches the current revision and creates a NEW immutable event under the existing audited RPC. Cross-device conflicting staff/day creations with **different IDs**, multi-event dependency recovery, and durable browser crash recovery remain incomplete. No silent last-write-wins.
 3. **Timezone/DST:** shared `checkZonedRosterSlot` resolves actual UTC instants with explicit branch IANA rules. PostgreSQL trigger currently validates wall-clock overlap and does not yet provide tenant-owned branch timezone/DST branch-policy enforcement or UTC minimum-rest on the server.
 4. **Minimum rest and labor policy:** current local planner numeric minimum-rest input is not a centrally versioned approved organizational policy. A server-authoritative configurable rest policy, statutory pack integration and migration-safe history remain outstanding.
@@ -39,7 +41,7 @@ The exact-head #299, #301, #302, #304 and #305 merge gates each concluded with *
 ## Required next engineering slices
 
 - HR-004A (partially complete): one-event same-ID **Reapply Local** reviewed, audited and exact-head verified in #301. Next extend canonical different-ID same-staff/day identity review and ordered dependent-event recovery; never discard third-party changes or bypass tenant authority.
-- HR-004B (partial): encrypted tenant-partitioned Web pre-RPC event persistence and fail-closed quarantine landed in #304–#305. **Next** deliver reviewed restoration/import from the sealed backup into authorized Cloud/current local roster state, including no automatic replay, exact event identity, canonical conflicts, real IndexedDB restart/auth swap/logout tests, and audit. XSS, storage eviction and browser-profile loss remain threat-model considerations.
+- HR-004B (partial): #304–#305 encrypted pre-RPC checkpoint and quarantine; #307 read-only comparison; #308 explicit single same-ID local restore with unchanged original event and separate Retry. **Next** deliver real browser IndexedDB crash/relogin/tenant-switch/eviction acceptance, multi-event and different-ID canonical conflict-safe recovery, audit and eventual repeatable customer UAT. No auto-replay; XSS/profile theft and browser storage eviction remain risks.
 - HR-004C: tenant-owned IANA timezone and DST fold/gap policy + centrally approved minimum rest; additive PostgreSQL migration with authorization, server enforced UTC overlap/rest and cross-branch historic shifts; reproducible PostgreSQL E2E.
 - HR-004D: shift templates and recurring roster approvals including review, versioned policy, audit, batch atomicity, correction/cancellation and explicit conflicts.
 - HR-004E: browser and **real installed** Windows UI feature UAT, further customer-grade native SQLite/backup disaster recovery (engine-level regression is verified in #302), PostgreSQL production integration and legitimate authenticated customer UAT; separately verify new signed installer and updater. No synthetic customer production fixtures.
@@ -56,3 +58,9 @@ All writes pass shared `staff.manage` authorization and existing server organiza
 The AES-GCM Web vault is not a cloud-side vault and does not carry server credentials. It binds the encrypted record to the user ID and organization ID from the existing PostgreSQL authorization RPC; source/user-provided role claims alone are never sufficient. It stores non-extractable CryptoKeys *inside the same browser profile*, preventing plaintext-at-rest leakage but not same-origin XSS or a compromised browser profile. #305 persists unconfirmed event bytes before RPC and retains a sealed record on RPC failure. On refresh, it shows a quarantined recovery warning and blocks edits; it does **not** yet merge/restore the event back into the active roster or mark the Cloud result as accepted.
 
 Acceptance requires verified authorized reviewer actions, no cross-tenant restore, exact immutable event replay ID/device/sequence/payload, safe same-day/different-ID conflicts, revocation during read/write, full real browser IndexedDB restart/eviction simulation, audit and server authoritative RLS. Only after passing these gates may HR-004B be called complete.
+
+## Web encrypted recovery advance — #307–#308
+
+The manager may read at most 25 saved pending events with an RLS-scoped authenticated comparison. Missing/hidden Cloud rows cannot be classified as absent; they never authorize a forced insert. One manager-confirmed, unconfirmed same-ID update may be restored to current *local browser memory* only when the current Cloud record is visible and exactly one revision earlier, every scoped session/writer check remains unchanged, there is no other unresolved queue and the full roster snapshot validates. This action does not contact the Cloud writer and does not erase the original encrypted vault; a further user-selected Retry is necessary. Regression tests verify denial for stale revisions, unauthorized sessions, canonical mismatches, conflicting queue and changes to historical shift timing. Exact-head CI #307 and #308 passed 19 checks each with 2 optional skipped, but this is not live customer authenticated UAT or real browser-profile disaster recovery acceptance.
+
+Remaining production acceptance: real IndexedDB browser restart/relogin/login-different-user/org tests; storage eviction and partial-write recovery; controlled multi-event dependencies/canonical same-day different-ID merging; server IANA DST/min-rest, recurrence approval and a new verified signed Windows release. Full Master Vision remains an estimated **~51%**.
