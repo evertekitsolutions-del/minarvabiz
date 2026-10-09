@@ -96,7 +96,8 @@ export function checkRosterSlot(
   else {
     try { duration = validateShiftRule(shift); } catch (error) { errors.push(error instanceof Error ? error.message : String(error)); }
     if (candidate.status === "scheduled" && !shift.active) errors.push("Cannot assign an inactive shift template");
-    if (candidate.branchId !== shift.branchId) errors.push("Roster branch must match the shift template branch");
+    // A null template branch means a reusable organization-wide shift rule.
+    if (shift.branchId !== null && candidate.branchId !== shift.branchId) errors.push("Roster branch must match the shift template branch");
   }
   const previous = slots.find(s => s.id === candidate.id);
   if (previous) {
