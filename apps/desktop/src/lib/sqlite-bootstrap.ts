@@ -28,6 +28,8 @@ let initError: string | null = null;
 let integrityOk = false;
 let integrityResult: string[] = [];
 let pendingWrite: Promise<boolean> = Promise.resolve(true);
+let newestBinary: Uint8Array | null = null;
+let writeDrain: Promise<boolean> | null = null;
 let scheduledPersist: ReturnType<typeof setTimeout> | null = null;
 
 // Domain mutations may touch audit logs and outbox entries in the same UI action.
@@ -138,11 +140,24 @@ async function initializeDesktopSqlite(): Promise<{ ok: boolean; error?: string 
       readFile: (_p: string): Uint8Array | null => cached,
       writeFile: (_p: string, data: Uint8Array) => {
         cached = data;
-        // Keep one outstanding native write: intermediate snapshots are superseded by
-        // the latest committed snapshot. Retain the bytes until the IPC write settles.
-        // Do not silently convert a failed write into success.
-        const write = pendingWrite.then(() => api.writeSqliteBinary(data));
-        pendingWrite = write;
+        // Snapshots are complete images of the domain. Bound native IPC memory to
+        // one in-flight image and the newest queued image, not every intermediate one.
+        newestBinary = data;
+        if (!writeDrain) {
+          const drain = async (): Promise<boolean> => {
+            while (newestBinary) {
+              const latest = newestBinary;
+              newestBinary = null;
+              // Never report a failed IPC write as successful; the caller can
+              // retry a fresh complete snapshot without replacing the saved file.
+              if (await api.writeSqliteBinary(latest) !== true) return false;
+            }
+            return true;
+          };
+          const operation = Promise.resolve().then(drain);
+          writeDrain = operation;
+          pendingWrite = operation.finally(() => { writeDrain = null; });
+        }
       },
       exists: (_p: string) => cached != null && cached.length > 0,
       mkdirp: (_dir: string) => {
