@@ -78,3 +78,4 @@
 20261008140151_attendance_role_integrity.sql
 20261008141024_attendance_event_authority.sql
 20261009_attendance_foreign_key_indexes.sql
+20261009_hr_roster_schema_authority.sql
