@@ -20,7 +20,7 @@ assert.match(source,/ensureNoUnconfirmedRosterEvents\(exportOutbox\(\)\)/);
 assert.match(source,/rosterRows = await loadCloudRoster\(cfg\)/);
 assert.match(source,/rosterRows\.shiftRules, rosterSlots: rosterRows\.rosterSlots/);
 assert.match(source,/registerRemoteWriter\(null\)/);
-assert.match(page,/if \(!ready\) return/);
+assert.match(page,/if \(!scopedReady\) return/,"Switching tenant must hide prior hydrated roster until current auth completes");
 assert.match(page,/canEdit=\{editable\}/,"Authorized browser can edit only behind the authenticated writer gate");
 assert.match(page,/isRosterHydrated\(\)/,"Web roster edits require authenticated hydration");
 assert.match(page,/can\("staff.manage"\)/,"Web roster actions require staff.manage");
@@ -30,6 +30,12 @@ assert.match(page,/phase6Store\.assignRosterSlot\(input, policy\)/,"Slot writes 
 assert.match(page,/phase6Store\.updateShiftRule\(id, input\)/,"Shift writes use audited domain");
 assert.match(page,/beforeunload/,"Pending browser events need unload protection");
 assert.match(page,/Retry original events/,"Explicit replay keeps original immutable event identity");
+assert.match(page,/reviewWorkforceRosterConflict\(eventId\)/,"Review must use the permission-checked shared domain");
+assert.match(page,/Review local vs Cloud/,"Web shows an explicit comparison affordance");
+assert.match(page,/Read-only tenant-scoped comparison/,"Conflict review must not claim a resolution");
+assert.match(code,/getRosterShift:/,"Cloud reader must be registered on authenticated writer");
+assert.match(code,/getRosterSlot:/,"Roster reader must be registered on authenticated writer");
+
 assert.match(page,/unsent.length === 0/,"Block new mutations while unconfirmed revisions remain");
 assert.doesNotMatch(page,/service_role|SUPABASE_SECRET|SUPABASE_SERVICE_ROLE_KEY|pgInsert|pgUpdate|pgRpc/);
 assert.match(nav,/href: "\/roster"/);

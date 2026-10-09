@@ -253,6 +253,54 @@ export function flushWorkforceRosterOutbox(): Promise<number> {
   return operation.finally(() => { if (workforceFlush === operation) workforceFlush = null; });
 }
 
+/**
+ * Review a failed or pending HR event against its current authenticated,
+ * tenant-scoped PostgreSQL snapshot. Read-only: no queue discard, local
+ * overwrite or optimistic version bump occurs without a later human decision.
+ */
+export async function reviewWorkforceRosterConflict(eventId: string): Promise<{
+  eventId: string;
+  aggregateType: "staff_shift_rules" | "staff_roster_slots";
+  local: ShiftRule | RosterSlot;
+  remote: ShiftRule | RosterSlot | null;
+  error: string | null;
+}> {
+  assertPermission("staff.manage");
+  if (workforceFlush) throw new Error("Wait for roster sync to stop before reviewing a conflict");
+  const event = exportOutbox().find(e => e.id === eventId &&
+    (e.aggregateType === "staff_shift_rules" || e.aggregateType === "staff_roster_slots") &&
+    (e.status === "pending" || e.status === "failed"));
+  if (!event) throw new Error("No unconfirmed roster event matches this review request");
+  const snapshot = event.payload as ShiftRule | RosterSlot;
+  if (!snapshot || typeof snapshot !== "object" || snapshot.id !== event.aggregateId ||
+      !Number.isSafeInteger(snapshot.version) || (snapshot.version ?? 0) < 1) {
+    throw new Error("Invalid immutable local roster event; preserve it for manual recovery");
+  }
+  const activeWriter = getRemoteWriter();
+  const reader = event.aggregateType === "staff_shift_rules"
+    ? activeWriter?.getRosterShift
+    : activeWriter?.getRosterSlot;
+  if (!reader) throw new Error("Authenticated RLS-scoped roster conflict reader is unavailable");
+  const writerGeneration = getRemoteWriterGeneration();
+  const remote = await reader(event.aggregateId);
+  assertPermission("staff.manage");
+  if (getRemoteWriterGeneration() !== writerGeneration ||
+      (event.aggregateType === "staff_shift_rules"
+        ? getRemoteWriter()?.getRosterShift !== reader
+        : getRemoteWriter()?.getRosterSlot !== reader)) {
+    throw new Error("Roster session changed while reviewing; restart conflict review");
+  }
+  if (remote && remote.id !== event.aggregateId) throw new Error("Remote roster identity mismatch");
+  if (event.status === "synced" || event.status === "discarded") {
+    throw new Error("Roster event changed since review started");
+  }
+  return {
+    eventId: event.id,
+    aggregateType: event.aggregateType as "staff_shift_rules" | "staff_roster_slots",
+    local: { ...snapshot }, remote: remote ? { ...remote } : null, error: event.lastError,
+  };
+}
+
 /** Restore Phase 6 state from a persisted snapshot without emitting outbox events. */
 export function exportPhase6State(){return{staff:[...staff],attendance:[...attendance],shiftRules:shiftRules.map(rule=>({...rule})),rosterSlots:rosterSlots.map(slot=>({...slot})),assignments:[...assignments],incentiveRules:[...incentiveRules],payouts:[...payouts],notifications:[...notifications]};}
 

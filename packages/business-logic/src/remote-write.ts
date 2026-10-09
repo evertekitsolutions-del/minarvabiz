@@ -26,6 +26,7 @@ import type {
   JournalEntry,
 } from "@minarvabiz/types";
 import type { LocalOutboxEvent } from "./outbox-bridge";
+import type { ShiftRule, RosterSlot } from "./workforce-roster";
 import { enqueueOutbox } from "./outbox-bridge";
 
 export interface RemoteWriter {
@@ -33,6 +34,9 @@ export interface RemoteWriter {
   upsertAttendance?: (record: StaffAttendanceRecord, event?: LocalOutboxEvent) => Promise<void>;
   /** Authenticated atomic PostgreSQL HR event authority; never direct table DML. */
   upsertRosterEvent?: (event: LocalOutboxEvent) => Promise<void>;
+  /** Read-only tenant/RLS-scoped records used for human conflict comparison. */
+  getRosterShift?: (id: string) => Promise<ShiftRule | null>;
+  getRosterSlot?: (id: string) => Promise<RosterSlot | null>;
   upsertCustomer?: (c: Customer) => Promise<void>;
   upsertCategory?: (c: Category) => Promise<void>;
   upsertProduct?: (p: Product) => Promise<void>;
