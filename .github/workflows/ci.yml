@@ -442,6 +442,17 @@ jobs:
             -f supabase/migrations/20261010_hr_roster_iana_time_resolution.sql
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f scripts/hr-roster-timezone-resolver-e2e.sql
+      - name: Verify HR-004C manager policy drafts and RLS in PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Use ONLY the ephemeral PostgreSQL service with synthetic CI tenants.
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f scripts/hr-roster-time-policy-fixture.sql
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20261010_hr_roster_time_policy_drafts.sql
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f scripts/hr-roster-time-policy-drafts-e2e.sql
 
   windows-package:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
