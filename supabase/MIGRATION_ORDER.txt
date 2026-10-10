@@ -80,3 +80,4 @@
 20261009_attendance_foreign_key_indexes.sql
 20261009_hr_roster_schema_authority.sql
 20261009_hr_roster_event_authority.sql
+20261010_hr_roster_iana_time_resolution.sql
