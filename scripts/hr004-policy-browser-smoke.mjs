@@ -59,11 +59,11 @@ async function evaluate(ws,expression,timeoutMs=20000){
 const compiled=await build({stdin:{contents:`
 import React from 'react';
 import {createRoot} from 'react-dom/client';
-import {RosterPolicyDrafts} from './apps/web/src/components/roster/RosterPolicyDrafts';
+import {RosterPolicyDrafts} from './src/components/roster/RosterPolicyDrafts';
 const container=document.createElement('div');container.id='policy-test';document.body.appendChild(container);
 window.__policyRoot=createRoot(container);
 window.__policyRoot.render(React.createElement(RosterPolicyDrafts,{branches:[{id:'20000000-0000-4000-8000-000000000001',name:'Test branch'}]}));
-`,resolveDir:process.cwd(),loader:'tsx'},bundle:true,write:false,format:'iife',platform:'browser',
+`,resolveDir:process.cwd()+'/apps/web',loader:'tsx'},bundle:true,write:false,format:'iife',platform:'browser',
   define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'isolated-policy-transport',setup(b){
     b.onResolve({filter:/^@\/lib\/roster-policy-online$/},()=>({path:'policy-transport',namespace:'test'}));
     b.onLoad({filter:/.*/,namespace:'test'},()=>({contents:`export function onlineRosterPolicies(){return {list:async()=>window.__policyRows,save:async(input)=>{window.__policyInput=input;if(window.__policyFailure)throw Error('Draft save was not confirmed. Reload before retrying');return window.__policyResult}}}`,loader:'js'}));

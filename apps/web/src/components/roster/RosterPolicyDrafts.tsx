@@ -66,7 +66,7 @@ export function RosterPolicyDrafts({branches}:{branches:ReadonlyArray<{id:string
         <label className="grid gap-1">Repeated clock time (DST)<select className={inputClass} value={form.foldPolicy} onChange={e=>setForm({...form,foldPolicy:e.target.value as PolicyDraftInput['foldPolicy']})}>
           <option value="reject">Reject ambiguous time</option><option value="earlier">Use earlier occurrence</option><option value="later">Use later occurrence</option>
         </select></label>
-        <label className="grid gap-1">Minimum rest (minutes)<input type="number" required min={0} max={10080} step={1} className={inputClass} value={form.minimumRestMinutes} onChange={e=>setForm({...form,minimumRestMinutes:e.target.value===''?NaN:Number(e.target.value)})}/></label>
+        <label className="grid gap-1">Minimum rest (minutes)<input type="number" required min={0} max={10080} step={1} className={inputClass} value={Number.isNaN(form.minimumRestMinutes)?'':form.minimumRestMinutes} onChange={e=>setForm({...form,minimumRestMinutes:e.target.value===''?NaN:Number(e.target.value)})}/></label>
         <p>Nonexistent clock times during a DST change are always rejected by the proposed policy.</p>
         <div className="flex gap-2"><button type="submit" className={inputClass}>Save draft only</button><button type="button" className={inputClass} onClick={()=>{setForm(blank());setMessage('');setConflict(null)}}>New draft</button></div>
       </fieldset>
