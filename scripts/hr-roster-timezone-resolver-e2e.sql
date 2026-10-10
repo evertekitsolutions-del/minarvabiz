@@ -7,7 +7,6 @@ DO $timezone_test$
 DECLARE
   early TIMESTAMPTZ;
   late TIMESTAMPTZ;
-  midnight TIMESTAMPTZ;
   failed BOOLEAN;
 BEGIN
   -- The result is independent of connection/server time zone.
@@ -71,9 +70,7 @@ BEGIN
     RAISE EXCEPTION 'London overnight DST interval is not 7 real hours';
   END IF;
   -- Invalid policy and unknown / POSIX-style timezone strings fail closed.
-  FOR midnight IN SELECT value FROM (VALUES
-    ('2026-10-10 00:00:00+00'::timestamptz)) AS cases(value)
-  LOOP
+  -- Validate all rejected inputs without introducing any customer fixture.
     failed:=false;
     BEGIN
       PERFORM public.roster_resolve_local_instant(
@@ -92,7 +89,6 @@ BEGIN
         '2026-10-10 09:00'::timestamp,'Mars/Olympus_Mons','earlier');
     EXCEPTION WHEN SQLSTATE '22007' THEN failed:=true; END;
     IF NOT failed THEN RAISE EXCEPTION 'Unknown named zone accepted'; END IF;
-  END LOOP;
 END;
 $timezone_test$;
 
