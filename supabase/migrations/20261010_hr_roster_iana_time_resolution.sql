@@ -48,8 +48,8 @@ BEGIN
   -- No inference from the server's TimeZone setting. Candidate instants are
   -- interpreted explicitly as UTC, then round-tripped to the branch zone.
   FOR v_probe IN
-    SELECT (p_local AT TIME ZONE 'UTC') + n * INTERVAL '1 minute'
-      FROM pg_catalog.generate_series(-2160,2160,15) AS n
+    SELECT (p_local AT TIME ZONE 'UTC') + minute_offset * INTERVAL '1 minute'
+      FROM pg_catalog.generate_series(-2160,2160,15) AS samples(minute_offset)
   LOOP
     v_offset := (v_probe AT TIME ZONE p_iana_zone)
                 - (v_probe AT TIME ZONE 'UTC');
@@ -64,8 +64,8 @@ BEGIN
     RAISE EXCEPTION 'Roster branch-local time does not exist (DST gap)'
       USING ERRCODE='22007';
   END IF;
-  SELECT pg_catalog.min(value),pg_catalog.max(value)
-    INTO v_earlier,v_later FROM pg_catalog.unnest(v_matches) AS value;
+  SELECT pg_catalog.min(instant),pg_catalog.max(instant)
+    INTO v_earlier,v_later FROM pg_catalog.unnest(v_matches) AS candidates(instant);
   IF v_earlier IS DISTINCT FROM v_later AND p_fold_policy='reject' THEN
     RAISE EXCEPTION 'Roster branch-local time is ambiguous (DST fold); choose earlier or later'
       USING ERRCODE='22007';
