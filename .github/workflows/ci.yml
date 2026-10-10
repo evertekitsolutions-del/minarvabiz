@@ -433,6 +433,15 @@ jobs:
           test "$before_status" -ne 0
           grep -Fq "expected RLS/privilege denial: cross-tenant staff reference" /tmp/attendance-before-hardening.log
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -v attendance_hardening=supabase/migrations/20261008140151_attendance_role_integrity.sql -f scripts/attendance-rls-integration.sql
+      - name: Verify HR-004C IANA/DST instants in real PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only the isolated GitHub Actions PostgreSQL service; never remote Supabase.
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20261010_hr_roster_iana_time_resolution.sql
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f scripts/hr-roster-timezone-resolver-e2e.sql
 
   windows-package:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
