@@ -158,10 +158,14 @@ try{
     let blocked=false;
     try{await driver.write(next,old.revision);}
     catch(e){blocked=String(e.message).includes('changed in another tab');}
+    let eraseBlocked=false;
+    try{await driver.erase(key,old.revision);}
+    catch(e){eraseBlocked=String(e.message).includes('refuse stale deletion');}
     const final=await driver.read(key);
-    return {blocked,revision:final.revision,oldRevision:old.revision};
+    return {blocked,eraseBlocked,revision:final.revision,oldRevision:old.revision};
   `));
   assert.equal(stale.blocked,true,"Native IndexedDB must refuse a competing stale tab");
+  assert.equal(stale.eraseBlocked,true,"Stale tab must not delete a newer sealed checkpoint");
   assert.equal(stale.revision,stale.oldRevision+1);
 
   const scopedErase=await evaluate(ws,script(`
