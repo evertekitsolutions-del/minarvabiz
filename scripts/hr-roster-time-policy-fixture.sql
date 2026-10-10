@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS public.branches (
   org_id UUID NOT NULL REFERENCES public.organizations(id),
   deleted_at TIMESTAMPTZ
 );
+-- The pre-existing attendance CI stub may provide an older branches table
+-- without archived-branch metadata present in the actual production schema.
+ALTER TABLE public.branches ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 CREATE TABLE IF NOT EXISTS public.audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id UUID,
