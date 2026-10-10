@@ -135,16 +135,34 @@ try{
     const original=await driver.read(key);
     const modified={...original,ciphertext:[...original.ciphertext]};
     modified.ciphertext[5]^=1;
-    await driver.write(modified);
+    await driver.write({...modified,revision:original.revision+1},original.revision);
     let refused=false;
     try{await vault.loadSealedRosterRecovery(driver,scope);}
     catch(e){refused=String(e.message).includes('authentication failed');}
-    await driver.write(original);
+    await driver.write({...original,revision:original.revision+2},original.revision+1);
     const intact=await vault.loadSealedRosterRecovery(driver,scope);
     return {refused,intact:intact?.[0]?.id};
   `));
   assert.equal(tamper.refused,true,"Authenticity failure must reject modified ciphertext");
   assert.equal(tamper.intact,event.id);
+
+  // Production IndexedDB uses a serialized readwrite transaction for CAS.
+  // A stale cross-tab writer must not replace a newer encrypted checkpoint.
+  const stale=await evaluate(ws,script(`
+    const driver=vault.createIndexedDbRosterRecoveryDriver();
+    const scope=${JSON.stringify(scopeA)};
+    const key='hr004:v1:'+scope.userId+':'+scope.organizationId;
+    const old=await driver.read(key);
+    const next={...old,revision:old.revision+1};
+    await driver.write(next,old.revision);
+    let blocked=false;
+    try{await driver.write(next,old.revision);}
+    catch(e){blocked=String(e.message).includes('changed in another tab');}
+    const final=await driver.read(key);
+    return {blocked,revision:final.revision,oldRevision:old.revision};
+  `));
+  assert.equal(stale.blocked,true,"Native IndexedDB must refuse a competing stale tab");
+  assert.equal(stale.revision,stale.oldRevision+1);
 
   const scopedErase=await evaluate(ws,script(`
     const driver=vault.createIndexedDbRosterRecoveryDriver();
