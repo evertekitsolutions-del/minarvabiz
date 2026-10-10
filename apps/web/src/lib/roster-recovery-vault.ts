@@ -37,11 +37,14 @@ export interface SealedRosterRecovery {
   key: CryptoKey;
   iv: number[];
   ciphertext: number[];
+  /** Monotonic per-scope CAS revision; absent only on pre-migration vaults. */
+  revision?: number;
 }
 
 export interface RosterRecoveryDriver {
   read(scopeKey: string): Promise<SealedRosterRecovery | null>;
-  write(record: SealedRosterRecovery): Promise<void>;
+  /** Must atomically refuse writes if the persisted revision changed. */
+  write(record: SealedRosterRecovery, expectedRevision: number): Promise<void>;
   erase(scopeKey: string): Promise<void>;
 }
 
@@ -143,7 +146,8 @@ export async function saveSealedRosterRecovery(
   const existing = await driver.read(scopeKey);
   if (existing && (existing.scopeKey !== scopeKey || existing.userId !== scope.userId ||
       existing.organizationId !== scope.organizationId ||
-      existing.key?.extractable !== false || existing.key.algorithm.name !== "AES-GCM")) {
+      existing.key?.extractable !== false || existing.key.algorithm.name !== "AES-GCM" ||
+      (existing.revision !== undefined && (!Number.isSafeInteger(existing.revision) || existing.revision < 1)))) {
     throw new Error("Roster recovery key/scope is corrupted; keep existing data for manual recovery");
   }
   const key = existing?.key ?? await subtle().generateKey(
@@ -152,8 +156,15 @@ export async function saveSealedRosterRecovery(
   const payload = textEncoder.encode(JSON.stringify({version:1,scopeKey,events:sanitized}));
   const ciphertext = await subtle().encrypt({name:"AES-GCM",iv:new Uint8Array(iv),
     additionalData:textEncoder.encode(scopeKey)},key,payload);
+  // Read/encrypt happens outside the IDB transaction. The revision comparison
+  // MUST occur within the same readwrite transaction as the put. A concurrent
+  // tab cannot silently overwrite an unknown newer sealed event checkpoint.
+  const expectedRevision = existing?.revision ?? 0; // v1 records have no revision
+  if (!Number.isSafeInteger(expectedRevision + 1))
+    throw new Error("Roster recovery revision overflow; retain existing backup");
   await driver.write({scopeKey,userId:scope.userId,organizationId:scope.organizationId,
-    key,iv,ciphertext:Array.from(new Uint8Array(ciphertext))});
+    key,iv,ciphertext:Array.from(new Uint8Array(ciphertext)),
+    revision:expectedRevision + 1}, expectedRevision);
 }
 
 /** Reads only the requested verified scope; rejects swaps/corruption without deleting it. */
@@ -166,7 +177,8 @@ export async function loadSealedRosterRecovery(
   if (item.scopeKey !== scopeKey || item.userId !== scope.userId ||
       item.organizationId !== scope.organizationId || item.key?.extractable !== false ||
       item.key.algorithm.name !== "AES-GCM" ||
-      !Array.isArray(item.iv) || item.iv.length !== 12 || !Array.isArray(item.ciphertext)) {
+      !Array.isArray(item.iv) || item.iv.length !== 12 || !Array.isArray(item.ciphertext) ||
+      (item.revision !== undefined && (!Number.isSafeInteger(item.revision) || item.revision < 1))) {
     throw new Error("Roster recovery scope or encrypted record is corrupt");
   }
   let decrypted: unknown;
@@ -214,14 +226,31 @@ export function createIndexedDbRosterRecoveryDriver(): RosterRecoveryDriver {
         req.onerror=()=>reject(req.error??new Error("Roster recovery read failed"));
       });
     },
-    write:async record=>{
+    write:async (record,expectedRevision)=>{
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 ||
+          record.revision !== expectedRevision + 1)
+        throw new Error("Invalid roster recovery compare-and-swap revision");
       const opened=await db();
       await new Promise<void>((resolve,reject)=>{
         const tx=opened.transaction("vaults","readwrite");
-        tx.objectStore("vaults").put(record);
+        const store=tx.objectStore("vaults");
+        let stale=false;
+        const request=store.get(record.scopeKey);
+        request.onsuccess=()=>{
+          const previous=request.result as SealedRosterRecovery | undefined;
+          const currentRevision=previous?.revision ?? 0;
+          if (currentRevision !== expectedRevision) {
+            stale=true;tx.abort();
+            return;
+          }
+          store.put(record);
+        };
+        request.onerror=()=>tx.abort();
         tx.oncomplete=()=>resolve();
-        tx.onabort=()=>reject(tx.error??new Error("Roster recovery write rolled back"));
-        tx.onerror=()=>reject(tx.error??new Error("Roster recovery write failed"));
+        tx.onabort=()=>reject(stale
+          ? new Error("Roster recovery was changed in another tab; preserve and review the encrypted backup")
+          : tx.error??new Error("Roster recovery atomic write rolled back"));
+        tx.onerror=()=>reject(tx.error??new Error("Roster recovery atomic write failed"));
       });
     },
     erase:async scopeKey=>{

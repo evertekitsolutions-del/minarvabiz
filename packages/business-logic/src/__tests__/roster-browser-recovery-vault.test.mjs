@@ -18,7 +18,13 @@ const vault=require("../../../../apps/web/src/lib/roster-recovery-vault.ts");
 const db=new Map();
 const driver={
   read:async key=>db.get(key)??null,
-  write:async row=>{db.set(row.scopeKey,row);},
+  write:async (row, expected)=>{
+    const before=db.get(row.scopeKey);
+    if ((before?.revision??0)!==expected || row.revision!==expected+1) {
+      throw new Error("Roster recovery was changed in another tab");
+    }
+    db.set(row.scopeKey,row);
+  },
   erase:async key=>{db.delete(key);},
 };
 const uuid=()=>webcrypto.randomUUID();
@@ -90,13 +96,13 @@ assert.deepEqual(await vault.loadSealedRosterRecovery(driver,scope),restored,
 
 // Explicit metadata swap between different users or tenants must fail closed.
 const swapped={...sealed,userId:userB};
-await driver.write(swapped);
+await driver.write({...swapped,revision:sealed.revision+1},sealed.revision);
 await assert.rejects(()=>vault.loadSealedRosterRecovery(driver,scope),/scope or encrypted record is corrupt/);
-await driver.write(sealed);
+await driver.write({...sealed,revision:sealed.revision+2},sealed.revision+1);
 const tampered={...sealed,ciphertext:sealed.ciphertext.map((x,i)=>i===8?x^1:x)};
-await driver.write(tampered);
+await driver.write({...tampered,revision:sealed.revision+3},sealed.revision+2);
 await assert.rejects(()=>vault.loadSealedRosterRecovery(driver,scope),/authentication failed/);
-await driver.write(sealed);
+await driver.write({...sealed,revision:sealed.revision+4},sealed.revision+3);
 
 // Re-encryption uses a fresh nonce on every write, with no plaintext exposure.
 await vault.saveSealedRosterRecovery(driver,scope,[event]);
@@ -104,6 +110,45 @@ const newest=[...db.values()].find(x=>x.userId===userA);
 assert.notDeepEqual(newest.iv,sealed.iv);
 assert.equal(newest.key,sealed.key,"Existing sealed key is stable on crash recovery");
 assert.deepEqual(await vault.loadSealedRosterRecovery(driver,scope),restored);
+
+
+// Simulate two browser tabs reading the same revision before both encrypt.
+// Compare-and-swap must reject the loser and preserve the winner's checkpoint.
+const current=await driver.read(newest.scopeKey);
+let readCount=0,unlock;
+const gate=new Promise(resolve=>{unlock=resolve;});
+const concurrent={
+  read:async key=>{
+    const result=await driver.read(key);
+    readCount++;
+    if(readCount===2)unlock();
+    await gate;
+    return result;
+  },
+  write:driver.write,
+  erase:driver.erase,
+};
+const tabA=[{...event,id:uuid(),aggregateId:uuid(),
+  payload:{...event.payload,id:"",name:"Tab A keeps its own correction"}}];
+tabA[0].payload.id=tabA[0].aggregateId;
+const tabB=[{...event,id:uuid(),aggregateId:uuid(),
+  payload:{...event.payload,id:"",name:"Tab B competing correction"}}];
+tabB[0].payload.id=tabB[0].aggregateId;
+const both=await Promise.allSettled([
+  vault.saveSealedRosterRecovery(concurrent,scope,tabA),
+  vault.saveSealedRosterRecovery(concurrent,scope,tabB),
+]);
+assert.equal(both.filter(x=>x.status==="fulfilled").length,1);
+const loser=both.find(x=>x.status==="rejected");
+assert.match(String(loser.reason),/changed in another tab/);
+const afterRace=await vault.loadSealedRosterRecovery(driver,scope);
+assert.equal(afterRace.length,1);
+assert.ok([tabA[0].id,tabB[0].id].includes(afterRace[0].id));
+assert.equal((await driver.read(newest.scopeKey)).revision,current.revision+1);
+await assert.rejects(()=>driver.write({...current,revision:current.revision+1},
+  current.revision),/changed in another tab/);
+assert.deepEqual(await vault.loadSealedRosterRecovery(driver,scope),afterRace,
+  "Rejected concurrent writer may not erase or overwrite the acknowledged checkpoint");
 
 // Deletion is explicit per scope; unrelated organization data must survive.
 await vault.eraseSealedRosterRecovery(driver,scope);
