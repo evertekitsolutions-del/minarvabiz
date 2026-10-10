@@ -234,24 +234,22 @@ export function createIndexedDbRosterRecoveryDriver(): RosterRecoveryDriver {
       await new Promise<void>((resolve,reject)=>{
         const tx=opened.transaction("vaults","readwrite");
         const store=tx.objectStore("vaults");
+        let stale=false;
         const request=store.get(record.scopeKey);
         request.onsuccess=()=>{
           const previous=request.result as SealedRosterRecovery | undefined;
           const currentRevision=previous?.revision ?? 0;
           if (currentRevision !== expectedRevision) {
-            tx.abort();
+            stale=true;tx.abort();
             return;
           }
           store.put(record);
         };
         request.onerror=()=>tx.abort();
         tx.oncomplete=()=>resolve();
-        tx.onabort=()=>reject(
-          request.readyState === "done" &&
-          (request.result as SealedRosterRecovery | undefined)?.revision !== expectedRevision
-            ? new Error("Roster recovery was changed in another tab; preserve and review the encrypted backup")
-            : tx.error??new Error("Roster recovery atomic write rolled back")
-        );
+        tx.onabort=()=>reject(stale
+          ? new Error("Roster recovery was changed in another tab; preserve and review the encrypted backup")
+          : tx.error??new Error("Roster recovery atomic write rolled back"));
         tx.onerror=()=>reject(tx.error??new Error("Roster recovery atomic write failed"));
       });
     },
