@@ -1,8 +1,8 @@
 # HR-004 Shift/Roster — Delivery and Remaining Acceptance
 
 **Status:** Partial implementation; not production-complete  
-**Verified baseline:** main `fbc7827d16b3f5bd9402775d7b3525adb45c6616`, merged PR #308  
-**Updated:** 2026-10-09  
+**Verified baseline:** main `fb6394fada4d85f58def9c2a19c3d8196d68ae09`, merged PR #312  
+**Updated:** 2026-10-10  
 **Scope:** Shared Web, Windows SQLite, hybrid PostgreSQL/cloud authority
 
 ## Implemented and merged
@@ -24,8 +24,11 @@
 | #305 | Authenticated pre-RPC encrypted Web checkpoint and post-reload quarantine | Current organization/role via PostgreSQL RPC, no cross-tenant event replacement, confirmation/retry checkpoint, explicit fail-closed recovery block |
 | #307 | RLS-scoped read-only comparison of sealed crash-recovery event vs current Cloud | Bound 25 records; remote missing/hidden is ambiguous, no automatic import/replay |
 | #308 | Explicit manager-reviewed single-event Web restore to local memory only | One same-ID update, current remote revision N-1, original immutable ID/device/sequence, full roster validation and separate manual Retry |
+| #310 | Actual Chrome native IndexedDB/WebCrypto recovery smoke | Native non-extractable CryptoKey survives page reload; scope separation and tamper/erase tests; isolated CI demo only |
+| #311 | Atomic encrypted outbox save with scope revision | A concurrent tab with stale revision cannot overwrite newer encrypted recovery data; legacy revisionless vaults migrate on next write |
+| #312 | Atomic encrypted recovery erase | A stale manager tab cannot silently delete another tab's newly sealed event; explicit scoped erase only |
 
-The exact-head #299, #301, #302, #304, #305, #307 and #308 merge gates each concluded with **19 success, 2 optional skipped, 0 failure**, including CI, SAST, dependency/license, secrets, coverage, Web, Windows packaged/feature-click/deep installed smoke. An initial test-code syntax defect was corrected before green exact-head validation.
+The exact-head #299, #301, #302, #304, #305, #307, #308, #310, #311 and #312 merge gates each concluded with **19 success, 2 optional skipped, 0 failure**, including CI, SAST, dependency/license, secrets, coverage, Web, Windows packaged/feature-click/deep installed smoke. An initial test-code syntax defect was corrected before green exact-head validation.
 
 ## Important limits — do not misreport as complete
 
@@ -64,3 +67,18 @@ Acceptance requires verified authorized reviewer actions, no cross-tenant restor
 The manager may read at most 25 saved pending events with an RLS-scoped authenticated comparison. Missing/hidden Cloud rows cannot be classified as absent; they never authorize a forced insert. One manager-confirmed, unconfirmed same-ID update may be restored to current *local browser memory* only when the current Cloud record is visible and exactly one revision earlier, every scoped session/writer check remains unchanged, there is no other unresolved queue and the full roster snapshot validates. This action does not contact the Cloud writer and does not erase the original encrypted vault; a further user-selected Retry is necessary. Regression tests verify denial for stale revisions, unauthorized sessions, canonical mismatches, conflicting queue and changes to historical shift timing. Exact-head CI #307 and #308 passed 19 checks each with 2 optional skipped, but this is not live customer authenticated UAT or real browser-profile disaster recovery acceptance.
 
 Remaining production acceptance: real IndexedDB browser restart/relogin/login-different-user/org tests; storage eviction and partial-write recovery; controlled multi-event dependencies/canonical same-day different-ID merging; server IANA DST/min-rest, recurrence approval and a new verified signed Windows release. Full Master Vision remains an estimated **~51%**.
+
+## Browser vault race-safety acceptance — #310–#312 (2026-10-10)
+
+- #310 uses pinned Chrome in GitHub CI and **actual TypeScript vault source**, not just mocked IndexedDB storage. Confirms AES-GCM key non-extractability, browser page reload/decryption, organization isolation, ciphertext tamper rejection and scoped erase. These are engine/browser smoke results, **not** a real authenticated customer production UAT.
+- #311 adds an optional revision field to existing encrypted vault records with no IndexedDB version/schema migration. Legacy v1 records without revision read as revision 0; first atomic write promotes to 1. Per-scope IndexedDB `readwrite` transaction reads stored revision and commits only when the optimistic expected revision matches. Concurrent tab losing the race fails closed, preserving winner's sealed event; Node and native browser regressions cover that behavior.
+- #312 applies the same atomic expected-revision check to scope erasure. Explicit cleanup of an old revision cannot erase newer concurrent changes. There is **no automatic deletion, restore, Cloud replay, or cross-tenant merge** in these PRs.
+- Open HR-004B gaps remain: browser profile eviction (data may be irrecoverable), two-tab user-facing conflict review/resolution, multiple dependent saved events, real authenticated relogin/organization switching, multi-device reconciliation, and customer production UAT.
+
+## HR-004C production gate — PostgreSQL server timezone/DST and rest (2026-10-10)
+
+Read-only code audit finds `staff_roster_guard()` currently compares naive `work_date + start_time` and `work_date + end_time` values, including overnight shifts, rather than actual UTC instants resolved through per-tenant branch IANA timezone and explicit DST policy. Core `checkZonedRosterSlot()` implements UTC comparison, gap rejection and fold disambiguation **only when the caller supplies a policy**. Current PostgreSQL does not yet enforce tenant-owned approved branch zone, DST fold/gap choice or a centrally configured minimum rest.
+
+**Required next implementation:** additive schema/migration for tenant/branch effective-dated policy and manager authorization; history-safe default/activation design; server-side UTC shift instant calculation with explicit gap and fold validation, overlap and minimum-rest across overnight, DST transitions and branches; tenant isolation and audit; PostgreSQL E2E that proves unauthorized changes denied and both DST and rest violations refused. Do not activate a production migration or claim RLS/UAT readiness based solely on TypeScript tests. Preserve country packs, payroll, history and migration portability.
+
+**Full Master Vision estimate remains approximately 51%.** Stable Windows installer remains separately confirmed v1.0.15.
