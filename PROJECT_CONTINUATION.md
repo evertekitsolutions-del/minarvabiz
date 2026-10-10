@@ -5,6 +5,14 @@
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
+## Active source continuation — October 10 HR-004C
+
+- Live source baseline for the manager draft editor: `d30a7553a1420da91930947cf9292b5e891dd3ed` (#315). Main checks verified 21 success, 5 skipped, 0 failed; open PRs/issues 0 before this branch.
+- #314 PostgreSQL IANA instant resolver and #315 audited tenant/branch effective-dated timezone/minimum-rest DRAFT policy schema are merged. They do not activate server roster UTC/rest enforcement.
+- Current work connects manager Web roster UI to authorized draft read/create/revisioned update, with session pinning, stale-save conflict review and explicit non-enforcement notice. See `docs/HR004_ROSTER_DELIVERY_STATUS.md` for scope/tests and acceptance limits. Do not restart #314/#315.
+- Next after draft editor verification: additive server UTC overlap/min-rest activation and approval with history/cross-branch tests; then recurrence, multi-event recovery and Online/Offline/Hybrid acceptance. No fabricated real production tenant tests.
+- Latest stable release verified live: `v1.0.15`, published 2026-10-02. Source changes are not a new installer. Whole Master Vision remains approximately **51%**, not HR-004 completion.
+
 ## Active continuation — October 9 HR-004 shift/roster
 
 This section supersedes the historical October 8 Attendance instructions below. Always verify live GitHub main/PR/issue/exact-head CI first; never treat these SHAs as guaranteed current in a later session.

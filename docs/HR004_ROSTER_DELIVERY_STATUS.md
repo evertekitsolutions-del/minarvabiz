@@ -82,3 +82,40 @@ Read-only code audit finds `staff_roster_guard()` currently compares naive `work
 **Required next implementation:** additive schema/migration for tenant/branch effective-dated policy and manager authorization; history-safe default/activation design; server-side UTC shift instant calculation with explicit gap and fold validation, overlap and minimum-rest across overnight, DST transitions and branches; tenant isolation and audit; PostgreSQL E2E that proves unauthorized changes denied and both DST and rest violations refused. Do not activate a production migration or claim RLS/UAT readiness based solely on TypeScript tests. Preserve country packs, payroll, history and migration portability.
 
 **Full Master Vision estimate remains approximately 51%.** Stable Windows installer remains separately confirmed v1.0.15.
+
+## HR-004C manager draft editor — 2026-10-10
+
+Live baseline `d30a7553a1420da91930947cf9292b5e891dd3ed` includes #314's
+PostgreSQL IANA resolver and #315's audited tenant/branch policy DRAFT schema.
+Those supersede older statements above that no policy schema exists. Neither
+migration activates UTC overlap/minimum-rest enforcement in the roster trigger.
+
+This branch connects the existing manager roster page to policy draft read,
+create and revisioned update. The editor requires authenticated roster hydration;
+each operation resolves server membership, pins user/token/writer generation,
+checks manager role and rejects responses from another organization. Save uses
+only the existing audited draft RPC, with no direct table DML or browser queue.
+The response must match the requested identity, next revision and values.
+
+An explicit Load action is required. Conflicts preserve the unsaved form and show
+the current Cloud draft for separate review; failed/uncertain saves require reload.
+The UI identifies drafts as not enforced and has no approval/activation control.
+Branch/effective-from identity cannot change while editing a saved revision.
+This Web-only draft configuration does not assert Offline/Hybrid policy parity.
+
+Verification added: executable client validation/tenant/session/conflict tests,
+and real Chrome rendering of the actual React editor with isolated transport
+fixtures for create, conflict review and failed-save handling. Browser fixtures
+are not real hosted customer UAT. Full existing CI/Windows/security gates apply.
+
+Reuse: existing #315 RPC, configFromEnv, pgRpc, pgSelectAll, membership authority,
+writer generation and roster hydration boundary; existing React and test tools.
+No added package or copied upstream source. Supabase changelog and official
+Data API security guidance reviewed 2026-10-10: grants and RLS remain separate
+required boundaries; current relevant extension upgrade notices do not change
+this client-only RPC integration. PostgreSQL remains the portable authority.
+
+Remaining: server UTC/rest activation with historical/cross-branch invariants,
+policy approval and recurring batch approval, offline configuration parity,
+multi-event recovery, authenticated real customer UAT and a verified installer.
+Master Vision remains ~51%; stable Windows remains v1.0.15.
