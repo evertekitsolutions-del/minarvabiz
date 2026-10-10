@@ -4,7 +4,14 @@ import fs from "node:fs";
 const sql=fs.readFileSync("supabase/migrations/20261009_hr_roster_event_authority.sql","utf8");
 const order=fs.readFileSync("supabase/MIGRATION_ORDER.txt","utf8").trim().split(/\r?\n/).filter(Boolean);
 const workflow=fs.readFileSync(".github/workflows/first-admin-fresh-instance-e2e.yml","utf8");
-assert.equal(order.at(-1),"20261009_hr_roster_event_authority.sql");
+const schemaPos=order.indexOf("20261009_hr_roster_schema_authority.sql");
+const eventPos=order.indexOf("20261009_hr_roster_event_authority.sql");
+assert.ok(schemaPos>=0 && eventPos>schemaPos,
+  "Audited roster event authority migration must follow shift/roster schema");
+assert.equal(order.filter(name=>name==="20261009_hr_roster_event_authority.sql").length,1,
+  "Roster event authority must be replayed exactly once");
+assert.ok(order.indexOf("20261010_hr_roster_iana_time_resolution.sql")>eventPos,
+  "Subsequent additive timezone resolver must follow the audited event authority");
 assert.match(sql,/CREATE TABLE IF NOT EXISTS public\.staff_roster_event_receipts/);
 assert.match(sql,/CREATE OR REPLACE FUNCTION public\.apply_staff_roster_event/);
 assert.match(sql,/SECURITY DEFINER/);
