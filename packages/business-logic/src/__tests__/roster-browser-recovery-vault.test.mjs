@@ -25,7 +25,12 @@ const driver={
     }
     db.set(row.scopeKey,row);
   },
-  erase:async key=>{db.delete(key);},
+  erase:async (key,expected)=>{
+    const current=db.get(key);
+    if (!current || (current.revision??0)!==expected)
+      throw new Error("Roster recovery changed in another tab; refuse stale deletion");
+    db.delete(key);
+  },
 };
 const uuid=()=>webcrypto.randomUUID();
 const userA=uuid(),userB=uuid(),orgA=uuid(),orgB=uuid();
@@ -149,6 +154,12 @@ await assert.rejects(()=>driver.write({...current,revision:current.revision+1},
   current.revision),/changed in another tab/);
 assert.deepEqual(await vault.loadSealedRosterRecovery(driver,scope),afterRace,
   "Rejected concurrent writer may not erase or overwrite the acknowledged checkpoint");
+
+// A stale browser tab cannot erase an intervening newer checkpoint.
+await assert.rejects(()=>driver.erase(newest.scopeKey,current.revision),
+  /changed in another tab/);
+assert.deepEqual(await vault.loadSealedRosterRecovery(driver,scope),afterRace,
+  "Stale explicit deletion must not destroy a newly sealed event");
 
 // Deletion is explicit per scope; unrelated organization data must survive.
 await vault.eraseSealedRosterRecovery(driver,scope);

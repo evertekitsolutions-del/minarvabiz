@@ -45,7 +45,8 @@ export interface RosterRecoveryDriver {
   read(scopeKey: string): Promise<SealedRosterRecovery | null>;
   /** Must atomically refuse writes if the persisted revision changed. */
   write(record: SealedRosterRecovery, expectedRevision: number): Promise<void>;
-  erase(scopeKey: string): Promise<void>;
+  /** Refuse stale deletion if another tab changed the scoped sealed record. */
+  erase(scopeKey: string, expectedRevision: number): Promise<void>;
 }
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -197,7 +198,19 @@ export async function loadSealedRosterRecovery(
 
 /** Only invoke from a separately authorized explicit reconciliation/discard flow. */
 export async function eraseSealedRosterRecovery(driver: RosterRecoveryDriver,scope: RosterRecoveryScope) {
-  await driver.erase(requireScope(scope));
+  const scopeKey=requireScope(scope);
+  const existing=await driver.read(scopeKey);
+  if (!existing) return;
+  if (existing.scopeKey!==scopeKey || existing.userId!==scope.userId ||
+      existing.organizationId!==scope.organizationId ||
+      existing.key?.extractable!==false || existing.key.algorithm.name!=="AES-GCM" ||
+      (existing.revision!==undefined &&
+        (!Number.isSafeInteger(existing.revision) || existing.revision<1))) {
+    throw new Error("Roster recovery scope or revision is corrupt; reviewed resolution required");
+  }
+  // The IndexedDB readwrite transaction checks this revision again to avoid
+  // deleting a new event saved by another tab after our read completed.
+  await driver.erase(scopeKey,existing.revision??0);
 }
 
 /**
@@ -253,13 +266,28 @@ export function createIndexedDbRosterRecoveryDriver(): RosterRecoveryDriver {
         tx.onerror=()=>reject(tx.error??new Error("Roster recovery atomic write failed"));
       });
     },
-    erase:async scopeKey=>{
+    erase:async (scopeKey,expectedRevision)=>{
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision<0)
+        throw new Error("Invalid roster recovery erase revision");
       const opened=await db();
       await new Promise<void>((resolve,reject)=>{
         const tx=opened.transaction("vaults","readwrite");
-        tx.objectStore("vaults").delete(scopeKey);
+        const store=tx.objectStore("vaults");
+        let stale=false;
+        const request=store.get(scopeKey);
+        request.onsuccess=()=>{
+          const current=request.result as SealedRosterRecovery | undefined;
+          if (!current || (current.revision??0)!==expectedRevision) {
+            stale=true;tx.abort();
+            return;
+          }
+          store.delete(scopeKey);
+        };
+        request.onerror=()=>tx.abort();
         tx.oncomplete=()=>resolve();
-        tx.onabort=()=>reject(tx.error??new Error("Roster recovery delete rolled back"));
+        tx.onabort=()=>reject(stale
+          ? new Error("Roster recovery changed in another tab; refuse stale deletion")
+          : tx.error??new Error("Roster recovery delete rolled back"));
         tx.onerror=()=>reject(tx.error??new Error("Roster recovery delete failed"));
       });
     },
