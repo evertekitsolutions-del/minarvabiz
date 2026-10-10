@@ -25,7 +25,7 @@ assert.doesNotMatch(sql,/CREATE TRIGGER|ALTER TABLE|DELETE FROM public|UPDATE pu
   "Untested policy rollout cannot silently replace production roster authority");
 const e2e=fs.readFileSync("scripts/hr-roster-timezone-resolver-e2e.sql","utf8");
 for(const name of ["Asia/Kolkata","America/New_York","Australia/Lord_Howe","Europe/London",
-                    "DST gap","fold","insufficient_privilege"]){
+                    "Spring-forward gap","fold","insufficient_privilege"]){
   assert.ok(e2e.includes(name),"Missing real database conformance check: "+name);
 }
 const ci=fs.readFileSync(".github/workflows/ci.yml","utf8");
