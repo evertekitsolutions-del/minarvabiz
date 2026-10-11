@@ -1,3 +1,7 @@
+## HR-005 read-only offline/cloud revision preview — branch exact-head CI pending
+
+Main pre-branch `4f795b0bbcbfd8e863fcdd332c07b64014e7d17c`, PR #339 verified 25/5 post-merge checks. Compare current authorized manager Cloud holiday list to read-only Windows/device cache for version/content/missing-item mismatches without automatic sync, deletion or Cloud update. No new provider, production migration or customer release. Do not mark HR-005 complete; full Master Vision ~51%, stable installer v1.0.15. Refer to `docs/HR005_CLOUD_OFFLINE_REVISION_REVIEW.md`.
+
 ## HR-005 Cloud-only continuation and attendance exception review — source verification pending
 
 - GitHub main baseline after PR #338: `11ac47b8f6e03de503365f1f112a2a96a520be59`; 25 successful checks, 5 optional skipped, no failed/pending and zero open PRs before new work. The user's local OpenCode/Ollama path is optional and not part of delivery.
