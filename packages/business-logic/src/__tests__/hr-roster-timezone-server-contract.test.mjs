@@ -32,4 +32,25 @@ const ci=fs.readFileSync(".github/workflows/ci.yml","utf8");
 assert.match(ci,/Verify HR-004C IANA\/DST instants in real PostgreSQL 17/);
 assert.match(ci,/scripts\/hr-roster-timezone-resolver-e2e\.sql/);
 assert.match(ci,/supabase\/migrations\/20261010_hr_roster_iana_time_resolution\.sql/);
+const primitive = "20261011_hr_roster_utc_rest_primitives.sql";
+const primitiveSql = fs.readFileSync("supabase/migrations/" + primitive, "utf8");
+const primitiveTest = fs.readFileSync("scripts/hr-roster-utc-rest-primitives-e2e.sql", "utf8");
+assert.equal(order.filter(x=>x===primitive).length,1, "UTC/rest primitive must replay exactly once");
+assert.ok(order.indexOf(primitive)>order.indexOf("20261010_hr_roster_time_policy_drafts.sql"),
+  "Internal enforcement primitives require the IANA resolver and policy schema");
+assert.match(primitiveSql,/public\.roster_shift_utc_window\(/);
+assert.match(primitiveSql,/public\.roster_assert_utc_rest\(/);
+assert.match(primitiveSql,/public\.roster_resolve_local_instant/);
+assert.match(primitiveSql,/LANGUAGE plpgsql (?:STABLE|IMMUTABLE) SECURITY INVOKER/g);
+assert.match(primitiveSql,/REVOKE ALL ON FUNCTION public\.roster_shift_utc_window/);
+assert.match(primitiveSql,/REVOKE ALL ON FUNCTION public\.roster_assert_utc_rest/);
+assert.doesNotMatch(primitiveSql,/CREATE TRIGGER|ALTER TABLE|UPDATE public|INSERT INTO public|SECURITY DEFINER/i,
+  "Unapproved draft policies must not be activated by primitive migration");
+for (const proof of ["Asia/Kolkata","America/New_York","Europe/London","Australia/Lord_Howe",
+  "Cross-branch UTC overlap","minimum rest","Spring DST gap","Browser can execute"]) {
+  assert.ok(primitiveTest.includes(proof),"Missing PostgreSQL UTC/rest assertion: "+proof);
+}
+assert.match(ci,/Verify HR-004C UTC interval and minimum rest in PostgreSQL 17/);
+assert.match(ci,/scripts\/hr-roster-utc-rest-primitives-e2e\.sql/);
+assert.match(ci,/supabase\/migrations\/20261011_hr_roster_utc_rest_primitives\.sql/);
 console.log("HR-004C timezone resolver migration order, security restrictions and PostgreSQL E2E registration PASS");
