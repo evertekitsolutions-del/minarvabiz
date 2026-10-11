@@ -5,6 +5,14 @@
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
+## Active HR-004C server UTC/rest validation milestone — source candidate
+
+- Continue from merged main `563dace9be99abc9fe6ef39b46c26bba5322094a` (PR #317). Production policy draft migration `20261011021532` already applied and security inspected; no rollback or re-run of #315/#316.
+- Next proposed incremental source migration `20261011_hr_roster_utc_rest_primitives.sql` adds internal-only `roster_shift_utc_window()` and `roster_assert_utc_rest()`. These use explicit branch IANA + fold policy to resolve real UTC shift endpoints and validate actual elapsed-time overlap/rest symmetrically, including overnight and cross-branch scenarios.
+- Real PostgreSQL 17 isolated E2E checks London spring, New York folds/gaps, Lord Howe half-hour adjustment, India/US cross-branch overlap, minimum rest thresholds, invalid arguments and browser-role execution refusal. CI plus portable fresh-instance migration order must pass before merge.
+- **Not activation:** No change to `staff_roster_guard()`, no approved policy transition, no production deployment, no privilege expansion, no new Windows installer. Production still lacks enforcement/approval and real authenticated tenant UAT. Next milestone is approved policy history/activation, branch-policy selection and roster guard integration with full cross-branch/draft-vs-approved controls.
+- Master Vision estimated ~51%; code/CI milestones alone do not warrant an invented 1-point increment.
+
 ## Verified production database rollout — October 11, 2026
 
 - Live main before this documentation PR: `dd6f2938dd083201baf8191acccda955b6b48093` (#316 merged). Open PRs/issues: 0. Main push CI, Secret Scan, Dependency Security and Final Release Audit completed successfully; latest Windows release is still `v1.0.15`.
