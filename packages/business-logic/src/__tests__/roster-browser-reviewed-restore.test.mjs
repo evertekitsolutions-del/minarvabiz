@@ -22,7 +22,7 @@ const event={id:eventId,aggregateType:"staff_shift_rules",aggregateId:shiftId,
   eventType:"update",payload:{...desired},occurredAt:"2026-10-09T16:00:00.000Z",
   deviceId,sequence:12,status:"failed",attempts:2,lastError:null};
 const scope={userId:user,organizationId:org};
-const item={eventId,aggregateType:"staff_shift_rules",aggregateId:shiftId,
+const item={eventId,aggregateType:"staff_shift_rules",aggregateId:shiftId,eventType:"update",
   localStatus:"failed",localVersion:2,remoteVersion:1,
   remotePresence:"visible",localPayload:{...desired},remotePayload:{...cloud}};
 const approved={scope,total:1,comparisons:[item]};
@@ -103,11 +103,11 @@ store.shiftRules[0]={...cloud};
 // Wrong canonical identity or unsafe version relationship: no restore.
 const forged=structuredClone(approved);
 forged.comparisons[0].remoteVersion=4;
-await assert.rejects(()=>restore(forged),/Unsafe Cloud revision/);
+await assert.rejects(()=>restore(forged),/unsafe/i);
 const hidden=structuredClone(approved);
 hidden.comparisons[0].remotePresence="missing-or-hidden";
 hidden.comparisons[0].remotePayload=null;
-await assert.rejects(()=>restore(hidden),/Unsafe Cloud revision/);
+await assert.rejects(()=>restore(hidden),/unsafe/i);
 const duplicate=structuredClone(approved);
 duplicate.total=2;
 await assert.rejects(()=>restore(duplicate),/Only one/);
@@ -136,8 +136,72 @@ assert.deepEqual(store.shiftRules,[cloud],"Historical error must never rewrite C
 assert.equal(memory.length,0);
 assert.equal(cloudWrites,0);
 
+
+// A Cloud-visible different canonical roster ID must block even one
+// revision-matched local slot update. This is the server boundary, not just
+// a hidden/disabled browser button.
+memory=[];store.shiftRules=[{...cloud}];
+const slotId="77777777-7777-4777-8777-777777777777";
+const staffId="88888888-8888-4888-8888-888888888888";
+const otherId="99999999-9999-4999-8999-999999999999";
+const slotRemote={id:slotId,staffId,shiftRuleId:shiftId,branchId:null,
+  workDate:"2026-11-11",status:"scheduled",version:1};
+const slotLocal={...slotRemote,version:2,status:"cancelled"};
+const slotEvent={...event,id:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  aggregateType:"staff_roster_slots",aggregateId:slotId,payload:{...slotLocal}};
+const slotComparison={...item,eventId:slotEvent.id,aggregateType:"staff_roster_slots",
+  aggregateId:slotId,localPayload:{...slotLocal},remotePayload:{...slotRemote},
+  sameDayCloudPeers:[{...slotRemote}]};
+const slotApproved={scope,total:1,comparisons:[slotComparison]};
+store.rosterSlots=[{...slotRemote}];sealed=[{...slotEvent}];report=structuredClone(slotApproved);
+assert.equal(module.isReviewedSealedRosterRestoreCandidate(slotApproved),true,
+  "An isolated, fully scoped same-ID slot with matching revision remains recoverable");
+const slotBackup=structuredClone(store),sealedBackup=structuredClone(sealed);
+for(const peers of [
+  null,undefined,[],
+  [{...slotRemote},{...slotRemote,id:otherId,status:"cancelled"}],
+  [{...slotRemote,id:otherId}],
+  [{...slotRemote,version:4}],
+  [{...slotRemote,staffId:"foreign-staff"}],
+  [{...slotRemote,workDate:"2026-11-12"}],
+  [{...slotRemote,shiftRuleId:"unreviewed-shift"}],
+  [{...slotRemote,branchId:"foreign-branch"}],
+  [{...slotRemote,status:"cancelled"}],
+]) {
+  const unsafe=structuredClone(slotApproved);
+  unsafe.comparisons[0].sameDayCloudPeers=peers;
+  assert.equal(module.isReviewedSealedRosterRestoreCandidate(unsafe),false,
+    "Unverified or different-ID same-day Cloud peer set cannot enable restore");
+  await assert.rejects(()=>restore(unsafe),/unsafe|quarantined/i);
+  assert.deepEqual(store,slotBackup,"Unsafe Cloud identity never changes current roster memory");
+  assert.equal(memory.length,0,"Unsafe Cloud identity never hydrates original event");
+  assert.deepEqual(sealed,sealedBackup,"Sealed backup remains intact on refusal");
+}
+const invalidEventType=structuredClone(slotApproved);
+invalidEventType.comparisons[0].eventType="insert";
+assert.equal(module.isReviewedSealedRosterRestoreCandidate(invalidEventType),false);
+await assert.rejects(()=>restore(invalidEventType),/unsafe/i);
+
+// A peer changed between human comparison and fresh authorized read:
+// deny on the second, pinned Cloud snapshot and preserve encrypted history.
+const stalePeers=structuredClone(slotApproved);
+report=structuredClone(slotApproved);
+report.comparisons[0].sameDayCloudPeers=[{...slotRemote},{...slotRemote,id:otherId}];
+await assert.rejects(()=>restore(stalePeers),/changed since review/);
+assert.equal(memory.length,0);
+report=structuredClone(slotApproved);
+const restoredSlot=await restore(slotApproved);
+assert.equal(restoredSlot.eventId,slotEvent.id);
+assert.deepEqual(store.rosterSlots,[slotLocal]);
+assert.equal(memory.length,1);
+assert.deepEqual(memory[0].payload,slotEvent.payload);
+assert.equal(memory[0].status,"failed");
+assert.equal(cloudWrites,0,"Reviewing/restoring a slot never sends a Cloud write");
+assert.deepEqual(sealed,sealedBackup);
+
 const ui=fs.readFileSync("apps/web/src/app/(app)/roster/page.tsx","utf8");
-assert.match(ui,/restoreReviewedSealedRosterEventToMemory\(sealedReview\)/);
+assert.match(ui,/restoreReviewedSealedRosterEventToMemory\\(sealedReview\\)/);
+assert.match(ui,/isReviewedSealedRosterRestoreCandidate\\(sealedReview\\)/);
 assert.match(ui,/Restore reviewed original event locally \(no Cloud write\)/);
 assert.match(ui,/window\.confirm\(/);
 assert.match(ui,/separately review and press Retry/);
