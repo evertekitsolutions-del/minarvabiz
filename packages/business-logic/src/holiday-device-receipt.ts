@@ -1,4 +1,5 @@
 import { validateHolidayCache } from "./holiday-cache";
+import { reviewHolidayRevisionSnapshots, type HolidayRevisionReview } from "./holiday-sync-review";
 import type { HolidayRule } from "./holiday-calendar";
 
 /**
@@ -139,5 +140,55 @@ export async function verifyHolidayDeviceSnapshot(input: {
     snapshotId: payload.snapshotId, orgId: payload.orgId,
     deviceId: payload.deviceId, sequence: payload.sequence,
     rules: payload.rules.map(rule => ({...rule}))
+  };
+}
+
+
+/**
+ * HR-005J: Read-only bridge between a verified, device-addressed receipt
+ * and the EXISTING Cloud/Offline revision review. The receipt's signature
+ * alone is NOT enough to authorize replacing the local SQLite snapshot:
+ * local-only rows might be unsynced work or genuine offline history.
+ *
+ * The caller must supply a protected, current device sequence and pinned
+ * server key. Both data sources are validated against that tenant here.
+ * No writes, deletes, receipt consumption or authorization are performed.
+ */
+export interface SignedHolidayIntakeReview {
+  snapshotId: string;
+  orgId: string;
+  deviceId: string;
+  sequence: number;
+  status: "unchanged_review_only" | "manual_reconciliation_required";
+  unchangedRules: number;
+  discrepancies: HolidayRevisionReview[];
+  canHydrate: false;
+}
+export async function reviewSignedHolidayIntake(
+  input: Parameters<typeof verifyHolidayDeviceSnapshot>[0] & {
+    localRules: readonly HolidayRule[];
+  },
+): Promise<SignedHolidayIntakeReview> {
+  // Cryptographic destination, expiry and monotonic sequence checks MUST
+  // complete before any signed payload is interpreted for reconciliation.
+  const verified = await verifyHolidayDeviceSnapshot(input);
+  const differences = reviewHolidayRevisionSnapshots({
+    orgId: verified.orgId, local: input.localRules, cloud: verified.rules,
+  });
+  const discrepancies = differences
+    .filter(row => row.kind !== "identical")
+    .map(row => ({...row}));
+  return {
+    snapshotId: verified.snapshotId,
+    orgId: verified.orgId,
+    deviceId: verified.deviceId,
+    sequence: verified.sequence,
+    status: discrepancies.length === 0
+      ? "unchanged_review_only" : "manual_reconciliation_required",
+    unchangedRules: differences.length - discrepancies.length,
+    discrepancies,
+    // Requires server-audited issuance, durable receipt ledger, transactional
+    // Windows intake, rollback and customer UAT; NEVER use this as write grant.
+    canHydrate: false,
   };
 }
