@@ -5,6 +5,13 @@
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
+## Current HR-004B source slice — pending independent CI
+
+- Started from verified main `b4812336ad43097d5b8f8988a3f7b9b5c1b0547d`; 25 successful / 5 skipped / 0 failed checks, no open PR.
+- Branch `feat/hr004b-multievent-readonly-dependencies` adds deterministic, bounded, **read-only** review of sealed dependent events, same canonical record chains and different-ID same-staff/day candidate collisions, with strict preservation of existing one-isolated-event restore and encrypted vault protections. Existing code was reused; no new runtime dependency, paid service, migration or customer data operation.
+- All batch recovery mutations **remain blocked**. Server-side authoritative different-ID conflict reconciliation, reviewed ordered restore/retry, durable rollback on browser eviction, real browser-profile UAT and Windows/offline/hybrid parity remain required.
+- New tests live in `packages/business-logic/src/__tests__/roster-recovery-dependencies.test.mjs`. Merge only after exact-head CI, independent review and post-merge CI. Full Master Vision remains ~51%.
+
 ## Latest verified HR-004C source and database checkpoint — Oct 11, 2026
 
 - PR #326 merged into main `0a98f29b7e2c8c633b82de7835f1b990afaa41ba`. Exact-head PR: 20 successful, 2 skipped, 0 failed. Post-merge main: **25 passed, 5 optional skipped, 0 failed/pending**, no open PR. Stable public Windows installer remains **v1.0.15** (do not equate source runner release with installer).
