@@ -28,6 +28,43 @@ function equal(value: unknown, other: unknown) {
 }
 
 /**
+ * Never present the local restore action for a roster slot when the scoped
+ * Cloud staff/day snapshot is absent, contradictory, truncated or contains
+ * another canonical ID. This is a *necessary* condition, not authorization
+ * to write or evidence that no concurrently-created Cloud row exists.
+ *
+ * Shift-template restores have no staff/day identity. They still require
+ * fresh authorized Cloud comparison and historical-timing checks below.
+ */
+export function isReviewedSealedRosterRestoreCandidate(
+  review: ApprovedReview | null,
+): boolean {
+  if (!review || review.total!==1 || review.comparisons?.length!==1) return false;
+  const item=review.comparisons[0];
+  if ((item.aggregateType!=="staff_roster_slots" && item.aggregateType!=="staff_shift_rules") ||
+      item.eventType!=="update" ||
+      (item.localStatus!=="pending" && item.localStatus!=="failed") ||
+      item.remotePresence!=="visible" || !item.remotePayload ||
+      item.remotePayload.id!==item.aggregateId ||
+      !Number.isSafeInteger(item.remoteVersion) || item.remoteVersion===null ||
+      item.remoteVersion<1 || !Number.isSafeInteger(item.localVersion) ||
+      item.localVersion!==item.remoteVersion+1) return false;
+  if (item.aggregateType==="staff_shift_rules") return true;
+  const peers=item.sameDayCloudPeers;
+  if (!Array.isArray(peers) || peers.length!==1) return false;
+  const only=peers[0];
+  if (!only || typeof only!=="object" || Array.isArray(only)) return false;
+  const local=item.localPayload,remote=item.remotePayload;
+  return typeof local?.staffId==="string" && typeof local?.workDate==="string" &&
+    only.id===item.aggregateId &&
+    only.staffId===local.staffId && only.staffId===remote.staffId &&
+    only.workDate===local.workDate && only.workDate===remote.workDate &&
+    only.version===item.remoteVersion &&
+    only.shiftRuleId===remote.shiftRuleId &&
+    only.status===remote.status && only.branchId===remote.branchId;
+}
+
+/**
  * Never directly retry, mark synced, or clear the encrypted backup.
  * The original ID/device sequence/payload are preserved. If Cloud has advanced
  * since the manager reviewed the data, a new explicit conflict review is needed.
@@ -43,6 +80,8 @@ export async function restoreReviewedSealedRosterEventToMemory(
     throw new Error("Authorized roster manager and authenticated writer are required for restoration");
   if (!approved || approved.total !== 1 || approved.comparisons?.length !== 1)
     throw new Error("Only one independently reviewed sealed roster event can be restored");
+  if (!isReviewedSealedRosterRestoreCandidate(approved))
+    throw new Error("Reviewed Cloud revision, same-day canonical identity or peer snapshot is unsafe; keep sealed recovery quarantined");
   const comparison=approved.comparisons[0];
   if (comparison.localStatus !== "pending" && comparison.localStatus !== "failed")
     throw new Error("Only unconfirmed roster changes may be recovered");
