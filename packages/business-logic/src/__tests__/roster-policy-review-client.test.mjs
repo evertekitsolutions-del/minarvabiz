@@ -15,6 +15,7 @@ const org='10000000-0000-4000-8000-000000000001';
 const branch='c1000000-0000-4000-8000-000000000001';
 const draft={id:'30000000-0000-4000-8000-000000000001',org_id:org,branch_id:branch,effective_from:'2026-11-01',effective_until:null,iana_zone:'America/New_York',dst_gap_policy:'reject',dst_fold_policy:'later',minimum_rest_minutes:720,status:'draft',version:2};
 const review={id:'40000000-0000-4000-8000-000000000001',org_id:org,branch_id:branch,policy_id:draft.id,policy_version:2,effective_from:draft.effective_from,effective_until:null,iana_zone:draft.iana_zone,dst_fold_policy:draft.dst_fold_policy,minimum_rest_minutes:720,decision:'approved_pending_activation',activation_state:'inactive',review_note:'Reviewed',reviewed_by:'50000000-0000-4000-8000-000000000001',reviewed_at:'2026-10-11T05:00:00Z',supersedes_review_id:null};
+let ready=true;
 let role='admin',current=true,writes=0,raw={accepted:true,review,enforcement_active:false},drafts=[draft],history=[review];
 const resolution={id:'60000000-0000-4000-8000-000000000001',org_id:org,branch_id:branch,
   review_id:review.id,resolution:'revoked',reason:'Approval withdrawn',resolved_by:review.reviewed_by,
@@ -23,6 +24,7 @@ let termination={accepted:true,resolution,enforcement_active:false};
 let selected={accepted:true,review,selection_state:'pending_activation_only',enforcement_active:false};
 const client=createRosterPolicyReviewClient({
   authorize:async()=>({orgId:org,role,ensureCurrent(){if(!current)throw Error('Session changed');}}),
+  isLifecycleReady:()=>ready,
   readDrafts:async()=>drafts,
   readReviews:async()=>history,
   readResolutions:async()=>[],
@@ -32,6 +34,11 @@ const client=createRosterPolicyReviewClient({
 });
 const input={policy:draft,decision:'approved_pending_activation',note:'Reviewed'};
 assert.equal((await client.list()).drafts.length,1);
+ready=false;
+assert.equal((await client.list()).lifecycleReady,false);
+await assert.rejects(client.resolve({review,resolution:'revoked',reason:'Approval withdrawn'}),/not enabled/);
+await assert.rejects(client.candidate(branch,'2026-11-10'),/not enabled/);
+ready=true;
 const resolved=await client.resolve({review,resolution:'revoked',reason:'Approval withdrawn'});
 assert.equal(resolved.accepted,true);
 assert.equal(resolved.resolution.review_id,review.id);
