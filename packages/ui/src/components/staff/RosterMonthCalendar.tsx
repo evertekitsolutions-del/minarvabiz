@@ -26,7 +26,7 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
 /** Monday-first ISO date-only grid. UTC arithmetic avoids device timezone drift. */
 export function rosterMonthCells(month: string): (string | null)[] {
-  if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(month)) return [];
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return [];
   const year = Number(month.slice(0, 4));
   const number = Number(month.slice(5, 7));
   if (year < 1900 || year > 9999) return [];
@@ -45,7 +45,7 @@ export function RosterMonthCalendar({ month, entries }: RosterMonthCalendarProps
   if (!cells.length) return <p role="status">Select a valid planning month to view the roster calendar.</p>;
   const grouped = new Map<string, RosterCalendarEntry[]>();
   for (const entry of entries) {
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(entry.workDate) || entry.workDate.slice(0, 7) !== month) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.workDate) || entry.workDate.slice(0, 7) !== month) continue;
     const group = grouped.get(entry.workDate) ?? [];
     group.push(entry);
     grouped.set(entry.workDate, group);
