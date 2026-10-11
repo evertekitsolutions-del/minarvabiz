@@ -6,7 +6,7 @@ import {createHolidayManagerClient} from "./holiday-client";
 /** Disabled until explicitly deployed + audited HR005 schema verified. */
 export const holidayManagementEnabled=process.env.NEXT_PUBLIC_HR005_HOLIDAYS_READY==="true";
 
-export function onlineHolidayManager(){
+export function onlineHolidayManager(): ReturnType<typeof createHolidayManagerClient>{
  if(!holidayManagementEnabled)throw Error("Holiday database rollout is not enabled; no write was attempted");
  const token=getSessionToken(),userId=getSessionUser()?.id,generation=getRemoteWriterGeneration();
  const config=configFromEnv();
