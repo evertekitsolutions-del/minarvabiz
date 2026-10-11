@@ -38,3 +38,37 @@ const ci=fs.readFileSync(".github/workflows/ci.yml","utf8");
 assert.match(ci,/Verify HR-004C inactive policy review authority in PostgreSQL 17/);
 assert.match(ci,/scripts\/hr-roster-policy-reviews-e2e\.sql/);
 console.log("HR004C policy approval-review authority, immutable history and PG17 registration PASS");
+
+const lifecycle="20261011_hr_roster_policy_resolution_selection.sql";
+const lifecycleSql=fs.readFileSync("supabase/migrations/"+lifecycle,"utf8");
+assert.equal(order.filter(x=>x===lifecycle).length,1,"Lifecycle migration must be ordered exactly once");
+assert.ok(order.indexOf(lifecycle)>order.indexOf(migration),"Lifecycle depends on immutable review ledger");
+for(const guard of [
+  "CREATE TABLE public.staff_roster_policy_resolutions",
+  "ALTER TABLE public.staff_roster_policy_resolutions FORCE ROW LEVEL SECURITY",
+  "CREATE TRIGGER staff_roster_policy_resolution_no_mutation",
+  "CREATE FUNCTION public.resolve_staff_roster_policy_review",
+  "CREATE FUNCTION public.select_staff_roster_policy_candidate",
+  "CREATE OR REPLACE FUNCTION public.review_staff_roster_time_policy",
+  "current_user_authorization()",
+  "pg_advisory_xact_lock",
+  "superseded_review",
+  "already_resolved",
+  "no_reviewed_candidate",
+  "pending_activation_only",
+  "'enforcement_active',false",
+  "INSERT INTO public.audit_logs",
+]) assert.ok(lifecycleSql.includes(guard),"Missing reviewed-policy lifecycle guard: "+guard);
+assert.doesNotMatch(lifecycleSql,/CREATE OR REPLACE FUNCTION public\.staff_roster_guard|GRANT (?:ALL|INSERT|UPDATE|DELETE) ON public\.staff_roster_policy_resolutions TO authenticated/i,
+  "Lifecycle must never activate scheduling or grant browser DML");
+const lifecycleE2e=fs.readFileSync("scripts/hr-roster-policy-lifecycle-e2e.sql","utf8");
+for(const guard of ["ROLLBACK;","Unresolved overlap was not blocked",
+  "Blank resolution reason","Stale resolution accepted","Duplicate revocation",
+  "Revoked review was still selected","Cancellation failed",
+  "Manager could revoke","Other tenant revoked","Cashier could select",
+  "Privileged resolution deletion","Effective start was not selected"]) {
+  assert.ok(lifecycleE2e.toLowerCase().includes(guard.toLowerCase()),"Missing lifecycle PG17 acceptance: "+guard);
+}
+assert.match(ci,/Verify HR-004C immutable policy resolution and effective selection in PostgreSQL 17/);
+assert.match(ci,/scripts\/hr-roster-policy-lifecycle-e2e\.sql/);
+console.log("HR004C revocation, cancellation, effective selection & PG17 CI contract PASS");

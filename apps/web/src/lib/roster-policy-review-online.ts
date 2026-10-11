@@ -14,7 +14,11 @@ export function onlineRosterPolicyReviews(){
   }
   ensureCurrent();
   const cfg={...config!,accessToken:token!};
+  // Schema-first rollout: the current production UI must keep working until
+  // the additive migration is applied, verified and explicitly enabled.
+  const lifecycleReady=process.env.NEXT_PUBLIC_ROSTER_POLICY_LIFECYCLE_READY==='true';
   return createRosterPolicyReviewClient({
+    isLifecycleReady:()=>lifecycleReady,
     async authorize(){
       ensureCurrent();
       const auth=await resolveOnlineAuthorization(token!,userId!);
@@ -35,6 +39,27 @@ export function onlineRosterPolicyReviews(){
       const result=await pgSelectAll<Record<string,unknown>>(cfg,'staff_roster_policy_reviews','select=*&order=reviewed_at.desc,id.asc');
       authority.ensureCurrent();
       if(result.error)throw Error('Policy review history unavailable: '+result.error.message);
+      return result.data;
+    },
+    async readResolutions(authority){
+      authority.ensureCurrent();
+      const result=await pgSelectAll<Record<string,unknown>>(cfg,'staff_roster_policy_resolutions','select=*&order=resolved_at.desc,id.asc');
+      authority.ensureCurrent();
+      if(result.error)throw Error('Policy resolution history unavailable: '+result.error.message);
+      return result.data;
+    },
+    async writeResolution(args,authority){
+      authority.ensureCurrent();
+      const result=await pgRpc<Record<string,unknown>>(cfg,'resolve_staff_roster_policy_review',args);
+      authority.ensureCurrent();
+      if(result.error)throw Error('Policy resolution unconfirmed. Reload before retrying: '+result.error.message);
+      return result.data;
+    },
+    async selectCandidate(args,authority){
+      authority.ensureCurrent();
+      const result=await pgRpc<Record<string,unknown>>(cfg,'select_staff_roster_policy_candidate',args);
+      authority.ensureCurrent();
+      if(result.error)throw Error('Candidate selection unavailable: '+result.error.message);
       return result.data;
     },
     async writeReview(args,authority){

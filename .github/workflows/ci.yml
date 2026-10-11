@@ -475,6 +475,15 @@ jobs:
             -f supabase/migrations/20261011_hr_roster_policy_review_history.sql
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f scripts/hr-roster-policy-reviews-e2e.sql
+      - name: Verify HR-004C immutable policy resolution and effective selection in PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Existing synthetic tenants in isolated PG17; never a remote database.
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/20261011_hr_roster_policy_resolution_selection.sql
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f scripts/hr-roster-policy-lifecycle-e2e.sql
 
   windows-package:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository

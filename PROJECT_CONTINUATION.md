@@ -5,6 +5,13 @@
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
+## Current source work — HR-004C review lifecycle (PR verification pending)
+
+- Verified live main baseline `e7a0e5ac83519b4478f4982310f694d886f1bd39`, 0 PRs and one open checkpoint issue #325; 25 visible passed checks, 5 optional skips, no failures before branch.
+- Branch `feat/hr004c-reviewed-policy-lifecycle`: additive PostgreSQL resolution ledger and authorized immutable revocation/cancellation of inactive reviewed approvals; date-scoped read-only candidate selector; amended review overlap rule excludes explicitly resolved or superseded historical approvals. Preserves all old reviews, strict tenant/RBAC/RLS, audit and branch locks; **does not activate scheduling enforcement**.
+- Real ephemeral PostgreSQL 17 E2E and static contract added to CI, with cross-tenant/manager/cashier, stale/duplicate, overlap, period, rollback and immutable history checks. These source changes are not accepted until PR exact-head and post-merge checks pass.
+- Web administrator resolution/preview source and Chrome tests are included behind deployment flag NEXT_PUBLIC_ROSTER_POLICY_LIFECYCLE_READY=true, OFF by default. Existing draft/review UI remains available before migration rollout. Remaining: verified production SQL, flag activation, authenticated customer UAT, UTC/rest guard cutover, Online/Offline/Hybrid parity and Windows customer release. No paid services, no claim of completion above ~51%.
+
 ## Active delivery: GitHub-based durable development continuity (source PR pending)
 
 - Live baseline before branch: main `916cdd4c1cf1ea799bb1f46a14ff5fc789e8bbde`; 0 open PRs/issues, PR #323 shared Web/Windows monthly roster calendar merged; post-merge main exact-head 21 successful checks, 5 optional skipped and 0 failed/pending. Latest public stable Windows release separately verified as v1.0.15.
