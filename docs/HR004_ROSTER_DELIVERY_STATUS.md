@@ -5,6 +5,12 @@
 **Updated:** 2026-10-10  
 **Scope:** Shared Web, Windows SQLite, hybrid PostgreSQL/cloud authority
 
+## Verified review history rollout — 2026-10-11
+
+PR #320 merged at `607bd19ad7ac1f80404fc38b44bf2c5a6dac7b83` after 20 successful exact-head checks, 2 optional skipped, 0 failed. Post-merge main completed 21 successful checks, 5 skipped, 0 failed. Merged SQL `20261011_hr_roster_policy_review_history.sql` was applied successfully to production as migration `20261011032956`. Live RLS + FORCE RLS, append-only trigger, anonymous RPC denial, authenticated direct-DML denial, and current `staff_roster_guard()` non-use were verified. Production has 0 organizations and 0 review rows; no genuine customer UAT performed.
+
+The implementation includes versioned reviewed/rejected snapshot history, stale-client rejection, same-draft supersession reference, branch-period pending-approval overlap guard and audit. It **does not** activate approved policies. All review records are forcibly inactive, and the unchanged roster guard does not use them. Future accepted full scope includes UI approval/rejection, cancellation/revocation history, effective-dated policy authority, server enforcement, multi-branch DST/rest cross-period acceptance, Offline/Hybrid and Windows release. Full Master Vision remains approximately 51%.
+
 ## Next server review authority: versioned decisions without activation
 
 The next HR-004C source slice stores independent, immutable administrator review snapshots for roster-time policy drafts, including approved-pending-activation versus rejected decisions, explanation, exact draft revision, actor, timestamp, branch/effective dates, and historical supersession. Tenant ownership comes only from authenticated PostgreSQL membership authority; direct browser writes and anonymous RPC are denied. Rejected decisions require nonblank explanations. Distinct drafts cannot stage overlapping branch approval periods without an explicit resolution.
