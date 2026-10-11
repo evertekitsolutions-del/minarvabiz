@@ -1,3 +1,10 @@
+## HR-005 configurable holiday vs attendance read-only review — source PR pending
+
+- Verified live main `11ac47b8f6e03de503365f1f112a2a96a520be59` (source PR #338 merged, 25 passed/5 skipped/0 failed main checks), zero open PRs before this branch. GitHub remains the connected cloud coding/CI infrastructure; no paid AI, local Ollama, new cloud account or background coding service is required.
+- Reuses merged HR-005 shared Gregorian date/tenant/country/branch review, existing authorized attendance reader and gated Web Holiday Console. Shows explicit reviewed nonworking-day attendance, contradictory holiday rules, manually recorded 'holiday' with no configured nonworking rule, and missing branch scope. The last condition remains unverified rather than assuming another branch's policy.
+- Deterministic bounded pure preview; rejects invalid staff/date/duplicate staff/day, refuses other-branch and inactive/foreign tenant rule matches, never mutates attendance, holiday rules, outbox, audit, payroll or Cloud records. No new dependency, migration, paid service, production feature flag change or new installer.
+- **Pending:** PR exact-head, post-merge CI and actual authenticated Browser/Windows/Offline/Hybrid UAT. Production holiday SQL migration remains unapplied; `NEXT_PUBLIC_HR005_HOLIDAYS_READY` stays OFF. Full Master Vision stays approximately **51%**.
+
 ## HR-005 parallel calendar implementation — authenticated Web console source pending CI
 
 - Verified main after PR #336: `571c0117a8134ab45519baa5ed030082eaae9655`; PR #335 introduced shared deterministic read-only holiday calendar preview (Web/Windows compatible), PR #336 introduced audited, revisioned, tenant-RLS PostgreSQL calendar rules and migration replay evidence. PR #336 **did not deploy to hosted production**.
