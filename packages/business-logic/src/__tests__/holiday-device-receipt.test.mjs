@@ -121,4 +121,83 @@ assert.doesNotMatch(
 assert.ok(fs.readFileSync("packages/business-logic/src/index.ts","utf8")
  .includes('export * as holidayDeviceReceipt from "./holiday-device-receipt";'));
 assert.equal(typeof cache.hydrateHolidayCache,"function");
+
+// HR-005J: real signatures are necessary, but never sufficient authority to
+// replace the device cache. All versions/one-sided rows remain review-only.
+const {reviewSignedHolidayIntake}=verifier;
+const preflightInput={...trusted,packet:valid,localRules:[rule]};
+const reviewed=await reviewSignedHolidayIntake(preflightInput);
+assert.deepEqual(reviewed,{
+ snapshotId:payload.snapshotId,orgId:tenant,deviceId:device,sequence:7,
+ status:"unchanged_review_only",unchangedRules:1,discrepancies:[],
+ canHydrate:false
+});
+const localOriginal=structuredClone(preflightInput.localRules);
+assert.deepEqual(preflightInput.localRules,localOriginal);
+const localOnly={
+ ...rule,id:"a5000000-0000-4000-8000-000000000002",
+ name:"Local-only unverified day",version:3
+};
+const cloudOnly={
+ ...rule,id:"a5000000-0000-4000-8000-000000000003",
+ name:"Cloud-only unverified day",version:1
+};
+const changed=signed({...payload,rules:[{...rule,name:"Server revision",version:2},cloudOnly]});
+const conflicts=await reviewSignedHolidayIntake({
+ ...trusted,packet:changed,localRules:[rule,localOnly]
+});
+assert.equal(conflicts.status,"manual_reconciliation_required");
+assert.equal(conflicts.unchangedRules,0);
+assert.equal(conflicts.canHydrate,false);
+assert.deepEqual(conflicts.discrepancies.map(x=>[x.ruleId,x.kind]),[
+ [rule.id,"cloud_newer_review"],
+ [localOnly.id,"local_only_unverified"],
+ [cloudOnly.id,"cloud_only_unverified"]
+]);
+conflicts.discrepancies[0].kind="identical";
+assert.equal((await reviewSignedHolidayIntake({
+ ...trusted,packet:changed,localRules:[rule,localOnly]
+})).discrepancies[0].kind,"cloud_newer_review",
+ "Caller mutation cannot influence a new review");
+const sameVersionDivergence=await reviewSignedHolidayIntake({
+ ...trusted,packet:signed({...payload,rules:[{...rule,name:"Different same revision"}]}),
+ localRules:[rule]
+});
+assert.deepEqual(sameVersionDivergence.discrepancies.map(x=>x.kind),["same_version_divergence"]);
+const newerLocal=await reviewSignedHolidayIntake({
+ ...trusted,packet:valid,localRules:[{...rule,version:5}]
+});
+assert.deepEqual(newerLocal.discrepancies.map(x=>x.kind),["local_newer_unverified"]);
+const noLocal=await reviewSignedHolidayIntake({
+ ...trusted,packet:valid,localRules:[]
+});
+assert.deepEqual(noLocal.discrepancies.map(x=>x.kind),["cloud_only_unverified"]);
+const noServerRules=await reviewSignedHolidayIntake({
+ ...trusted,packet:signed({...payload,rules:[]}),localRules:[rule]
+});
+assert.deepEqual(noServerRules.discrepancies.map(x=>x.kind),["local_only_unverified"],
+ "An empty signed set is not deletion authority");
+for(const untrusted of [
+ {...preflightInput,packet:{...valid,signatureBase64:"bad"}},
+ {...preflightInput,lastAcceptedSequence:7},
+ {...preflightInput,nowMs:NOW+60001},
+ {...preflightInput,expectedDeviceId:otherDevice},
+ {...preflightInput,pinnedEd25519PublicKey:new Uint8Array(32)},
+ {...preflightInput,localRules:[{...rule,orgId:otherTenant}]},
+ {...preflightInput,localRules:[rule,rule]},
+ {...preflightInput,localRules:[{...rule,date:"2026-02-30"}]},
+ {...preflightInput,localRules:null},
+]){
+ await assert.rejects(reviewSignedHolidayIntake(untrusted),
+  /signature|replay|stale|expired|destination|organization|duplicate|holiday|snapshot|array/i);
+}
+assert.deepEqual(preflightInput.localRules,localOriginal,"Offline caller source untouched");
+assert.deepEqual(valid.payload,payload,"Signed packet untouched");
+assert.equal(cache.exportHolidayCache().length,0,"Signed intake review never hydrates shared cache");
+assert.doesNotMatch(
+ fs.readFileSync("packages/business-logic/src/holiday-device-receipt.ts","utf8"),
+ /hydrateHolidayCache\(|pgRpc\(|fetch\(|enqueueOutbox\(|assignRosterSlot\(|saveAttendance\(/,
+ "Signed intake review must remain free of Cloud, outbox, Windows writes");
+console.log("HR005J verified signed Cloud/Offline intake conflict preflight, deletion denial, no-writes PASS");
+
 console.log("HR005 real Ed25519 tenant/device/expiry/replay-bound signed holiday snapshot verification and NO-WRITE PASS");
