@@ -5,6 +5,15 @@
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
+## Verified HR-004C immutable policy reviews rollout — October 11, 2026
+
+- PR #320 merged into `main` as `607bd19ad7ac1f80404fc38b44bf2c5a6dac7b83`, after 20 successful, 2 skipped, 0 failed exact-head checks. The first failed CI was a **test privilege error** (authenticated test role was improperly reading protected `audit_logs`); corrected by verifying audit history under the isolated privileged fixture, **without relaxing production access**. Post-merge `main` CI: 21 successful, 5 skipped, 0 failed.
+- Applied the merged `20261011_hr_roster_policy_review_history.sql` migration (GitHub blob `7f26b4a3d8cea46038d1382128498f28172fa3ad`) to Supabase `wmjgefbaliuwmaxyzxkq`, `success:true`; migration history entry `20261011032956`, `hr_roster_policy_review_history`.
+- Live read-only verification: `staff_roster_policy_reviews` exists, RLS and FORCE RLS enabled, one manager/admin RLS read policy and one append-only mutation trigger. Authenticated table SELECT true, authenticated INSERT/UPDATE/DELETE false. `review_staff_roster_time_policy(uuid,integer,text,text)` is SECURITY DEFINER and authenticated executable with verified server-side admin role check; anonymous execute denied. No existing `staff_roster_guard()` review dependency. Production organizations 0, review rows 0.
+- New behavior: tenant-admin-approved-pending-activation or rejected review decisions; immutable versioned snapshot/supersession history; rejection reason, optimistic conflict, branch-period overlap guard and audit. **No active enforcement**: all snapshots have `activation_state='inactive'` CHECK, draft records remain draft-only, no UI approval flow, no actual approved policy used by rostering. No fabricated production customer UAT.
+- **Next:** authenticated manager/admin Web approval/rejection UX with secure response/tenant pinning and explicit non-activation copy; review revocation/cancellation and safe effective-dated approved-policy selection; server `staff_roster_guard()` cutover only after isolated real PG17 history/cross-branch/DST/rest and legacy tenant migration acceptance. Offline/Hybrid parity, customer UAT and a verified installer remain open.
+- Last verified stable installer `v1.0.15`. Full Master Vision still ~51%; do NOT increment from small PRs or CI alone. No new paid service.
+
 ## Active next HR-004C slice — immutable reviewed policies (pending activation)
 
 - Source baseline: main `258c971c374606ad816689f49491a5f9cdbcbc1f`; 0 open PRs/issues, all post-merge checks green, production SQL migration history through `hr_roster_utc_rest_primitives`.
