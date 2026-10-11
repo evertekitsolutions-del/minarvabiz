@@ -32,7 +32,7 @@
       "status": "in_progress",
       "capability": "HR-004 durable hybrid roster recovery",
       "title": "Recover multi-event and different-ID roster conflicts safely",
-      "nextAction": "Restore guard safety source branch fix/hr004b-restore-same-day-conflict-gate: reject absent/stale/different-ID Cloud roster peer snapshots at UI and function; verify exact-head CI, merge and post-merge CI first. Remaining independently reviewed ordered multi-event recovery/rollback, authenticated customer browser profile tests, server transactional conflict authority and Windows/Offline/Hybrid parity. Never silently replay sealed events.",
+      "nextAction": "Integrate PR #330 after #331 and verify isolated roster-slot recovery exact same-day RLS peer safety. Complete exact-head/post-merge CI, customer browser tests, multi-ID/multi-device ordered recovery with authoritative Cloud transactions and Windows SQLite/Offline/Hybrid parity. Never auto-replay.",
       "acceptance": [
         "No cross-tenant restores or automatic cloud replays",
         "Dependent-event and different-ID conflicts explicitly reviewed",

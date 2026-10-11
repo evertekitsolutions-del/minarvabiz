@@ -1,9 +1,6 @@
-## HR-004B isolated restore safety correction — pending CI
-
-- Source branch `fix/hr004b-restore-same-day-conflict-gate` based on main `81d1c8de5047a623ac7fe4b44cd5d8a919ec1d6f` (25 passed, 5 skipped, zero failed). HR-004B PR #329 read-only same-staff/day Cloud peer review is already merged.
-- Corrects a dangerous gap: former single-event restore button and function only checked same-ID revision and ignored newly available Cloud peer IDs. Now both UI and restoration authority require a *verified, exactly-one matching canonical staff/date Cloud peer snapshot* for roster-slot updates; reject unseen, different-ID, cancelled-historical, stale and cross-scope peers. Shift-template update restore still requires prior version/historical rules.
-- Restore remains local-only, exact original event payload/device ID and outbox sequence preserved, no automatic Cloud replay or overwrite; any new Cloud change during fresh review fails closed. Added negative/positive regression tests. No new paid services or database migration.
-- Independent exact-head and post-merge CI plus real authenticated browser customer UAT, durable multi-event ordered recovery and Windows/Offline/Hybrid parity remain pending. Full Master Vision remains **~51%**. Stable installer v1.0.15 unchanged.
+## HR-004B isolated restore safety correction — PR #330 rebased on merged #331
+- Match the canonical same-day RLS Cloud peer on both isolated roster button and restore authority; refuse missing/stale/foreign/different-ID peers. Existing ordered chain remains intact. Local-only; no automatic Cloud write.
+- Verify exact-head/post-merge CI. Actual customer UAT, cross-device and Windows/Hybrid parity remain open; whole Master Vision ~51%.
 
 # Minarva Biz — Authoritative Project Continuation
 
@@ -11,6 +8,13 @@
 **Repository:** `evertekitsolutions-del/minarvabiz`
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
+
+## Current HR-004B reviewed consecutive same-ID local recovery — source CI pending
+
+- Verified live main `81d1c8de5047a623ac7fe4b44cd5d8a919ec1d6f`, 25 successful / 5 skipped / 0 failed checks and zero open PRs. Branch `feat/hr004b-reviewed-same-id-chain-restore` continues after merged PR #328/#329; **does not restart** existing work.
+- Adds an explicit administrator-confirmed **local-only** reconstruction of a complete 2–25-event same-canonical-record update chain, from one device, with strictly ascending device sequence, consecutive optimistic versions, identical authorized Cloud baseline and matching sealed original events. Cloud same-staff/day peers must be unambiguous for roster slots. All changed revisions and dependent historical shift rules are validated. Uses existing domain `hydratePhase6` transactional rollback and `hydrateOutbox`, preserves encrypted originals and event identities.
+- Two fresh tenant-scoped reads, current-session/writer-generation checks, zero automatic network write or acknowledgement, strict rejection on mixed/cross-device/nonconsecutive/different-ID chains. Original encrypted vault is never deleted; explicit Retry and Cloud's audited event RPC remain separate.
+- Added Web UI guarded action and Node synthetic recovery tests. **Pending:** PR exact-head CI, post-merge CI, real authenticated customer browser UAT, Cloud race/cross-device proof, Windows SQLite/Offline/Hybrid parity, audited multi-ID dependency-order recovery. Do not claim full HR-004B complete. Full Master Vision stays ~51%; Windows stable release v1.0.15 unchanged.
 
 ## Current HR-004B Cloud same-day peer review — source PR pending
 

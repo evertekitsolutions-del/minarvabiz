@@ -8,7 +8,8 @@ import {
 } from "@minarvabiz/business-logic";
 import { isRosterHydrated } from "@/lib/data-source";
 import { checkpointUnconfirmedRosterEvents, inspectSealedRosterCheckpoint, compareSealedRosterCheckpointWithCloud } from "@/lib/roster-recovery-checkpoint";
-import { restoreReviewedSealedRosterEventToMemory, isReviewedSealedRosterRestoreCandidate } from "@/lib/roster-recovery-restore";
+import { restoreReviewedSealedRosterEventToMemory, restoreReviewedSealedRosterChainToMemory, isReviewedSealedRosterRestoreCandidate } from "@/lib/roster-recovery-restore";
+import { planReviewedSealedRosterChain } from "@/lib/roster-recovery-chain";
 import { analyzeSealedRosterDependencies, type RosterRecoveryDependencyReview } from "@/lib/roster-recovery-dependencies";
 
 /**
@@ -127,6 +128,30 @@ export default function RosterPage() {
     } catch(error) {
       setSyncProblem(error instanceof Error?error.message:String(error));
     } finally {
+      inFlight.current=false;setBusy(false);redraw();
+    }
+  }
+
+  async function restoreReviewedChainForReview(){
+    if(!sealedReview || !ready || !isRosterHydrated() ||
+       recoveryState!=="blocked" || !can("staff.manage") ||
+       !getRemoteWriter()?.upsertRosterEvent || inFlight.current)return;
+    const plan=planReviewedSealedRosterChain(sealedReview);
+    if(!plan.eligible)return;
+    if(!window.confirm(
+      "Restore exactly "+plan.eventIds.length+" original same-ID events in order into LOCAL memory only? "+
+      "All Cloud revisions, immutable IDs and encrypted backups will be checked again. "+
+      "No events will be acknowledged or sent; you must review and click Retry separately."
+    ))return;
+    inFlight.current=true;setBusy(true);setSyncProblem("");setResolutionMessage("");
+    try{
+      const restored=await restoreReviewedSealedRosterChainToMemory(sealedReview);
+      setSealedReview(null);setRecoveryDependencies(null);setRecoveryState("ready");setRecoveryCount(0);
+      setResolutionMessage(restored.eventIds.length+" original ordered recovery events restored to browser memory. "+
+        "No Cloud write occurred. Independently review the queued original events before explicit Retry.");
+    }catch(error){
+      setSyncProblem(error instanceof Error?error.message:String(error));
+    }finally{
       inFlight.current=false;setBusy(false);redraw();
     }
   }
@@ -307,11 +332,18 @@ export default function RosterPage() {
          onClick={() => void restoreSavedEventForReview()}>
          Restore reviewed original event locally (no Cloud write)
        </button>}
-      <p className="mt-2 text-sm">Only an isolated same-ID update with a matching Cloud revision
-        can be restored locally. Roster assignments additionally require a current RLS-scoped
-        staff/date snapshot containing only the identical canonical ID; missing, unverified,
-        different-ID, cancelled historical peers, or dependent events stay quarantined.
-        This read-only check does not guarantee an unchanged Cloud state or authorize automatic sync.</p>
+      {(()=>{
+        const plan=planReviewedSealedRosterChain(sealedReview);
+        return plan.eligible && <button type="button"
+          className="mt-3 rounded border px-3 py-2"
+          disabled={busy || !isRosterHydrated() || !getRemoteWriter()?.upsertRosterEvent}
+          onClick={()=>void restoreReviewedChainForReview()}>
+          Restore reviewed ordered same-ID chain locally ({plan.eventIds.length} events; no Cloud write)
+        </button>;
+      })()}
+      <p className="mt-2 text-sm">A single roster assignment must have exactly one matching RLS-scoped Cloud staff/date peer before isolated restore. Unverified, different-ID or cancelled historical peers stay quarantined. A complete, single-ID, ordered revision chain may be
+        restored locally after explicit confirmation and another fresh Cloud/backup comparison.
+        Multi-ID or nonconsecutive events stay quarantined. Cloud synchronization is never automatic.</p>
     </section>}
     {recoveryState === "unavailable" && <p role="alert">Roster recovery storage or authorization is unavailable; Web editing is disabled to prevent silent data loss.</p>}
     {unsent.length > 0 && <div role="alert" className="rounded border border-amber-300 p-3 text-sm">

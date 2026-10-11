@@ -1,8 +1,6 @@
-## HR-004B same-day Cloud peer restore authority hardening — source validation pending
+## HR-004B single-event Cloud-peer restore guard — pending CI
 
-After PR #329 added read-only staff/date peer inspection, the existing **single-event restoration path** could still be offered to a user whose Cloud snapshot contained another canonical roster ID. The branch `fix/hr004b-restore-same-day-conflict-gate` corrects this authorization gap on both browser button visibility and the underlying restoration function. A roster assignment can be restored to browser memory only with one current RLS-scoped same-ID peer row and matching staff/date/shift/branch/status/version, plus existing revision, user/org and source-backup checks. Missing or ambiguous peers, including a differently identified cancelled historical assignment, remain quarantined. Shift-template restores keep their independent historical timing checks. There is no Cloud write or automatic replay.
-
-Tests cover valid isolated same-ID restore, stale/foreign/different-ID peers, absent peer authority, mid-review Cloud change, no automatic RPC and unchanged sealed history. Actual production customer browser UAT and ordered multi-event, SQLite/Hybrid acceptance remain open; not a completed HR-004B milestone. Master Vision stays ~51%.
+An isolated roster-slot restore requires exactly one matching tenant-RLS staff/day Cloud peer on both UI and server-bound local restoration function. Deny missing, stale, foreign or different-ID peers. Retain #331 ordered chain restoration, original encrypted event backup and explicit Retry. No automatic Cloud write or paid service. Full HR004B real UAT/Offline/Hybrid/mixed-ID remains open.
 
 # HR-004 Shift/Roster — Delivery and Remaining Acceptance
 
@@ -111,6 +109,12 @@ Acceptance requires verified authorized reviewer actions, no cross-tenant restor
 The manager may read at most 25 saved pending events with an RLS-scoped authenticated comparison. Missing/hidden Cloud rows cannot be classified as absent; they never authorize a forced insert. One manager-confirmed, unconfirmed same-ID update may be restored to current *local browser memory* only when the current Cloud record is visible and exactly one revision earlier, every scoped session/writer check remains unchanged, there is no other unresolved queue and the full roster snapshot validates. This action does not contact the Cloud writer and does not erase the original encrypted vault; a further user-selected Retry is necessary. Regression tests verify denial for stale revisions, unauthorized sessions, canonical mismatches, conflicting queue and changes to historical shift timing. Exact-head CI #307 and #308 passed 19 checks each with 2 optional skipped, but this is not live customer authenticated UAT or real browser-profile disaster recovery acceptance.
 
 Remaining production acceptance: real IndexedDB browser restart/relogin/login-different-user/org tests; storage eviction and partial-write recovery; controlled multi-event dependencies/canonical same-day different-ID merging; server IANA DST/min-rest, recurrence approval and a new verified signed Windows release. Full Master Vision remains an estimated **~51%**.
+
+## HR-004B reviewed same-ID local recovery — CI pending
+
+A complete chain of 2–25 same-record UPDATE events from one device with increasing immutable sequence, consecutive versions and identical fresh authorized Cloud baselines may now be explicitly restored to LOCAL browser memory after manager confirmation. Recovery re-verifies the session, exact encrypted original IDs/device/sequences/payloads, revisioned Cloud peer snapshots and domain invariants. The original vault, original event identities, statuses and audited retry contract remain unchanged: this action does not post or acknowledge any Cloud event. Rollback restores the old memory snapshot if hydration fails.
+
+Still pending: CI, real customer/browser power-loss UAT, dependent different-ID and cross-device ordered recovery, server-atomic conflict resolution, Offline/Windows/Hybrid parity. This source slice does not complete HR-004B or increase Full Master Vision beyond ~51%.
 
 ## HR-004B ordered read-only dependency review — source PR verification pending
 
