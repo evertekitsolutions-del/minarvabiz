@@ -94,7 +94,8 @@ await assert.rejects(stageVerifiedHolidayReceipt(sqlite,{...trust,packet:signed(
  /UNIQUE|constraint|unique/i,"Snapshot UUID cannot be reused with another sequence");
 for(const packet of [
  {...signed({...next,sequence:9,snapshotId:"c0000000-0000-4000-8000-000000000004"}),signatureBase64:"bad"},
- signed({...next,sequence:9,snapshotId:"c0000000-0000-4000-8000-000000000005",rules:[{...rule,orgId:foreignOrg}]}),
+ {...signed({...next,sequence:9,snapshotId:"c0000000-0000-4000-8000-000000000005"}),
+  payload:{...next,sequence:9,snapshotId:"c0000000-0000-4000-8000-000000000005",rules:[{...rule,orgId:foreignOrg}]}},
  signed({...next,sequence:9,snapshotId:"c0000000-0000-4000-8000-000000000006",expiresAt:now-1}),
 ]){
  await assert.rejects(stageVerifiedHolidayReceipt(sqlite,{...trust,packet}),
