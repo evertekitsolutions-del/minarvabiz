@@ -123,6 +123,8 @@ export interface SealedRosterCloudComparison {
   remotePresence: "visible" | "missing-or-hidden";
   localPayload: Record<string, unknown>;
   remotePayload: Record<string, unknown> | null;
+  /** RLS-scoped same-staff/date rows. Null means NOT verified, not zero peers. */
+  sameDayCloudPeers?: Array<Record<string,unknown>> | null;
 }
 
 export async function compareSealedRosterCheckpointWithCloud(
@@ -155,6 +157,23 @@ export async function compareSealedRosterCheckpointWithCloud(
         typeof remoteRevision !== "number" ||
         !Number.isSafeInteger(remoteRevision) || remoteRevision < 1))
       throw new Error("Authorized Cloud record identity or version is invalid");
+    let sameDayCloudPeers: Array<Record<string,unknown>> | null=null;
+    if(event.aggregateType==="staff_roster_slots" && currentWriter.getRosterDayPeers) {
+      const staffId=event.payload.staffId, workDate=event.payload.workDate;
+      if(typeof staffId!=="string" || typeof workDate!=="string")
+        throw Error("Sealed assignment staff/date identity invalid; retain encrypted backup");
+      const peerRows=await currentWriter.getRosterDayPeers(staffId,workDate);
+      ensureCurrent(identity);
+      if(getRemoteWriter()!==currentWriter)
+        throw Error("Roster reader changed during same-day review");
+      if(!Array.isArray(peerRows) || peerRows.length>25 ||
+         peerRows.some(peer=>peer.staffId!==staffId||peer.workDate!==workDate||
+           !peer.id||!Number.isSafeInteger(peer.version)||peer.version<1))
+        throw Error("Authorized same-day roster peer response invalid; leave sealed backup unchanged");
+      if(new Set(peerRows.map(peer=>peer.id)).size!==peerRows.length)
+        throw Error("Duplicate authorized roster peer identities; quarantine recovery");
+      sameDayCloudPeers=peerRows.map(peer=>({...peer}));
+    }
     const localVersion = Number(event.payload.version);
     if (!Number.isSafeInteger(localVersion) || localVersion < 1)
       throw new Error("Sealed roster local revision is invalid; preserve backup for manual review");
@@ -166,6 +185,7 @@ export async function compareSealedRosterCheckpointWithCloud(
       remotePresence:remote?"visible":"missing-or-hidden",
       localPayload:{...event.payload},
       remotePayload:remote?{...remote}:null,
+      sameDayCloudPeers,
     });
   }
   ensureCurrent(identity);
