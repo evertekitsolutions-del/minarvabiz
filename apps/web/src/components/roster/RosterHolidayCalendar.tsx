@@ -25,6 +25,8 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
  const [attendanceReview,setAttendanceReview]=React.useState<
    ReturnType<typeof holidayCalendar.previewAttendanceHolidayReview>>([]);
  const [syncReview,setSyncReview]=React.useState<holidaySyncReview.HolidayRevisionReview[]>([]);
+ const [syncImpacts,setSyncImpacts]=React.useState<holidaySyncReview.HolidayCalendarImpact[]>([]);
+ const [impactReviewed,setImpactReviewed]=React.useState(false);
  const [syncReviewed,setSyncReviewed]=React.useState(false);
  const [busy,setBusy]=React.useState(false);
  const [loaded,setLoaded]=React.useState(false);
@@ -33,7 +35,7 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
  const alive=React.useRef(true),inFlight=React.useRef(false);
  React.useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
  const input="rounded border bg-transparent p-2";
- const clearPreview=()=>{setDays([]);setExceptions([]);setAttendanceReview([]);setSyncReview([]);setSyncReviewed(false)};
+ const clearPreview=()=>{setDays([]);setExceptions([]);setAttendanceReview([]);setSyncReview([]);setSyncReviewed(false);setSyncImpacts([]);setImpactReviewed(false)};
  async function load(){
    if(inFlight.current||!holidayManagementEnabled)return;
    inFlight.current=true;setBusy(true);setError("");setMessage("");
@@ -62,11 +64,22 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
      const findings=holidaySyncReview.reviewHolidayRevisionSnapshots({
        orgId:fresh.orgId,local,cloud:fresh.rules,
      });
+     // The selected date window is OPTIONAL for the revision check, but
+     // if supplied must be complete and valid before showing any impact.
+     if(Boolean(from)!==Boolean(to))
+       throw Error("Select both From and To for a bounded calendar impact comparison");
+     const impactWindow=Boolean(from&&to);
+     const impacts=impactWindow?holidaySyncReview.reviewHolidayCalendarImpact({
+       orgId:fresh.orgId,local,cloud:fresh.rules,from,to,
+       context:{orgId:fresh.orgId,branchId:branch||null,countryCode:country||null},
+     }):[];
      if(!alive.current)return;
      setRows(fresh.rules);
      clearPreview();
      setSyncReview(findings);
      setSyncReviewed(true);
+     setSyncImpacts(impacts);
+     setImpactReviewed(impactWindow);
      setMessage("Fresh authorized Cloud and local holiday backup revisions reviewed. No sync, deletion, payroll or attendance changes were performed.");
    }catch(e){
      if(alive.current){
@@ -158,10 +171,17 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
        <button type="button" className={input} disabled={busy} onClick={()=>void compareRevisions()}>
          Compare Cloud and Offline revisions
        </button>
+       <p className="text-sm">Optionally select Branch, Country, From and To below before comparing to review which effective calendar days differ. This does not authorize Cloud-to-Windows hydration.</p>
        {syncReviewed&&<div role="status" aria-label="Holiday revision comparison results">
          <p className="text-sm">{syncReview.filter(x=>x.kind!=="identical").length} entries need review out of {syncReview.length}. Every difference needs server-authorized review before reconciliation.</p>
          <ul className="space-y-1">{syncReview.filter(x=>x.kind!=="identical").map(x=><li key={x.ruleId} className="rounded border p-2 text-sm">
            {x.ruleId} · {x.kind.replaceAll("_"," ")} · Offline v{x.localVersion??"unknown"} · Cloud v{x.cloudVersion??"unknown"}
+         </li>)}</ul>
+       </div>}
+       {impactReviewed&&<div role="status" aria-label="Holiday effective calendar impact results">
+         <p className="text-sm">{syncImpacts.length} effective calendar days differ in the selected period. A day difference is only a manager review finding, never an attendance, leave or payroll change.</p>
+         <ul className="space-y-1">{syncImpacts.map(x=><li key={x.date} className="rounded border p-2 text-sm">
+           {x.date} · Offline {x.localTreatment} ({x.localHolidayIds.join(", ")||"none"}) · Cloud {x.cloudTreatment} ({x.cloudHolidayIds.join(", ")||"none"})
          </li>)}</ul>
        </div>}
      </div>
@@ -227,17 +247,17 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
        <h3 className="font-medium">Read-only calendar and roster conflict preview</h3>
        <div className="grid gap-2 md:grid-cols-2">
          <label className="grid gap-1">Branch
-           <select className={input} value={branch} onChange={e=>setBranch(e.target.value)}>
+           <select className={input} value={branch} onChange={e=>{setBranch(e.target.value);clearPreview()}}>
              <option value="">Organization-wide, no branch</option>
              {branches.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}
            </select></label>
          <label className="grid gap-1">Country context (optional)
            <input className={input} maxLength={2} placeholder="IN" value={country}
-             onChange={e=>setCountry(e.target.value.toUpperCase())}/></label>
+             onChange={e=>{setCountry(e.target.value.toUpperCase());clearPreview()}}/></label>
          <label className="grid gap-1">From
-           <input type="date" className={input} value={from} onChange={e=>setFrom(e.target.value)}/></label>
+           <input type="date" className={input} value={from} onChange={e=>{setFrom(e.target.value);clearPreview()}}/></label>
          <label className="grid gap-1">To (up to 366 days)
-           <input type="date" className={input} value={to} onChange={e=>setTo(e.target.value)}/></label>
+           <input type="date" className={input} value={to} onChange={e=>{setTo(e.target.value);clearPreview()}}/></label>
        </div>
        <button type="button" disabled={busy} className={input} onClick={preview}>
          Preview holidays, roster and attendance exceptions

@@ -55,6 +55,64 @@ assert.throws(()=>reviewHolidayRevisionSnapshots({
  orgId:"another-company",local,cloud}),/organization identity/);
 assert.throws(()=>reviewHolidayRevisionSnapshots({
  orgId,local,cloud:[...cloud,rule(1)]}),/Duplicate/);
+
+const {reviewHolidayCalendarImpact}=require("../holiday-sync-review.ts");
+const context={orgId,branchId:null,countryCode:null};
+const impactLocal=[rule(8)];
+const impactCloud=[{...rule(9),date:"2026-10-12"}];
+const impactBefore=structuredClone({impactLocal,impactCloud});
+assert.deepEqual(reviewHolidayCalendarImpact({
+ orgId,local:impactLocal,cloud:impactCloud,context,
+ from:"2026-10-10",to:"2026-10-12"
+}).map(x=>[x.date,x.localTreatment,x.cloudTreatment]),[
+ ["2026-10-11","non_working","none"],
+ ["2026-10-12","none","non_working"]
+],"Cloud/Offline policy days must be compared without automatic merge");
+assert.deepEqual({impactLocal,impactCloud},impactBefore,"Impact review must not mutate either source");
+assert.deepEqual(reviewHolidayCalendarImpact({
+ orgId,local:[rule(8)],cloud:[{...rule(8),version:2,name:"Updated label"}],
+ context,from:"2026-10-11",to:"2026-10-11"
+}),[],"A label-only revision remains visible in revision review, not a false calendar-day impact");
+assert.deepEqual(reviewHolidayRevisionSnapshots({
+ orgId,local:[rule(8)],cloud:[{...rule(8),version:2,name:"Updated label"}]
+}).map(x=>x.kind),["cloud_newer_review"]);
+const branchId="b1000000-0000-4000-8000-000000000001";
+const scoped={...rule(10),scope:"branch",branchId};
+assert.equal(reviewHolidayCalendarImpact({
+ orgId,local:[scoped],cloud:[],context,
+ from:"2026-10-11",to:"2026-10-11"
+}).length,0,"Branch rule must not leak into organization-only scope");
+assert.equal(reviewHolidayCalendarImpact({
+ orgId,local:[scoped],cloud:[],
+ context:{orgId,branchId,countryCode:null},
+ from:"2026-10-11",to:"2026-10-11"
+}).length,1,"Explicit matching branch impact must be visible");
+assert.equal(reviewHolidayCalendarImpact({
+ orgId,local:[{...rule(11),scope:"country",countryCode:"IN"}],cloud:[],
+ context:{orgId,branchId:null,countryCode:"IN"},
+ from:"2026-10-11",to:"2026-10-11"
+}).length,1);
+assert.deepEqual(reviewHolidayCalendarImpact({
+ orgId,local:[],cloud:[],context,from:"2028-02-29",to:"2028-02-29"
+}),[]);
+for(const bad of [
+ {orgId,local:impactLocal,cloud:impactCloud,context:{...context,orgId:"other"},
+ from:"2026-10-11",to:"2026-10-11"},
+ {orgId,local:[{...rule(8),orgId:"20000000-0000-4000-8000-000000000002"}],
+ cloud:[],context,from:"2026-10-11",to:"2026-10-11"},
+ {orgId,local:[rule(8),rule(8)],cloud:[],context,from:"2026-10-11",to:"2026-10-11"},
+ {orgId,local:[],cloud:[],context,from:"2026-02-30",to:"2026-03-01"},
+ {orgId,local:[],cloud:[],context,from:"2026-01-01",to:"2027-01-02"},
+]){
+ assert.throws(()=>reviewHolidayCalendarImpact(bad),/holiday|organization|duplicate/i,
+  "Invalid tenant, identity or date range must fail closed");
+}
+const impactUI=fs.readFileSync("apps/web/src/components/roster/RosterHolidayCalendar.tsx","utf8");
+assert.match(impactUI,/reviewHolidayCalendarImpact/);
+assert.match(impactUI,/Holiday effective calendar impact results/);
+assert.match(impactUI,/Boolean\(from\)!==Boolean\(to\)/);
+assert.match(impactUI,/clearPreview\(\)/);
+assert.doesNotMatch(impactUI,/applyHolidayRevision\(|automaticHolidaySync\(/);
 const source=fs.readFileSync("packages/business-logic/src/holiday-sync-review.ts","utf8");
 assert.doesNotMatch(source,/fetch\(|pgRpc|saveAttendance|writeAttendance|hydrateHolidayCache\(|enqueueOutbox|sendCloud|mergeHoliday|localStorage|setTimeout/);
 const index=fs.readFileSync("packages/business-logic/src/index.ts","utf8");

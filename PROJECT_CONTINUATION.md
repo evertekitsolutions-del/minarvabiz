@@ -1,3 +1,10 @@
+## HR-005 effective calendar day impact — source CI pending
+
+- From verified main `b0177f0e5146e9f2928614a61da2c2c5310fa7db` (PR #341 merged; 25 checks passed, 5 skipped; zero failed/pending; open PRs 0 before branch), the new bounded review reuses authenticated HR-005 Cloud rule list, offline v15 snapshot validation and deterministic branch-local shared calendar engine.
+- Existing manager Web comparison gains optional scoped From/To (at most 366 days) **effective holiday day impact** alongside exact rule-revision findings. Tenant mismatches, malformed snapshots, duplicates, invalid dates and stale selected context fail closed; changing context clears old findings. No automatic write, receipt, hydration, roster, attendance or payroll decisions.
+- Source-only: exact-head/post-merge CI and real customer UAT still required. HR-005 production SQL migration has NOT been authorized or applied; `NEXT_PUBLIC_HR005_HOLIDAYS_READY` remains OFF. Tenant/device authoritative Cloud-to-Windows hydration, audited receipts, Offline/Hybrid conflict reconciliation and statutory policy remain pending. Stable customer installer v1.0.15; Full Master Vision ~51%.
+- See `docs/HR005_EFFECTIVE_CALENDAR_IMPACT_REVIEW.md`.
+
 ## HR-005 Windows SQLite calendar review UI — source CI pending
 
 - Verified live main before branch: `6259be8425a5be0d82a03d652e737b0aae61461e` (PR #340 merged, post-merge 25 passed/5 skipped and 0 failed/pending, 0 open PR); Full Master Vision ~51%, customer Windows installer still v1.0.15.

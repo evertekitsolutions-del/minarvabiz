@@ -1,3 +1,10 @@
+## HR-005 effective calendar day impact — source CI pending
+
+- From verified main `b0177f0e5146e9f2928614a61da2c2c5310fa7db` (PR #341 merged; 25 checks passed, 5 skipped; zero failed/pending; open PRs 0 before branch), the new bounded review reuses authenticated HR-005 Cloud rule list, offline v15 snapshot validation and deterministic branch-local shared calendar engine.
+- Existing manager Web comparison gains optional scoped From/To (at most 366 days) **effective holiday day impact** alongside exact rule-revision findings. Tenant mismatches, malformed snapshots, duplicates, invalid dates and stale selected context fail closed; changing context clears old findings. No automatic write, receipt, hydration, roster, attendance or payroll decisions.
+- Source-only: exact-head/post-merge CI and real customer UAT still required. HR-005 production SQL migration has NOT been authorized or applied; `NEXT_PUBLIC_HR005_HOLIDAYS_READY` remains OFF. Tenant/device authoritative Cloud-to-Windows hydration, audited receipts, Offline/Hybrid conflict reconciliation and statutory policy remain pending. Stable customer installer v1.0.15; Full Master Vision ~51%.
+- See `docs/HR005_EFFECTIVE_CALENDAR_IMPACT_REVIEW.md`.
+
 ## HR-005 Windows offline read-only holiday review — branch pending CI
 
 Current pre-branch verified main `6259be8425a5be0d82a03d652e737b0aae61461e`; PR #340 exact-head/post-merge checks green. Reuse Windows SQLite v15 read-only holiday cache and shared calendar/roster/attendance preview. Add manager-only display inside existing Windows Roster Planner. No active Cloud holiday migration, replay, automatic edits, paid providers, or new stable installer. Full Master Vision ~51% until customer acceptance; verify CI and then real installed Windows/Cloud policy authority. See `docs/HR005_DESKTOP_OFFLINE_HOLIDAY_REVIEW.md`.
