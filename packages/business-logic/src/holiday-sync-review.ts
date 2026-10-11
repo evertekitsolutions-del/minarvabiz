@@ -1,5 +1,5 @@
 import { validateHolidayCache } from "./holiday-cache";
-import type { HolidayRule } from "./holiday-calendar";
+import { previewHolidayCalendar, type HolidayCalendarContext, type HolidayDayReview, type HolidayRule } from "./holiday-calendar";
 
 /**
  * HR-005 conservative offline/Cloud *read-only* reconciliation.
@@ -68,4 +68,57 @@ export function reviewHolidayRevisionSnapshots(input: {
       cloudVersion:cloudRow?.version??null});
   }
   return findings;
+}
+
+/**
+ * HR-005 read-only calendar impact preflight for a human reconciliation.
+ * A revision mismatch is never an instruction to hydrate, erase or replay.
+ * The caller must independently authenticate and authorize both sources.
+ * This function only compares the effective branch-local calendar over a
+ * bounded date range; it does not make pay/attendance/roster decisions.
+ */
+export interface HolidayCalendarImpact {
+  date: string;
+  localTreatment: HolidayDayReview["treatment"];
+  cloudTreatment: HolidayDayReview["treatment"];
+  localHolidayIds: string[];
+  cloudHolidayIds: string[];
+}
+
+export function reviewHolidayCalendarImpact(input: {
+  orgId: string;
+  local: readonly HolidayRule[];
+  cloud: readonly HolidayRule[];
+  from: string;
+  to: string;
+  context: HolidayCalendarContext;
+}): HolidayCalendarImpact[] {
+  if (!input || !uuid(input.orgId) || !input.context ||
+      input.context.orgId !== input.orgId)
+    throw Error("Verified matching organization context required for holiday calendar impact review");
+
+  const local = validateHolidayCache(input.local);
+  const cloud = validateHolidayCache(input.cloud);
+  for (const row of [...local, ...cloud])
+    if (row.orgId !== input.orgId)
+      throw Error("Holiday calendar impact refused across organizations");
+
+  // The shared calendar engine enforces real local civil dates, a maximum
+  // of 366 inclusive days and explicit branch/country scope on both sides.
+  const params = {from: input.from, to: input.to, context: input.context};
+  const localDays = previewHolidayCalendar({...params, rules: local});
+  const cloudDays = previewHolidayCalendar({...params, rules: cloud});
+  const impacts: HolidayCalendarImpact[] = [];
+  for (let i = 0; i < localDays.length; i++) {
+    const lhs = localDays[i], rhs = cloudDays[i];
+    const localHolidayIds = lhs.holidays.map(row => row.id).sort();
+    const cloudHolidayIds = rhs.holidays.map(row => row.id).sort();
+    if (lhs.treatment !== rhs.treatment ||
+        localHolidayIds.join(",") !== cloudHolidayIds.join(","))
+      impacts.push({
+        date: lhs.date, localTreatment: lhs.treatment,
+        cloudTreatment: rhs.treatment, localHolidayIds, cloudHolidayIds
+      });
+  }
+  return impacts;
 }
