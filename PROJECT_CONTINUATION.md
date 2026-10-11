@@ -1,3 +1,10 @@
+## HR-004B same-origin concurrent restore exclusion — source verification pending
+
+- From verified main `f4e122fb0ce451b5998e32d69e7fd6b8e507e68e` (PR #332 merged; exact-head 25 passed/5 optional skipped), branch `feat/hr004b-cross-tab-reviewed-restore-lock` adds native Web Locks exclusive/ifAvailable protection around both existing explicit **local-only** reviewed single-event and same-ID-chain restore flows, including fresh scoped Cloud/vault reads and memory/outbox hydration.
+- A busy other browser tab or unavailable Web Locks fails closed without replay, destructive vault mutation or Cloud writes. Existing IndexedDB CAS remains unchanged. No third-party package, paid service, production migration, customer approval, multi-ID recovery permission or new UI restore path.
+- Node regression covers contention, unsupported API and error release alongside existing reviewed-restore tests. **Before acceptance:** verify PR exact-head and post-merge CI; real multi-tab Chrome/Windows UAT, cross-device and server-audited transactions/rollback, revoked sessions, eviction recovery and Offline/Hybrid parity remain pending. A browser lock is **not** cross-device or authoritative Cloud conflict resolution.
+- Full Master Vision remains **~51%**; latest customer installer `v1.0.15` unchanged.
+
 ## HR-004B isolated restore safety correction — PR #330 rebased on merged #331
 - Match the canonical same-day RLS Cloud peer on both isolated roster button and restore authority; refuse missing/stale/foreign/different-ID peers. Existing ordered chain remains intact. Local-only; no automatic Cloud write.
 - Verify exact-head/post-merge CI. Actual customer UAT, cross-device and Windows/Hybrid parity remain open; whole Master Vision ~51%.

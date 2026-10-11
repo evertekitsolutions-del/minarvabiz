@@ -10,6 +10,7 @@ import {
   type LocalOutboxEvent, workforceRoster,
 } from "@minarvabiz/business-logic";
 import { planReviewedSealedRosterChain } from "./roster-recovery-chain";
+import { withExclusiveRosterRecoveryTabLock } from "./roster-recovery-tab-lock";
 import {
   compareSealedRosterCheckpointWithCloud, inspectSealedRosterCheckpoint,
   type SealedRosterCloudComparison,
@@ -70,7 +71,7 @@ export function isReviewedSealedRosterRestoreCandidate(
  * The original ID/device sequence/payload are preserved. If Cloud has advanced
  * since the manager reviewed the data, a new explicit conflict review is needed.
  */
-export async function restoreReviewedSealedRosterEventToMemory(
+async function restoreReviewedSealedRosterEventUnlocked(
   approved: ApprovedReview,
 ): Promise<{eventId: string; aggregateType: SealedRosterCloudComparison["aggregateType"]}> {
   const token=getSessionToken();
@@ -172,7 +173,7 @@ export async function restoreReviewedSealedRosterEventToMemory(
  * Canonical identity, device sequence, dependent shifts and date-peer
  * ambiguities fail closed. Does not grant authority for other multi-ID batches.
  */
-export async function restoreReviewedSealedRosterChainToMemory(
+async function restoreReviewedSealedRosterChainUnlocked(
   approved: ApprovedReview,
 ):Promise<{eventIds:string[];finalVersion:number}> {
   const plan=planReviewedSealedRosterChain(approved);
@@ -264,4 +265,21 @@ export async function restoreReviewedSealedRosterChainToMemory(
   // No Cloud call or checkpoint mutation. The original sealed events remain
   // byte-for-byte encrypted and the explicit retry path is separately audited.
   return {eventIds:[...plan.eventIds],finalVersion:plan.finalVersion};
+}
+
+/**
+ * Browser-wide, fail-closed coordination: an approved review is still re-read
+ * under the exclusive same-origin lock. The Web Lock is NOT Cloud authority,
+ * a durable claim, or cross-device reconciliation.
+ */
+export function restoreReviewedSealedRosterEventToMemory(
+  approved: ApprovedReview,
+): Promise<{eventId:string;aggregateType:SealedRosterCloudComparison["aggregateType"]}> {
+  return withExclusiveRosterRecoveryTabLock(() => restoreReviewedSealedRosterEventUnlocked(approved));
+}
+
+export function restoreReviewedSealedRosterChainToMemory(
+  approved: ApprovedReview,
+): Promise<{eventIds:string[];finalVersion:number}> {
+  return withExclusiveRosterRecoveryTabLock(() => restoreReviewedSealedRosterChainUnlocked(approved));
 }

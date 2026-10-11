@@ -3,6 +3,15 @@ import fs from "node:fs";
 import Module from "node:module";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url),ts=require("typescript");
+/** Model Chromium's Web Locks contract; the separate contention test asserts exclusion. */
+Object.defineProperty(globalThis,"navigator",{configurable:true,value:{
+  locks:{request:async(name,options,callback)=>{
+    assert.equal(options.mode,"exclusive");
+    assert.equal(options.ifAvailable,true);
+    return callback({name,mode:"exclusive"});
+  }},
+}});
+
 require.extensions[".ts"]=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,"utf8"),{
   compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}
 }).outputText,f);
