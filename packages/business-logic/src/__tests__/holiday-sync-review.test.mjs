@@ -4,7 +4,8 @@ import {createRequire} from "node:module";
 const require=createRequire(import.meta.url),ts=require("typescript");
 require.extensions[".ts"]=(module,file)=>module._compile(ts.transpileModule(
  fs.readFileSync(file,"utf8"),{fileName:file,compilerOptions:{
- module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true
+ module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
+ esModuleInterop:true,inlineSourceMap:true,inlineSources:true
  }}).outputText,file);
 const {reviewHolidayRevisionSnapshots}=require("../holiday-sync-review.ts");
 const orgId="10000000-0000-4000-8000-000000000001";
