@@ -22,7 +22,7 @@ for (const kind of ["pre-restore", "pre-update"]) {
 assert.match(main, /function backupIdFor/);
 assert.match(main, /function resolveBackupId/);
 assert.match(main, /backupDestinationDir\(\)/);
-assert.match(main, /await createLocalBackup\("manual"\)/);
+assert.match(main, /sqliteGate\.reserve\("backup", \(\) => createLocalBackup\("manual"\)\)/);
 assert.match(main, /await createLocalBackup\("automatic"\)/);
 assert.match(main, /await createLocalBackup\("pre-restore"\)/);
 assert.match(main, /await createLocalBackup\("pre-update"\)/);
