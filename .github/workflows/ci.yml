@@ -24,6 +24,8 @@ jobs:
           cache: pnpm
       - name: Verify GitHub Actions hardening
         run: node scripts/github-actions-hardening-smoke.mjs
+      - name: Verify durable development continuity without external API charges
+        run: node scripts/development-continuity-contract-smoke.mjs
       - name: Verify SBOM and dependency-license workflow contract
         run: node scripts/sbom-license-workflow-smoke.mjs
       - name: Verify repository licensing and compliance declaration

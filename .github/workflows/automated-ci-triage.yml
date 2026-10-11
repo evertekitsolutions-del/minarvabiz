@@ -8,6 +8,8 @@ on:
       - Windows Deep Installed Smoke
       - Final Release Audit
     types: [completed]
+  schedule:
+    - cron: '37 2 * * *'
 
 permissions:
   actions: read
@@ -16,7 +18,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: ci-triage-${{ github.event.workflow_run.id }}
+  group: ${{ (github.event_name == 'schedule' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main')) && 'minarva-continuity-main' || format('ci-triage-{0}', github.event.workflow_run.id) }}
   cancel-in-progress: false
 
 jobs:
@@ -56,4 +58,62 @@ jobs:
             gh issue comment "$existing" --body "$body"
           else
             gh issue create --title "$title" --body "$body"
+          fi
+
+  continuity:
+    name: Durable main and backlog checkpoint
+    if: >-
+      ${{
+        github.event_name == 'schedule' ||
+        (
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.repository.full_name == github.repository &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main'
+        )
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Refresh one durable issue using GitHub API only
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Never checkout or execute repository code under this issues:write token.
+          MAIN_SHA="$(gh api "repos/$GH_REPO/branches/main" --jq '.commit.sha')"
+          [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid main SHA' >&2; exit 1; }
+          QUEUE="$(gh api "repos/$GH_REPO/contents/docs/DEVELOPMENT_TASK_QUEUE.json?ref=main" --jq '.content' | tr -d '\n' | base64 --decode)"
+          printf '%s' "$QUEUE" | jq -e '.schemaVersion == 1 and .repository == "evertekitsolutions-del/minarvabiz" and (.tasks | type == "array" and length > 0) and all(.tasks[]; .status == "ready" or .status == "blocked" or .status == "in_progress" or .status == "verified")' >/dev/null
+          PERCENT="$(printf '%s' "$QUEUE" | jq -r '.fullMasterVisionEstimatedPercent')"
+          NEXT="$(printf '%s' "$QUEUE" | jq -r '[.tasks[] | select(.status == "ready" or .status == "in_progress")] | sort_by(.priority) | .[0] | if . == null then "No unblocked task; review dependency gates" else .id + " — " + .title end')"
+          TASKS="$(printf '%s' "$QUEUE" | jq -r '.tasks | sort_by(.priority) | .[] | "- " + .id + " (" + .status + "): " + .title + " — " + .nextAction')"
+          CHECKS="$(gh api "repos/$GH_REPO/commits/$MAIN_SHA/check-runs?per_page=100")"
+          read -r TOTAL PASSED SKIPPED FAILED PENDING <<< "$(printf '%s' "$CHECKS" | jq -r '[(.check_runs | length), ([.check_runs[] | select(.conclusion == "success")] | length), ([.check_runs[] | select(.conclusion == "skipped")] | length), ([.check_runs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "action_required")] | length), ([.check_runs[] | select(.conclusion == null)] | length)] | @tsv')"
+          OPEN_PRS="$(gh pr list --base main --state open --limit 100 --json number --jq 'map("#" + (.number | tostring)) | join(", ")')"
+          [[ -n "$OPEN_PRS" ]] || OPEN_PRS='none'
+          LATEST="$(gh release view --json tagName --jq '.tagName' 2>/dev/null || true)"
+          [[ -n "$LATEST" ]] || LATEST='unverified'
+          CHECK_STATUS='Pending/unverified: do not claim green or merge from this snapshot'
+          if [[ "$FAILED" -gt 0 ]]; then
+            CHECK_STATUS='FAILED: inspect logs, root-cause fix and repeat tests'
+          elif [[ "$TOTAL" -gt 0 && "$PENDING" -eq 0 ]]; then
+            CHECK_STATUS='Visible checks completed, not customer production UAT'
+          fi
+          TITLE='Minarva Biz — Development Continuity Dashboard'
+          BODY="$(printf '%s\n'             '# Minarva Biz — Durable Development Checkpoint'             ''             'Automatically updated from GitHub main. This is a checkpoint monitor, NOT an autonomous coding agent.'             ''             "**Main SHA:** $MAIN_SHA"             "**Open PRs targeting main:** $OPEN_PRS"             "**Visible main checks:** $PASSED passed, $SKIPPED skipped, $FAILED failed/cancelled, $PENDING pending (of $TOTAL)"             "**Check assessment:** $CHECK_STATUS"             "**Latest GitHub release:** $LATEST (source CI artifact does not mean customer installer release)"             "**Full Master Vision estimate:** ~$PERCENT% (never automatically increased by PR counts)"             ''             '## Next task'             "$NEXT"             ''             '## Source-backed feature queue'             "$TASKS"             ''             '## Resume after connection/chat interruption'             '1. Verify live main SHA, open PRs, CI runs and failed logs; do not trust an old chat SHA.'             '2. Read PROJECT_CONTINUATION.md, docs/MASTER_PRODUCT_PLAN.md, docs/CAPABILITY_REGISTRY.md, docs/AI_CAPABILITY_REGISTRY.md, docs/ENGINEERING_REUSE_POLICY.md, docs/MULTI_MODEL_REVIEW_GOVERNANCE.md and docs/DEVELOPMENT_TASK_QUEUE.json.'             '3. Finish an open PR exact-head mandatory checks before starting another milestone.'             '4. Reuse existing code and licensed OSS first, test, merge only after green gates, verify post-merge and distinguish released vs source-only.'             '5. Change task state only after acceptance evidence. Review whole-product progress independently; preserve offline, hybrid, audit, customer UAT and zero-paid constraints.'             ''             'No code writing, automatic merges, migrations, paid services or customer data mutations occur in this workflow.')"
+          INDEX="$(gh issue list --state all --limit 500 --json number,title,state)"
+          MATCHES="$(printf '%s' "$INDEX" | jq '[.[] | select(.title == "Minarva Biz — Development Continuity Dashboard")] | length')"
+          if [[ "$MATCHES" -gt 1 ]]; then echo 'Duplicate dashboard issues: manual review required' >&2; exit 1; fi
+          if [[ "$MATCHES" -eq 1 ]]; then
+            ISSUE="$(printf '%s' "$INDEX" | jq -r '.[] | select(.title == "Minarva Biz — Development Continuity Dashboard") | .number')"
+            ISSUE_STATE="$(printf '%s' "$INDEX" | jq -r '.[] | select(.title == "Minarva Biz — Development Continuity Dashboard") | .state')"
+            if [[ "$ISSUE_STATE" != 'OPEN' ]]; then echo 'Dashboard was closed by owner; not reopening'; exit 0; fi
+            gh issue edit "$ISSUE" --body "$BODY"
+            echo "Updated dashboard issue #$ISSUE"
+          else
+            if [[ "$(printf '%s' "$INDEX" | jq 'length')" -eq 500 ]]; then echo 'Issue search saturated, refuse duplicate' >&2; exit 1; fi
+            gh issue create --title "$TITLE" --body "$BODY"
           fi

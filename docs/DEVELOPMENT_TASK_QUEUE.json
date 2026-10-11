@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "project": "Minarva Biz",
+  "repository": "evertekitsolutions-del/minarvabiz",
+  "fullMasterVisionEstimatedPercent": 51,
+  "progressBasis": "Human-reviewed full Master Vision evidence; never increment from PR count, tests or CI alone",
+  "paidServicePolicy": "No mandatory paid infrastructure before a review after approximately 25 paying customers; review is not automatic purchase approval",
+  "tasks": [
+    {
+      "id": "HR-004C-REVIEW-LIFECYCLE",
+      "priority": 1,
+      "status": "ready",
+      "capability": "HR-004 shift roster governance",
+      "title": "Secure reviewed-policy revocation and effective-dated policy selection",
+      "nextAction": "Audit merged #320/#322 review authority and Web UI; implement immutable revocation/cancellation and valid effective-dated selection with real PostgreSQL tests",
+      "acceptance": [
+        "Existing approved-pending-activation reviews cannot silently become active or disappear",
+        "Explicit manager/admin authorization and tenant RLS with audit trail",
+        "Stale revision, overlapping periods and retroactive conflicts fail closed",
+        "Online, Offline Windows and Hybrid implications verified",
+        "All exact-head and post-merge checks green; production customer UAT not fabricated"
+      ],
+      "references": [
+        "docs/HR004_ROSTER_DELIVERY_STATUS.md",
+        "docs/MASTER_PRODUCT_PLAN.md"
+      ]
+    },
+    {
+      "id": "HR-004B-RECOVERY",
+      "priority": 2,
+      "status": "ready",
+      "capability": "HR-004 durable hybrid roster recovery",
+      "title": "Recover multi-event and different-ID roster conflicts safely",
+      "nextAction": "Reuse sealed IndexedDB checkpoint, revision/receipt authority and SQLite recovery; add ordered dependent-event review and real browser-profile UAT",
+      "acceptance": [
+        "No cross-tenant restores or automatic cloud replays",
+        "Dependent-event and different-ID conflicts explicitly reviewed",
+        "Revoked sessions, concurrent tabs, eviction and partial-write failures tested",
+        "Real Web, Windows SQLite and PostgreSQL integration verification"
+      ],
+      "references": [
+        "docs/HR004_ROSTER_DELIVERY_STATUS.md"
+      ]
+    },
+    {
+      "id": "HR-004C-GUARD-CUTOVER",
+      "priority": 3,
+      "status": "blocked",
+      "capability": "HR-004 roster timezone/rest enforcement",
+      "title": "Activate approved server UTC/DST overlap and minimum-rest guard",
+      "nextAction": "After reviewed-policy lifecycle approval, integrate existing PostgreSQL UTC/rest validators into staff_roster_guard with additive reversible migration",
+      "acceptance": [
+        "Real PG17 tests for DST gaps/folds, overnight, cross-branch and legacy history",
+        "Unauthorized or ambiguous policies fail closed",
+        "Rollback and history invariants verified",
+        "Online, Offline, Hybrid and customer UAT tracked"
+      ],
+      "references": [
+        "docs/HR004_ROSTER_DELIVERY_STATUS.md"
+      ]
+    },
+    {
+      "id": "HR-004D-RECURRING",
+      "priority": 4,
+      "status": "blocked",
+      "capability": "HR-004 recurring roster scheduling",
+      "title": "Reviewed recurring roster batches with atomic approvals",
+      "nextAction": "Reuse monthly recurrence preview and audited roster RPC; implement approval, atomic batch, timezone/rest, conflict and rollback after guard authority",
+      "acceptance": [
+        "No automatic writes from preview or partial batch commits",
+        "Tenant-authorized approval/rejection with audit",
+        "Online/Offline/Hybrid parity and customer UAT",
+        "New Windows release separately verified"
+      ],
+      "references": [
+        "docs/HR004_RECURRING_ROSTER_REVIEW.md"
+      ]
+    },
+    {
+      "id": "HR-005-HOLIDAYS",
+      "priority": 5,
+      "status": "ready",
+      "capability": "HR-005 country and company holiday calendars",
+      "title": "Complete holidays policy and attendance/roster integration",
+      "nextAction": "Search existing Minarva code and license-compatible OSS first; implement holiday authority and offline parity",
+      "acceptance": [
+        "Tenant/country/branch holiday scopes and history",
+        "Attendance and payroll/roster integration without statutory assumptions",
+        "Offline/Online/Hybrid and backup validation",
+        "Real browser/Windows UAT"
+      ],
+      "references": [
+        "docs/MASTER_PRODUCT_PLAN.md",
+        "docs/CAPABILITY_REGISTRY.md"
+      ]
+    }
+  ]
+}
