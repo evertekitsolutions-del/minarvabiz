@@ -106,6 +106,12 @@ The manager may read at most 25 saved pending events with an RLS-scoped authenti
 
 Remaining production acceptance: real IndexedDB browser restart/relogin/login-different-user/org tests; storage eviction and partial-write recovery; controlled multi-event dependencies/canonical same-day different-ID merging; server IANA DST/min-rest, recurrence approval and a new verified signed Windows release. Full Master Vision remains an estimated **~51%**.
 
+## HR-004B ordered read-only dependency review — source PR verification pending
+
+The existing authenticated, RLS-scoped sealed-browser recovery comparison is extended with immutable event type, device and sequence metadata; **no new Cloud write/read scopes** are granted. A pure, zero-I/O dependency analyzer flags same-canonical-ID event chains, shift-to-roster-assignment prerequisites, same-staff/day assignments with **different IDs**, duplicate device sequence, Cloud-hidden or incompatible revisions, and truncated bounded (25 event) views. The roster Web UI displays the report while retaining the encrypted backup and existing strict one-isolated-event restoration gate.
+
+This is **not** multi-event auto-recovery or cross-device reconciliation: current Cloud search by canonical ID alone cannot prove there are no hidden/different-ID same-day conflicts, an IndexedDB eviction can still destroy local sealed bytes, and no user action is added that discards/sends/restores these multi-event records. Real authenticated profile UAT, explicit reviewed ordered import with durable checkpoints and server same-day collision authority, Online/Offline/Windows SQLite/Hybrid parity and conflict audit remain pending. New test suite exercises dependencies, ordering ambiguity, fail-closed malformed data and no write/replay behavior. Whole Master Vision stays ~51%.
+
 ## Browser vault race-safety acceptance — #310–#312 (2026-10-10)
 
 - #310 uses pinned Chrome in GitHub CI and **actual TypeScript vault source**, not just mocked IndexedDB storage. Confirms AES-GCM key non-extractability, browser page reload/decryption, organization isolation, ciphertext tamper rejection and scoped erase. These are engine/browser smoke results, **not** a real authenticated customer production UAT.

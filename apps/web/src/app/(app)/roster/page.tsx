@@ -9,6 +9,7 @@ import {
 import { isRosterHydrated } from "@/lib/data-source";
 import { checkpointUnconfirmedRosterEvents, inspectSealedRosterCheckpoint, compareSealedRosterCheckpointWithCloud } from "@/lib/roster-recovery-checkpoint";
 import { restoreReviewedSealedRosterEventToMemory } from "@/lib/roster-recovery-restore";
+import { analyzeSealedRosterDependencies, type RosterRecoveryDependencyReview } from "@/lib/roster-recovery-dependencies";
 
 /**
  * Authorized browser roster editor. Mutations stay on the shared domain/outbox,
@@ -26,6 +27,7 @@ export default function RosterPage() {
   const [sealedReview, setSealedReview] = React.useState<
     Awaited<ReturnType<typeof compareSealedRosterCheckpointWithCloud>> | null
   >(null);
+  const [recoveryDependencies,setRecoveryDependencies] = React.useState<RosterRecoveryDependencyReview|null>(null);
   const [hydrationEpoch, setHydrationEpoch] = React.useState(0);
   const [review, setReview] = React.useState<
     Awaited<ReturnType<typeof phase6Store.reviewWorkforceRosterConflict>> | null
@@ -43,9 +45,9 @@ export default function RosterPage() {
       const detail = (event as CustomEvent<{ok?:boolean; message?:string}>).detail;
       if (detail?.ok) {
         setReady(getRuntimeMode() === "demo" || isRosterHydrated());
-        setProblem(""); setSyncProblem(""); setReview(null); setResolutionMessage(""); setRecoveryState("checking"); setSealedReview(null); setHydrationEpoch(n=>n+1); redraw();
+        setProblem(""); setSyncProblem(""); setReview(null); setResolutionMessage(""); setRecoveryState("checking"); setSealedReview(null);setRecoveryDependencies(null); setHydrationEpoch(n=>n+1); redraw();
       } else {
-        setReady(false); setReview(null); setRecoveryState("checking"); setSealedReview(null); setHydrationEpoch(n=>n+1);
+        setReady(false); setReview(null); setRecoveryState("checking"); setSealedReview(null);setRecoveryDependencies(null); setHydrationEpoch(n=>n+1);
         setProblem(detail?.message || "Roster cloud hydration failed");
       }
     };
@@ -91,10 +93,12 @@ export default function RosterPage() {
     if (!ready || !isRosterHydrated() || recoveryState !== "blocked" ||
         !can("staff.manage") || !getRemoteWriter()?.getRosterShift ||
         !getRemoteWriter()?.getRosterSlot || inFlight.current) return;
-    inFlight.current = true; setBusy(true); setSyncProblem(""); setSealedReview(null);
+    inFlight.current = true; setBusy(true); setSyncProblem(""); setSealedReview(null);setRecoveryDependencies(null);
     try {
       // Only read a fresh RLS-scoped snapshot. Never hydrate queue or auto-RPC.
       const report = await compareSealedRosterCheckpointWithCloud();
+      const dependencies=analyzeSealedRosterDependencies(report);
+      setRecoveryDependencies(dependencies);
       setSealedReview(report);
     } catch (error) {
       setSyncProblem(error instanceof Error ? error.message : String(error));
@@ -263,6 +267,25 @@ export default function RosterPage() {
       <p className="text-sm">Read-only comparison of {sealedReview.comparisons.length} of {sealedReview.total} event(s).
         Missing or hidden records cannot be distinguished under RLS. No events were imported, discarded, sent or acknowledged.
         The saved encrypted backup is unchanged; reviewed restoration needs a separate explicit decision.</p>
+      {recoveryDependencies&&<div className="space-y-2 rounded border p-3 text-sm"
+        aria-label="Read-only recovery dependency and conflict analysis">
+        <h4 className="font-semibold">Ordered dependency and different-ID conflict review</h4>
+        <p>Checked {recoveryDependencies.reviewedCount} of {recoveryDependencies.total} encrypted events.
+          This provisional read-only report cannot prove remote same-day uniqueness,
+          identify RLS-hidden rows, or authorize automatic replay, overwrite or discard.</p>
+        {!recoveryDependencies.completeBatch&&<p role="alert">
+          More sealed events exist beyond the bounded comparison. No recovery decision is safe from this partial batch.
+        </p>}
+        {recoveryDependencies.findings.length===0
+          ? <p>No relationships detected in this bounded snapshot. Cloud uniqueness and replay safety are not established.</p>
+          : <ul className="list-disc space-y-2 pl-5">
+            {recoveryDependencies.findings.map(finding=><li key={finding.key}>
+              <strong>{finding.kind.replace(/-/g," ")}</strong> · {finding.message}
+              {finding.eventIds.length>0&&<p className="break-all">Affected events: {finding.eventIds.join(", ")}</p>}
+            </li>)}
+          </ul>}
+        <p>Multiple-event restores remain disabled pending explicit server-backed reconciliation and real customer UAT.</p>
+      </div>}
       <div className="space-y-3">
         {sealedReview.comparisons.map(item => <article key={item.eventId} className="rounded border p-2 text-sm">
           <p>Event {item.eventId} · {item.aggregateType} · local {item.localStatus}</p>

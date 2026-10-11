@@ -113,6 +113,10 @@ export interface SealedRosterCloudComparison {
   eventId: string;
   aggregateId: string;
   aggregateType: RosterRecoveryEvent["aggregateType"];
+  /** Immutable device sequence only for read-only dependency review. */
+  eventType: RosterRecoveryEvent["eventType"];
+  deviceId: string;
+  sequence: number;
   localStatus: "pending" | "failed";
   localVersion: number;
   remoteVersion: number | null;
@@ -156,6 +160,7 @@ export async function compareSealedRosterCheckpointWithCloud(
       throw new Error("Sealed roster local revision is invalid; preserve backup for manual review");
     comparisons.push({
       eventId:event.id, aggregateId:event.aggregateId, aggregateType:event.aggregateType,
+      eventType:event.eventType,deviceId:event.deviceId,sequence:event.sequence,
       localStatus:event.status as "pending"|"failed",
       localVersion,remoteVersion:remoteRevision ?? null,
       remotePresence:remote?"visible":"missing-or-hidden",

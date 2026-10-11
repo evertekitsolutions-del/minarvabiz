@@ -29,10 +29,10 @@
     {
       "id": "HR-004B-RECOVERY",
       "priority": 2,
-      "status": "ready",
+      "status": "in_progress",
       "capability": "HR-004 durable hybrid roster recovery",
       "title": "Recover multi-event and different-ID roster conflicts safely",
-      "nextAction": "Reuse sealed IndexedDB checkpoint, revision/receipt authority and SQLite recovery; add ordered dependent-event review and real browser-profile UAT",
+      "nextAction": "PR #328 adds sealed-batch read-only dependencies, same-ID chains and possible different-ID staff/day conflicts. Verify exact-head/Post-merge CI; next implement scoped server-authoritative same-day different-ID discovery and explicitly reviewed ordered restore with rollback, actual authenticated Chrome-profile restart/eviction UAT, Windows SQLite/Hybrid parity. Never auto-replay a sealed batch.",
       "acceptance": [
         "No cross-tenant restores or automatic cloud replays",
         "Dependent-event and different-ID conflicts explicitly reviewed",
