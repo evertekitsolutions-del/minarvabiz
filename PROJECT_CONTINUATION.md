@@ -1,3 +1,9 @@
+## HR-005K server-only Ed25519 receipt signing kernel — source CI pending
+
+- Latest verified main before branch: `f94fc98012b0efeeae271d41aea7680d862582fd` (#347 merged), exact-head 19 passed/2 skipped and postmerge 26 passed/6 skipped after retry of a transient Windows pnpm runner failure; zero open PRs. Full Master Vision ~51%; customer installer v1.0.15.
+- New isolated `apps/web/src/lib/hr005-holiday-receipt-signing.server.ts` reuses already merged shared canonical snapshot signing bytes and Ed25519 device verifier. Rejects wrong signing key vs pinned public key, malformed tenant snapshot and clock; validates real crypto roundtrip via shared WebCrypto Windows verifier. No env secrets read, API route, payments, production Cloud/SQLite/roster/attendance changes, holiday feature activation, or new dependencies.
+- This is a **signing kernel, NOT authenticated issuance**. Required before any production use: independent server session/tenant/device authorization and RLS, device registration/revocation, audited transactional receipt/sequence ledger, key rotation, complete authorized snapshot selection, rate limiting, Windows atomic sync and rollback, Offline/Hybrid cross-device conflicts, statutory policy and real customer UAT. Hosted HR-005 migration NOT applied; flag `NEXT_PUBLIC_HR005_HOLIDAYS_READY` OFF. Details: `docs/HR005_SERVER_SIGNING_KERNEL.md`.
+
 ## HR-005J signature-bound Offline intake review — source CI pending
 
 - After PR #343 signed Ed25519 device receipts, PR #345 read-only staff impact and #346 GitHub source agent foundation all merged, verified main `70930867d6e28b8cdf6e9ebd27589f175e23fb41` with 25 successful/5 skipped postmerge checks and zero open PRs. Full Master Vision ~51%; last customer Windows release v1.0.15.
