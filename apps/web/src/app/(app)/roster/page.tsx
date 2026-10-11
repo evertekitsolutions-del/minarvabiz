@@ -2,6 +2,7 @@
 import * as React from "react";
 import { RosterPolicyDrafts } from "@/components/roster/RosterPolicyDrafts";
 import { RosterPolicyReviews } from "@/components/roster/RosterPolicyReviews";
+import { RosterHolidayCalendar } from "@/components/roster/RosterHolidayCalendar";
 import { RosterPlanner } from "@minarvabiz/ui";
 import {
   can, exportOutbox, getRemoteWriter, getRuntimeMode, phase6Store, phase9Store,
@@ -274,6 +275,7 @@ export default function RosterPage() {
   if (!scopedReady) return <p role={problem ? "alert" : "status"}>{problem || "Loading authorized shift and roster data…"}</p>;
 
   return <div className="space-y-3">
+    {isRosterHydrated() && <RosterHolidayCalendar key={`holidays-${hydrationEpoch}`} branches={phase9Store.listBranches()} />}
     {isRosterHydrated() && <RosterPolicyDrafts key={hydrationEpoch} branches={phase9Store.listBranches()} />}
     {isRosterHydrated() && <RosterPolicyReviews key={`reviews-${hydrationEpoch}`} branches={phase9Store.listBranches()} />}
     {recoveryState === "checking" && <p role="status">Checking encrypted organization-scoped roster recovery before editing…</p>}
