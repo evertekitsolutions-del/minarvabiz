@@ -11,7 +11,7 @@ require.extensions[".ts"]=(module,file)=>module._compile(ts.transpileModule(
     esModuleInterop:true,
   }}).outputText,file);
 const {writeValidatedSqliteBinaryAtomically}=require(
-  "../../../apps/desktop/electron/sqlite-native-atomic-write.ts");
+  "../../../../apps/desktop/electron/sqlite-native-atomic-write.ts");
 const nativeMain=fs.readFileSync("apps/desktop/electron/main.ts","utf8");
 assert.match(nativeMain,/requireTrustedRenderer\(event\);\s*if \(!\(data instanceof Uint8Array\)/,
   "SQLite IPC writer must retain trusted-renderer and size checks");
