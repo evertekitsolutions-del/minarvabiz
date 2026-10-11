@@ -152,3 +152,75 @@ export function previewRosterHolidayReview(input:{
   }
   return result.sort((a,b)=>a.date.localeCompare(b.date)||a.slotId.localeCompare(b.slotId));
 }
+
+
+/**
+ * Read-only reconciliation of existing attendance statuses with CONFIGURED
+ * holiday rules. A finding is a question for an authorized manager, never
+ * proof of a statutory entitlement, a payroll error, or authority to edit.
+ * Country and branch scope are explicit; unknown branch is quarantined.
+ */
+export type AttendanceHolidayStatus="present"|"absent"|"half_day"|"leave"|"holiday";
+export interface HolidayAttendanceRow {
+  id:string;
+  staffId:string;
+  date:string;
+  branchId?:string|null;
+  status:AttendanceHolidayStatus;
+}
+export type HolidayAttendanceReviewReason=
+  "contradictory_rules"|"nonworking_day_requires_review"|
+  "unmatched_holiday_status"|"branch_scope_unverified";
+export interface HolidayAttendanceReview {
+  attendanceId:string;
+  staffId:string;
+  date:string;
+  status:AttendanceHolidayStatus;
+  reason:HolidayAttendanceReviewReason;
+  holidayIds:string[];
+}
+/** Review up to one civil year; work only on caller-authorized attendance. */
+export function previewAttendanceHolidayReview(input:{
+  rules:readonly HolidayRule[];
+  context:HolidayCalendarContext;
+  from:string;
+  to:string;
+  attendance:readonly HolidayAttendanceRow[];
+}):HolidayAttendanceReview[] {
+  const days=previewHolidayCalendar({
+    rules:input.rules,context:input.context,from:input.from,to:input.to,
+  });
+  if(!Array.isArray(input.attendance)||input.attendance.length>5000)
+    throw Error("Attendance holiday review requires bounded authorized records");
+  const byDay=new Map(days.map(day=>[day.date,day]));
+  const seen=new Set<string>(),findings:HolidayAttendanceReview[]=[];
+  for(const record of input.attendance){
+    if(!record||!nonEmpty(record.id)||!nonEmpty(record.staffId)||
+       !realDate(record.date)||
+       !["present","absent","half_day","leave","holiday"].includes(record.status)||
+       (record.branchId!==undefined&&record.branchId!==null&&!nonEmpty(record.branchId)))
+      throw Error("Attendance holiday review contains malformed identity/date/status/branch");
+    const key=record.staffId+":"+record.date;
+    if(seen.has(key))throw Error("Duplicate staff/date attendance requires canonical review");
+    seen.add(key);
+    const day=byDay.get(record.date);
+    if(!day)continue;
+    const recordBranch=record.branchId??null;
+    if(recordBranch!==null&&recordBranch!==input.context.branchId)continue;
+    let reason:HolidayAttendanceReviewReason|null=null;
+    if(recordBranch===null&&input.context.branchId!==null)
+      reason="branch_scope_unverified";
+    else if(day.treatment==="needs_review")
+      reason="contradictory_rules";
+    else if(day.treatment==="non_working"&&record.status!=="holiday")
+      reason="nonworking_day_requires_review";
+    else if(day.treatment!=="non_working"&&record.status==="holiday")
+      reason="unmatched_holiday_status";
+    if(reason)findings.push({
+      attendanceId:record.id,staffId:record.staffId,date:record.date,
+      status:record.status,reason,holidayIds:day.holidays.map(x=>x.id),
+    });
+  }
+  return findings.sort((a,b)=>a.date.localeCompare(b.date)||
+    a.staffId.localeCompare(b.staffId)||a.attendanceId.localeCompare(b.attendanceId));
+}
