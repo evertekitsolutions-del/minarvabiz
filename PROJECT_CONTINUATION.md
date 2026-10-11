@@ -5,6 +5,16 @@
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
+## Active delivery: GitHub-based durable development continuity (source PR pending)
+
+- Live baseline before branch: main `916cdd4c1cf1ea799bb1f46a14ff5fc789e8bbde`; 0 open PRs/issues, PR #323 shared Web/Windows monthly roster calendar merged; post-merge main exact-head 21 successful checks, 5 optional skipped and 0 failed/pending. Latest public stable Windows release separately verified as v1.0.15.
+- New branch `feat/durable-development-continuity-dashboard`: preserves task IDs, ranked full-scope backlog, acceptance and next actions in `docs/DEVELOPMENT_TASK_QUEUE.json`. Extends the existing no-checkout `.github/workflows/automated-ci-triage.yml` so completed main CI/Windows check runs or a daily backup refresh update ONE durable GitHub Issue; PR failures still create the existing triage issues. This prevents loss of handoff state when ChatGPT networking or usage stops.
+- CI runs `scripts/development-continuity-contract-smoke.mjs` with synthetic GitHub API and duplicate/closure regression. New dashboard uses only GitHub's built-in token, issues:write permission and no untrusted code checkout; no external paid AI provider. See `docs/DEVELOPMENT_CONTINUITY.md`.
+- **Not autonomous coding:** no claim that GitHub can develop new features while no coding agent runs. The checkpoint and CI are durable, but a separate authorized developer/agent still must implement and verify new PRs. No automatic merge, production SQL mutation, releases or cloud credential changes.
+- Current planned next accepted feature scope (subject to live status): HR-004C immutable policy revocation/effective selection, HR-004B multi-event recovery, then controlled server UTC/rest cutover and recurring approvals; reuse Minarva/shared and permissively licensed source first. Do NOT repeat #314–#323 or declare scheduling complete.
+- Full Master Vision remains estimated **~51%**, not a CI or partial HR milestone percentage. No feature scope reduction, paid options, fictional UAT or new Windows customer installer.
+
+
 ## Active reuse-first feature — HR-004 Web/Windows monthly calendar (CI pending)
 
 - Baseline verified at start: `main` `b82256a3bb9fb44dba60970a26ec77a9e9b0522d`, 0 open PRs/issues, 21 success/5 skip/0 failure checks.
