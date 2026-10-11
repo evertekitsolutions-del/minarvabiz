@@ -31,7 +31,7 @@ const updateBlock = block('ipcMain.handle("update:install"', 'ipcMain.handle("ap
 
 assert.match(listBlock, /return listBackupFiles\(\)/);
 
-assert.match(manualBlock, /await createLocalBackup\("manual"\)/);
+assert.match(manualBlock, /sqliteGate\.reserve\("backup", \(\) => createLocalBackup\("manual"\)\)/);
 assert.match(manualBlock, /await minarvaSqliteValidationError\(result\.filePath\)/);
 assert.match(manualBlock, /internalBackup: internal\.path/);
 
