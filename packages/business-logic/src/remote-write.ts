@@ -37,6 +37,8 @@ export interface RemoteWriter {
   /** Read-only tenant/RLS-scoped records used for human conflict comparison. */
   getRosterShift?: (id: string) => Promise<ShiftRule | null>;
   getRosterSlot?: (id: string) => Promise<RosterSlot | null>;
+  /** RLS-scoped bounded staff/day snapshot for conflict explanation, never replay authority. */
+  getRosterDayPeers?: (staffId: string, workDate: string) => Promise<RosterSlot[]>;
   upsertCustomer?: (c: Customer) => Promise<void>;
   upsertCategory?: (c: Category) => Promise<void>;
   upsertProduct?: (p: Product) => Promise<void>;
