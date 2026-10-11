@@ -81,10 +81,10 @@ for(const bad of [
 const source=fs.readFileSync("packages/business-logic/src/holiday-sync-review.ts","utf8");
 const ui=fs.readFileSync("apps/web/src/components/roster/RosterHolidayCalendar.tsx","utf8");
 assert.match(source,/reviewHolidayStaffImpact/);
-assert.doesNotMatch(source,/fetch\\(|pgRpc|saveAttendance|writeAttendance|hydrateHolidayCache\\(|enqueueOutbox|sendCloud|mergeHoliday|localStorage|setTimeout/);
+assert.doesNotMatch(source,/fetch\(|pgRpc|saveAttendance|writeAttendance|hydrateHolidayCache\(|enqueueOutbox|sendCloud|mergeHoliday|localStorage|setTimeout/);
 assert.match(ui,/reviewHolidayStaffImpact/);
 assert.match(ui,/Holiday staff review impact results/);
-assert.match(ui,/phase6Store\\.listRosterSlots\\(from,to\\)/);
-assert.match(ui,/phase6Store\\.listAttendance\\(\\{from,to\\}\\)/);
-assert.doesNotMatch(ui,/applyHolidayRevision\\(|automaticHolidaySync\\(/);
+assert.match(ui,/phase6Store\.listRosterSlots\(from,to\)/);
+assert.match(ui,/phase6Store\.listAttendance\(\{from,to\}\)/);
+assert.doesNotMatch(ui,/applyHolidayRevision\(|automaticHolidaySync\(/);
 console.log("HR005 read-only staff impact: roster/attendance delta, branches, bounds, identity and no-write PASS");
