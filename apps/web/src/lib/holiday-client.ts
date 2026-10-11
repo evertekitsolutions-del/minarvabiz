@@ -1,5 +1,5 @@
 import {holidayCalendar} from "@minarvabiz/business-logic";
-import type {HolidayRule} from "@minarvabiz/business-logic";
+type HolidayRule=holidayCalendar.HolidayRule;
 type Authority={orgId:string;role:string;ensureCurrent():void};
 type Transport={
  authorize():Promise<Authority>;
@@ -61,7 +61,7 @@ export function createHolidayManagerClient(transport:Transport){
    authorized(authority);return authority;
  };
  return {
-   async list():Promise<HolidayRule[]> {
+   async list():Promise<{orgId:string;rules:HolidayRule[]}> {
      const authority=await requireManager(),response=await transport.read(authority);
      authority.ensureCurrent();
      if(!Array.isArray(response)||response.length>5000)
@@ -69,7 +69,7 @@ export function createHolidayManagerClient(transport:Transport){
      const rows=response.map(item=>parseRow(item,authority.orgId));
      if(new Set(rows.map(row=>row.id)).size!==rows.length)
        throw Error("Duplicate Cloud holiday IDs; reload before editing");
-     return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
+     return {orgId:authority.orgId,rules:rows.sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name)||a.id.localeCompare(b.id))};
    },
    async save(input:HolidayEdit):Promise<{accepted:true;rule:HolidayRule}|{accepted:false;reason:string;remote:HolidayRule|null}>{
      validateHolidayEdit(input);
