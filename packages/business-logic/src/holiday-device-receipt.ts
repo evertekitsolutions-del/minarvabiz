@@ -45,9 +45,9 @@ function canonicalSnapshot(value: unknown): HolidayDeviceSnapshot {
   const packet = value as Record<string, unknown>;
   if (packet.schemaVersion !== 1 ||
       !uuid(packet.snapshotId) || !uuid(packet.orgId) || !uuid(packet.deviceId) ||
-      !Number.isSafeInteger(packet.sequence) || (packet.sequence as number) < 1 ||
-      !Number.isSafeInteger(packet.issuedAt) ||
-      !Number.isSafeInteger(packet.expiresAt) ||
+      !Number.isSafeInteger(packet.sequence as number) || (packet.sequence as number) < 1 ||
+      !Number.isSafeInteger(packet.issuedAt as number) ||
+      !Number.isSafeInteger(packet.expiresAt as number) ||
       (packet.expiresAt as number) <= (packet.issuedAt as number) ||
       (packet.expiresAt as number) - (packet.issuedAt as number) > MAX_RECEIPT_LIFETIME_MS)
     throw Error("Invalid signed holiday snapshot identity, sequence or lifetime");
