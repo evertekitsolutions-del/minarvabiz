@@ -12,6 +12,7 @@ import * as store from "./store";
 import * as ordersStore from "./orders-store";
 import * as phase5Store from "./phase5-store";
 import * as phase6Store from "./phase6-store";
+import * as holidayCache from "./holiday-cache";
 import * as phase7Store from "./phase7-store";
 import * as phase9Store from "./phase9-store";
 import * as phase10Store from "./phase10-operations-store";
@@ -32,7 +33,7 @@ import type { ShopProfile } from "./shop-profile";
 import type { TaxConfig } from "./tax-config";
 import type { AutoBackupSettings, BackupMeta } from "./auto-backup";
 
-export const SNAPSHOT_VERSION = 14;
+export const SNAPSHOT_VERSION = 15;
 
 export interface DomainSnapshot {
   version: number;
@@ -55,6 +56,7 @@ export interface DomainSnapshot {
   attendance?: ReturnType<typeof phase6Store.exportPhase6State>["attendance"];
   shiftRules?: ReturnType<typeof phase6Store.exportPhase6State>["shiftRules"];
   rosterSlots?: ReturnType<typeof phase6Store.exportPhase6State>["rosterSlots"];
+  holidayRules?: ReturnType<typeof holidayCache.exportHolidayCache>;
   assignments: StaffAssignment[];
   incentiveRules: IncentiveRuleRecord[];
   payouts: StaffIncentivePayout[];
@@ -104,6 +106,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     attendance: phase6.attendance,
     shiftRules: phase6.shiftRules,
     rosterSlots: phase6.rosterSlots,
+    holidayRules: holidayCache.exportHolidayCache(),
     assignments: phase6.assignments,
     incentiveRules: phase6.incentiveRules,
     payouts: phase6.payouts,
@@ -136,7 +139,7 @@ export function exportDomainSnapshotFull(): DomainSnapshot {
 }
 export function exportDomainSnapshotJson(): string { return JSON.stringify(exportDomainSnapshotFull(), null, 2); }
 
-const SUPPORTED_SNAPSHOT_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+const SUPPORTED_SNAPSHOT_VERSIONS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 
 function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
   const collection = <T>(value: T[] | undefined, field: string): T[] => {
@@ -174,6 +177,7 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     attendance: collection(input.attendance, "attendance"),
     shiftRules: collection(input.shiftRules, "shiftRules"),
     rosterSlots: collection(input.rosterSlots, "rosterSlots"),
+    holidayRules: holidayCache.validateHolidayCache(collection(input.holidayRules, "holidayRules")),
     assignments: collection(input.assignments, "assignments"),
     incentiveRules: collection(input.incentiveRules, "incentiveRules"),
     payouts: collection(input.payouts, "payouts"),
@@ -222,6 +226,7 @@ function applyDomainSnapshot(snap: DomainSnapshot): void {
     payouts: snap.payouts,
     notifications: snap.notifications,
   });
+  holidayCache.hydrateHolidayCache(snap.holidayRules ?? []);
   phase7Store.hydratePhase7({ returns: snap.returns, auditLogs: snap.audit });
 
   if (snap.branches?.length) {
@@ -277,6 +282,7 @@ export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error
       sales: incoming.sales.length,
       orders: incoming.orders.length,
       staff: incoming.staff.length,
+      holidays: incoming.holidayRules?.length ?? 0,
       expenses: incoming.expenses.length,
       productionWorkflows: incoming.phase10?.productionWorkflows?.length ?? 0,
       materialRolls: incoming.phase10?.materialRolls?.length ?? 0,

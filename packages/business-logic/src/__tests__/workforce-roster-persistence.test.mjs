@@ -78,7 +78,7 @@ assert.throws(() => roster.assignRosterSlot({
 // before exporting the canonical domain snapshot.
 await new Promise(resolve => setImmediate(resolve));
 const snapshot = persistence.exportDomainSnapshotFull();
-assert.equal(snapshot.version, 14);
+assert.equal(snapshot.version, 15);
 assert.equal(snapshot.shiftRules.length, 2);
 assert.equal(snapshot.rosterSlots.length, 2);
 const beforeAudit = audit.listAuditLogs(Number.MAX_SAFE_INTEGER).filter(e => String(e.action).startsWith("roster."));

@@ -26,6 +26,7 @@ export * as phase5Store from "./phase5-store";
 export * as phase6Store from "./phase6-store";
 export * as workforceRoster from "./workforce-roster";
 export * as holidayCalendar from "./holiday-calendar";
+export * as holidayCache from "./holiday-cache";
 export * as rosterExport from "./workforce-roster-export";
 export * as rosterTimezone from "./roster-timezone";
 export * as phase7Store from "./phase7-store";

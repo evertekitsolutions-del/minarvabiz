@@ -62,7 +62,7 @@ const immutableBefore = structuredClone(hrEvents());
 const domainBefore = structuredClone(phase.exportPhase6State());
 await new Promise(resolve=>setImmediate(resolve));
 const snapshot = persistence.exportDomainSnapshotFull();
-assert.equal(snapshot.version,14);
+assert.equal(snapshot.version,15);
 assert.deepEqual(snapshot.outbox.filter(e=>e.aggregateType==="staff_shift_rules"||e.aggregateType==="staff_roster_slots"),immutableBefore);
 assert.equal(snapshot.rosterSlots.length,1);
 assert.equal(snapshot.shiftRules.find(s=>s.id===shift.id).name,"Offline change needs retry");
