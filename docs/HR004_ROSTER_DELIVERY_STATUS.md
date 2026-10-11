@@ -1,3 +1,9 @@
+## HR-004B multi-ID dependency order preview — source review pending
+
+From verified main `109e8ea58939e79211c49b31fdcc627ea7a15bcc`, a new pure read-only planner produces a **provisional device-sequenced review order** for a complete bounded 2–25-event encrypted batch targeting distinct canonical records. It checks original device stream continuity, duplicate/repeated aggregate IDs, Cloud revision consistency, shift-before-slot prerequisites without historical timing mutation, staff/day different-ID collision and exact RLS-visible canonical peers. It fails closed for partial/cross-device/missing/hidden data and has **no ability to restore or synchronize**. The existing browser recovery UI presents the plan as non-executable human evidence, not a server-authorized recovery command.
+
+Tests exercise deterministic positive order, malformed/foreign data, hidden peers, shifted dependencies, identical staff/day conflicts, unauthorized overlap and no-write properties. New paid services, packages, migrations and automatic Cloud replay are prohibited. Next: independently audited transactional multi-ID restore/rollback, real authenticated UAT, Windows/Offline/Hybrid parity. Full Master Vision stays ~51%, stable Windows installer v1.0.15.
+
 ## HR-004B single-event Cloud-peer restore guard — pending CI
 
 An isolated roster-slot restore requires exactly one matching tenant-RLS staff/day Cloud peer on both UI and server-bound local restoration function. Deny missing, stale, foreign or different-ID peers. Retain #331 ordered chain restoration, original encrypted event backup and explicit Retry. No automatic Cloud write or paid service. Full HR004B real UAT/Offline/Hybrid/mixed-ID remains open.

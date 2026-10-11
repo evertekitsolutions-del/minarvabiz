@@ -9,6 +9,15 @@
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
+## Current HR-004B distinct-ID read-only ordering source (PR verification pending)
+
+- Live main before branch: `109e8ea58939e79211c49b31fdcc627ea7a15bcc`; PR #330 merged, post-merge exact-head 25 passed / 5 skipped / 0 failed or pending, zero open PR.
+- Branch `feat/hr004b-multiid-ordered-readonly-plan` reuses encrypted tenant-scoped comparisons and device/sequence metadata to display a deterministic proposed **human review order** for 2–25 distinct canonical record updates only; checks partial history, device sequence gaps, cross-device ambiguity, duplicate record IDs, shift prerequisites, historical timing safety, staff/date conflict and RLS-visible same-day peers. Explicit automatic recovery permission is **always false**.
+- Web shows ordered preview or fail-closed quarantine reason; no new mutation buttons, DB migration, AI billing, remote API, storage, auto-replay or authorization escalation.
+- CI must verify new `roster-recovery-multiid-plan.test.mjs` and existing security/Web/Windows gates before merge. Ordered multi-ID **recovery** itself remains blocked pending audited server transaction, true cross-device conflict authority, atomic rollback, customer UAT and Offline/SQLite/Hybrid parity. Existing single-event and same-ID chain restore remain unchanged.
+- Full Master Vision estimate stays **~51%**, latest customer Windows stable installer `v1.0.15`.
+
+
 ## Current HR-004B reviewed consecutive same-ID local recovery — source CI pending
 
 - Verified live main `81d1c8de5047a623ac7fe4b44cd5d8a919ec1d6f`, 25 successful / 5 skipped / 0 failed checks and zero open PRs. Branch `feat/hr004b-reviewed-same-id-chain-restore` continues after merged PR #328/#329; **does not restart** existing work.
