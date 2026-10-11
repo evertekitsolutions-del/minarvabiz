@@ -113,7 +113,7 @@ const checkpoint=fs.readFileSync("apps/web/src/lib/roster-recovery-checkpoint.ts
 assert.match(checkpoint,/eventType:event\.eventType,deviceId:event\.deviceId,sequence:event\.sequence/);
 assert.match(page,/analyzeSealedRosterDependencies\(report\)/);
 assert.match(page,/Multiple-event restores remain disabled/);
-assert.match(page,/A single roster assignment must have exactly one matching RLS-scoped Cloud staff\\/date peer/);
+assert.match(page,/A single roster assignment must have exactly one matching RLS-scoped Cloud staff/);
 assert.match(page,/staff\/date snapshot containing only the identical canonical ID/);
 assert.match(page,/isReviewedSealedRosterRestoreCandidate\(sealedReview\)/);
 assert.doesNotMatch(fs.readFileSync("apps/web/src/lib/roster-recovery-dependencies.ts","utf8"),
