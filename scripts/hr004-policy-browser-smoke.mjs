@@ -72,7 +72,7 @@ window.__reviewRoot.render(React.createElement(RosterPolicyReviews,{branches:[{i
     b.onResolve({filter:/^@\/lib\/roster-policy-online$/},()=>({path:'policy-transport',namespace:'test'}));
     b.onLoad({filter:/.*/,namespace:'test'},()=>({contents:`export function onlineRosterPolicies(){return {list:async()=>window.__policyRows,save:async(input)=>{window.__policyInput=input;if(window.__policyFailure)throw Error('Draft save was not confirmed. Reload before retrying');return window.__policyResult}}}`,loader:'js'}));
     b.onResolve({filter:/^@\/lib\/roster-policy-review-online$/},()=>({path:'review-transport',namespace:'review-test'}));
-    b.onLoad({filter:/.*/,namespace:'review-test'},()=>({contents:`export function onlineRosterPolicyReviews(){return {list:async()=>({drafts:window.__reviewDrafts,reviews:window.__reviewHistory}),review:async(input)=>{window.__reviewInput=input;if(window.__reviewFailure)throw Error('Review confirmation unconfirmed');return window.__reviewResult}}}`,loader:'js'}));
+    b.onLoad({filter:/.*/,namespace:'review-test'},()=>({contents:`export function onlineRosterPolicyReviews(){return {list:async()=>({drafts:window.__reviewDrafts,reviews:window.__reviewHistory,resolutions:window.__reviewResolutions||[]}),review:async(input)=>{window.__reviewInput=input;if(window.__reviewFailure)throw Error('Review confirmation unconfirmed');return window.__reviewResult},resolve:async(input)=>{window.__resolutionInput=input;return window.__resolutionResult},candidate:async(branch,date)=>{window.__candidateInput={branch,date};return window.__candidateResult}}}`,loader:'js'}));
   }}]});
 const ws=await connect();
 const row={id:'30000000-0000-4000-8000-000000000001',org_id:'10000000-0000-4000-8000-000000000001',branch_id:'20000000-0000-4000-8000-000000000001',effective_from:'2026-11-01',effective_until:null,iana_zone:'Asia/Kolkata',dst_fold_policy:'reject',minimum_rest_minutes:660,status:'draft',version:1};
@@ -123,6 +123,30 @@ try{
   assert.equal(await evaluate(ws,'window.__reviewInput.decision'),'approved_pending_activation');
   await evaluate(ws,`window.__reviewHistory=${JSON.stringify([review])};true`);
   await reviewClick('Load / reload policy review queue');await reviewWait('This exact revision was already reviewed.');
+
+  // Real Chrome UI: reasoned immutable revocation and read-only effective date.
+  await reviewClick('Revoke or cancel pending review 1');
+  assert.equal(await evaluate(ws,"[...document.querySelectorAll('#review-test button')].find(b=>b.textContent==='Record immutable revocation / cancellation').disabled"),true,
+    'Resolution requires an acknowledgement and a mandatory reason');
+  await evaluate(ws,"(()=>{const f=[...document.querySelectorAll('#review-test form')].find(f=>f.textContent.includes('Resolve pending approval'));const e=f.querySelector('textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,'Branch approval withdrawn');e.dispatchEvent(new Event('input',{bubbles:true}));return true})()");
+  await sleep(100);
+  await evaluate(ws,"[...document.querySelectorAll('#review-test form')].find(f=>f.textContent.includes('Resolve pending approval')).querySelector('input[type=checkbox]').click();true");
+  const resolution={id:'60000000-0000-4000-8000-000000000001',org_id:row.org_id,
+    branch_id:row.branch_id,review_id:review.id,resolution:'revoked',
+    reason:'Branch approval withdrawn',resolved_by:review.reviewed_by,resolved_at:'2026-10-11T06:00:00Z'};
+  await evaluate(ws,`window.__resolutionResult=${JSON.stringify({accepted:true,resolution,enforcement_active:false})};true`);
+  await reviewClick('Record immutable revocation / cancellation');
+  await reviewWait('Scheduling remains inactive');
+  assert.equal(await evaluate(ws,'window.__resolutionInput.resolution'),'revoked');
+  await evaluate(ws,`window.__reviewResolutions=${JSON.stringify([resolution])};window.__candidateResult={accepted:false,reason:'no_reviewed_candidate'};true`);
+  await reviewClick('Load / reload policy review queue');await reviewWait('Immutable revoked');
+  assert.equal(await evaluate(ws,"[...document.querySelectorAll('#review-test button')].some(b=>b.textContent==='Revoke or cancel pending review 1')"),false);
+  await evaluate(ws,"(()=>{const f=[...document.querySelectorAll('#review-test form')].find(f=>f.textContent.includes('Effective-date policy preview'));const s=f.querySelector('select');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(s,'20000000-0000-4000-8000-000000000001');s.dispatchEvent(new Event('change',{bubbles:true}));const d=f.querySelector('input[type=date]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(d,'2026-11-01');d.dispatchEvent(new Event('input',{bubbles:true}));return true})()");
+  await sleep(100);
+  await reviewClick('Preview pending candidate (no changes)');
+  await reviewWait('No valid pending reviewed policy');
+  assert.equal(await evaluate(ws,'window.__candidateInput.date'),'2026-11-01');
+
   assert.equal(await evaluate(ws,"[...document.querySelectorAll('#review-test button')].find(b=>b.textContent==='Review draft revision 1').disabled"),true);
   await evaluate(ws,`window.__reviewDrafts=${JSON.stringify([{...row,version:2}])};true`);
   await reviewClick('Load / reload policy review queue');await reviewWait('Draft updated since last review.');
