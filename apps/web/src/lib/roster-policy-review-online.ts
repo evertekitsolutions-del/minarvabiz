@@ -14,7 +14,11 @@ export function onlineRosterPolicyReviews(){
   }
   ensureCurrent();
   const cfg={...config!,accessToken:token!};
+  // Schema-first rollout: the current production UI must keep working until
+  // the additive migration is applied, verified and explicitly enabled.
+  const lifecycleReady=process.env.NEXT_PUBLIC_ROSTER_POLICY_LIFECYCLE_READY==='true';
   return createRosterPolicyReviewClient({
+    isLifecycleReady:()=>lifecycleReady,
     async authorize(){
       ensureCurrent();
       const auth=await resolveOnlineAuthorization(token!,userId!);
