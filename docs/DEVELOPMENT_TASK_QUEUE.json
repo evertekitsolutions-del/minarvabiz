@@ -32,7 +32,7 @@
       "status": "in_progress",
       "capability": "HR-004 durable hybrid roster recovery",
       "title": "Recover multi-event and different-ID roster conflicts safely",
-      "nextAction": "PR #333 merged and post-merge main verified 25 passed/5 skipped, adding same-origin reviewed local restore lock. Next source branch serializes pre-RPC encrypted checkpoint writes with the same Web Lock; verify its exact-head and post-merge gates. Then develop server-audited multi-ID/peer conflict transaction authority and durable cross-device, revoked-session, browser eviction/crash rollback plus Web/Windows SQLite/Offline/Hybrid UAT. Multi-ID plan is HUMAN READ-ONLY, never recovery or Cloud replay authority.",
+      "nextAction": "PR #333 and #334 merged with green post-merge main: same-origin Web Locks protect reviewed restores AND encrypted checkpoint writes. Next server-audited transactional multi-ID/peer identity authority, cross-device conflict and rollback, revoked-session and browser eviction/crash tests, authenticated Web/Windows/Offline/Hybrid UAT. Human-only review order does not authorize restore/Cloud replay.",
       "acceptance": [
         "No cross-tenant restores or automatic cloud replays",
         "Dependent-event and different-ID conflicts explicitly reviewed",
@@ -80,10 +80,10 @@
     {
       "id": "HR-005-HOLIDAYS",
       "priority": 5,
-      "status": "ready",
+      "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "Search existing Minarva code and license-compatible OSS first; implement holiday authority and offline parity",
+      "nextAction": "PR #335 shared holiday engine and PR #336 PostgreSQL audited RLS authority merged. PR #336 source-only migration NOT deployed to production; explicit NEXT_PUBLIC_HR005_HOLIDAYS_READY flag remains OFF. Browser manager UI and tenant-pinned save/list with real Cloud RPC are next; validate Web/browser CI then staged migration, authenticated UAT, Windows SQLite/Offline/Hybrid sync and statutory/payroll/attendance parity.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",

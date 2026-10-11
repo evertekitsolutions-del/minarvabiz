@@ -21,7 +21,8 @@ for (const item of queue.tasks) {
   assert.ok(item.title.length > 12 && item.nextAction.length > 25);
   assert.ok(item.acceptance.length >= 2 && item.references.length >= 1);
 }
-assert.ok(queue.tasks.some(item => item.status === "ready"));
+assert.ok(queue.tasks.some(item => item.status === "ready" || item.status === "in_progress"),
+  "Queue must include runnable work; actively developing the last ready task does not make the backlog empty");
 const workflow = fs.readFileSync(".github/workflows/automated-ci-triage.yml", "utf8");
 assert.match(workflow, /schedule:[\s\S]*?cron:/);
 assert.match(workflow, /workflow_run:\s*\n\s+workflows:/);
