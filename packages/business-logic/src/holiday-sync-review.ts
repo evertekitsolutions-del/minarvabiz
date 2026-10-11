@@ -55,7 +55,8 @@ export function reviewHolidayRevisionSnapshots(input: {
   const byLocal=new Map(local.map(row=>[row.id,row]));
   const byCloud=new Map(cloud.map(row=>[row.id,row]));
   const ids=[...new Set([...byLocal.keys(),...byCloud.keys()])].sort();
-  return ids.map(ruleId=>{
+  const findings:HolidayRevisionReview[]=[];
+  for (const ruleId of ids) {
     const localRow=byLocal.get(ruleId),cloudRow=byCloud.get(ruleId);
     let kind:HolidayRevisionFinding;
     if (!localRow)kind="cloud_only_unverified";
@@ -63,7 +64,8 @@ export function reviewHolidayRevisionSnapshots(input: {
     else if (localRow.version<cloudRow.version)kind="cloud_newer_review";
     else if (localRow.version>cloudRow.version)kind="local_newer_unverified";
     else kind=sameContent(localRow,cloudRow)?"identical":"same_version_divergence";
-    return {ruleId,kind,localVersion:localRow?.version??null,
-      cloudVersion:cloudRow?.version??null};
-  });
+    findings.push({ruleId,kind,localVersion:localRow?.version??null,
+      cloudVersion:cloudRow?.version??null});
+  }
+  return findings;
 }
