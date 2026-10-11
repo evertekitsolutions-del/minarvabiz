@@ -5,6 +5,12 @@
 **Updated:** 2026-10-10  
 **Scope:** Shared Web, Windows SQLite, hybrid PostgreSQL/cloud authority
 
+## Next server review authority: versioned decisions without activation
+
+The next HR-004C source slice stores independent, immutable administrator review snapshots for roster-time policy drafts, including approved-pending-activation versus rejected decisions, explanation, exact draft revision, actor, timestamp, branch/effective dates, and historical supersession. Tenant ownership comes only from authenticated PostgreSQL membership authority; direct browser writes and anonymous RPC are denied. Rejected decisions require nonblank explanations. Distinct drafts cannot stage overlapping branch approval periods without an explicit resolution.
+
+An approval is **not activation**: hard SQL checks force all review records inactive, drafts remain draft-only, and `staff_roster_guard()` does not consult this table. There is no UI release, automatic rest enforcement, revocation management, full history-effective rule selection, or Offline/Hybrid parity in this slice. These are later non-negotiable deliverables. Real PostgreSQL isolation tests and main/Windows gates must pass first. Master Vision remains ~51%.
+
 ## Production UTC/rest validation foundation — verified October 11, 2026
 
 PR #318 completed 20 successful checks, 2 optional skipped and 0 failed; merged main `17ce51abcd805725b1eccc6eb5a1db3a61f16ec4` then passed 21 successful main checks, 5 optional skipped, 0 failed. Merged internal SQL `20261011_hr_roster_utc_rest_primitives.sql` was deployed in Supabase, acknowledged `success:true`, registered under `20261011030016`. Live verification confirms the two functions are SECURITY INVOKER, unavailable to anonymous/authenticated direct execution, calculate explicit branch UTC windows correctly, and **are not called by the current roster trigger**. Production contains 0 organizations, 0 roster slots, and 0 policy drafts.
