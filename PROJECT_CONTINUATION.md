@@ -5,6 +5,14 @@
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
+## Active next HR-004C slice — immutable reviewed policies (pending activation)
+
+- Source baseline: main `258c971c374606ad816689f49491a5f9cdbcbc1f`; 0 open PRs/issues, all post-merge checks green, production SQL migration history through `hr_roster_utc_rest_primitives`.
+- Next bounded source milestone adds `staff_roster_policy_reviews`: append-only, tenant-RLS + FORCE RLS, admin-authorized review of manager drafts, immutable versioned snapshots, rejection reasons, audit, stale-review conflict detection, approved-pending-activation intervals, and explicit same-draft review supersession history.
+- **Critical separation:** `activation_state='inactive'` is enforced by CHECK, draft table remains `status='draft'`, existing `staff_roster_guard()` is unmodified; approval-for-activation does not enforce anything in customer scheduling. UI approval workflow, legally approved effective-date authority, reversals and policy cutover are separate future milestones.
+- Real isolated PostgreSQL17 test suite must prove admin/manager/cashier and cross-tenant boundaries, stable history after draft changes, same-version review prevention, overlapping period rejection, denial of update/delete even by privileged actors, and full rollback.
+- No fabricated production customer tests, no paid dependencies and no extra master completion percentage. Full Master Vision stays **~51%**. Deploy additive SQL only after exact-head AND post-merge green checks and read-only production gates.
+
 ## Verified HR-004C server UTC/rest primitives rollout — October 11, 2026
 
 - PR #318 (`https://github.com/evertekitsolutions-del/minarvabiz/pull/318`) merged into `main` as `17ce51abcd805725b1eccc6eb5a1db3a61f16ec4` after **20 successful, 2 optional skipped, 0 failed** exact-head checks. Post-merge `main` verification finished **21 successful, 5 optional skipped, 0 failed**.
