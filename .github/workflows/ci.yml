@@ -137,7 +137,7 @@ jobs:
         run: node scripts/web-ui-deep-smoke.mjs
       - name: Verify actual Chrome IndexedDB roster recovery after reload
         run: node scripts/hr004-indexeddb-browser-smoke.mjs
-      - name: Verify manager policy editor draft and conflict UI
+      - name: Verify manager drafts and administrator policy review UI in Chrome
         run: node scripts/hr004-policy-browser-smoke.mjs
       - name: Capture web UI diagnostics
         if: failure()
