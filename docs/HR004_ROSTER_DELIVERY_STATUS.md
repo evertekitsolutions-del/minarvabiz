@@ -106,6 +106,12 @@ The manager may read at most 25 saved pending events with an RLS-scoped authenti
 
 Remaining production acceptance: real IndexedDB browser restart/relogin/login-different-user/org tests; storage eviction and partial-write recovery; controlled multi-event dependencies/canonical same-day different-ID merging; server IANA DST/min-rest, recurrence approval and a new verified signed Windows release. Full Master Vision remains an estimated **~51%**.
 
+## HR-004B reviewed same-ID local recovery — CI pending
+
+A complete chain of 2–25 same-record UPDATE events from one device with increasing immutable sequence, consecutive versions and identical fresh authorized Cloud baselines may now be explicitly restored to LOCAL browser memory after manager confirmation. Recovery re-verifies the session, exact encrypted original IDs/device/sequences/payloads, revisioned Cloud peer snapshots and domain invariants. The original vault, original event identities, statuses and audited retry contract remain unchanged: this action does not post or acknowledge any Cloud event. Rollback restores the old memory snapshot if hydration fails.
+
+Still pending: CI, real customer/browser power-loss UAT, dependent different-ID and cross-device ordered recovery, server-atomic conflict resolution, Offline/Windows/Hybrid parity. This source slice does not complete HR-004B or increase Full Master Vision beyond ~51%.
+
 ## HR-004B ordered read-only dependency review — source PR verification pending
 
 The existing authenticated, RLS-scoped sealed-browser recovery comparison is extended with immutable event type, device and sequence metadata; **no new Cloud write/read scopes** are granted. A pure, zero-I/O dependency analyzer flags same-canonical-ID event chains, shift-to-roster-assignment prerequisites, same-staff/day assignments with **different IDs**, duplicate device sequence, Cloud-hidden or incompatible revisions, and truncated bounded (25 event) views. The roster Web UI displays the report while retaining the encrypted backup and existing strict one-isolated-event restoration gate.

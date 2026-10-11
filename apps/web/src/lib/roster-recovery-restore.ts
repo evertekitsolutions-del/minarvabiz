@@ -7,8 +7,9 @@
 import {
   can, exportOutbox, getRemoteWriter, getRemoteWriterGeneration,
   getSessionToken, getSessionUser, hydrateOutbox, phase6Store,
-  type LocalOutboxEvent, type workforceRoster,
+  type LocalOutboxEvent, workforceRoster,
 } from "@minarvabiz/business-logic";
+import { planReviewedSealedRosterChain } from "./roster-recovery-chain";
 import {
   compareSealedRosterCheckpointWithCloud, inspectSealedRosterCheckpoint,
   type SealedRosterCloudComparison,
@@ -120,4 +121,108 @@ export async function restoreReviewedSealedRosterEventToMemory(
   // The vault remains encrypted and intact; next explicit Retry first checks
   // exact original ID and payload against it before sending an authorized RPC.
   return {eventId:event.id,aggregateType:comparison.aggregateType};
+}
+
+/**
+ * HR-004B explicit *local-only* recovery of a strict 2–25-event, single-ID
+ * consecutive update chain. Never replay, acknowledge, remove, or alter the
+ * encrypted source; the manager must separately verify and retry original IDs.
+ *
+ * All events must share one Cloud revision and the same authorized user,
+ * organization and writer throughout two fresh Cloud reads and a vault read.
+ * Canonical identity, device sequence, dependent shifts and date-peer
+ * ambiguities fail closed. Does not grant authority for other multi-ID batches.
+ */
+export async function restoreReviewedSealedRosterChainToMemory(
+  approved: ApprovedReview,
+):Promise<{eventIds:string[];finalVersion:number}> {
+  const plan=planReviewedSealedRosterChain(approved);
+  if(!plan.eligible)throw Error("Unsafe ordered roster recovery: "+plan.reason);
+  const token=getSessionToken();
+  const user=getSessionUser();
+  const generation=getRemoteWriterGeneration();
+  const writer=getRemoteWriter();
+  if(!token || !user?.id || !writer?.upsertRosterEvent || !can("staff.manage"))
+    throw Error("Authorized roster manager and authenticated writer required for chain recovery");
+  const fresh=await compareSealedRosterCheckpointWithCloud(25);
+  assertAuthorized(token,user.id,generation,writer);
+  if(!equal(fresh,approved))
+    throw Error("Cloud or encrypted roster chain changed since review; repeat comparison");
+  const freshPlan=planReviewedSealedRosterChain(fresh);
+  if(!freshPlan.eligible || !equal(freshPlan,plan))
+    throw Error("Authorized ordered roster recovery plan changed");
+  const sealed=await inspectSealedRosterCheckpoint();
+  assertAuthorized(token,user.id,generation,writer);
+  if(!equal(sealed.scope,approved.scope) || sealed.events.length!==plan.eventIds.length)
+    throw Error("Encrypted recovery chain count or tenant identity changed");
+  const chain=sealed.events;
+  for(let i=0;i<chain.length;i++){
+    const e=chain[i],c=approved.comparisons[i];
+    if(e.id!==plan.eventIds[i] || e.id!==c.eventId ||
+       e.aggregateId!==plan.aggregateId || e.aggregateType!==plan.aggregateType ||
+       e.deviceId!==c.deviceId || e.sequence!==c.sequence ||
+       e.eventType!=="update" || e.status!==c.localStatus ||
+       !equal(e.payload,c.localPayload))
+      throw Error("Immutable sealed recovery chain differs from the reviewed snapshot");
+  }
+  const history=exportOutbox();
+  // Never replace a different session's pending operation. Any pre-existing
+  // identifier also blocks silent duplicate restoration of an acknowledged event.
+  if(history.some(e=>e.status==="pending"||e.status==="failed"||
+     plan.eventIds.includes(e.id)))
+    throw Error("Existing unconfirmed or duplicate outbox events require separate reconciliation");
+  const previous=phase6Store.exportPhase6State();
+  const shifts=previous.shiftRules.map(s=>({...s}));
+  const slots=previous.rosterSlots.map(s=>({...s}));
+  const first=approved.comparisons[0];
+  const baseline=first.remotePayload;
+  if(!baseline)throw Error("Canonical recovery Cloud baseline is unavailable");
+  const last=approved.comparisons.at(-1);
+  if(!last)throw Error("Recovery chain is empty");
+  if(plan.aggregateType==="staff_shift_rules"){
+    const position=shifts.findIndex(s=>s.id===plan.aggregateId);
+    if(position<0 || !equal(shifts[position],baseline))
+      throw Error("Hydrated shift no longer matches the authorized Cloud baseline");
+    for(const c of approved.comparisons){
+      const next=c.localPayload as unknown as ShiftRule;
+      if(slots.some(s=>s.shiftRuleId===plan.aggregateId) &&
+         (next.startTime!==baseline.startTime || next.endTime!==baseline.endTime ||
+          next.unpaidBreakMinutes!==baseline.unpaidBreakMinutes ||
+          next.branchId!==baseline.branchId))
+        throw Error("Historical shift timing and branch cannot change through recovery chain");
+      // Use existing shared domain validator for EACH intermediate revision.
+      // Invalid intermediate steps cannot be safely replayed in sequence.
+      workforceRoster.validateShiftRule(next);
+    }
+    shifts[position]={...(last.localPayload as unknown as ShiftRule)};
+  }else{
+    const position=slots.findIndex(s=>s.id===plan.aggregateId);
+    if(position<0 || !equal(slots[position],baseline))
+      throw Error("Hydrated assignment no longer matches the authorized Cloud baseline");
+    for(const c of approved.comparisons){
+      const next=c.localPayload;
+      if(next.staffId!==baseline.staffId || next.workDate!==baseline.workDate ||
+         next.branchId!==baseline.branchId)
+        throw Error("Roster staff/date/branch identity cannot change in recovery chain");
+      if(!shifts.some(s=>s.id===next.shiftRuleId))
+        throw Error("Unrecognized dependent shift in recovery chain");
+    }
+    slots[position]={...(last.localPayload as unknown as RosterSlot)};
+  }
+  const originals:LocalOutboxEvent[]=chain.map(e=>({...e,
+    payload:{...e.payload},lastError:e.lastError??null}));
+  assertAuthorized(token,user.id,generation,writer);
+  try{
+    phase6Store.hydratePhase6({shiftRules:shifts,rosterSlots:slots});
+    hydrateOutbox([...history,...originals]);
+  }catch(error){
+    phase6Store.hydratePhase6({
+      shiftRules:previous.shiftRules,rosterSlots:previous.rosterSlots
+    });
+    hydrateOutbox(history);
+    throw error;
+  }
+  // No Cloud call or checkpoint mutation. The original sealed events remain
+  // byte-for-byte encrypted and the explicit retry path is separately audited.
+  return {eventIds:[...plan.eventIds],finalVersion:plan.finalVersion};
 }
