@@ -1,3 +1,11 @@
+## HR-005 parallel calendar implementation — authenticated Web console source pending CI
+
+- Verified main after PR #336: `571c0117a8134ab45519baa5ed030082eaae9655`; PR #335 introduced shared deterministic read-only holiday calendar preview (Web/Windows compatible), PR #336 introduced audited, revisioned, tenant-RLS PostgreSQL calendar rules and migration replay evidence. PR #336 **did not deploy to hosted production**.
+- New Web console source milestone offers authorized manager-scoped holiday list/create/review/change/deactivation, explicit ISO country/branch/org scopes, calendar/roster read-only exception preview, no automatic payroll, attendance or roster writes; reuse existing `holidayCalendar` namespace.
+- Online access must use active session-generation checks, `current_user_authorization` RPC, PostgREST RLS list and audited `save_staff_holiday_rule` RPC. Feature flag `NEXT_PUBLIC_HR005_HOLIDAYS_READY` defaults OFF until independent migration/UAT acceptance. Unknown/stale writes block further edits pending fresh authorized reload.
+- This Web capability **does not claim Offline SQLite/Hybrid parity** or statutory pay settings. Required follow-on: rollout gate verification, real authenticated manager/cashier/tenant browser UAT, shared Windows SQLite holiday data persistence/backup/sync with optimistic conflicts, audit compliance, attendance/roster/payroll policy acceptance.
+- Full Master Vision remains approximately **51%** pending end-to-end product evidence; latest confirmed stable customer installer **v1.0.15**.
+
 ## HR-004B checkpoint / local restore cross-tab exclusion — source CI pending
 
 - Main after PR #333: `a33c934fa018a81beef0f6a2b604dbe83d40ed2c`; independently checked main CI 25 passed / 5 skipped / 0 failed/pending. The reviewed single-event and same-ID-chain local restoration actions are protected by native Web Locks.
