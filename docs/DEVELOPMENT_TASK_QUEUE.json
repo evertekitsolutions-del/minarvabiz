@@ -9,10 +9,10 @@
     {
       "id": "HR-004C-REVIEW-LIFECYCLE",
       "priority": 1,
-      "status": "ready",
+      "status": "in_progress",
       "capability": "HR-004 shift roster governance",
       "title": "Secure reviewed-policy revocation and effective-dated policy selection",
-      "nextAction": "Audit merged #320/#322 review authority and Web UI; implement immutable revocation/cancellation and valid effective-dated selection with real PostgreSQL tests",
+      "nextAction": "Merged PR #326 and verified production migration 20261011054317; verify deployed feature flag and authenticated administrator revocation/cancellation/date-preview UAT, then Offline/Hybrid policy parity and security acceptance; retain remaining UTC/rest guard cutover as separate blocked task",
       "acceptance": [
         "Existing approved-pending-activation reviews cannot silently become active or disappear",
         "Explicit manager/admin authorization and tenant RLS with audit trail",
@@ -22,7 +22,8 @@
       ],
       "references": [
         "docs/HR004_ROSTER_DELIVERY_STATUS.md",
-        "docs/MASTER_PRODUCT_PLAN.md"
+        "docs/MASTER_PRODUCT_PLAN.md",
+        "docs/LOCAL_OLLAMA_AGENT_WORKFLOW.md"
       ]
     },
     {
