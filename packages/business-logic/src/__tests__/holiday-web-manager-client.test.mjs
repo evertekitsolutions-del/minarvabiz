@@ -88,7 +88,7 @@ const duplicated=createHolidayManagerClient({
 });
 await assert.rejects(()=>duplicated.list(),/Duplicate Cloud holiday IDs/);
 const revoked=createHolidayManagerClient({
- authorize:async()=>({orgId:org,role:"admin",ensureCurrent:()=>{}}),
+ authorize:async()=>({orgId:org,role:"admin",ensureCurrent:()=>{if(generation!==1)throw Error("Session changed")}}),
  read:async()=>{throw Error("unexpected")},
  write:async()=>{generation=2;return {accepted:true,record:raw(),attendance_payroll_enforcement_active:false}}
 });
