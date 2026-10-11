@@ -9,6 +9,7 @@ export function RosterPolicyReviews({branches}:{branches:ReadonlyArray<{id:strin
   const [drafts,setDrafts]=React.useState<PolicyDraft[]>([]);
   const [history,setHistory]=React.useState<PolicyReview[]>([]);
   const [resolutions,setResolutions]=React.useState<PolicyResolution[]>([]);
+  const [lifecycleReady,setLifecycleReady]=React.useState(false);
   const [resolveId,setResolveId]=React.useState('');
   const [resolutionAction,setResolutionAction]=React.useState<ResolutionAction>('revoked');
   const [resolutionReason,setResolutionReason]=React.useState('');
@@ -38,11 +39,11 @@ export function RosterPolicyReviews({branches}:{branches:ReadonlyArray<{id:strin
   async function load(){
     if(inFlight.current)return;
     inFlight.current=true;setBusy(true);setError('');setMessage('');
-    setLoaded(false);setDrafts([]);setHistory([]);setResolutions([]);setPreview(null);clearChoice();clearResolution();
+    setLoaded(false);setDrafts([]);setHistory([]);setResolutions([]);setLifecycleReady(false);setPreview(null);clearChoice();clearResolution();
     try{
       const result=await onlineRosterPolicyReviews().list();
       if(!alive.current)return;
-      setDrafts(result.drafts);setHistory(result.reviews);setResolutions(result.resolutions);setLoaded(true);
+      setDrafts(result.drafts);setHistory(result.reviews);setResolutions(result.resolutions);setLifecycleReady(result.lifecycleReady);setLoaded(true);
       setMessage('Authorized policy drafts and immutable review history loaded.');
     }catch(e){
       if(alive.current)setError(e instanceof Error?e.message:String(e));
@@ -72,7 +73,7 @@ export function RosterPolicyReviews({branches}:{branches:ReadonlyArray<{id:strin
   }
   async function submitResolution(event:React.FormEvent){
     event.preventDefault();
-    if(!loaded||!reviewToResolve||!resolutionConfirmed||inFlight.current||
+    if(!loaded||!lifecycleReady||!reviewToResolve||!resolutionConfirmed||inFlight.current||
        resolutionReason.trim().length<5||resolutions.some(r=>r.review_id===reviewToResolve.id))return;
     inFlight.current=true;setBusy(true);setError('');setMessage('');
     try{
@@ -90,7 +91,7 @@ export function RosterPolicyReviews({branches}:{branches:ReadonlyArray<{id:strin
   }
   async function inspectCandidate(event:React.FormEvent){
     event.preventDefault();
-    if(!loaded||!previewBranch||!previewDate||inFlight.current)return;
+    if(!loaded||!lifecycleReady||!previewBranch||!previewDate||inFlight.current)return;
     inFlight.current=true;setBusy(true);setError('');setPreview(null);setMessage('');
     try{
       const result=await onlineRosterPolicyReviews().candidate(previewBranch,previewDate);
@@ -108,6 +109,7 @@ export function RosterPolicyReviews({branches}:{branches:ReadonlyArray<{id:strin
     </button>
     {error&&<p role="alert">{error}</p>}
     {message&&<p role="status">{message}</p>}
+    {loaded&&!lifecycleReady&&<p>Reviewed-policy revocation and date preview are disabled until the verified database migration is deployed. Existing approvals remain inactive.</p>}
     {loaded&&drafts.length===0&&<p>No draft policies available for review.</p>}
     {loaded&&<div className="space-y-2">
       <h3 className="font-medium">Drafts awaiting administrator review</h3>
@@ -151,14 +153,14 @@ export function RosterPolicyReviews({branches}:{branches:ReadonlyArray<{id:strin
         {row.review_note&&<p>Explanation: {row.review_note}</p>}
         {ended&&<p>Immutable {ended.resolution}: {ended.reason}</p>}
         {superseded&&!ended&&<p>Superseded by a later draft review.</p>}
-        {row.decision==='approved_pending_activation'&&!ended&&!superseded&&
+        {lifecycleReady&&row.decision==='approved_pending_activation'&&!ended&&!superseded&&
           <button type="button" className={input} disabled={busy}
             onClick={()=>{setResolveId(row.id);setResolutionReason('');setResolutionAction('revoked');setResolutionConfirmed(false);setError('');}}>
             Revoke or cancel pending review {row.policy_version}
           </button>}
       </li>})}</ul>}
     </div>}
-    {loaded&&reviewToResolve&&<form className="space-y-2 rounded border p-3" onSubmit={event=>void submitResolution(event)}>
+    {loaded&&lifecycleReady&&reviewToResolve&&<form className="space-y-2 rounded border p-3" onSubmit={event=>void submitResolution(event)}>
       <h3 className="font-medium">Resolve pending approval — immutable event</h3>
       <p>{label(reviewToResolve.branch_id)} · {reviewToResolve.effective_from} to {reviewToResolve.effective_until||'open-ended'} · revision {reviewToResolve.policy_version}</p>
       <fieldset disabled={busy} className="space-y-2">
@@ -179,7 +181,7 @@ export function RosterPolicyReviews({branches}:{branches:ReadonlyArray<{id:strin
         </button>
       </fieldset>
     </form>}
-    {loaded&&<form className="space-y-2 rounded border p-3" onSubmit={event=>void inspectCandidate(event)}>
+    {loaded&&lifecycleReady&&<form className="space-y-2 rounded border p-3" onSubmit={event=>void inspectCandidate(event)}>
       <h3 className="font-medium">Effective-date policy preview — read only</h3>
       <p>This is a reviewed candidate for future activation only. It cannot enforce shifts, rest or DST yet.</p>
       <label className="grid gap-1">Branch
