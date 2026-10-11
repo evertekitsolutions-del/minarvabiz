@@ -38,7 +38,7 @@ const entries = [
 const before = structuredClone(entries);
 const html = renderToStaticMarkup(React.createElement(RosterMonthCalendar, { month: "2026-10", entries }));
 assert.match(html, /Monthly roster 2026-10/);
-assert.match(html, /dateTime="2026-10-01"|dateTime=\\"2026-10-01\\"|dateTime=/);
+assert.match(html, /dateTime="2026-10-01"/, "Browser calendar must preserve the exact branch-local day");
 assert.match(html, /Night.*22:00|Night<\/span>/);
 assert.match(html, /\(\+1 day\)/, "Overnight label must stay explicit");
 assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/, "Employee text is HTML-escaped");
