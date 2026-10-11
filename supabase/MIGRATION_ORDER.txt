@@ -86,3 +86,4 @@
 20261011_hr_roster_policy_review_history.sql
 
 20261011_hr_roster_policy_resolution_selection.sql
+20261011_hr005_holiday_rules.sql
