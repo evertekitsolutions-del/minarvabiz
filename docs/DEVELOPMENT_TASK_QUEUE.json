@@ -83,7 +83,7 @@
       "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "PR #349 source-only signed receipt metadata staging merged and postmerge main cae5c1a319663bf890d48e25f5f90a6e84b43da4 CI 25 pass/5 skip, 0 open PR. Current OFFLINE-NATIVE-01 hardens existing Windows SQLite db:writeBinary using exclusive UUID staging, fsync before validated atomic rename, best-effort directory sync and real fault-injection tests. CI and real Windows abrupt-power-loss UAT required; native IPC cross-window single writer and restore race fencing remain pending. HR005 device registration, server audited issuance ledger, trusted APPLIED sequence, transactional cache+sequence hydration, conflict reconciliation and UAT still NOT complete. HR005 migration not deployed; feature OFF.",
+      "nextAction": "OFFLINE-NATIVE-01 PR #350 merged main 9fedafea7ec79c9600e01f2b4a96ae1de47694e8 (25 main checks passed/5 skipped). OFFLINE-NATIVE-02 adds a same-main-process IPC reservation across async manual/automatic backups and full restore validation/rollback, rejecting concurrent renderer writes and false-empty reads during restore; fresh exact-head and postmerge CI required. Still need true OS-wide single instance/cross-process lock, Windows NTFS stress/power-loss UAT, unique backup restore recovery names and user-visible retry UX. HR005 signed staging NOT wired; server device registration, audited issuance, APPLIED sequence/atomic cache hydration and Offline/Hybrid conflicts remain pending. HR005 migration not deployed; holiday feature OFF.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",
@@ -103,7 +103,8 @@
         "docs/HR005_SIGNED_INTAKE_PREFLIGHT.md",
         "docs/HR005_SERVER_SIGNING_KERNEL.md",
         "docs/HR005_SIGNED_RECEIPT_SQLITE_STAGING.md",
-        "docs/WINDOWS_SQLITE_ATOMIC_WRITE_HARDENING.md"
+        "docs/WINDOWS_SQLITE_ATOMIC_WRITE_HARDENING.md",
+        "docs/WINDOWS_SQLITE_BACKUP_RESTORE_FENCE.md"
       ]
     }
   ]

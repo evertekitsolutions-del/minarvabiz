@@ -1,3 +1,9 @@
+## OFFLINE-NATIVE-02 — SQLite backup/restore same-process IPC fence (source CI pending)
+
+- Continue existing main from `9fedafea7ec79c9600e01f2b4a96ae1de47694e8`, PR #350 exact-head/postmerge green, 0 open PRs. Whole Master Vision ~51%, latest published Windows v1.0.15.
+- Root cause: native binary writes are synchronous but async backups/restore validation yield, allowing cross-tab save during snapshot, conflicting backup/restore and false-empty db:readBinary while live file is renamed away. Added `sqlite-ipc-gate.ts` with exclusive reservation spanning async backup and restore; wired directly to existing Electron trusted IPC save/read/exists/manual+automatic backups/restore handlers, with fail-fast false write and retriable busy errors. Tests simulate parallel suspended operations and failure release, and assert actual main IPC wiring.
+- **Limits**: same-main-process gate only, NOT OS-wide single instance/process lock, durable cross-process file fence, restored source encryption or HR005 authenticated cloud hydration. Windows NTFS concurrency/power-loss, restore unique filenames/recovery journal, renderer retry UX and genuine customer UAT remain outstanding. No production database/feature migration or paid service. See `docs/WINDOWS_SQLITE_BACKUP_RESTORE_FENCE.md`.
+
 ## OFFLINE-NATIVE-01 — Windows SQLite atomic write and fsync hardening (source CI pending)
 
 - Verified main baseline `cae5c1a319663bf890d48e25f5f90a6e84b43da4` (#349 merged), 25 successful and 5 optional skipped main checks, zero open PRs; customer installer v1.0.15, whole Master Vision ~51%.
