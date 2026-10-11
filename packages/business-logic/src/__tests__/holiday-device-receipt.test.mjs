@@ -118,7 +118,7 @@ assert.doesNotMatch(
  fs.readFileSync("packages/business-logic/src/holiday-device-receipt.ts","utf8"),
  /hydrateHolidayCache\(|pgRpc\(|fetch\(|enqueueOutbox\(|assignRosterSlot\(|saveAttendance\(/,
  "Signature preflight cannot perform Cloud or Windows writes");
-assert.match(fs.readFileSync("packages/business-logic/src/index.ts","utf8"),
- /export \\* as holidayDeviceReceipt from "\\.\\/holiday-device-receipt"/);
+assert.ok(fs.readFileSync("packages/business-logic/src/index.ts","utf8")
+ .includes('export * as holidayDeviceReceipt from "./holiday-device-receipt";'));
 assert.equal(typeof cache.hydrateHolidayCache,"function");
 console.log("HR005 real Ed25519 tenant/device/expiry/replay-bound signed holiday snapshot verification and NO-WRITE PASS");
