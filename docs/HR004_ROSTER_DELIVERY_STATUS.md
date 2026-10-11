@@ -5,6 +5,12 @@
 **Updated:** 2026-10-10  
 **Scope:** Shared Web, Windows SQLite, hybrid PostgreSQL/cloud authority
 
+## HR-004C next source slice — PostgreSQL UTC and minimum-rest primitives
+
+A proposed additive SQL migration `20261011_hr_roster_utc_rest_primitives.sql` supplies server-internal branch-local clock-to-UTC shift windows and symmetric overlap/minimum-rest comparisons. The real PostgreSQL 17 E2E harness checks New York fold/gap, London overnight spring change, Lord Howe half-hour DST, Asia/Kolkata to America/New_York cross-branch conflicts, exact and insufficient rest, invalid inputs, and authenticated direct-execute denial. No managed service, runtime package, table mutation or new paid dependency is required.
+
+**Acceptance limit:** These functions are not yet invoked by `staff_roster_guard()`. Stored policies remain `status='draft'` only. Approved-policy authorization, historically effective branch selection, mutual and across-branch rest decisions, safe trigger cutover, recurrence approvals, genuine tenant UAT, Offline/Hybrid parity and installer publication are still required. Keep Master Vision at ~51% until those features are verified.
+
 ## Production policy-draft migration rollout — verified October 11, 2026
 
 GitHub main `dd6f2938dd083201baf8191acccda955b6b48093` includes #314, #315 and #316. The previously blocked source-identical migration `20261010_hr_roster_time_policy_drafts.sql` was successfully applied to Supabase project `wmjgefbaliuwmaxyzxkq`; its source blob SHA is `2902b90796c87680317768490832e46213163d4f`. The tool returned `success:true` after prior sessions recorded `Invalid or expired requestState`.
