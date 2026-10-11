@@ -29,6 +29,7 @@ export interface ReviewTransport {
   readResolutions(authority:Authority):Promise<unknown>;
   writeResolution(args:Record<string,unknown>,authority:Authority):Promise<unknown>;
   selectCandidate(args:Record<string,unknown>,authority:Authority):Promise<unknown>;
+  isLifecycleReady?():boolean;
 }
 const uuid=(x:unknown):x is string=>typeof x==='string'&&
   /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(x);
@@ -107,7 +108,7 @@ export function createRosterPolicyReviewClient(transport:ReviewTransport){
     auth.ensureCurrent();return auth;
   }
   return {
-    async list():Promise<{drafts:PolicyDraft[];reviews:PolicyReview[];resolutions:PolicyResolution[]}> {
+    async list():Promise<{drafts:PolicyDraft[];reviews:PolicyReview[];resolutions:PolicyResolution[];lifecycleReady:boolean}> {
       const auth=await authorize();
       const rawDrafts=await transport.readDrafts(auth);auth.ensureCurrent();
       if(!Array.isArray(rawDrafts))throw Error('Invalid policy drafts response');
@@ -120,7 +121,8 @@ export function createRosterPolicyReviewClient(transport:ReviewTransport){
         throw Error('Duplicate policy review identity');
       if(reviews.some(r=>drafts.some(d=>d.id===r.policy_id&&d.branch_id!==r.branch_id)))
         throw Error('Policy review branch identity mismatch');
-      const rawResolutions=await transport.readResolutions(auth);auth.ensureCurrent();
+      const lifecycleReady=transport.isLifecycleReady?.()!==false;
+      const rawResolutions=lifecycleReady?await transport.readResolutions(auth):[];auth.ensureCurrent();
       if(!Array.isArray(rawResolutions))throw Error('Invalid resolutions history response');
       const resolutions=rawResolutions.map(raw=>parseResolution(raw,auth.orgId));
       if(new Set(resolutions.map(r=>r.id)).size!==resolutions.length ||
@@ -130,11 +132,12 @@ export function createRosterPolicyReviewClient(transport:ReviewTransport){
           return !review || review.branch_id!==r.branch_id ||
             review.decision!=='approved_pending_activation';
         }))throw Error('Resolution ledger identity mismatch');
-      return {drafts,reviews,resolutions};
+      return {drafts,reviews,resolutions,lifecycleReady};
     },
     async resolve(input:{review:PolicyReview;resolution:ResolutionAction;reason:string}):
       Promise<{accepted:true;resolution:PolicyResolution}|{accepted:false;reason:string}> {
       validateResolutionRequest(input);
+      if(transport.isLifecycleReady?.()===false)throw Error('Policy lifecycle migration not enabled');
       const auth=await authorize();
       const review=parseReview(input.review,auth.orgId);
       const raw=await transport.writeResolution({
@@ -160,6 +163,7 @@ export function createRosterPolicyReviewClient(transport:ReviewTransport){
     async candidate(branchId:string,forDate:string):
       Promise<{accepted:true;review:PolicyReview}|{accepted:false;reason:'no_reviewed_candidate'}> {
       validateCandidateDate(branchId,forDate);
+      if(transport.isLifecycleReady?.()===false)throw Error('Policy lifecycle migration not enabled');
       const auth=await authorize();
       const raw=await transport.selectCandidate({
         p_branch_id:branchId,p_for_date:forDate
