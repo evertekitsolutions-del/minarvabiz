@@ -49,6 +49,7 @@ BEGIN
     OR (saved->'review'->>'policy_version')::INTEGER<>1 THEN
     RAISE EXCEPTION 'Admin review decision did not record inactive snapshot: %',saved;
   END IF;
+  PERFORM pg_catalog.set_config('minarva.hr004_test_policy_id',policy_uuid::TEXT,true);
   first_review:=(saved->'review'->>'id')::UUID;
   saved:=public.review_staff_roster_time_policy(
     policy_uuid,1,'approved_pending_activation',NULL);
@@ -161,7 +162,7 @@ BEGIN
   END IF;
   BEGIN
     PERFORM public.review_staff_roster_time_policy(
-      'c1000000-0000-4000-8000-000000000001',1,
+      current_setting('minarva.hr004_test_policy_id',true)::UUID,1,
       'approved_pending_activation','Cross-tenant');
   EXCEPTION WHEN insufficient_privilege THEN denied:=true; END;
   IF NOT denied THEN
