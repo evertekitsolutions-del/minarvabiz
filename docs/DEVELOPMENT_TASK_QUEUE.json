@@ -83,7 +83,7 @@
       "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "PR #347 HR-005J signed read-only Cloud/Offline intake review merged at main f94fc98012b0efeeae271d41aea7680d862582fd, exact-head 19/2 and verified postmerge 26 success/6 skipped after Windows runner pnpm flake retry. HR-005K now adds an isolated server-only Ed25519 signing kernel compatible with existing device verifier (source code only, NO HTTP API or authorized issuance). Next: explicit authenticated/RLS device enrollment, audited transactionally persisted signing ledger and monotonic sequence, key rotation, rate limits; Windows atomic SQLite hydration/rollback and Offline/Hybrid conflicts, real UAT/legal leave-payroll policy. HR-005 production SQL unapplied, feature flag OFF, no customer writes.",
+      "nextAction": "PR #348 server-only Ed25519 signer merged main 13f9dcfa542c149eb126075f0948895b9777cca6 with 25 main CI passed /5 skipped, 0 open PR. HR005L source milestone now stages verified device receipt metadata in an append-only SQLite transaction, checks anti-replay after async signature verification, tests persistence/reopen, cross-tenant fencing and rollback. No data hydration and no customer deployment. Next: real authenticated server/device enrollment and audited issuance ledger; trusted last APPLIED sequence persistence, IPC single-writer, native file atomicity and SQLite cache+sequence transaction, offline conflict policy and UAT. HR005 production hosted migration not deployed and feature flag OFF; no payroll/attendance changes.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",
@@ -101,7 +101,8 @@
         "docs/HR005_SIGNED_DEVICE_RECEIPT.md",
         "docs/HR005_STAFF_IMPACT_REVIEW.md",
         "docs/HR005_SIGNED_INTAKE_PREFLIGHT.md",
-        "docs/HR005_SERVER_SIGNING_KERNEL.md"
+        "docs/HR005_SERVER_SIGNING_KERNEL.md",
+        "docs/HR005_SIGNED_RECEIPT_SQLITE_STAGING.md"
       ]
     }
   ]

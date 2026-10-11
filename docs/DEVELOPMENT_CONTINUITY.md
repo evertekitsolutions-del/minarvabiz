@@ -1,3 +1,10 @@
+## HR-005L immutable SQLite signed receipt staging — source CI pending
+
+- Start from independently verified `main` `13f9dcfa542c149eb126075f0948895b9777cca6` (#348 merged, 25 main CI passed/5 skipped, zero open PRs) and reuse HR005 existing receipt signing/verification. Full Master Vision still ~51%, stable customer Windows v1.0.15.
+- This branch adds **source-only, not wired** SQLite verified signed receipt metadata staging: real WebCrypto signature verification precedes SQLite transaction, transaction rechecks max staged sequence, append-only tenant/device-pinned ledger stores only identity, timestamps and SHA-256 fingerprint, never holiday rules. Replays/duplicate UUID, foreign tenant/device and staged rollback refused. It does NOT commit hydrated holiday cache, mark last applied sequence, replay Cloud, overwrite customer SQLite or activate hosted HR005 SQL.
+- Real sql.js SQLite file persistence/reopen, real Ed25519 signature, anti-replay, tenant fence, append-only triggers and failed-transaction rollback tests are included in the business-logic CI sweep. Actual native Windows IPC single-writer/atomic durable file commit, server audited issuance and registered device authority, key rotation and customer Offline/Hybrid UAT remain explicit blockers.
+- `NEXT_PUBLIC_HR005_HOLIDAYS_READY` OFF and hosted HR005 migration not deployed, no paid service or Windows release. See `docs/HR005_SIGNED_RECEIPT_SQLITE_STAGING.md`.
+
 ## HR-005K server-only Ed25519 receipt signing kernel — source CI pending
 
 - Latest verified main before branch: `f94fc98012b0efeeae271d41aea7680d862582fd` (#347 merged), exact-head 19 passed/2 skipped and postmerge 26 passed/6 skipped after retry of a transient Windows pnpm runner failure; zero open PRs. Full Master Vision ~51%; customer installer v1.0.15.
