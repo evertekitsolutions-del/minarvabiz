@@ -1,3 +1,10 @@
+## HR-004B isolated restore safety correction — pending CI
+
+- Source branch `fix/hr004b-restore-same-day-conflict-gate` based on main `81d1c8de5047a623ac7fe4b44cd5d8a919ec1d6f` (25 passed, 5 skipped, zero failed). HR-004B PR #329 read-only same-staff/day Cloud peer review is already merged.
+- Corrects a dangerous gap: former single-event restore button and function only checked same-ID revision and ignored newly available Cloud peer IDs. Now both UI and restoration authority require a *verified, exactly-one matching canonical staff/date Cloud peer snapshot* for roster-slot updates; reject unseen, different-ID, cancelled-historical, stale and cross-scope peers. Shift-template update restore still requires prior version/historical rules.
+- Restore remains local-only, exact original event payload/device ID and outbox sequence preserved, no automatic Cloud replay or overwrite; any new Cloud change during fresh review fails closed. Added negative/positive regression tests. No new paid services or database migration.
+- Independent exact-head and post-merge CI plus real authenticated browser customer UAT, durable multi-event ordered recovery and Windows/Offline/Hybrid parity remain pending. Full Master Vision remains **~51%**. Stable installer v1.0.15 unchanged.
+
 # Minarva Biz — Authoritative Project Continuation
 
 **Last updated:** 2026-10-11  
