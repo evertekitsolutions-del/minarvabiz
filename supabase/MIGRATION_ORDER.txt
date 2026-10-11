@@ -84,3 +84,5 @@
 20261010_hr_roster_time_policy_drafts.sql
 20261011_hr_roster_utc_rest_primitives.sql
 20261011_hr_roster_policy_review_history.sql
+
+20261011_hr_roster_policy_resolution_selection.sql
