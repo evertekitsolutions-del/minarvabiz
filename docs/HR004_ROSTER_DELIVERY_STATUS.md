@@ -1,3 +1,9 @@
+## HR-004B same-day Cloud peer restore authority hardening — source validation pending
+
+After PR #329 added read-only staff/date peer inspection, the existing **single-event restoration path** could still be offered to a user whose Cloud snapshot contained another canonical roster ID. The branch `fix/hr004b-restore-same-day-conflict-gate` corrects this authorization gap on both browser button visibility and the underlying restoration function. A roster assignment can be restored to browser memory only with one current RLS-scoped same-ID peer row and matching staff/date/shift/branch/status/version, plus existing revision, user/org and source-backup checks. Missing or ambiguous peers, including a differently identified cancelled historical assignment, remain quarantined. Shift-template restores keep their independent historical timing checks. There is no Cloud write or automatic replay.
+
+Tests cover valid isolated same-ID restore, stale/foreign/different-ID peers, absent peer authority, mid-review Cloud change, no automatic RPC and unchanged sealed history. Actual production customer browser UAT and ordered multi-event, SQLite/Hybrid acceptance remain open; not a completed HR-004B milestone. Master Vision stays ~51%.
+
 # HR-004 Shift/Roster — Delivery and Remaining Acceptance
 
 **Status:** Partial implementation; not production-complete  
