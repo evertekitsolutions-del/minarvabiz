@@ -138,10 +138,12 @@ await assert.rejects(()=>restore(approved),/duplicate outbox/);
 assert.deepEqual(store,savedState);assert.deepEqual(history,savedHistory);
 history=[];store={shiftRules:[{...cloud}],rosterSlots:[]};
 const refused=async(modified,pattern)=>{
+  const untouchedSealed=structuredClone(sealed);
   await assert.rejects(()=>restore(modified),pattern);
   assert.equal(store.shiftRules[0].name,cloud.name);
   assert.equal(history.length,0);
-  assert.deepEqual(sealed,events);
+  assert.deepEqual(sealed,untouchedSealed,
+    "A rejected restore must never alter even an intentionally tampered sealed fixture");
 };
 role=false;await refused(approved,/Authorized roster manager/);role=true;
 token=null;await refused(approved,/Authorized roster manager/);token=tokenValue;
