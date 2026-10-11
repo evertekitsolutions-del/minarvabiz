@@ -200,8 +200,8 @@ assert.equal(cloudWrites,0,"Reviewing/restoring a slot never sends a Cloud write
 assert.deepEqual(sealed,sealedBackup);
 
 const ui=fs.readFileSync("apps/web/src/app/(app)/roster/page.tsx","utf8");
-assert.match(ui,/restoreReviewedSealedRosterEventToMemory\\(sealedReview\\)/);
-assert.match(ui,/isReviewedSealedRosterRestoreCandidate\\(sealedReview\\)/);
+assert.match(ui,/restoreReviewedSealedRosterEventToMemory\(sealedReview\)/);
+assert.match(ui,/isReviewedSealedRosterRestoreCandidate\(sealedReview\)/);
 assert.match(ui,/Restore reviewed original event locally \(no Cloud write\)/);
 assert.match(ui,/window\.confirm\(/);
 assert.match(ui,/separately review and press Retry/);
