@@ -5,6 +5,12 @@
 **Updated:** 2026-10-10  
 **Scope:** Shared Web, Windows SQLite, hybrid PostgreSQL/cloud authority
 
+## HR-004C reviewed-policy lifecycle source milestone — pending exact-head CI
+
+The branch `feat/hr004c-reviewed-policy-lifecycle` reuses existing versioned inactive review snapshots and applies an additive immutable resolution ledger. Admins may explicitly `revoke` or `cancel` a pending approval with a reason, tenant authorization, version check, audited append-only record and serialized branch lock. A read-only effective-date selector returns at most one unrevoked, current-draft-version approved candidate, never an active scheduling rule. Later rejections/superseding reviews and changed drafts invalidate the old candidate, and ambiguous periods fail closed. Overlap checks are amended to permit a different draft only after explicit resolution/supersession; old history is never deleted.
+
+Ephemeral PostgreSQL 17 tests cover boundaries, false activation, overlap, stale/duplicate requests, RLS/role/tenant isolation, immutable audit and rollback. This is **not yet a feature-complete production rollout**: PR/head/main checks, verified deployment, browser UI, customer Web/Windows Offline/Hybrid/UAT and actual server roster guard cutover remain required. The latest verified installer stays v1.0.15. Full Master Vision estimate stays ~51%.
+
 ## Verified review history rollout — 2026-10-11
 
 PR #320 merged at `607bd19ad7ac1f80404fc38b44bf2c5a6dac7b83` after 20 successful exact-head checks, 2 optional skipped, 0 failed. Post-merge main completed 21 successful checks, 5 skipped, 0 failed. Merged SQL `20261011_hr_roster_policy_review_history.sql` was applied successfully to production as migration `20261011032956`. Live RLS + FORCE RLS, append-only trigger, anonymous RPC denial, authenticated direct-DML denial, and current `staff_roster_guard()` non-use were verified. Production has 0 organizations and 0 review rows; no genuine customer UAT performed.
