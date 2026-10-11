@@ -1,3 +1,7 @@
+## HR-005 Web holiday integration checkpoint — pending exact-head source verification
+
+PR #335 and #336 are merged (source baseline `571c0117a8134ab45519baa5ed030082eaae9655`). New Web console adds feature-flagged authenticated holiday manager, scoped save/list, optimistic revision, read-only roster exception preview. Production holiday SQL migration **not** applied; customer UAT and Windows Offline/Hybrid parity missing. Keep `NEXT_PUBLIC_HR005_HOLIDAYS_READY` OFF until controlled database rollout. Live source CI/results supersede this provisional checkpoint. Full Master Vision ~51%.
+
 # Minarva Biz — Durable Development Continuity
 
 **Purpose:** A GitHub-backed recovery/checkpoint mechanism for chat interruptions, not a replacement for human or AI implementation.
