@@ -5,6 +5,12 @@
 **Updated:** 2026-10-10  
 **Scope:** Shared Web, Windows SQLite, hybrid PostgreSQL/cloud authority
 
+## Production UTC/rest validation foundation — verified October 11, 2026
+
+PR #318 completed 20 successful checks, 2 optional skipped and 0 failed; merged main `17ce51abcd805725b1eccc6eb5a1db3a61f16ec4` then passed 21 successful main checks, 5 optional skipped, 0 failed. Merged internal SQL `20261011_hr_roster_utc_rest_primitives.sql` was deployed in Supabase, acknowledged `success:true`, registered under `20261011030016`. Live verification confirms the two functions are SECURITY INVOKER, unavailable to anonymous/authenticated direct execution, calculate explicit branch UTC windows correctly, and **are not called by the current roster trigger**. Production contains 0 organizations, 0 roster slots, and 0 policy drafts.
+
+**Still required**: approved policy history, explicit policy selection for both sides of cross-branch pairs, a server UTC/rest trigger path, approved-policy conflict review with legacy roster history, security/role tests, real authenticated tenant UAT, Offline/Hybrid parity and verified customer installer. The next activation migration must be tested separately and never assume that passing this function-only milestone activates policy enforcement. Full Master Vision remains ~51%.
+
 ## HR-004C next source slice — PostgreSQL UTC and minimum-rest primitives
 
 A proposed additive SQL migration `20261011_hr_roster_utc_rest_primitives.sql` supplies server-internal branch-local clock-to-UTC shift windows and symmetric overlap/minimum-rest comparisons. The real PostgreSQL 17 E2E harness checks New York fold/gap, London overnight spring change, Lord Howe half-hour DST, Asia/Kolkata to America/New_York cross-branch conflicts, exact and insufficient rest, invalid inputs, and authenticated direct-execute denial. No managed service, runtime package, table mutation or new paid dependency is required.
