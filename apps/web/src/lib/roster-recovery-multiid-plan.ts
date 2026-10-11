@@ -31,7 +31,6 @@ const reject=(reason:string):MultiIdReadOnlyPlan=>({
 });
 const object=(v:unknown):v is Record<string,unknown> =>
   v!==null && typeof v==="object" && !Array.isArray(v);
-const same=(a:unknown,b:unknown)=>JSON.stringify(a)===JSON.stringify(b);
 
 /**
  * A successful result is an ordered display of known evidence only.
