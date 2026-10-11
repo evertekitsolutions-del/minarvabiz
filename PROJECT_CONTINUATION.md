@@ -1,4 +1,11 @@
-## HR-004B same-origin concurrent restore exclusion — source verification pending
+## HR-004B checkpoint / local restore cross-tab exclusion — source CI pending
+
+- Main after PR #333: `a33c934fa018a81beef0f6a2b604dbe83d40ed2c`; independently checked main CI 25 passed / 5 skipped / 0 failed/pending. The reviewed single-event and same-ID-chain local restoration actions are protected by native Web Locks.
+- This next narrow source change reuses **the exact same browser lock** to serialize pre-RPC encrypted checkpoint read/compare/CAS persistence with local restoration, so a tab cannot change the sealed source during another tab's fresh review and hydration. A contending tab or missing Web Locks fails before any outbound roster RPC, without discarding the backup.
+- Existing tenant authorization, original event identity, no auto-replay, and IndexedDB atomic revision CAS remain intact. Tests add tab contention, unsupported API and no-vault-write assertions. No new dependency, production schema migration, cross-device claim or multi-ID recovery authorization.
+- Pending: exact-head PR CI, post-merge CI, Chrome multi-tab UAT, Windows/Offline/Hybrid parity, browser eviction/crash recovery, server-audited transaction conflicts, and authorized customer acceptance. Full Master Vision ~51%; stable installer v1.0.15.
+
+## HR-004B same-origin concurrent restore exclusion — merged PR #333 and green main
 
 - From verified main `f4e122fb0ce451b5998e32d69e7fd6b8e507e68e` (PR #332 merged; exact-head 25 passed/5 optional skipped), branch `feat/hr004b-cross-tab-reviewed-restore-lock` adds native Web Locks exclusive/ifAvailable protection around both existing explicit **local-only** reviewed single-event and same-ID-chain restore flows, including fresh scoped Cloud/vault reads and memory/outbox hydration.
 - A busy other browser tab or unavailable Web Locks fails closed without replay, destructive vault mutation or Cloud writes. Existing IndexedDB CAS remains unchanged. No third-party package, paid service, production migration, customer approval, multi-ID recovery permission or new UI restore path.
