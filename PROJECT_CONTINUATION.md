@@ -1,3 +1,7 @@
+## HR-004B isolated restore safety correction — PR #330 rebased on merged #331
+- Match the canonical same-day RLS Cloud peer on both isolated roster button and restore authority; refuse missing/stale/foreign/different-ID peers. Existing ordered chain remains intact. Local-only; no automatic Cloud write.
+- Verify exact-head/post-merge CI. Actual customer UAT, cross-device and Windows/Hybrid parity remain open; whole Master Vision ~51%.
+
 # Minarva Biz — Authoritative Project Continuation
 
 **Last updated:** 2026-10-11  

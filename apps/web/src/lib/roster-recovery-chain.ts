@@ -78,7 +78,10 @@ export function planReviewedSealedRosterChain(input:ChainReview):ChainPlan {
       if(!Array.isArray(peers) || peers.length!==1 ||
          !record(peers[0]) || peers[0].id!==first.aggregateId ||
          peers[0].staffId!==base.staffId || peers[0].workDate!==base.workDate ||
-         peers[0].version!==baseRevision)
+         peers[0].version!==baseRevision ||
+         peers[0].shiftRuleId!==base.shiftRuleId ||
+         peers[0].branchId!==base.branchId ||
+         peers[0].status!==base.status)
         return fail("Cloud same-day assignment peers are missing, ambiguous or changed");
     } else {
       if(typeof event.localPayload.name!=="string" || !event.localPayload.name.trim() ||

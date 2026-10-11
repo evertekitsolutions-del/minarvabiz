@@ -113,7 +113,9 @@ const checkpoint=fs.readFileSync("apps/web/src/lib/roster-recovery-checkpoint.ts
 assert.match(checkpoint,/eventType:event\.eventType,deviceId:event\.deviceId,sequence:event\.sequence/);
 assert.match(page,/analyzeSealedRosterDependencies\(report\)/);
 assert.match(page,/Multiple-event restores remain disabled/);
-assert.match(page,/Only a single same-ID update/);
+assert.match(page,/A single roster assignment must have exactly one matching RLS-scoped Cloud staff/);
+assert.match(page,/Unverified, different-ID or cancelled historical peers stay quarantined/);
+assert.match(page,/isReviewedSealedRosterRestoreCandidate\(sealedReview\)/);
 assert.doesNotMatch(fs.readFileSync("apps/web/src/lib/roster-recovery-dependencies.ts","utf8"),
   /pgRpc|fetch\(|upsertRosterEvent|hydrateOutbox|saveSealedRosterRecovery|\.delete\(|window\./,
   "Dependency analysis must not include network/write/restore functions");

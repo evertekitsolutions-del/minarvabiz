@@ -32,7 +32,7 @@
       "status": "in_progress",
       "capability": "HR-004 durable hybrid roster recovery",
       "title": "Recover multi-event and different-ID roster conflicts safely",
-      "nextAction": "PR branch adds explicitly confirmed, same-ID consecutive 2–25 event local-only restoration with sealed originals, rollback and no automatic Cloud write. Verify exact-head and post-merge CI and real authenticated browser UAT. Complete multi-ID/multi-device ordered restore, independent Cloud race authority, customer UAT and Windows SQLite/Offline/Hybrid parity before feature completion.",
+      "nextAction": "Integrate PR #330 after #331 and verify isolated roster-slot recovery exact same-day RLS peer safety. Complete exact-head/post-merge CI, customer browser tests, multi-ID/multi-device ordered recovery with authoritative Cloud transactions and Windows SQLite/Offline/Hybrid parity. Never auto-replay.",
       "acceptance": [
         "No cross-tenant restores or automatic cloud replays",
         "Dependent-event and different-ID conflicts explicitly reviewed",

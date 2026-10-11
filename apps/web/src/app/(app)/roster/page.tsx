@@ -8,7 +8,7 @@ import {
 } from "@minarvabiz/business-logic";
 import { isRosterHydrated } from "@/lib/data-source";
 import { checkpointUnconfirmedRosterEvents, inspectSealedRosterCheckpoint, compareSealedRosterCheckpointWithCloud } from "@/lib/roster-recovery-checkpoint";
-import { restoreReviewedSealedRosterEventToMemory, restoreReviewedSealedRosterChainToMemory } from "@/lib/roster-recovery-restore";
+import { restoreReviewedSealedRosterEventToMemory, restoreReviewedSealedRosterChainToMemory, isReviewedSealedRosterRestoreCandidate } from "@/lib/roster-recovery-restore";
 import { planReviewedSealedRosterChain } from "@/lib/roster-recovery-chain";
 import { analyzeSealedRosterDependencies, type RosterRecoveryDependencyReview } from "@/lib/roster-recovery-dependencies";
 
@@ -109,7 +109,7 @@ export default function RosterPage() {
   }
 
   async function restoreSavedEventForReview() {
-    if (!sealedReview || !ready || !isRosterHydrated() ||
+    if (!sealedReview || !isReviewedSealedRosterRestoreCandidate(sealedReview) || !ready || !isRosterHydrated() ||
         recoveryState !== "blocked" || !can("staff.manage") ||
         !getRemoteWriter()?.upsertRosterEvent || inFlight.current) return;
     if (!window.confirm(
@@ -326,10 +326,7 @@ export default function RosterPage() {
           </div>
         </article>)}
       </div>
-      {sealedReview.total === 1 && sealedReview.comparisons.length === 1 &&
-       sealedReview.comparisons[0].remotePresence === "visible" &&
-       sealedReview.comparisons[0].remoteVersion !== null &&
-       sealedReview.comparisons[0].localVersion === sealedReview.comparisons[0].remoteVersion + 1 &&
+      {isReviewedSealedRosterRestoreCandidate(sealedReview) &&
        <button type="button" className="mt-3 rounded border px-3 py-2"
          disabled={busy || !isRosterHydrated() || !getRemoteWriter()?.upsertRosterEvent}
          onClick={() => void restoreSavedEventForReview()}>
@@ -344,9 +341,7 @@ export default function RosterPage() {
           Restore reviewed ordered same-ID chain locally ({plan.eventIds.length} events; no Cloud write)
         </button>;
       })()}
-      <p className="mt-2 text-sm">Only a single same-ID update whose Cloud version is exactly one behind
-        can be restored by this action. Conflicting, missing, hidden or dependent events remain
-        quarantined for separate recovery. A complete, single-ID, ordered revision chain may be
+      <p className="mt-2 text-sm">A single roster assignment must have exactly one matching RLS-scoped Cloud staff/date peer before isolated restore. Unverified, different-ID or cancelled historical peers stay quarantined. A complete, single-ID, ordered revision chain may be
         restored locally after explicit confirmation and another fresh Cloud/backup comparison.
         Multi-ID or nonconsecutive events stay quarantined. Cloud synchronization is never automatic.</p>
     </section>}

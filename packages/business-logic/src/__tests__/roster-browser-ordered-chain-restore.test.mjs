@@ -74,6 +74,16 @@ assert.equal(planner({...slotApproved,comparisons:[slotApproved.comparisons[0],
   {...slotApproved.comparisons[1],sameDayCloudPeers:[]}]}).eligible,false);
 assert.equal(planner({...slotApproved,comparisons:[slotApproved.comparisons[0],
   {...slotApproved.comparisons[1],sameDayCloudPeers:[{...slotBase,id:"foreign-id"}]}]}).eligible,false);
+for(const peer of [
+  {...slotBase,shiftRuleId:"another-shift"},
+  {...slotBase,branchId:"another-branch"},
+  {...slotBase,status:"cancelled"},
+]) {
+  assert.equal(planner({...slotApproved,comparisons:[
+    slotApproved.comparisons[0],
+    {...slotApproved.comparisons[1],sameDayCloudPeers:[peer]}
+  ]}).eligible,false,"Changed peer shift, branch or status must block ordered recovery");
+}
 assert.equal(planner({...slotApproved,comparisons:[slotApproved.comparisons[0],
   {...slotApproved.comparisons[1],localPayload:{...slotApproved.comparisons[1].localPayload,staffId:"other-staff"}}]}).eligible,false);
 

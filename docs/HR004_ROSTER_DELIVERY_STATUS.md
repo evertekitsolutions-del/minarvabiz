@@ -1,3 +1,7 @@
+## HR-004B single-event Cloud-peer restore guard — pending CI
+
+An isolated roster-slot restore requires exactly one matching tenant-RLS staff/day Cloud peer on both UI and server-bound local restoration function. Deny missing, stale, foreign or different-ID peers. Retain #331 ordered chain restoration, original encrypted event backup and explicit Retry. No automatic Cloud write or paid service. Full HR004B real UAT/Offline/Hybrid/mixed-ID remains open.
+
 # HR-004 Shift/Roster — Delivery and Remaining Acceptance
 
 **Status:** Partial implementation; not production-complete  
