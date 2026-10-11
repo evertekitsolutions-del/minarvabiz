@@ -10,6 +10,7 @@ import {
   can, exportOutbox, getRemoteWriter, getRemoteWriterGeneration, getSessionToken, getSessionUser,
 } from "@minarvabiz/business-logic";
 import { resolveOnlineAuthorization } from "./data-source";
+import { withExclusiveRosterRecoveryTabLock } from "./roster-recovery-tab-lock";
 import {
   createIndexedDbRosterRecoveryDriver,
   loadSealedRosterRecovery, saveSealedRosterRecovery,
@@ -67,6 +68,9 @@ export async function inspectSealedRosterCheckpoint(): Promise<{
 export async function checkpointUnconfirmedRosterEvents(
   resolvedEventIds: readonly string[] = [],
 ): Promise<number> {
+  // Serialize same-origin checkpoint writes with explicit reviewed restores.
+  // A competing tab must fail closed before another Cloud RPC is attempted.
+  return withExclusiveRosterRecoveryTabLock(async () => {
   const identity = await authorizedScope();
   const previous = (await loadSealedRosterRecovery(storage(),identity.scope) ?? [])
     .filter(e=>e.status==="pending"||e.status==="failed");
@@ -98,6 +102,7 @@ export async function checkpointUnconfirmedRosterEvents(
   await saveSealedRosterRecovery(storage(),identity.scope,pending);
   ensureCurrent(identity);
   return pending.length;
+  });
 }
 
 /**

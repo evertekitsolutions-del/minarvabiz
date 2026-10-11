@@ -32,7 +32,7 @@
       "status": "in_progress",
       "capability": "HR-004 durable hybrid roster recovery",
       "title": "Recover multi-event and different-ID roster conflicts safely",
-      "nextAction": "PR #332 deterministic distinct-ID human-only review is merged. Next source slice: native browser Web Locks fail-closed protection for concurrent explicit local-only single-event/same-ID-chain restore; verify exact-head CI and post-merge tests. Server-audited transactional identity, cross-device/cross-tab durable coordination, browser eviction/crash rollback, authenticated UAT and Windows SQLite/Offline/Hybrid parity remain blocked. Never treat reviewOrderAvailable as restore or replay authority.",
+      "nextAction": "PR #333 merged and post-merge main verified 25 passed/5 skipped, adding same-origin reviewed local restore lock. Next source branch serializes pre-RPC encrypted checkpoint writes with the same Web Lock; verify its exact-head and post-merge gates. Then develop server-audited multi-ID/peer conflict transaction authority and durable cross-device, revoked-session, browser eviction/crash rollback plus Web/Windows SQLite/Offline/Hybrid UAT. Multi-ID plan is HUMAN READ-ONLY, never recovery or Cloud replay authority.",
       "acceptance": [
         "No cross-tenant restores or automatic cloud replays",
         "Dependent-event and different-ID conflicts explicitly reviewed",

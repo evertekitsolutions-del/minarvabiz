@@ -7,6 +7,21 @@ require.extensions[".ts"]=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f
   compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}
 }).outputText,f);
 
+// Chromium Web Locks serialize pre-RPC checkpoint writes with reviewed restores.
+let lockOccupied=false;
+const lockManager={request:async(name,options,callback)=>{
+  assert.equal(name,"minarvabiz:hr004b:reviewed-local-restore");
+  assert.deepEqual(options,{mode:"exclusive",ifAvailable:true});
+  if(lockOccupied)return callback(null);
+  lockOccupied=true;
+  try{return await callback({name,mode:"exclusive"});}
+  finally{lockOccupied=false;}
+}};
+Object.defineProperty(globalThis,"navigator",{configurable:true,
+  value:{locks:lockManager}});
+const {withExclusiveRosterRecoveryTabLock}=require(
+  "../../../../apps/web/src/lib/roster-recovery-tab-lock.ts");
+
 const user="11111111-1111-4111-8111-111111111111";
 const organization="22222222-2222-4222-8222-222222222222";
 let token="verified-token",generation=1,role=true,currentUser=user,authorized=true;
@@ -62,6 +77,24 @@ assert.equal(await checkpoints.checkpointUnconfirmedRosterEvents(),1);
 assert.equal(writes.length,1);
 assert.equal(writes[0].scope.organizationId,organization);
 assert.equal(writes[0].events[0].id,event.id);
+
+const persistedBeforeContention=writes.length;
+let releaseTab;
+const tabHold=new Promise(resolve=>{releaseTab=resolve;});
+const otherTab=withExclusiveRosterRecoveryTabLock(async()=>await tabHold);
+await new Promise(resolve=>setImmediate(resolve));
+await assert.rejects(()=>checkpoints.checkpointUnconfirmedRosterEvents(),
+  /Another browser tab/,"Busy recovery lock must block a competing checkpoint write");
+assert.equal(writes.length,persistedBeforeContention,
+  "A contending tab must not overwrite the previous encrypted checkpoint");
+releaseTab();await otherTab;
+const savedNavigator=globalThis.navigator;
+Object.defineProperty(globalThis,"navigator",{configurable:true,value:{}});
+await assert.rejects(()=>checkpoints.checkpointUnconfirmedRosterEvents(),
+  /Web Locks.*required/,"Unsupported browser must fail before any outbound Cloud RPC");
+assert.equal(writes.length,persistedBeforeContention);
+Object.defineProperty(globalThis,"navigator",{configurable:true,value:savedNavigator});
+
 assert.equal((await checkpoints.inspectSealedRosterCheckpoint()).events.length,1);
 
 // An event ID cannot be reused for a different immutable payload/sequence.
@@ -185,4 +218,6 @@ assert.match(page,/Compare saved changes with Cloud \(read only\)/);
 assert.match(page,/compareSealedRosterCheckpointWithCloud\(\)/);
 assert.match(page,/No events were imported, discarded, sent or acknowledged/);
 
+assert.match(fs.readFileSync("apps/web/src/lib/roster-recovery-checkpoint.ts","utf8"),
+  /return withExclusiveRosterRecoveryTabLock\(async \(\) => \{/);
 console.log("HR-004B Web integration: RPC-authorized scope, prewrite, acknowledgement, revoked session and crash quarantine PASS");

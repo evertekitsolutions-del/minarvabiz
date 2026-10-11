@@ -1,4 +1,8 @@
-## HR-004B cross-tab reviewed local restore gate — source CI pending
+## HR-004B encrypted checkpoint/restore tab-exclusion gate — source CI pending
+
+Reuses PR #333's same-origin exclusive Web Lock for `checkpointUnconfirmedRosterEvents` before authorized Cloud synchronization. Both reviewed local restore and encrypted checkpoint read/compare/save now acquire the same lock. A second tab or browser without Web Locks cannot overwrite the sealed roster vault during recovery; existing IndexedDB CAS remains an independent defense. Cross-device authority, durable crash/rollback and server transaction checks still require separate work. No automatic Cloud replay, no multi-ID restore, no migration; full Master Vision ~51%.
+
+## HR-004B cross-tab reviewed local restore gate — merged PR #333; main CI green
 
 Native same-origin exclusive Web Locks now wrap both existing explicit local-only restore authorities. Deny contending tabs immediately and fail closed if locks are unavailable; acquire before fresh tenant-scoped Cloud/vault reads, hold through local-memory/outbox hydration, release after error. Existing immutable AES-GCM vault, IndexedDB CAS, same-ID and isolated canonical peer validation are unchanged. No Cloud overwrite, multi-ID restore or batch replay is unlocked. Still required: real browser tabs and Windows UAT, cross-device/server-transaction conflict authority, eviction/rollback and Offline/Hybrid parity. Full Master Vision ~51%; customer Windows stable v1.0.15.
 
