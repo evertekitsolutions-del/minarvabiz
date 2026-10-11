@@ -173,6 +173,25 @@ generation+=1;unlock();changeDuringCloud=null;
 await assert.rejects(inFlight,/session or organization changed/);
 assert.equal(history.length,0);assert.equal(writes,0);
 
+// A two-revision roster assignment chain must respect the reviewed same-day
+// canonical peer and all previous local baseline identity without Cloud writes.
+generation+=1;
+store={shiftRules:[{...cloud}],rosterSlots:[{...slotBase}]};
+const slotEvents=slotApproved.comparisons.map(c=>({
+ id:c.eventId,aggregateType:c.aggregateType,aggregateId:c.aggregateId,
+ eventType:"update",deviceId:c.deviceId,sequence:c.sequence,
+ payload:{...c.localPayload},status:"failed",occurredAt:"2026-10-11T00:00:00Z",
+ attempts:1,lastError:null
+}));
+sealed=structuredClone(slotEvents);report=structuredClone(slotApproved);
+const slotRestored=await restore(slotApproved);
+assert.equal(slotRestored.finalVersion,4);
+assert.equal(store.rosterSlots[0].id,slotBase.id);
+assert.equal(store.rosterSlots[0].version,4);
+assert.deepEqual(history.map(e=>e.id),slotEvents.map(e=>e.id));
+assert.equal(writes,0);
+history=[];sealed=structuredClone(events);report=structuredClone(approved);
+
 // Browser must not expose a cloud-replay operation from this restore button.
 const ui=fs.readFileSync("apps/web/src/app/(app)/roster/page.tsx","utf8");
 assert.match(ui,/planReviewedSealedRosterChain\(sealedReview\)/);
@@ -180,5 +199,6 @@ assert.match(ui,/restoreReviewedSealedRosterChainToMemory\(sealedReview\)/);
 assert.match(ui,/Restore reviewed ordered same-ID chain locally/);
 assert.match(ui,/No Cloud write occurred/);
 assert.match(ui,/click Retry separately/);
-assert.match(fs.readFileSync("apps/web/src/lib/roster-recovery-chain.ts","utf8"),/automatic/i);
+assert.match(fs.readFileSync("apps/web/src/lib/roster-recovery-chain.ts","utf8"),
+  /never modifies|never.*Cloud write/i);
 console.log("HR004B reviewed multi-event LOCAL restore: immutable chains, revision/order/peer denial, rollback, auth swap and no Cloud RPC PASS");
