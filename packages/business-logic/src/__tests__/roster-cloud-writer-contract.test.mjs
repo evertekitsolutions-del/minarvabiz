@@ -84,6 +84,37 @@ readError=null;readRows=null;
 await assert.rejects(()=>writer.getRosterShift(shiftId),/Invalid roster conflict read response/);
 await assert.rejects(()=>roster.createRosterRemoteWriter({accessToken:null}).getRosterShift(shiftId),
   /Authenticated roster conflict review requires a valid session/);
-assert.ok(selected.every(read=>read.query.includes("&limit=1")),"Every conflict read is ID scoped");
+
+const staffUUID="33333333-3333-4333-8333-333333333333";
+const peerUUID="44444444-4444-4444-8444-444444444444";
+readRows=[{id:peerUUID,staff_id:staffUUID,shift_rule_id:shiftId,
+ branch_id:null,work_date:"2026-10-09",status:"scheduled",version:3}];
+const peers=await writer.getRosterDayPeers(staffUUID,"2026-10-09");
+assert.equal(peers.length,1);
+assert.equal(peers[0].id,peerUUID);
+assert.deepEqual(selected.at(-1),{
+ table:"staff_roster_slots",
+ query:`select=*&staff_id=eq.${staffUUID}&work_date=eq.2026-10-09&order=id.asc&limit=26`
+});
+await assert.rejects(()=>writer.getRosterDayPeers("staff-injected&id=neq.x","2026-10-09"),/Invalid roster staff identity/);
+await assert.rejects(()=>writer.getRosterDayPeers(staffUUID,"2026-02-30"),/Invalid cloud roster work date/);
+await assert.rejects(()=>writer.getRosterDayPeers(staffUUID,"2026-10-09&org_id=neq.x"),/Invalid cloud roster work date/);
+readRows=[{...readRows[0],staff_id:"55555555-5555-4555-8555-555555555555"}];
+await assert.rejects(()=>writer.getRosterDayPeers(staffUUID,"2026-10-09"),/peer identity mismatch/);
+readRows=[{...readRows[0],staff_id:staffUUID},{...readRows[0],staff_id:staffUUID}];
+await assert.rejects(()=>writer.getRosterDayPeers(staffUUID,"2026-10-09"),/peer identity mismatch/);
+readRows=Array.from({length:26},(_,i)=>({...readRows[0],id:`x-${i}`}));
+await assert.rejects(()=>writer.getRosterDayPeers(staffUUID,"2026-10-09"),/incomplete or invalid/);
+readRows=[];readError={message:"role has no organization access"};
+await assert.rejects(()=>writer.getRosterDayPeers(staffUUID,"2026-10-09"),/role has no organization access/);
+readError=null;
+await assert.rejects(()=>roster.createRosterRemoteWriter({accessToken:null})
+  .getRosterDayPeers(staffUUID,"2026-10-09"),/Authenticated roster day review/);
+assert.ok(selected.filter(read=>read.query.includes("&id=eq.")).every(read=>read.query.includes("&limit=1")),
+  "Exact ID conflict reads stay bounded");
+assert.ok(selected.filter(read=>read.query.includes("&staff_id=eq."))
+  .every(read=>read.query.includes("&work_date=eq.")&&read.query.includes("&limit=26")),
+  "New peer reads must remain staff/date bounded");
+
 console.log("HR-004 authorized conflict reads: exact ID, RLS denial, missing row, rejected injection and mapping PASS");
 console.log("HR-004 authenticated RPC adapter: immutable replay identity, refusal and acknowledgement tests PASS");

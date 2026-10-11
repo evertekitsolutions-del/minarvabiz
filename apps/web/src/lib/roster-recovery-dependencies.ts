@@ -10,7 +10,8 @@ import type { SealedRosterCloudComparison } from "./roster-recovery-checkpoint";
 
 export interface RosterDependencyFinding {
   key: string;
-  kind: "cloud-uncertain" | "same-record" | "shift-before-slot" |
+  kind: "cloud-uncertain" | "cloud-day-unverified" | "cloud-day-different-id" |
+    "same-record" | "shift-before-slot" |
     "same-day-different-id" | "sequence-collision" | "incomplete-batch";
   eventIds: string[];
   message: string;
@@ -80,6 +81,38 @@ export function analyzeSealedRosterDependencies(
     `Only ${events.length} of ${report.total} sealed events were compared. Dependencies outside this page are unknown; leave all events quarantined.`);
 
   for(const event of events){
+    if(event.aggregateType==="staff_roster_slots"){
+      const staffId=value(event.localPayload,"staffId"),date=value(event.localPayload,"workDate");
+      const peers=event.sameDayCloudPeers;
+      if(!Array.isArray(peers)){
+        add("cloud-day-unverified",[event.eventId],
+          "No verified same-staff/day Cloud roster snapshot. Cross-device different-ID conflicts are unknown.");
+      }else{
+        if(peers.length>25)throw Error("Unbounded or malformed authorized roster day snapshot");
+        const seenIds=new Set<string>();
+        for(const candidate of peers){
+          if(!candidate || typeof candidate!=="object" || Array.isArray(candidate) ||
+             typeof candidate.id!=="string" || !candidate.id ||
+             candidate.staffId!==staffId || candidate.workDate!==date ||
+             !Number.isSafeInteger(candidate.version) || Number(candidate.version)<1 ||
+             seenIds.has(candidate.id))
+            throw Error("Untrusted or cross-scope roster day comparison");
+          seenIds.add(candidate.id);
+          if(candidate.id!==event.aggregateId){
+            add("cloud-day-different-id",[event.eventId],
+              "Cloud contains a different canonical assignment ID "+candidate.id+
+              " for the same staff/date (including cancelled history). Explicit review required.");
+          }else if(event.remotePresence!=="visible" ||
+                    candidate.version!==event.remoteVersion){
+            add("cloud-day-unverified",[event.eventId],
+              "RLS-scoped day snapshot differs from same-ID Cloud review. Restart comparison.");
+          }
+        }
+        if(event.remotePresence==="visible" && !seenIds.has(event.aggregateId))
+          add("cloud-day-unverified",[event.eventId],
+            "Cloud day query did not include the visible canonical record. Snapshot is inconsistent.");
+      }
+    }
     if(event.remotePresence==="missing-or-hidden"){
       add("cloud-uncertain",[event.eventId],
         "Cloud record is missing or hidden by authorization. Never infer permission to recreate it.");

@@ -5,6 +5,13 @@
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
+## Current HR-004B Cloud same-day peer review — source PR pending
+
+- Verified pre-branch main `aa8c0fb90a57373df42e672e31912ae552bc963e`; 25 passed / 5 optional skipped, no failures/pending, no open PR. PR #328's bounded encrypted multi-event dependency inspector and tests merged; its server-visible external same-day peers remained missing.
+- Branch `feat/hr004b-cloud-day-peers` **reuses existing** manager SELECT RLS on `staff_roster_slots`, the current session-pinned RemoteWriter, and staff/date index; adds a strictly bounded, read-only tenant-scoped day lookup (26 fetch limit, reject >25), staff/date/id validation and warning of Cloud-visible different-ID records outside the encrypted local batch. No migration or additional privilege grant.
+- A RLS-hidden row can still be invisible; independent reads can race with concurrent Cloud writes. Hence an unavailable/ambiguous peer snapshot explicitly remains **UNVERIFIED**, and the user must not treat an empty response as permission to overwrite. Existing single-event reviewed local restore gate is unchanged; all multi-event writes remain prohibited.
+- No customer UAT, Offline/Windows/Hybrid proof, actual ordered multi-event restore, or version-safe reconciliation has been delivered. New tests cover constrained RLS queries, field validation, cross-scope rejection and different-ID warnings. Run exact-head and post-merge CI before accepting source. Full Master Vision estimate stays **~51%**.
+
 ## Current HR-004B source slice — pending independent CI
 
 - Started from verified main `b4812336ad43097d5b8f8988a3f7b9b5c1b0547d`; 25 successful / 5 skipped / 0 failed checks, no open PR.
