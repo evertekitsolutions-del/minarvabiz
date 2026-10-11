@@ -1,3 +1,7 @@
+## HR-004B cross-tab reviewed local restore gate — source CI pending
+
+Native same-origin exclusive Web Locks now wrap both existing explicit local-only restore authorities. Deny contending tabs immediately and fail closed if locks are unavailable; acquire before fresh tenant-scoped Cloud/vault reads, hold through local-memory/outbox hydration, release after error. Existing immutable AES-GCM vault, IndexedDB CAS, same-ID and isolated canonical peer validation are unchanged. No Cloud overwrite, multi-ID restore or batch replay is unlocked. Still required: real browser tabs and Windows UAT, cross-device/server-transaction conflict authority, eviction/rollback and Offline/Hybrid parity. Full Master Vision ~51%; customer Windows stable v1.0.15.
+
 ## HR-004B multi-ID dependency order preview — source review pending
 
 From verified main `109e8ea58939e79211c49b31fdcc627ea7a15bcc`, a new pure read-only planner produces a **provisional device-sequenced review order** for a complete bounded 2–25-event encrypted batch targeting distinct canonical records. It checks original device stream continuity, duplicate/repeated aggregate IDs, Cloud revision consistency, shift-before-slot prerequisites without historical timing mutation, staff/day different-ID collision and exact RLS-visible canonical peers. It fails closed for partial/cross-device/missing/hidden data and has **no ability to restore or synchronize**. The existing browser recovery UI presents the plan as non-executable human evidence, not a server-authorized recovery command.
