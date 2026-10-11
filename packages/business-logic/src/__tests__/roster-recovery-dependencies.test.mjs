@@ -36,6 +36,39 @@ assert.deepEqual(result.findings.filter(f=>f.kind==="shift-before-slot").map(f=>
 assert.equal(result.findings.filter(f=>f.kind==="same-day-different-id").length,1);
 assert.ok(result.findings.every(f=>!f.message.includes("safe to replay")));
 assert.equal(analyzeSealedRosterDependencies({comparisons:[],total:0}).automaticRecoveryAllowed,false);
+const cloudPeer={id:"99999999-9999-4999-8999-999999999999",
+  staffId,workDate:"2026-11-11",shiftRuleId:shiftId,
+  branchId:null,status:"scheduled",version:1};
+const cloudDifferent=analyzeSealedRosterDependencies({
+  comparisons:[{...slot,sameDayCloudPeers:[cloudPeer]}],total:1
+});
+assert.equal(cloudDifferent.findings.some(f=>f.kind==="cloud-day-different-id"),true);
+assert.equal(cloudDifferent.automaticRecoveryAllowed,false);
+const unverified=analyzeSealedRosterDependencies({comparisons:[slot],total:1});
+assert.equal(unverified.findings.some(f=>f.kind==="cloud-day-unverified"),true);
+const inconsistent=analyzeSealedRosterDependencies({
+  comparisons:[{...slot,sameDayCloudPeers:[]}],total:1
+});
+assert.equal(inconsistent.findings.some(f=>f.kind==="cloud-day-unverified"),true);
+const consistent=analyzeSealedRosterDependencies({
+  comparisons:[{...slot,sameDayCloudPeers:[{
+    id:slot.aggregateId,staffId,workDate:"2026-11-11",
+    shiftRuleId:shiftId,branchId:null,status:"scheduled",version:1
+  }]}],total:1
+});
+assert.equal(consistent.findings.some(f=>f.kind==="cloud-day-different-id"),false);
+assert.equal(consistent.findings.some(f=>f.kind==="cloud-day-unverified"),false);
+for(const wrong of [
+  {...cloudPeer,staffId:"foreign-staff"},
+  {...cloudPeer,workDate:"2026-11-12"},
+  {...cloudPeer,version:0}
+]) assert.throws(()=>analyzeSealedRosterDependencies({
+  comparisons:[{...slot,sameDayCloudPeers:[wrong]}],total:1
+}),/Untrusted or cross-scope/);
+assert.throws(()=>analyzeSealedRosterDependencies({
+  comparisons:[{...slot,sameDayCloudPeers:[cloudPeer,cloudPeer]}],total:1
+}),/Untrusted or cross-scope/);
+
 const before=structuredClone([shift,slot,slotDifferentId]);
 assert.deepEqual([shift,slot,slotDifferentId],before,"Read-only analysis never alters the reviewed events");
 
