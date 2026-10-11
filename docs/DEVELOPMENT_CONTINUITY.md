@@ -1,3 +1,10 @@
+## HR-005I staff review policy impact — source CI pending
+
+- Start from verified latest main `2bb2218ecb047280607377fec42cc2adbe66ce98` (PR #342 merged, exact-head 19 passed/2 skipped and post-merge main 25 passed/5 skipped; zero failures or pending, no open PRs).
+- Reuse existing authenticated manager-only Cloud/local holiday revision and civil-day impact comparisons. Add a shared bounded read-only delta of roster/attendance **review findings** in the selected tenant/country/branch/window; context changes reset previews. No automatic writes, device sync, server authority, holiday or payroll decisions.
+- Actual production read-only Supabase project inspection on 2026-10-11 confirmed `staff_holiday_rules` table and HR-005 migration are not deployed. Keep `NEXT_PUBLIC_HR005_HOLIDAYS_READY` OFF until explicit authorization and proper UAT.
+- Source milestone requires exact-head/post-merge CI and real authorized Web/Windows acceptance. No new paid dependency, migration, company data edit, production feature activation or release. Full Master Vision ~51%; customer installer v1.0.15. Details: `docs/HR005_STAFF_IMPACT_REVIEW.md`.
+
 ## HR-005 effective calendar day impact — source CI pending
 
 - From verified main `b0177f0e5146e9f2928614a61da2c2c5310fa7db` (PR #341 merged; 25 checks passed, 5 skipped; zero failed/pending; open PRs 0 before branch), the new bounded review reuses authenticated HR-005 Cloud rule list, offline v15 snapshot validation and deterministic branch-local shared calendar engine.
