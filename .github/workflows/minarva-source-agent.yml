@@ -1,0 +1,106 @@
+name: Minarva Source Agent — gated review patches
+
+on:
+  schedule:
+    - cron: '13,43 * * * *'
+  workflow_dispatch:
+
+# Source is always read-only. This workflow never pushes, merges, deploys,
+# updates a release or accepts any production/cloud write credentials.
+permissions:
+  contents: read
+
+concurrency:
+  group: minarva-source-agent-main
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      eligible: ${{ steps.gate.outputs.eligible }}
+      task_id: ${{ steps.gate.outputs.task_id }}
+      reason: ${{ steps.gate.outputs.reason }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+      - name: Validate no-duplicate, exact-main, allowlisted task selection
+        run: node --test scripts/agent-queue-gate.test.mjs scripts/agent-patch-audit.test.mjs
+      - name: Read-only GitHub state and source queue gate
+        id: gate
+        run: node scripts/agent-queue-gate.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MINARVA_AI_ENABLED: ${{ vars.MINARVA_COPILOT_AUTOCODE_ENABLED }}
+
+  source_patch:
+    needs: preflight
+    # IMPORTANT: defaults to disabled. Only enable after the repo owner
+    # verifies Copilot entitlement, spending limits and credit policy.
+    if: ${{ needs.preflight.outputs.eligible == 'true' && vars.MINARVA_COPILOT_AUTOCODE_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      copilot-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.0
+          run_install: false
+      - name: Install dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Install official GitHub Copilot CLI
+        run: npm install --global @github/copilot
+      - name: Produce bounded source-only edits for human review
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MINARVA_TASK_ID: ${{ needs.preflight.outputs.task_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$MINARVA_TASK_ID" = HR-005-HOLIDAYS
+          cat > "$RUNNER_TEMP/minarva-agent-prompt.txt" <<'PROMPT'
+          You are preparing one REVIEW-ONLY source code increment for EXISTING Minarva Biz.
+          Read PROJECT_CONTINUATION.md, docs/MASTER_PRODUCT_PLAN.md,
+          docs/CAPABILITY_REGISTRY.md, docs/DEVELOPMENT_TASK_QUEUE.json,
+          docs/ENGINEERING_REUSE_POLICY.md and HR005 existing code before changes.
+          Avoid duplicating existing features. Solve one bounded HR-005-HOLIDAYS
+          unblocked source-only increment and add regression tests. Only edit
+          applications' source: apps/web/src/, apps/desktop/src/,
+          packages/business-logic/src/, packages/utils/src/.
+          Do not edit workflows, lockfiles, secrets, tests infrastructure,
+          configs, license service, migrations or other file paths. Never run
+          commands, connect to customer services, push, open a PR, merge, deploy,
+          install dependencies, restore sync data or change an HR005 feature flag.
+          No automatic holiday or payroll writes. Do not simplify existing scope.
+          Fail safely if there is no independent source-only increment available.
+          PROMPT
+          copilot -p "$(cat "$RUNNER_TEMP/minarva-agent-prompt.txt")" \
+            --no-ask-user --allow-tool='write' \
+            --deny-tool='shell' --deny-tool='url'
+      - name: Convert safe source changes into review artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -N -- apps/web/src apps/desktop/src packages/business-logic/src packages/utils/src
+          node scripts/agent-patch-audit.mjs
+          node --test scripts/agent-queue-gate.test.mjs scripts/agent-patch-audit.test.mjs
+      - name: Publish review-only patch (not a PR, commit or merge)
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: minarva-reviewed-source-proposal
+          path: .agent-artifacts/minarva-source-review.patch
+          if-no-files-found: error
+          retention-days: 7
