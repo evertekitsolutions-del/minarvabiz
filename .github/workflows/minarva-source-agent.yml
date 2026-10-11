@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: 24
       - name: Validate no-duplicate, exact-main, allowlisted task selection
-        run: node --test scripts/agent-queue-gate.test.mjs scripts/agent-patch-audit.test.mjs
+        run: node --test scripts/agent-queue-gate.test.mjs scripts/agent-patch-audit.test.mjs scripts/agent-workflow-contract.test.mjs
       - name: Read-only GitHub state and source queue gate
         id: gate
         run: node scripts/agent-queue-gate.mjs
@@ -96,7 +96,7 @@ jobs:
           set -euo pipefail
           git add -N -- apps/web/src apps/desktop/src packages/business-logic/src packages/utils/src
           node scripts/agent-patch-audit.mjs
-          node --test scripts/agent-queue-gate.test.mjs scripts/agent-patch-audit.test.mjs
+          node --test scripts/agent-queue-gate.test.mjs scripts/agent-patch-audit.test.mjs scripts/agent-workflow-contract.test.mjs
       - name: Publish review-only patch (not a PR, commit or merge)
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
