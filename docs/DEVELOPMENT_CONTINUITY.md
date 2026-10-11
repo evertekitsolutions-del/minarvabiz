@@ -1,3 +1,9 @@
+## HR-005 Cloud-only continuation and attendance exception review — source verification pending
+
+- GitHub main baseline after PR #338: `11ac47b8f6e03de503365f1f112a2a96a520be59`; 25 successful checks, 5 optional skipped, no failed/pending and zero open PRs before new work. The user's local OpenCode/Ollama path is optional and not part of delivery.
+- Independent HR-005 read-only attendance/holiday discrepancy review adds a shared pure function and gated Web roster preview. No automatic attendance/roster/payroll decisions, production migrations, new packages, paid AI or Cloud account setup. Online authorization and tenant scope remain enforced by existing components.
+- Run exact-head and post-merge checks before checkpoint acceptance. Real customer acceptance, SQLite/Hybrid sync/write authority and production holiday rollout remain separately blocked. Master Vision ~51%.
+
 ## HR-005 Web holiday integration checkpoint — pending exact-head source verification
 
 PR #335 and #336 are merged (source baseline `571c0117a8134ab45519baa5ed030082eaae9655`). New Web console adds feature-flagged authenticated holiday manager, scoped save/list, optimistic revision, read-only roster exception preview. Production holiday SQL migration **not** applied; customer UAT and Windows Offline/Hybrid parity missing. Keep `NEXT_PUBLIC_HR005_HOLIDAYS_READY` OFF until controlled database rollout. Live source CI/results supersede this provisional checkpoint. Full Master Vision ~51%.
