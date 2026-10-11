@@ -119,3 +119,21 @@ Remaining: server UTC/rest activation with historical/cross-branch invariants,
 policy approval and recurring batch approval, offline configuration parity,
 multi-event recovery, authenticated real customer UAT and a verified installer.
 Master Vision remains ~51%; stable Windows remains v1.0.15.
+
+### Verified PR #316 and deployment boundary
+
+Code head `b5cf379d3c1c2684715003975e42dbed559b5218` passed 19 checks with
+2 optional skipped and no failures. Actual Chrome logged policy draft create,
+validation correction, revision conflict review and failed-save handling PASS.
+The full business test suite includes real online adapter session-boundary tests.
+Independent review found the preflight validation lockout; it was corrected.
+
+Production IANA resolver migration applied successfully. Applying the source-identical
+#315 draft-policy migration failed twice with Supabase connector `Invalid or expired
+requestState`. A subsequent read confirms policy table/RPC remain absent; do not
+represent the editor as operational on production yet. The resolver is not wired
+into the roster guard and does not change existing scheduling behavior.
+Production has 0 organizations / 0 staff; authenticated customer UAT remains open.
+Next deployment action is to restore the supported migration tool path and apply
+`20261010_hr_roster_time_policy_drafts.sql`, then verify manager-only read/RPC,
+no direct authenticated DML, FORCE RLS and server draft-only constraint.
