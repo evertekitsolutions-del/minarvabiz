@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { RosterPolicyDrafts } from "@/components/roster/RosterPolicyDrafts";
 import { RosterPlanner } from "@minarvabiz/ui";
 import {
   can, exportOutbox, getRemoteWriter, getRuntimeMode, phase6Store, phase9Store,
@@ -242,6 +243,7 @@ export default function RosterPage() {
   if (!scopedReady) return <p role={problem ? "alert" : "status"}>{problem || "Loading authorized shift and roster data…"}</p>;
 
   return <div className="space-y-3">
+    {isRosterHydrated() && <RosterPolicyDrafts key={hydrationEpoch} branches={phase9Store.listBranches()} />}
     {recoveryState === "checking" && <p role="status">Checking encrypted organization-scoped roster recovery before editing…</p>}
     {recoveryState === "blocked" && <div role="alert" className="rounded border border-amber-400 p-3">
       Encrypted recovery contains {recoveryCount} unconfirmed roster event(s) for this authorized account.
