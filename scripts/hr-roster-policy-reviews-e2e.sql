@@ -100,10 +100,8 @@ BEGIN
     WHERE id=latest_review)<>'later' THEN
     RAISE EXCEPTION 'Past approval snapshot was rewritten after draft revision';
   END IF;
-  IF (SELECT count(*) FROM public.audit_logs WHERE
-      action='roster.time_policy.review.approved_pending_activation')<>2 THEN
-    RAISE EXCEPTION 'Immutable policy approvals not properly audited';
-  END IF;
+  -- audit_logs intentionally denies direct browser SELECT; its complete
+  -- insert trail is verified later by the isolated privileged SQL fixture.
 
   saved:=public.save_staff_roster_time_policy_draft(
     'c1000000-0000-4000-8000-000000000001',
@@ -175,6 +173,14 @@ RESET ROLE;
 DO $privileged_history_guard$
 DECLARE denied BOOLEAN:=false;
 BEGIN
+  IF (SELECT count(*) FROM public.audit_logs WHERE
+      action='roster.time_policy.review.approved_pending_activation')<>2 THEN
+    RAISE EXCEPTION 'Immutable policy approvals not properly audited';
+  END IF;
+  IF (SELECT count(*) FROM public.audit_logs WHERE
+      action='roster.time_policy.review.rejected')<>1 THEN
+    RAISE EXCEPTION 'Rejected policy decision not properly audited';
+  END IF;
   BEGIN
     UPDATE public.staff_roster_policy_reviews
       SET activation_state='active';
