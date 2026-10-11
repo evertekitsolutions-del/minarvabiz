@@ -119,11 +119,20 @@ export async function verifyHolidayDeviceSnapshot(input: {
       payload.expiresAt < input.nowMs)
     throw Error("Holiday receipt expired or from an untrusted future clock");
   const signature = strictBase64(input.packet.signatureBase64);
+  // DOM WebCrypto BufferSource requires ArrayBuffer, not a potentially
+  // SharedArrayBuffer-backed Uint8Array. Copy across this trust boundary
+  // instead of weakening type checking or casting untrusted binary memory.
+  const keyBytes = new ArrayBuffer(input.pinnedEd25519PublicKey.byteLength);
+  new Uint8Array(keyBytes).set(input.pinnedEd25519PublicKey);
+  const signatureBytes = new ArrayBuffer(signature.byteLength);
+  new Uint8Array(signatureBytes).set(signature);
+  const message = holidayDeviceSnapshotSigningBytes(payload);
+  const messageBytes = new ArrayBuffer(message.byteLength);
+  new Uint8Array(messageBytes).set(message);
   const key = await input.subtle.importKey(
-    "raw", input.pinnedEd25519PublicKey, "Ed25519", false, ["verify"]);
+    "raw", keyBytes, "Ed25519", false, ["verify"]);
   const accepted = await input.subtle.verify(
-    "Ed25519", key, signature,
-    holidayDeviceSnapshotSigningBytes(payload));
+    "Ed25519", key, signatureBytes, messageBytes);
   if (!accepted)
     throw Error("Holiday receipt Ed25519 signature verification failed");
   return {
