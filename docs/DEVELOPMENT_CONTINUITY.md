@@ -1,3 +1,7 @@
+## HR-005 Windows offline read-only holiday review — branch pending CI
+
+Current pre-branch verified main `6259be8425a5be0d82a03d652e737b0aae61461e`; PR #340 exact-head/post-merge checks green. Reuse Windows SQLite v15 read-only holiday cache and shared calendar/roster/attendance preview. Add manager-only display inside existing Windows Roster Planner. No active Cloud holiday migration, replay, automatic edits, paid providers, or new stable installer. Full Master Vision ~51% until customer acceptance; verify CI and then real installed Windows/Cloud policy authority. See `docs/HR005_DESKTOP_OFFLINE_HOLIDAY_REVIEW.md`.
+
 ## HR-005 read-only offline/cloud revision preview — branch exact-head CI pending
 
 Main pre-branch `4f795b0bbcbfd8e863fcdd332c07b64014e7d17c`, PR #339 verified 25/5 post-merge checks. Compare current authorized manager Cloud holiday list to read-only Windows/device cache for version/content/missing-item mismatches without automatic sync, deletion or Cloud update. No new provider, production migration or customer release. Do not mark HR-005 complete; full Master Vision ~51%, stable installer v1.0.15. Refer to `docs/HR005_CLOUD_OFFLINE_REVISION_REVIEW.md`.
