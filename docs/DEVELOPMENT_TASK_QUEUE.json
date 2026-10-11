@@ -83,7 +83,7 @@
       "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "PR #339 merged and verified on main 4f795b0bbcbfd8e863fcdd332c07b64014e7d17c (25 passed, 5 skipped). Next bounded source milestone: read-only Cloud vs Offline holiday revision review in shared core/Web console. Preserve RLS-pinned fresh Cloud reads, classify divergent revisions and missing entries as unverified, never automatically hydrate/replay/overwrite. Run exact-head and post-merge CI. Production holiday migration, authenticated customer UAT, reliable offline event/sync authority, statutory/payroll/roster approvals remain pending.",
+      "nextAction": "PR #340 merged and verified on live main 6259be8425a5be0d82a03d652e737b0aae61461e (25 passed/5 skipped). Current source slice: add Windows SQLite read-only holiday, roster and attendance exception preview using existing permission-checked shared engine; verify exact-head and post-merge CI. Full HR-005 production/UAT is still blocked by unapplied SQL migration, OFF feature flag, fresh authenticated Cloud-to-Windows hydration, server-audited conflict/receipt authority and statutory attendance/payroll policy. No automatic sync or unsafe writes.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",
@@ -95,7 +95,8 @@
         "docs/CAPABILITY_REGISTRY.md",
         "docs/HR005_OFFLINE_SNAPSHOT_STATUS.md",
         "docs/HR005_ATTENDANCE_REVIEW_STATUS.md",
-        "docs/HR005_CLOUD_OFFLINE_REVISION_REVIEW.md"
+        "docs/HR005_CLOUD_OFFLINE_REVISION_REVIEW.md",
+        "docs/HR005_DESKTOP_OFFLINE_HOLIDAY_REVIEW.md"
       ]
     }
   ]
