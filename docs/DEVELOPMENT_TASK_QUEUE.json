@@ -83,7 +83,7 @@
       "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "PR #342 HR-005H effective calendar-day impact merged in main 2bb2218ecb047280607377fec42cc2adbe66ce98, exact-head 19/2 and post-merge 25/5 green. Current source milestone HR-005I adds bounded manager-only read-only roster and attendance difference preview for Cloud vs local holiday policies; verify exact-head/merge/main CI and real customer UAT. Production HR-005 migration NOT applied, NEXT_PUBLIC_HR005_HOLIDAYS_READY OFF. Authenticated Cloud-to-Windows tenant/device receipt authority, offline/hybrid sync conflict handling and legally reviewed leave/payroll remain blocked. Never infer entitlement or mutate customer data.",
+      "nextAction": "Merged PR #343 signed trusted tenant/device Ed25519 holiday snapshot verifier (source-only) and PR #346 read-only scheduled coding preflight foundation. This PR #345 adds bounded read-only Cloud vs Offline roster and attendance impact review; verify exact-head and post-merge CI, authenticated browser/Windows UAT. HR-005 production migration NOT deployed and NEXT_PUBLIC_HR005_HOLIDAYS_READY OFF. Server-authorized receipt issuer/device registration/atomic Windows hydration, conflict-aware Offline/Hybrid sync and legally reviewed attendance/leave/payroll remain pending; no automatic data changes.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",
@@ -98,6 +98,7 @@
         "docs/HR005_CLOUD_OFFLINE_REVISION_REVIEW.md",
         "docs/HR005_DESKTOP_OFFLINE_HOLIDAY_REVIEW.md",
         "docs/HR005_EFFECTIVE_CALENDAR_IMPACT_REVIEW.md",
+        "docs/HR005_SIGNED_DEVICE_RECEIPT.md",
         "docs/HR005_STAFF_IMPACT_REVIEW.md"
       ]
     }
