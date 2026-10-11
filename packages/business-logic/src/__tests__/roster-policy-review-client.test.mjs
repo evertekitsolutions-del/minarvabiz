@@ -1,5 +1,15 @@
 import assert from 'node:assert/strict';
-import { createRosterPolicyReviewClient } from '../../../../apps/web/src/lib/roster-policy-review-client.ts';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+const compile=file=>ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const draftModule={exports:{}};
+vm.runInNewContext(compile('apps/web/src/lib/roster-policy-client.ts'),{exports:draftModule.exports});
+const reviewModule={exports:{}};
+vm.runInNewContext(compile('apps/web/src/lib/roster-policy-review-client.ts'),{
+  exports:reviewModule.exports,require:name=>{assert.equal(name,'./roster-policy-client');return draftModule.exports;}
+});
+const { createRosterPolicyReviewClient }=reviewModule.exports;
 
 const org='10000000-0000-4000-8000-000000000001';
 const branch='c1000000-0000-4000-8000-000000000001';
