@@ -26,6 +26,7 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
    ReturnType<typeof holidayCalendar.previewAttendanceHolidayReview>>([]);
  const [syncReview,setSyncReview]=React.useState<holidaySyncReview.HolidayRevisionReview[]>([]);
  const [syncImpacts,setSyncImpacts]=React.useState<holidaySyncReview.HolidayCalendarImpact[]>([]);
+ const [staffImpacts,setStaffImpacts]=React.useState<holidaySyncReview.HolidayStaffImpact[]>([]);
  const [impactReviewed,setImpactReviewed]=React.useState(false);
  const [syncReviewed,setSyncReviewed]=React.useState(false);
  const [busy,setBusy]=React.useState(false);
@@ -35,7 +36,7 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
  const alive=React.useRef(true),inFlight=React.useRef(false);
  React.useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
  const input="rounded border bg-transparent p-2";
- const clearPreview=()=>{setDays([]);setExceptions([]);setAttendanceReview([]);setSyncReview([]);setSyncReviewed(false);setSyncImpacts([]);setImpactReviewed(false)};
+ const clearPreview=()=>{setDays([]);setExceptions([]);setAttendanceReview([]);setSyncReview([]);setSyncReviewed(false);setSyncImpacts([]);setStaffImpacts([]);setImpactReviewed(false)};
  async function load(){
    if(inFlight.current||!holidayManagementEnabled)return;
    inFlight.current=true;setBusy(true);setError("");setMessage("");
@@ -73,12 +74,19 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
        orgId:fresh.orgId,local,cloud:fresh.rules,from,to,
        context:{orgId:fresh.orgId,branchId:branch||null,countryCode:country||null},
      }):[];
+     const staff=impactWindow?holidaySyncReview.reviewHolidayStaffImpact({
+       orgId:fresh.orgId,local,cloud:fresh.rules,from,to,
+       context:{orgId:fresh.orgId,branchId:branch||null,countryCode:country||null},
+       slots:phase6Store.listRosterSlots(from,to),
+       attendance:phase6Store.listAttendance({from,to}),
+     }):[];
      if(!alive.current)return;
      setRows(fresh.rules);
      clearPreview();
      setSyncReview(findings);
      setSyncReviewed(true);
      setSyncImpacts(impacts);
+     setStaffImpacts(staff);
      setImpactReviewed(impactWindow);
      setMessage("Fresh authorized Cloud and local holiday backup revisions reviewed. No sync, deletion, payroll or attendance changes were performed.");
    }catch(e){
@@ -182,6 +190,13 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
          <p className="text-sm">{syncImpacts.length} effective calendar days differ in the selected period. A day difference is only a manager review finding, never an attendance, leave or payroll change.</p>
          <ul className="space-y-1">{syncImpacts.map(x=><li key={x.date} className="rounded border p-2 text-sm">
            {x.date} · Offline {x.localTreatment} ({x.localHolidayIds.join(", ")||"none"}) · Cloud {x.cloudTreatment} ({x.cloudHolidayIds.join(", ")||"none"})
+         </li>)}</ul>
+       </div>}
+       {impactReviewed&&<div role="status" aria-label="Holiday staff review impact results">
+         <p className="text-sm">{staffImpacts.length} existing roster or attendance review findings differ between this device and Cloud in the selected period. These are human-only previews, not employee status changes, statutory entitlements, or proof of Cloud-to-device sync.</p>
+         <ul className="space-y-1">{staffImpacts.map(x=><li className="rounded border p-2 text-sm" key={x.category+":"+x.recordId}>
+           {x.date} · {x.category} {x.recordId} · Offline {x.localReview||"no exception"} · Cloud {x.cloudReview||"no exception"}
+           {" "}· Offline rules {x.localHolidayIds.join(", ")||"none"} · Cloud rules {x.cloudHolidayIds.join(", ")||"none"}
          </li>)}</ul>
        </div>}
      </div>
