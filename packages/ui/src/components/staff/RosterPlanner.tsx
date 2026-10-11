@@ -8,6 +8,7 @@ type RosterSlot = workforceRoster.RosterSlot;
 type RosterPolicy = workforceRoster.RosterPolicy;
 import { Button } from "../Button";
 import { inputClass, selectClass } from "../forms/FormField";
+import { RosterMonthCalendar } from "./RosterMonthCalendar";
 
 type SlotInput = Omit<RosterSlot, "id" | "version"> & { id?: string; expectedVersion?: number };
 type ShiftForm = Omit<ShiftRule, "id" | "version">;
@@ -24,6 +25,7 @@ export interface RosterPlannerProps {
 export function RosterPlanner({ staff, shifts, slots, branches, canEdit, onSaveShift, onSaveSlot }: RosterPlannerProps) {
   const [staffId, setStaffId] = React.useState("");
   const [month, setMonth] = React.useState(() => new Date().toISOString().slice(0, 7));
+  const [rosterView, setRosterView] = React.useState<"list" | "calendar">("list");
   const [name, setName] = React.useState("");
   const [startTime, setStartTime] = React.useState("09:00");
   const [endTime, setEndTime] = React.useState("17:00");
@@ -48,6 +50,18 @@ export function RosterPlanner({ staff, shifts, slots, branches, canEdit, onSaveS
   const branchLabel = (id: string | null | undefined) => branches.find(b => b.id === id)?.name ?? (id ? "Unknown branch" : "Organization-wide");
   const shiftLabel = (id: string) => shifts.find(s => s.id === id)?.name ?? "Archived shift";
   const memberLabel = (id: string) => staff.find(s => s.id === id)?.name ?? "Archived employee";
+  // The already-tested shared planner owns status/date filtering. Calendar only displays
+  // authorized roster data passed in by the existing Web/Windows host; never refetch.
+  const calendarEntries = rosterView === "calendar" && monthValid
+    ? workforceRoster.rosterRange(visibleSlots, from, to, staffId || undefined).map(slot => {
+      const shift = shifts.find(s => s.id === slot.shiftRuleId);
+      return {
+        id: slot.id, workDate: slot.workDate,
+        employee: memberLabel(slot.staffId), shift: shiftLabel(slot.shiftRuleId),
+        hours: shift ? `${shift.startTime}–${shift.endTime}${shift.endTime <= shift.startTime ? " (+1 day)" : ""}` : "Shift unavailable",
+        branch: branchLabel(slot.branchId), version: slot.version,
+      };
+    }) : [];
   function policy(): RosterPolicy {
     const value = Number(minimumRestMinutes);
     if (!Number.isSafeInteger(value) || value < 0 || value > 1440) throw new Error("Minimum rest must be 0–1440 minutes; configure your organization's policy");
@@ -180,7 +194,12 @@ export function RosterPlanner({ staff, shifts, slots, branches, canEdit, onSaveS
       </tbody></table></div>}
     </form>
     <div className="space-y-3 rounded-xl border p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Employee roster</h3><Button type="button" variant="outline" disabled={!monthValid || visibleSlots.length === 0} onClick={downloadRosterCsv}>Export visible roster CSV</Button></div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold">Employee roster</h3>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" aria-pressed={rosterView === "list"} onClick={() => setRosterView("list")}>List view</Button>
+          <Button type="button" variant="outline" aria-pressed={rosterView === "calendar"} disabled={!monthValid} onClick={() => setRosterView("calendar")}>Calendar view</Button>
+          <Button type="button" variant="outline" disabled={!monthValid || visibleSlots.length === 0} onClick={downloadRosterCsv}>Export visible roster CSV</Button>
+        </div></div>
       <div className="grid gap-3 md:grid-cols-3">
         <label className="text-sm">Employee<select className={selectClass} value={staffId} onChange={e => {setStaffId(e.target.value);setEditingSlot(null);setPreview([]);}}><option value="">All staff</option>{staff.map(s => <option key={s.id} value={s.id}>{s.name}{s.status !== "active" ? " (inactive)" : ""}</option>)}</select></label>
         <label className="text-sm">Planning month<input className={inputClass} type="month" value={month} onChange={e => {setMonth(e.target.value);setPreview([]);}} /></label>
@@ -199,12 +218,13 @@ export function RosterPlanner({ staff, shifts, slots, branches, canEdit, onSaveS
         <Button type="button" variant="outline" disabled={!member || !shiftId || busy} onClick={planWeekdays}>Validate monthly recurrence</Button>
         {preview.length > 0 && <div className="text-sm"><p>Proposed dates (not saved): {preview.map(p=>p.workDate).join(", ")}</p><p>Review the dates, then save individual assignments above. Atomic bulk approval is not enabled until the audited cloud transaction workflow exists.</p></div>}
       </div>
-      <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-2">Date</th><th className="p-2">Employee</th><th className="p-2">Shift</th><th className="p-2">Branch</th><th className="p-2">Status / version</th><th className="p-2">Actions</th></tr></thead><tbody>
+      {rosterView === "calendar" && <RosterMonthCalendar month={month} entries={calendarEntries} />}
+      {rosterView === "list" && <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-2">Date</th><th className="p-2">Employee</th><th className="p-2">Shift</th><th className="p-2">Branch</th><th className="p-2">Status / version</th><th className="p-2">Actions</th></tr></thead><tbody>
         {visibleSlots.map(slot => <tr key={slot.id} className="border-t"><td className="p-2">{slot.workDate}</td><td className="p-2">{memberLabel(slot.staffId)}</td><td className="p-2">{shiftLabel(slot.shiftRuleId)}</td><td className="p-2">{branchLabel(slot.branchId)}</td><td className="p-2">{slot.status} · v{slot.version}</td><td className="p-2 flex flex-wrap gap-2">
         {slot.status==="scheduled" && <><Button size="sm" variant="outline" disabled={!canEdit||busy} onClick={()=>{clearFeedback();setStaffId(slot.staffId);setEditingSlot(slot);setShiftId(slot.shiftRuleId);}}>Correct</Button><Button size="sm" variant="outline" disabled={!canEdit||busy} onClick={()=>void cancelSlot(slot)}>Cancel shift</Button></>}
         </td></tr>)}
         {visibleSlots.length===0&&<tr><td colSpan={6} className="p-3 text-center text-slate-500">No roster entries for this period.</td></tr>}
-      </tbody></table></div>
+      </tbody></table></div>}
     </div>
   </section>;
 }

@@ -5,6 +5,16 @@
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
+## Active reuse-first feature — HR-004 Web/Windows monthly calendar (CI pending)
+
+- Baseline verified at start: `main` `b82256a3bb9fb44dba60970a26ec77a9e9b0522d`, 0 open PRs/issues, 21 success/5 skip/0 failure checks.
+- Branch: `feat/hr004-roster-month-calendar-reuse`. Adds a genuine read-only month calendar via existing `workforceRoster.rosterRange` + shared `RosterPlanner` in Web/Windows, reusing existing staff/shift/branch data and authorization boundaries. List view retains all correction/cancellation/CSV controls.
+- External React Big Calendar and FullCalendar Standard MIT candidates reviewed; neither added, because native shared logic and React/Tailwind cover this bounded view without extra runtime dependencies, notices, lockfile changes or vendor coupling. See `docs/HR004_ROSTER_CALENDAR_REUSE.md`.
+- Test: date-only Monday-first calendar, leap days, read-only SSR, HTML escaping, deterministic multiple events, branch labels, overnight label, no mutation and Web/Windows wiring. Run all exact-head required gates before considering merge. No production schema/credential changes.
+- **Scope boundary:** view only; NOT recurring batch approval, policy activation, UTC/rest guard, Offline/Hybrid acceptance or authenticated real customer UAT. Master Vision remains ~51%; stable public installer v1.0.15 until independently verified. Do not count this small UI slice as a 1% full-scope increment.
+- Next after green merge: return to HR-004C reviewed-policy lifecycle/UTC-rest guard activation with real PostgreSQL tests and HR-004B dependent conflict recovery. Maintain reuse-first/source-license audit for every future module.
+
+
 ## HR-004C Web administrator review UX — pending CI verification
 
 - Source baseline main `12ccd4713f2d4b11a8ef49f9290348c2bb03c09f`; existing production review migration already deployed; no duplicate migration.
