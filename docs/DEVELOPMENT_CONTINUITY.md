@@ -1,3 +1,10 @@
+## HR-005 signed holiday snapshot transfer receipt — source CI pending
+
+- From live main 2bb2218ecb047280607377fec42cc2adbe66ce98 (merged #342; existing manager-only Cloud-vs-Offline effective calendar preview), this branch adds portable, fail-closed ECDSA-P256/SHA-256 holiday snapshot receipt verification. Exact tenant/device IDs, signed canonical snapshot SHA-256, narrow UTC validity and supplied consumed-receipt ledger required.
+- Native WebCrypto only; no packages, paid APIs, schema migrations or cloud write. Imported SQLite cache is never changed. Node regression signs real receipts and exercises signature/key, replay, expiry, cross-tenant, payload corruption and no-write contract.
+- CRITICAL: no live signing endpoint, durable device/audit/receipt ledger, authenticated Cloud-to-Windows snapshot issuance, production holiday migration, atomic Windows import, true Hybrid sync or customer UAT is enabled. NEXT_PUBLIC_HR005_HOLIDAYS_READY remains OFF. No new customer Windows release. Full Master Vision ~51%.
+- See docs/HR005_SIGNED_TRANSFER_PREFLIGHT.md. Verify exact-head and post-merge CI before claiming this source slice merged; no production transfer is authorized.
+
 ## HR-005 effective calendar day impact — source CI pending
 
 - From verified main `b0177f0e5146e9f2928614a61da2c2c5310fa7db` (PR #341 merged; 25 checks passed, 5 skipped; zero failed/pending; open PRs 0 before branch), the new bounded review reuses authenticated HR-005 Cloud rule list, offline v15 snapshot validation and deterministic branch-local shared calendar engine.
