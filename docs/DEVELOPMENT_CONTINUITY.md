@@ -1,3 +1,10 @@
+## OFFLINE-NATIVE-01 — Windows SQLite atomic write and fsync hardening (source CI pending)
+
+- Verified main baseline `cae5c1a319663bf890d48e25f5f90a6e84b43da4` (#349 merged), 25 successful and 5 optional skipped main checks, zero open PRs; customer installer v1.0.15, whole Master Vision ~51%.
+- Root-cause found in production Electron trusted `db:writeBinary` handler: timestamp-only staging name, temporary file not fsynced before rename, insufficient temp cleanup on error. Shared Offline/Hybrid native durability blocker (more substantive than another HR005 review wrapper).
+- Changed existing native IPC to use tested `sqlite-native-atomic-write.ts`: unique exclusive UUID temp, 0600 file, full image write, fsync/close, existing SQLite validation, same-directory atomic rename, best-effort directory sync, before-rename failure preserves last valid file. Business-logic test sweep runs REAL sql.js SQLite valid/invalid roundtrips and fault injections including write/fsync/rename failures and unavailable directory fsync. No new paid services or schema, customer record modifications or HR005 feature rollout.
+- WARNING: this alone does NOT resolve native multi-window/restoration race, cross-process single-writer, power-loss NTFS UAT or authenticated HR005 server receipt authorization/hydration. Source tests and green PR+post-merge CI required; no installer release without separate UAT. See `docs/WINDOWS_SQLITE_ATOMIC_WRITE_HARDENING.md`.
+
 ## HR-005L immutable SQLite signed receipt staging — source CI pending
 
 - Start from independently verified `main` `13f9dcfa542c149eb126075f0948895b9777cca6` (#348 merged, 25 main CI passed/5 skipped, zero open PRs) and reuse HR005 existing receipt signing/verification. Full Master Vision still ~51%, stable customer Windows v1.0.15.

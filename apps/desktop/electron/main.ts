@@ -7,6 +7,7 @@ import { pathToFileURL } from "url";
 import { registerDesktopLicenseIpc, getDesktopLicenseState } from "./license";
 import { checkForSecureUpdate, downloadVerifiedUpdate, getDownloadedVerifiedUpdate } from "./updater";
 import { minarvaBackupSchemaError } from "./sqlite-backup-validation";
+import { writeValidatedSqliteBinaryAtomically } from "./sqlite-native-atomic-write";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 const runtimeSmoke = process.env.MINARVA_RUNTIME_SMOKE === "1";
@@ -361,12 +362,7 @@ ipcMain.handle("db:readBinary", (event) => { requireTrustedRenderer(event); try 
 ipcMain.handle("db:writeBinary", (event, data: unknown) => {
   requireTrustedRenderer(event);
   if (!(data instanceof Uint8Array) || data.byteLength === 0 || data.byteLength > MAX_SQLITE_IPC_BYTES) return false;
-  const file = sqlitePath(), temp = `${file}.restore-${process.pid}-${Date.now()}`;
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(temp, Buffer.from(data));
-  if (!isValidSqliteFile(temp)) { fs.unlinkSync(temp); return false; }
-  fs.renameSync(temp, file);
-  return true;
+  return writeValidatedSqliteBinaryAtomically(sqlitePath(), data, isValidSqliteFile);
 });
 ipcMain.handle("db:exists", (event) => { requireTrustedRenderer(event); return fs.existsSync(sqlitePath()); });
 ipcMain.handle("trial:getState", async (event) => { requireTrustedRenderer(event); const license = await getDesktopLicenseState(getDeviceId()); if (license.status === "active" || license.status === "grace") return { activated: true, status: "active", daysRemaining: license.daysRemaining ?? 0, trialStartedAt: null, trialExpiresAt: null, registration: null, synced: true }; return trialSnapshot(); });

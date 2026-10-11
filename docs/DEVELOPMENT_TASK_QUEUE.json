@@ -83,7 +83,7 @@
       "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "PR #348 server-only Ed25519 signer merged main 13f9dcfa542c149eb126075f0948895b9777cca6 with 25 main CI passed /5 skipped, 0 open PR. HR005L source milestone now stages verified device receipt metadata in an append-only SQLite transaction, checks anti-replay after async signature verification, tests persistence/reopen, cross-tenant fencing and rollback. No data hydration and no customer deployment. Next: real authenticated server/device enrollment and audited issuance ledger; trusted last APPLIED sequence persistence, IPC single-writer, native file atomicity and SQLite cache+sequence transaction, offline conflict policy and UAT. HR005 production hosted migration not deployed and feature flag OFF; no payroll/attendance changes.",
+      "nextAction": "PR #349 source-only signed receipt metadata staging merged and postmerge main cae5c1a319663bf890d48e25f5f90a6e84b43da4 CI 25 pass/5 skip, 0 open PR. Current OFFLINE-NATIVE-01 hardens existing Windows SQLite db:writeBinary using exclusive UUID staging, fsync before validated atomic rename, best-effort directory sync and real fault-injection tests. CI and real Windows abrupt-power-loss UAT required; native IPC cross-window single writer and restore race fencing remain pending. HR005 device registration, server audited issuance ledger, trusted APPLIED sequence, transactional cache+sequence hydration, conflict reconciliation and UAT still NOT complete. HR005 migration not deployed; feature OFF.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",
@@ -102,7 +102,8 @@
         "docs/HR005_STAFF_IMPACT_REVIEW.md",
         "docs/HR005_SIGNED_INTAKE_PREFLIGHT.md",
         "docs/HR005_SERVER_SIGNING_KERNEL.md",
-        "docs/HR005_SIGNED_RECEIPT_SQLITE_STAGING.md"
+        "docs/HR005_SIGNED_RECEIPT_SQLITE_STAGING.md",
+        "docs/WINDOWS_SQLITE_ATOMIC_WRITE_HARDENING.md"
       ]
     }
   ]
