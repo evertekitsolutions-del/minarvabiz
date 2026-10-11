@@ -5,6 +5,14 @@
 **Updated:** 2026-10-10  
 **Scope:** Shared Web, Windows SQLite, hybrid PostgreSQL/cloud authority
 
+## Production policy-draft migration rollout — verified October 11, 2026
+
+GitHub main `dd6f2938dd083201baf8191acccda955b6b48093` includes #314, #315 and #316. The previously blocked source-identical migration `20261010_hr_roster_time_policy_drafts.sql` was successfully applied to Supabase project `wmjgefbaliuwmaxyzxkq`; its source blob SHA is `2902b90796c87680317768490832e46213163d4f`. The tool returned `success:true` after prior sessions recorded `Invalid or expired requestState`.
+
+A follow-up live read-only query proved: `staff_roster_time_policies` exists; RLS and FORCE RLS both true; one authorized SELECT policy; one integrity trigger; `save_staff_roster_time_policy_draft(uuid,date,text,text,integer,integer,date)` is SECURITY DEFINER, executable by authenticated users, denied to anon; browser role has table SELECT but **not** INSERT/UPDATE/DELETE. Zero production organizations and zero policy drafts were present; **no authentic customer save/UAT** was performed. Migration is DRAFT-ONLY and cannot approve or activate enforcement. The later statement in this document that the table/RPC are still absent describes the historical pre-deployment state and is superseded.
+
+Remaining: verify migration history against repository and the next additive server-authoritative UTC/rest, DST and historical/cross-branch acceptance; policy approval; recurrence; Web/Windows Offline/Hybrid parity; recovery; real authenticated customer UAT. No full-Master-Vision increment claimed (~51%), and latest verified downloadable Windows installer remains v1.0.15.
+
 ## Implemented and merged
 
 | PRs | Functional scope | Safety and verification |
