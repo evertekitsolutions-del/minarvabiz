@@ -5,6 +5,14 @@
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
+## Verified HR-004C server UTC/rest primitives rollout — October 11, 2026
+
+- PR #318 (`https://github.com/evertekitsolutions-del/minarvabiz/pull/318`) merged into `main` as `17ce51abcd805725b1eccc6eb5a1db3a61f16ec4` after **20 successful, 2 optional skipped, 0 failed** exact-head checks. Post-merge `main` verification finished **21 successful, 5 optional skipped, 0 failed**.
+- Applied exact merged SQL `supabase/migrations/20261011_hr_roster_utc_rest_primitives.sql` (blob `fb124dea7c842d7223e7211e77ff554a1dbf944e`) to production project `wmjgefbaliuwmaxyzxkq` via Supabase migration tool, returned `success:true`. Supabase migration history now records `20261011030016` `hr_roster_utc_rest_primitives`.
+- Live read-only function audit: `roster_shift_utc_window` and `roster_assert_utc_rest` exist, SECURITY INVOKER, anonymous/authenticated EXECUTE denied. `2026-10-10 09:00–17:00 Asia/Kolkata` resolves to `03:30–11:30 UTC`. `staff_roster_guard()` does NOT call these helpers yet. Current production count is 0 organizations, 0 roster slots and 0 policy drafts.
+- **This is an additive internal validation foundation, NOT enforcement activation.** Existing roster behavior/history untouched; status remains draft-only, no approved/effective-dated policy authority, no live authenticated customer UAT, no recurring approval or Offline/Hybrid completion. A green Windows source smoke is not a new public installer; latest last-verified release v1.0.15.
+- Next after this verified rollout: tenant-authenticated policy review/approval history and additive server roster-guard UTC overlap/minimum-rest activation with cross-branch, DST, retroactive-policy and rollback tests. Keep fail-closed branch selection, unapproved drafts non-binding, and no invented tenant UAT. Whole Master Vision remains **~51%**, not HR-004 progress.
+
 ## Active HR-004C server UTC/rest validation milestone — source candidate
 
 - Continue from merged main `563dace9be99abc9fe6ef39b46c26bba5322094a` (PR #317). Production policy draft migration `20261011021532` already applied and security inspected; no rollback or re-run of #315/#316.
