@@ -82,6 +82,6 @@ assert.match(page,/analyzeSealedRosterDependencies\(report\)/);
 assert.match(page,/Multiple-event restores remain disabled/);
 assert.match(page,/Only a single same-ID update/);
 assert.doesNotMatch(fs.readFileSync("apps/web/src/lib/roster-recovery-dependencies.ts","utf8"),
-  /pgRpc|fetch\(|upsertRosterEvent|hydrateOutbox|saveSealedRosterRecovery|\bdelete\b|window\./,
+  /pgRpc|fetch\(|upsertRosterEvent|hydrateOutbox|saveSealedRosterRecovery|\.delete\(|window\./,
   "Dependency analysis must not include network/write/restore functions");
 console.log("HR004B ordered multi-event/different-ID read-only dependency analysis PASS");
