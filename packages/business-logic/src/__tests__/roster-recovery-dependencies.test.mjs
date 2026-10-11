@@ -112,7 +112,7 @@ const page=fs.readFileSync("apps/web/src/app/(app)/roster/page.tsx","utf8");
 const checkpoint=fs.readFileSync("apps/web/src/lib/roster-recovery-checkpoint.ts","utf8");
 assert.match(checkpoint,/eventType:event\.eventType,deviceId:event\.deviceId,sequence:event\.sequence/);
 assert.match(page,/analyzeSealedRosterDependencies\(report\)/);
-assert.match(page,/Multiple-event restores remain disabled/);
+assert.match(page,/Multi-ID and cross-device restore\/replay remain disabled/);
 assert.match(page,/A single roster assignment must have exactly one matching RLS-scoped Cloud staff/);
 assert.match(page,/Unverified, different-ID or cancelled historical peers stay quarantined/);
 assert.match(page,/isReviewedSealedRosterRestoreCandidate\(sealedReview\)/);
