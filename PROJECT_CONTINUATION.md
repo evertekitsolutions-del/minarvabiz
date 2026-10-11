@@ -5,6 +5,14 @@
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
+## HR-004C Web administrator review UX — pending CI verification
+
+- Source baseline main `12ccd4713f2d4b11a8ef49f9290348c2bb03c09f`; existing production review migration already deployed; no duplicate migration.
+- New review UI: explicit load, version-specific approve-pending-activation/reject, required rejection reason and administrator acknowledgment, immutable history, stale-decision lockout.
+- Session-pinned administrator authorization, tenant-confirmed RPC response, no local/outbox approval, denied active-state response. Tests include React Chrome interactions and negative client checks.
+- **Not actual scheduling enforcement:** both draft and reviewed-policy records remain inactive, existing roster trigger unchanged; no genuine hosted customer UAT yet. Follow-up: revocation/effective history, server UTC/rest guard cutover, Offline/Hybrid parity and installer.
+- Entire Master Vision remains ~51%; no extra paid infrastructure.
+
 ## Verified HR-004C immutable policy reviews rollout — October 11, 2026
 
 - PR #320 merged into `main` as `607bd19ad7ac1f80404fc38b44bf2c5a6dac7b83`, after 20 successful, 2 skipped, 0 failed exact-head checks. The first failed CI was a **test privilege error** (authenticated test role was improperly reading protected `audit_logs`); corrected by verifying audit history under the isolated privileged fixture, **without relaxing production access**. Post-merge `main` CI: 21 successful, 5 skipped, 0 failed.
