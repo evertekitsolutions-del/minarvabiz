@@ -10,6 +10,7 @@ import { isRosterHydrated } from "@/lib/data-source";
 import { checkpointUnconfirmedRosterEvents, inspectSealedRosterCheckpoint, compareSealedRosterCheckpointWithCloud } from "@/lib/roster-recovery-checkpoint";
 import { restoreReviewedSealedRosterEventToMemory, restoreReviewedSealedRosterChainToMemory, isReviewedSealedRosterRestoreCandidate } from "@/lib/roster-recovery-restore";
 import { planReviewedSealedRosterChain } from "@/lib/roster-recovery-chain";
+import { planMultiIdRosterReview } from "@/lib/roster-recovery-multiid-plan";
 import { analyzeSealedRosterDependencies, type RosterRecoveryDependencyReview } from "@/lib/roster-recovery-dependencies";
 
 /**
@@ -309,7 +310,31 @@ export default function RosterPage() {
               {finding.eventIds.length>0&&<p className="break-all">Affected events: {finding.eventIds.join(", ")}</p>}
             </li>)}
           </ul>}
-        <p>Multiple-event restores remain disabled pending explicit server-backed reconciliation and real customer UAT.</p>
+        <p>Multi-ID and cross-device restore/replay remain disabled pending server-backed reconciliation and customer UAT. Separately verified same-ID local chains use their existing guarded action.</p>
+        {sealedReview.total>1&&(()=>{
+          const proposed=planMultiIdRosterReview(sealedReview);
+          return <div className="mt-3 space-y-2 rounded border p-3"
+            aria-label="Multi-ID provisional dependency order">
+            <h5 className="font-semibold">Different-ID event order — human review only</h5>
+            {proposed.reviewOrderAvailable
+              ? <>
+                  <p role="status">Provisional original-device order only. No Cloud or local recovery was performed; automatic recovery disabled.</p>
+                  <ol className="list-decimal space-y-1 pl-5">
+                    {proposed.steps.map(step=><li key={step.eventId}>
+                      <span>{step.aggregateType==="staff_shift_rules"?"Shift":"Roster"}
+                        {" · sequence "+step.deviceSequence+" · event "+step.eventId}</span>
+                      {step.prerequisites.length>0&&<p>
+                        Review earlier prerequisite(s): {step.prerequisites.join(", ")}
+                      </p>}
+                    </li>)}
+                  </ol>
+                </>
+              : <p role="alert">Order cannot be established: {proposed.reason}.
+                  All different-ID events remain quarantined.</p>}
+            <p>This preview cannot authorize retry, import, overwrite, Cloud replay or restore.
+              RLS-hidden and concurrent Cloud changes require independent server transactional validation.</p>
+          </div>;
+        })()}
       </div>}
       <div className="space-y-3">
         {sealedReview.comparisons.map(item => <article key={item.eventId} className="rounded border p-2 text-sm">
