@@ -122,10 +122,35 @@ async function readAuthorizedRosterRecord<T extends ShiftRule | RosterSlot>(
   return parsed as T;
 }
 
-export function createRosterRemoteWriter(cfg: Config): Pick<RemoteWriter, "upsertRosterEvent" | "getRosterShift" | "getRosterSlot"> {
+/**
+ * Existing staff_roster_slots manager SELECT RLS is the tenant authority.
+ * Read-only snapshot with hard cap, never a same-day uniqueness guarantee
+ * across concurrent writes or invisible/historical assignments.
+ */
+export async function readAuthorizedRosterDayPeers(
+  cfg: Config,staffId:string,workDate:string,
+):Promise<RosterSlot[]> {
+  if(!cfg.accessToken)throw Error("Authenticated roster day review requires a valid session");
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(staffId))
+    throw Error("Invalid roster staff identity");
+  if(readWorkDate(workDate)!==workDate)throw Error("Invalid roster day");
+  const query=`select=*&staff_id=eq.${staffId}&work_date=eq.${workDate}&order=id.asc&limit=26`;
+  const result=await pgSelect<Row>(cfg,"staff_roster_slots",query);
+  if(result.error)throw Error("Authorized roster day review failed: "+result.error.message);
+  if(!Array.isArray(result.data) || result.data.length>25)
+    throw Error("Roster day review incomplete or invalid; keep sealed events quarantined");
+  const parsed=result.data.map(mapCloudRosterSlot);
+  if(parsed.some(row=>row.staffId!==staffId || row.workDate!==workDate) ||
+     new Set(parsed.map(row=>row.id)).size!==parsed.length)
+    throw Error("Roster day peer identity mismatch; leave recovery quarantined");
+  return parsed;
+}
+
+export function createRosterRemoteWriter(cfg: Config): Pick<RemoteWriter, "upsertRosterEvent" | "getRosterShift" | "getRosterSlot" | "getRosterDayPeers"> {
   return {
     getRosterShift: id => readAuthorizedRosterRecord<ShiftRule>(cfg, "shift", id),
     getRosterSlot: id => readAuthorizedRosterRecord<RosterSlot>(cfg, "roster", id),
+    getRosterDayPeers: (staffId,workDate) => readAuthorizedRosterDayPeers(cfg,staffId,workDate),
     upsertRosterEvent: async (event) => {
       if (!cfg.accessToken) throw new Error("Authenticated roster write requires a valid session");
       if (!event || (event.aggregateType !== "staff_shift_rules" &&
