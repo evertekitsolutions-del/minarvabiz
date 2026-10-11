@@ -60,22 +60,34 @@ const compiled=await build({stdin:{contents:`
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {RosterPolicyDrafts} from './src/components/roster/RosterPolicyDrafts';
+import {RosterPolicyReviews} from './src/components/roster/RosterPolicyReviews';
 const container=document.createElement('div');container.id='policy-test';document.body.appendChild(container);
 window.__policyRoot=createRoot(container);
 window.__policyRoot.render(React.createElement(RosterPolicyDrafts,{branches:[{id:'20000000-0000-4000-8000-000000000001',name:'Test branch'}]}));
+const reviewContainer=document.createElement('div');reviewContainer.id='review-test';document.body.appendChild(reviewContainer);
+window.__reviewRoot=createRoot(reviewContainer);
+window.__reviewRoot.render(React.createElement(RosterPolicyReviews,{branches:[{id:'20000000-0000-4000-8000-000000000001',name:'Test branch'}]}));
 `,resolveDir:process.cwd()+'/apps/web',loader:'tsx'},bundle:true,write:false,format:'iife',platform:'browser',
   define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'isolated-policy-transport',setup(b){
     b.onResolve({filter:/^@\/lib\/roster-policy-online$/},()=>({path:'policy-transport',namespace:'test'}));
     b.onLoad({filter:/.*/,namespace:'test'},()=>({contents:`export function onlineRosterPolicies(){return {list:async()=>window.__policyRows,save:async(input)=>{window.__policyInput=input;if(window.__policyFailure)throw Error('Draft save was not confirmed. Reload before retrying');return window.__policyResult}}}`,loader:'js'}));
+    b.onResolve({filter:/^@\/lib\/roster-policy-review-online$/},()=>({path:'review-transport',namespace:'review-test'}));
+    b.onLoad({filter:/.*/,namespace:'review-test'},()=>({contents:`export function onlineRosterPolicyReviews(){return {list:async()=>({drafts:window.__reviewDrafts,reviews:window.__reviewHistory}),review:async(input)=>{window.__reviewInput=input;if(window.__reviewFailure)throw Error('Review confirmation unconfirmed');return window.__reviewResult}}}`,loader:'js'}));
   }}]});
 const ws=await connect();
 const row={id:'30000000-0000-4000-8000-000000000001',org_id:'10000000-0000-4000-8000-000000000001',branch_id:'20000000-0000-4000-8000-000000000001',effective_from:'2026-11-01',effective_until:null,iana_zone:'Asia/Kolkata',dst_fold_policy:'reject',minimum_rest_minutes:660,status:'draft',version:1};
 async function text(){return evaluate(ws,"document.querySelector('#policy-test')?.innerText||''")}
 async function waitFor(value){for(let i=0;i<40;i++){if((await text()).includes(value))return;await sleep(100)}throw Error('Missing policy UI: '+value+'; '+await text())}
 async function click(label){await evaluate(ws,`(()=>{const b=[...document.querySelectorAll('#policy-test button')].find(b=>b.textContent===${JSON.stringify(label)});if(!b||b.disabled)throw Error('Missing/enabled button');b.click();return true})()`);await sleep(100)}
+async function reviewText(){return evaluate(ws,"document.querySelector('#review-test')?.innerText||''")}
+async function reviewWait(value){for(let i=0;i<60;i++){if((await reviewText()).includes(value))return;await sleep(100)}throw Error('Missing review UI: '+value+'; '+await reviewText())}
+async function reviewClick(label){
+  await evaluate(ws,`(()=>{const b=[...document.querySelectorAll('#review-test button')].find(b=>b.textContent===${JSON.stringify(label)});if(!b||b.disabled)throw Error('Missing/enabled review button: '+${JSON.stringify(label)});b.click();return true})()`);
+  await sleep(100);
+}
 async function field(label,value){await evaluate(ws,`(()=>{const l=[...document.querySelectorAll('#policy-test label')].find(l=>l.textContent.startsWith(${JSON.stringify(label)}));const e=l.querySelector('input,select');Object.getOwnPropertyDescriptor(e.tagName==='SELECT'?HTMLSelectElement.prototype:HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event(e.tagName==='SELECT'?'change':'input',{bubbles:true}));return true})()`);await sleep(100)}
 try{
-  await evaluate(ws,`window.__policyRows=[];true`);
+  await evaluate(ws,`window.__policyRows=[];window.__reviewDrafts=${JSON.stringify([row])};window.__reviewHistory=[];true`);
   await evaluate(ws,compiled.outputFiles[0].text+';true');
   await waitFor('Draft — not enforced');
   await click('Load / reload policy drafts');await waitFor('No saved policy drafts');
@@ -94,8 +106,37 @@ try{
   assert.equal(await evaluate(ws,`[...document.querySelectorAll('#policy-test input')].find(e=>e.type==='number').value`),'720');
   await evaluate(ws,'window.__policyFailure=true;true');await click('Save draft only');await waitFor('Reload before retrying');
   assert.equal(await evaluate(ws,"document.querySelector('#policy-test fieldset').disabled"),true);
-  console.log('Actual React policy editor Chrome smoke PASS: draft create, conflict review, revision, failed save');
+  await reviewWait('Administrator roster policy reviews');
+  await reviewClick('Load / reload policy review queue');await reviewWait('Not reviewed yet.');
+  await reviewClick('Review draft revision 1');
+  assert.equal(await evaluate(ws,"[...document.querySelectorAll('#review-test button')].find(b=>b.textContent==='Record immutable review decision').disabled"),true,
+    'Review must require explicit administrator confirmation');
+  await evaluate(ws,"document.querySelector('#review-test input[type=checkbox]').click();true");
+  const review={id:'40000000-0000-4000-8000-000000000001',org_id:row.org_id,branch_id:row.branch_id,
+    policy_id:row.id,policy_version:1,effective_from:row.effective_from,effective_until:null,iana_zone:row.iana_zone,
+    dst_fold_policy:row.dst_fold_policy,minimum_rest_minutes:row.minimum_rest_minutes,
+    decision:'approved_pending_activation',activation_state:'inactive',review_note:null,
+    reviewed_by:'50000000-0000-4000-8000-000000000001',reviewed_at:'2026-10-11T05:00:00Z',supersedes_review_id:null};
+  await evaluate(ws,`window.__reviewResult=${JSON.stringify({accepted:true,review,enforcement_active:false})};true`);
+  await reviewClick('Record immutable review decision');
+  await reviewWait('Policy remains inactive and is not enforced');
+  assert.equal(await evaluate(ws,'window.__reviewInput.decision'),'approved_pending_activation');
+  await evaluate(ws,`window.__reviewHistory=${JSON.stringify([review])};true`);
+  await reviewClick('Load / reload policy review queue');await reviewWait('This exact revision was already reviewed.');
+  assert.equal(await evaluate(ws,"[...document.querySelectorAll('#review-test button')].find(b=>b.textContent==='Review draft revision 1').disabled"),true);
+  await evaluate(ws,`window.__reviewDrafts=${JSON.stringify([{...row,version:2}])};true`);
+  await reviewClick('Load / reload policy review queue');await reviewWait('Draft updated since last review.');
+  await reviewClick('Review draft revision 2');
+  await evaluate(ws,"document.querySelector('#review-test input[value=rejected]').click();true");
+  assert.equal(await evaluate(ws,"document.querySelector('#review-test button[type=submit]').disabled"),true);
+  await evaluate(ws,"(()=>{const e=document.querySelector('#review-test textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,'Incorrect timezone');e.dispatchEvent(new Event('input',{bubbles:true}));return true})()");
+  await sleep(100);
+  await evaluate(ws,"document.querySelector('#review-test input[type=checkbox]').click();true");
+  await evaluate(ws,"window.__reviewResult={accepted:false,reason:'stale_draft',currentVersion:3};true");
+  await reviewClick('Record immutable review decision');await reviewWait('stale_draft');
+  assert.equal(await evaluate(ws,"document.querySelector('#review-test form')===null"),true,'Uncertain review must lock further mutation until reload');
+  console.log('Actual React policy+review Chrome smoke PASS: draft conflict, explicit approval, inactive history, rejection, stale lockout');
 }finally{
-  await evaluate(ws,"window.__policyRoot?.unmount();document.querySelector('#policy-test')?.remove();true").catch(()=>{});
+  await evaluate(ws,"window.__policyRoot?.unmount();window.__reviewRoot?.unmount();document.querySelector('#policy-test')?.remove();document.querySelector('#review-test')?.remove();true").catch(()=>{});
   ws.close();
 }
