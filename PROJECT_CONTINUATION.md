@@ -1,3 +1,9 @@
+## HR-005 Windows SQLite calendar review UI — source CI pending
+
+- Verified live main before branch: `6259be8425a5be0d82a03d652e737b0aae61461e` (PR #340 merged, post-merge 25 passed/5 skipped and 0 failed/pending, 0 open PR); Full Master Vision ~51%, customer Windows installer still v1.0.15.
+- Reuses `holidayCache.listHolidayCache` native SQLite v15 snapshot, permission-checked staff/branch readers and shared deterministic calendar, roster/attendance exception engines. Windows Roster Planner gets a manager-only **read-only local snapshot review** with explicit country/branch/date context and stale-data warnings, no Cloud authorization claim. Tests exercise RBAC, branch/tenant isolation, conflicting policies, leap days, no mutations and desktop navigation.
+- No extra dependencies, paid AI, migrations, feature activation, Cloud writes, attendance/payroll edits, or automatic sync. Remaining: exact-head/post-merge CI, real installed Windows customer UAT, server-audited tenant-bound Cloud hydration and Offline/Hybrid write/sync, deployed holiday migration with explicit customer approval and country/payroll legal rules.
+
 ## HR-005 Offline/Cloud revision conflict review — source CI pending
 
 - Latest verified live main before this branch: `4f795b0bbcbfd8e863fcdd332c07b64014e7d17c` (PR #339 merged, 25 passed/5 skipped exact-head main checks, zero open PRs); Full Master Vision remains ~51%; stable released Windows installer remains v1.0.15.
