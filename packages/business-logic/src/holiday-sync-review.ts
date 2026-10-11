@@ -1,5 +1,5 @@
 import { validateHolidayCache } from "./holiday-cache";
-import { previewHolidayCalendar, type HolidayCalendarContext, type HolidayDayReview, type HolidayRule } from "./holiday-calendar";
+import { previewHolidayCalendar, previewRosterHolidayReview, previewAttendanceHolidayReview, type HolidayCalendarContext, type HolidayDayReview, type HolidayRule, type HolidayAttendanceRow, type HolidayAttendanceReview } from "./holiday-calendar";
 
 /**
  * HR-005 conservative offline/Cloud *read-only* reconciliation.
@@ -121,4 +121,83 @@ export function reviewHolidayCalendarImpact(input: {
       });
   }
   return impacts;
+}
+
+/**
+ * HR-005I — Human-only workforce impact of divergent holiday policies.
+ * Uses caller-authorized roster/attendance reads and never approves Cloud
+ * hydration, marks attendance, modifies a shift or infers pay/leave rights.
+ * The pure review is not an authentication or server-receipt boundary.
+ */
+export interface HolidayStaffImpact {
+  category: "roster" | "attendance";
+  recordId: string;
+  date: string;
+  localReview: string | null;
+  cloudReview: string | null;
+  localHolidayIds: string[];
+  cloudHolidayIds: string[];
+}
+export function reviewHolidayStaffImpact(input: {
+  orgId: string;
+  local: readonly HolidayRule[];
+  cloud: readonly HolidayRule[];
+  from: string;
+  to: string;
+  context: HolidayCalendarContext;
+  slots: readonly {id:string;workDate:string;branchId:string|null;status:"scheduled"|"cancelled"}[];
+  attendance: readonly HolidayAttendanceRow[];
+}): HolidayStaffImpact[] {
+  if(!input || !uuid(input.orgId) || !input.context ||
+     input.context.orgId!==input.orgId)
+    throw Error("Verified matching organization required for holiday staff impact review");
+  const local=validateHolidayCache(input.local);
+  const cloud=validateHolidayCache(input.cloud);
+  for(const row of [...local,...cloud])
+    if(row.orgId!==input.orgId)
+      throw Error("Cross-organization holiday staff impact refused");
+  // Check the entire time window even if no local staff record is present.
+  // Never let a malformed/oversized scope quietly return an empty result.
+  previewHolidayCalendar({rules:local,from:input.from,to:input.to,context:input.context});
+  previewHolidayCalendar({rules:cloud,from:input.from,to:input.to,context:input.context});
+  if(!Array.isArray(input.slots)||input.slots.length>5000 ||
+     !Array.isArray(input.attendance)||input.attendance.length>5000)
+    throw Error("Holiday staff impact needs bounded authorized staff rows");
+  if(input.slots.some(row=>!row || row.workDate<input.from || row.workDate>input.to) ||
+     input.attendance.some(row=>!row || row.date<input.from || row.date>input.to))
+    throw Error("Holiday staff impact refuses outside-window records");
+  const params={context:input.context};
+  const localRoster=previewRosterHolidayReview({...params,rules:local,slots:input.slots});
+  const cloudRoster=previewRosterHolidayReview({...params,rules:cloud,slots:input.slots});
+  const period={...params,from:input.from,to:input.to,attendance:input.attendance};
+  const localAttendance=previewAttendanceHolidayReview({...period,rules:local});
+  const cloudAttendance=previewAttendanceHolidayReview({...period,rules:cloud});
+  type Entry={id:string;date:string;reason:string;holidayIds:string[]};
+  const combine=(category:HolidayStaffImpact["category"],lhs:Entry[],rhs:Entry[])=>{
+    const left=new Map(lhs.map(x=>[x.id,x])),right=new Map(rhs.map(x=>[x.id,x]));
+    const ids=[...new Set([...left.keys(),...right.keys()])].sort();
+    const changes:HolidayStaffImpact[]=[];
+    for(const recordId of ids){
+      const a=left.get(recordId),b=right.get(recordId);
+      const before=(a?.holidayIds??[]).slice().sort();
+      const after=(b?.holidayIds??[]).slice().sort();
+      if(a?.reason===b?.reason && before.join(",")===after.join(","))continue;
+      changes.push({
+        category,recordId,date:(a??b)!.date,localReview:a?.reason??null,
+        cloudReview:b?.reason??null,localHolidayIds:before,cloudHolidayIds:after
+      });
+    }
+    return changes;
+  };
+  const roster=(arr:typeof localRoster):Entry[]=>arr.map(x=>({
+    id:x.slotId,date:x.date,reason:x.treatment,holidayIds:x.holidayIds
+  }));
+  const attendance=(arr:HolidayAttendanceReview[]):Entry[]=>arr.map(x=>({
+    id:x.attendanceId,date:x.date,reason:x.reason,holidayIds:x.holidayIds
+  }));
+  return [
+    ...combine("roster",roster(localRoster),roster(cloudRoster)),
+    ...combine("attendance",attendance(localAttendance),attendance(cloudAttendance))
+  ].sort((a,b)=>a.date.localeCompare(b.date)||a.category.localeCompare(b.category)||
+    a.recordId.localeCompare(b.recordId));
 }
