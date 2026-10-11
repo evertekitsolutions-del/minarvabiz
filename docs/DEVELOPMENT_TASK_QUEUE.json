@@ -83,7 +83,7 @@
       "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "PR #341 Windows SQLite read-only holiday/roster/attendance review merged at main b0177f0e5146e9f2928614a61da2c2c5310fa7db with 25 successful/5 skipped checks. Current branch adds read-only scoped effective calendar day impact to fresh authenticated Cloud/offline revision review; exact-head CI/merge still required. Full HR-005 acceptance requires real customer UAT, unapplied production holiday SQL migration, feature flag OFF until approval, secure tenant/device/audit receipts and conflict-aware Cloud-to-Windows hydration, statutory leave/attendance/payroll policy. No automatic sync or unsafe writes.",
+      "nextAction": "PR #342 effective Cloud/Offline calendar impact merged on main 2bb2218ecb047280607377fec42cc2adbe66ce98, post-merge 25 passed/5 skipped. Current source-only slice verifies trusted Ed25519 holiday device receipt against tenant, device, immutable snapshot, expiry and monotonic sequence; exact-head CI/merge not yet verified. Next actual production-safe chain: authorized server-side receipt issuer and durable device sequence, authenticated Windows SQLite atomic hydration/rollback and conflict-aware Offline/Hybrid sync; feature flag OFF, holiday SQL migration unapplied, real customer UAT/legal payroll pending.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",
@@ -97,7 +97,8 @@
         "docs/HR005_ATTENDANCE_REVIEW_STATUS.md",
         "docs/HR005_CLOUD_OFFLINE_REVISION_REVIEW.md",
         "docs/HR005_DESKTOP_OFFLINE_HOLIDAY_REVIEW.md",
-        "docs/HR005_EFFECTIVE_CALENDAR_IMPACT_REVIEW.md"
+        "docs/HR005_EFFECTIVE_CALENDAR_IMPACT_REVIEW.md",
+        "docs/HR005_SIGNED_DEVICE_RECEIPT.md"
       ]
     }
   ]
