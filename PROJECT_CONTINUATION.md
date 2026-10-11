@@ -5,6 +5,16 @@
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
 
+## Latest verified HR-004C source and database checkpoint — Oct 11, 2026
+
+- PR #326 merged into main `0a98f29b7e2c8c633b82de7835f1b990afaa41ba`. Exact-head PR: 20 successful, 2 skipped, 0 failed. Post-merge main: **25 passed, 5 optional skipped, 0 failed/pending**, no open PR. Stable public Windows installer remains **v1.0.15** (do not equate source runner release with installer).
+- Supabase `wmjgefbaliuwmaxyzxkq` is healthy. Verified migration history has `20261011054317 hr_roster_policy_resolution_selection`; the additive migration was **already applied**, so it was not reapplied in the follow-up. RLS + FORCE RLS active on resolution/review ledgers; authenticated role SELECT allowed but direct INSERT/UPDATE/DELETE denied; append-only and insertion-validation triggers present; resolution/selector RPCs allow authenticated EXECUTE with server membership/role validation, deny anon. Production tenants/drafts/reviews: zero during verification.
+- Scheduling guard still does NOT call policy candidate selection. Web lifecycle actions are deployment-flagged OFF by default pending authenticated administrator rollout and browser UAT; existing review interface still works before lifecycle flag enablement.
+- Task queue HR-004C remains **in progress**, not whole feature verified. Remaining acceptance: verify deployed flag and authorized real browser interaction, Windows/Offline/Hybrid parity, history/DST/branch migration safety, future independent server UTC/rest enforcement cutover and genuine customer UAT. No extra paid infrastructure.
+- Optional free local Ollama + OpenCode developer workflow documented in `docs/LOCAL_OLLAMA_AGENT_WORKFLOW.md`: agent work requires a running PC and an explicit authorized branch; no autonomous paid service, no direct production secrets, and no skipping PR/CI gates. Keep durable Issue #325 updated through normal main workflows.
+- Full Master Vision estimate remains **~51%**. Do not add 1% for a PR, migration or documentation alone.
+
+
 ## Current source work — HR-004C review lifecycle (PR verification pending)
 
 - Verified live main baseline `e7a0e5ac83519b4478f4982310f694d886f1bd39`, 0 PRs and one open checkpoint issue #325; 25 visible passed checks, 5 optional skips, no failures before branch.
