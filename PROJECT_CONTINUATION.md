@@ -1,9 +1,18 @@
 # Minarva Biz — Authoritative Project Continuation
 
-**Last updated:** 2026-10-10  
+**Last updated:** 2026-10-11  
 **Repository:** `evertekitsolutions-del/minarvabiz`
 
 This file is the first document a new ChatGPT/work session should read after verifying live GitHub state.
+
+## Verified production database rollout — October 11, 2026
+
+- Live main before this documentation PR: `dd6f2938dd083201baf8191acccda955b6b48093` (#316 merged). Open PRs/issues: 0. Main push CI, Secret Scan, Dependency Security and Final Release Audit completed successfully; latest Windows release is still `v1.0.15`.
+- Supabase `wmjgefbaliuwmaxyzxkq` is `ACTIVE_HEALTHY`. The previously blocked, **unaltered** merged source migration `supabase/migrations/20261010_hr_roster_time_policy_drafts.sql` (blob `2902b90796c87680317768490832e46213163d4f`) was **successfully applied** via the authorized Supabase migration tool; tool returned `success:true`.
+- Immediate read-only PostgreSQL verification: `public.staff_roster_time_policies` exists with RLS and FORCE RLS enabled; one SELECT policy, one validation trigger, manager-draft RPC `save_staff_roster_time_policy_draft(uuid,date,text,text,integer,integer,date)` exists and is SECURITY DEFINER; authenticated users have RPC execute and SELECT but not direct INSERT/UPDATE/DELETE; `anon` cannot execute RPC. Production organizations 0, drafts 0.
+- These results resolve the historical connector `Invalid or expired requestState` deployment blocker described below, **not** the end-to-end product. This migration allows drafts only (`status='draft'` CHECK). It does not activate approved UTC overlap/minimum-rest policy enforcement, recurring approvals, Offline/Hybrid parity, real customer tenant UAT or an installed Windows upgrade.
+- Next action: verify SQL migration-history registration/target and implement separate server-side UTC/rest enforcement and approval only after real PostgreSQL DST, cross-branch, history and authorization tests; maintain immutable existing roster history. Continue HR-004B multi-event and browser crash recovery. No fabricated customer records, paid services or Master Vision percentage uplift. Whole Master Vision remains ~51%.
+- Statements further below that production draft policy table/RPC are absent are historical snapshots **superseded** by this verified October 11 rollout.
 
 ## Active source continuation — October 10 HR-004C
 
