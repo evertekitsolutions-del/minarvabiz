@@ -22,6 +22,8 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
  const [days,setDays]=React.useState<DayReview[]>([]);
  const [exceptions,setExceptions]=React.useState<
    ReturnType<typeof holidayCalendar.previewRosterHolidayReview>>([]);
+ const [attendanceReview,setAttendanceReview]=React.useState<
+   ReturnType<typeof holidayCalendar.previewAttendanceHolidayReview>>([]);
  const [busy,setBusy]=React.useState(false);
  const [loaded,setLoaded]=React.useState(false);
  const [error,setError]=React.useState("");
@@ -29,7 +31,7 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
  const alive=React.useRef(true),inFlight=React.useRef(false);
  React.useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
  const input="rounded border bg-transparent p-2";
- const clearPreview=()=>{setDays([]);setExceptions([])};
+ const clearPreview=()=>{setDays([]);setExceptions([]);setAttendanceReview([])};
  async function load(){
    if(inFlight.current||!holidayManagementEnabled)return;
    inFlight.current=true;setBusy(true);setError("");setMessage("");
@@ -94,9 +96,14 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
      const days=holidayCalendar.previewHolidayCalendar({rules:rows,from,to,context});
      const slots=phase6Store.listRosterSlots(from,to);
      const exceptions=holidayCalendar.previewRosterHolidayReview({rules:rows,context,slots});
+     const attendance=phase6Store.listAttendance({from,to});
+     const attendanceFindings=holidayCalendar.previewAttendanceHolidayReview({
+       rules:rows,context,from,to,attendance,
+     });
      setDays(days.filter(day=>day.holidays.length>0));
      setExceptions(exceptions);
-     setMessage("Read-only calendar preview completed. Conflicts need manager review; existing roster, attendance and payroll remain unchanged.");
+     setAttendanceReview(attendanceFindings);
+     setMessage("Read-only holiday, roster and attendance review completed. Findings are not payroll decisions; no existing records were changed.");
    }catch(e){setError(e instanceof Error?e.message:String(e))}
  }
  return <section aria-label="Holiday calendar management" className="space-y-4 rounded border p-4">
@@ -189,12 +196,20 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
            <input type="date" className={input} value={to} onChange={e=>setTo(e.target.value)}/></label>
        </div>
        <button type="button" disabled={busy} className={input} onClick={preview}>
-         Preview holidays and roster exceptions
+         Preview holidays, roster and attendance exceptions
        </button>
        {days.length>0&&<ul className="space-y-1">{days.map(day=><li key={day.date}
          className="rounded border p-2 text-sm">{day.date} · {day.treatment} ·
          {" "}{day.holidays.map(x=>x.name).join(", ")}
        </li>)}</ul>}
+       {attendanceReview.length>0&&<div role="status" aria-label="Attendance holiday review findings">
+         <h4 className="font-medium">Attendance records requiring manager review ({attendanceReview.length})</h4>
+         <p className="text-sm">These are review indicators only. Company holidays do not automatically determine leave, attendance status or payroll.</p>
+         <ul className="space-y-1">{attendanceReview.map(item=><li className="rounded border p-2 text-sm" key={item.attendanceId}>
+           {item.date} · staff {item.staffId} · recorded {item.status} · {item.reason.replaceAll("_"," ")}
+           {item.holidayIds.length>0&&<> · configured rules {item.holidayIds.join(", ")}</>}
+         </li>)}</ul>
+       </div>}
        {exceptions.length>0&&<div role="status">
          <h4 className="font-medium">Roster assignments needing review ({exceptions.length})</h4>
          <ul>{exceptions.map(x=><li key={x.slotId}>{x.date} · roster {x.slotId} · {x.treatment}</li>)}</ul>
