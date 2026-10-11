@@ -1,3 +1,10 @@
+## HR-005J signature-bound Offline intake review — source CI pending
+
+- After PR #343 signed Ed25519 device receipts, PR #345 read-only staff impact and #346 GitHub source agent foundation all merged, verified main `70930867d6e28b8cdf6e9ebd27589f175e23fb41` with 25 successful/5 skipped postmerge checks and zero open PRs. Full Master Vision ~51%; last customer Windows release v1.0.15.
+- Reused `verifyHolidayDeviceSnapshot` plus `reviewHolidayRevisionSnapshots` to create a signature-gated, tenant/device/monotonic-sequence-bound read-only Offline intake review. Identifies local/cloud revision divergence, one-sided rules, same-version payload mismatch and missing/empty snapshots without granting deletion or hydration. Explicit `canHydrate: false`.
+- Real Ed25519 regression cases cover stale sequence/replay, wrong signer/device/tenant, expiry, local cross-tenant/duplicates/invalid rule, local-newer/cloud-newer/missing/same-version divergence and data immutability; no paid dependency, Cloud calls or customer records changed.
+- Source CI and merge remain to verify. Real server signer/enrolled device, durable receipt consumption, atomic Windows apply/rollback, conflict-aware Online/Offline/Hybrid UAT, customer consent and country-specific payroll/leave remain blocked. HR005 hosted migration not applied, `NEXT_PUBLIC_HR005_HOLIDAYS_READY` OFF. Details `docs/HR005_SIGNED_INTAKE_PREFLIGHT.md`.
+
 ## HR-005I staff review policy impact — source CI pending
 
 - Start from verified latest main `2bb2218ecb047280607377fec42cc2adbe66ce98` (PR #342 merged, exact-head 19 passed/2 skipped and post-merge main 25 passed/5 skipped; zero failures or pending, no open PRs).
