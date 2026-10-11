@@ -89,7 +89,7 @@ export function createHolidayManagerClient(transport:Transport){
        const reason=String(response.reason??"conflict");
        if(!["stale_revision","not_found"].includes(reason))
          throw Error("Unexpected holiday write refusal; reload");
-       const remote=response.remote===null?null:parseRow(response.remote,a.orgId);
+       const remote=response.remote==null?null:parseRow(response.remote,a.orgId);
        return {accepted:false,reason,remote};
      }
      if(response.attendance_payroll_enforcement_active!==false)
