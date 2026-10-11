@@ -1,3 +1,10 @@
+## HR-005 Offline/Cloud revision conflict review — source CI pending
+
+- Latest verified live main before this branch: `4f795b0bbcbfd8e863fcdd332c07b64014e7d17c` (PR #339 merged, 25 passed/5 skipped exact-head main checks, zero open PRs); Full Master Vision remains ~51%; stable released Windows installer remains v1.0.15.
+- Reuse `holidayCache.validateHolidayCache`, `holidayCalendar.HolidayRule`, `onlineHolidayManager().list()` and feature-flagged holiday Web UI. Only a current authenticated organization manager can request fresh Cloud data, checked against local tenant scope before pure comparison. Classify identical, Cloud-newer, local-newer, equal-version divergence and Cloud-only/local-only as **human/server review**, NOT automatic deletion or sync authorization.
+- Source-only, no new dependency, paid LLM, Cloud infrastructure, production migrations, online/offline writes, automatic roster/attendance/payroll change, release or actual customer UAT. GitHub Actions and the existing hourly ChatGPT task remain separate: CI is not an autonomous AI coding system.
+- Verify exact-head/post-merge CI. Still pending: authenticated customer UAT, true device/outbox receipt and transaction authority, Windows Offline/Hybrid sync conflict resolution, HR-004B/004C acceptance and legal holiday/payroll policy.
+
 ## HR-005 configurable holiday vs attendance read-only review — source PR pending
 
 - Verified live main `11ac47b8f6e03de503365f1f112a2a96a520be59` (source PR #338 merged, 25 passed/5 skipped/0 failed main checks), zero open PRs before this branch. GitHub remains the connected cloud coding/CI infrastructure; no paid AI, local Ollama, new cloud account or background coding service is required.

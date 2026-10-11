@@ -83,7 +83,7 @@
       "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "PRs #335–#338 merged, exact-head/post-merge checks previously verified. Continue HR-005 via source-only read-only attendance/holiday mismatch review for country/organization/branch rule conflicts; verify full CI and post-merge, then production migration/flag with authenticated admin UAT, attendance policy decisions and Windows SQLite/Offline/Hybrid conflict-aware sync. Never infer statutory pay, change attendance automatically, or enable production migration.",
+      "nextAction": "PR #339 merged and verified on main 4f795b0bbcbfd8e863fcdd332c07b64014e7d17c (25 passed, 5 skipped). Next bounded source milestone: read-only Cloud vs Offline holiday revision review in shared core/Web console. Preserve RLS-pinned fresh Cloud reads, classify divergent revisions and missing entries as unverified, never automatically hydrate/replay/overwrite. Run exact-head and post-merge CI. Production holiday migration, authenticated customer UAT, reliable offline event/sync authority, statutory/payroll/roster approvals remain pending.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",
@@ -94,7 +94,8 @@
         "docs/MASTER_PRODUCT_PLAN.md",
         "docs/CAPABILITY_REGISTRY.md",
         "docs/HR005_OFFLINE_SNAPSHOT_STATUS.md",
-        "docs/HR005_ATTENDANCE_REVIEW_STATUS.md"
+        "docs/HR005_ATTENDANCE_REVIEW_STATUS.md",
+        "docs/HR005_CLOUD_OFFLINE_REVISION_REVIEW.md"
       ]
     }
   ]

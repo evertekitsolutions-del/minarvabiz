@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import {holidayCalendar,phase6Store} from "@minarvabiz/business-logic";
+import {holidayCalendar,holidayCache,holidaySyncReview,phase6Store} from "@minarvabiz/business-logic";
 import {holidayManagementEnabled,onlineHolidayManager} from "@/lib/holiday-online";
 import {validateHolidayEdit,type HolidayEdit} from "@/lib/holiday-client";
 
@@ -24,6 +24,8 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
    ReturnType<typeof holidayCalendar.previewRosterHolidayReview>>([]);
  const [attendanceReview,setAttendanceReview]=React.useState<
    ReturnType<typeof holidayCalendar.previewAttendanceHolidayReview>>([]);
+ const [syncReview,setSyncReview]=React.useState<holidaySyncReview.HolidayRevisionReview[]>([]);
+ const [syncReviewed,setSyncReviewed]=React.useState(false);
  const [busy,setBusy]=React.useState(false);
  const [loaded,setLoaded]=React.useState(false);
  const [error,setError]=React.useState("");
@@ -31,7 +33,7 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
  const alive=React.useRef(true),inFlight=React.useRef(false);
  React.useEffect(()=>{alive.current=true;return()=>{alive.current=false}},[]);
  const input="rounded border bg-transparent p-2";
- const clearPreview=()=>{setDays([]);setExceptions([]);setAttendanceReview([])};
+ const clearPreview=()=>{setDays([]);setExceptions([]);setAttendanceReview([]);setSyncReview([]);setSyncReviewed(false)};
  async function load(){
    if(inFlight.current||!holidayManagementEnabled)return;
    inFlight.current=true;setBusy(true);setError("");setMessage("");
@@ -43,6 +45,35 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
      setMessage("Authorized organization holiday rules loaded. No attendance or roster changes were made.");
    }catch(e){if(alive.current)setError(e instanceof Error?e.message:String(e))}
    finally{inFlight.current=false;if(alive.current)setBusy(false)}
+ }
+ /**
+  * Fresh authenticated re-read is mandatory. The local cache is a backup,
+  * not authority to replay, erase or auto-merge remotely.
+  */
+ async function compareRevisions(){
+   if(inFlight.current||!holidayManagementEnabled||!loaded||!orgId)return;
+   inFlight.current=true;setBusy(true);setError("");setMessage("");
+   setSyncReview([]);setSyncReviewed(false);
+   try{
+     const fresh=await onlineHolidayManager().list();
+     if(!alive.current)return;
+     if(fresh.orgId!==orgId)throw Error("Holiday organization changed. Reload before comparing.");
+     const local=holidayCache.listHolidayCache();
+     const findings=holidaySyncReview.reviewHolidayRevisionSnapshots({
+       orgId:fresh.orgId,local,cloud:fresh.rules,
+     });
+     if(!alive.current)return;
+     setRows(fresh.rules);
+     clearPreview();
+     setSyncReview(findings);
+     setSyncReviewed(true);
+     setMessage("Fresh authorized Cloud and local holiday backup revisions reviewed. No sync, deletion, payroll or attendance changes were performed.");
+   }catch(e){
+     if(alive.current){
+       setLoaded(false);setRows([]);setOrgId("");setForm(blank());clearPreview();
+       setError("Holiday comparison blocked; reload the authorized calendar. "+(e instanceof Error?e.message:String(e)));
+     }
+   }finally{inFlight.current=false;if(alive.current)setBusy(false)}
  }
  function edit(row:HolidayRule){
    setForm({id:row.id,scope:row.scope,countryCode:row.countryCode,branchId:row.branchId,
@@ -121,6 +152,19 @@ export function RosterHolidayCalendar({branches}:{branches:ReadonlyArray<{id:str
    {loaded&&<div className="space-y-3">
      <h3 className="font-medium">Registered holiday rules ({rows.length})</h3>
      {rows.length===0&&<p>No authorized holiday rules yet. Create the first one below.</p>}
+     <div className="space-y-2 rounded border p-3">
+       <h3 className="font-medium">Offline vs Cloud holiday revisions — read-only</h3>
+       <p className="text-sm">Compares this device\u0027s existing authorized holiday snapshot with a fresh tenant-scoped Cloud read. A missing entry is unverified, not proof of deletion. No automatic sync or overwrite.</p>
+       <button type="button" className={input} disabled={busy} onClick={()=>void compareRevisions()}>
+         Compare Cloud and Offline revisions
+       </button>
+       {syncReviewed&&<div role="status" aria-label="Holiday revision comparison results">
+         <p className="text-sm">{syncReview.filter(x=>x.kind!=="identical").length} entries need review out of {syncReview.length}. Every difference needs server-authorized review before reconciliation.</p>
+         <ul className="space-y-1">{syncReview.filter(x=>x.kind!=="identical").map(x=><li key={x.ruleId} className="rounded border p-2 text-sm">
+           {x.ruleId} · {x.kind.replaceAll("_"," ")} · Offline v{x.localVersion??"unknown"} · Cloud v{x.cloudVersion??"unknown"}
+         </li>)}</ul>
+       </div>}
+     </div>
      {rows.length>0&&<ul className="space-y-2">
        {rows.map(row=><li key={row.id} className="rounded border p-2 text-sm">
          <span>{row.date}{row.repeatsAnnually?" (annually)":""} · {row.name} · {row.scope} ·
