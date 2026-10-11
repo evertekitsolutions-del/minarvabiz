@@ -7,7 +7,7 @@
 import {
   can, exportOutbox, getRemoteWriter, getRemoteWriterGeneration,
   getSessionToken, getSessionUser, hydrateOutbox, phase6Store,
-  type LocalOutboxEvent, type workforceRoster,
+  type LocalOutboxEvent, workforceRoster,
 } from "@minarvabiz/business-logic";
 import { planReviewedSealedRosterChain } from "./roster-recovery-chain";
 import {
@@ -192,8 +192,7 @@ export async function restoreReviewedSealedRosterChainToMemory(
         throw Error("Historical shift timing and branch cannot change through recovery chain");
       // Use existing shared domain validator for EACH intermediate revision.
       // Invalid intermediate steps cannot be safely replayed in sequence.
-      const validation= (await import("@minarvabiz/business-logic")).workforceRoster.validateShiftRule;
-      validation(next);
+      workforceRoster.validateShiftRule(next);
     }
     shifts[position]={...(last.localPayload as unknown as ShiftRule)};
   }else{
