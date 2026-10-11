@@ -1,3 +1,11 @@
+## HR-005 signed device holiday receipt verifier — source CI pending
+
+- Baseline main `2bb2218ecb047280607377fec42cc2adbe66ce98` after PR #342 merged; 25 successful / 5 skipped post-merge checks, zero open PR at branch creation. Latest stable customer Windows installer v1.0.15; full Master Vision ~51%.
+- Added standalone Ed25519 WebCrypto verification of tenant/device-pinned, expiry-bounded, monotonic-sequence signed holiday snapshots. Source only: consumes pinned trusted verifier key, rejects tampering, cross-org data, replay, bad identities, invalid records. It NEVER hydrates SQLite cache or authorizes any Cloud/attendance/payroll/roster write.
+- Tests cover real Ed25519 signatures plus negative tamper, replay, expired, wrong signer/tenant/device, input immutability and no-write guard. No paid services or new runtime dependencies.
+- Still missing: authenticated server signing/audit/device registration, protected last-sequence state, durable receipt authority, atomic Windows hydration/rollback, genuine customer Web/Windows/Hybrid UAT, unapplied HR-005 production migration, OFF `NEXT_PUBLIC_HR005_HOLIDAYS_READY` flag and reviewed leave/payroll policy.
+- See `docs/HR005_SIGNED_DEVICE_RECEIPT.md`; exact-head/post-merge CI acceptance follows live GitHub results, not this preliminary wording.
+
 ## HR-005 effective calendar day impact — source CI pending
 
 - From verified main `b0177f0e5146e9f2928614a61da2c2c5310fa7db` (PR #341 merged; 25 checks passed, 5 skipped; zero failed/pending; open PRs 0 before branch), the new bounded review reuses authenticated HR-005 Cloud rule list, offline v15 snapshot validation and deterministic branch-local shared calendar engine.
