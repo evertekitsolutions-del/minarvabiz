@@ -8,10 +8,12 @@ import { registerDesktopLicenseIpc, getDesktopLicenseState } from "./license";
 import { checkForSecureUpdate, downloadVerifiedUpdate, getDownloadedVerifiedUpdate } from "./updater";
 import { minarvaBackupSchemaError } from "./sqlite-backup-validation";
 import { writeValidatedSqliteBinaryAtomically } from "./sqlite-native-atomic-write";
+import { NativeSqliteBusyError, NativeSqliteIpcGate } from "./sqlite-ipc-gate";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 const runtimeSmoke = process.env.MINARVA_RUNTIME_SMOKE === "1";
 const MAX_SQLITE_IPC_BYTES = 256 * 1024 * 1024;
+const sqliteGate = new NativeSqliteIpcGate();
 const MAX_TRIAL_EMAIL_CHARS = 254;
 const MAX_TRIAL_PHONE_CHARS = 50;
 const MAX_TRIAL_ORG_CHARS = 200;
@@ -358,13 +360,13 @@ app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(
 
 ipcMain.handle("app:getVersion", (event) => { requireTrustedRenderer(event); return app.getVersion(); });
 ipcMain.handle("app:getDeviceId", (event) => { requireTrustedRenderer(event); return getDeviceId(); });
-ipcMain.handle("db:readBinary", (event) => { requireTrustedRenderer(event); try { return fs.existsSync(sqlitePath()) ? fs.readFileSync(sqlitePath()) : null; } catch { return null; } });
+ipcMain.handle("db:readBinary", (event) => { requireTrustedRenderer(event); return sqliteGate.read(() => { try { return fs.existsSync(sqlitePath()) ? fs.readFileSync(sqlitePath()) : null; } catch { return null; } }); });
 ipcMain.handle("db:writeBinary", (event, data: unknown) => {
   requireTrustedRenderer(event);
   if (!(data instanceof Uint8Array) || data.byteLength === 0 || data.byteLength > MAX_SQLITE_IPC_BYTES) return false;
-  return writeValidatedSqliteBinaryAtomically(sqlitePath(), data, isValidSqliteFile);
+  return sqliteGate.write(() => writeValidatedSqliteBinaryAtomically(sqlitePath(), data, isValidSqliteFile));
 });
-ipcMain.handle("db:exists", (event) => { requireTrustedRenderer(event); return fs.existsSync(sqlitePath()); });
+ipcMain.handle("db:exists", (event) => { requireTrustedRenderer(event); return sqliteGate.read(() => fs.existsSync(sqlitePath())); });
 ipcMain.handle("trial:getState", async (event) => { requireTrustedRenderer(event); const license = await getDesktopLicenseState(getDeviceId()); if (license.status === "active" || license.status === "grace") return { activated: true, status: "active", daysRemaining: license.daysRemaining ?? 0, trialStartedAt: null, trialExpiresAt: null, registration: null, synced: true }; return trialSnapshot(); });
 ipcMain.handle("trial:activate", (event, registration: unknown) => {
   requireTrustedRenderer(event);
@@ -402,7 +404,13 @@ ipcMain.handle("backup:createManual", async (event) => {
   });
   if (result.canceled || !result.filePath) return { ok: false, cancelled: true };
 
-  const internal = await createLocalBackup("manual");
+  let internal: LocalBackupResult;
+  try {
+    internal = await sqliteGate.reserve("backup", () => createLocalBackup("manual"));
+  } catch (error) {
+    if (error instanceof NativeSqliteBusyError) return { ok: false, error: error.message };
+    throw error;
+  }
   if (!internal.ok) return internal;
   try {
     const sizeBytes = copySqlite(internal.path, result.filePath);
@@ -487,10 +495,17 @@ ipcMain.handle("backup:useDriveD", async (event) => {
 });
 ipcMain.handle("backup:createAutomatic", async (event, retention?: number) => {
   requireTrustedRenderer(event);
-  const result = await createLocalBackup("automatic");
-  if (!result.ok) return result;
-  pruneAutomaticBackups(Number.isFinite(retention) ? Number(retention) : 14);
-  return { ok: true, path: result.path, sizeBytes: result.sizeBytes, filename: path.basename(result.path) };
+  try {
+    return await sqliteGate.reserve("backup", async () => {
+      const result = await createLocalBackup("automatic");
+      if (!result.ok) return result;
+      pruneAutomaticBackups(Number.isFinite(retention) ? Number(retention) : 14);
+      return { ok: true, path: result.path, sizeBytes: result.sizeBytes, filename: path.basename(result.path) };
+    });
+  } catch (error) {
+    if (error instanceof NativeSqliteBusyError) return { ok: false, error: error.message };
+    throw error;
+  }
 });
 ipcMain.handle("backup:pruneAutomatic", (event, retention?: number) => {
   requireTrustedRenderer(event);
@@ -506,6 +521,8 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
   });
   if (result.canceled || !result.filePaths[0]) return { ok: false, cancelled: true };
 
+  try {
+    return await sqliteGate.reserve("restore", async () => {
   const source = result.filePaths[0];
   const validationError = await minarvaSqliteValidationError(source);
   if (validationError) {
@@ -571,6 +588,11 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
       error: `Restore failed: ${error instanceof Error ? error.message : String(error)}.${rollbackStatus}`,
       preRestoreBackup,
     };
+  }
+    });
+  } catch (error) {
+    if (error instanceof NativeSqliteBusyError) return { ok: false, error: error.message };
+    throw error;
   }
 });
 ipcMain.handle("printer:list", async (event) => {
