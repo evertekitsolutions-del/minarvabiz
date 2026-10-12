@@ -68,6 +68,19 @@ export function createReturn(input: {
   if (!["cash", "card", "upi", "bank", "online", "other"].includes(input.refundMethod)) return { ret: null, errors: ["Invalid refund method"], paidRefund: 0, receivableReduction: 0 };
   const quote = quoteSaleReturn(sale, returns, input.items);
   if (quote.errors.length) return { ret: null, errors: quote.errors, paidRefund: 0, receivableReduction: 0 };
+
+  // A refund may still be processed for a retired/missing product when the
+  // returned goods are NOT restocked. However, silently accepting "restock"
+  // for a product no longer in the master would credit the customer and book
+  // inventory in the journal without restoring a physical product balance.
+  // Validate against the same live product lookup used by the mutation below,
+  // before consuming a return number or touching payments, stock or ledgers.
+  const unavailableRestocks = quote.items
+    .filter(item => item.restock && !mainStore.getProduct(item.productId))
+    .map(item => `${item.productName}: product is unavailable for restocking; choose 'Do not restock' to issue the refund`);
+  if (unavailableRestocks.length) {
+    return { ret: null, errors: unavailableRestocks, paidRefund: 0, receivableReduction: 0 };
+  }
   const returnId = generateId();
   const returnItems: SaleReturnItem[] = quote.items.map(item => ({ ...item, id: generateId(), returnId }));
   const totalRefund = quote.totalRefund;
