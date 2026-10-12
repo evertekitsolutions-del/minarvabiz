@@ -23,6 +23,75 @@ async function setMainField(ws,label,value){const raw=await evalIn(ws,`(()=>{con
 async function styleGuard(ws){const raw=await evalIn(ws,`JSON.stringify((()=>{const aside=document.querySelector('aside');const a=aside?getComputedStyle(aside):null;return {aside:!!aside,bg:a?.backgroundImage||'',cards:document.querySelectorAll('[data-testid="app-content"] [class*="rounded"]').length,css:document.styleSheets.length,logo:!!document.querySelector('aside img[alt="Minarva Biz"]')};})())`);const s=JSON.parse(raw);if(!s.aside||!s.logo||s.css<1||s.cards<6||s.bg==='none')throw new Error(`Dashboard styling guard failed: ${raw}`);console.log('DASHBOARD_STYLE PASS');}
 async function firstDialogNumber(ws,dialog,value){const raw=await evalIn(ws,`(()=>{const d=[...document.querySelectorAll('[role="dialog"]')].find(x=>(x.getAttribute('aria-label')||'').toLowerCase().includes(${JSON.stringify(dialog.toLowerCase())}));const el=d?.querySelector('input[type="number"]');if(!el)return JSON.stringify({ok:false});const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;setter?setter.call(el,${JSON.stringify(value)}):el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return JSON.stringify({ok:true});})()`);if(!JSON.parse(raw).ok)throw new Error(`FIRST_DIALOG_NUMBER ${dialog} failed`);}
 
+
+/**
+ * Exercise the actual current-device Web backup contract in headless Chrome.
+ * Inspect the downloaded JSON Blob instead of the retired partial archive.
+ */
+async function verifyWebLocalSnapshotDownload(ws) {
+  await waitFor(ws, ["Export current-device business data", "not full recovery snapshots",
+    "Download full current-device snapshot"], 20000);
+  const setup = await evalIn(ws, [
+    "(() => {",
+    "const state = {prompt:'',blob:null,filename:'',allow:false,originalConfirm:window.confirm,",
+    " originalBlobUrl:URL.createObjectURL,originalAnchorClick:HTMLAnchorElement.prototype.click};",
+    "window.__minarvaSnapshotSmoke=state;",
+    "window.confirm = message => {state.prompt=String(message); return state.allow;};",
+    "URL.createObjectURL = function(blob){state.blob=blob;return state.originalBlobUrl.call(URL,blob);};",
+    "HTMLAnchorElement.prototype.click = function(...args){",
+    " if(this.download.startsWith('minarvabiz-local-business-snapshot-')){state.filename=this.download;return;}",
+    " return state.originalAnchorClick.apply(this,args);",
+    "};",
+    "return true;",
+    "})()",
+  ].join("\n"));
+  if (setup !== true) throw new Error("Unable to instrument Web snapshot smoke");
+  try {
+    // Rejecting the sensitive-data prompt must not create or download a Blob.
+    await clickButtonText(ws,"DECLINE_LOCAL_SNAPSHOT",["download full current-device snapshot"],200);
+    const denied = await evalIn(ws, [
+      "(()=>{const state=window.__minarvaSnapshotSmoke;",
+      "return {prompt:state.prompt,download:state.filename,hasBlob:!!state.blob};})()",
+    ].join("\n"));
+    if (!denied.prompt.includes("NOT an export of all hosted cloud records") ||
+        denied.download || denied.hasBlob) {
+      throw new Error("Cancelled sensitive snapshot unexpectedly generated a download: " +
+        JSON.stringify(denied));
+    }
+    await evalIn(ws,"(()=>{window.__minarvaSnapshotSmoke.allow=true;return true;})()");
+    await clickButtonText(ws,"DOWNLOAD_LOCAL_SNAPSHOT",["download full current-device snapshot"],600);
+    await waitFor(ws,["download requested","not a cloud-server backup"],20000);
+    const result = await evalIn(ws, [
+      "(async()=>{",
+      "const state=window.__minarvaSnapshotSmoke;",
+      "if(!state || !(state.blob instanceof Blob))return {error:'No real snapshot Blob'};",
+      "const snapshot=JSON.parse(await state.blob.text());",
+      "return {filename:state.filename,prompt:state.prompt,version:snapshot.version,",
+      "customerCount:snapshot.customers?.length,productCount:snapshot.products?.length,",
+      "saleCount:snapshot.sales?.length,hasPurchases:Array.isArray(snapshot.purchases),",
+      "hasStaff:Array.isArray(snapshot.staff),hasBranches:Array.isArray(snapshot.branches),",
+      "hasAudit:Array.isArray(snapshot.audit),exportedAt:snapshot.exportedAt};",
+      "})()",
+    ].join("\n"));
+    if (!/^minarvabiz-local-business-snapshot-v15-.+\.json$/.test(result?.filename || "") ||
+      !result.prompt?.includes("NOT an export of all hosted cloud records") ||
+      result.version !== 15 || !Number.isFinite(Date.parse(result.exportedAt)) ||
+      !(result.customerCount > 0) || !(result.productCount > 0) || !(result.saleCount > 0) ||
+      !result.hasPurchases || !result.hasStaff || !result.hasBranches || !result.hasAudit) {
+      throw new Error("Web snapshot download did not contain valid full local business data: " +
+        JSON.stringify(result));
+    }
+    console.log("WEB_LOCAL_V15_SNAPSHOT_DOWNLOAD_AND_SCOPE PASS");
+  } finally {
+    await evalIn(ws, [
+      "(()=>{const state=window.__minarvaSnapshotSmoke;if(!state)return false;",
+      "window.confirm=state.originalConfirm;URL.createObjectURL=state.originalBlobUrl;",
+      "HTMLAnchorElement.prototype.click=state.originalAnchorClick;",
+      "delete window.__minarvaSnapshotSmoke;return true;})()",
+    ].join("\n"));
+  }
+}
+
 async function run(){const ws=await connect();try{
   await waitFor(ws,['Total Sales','Total Profit'],30000); await styleGuard(ws);
   await clickText(ws,'OPENING_BANK_ACCOUNTING',['accounting']); await waitFor(ws,['Accounting & General Ledger','Opening bank balance']); await setMainField(ws,'Opening bank balance','500'); await clickText(ws,'POST_OPENING_BANK',['post opening bank'],600); await waitFor(ws,['Opening bank balance posted.']); await clickText(ws,'OPENING_BANK_TRIAL',['trial balance'],400); await waitFor(ws,['Trial Balance','Bank','₹500.00']);
@@ -99,7 +168,7 @@ async function run(){const ws=await connect();try{
   await clickText(ws,'NOTIFICATIONS',['messages & notifications','notifications']); await waitFor(ws,['Notifications']);
   await clickText(ws,'SETTINGS',['settings']); await waitFor(ws,['Settings','Business profile','Browser printing defaults']); await setMainField(ws,'Business / trade name','QA Minarva Web'); await clickText(ws,'SAVE_SHOP',['save shop profile']); await waitFor(ws,['Business profile saved']);
   await verifyPrintTemplates(expression => evalIn(ws, expression));
-  await clickText(ws,'BACKUP',['backup & restore']); await waitFor(ws,['Backup','Create backup']); await clickText(ws,'CREATE_BACKUP',['create backup'],700); await waitFor(ws,['Backup created']);
+  await clickText(ws,'BACKUP',['backup & restore']); await verifyWebLocalSnapshotDownload(ws);
 
   await navigate(ws,'/license',['License','Trial']); await navigate(ws,'/users',['Users & roles','Add user']); await setMainField(ws,'Full name','QA Manager'); await setMainField(ws,'Email','qa.manager@example.com'); await setMainField(ws,'Role','manager'); await clickText(ws,'ADD_USER',['add user'],500); await waitFor(ws,['QA Manager','qa.manager@example.com']);
   await navigate(ws,'/forgot-password',['Reset your password','Send reset link']); await navigate(ws,'/dashboard',['Total Sales','Total Profit']); await styleGuard(ws);

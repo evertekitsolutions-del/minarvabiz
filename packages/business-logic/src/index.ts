@@ -40,6 +40,7 @@ export * as procurementStore from "./procurement-store";
 export * as accountingStore from "./accounting-store";
 export * from "./feature-gates";
 export * from "./persistence";
+export * from "./browser-snapshot-download";
 export * from "./session";
 export * from "./autosave";
 export * from "./receipt";
