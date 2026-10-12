@@ -500,12 +500,33 @@ export function createSale(input: {
   assertPermission("sales.create");
   assertBusinessDayOpen();
   const errors = validateCart(input.lines, { allowNegativeStock: input.allowNegativeStock });
-  if (!input.allowNegativeStock) {
-    for (const line of input.lines) {
-      const live = getProduct(line.productId);
-      if (!live) errors.push(`Product not found: ${line.productName}`);
-      else if (line.quantity > live.stockQuantity) errors.push(`${live.name}: insufficient stock (available ${live.stockQuantity})`);
+  // Recheck live stock at the last mutation boundary. A stale POS tab or a
+  // programmatic caller can submit repeated lines for the same product.
+  const demanded = new Map<string, number>();
+  for (const line of input.lines) {
+    const live = getProduct(line.productId);
+    if (!live) {
+      errors.push(`Product not found: ${line.productName}`);
+      continue;
     }
+    if (live.isActive === false) errors.push(`${live.name}: product is inactive`);
+    if (Number.isFinite(line.quantity) && line.quantity > 0) {
+      demanded.set(live.id, (demanded.get(live.id) ?? 0) + line.quantity);
+    }
+  }
+  if (!input.allowNegativeStock) {
+    for (const [productId, requested] of demanded) {
+      const live = getProduct(productId)!;
+      if (!Number.isFinite(requested) || requested > live.stockQuantity) {
+        errors.push(`${live.name}: insufficient live stock (requested ${requested}, available ${live.stockQuantity})`);
+      }
+    }
+  }
+  if (input.customerId && !getCustomer(input.customerId)) {
+    errors.push("Selected customer no longer exists");
+  }
+  if (!Number.isFinite(input.paidAmount) || input.paidAmount < 0) {
+    errors.push("Paid amount must be finite and non-negative");
   }
   if (errors.length) return { sale: null as unknown as Sale, payment: null, payments: [], errors };
 
@@ -524,7 +545,7 @@ export function createSale(input: {
     : [{ method: input.paymentMethod, amount: input.paidAmount }])
     .map((split) => ({
       method: split.method,
-      amount: Number(split.amount) || 0,
+      amount: split.amount,
       reference: split.reference ?? null,
     }));
   const tender = validateTender(fromMinorUnits(remainingAfterCreditMinor), rawSplits);
