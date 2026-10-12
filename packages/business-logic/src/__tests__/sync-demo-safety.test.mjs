@@ -52,3 +52,77 @@ test("production settings do not advertise demo memory sync as real cloud transf
   assert.match(page, /cloudSyncAvailable=\{snap\.cloudSyncAvailable\}/);
   assert.match(page, /demoMode=\{snap\.demoMode\}/);
 });
+
+
+test("production bridge never invokes the in-memory adapter or marks it connected", async () => {
+  const { bridge, runtime, calls } = loadRealBridgeWithIsolatedMemoryTransport();
+  runtime.setRuntimeMode("production");
+  const snap = bridge.getSyncSnapshot();
+  assert.equal(snap.cloudSyncAvailable, false);
+  assert.equal(snap.demoMode, false);
+  assert.equal(snap.online, false);
+  await assert.rejects(bridge.runSync(), /demo-only.*no cloud transport/i);
+  assert.throws(() => bridge.enqueueDemoWrite(), /demo-only/);
+  assert.throws(() => bridge.setSyncOnline(true), /demo-only/);
+  assert.throws(() => bridge.resolveSyncConflict("conflict-1", "local"), /demo-only/);
+  assert.deepEqual(calls, { sync: 0, write: 0, toggle: 0, resolve: 0 });
+});
+
+test("explicit demo can exercise a simulated session without cloud transport", async () => {
+  const { bridge, runtime, calls } = loadRealBridgeWithIsolatedMemoryTransport();
+  runtime.setRuntimeMode("demo");
+  const snap = bridge.getSyncSnapshot();
+  assert.equal(snap.cloudSyncAvailable, false);
+  assert.equal(snap.demoMode, true);
+  assert.equal(snap.online, true);
+  assert.deepEqual(await bridge.runSync(), { status: "completed", simulated: true });
+  bridge.enqueueDemoWrite();
+  bridge.setSyncOnline(false);
+  assert.equal(bridge.getSyncSnapshot().online, false);
+  bridge.resolveSyncConflict("conflict-1", "remote");
+  assert.deepEqual(calls, { sync: 1, write: 1, toggle: 1, resolve: 1 });
+  runtime.setRuntimeMode("production");
+});
+
+function loadRealBridgeWithIsolatedMemoryTransport() {
+  const Module = require("node:module");
+  const runtime = require("../runtime-mode.ts");
+  const calls = { sync: 0, write: 0, toggle: 0, resolve: 0 };
+  class TestSyncEngine {
+    constructor() {
+      this.online = true;
+      this.outbox = { stats: () => ({ total: 0, pending: 0, synced: 0, conflict: 0, error: 0 }) };
+    }
+    registerDevice() {}
+    isOnline() { return this.online; }
+    listSessions() { return []; }
+    listConflicts() { return []; }
+    listDevices() { return [{ lastSyncAt: null }]; }
+    async sync() { calls.sync++; return { status: "completed", simulated: true }; }
+    writeLocal() { calls.write++; }
+    setOnline(online) { calls.toggle++; this.online = online; }
+    resolveConflictManually() { calls.resolve++; return null; }
+  }
+  const original = Module._load;
+  // Only substitute the in-memory transport; execute actual sync-bridge.ts
+  // and runtime-mode.ts to cover the user-facing guard.
+  Module._load = function(request, parent, isMain) {
+    if (request === "@minarvabiz/sync") {
+      return {
+        SyncEngine: TestSyncEngine,
+        MemoryCloudAdapter: class {},
+        createMemoryLocalStore: () => ({}),
+      };
+    }
+    if (request === "@minarvabiz/utils") return { generateId: () => "demo-test-device-id" };
+    return original.call(this, request, parent, isMain);
+  };
+  let bridge;
+  try {
+    delete require.cache[require.resolve("../sync-bridge.ts")];
+    bridge = require("../sync-bridge.ts");
+  } finally {
+    Module._load = original;
+  }
+  return { bridge, runtime, calls };
+}
