@@ -649,7 +649,7 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
     if (journalStarted && !fs.existsSync(rollback)) {
       try { clearSqliteRestoreJournal(stage); } catch {}
     }
-    sqliteFingerprintFence.resetAfterRestore();
+    sqliteFingerprintFence.requireRestartAfterRestore();
     return { ok: true, source, preRestoreBackup };
   } catch (error) {
     try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch {}
