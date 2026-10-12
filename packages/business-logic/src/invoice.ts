@@ -6,7 +6,7 @@ import type { Sale, ServiceOrder } from "@minarvabiz/types";
 import { formatMoney } from "@minarvabiz/utils";
 import { getPrintSettings, getPrintTemplate, getPrintTemplateById } from "./print-settings";
 import { escapeHtml } from "./html";
-import { tryDesktopPrintHtml } from "./desktop-print";
+import { requestDesktopPrintHtml, tryDesktopPrintHtml } from "./desktop-print";
 import { businessHeaderHtml, customerBlockHtml, documentCss, documentFooterHtml } from "./print-document-render";
 import * as mainStore from "./store";
 import type { PrintDocumentTemplate } from "./print-templates";
@@ -56,6 +56,66 @@ ${customerBlockHtml(template, customer, sale.customerName || "Walk-in")}
 </table>
 ${documentFooterHtml(template, sale.notes)}
 </div>${autoPrint ? "<script>window.onload=function(){window.print&&window.print()}</script>" : ""}</body></html>`;
+}
+
+export type SaleInvoicePrintAttempt =
+  | { ok: true; state: "native-accepted" | "browser-window-opened" }
+  | { ok: false; state: "blocked"; error: string };
+
+/**
+ * Start print synchronously from the user's click (browser popup rules), but
+ * return the native bridge result asynchronously. Do not equate dispatch with
+ * physically printed paper or retry the sale/payment transaction on failure.
+ */
+export function requestSaleInvoicePrint(
+  sale: Sale,
+  paper?: "a4" | "thermal",
+  templateId?: string,
+): Promise<SaleInvoicePrintAttempt> {
+  if (typeof window === "undefined") {
+    return Promise.resolve({ ok: false, state: "blocked", error: "Printing requires an open app window" });
+  }
+  try {
+    const selectedPaper = paper ?? getPrintSettings().defaultInvoicePaper;
+    const directHtml = buildSaleInvoiceHtml(sale, { paper: selectedPaper, autoPrint: false, templateId });
+    const native = requestDesktopPrintHtml(directHtml, selectedPaper);
+    if (native) {
+      return native.then((result): SaleInvoicePrintAttempt =>
+        result.ok
+          ? { ok: true, state: "native-accepted" }
+          : { ok: false, state: "blocked", error: result.error || "Printer rejected the request" },
+      );
+    }
+
+    // Opening the browser window must happen before any await or promise
+    // callback or popup blockers will treat it as an unsolicited popup.
+    const html = buildSaleInvoiceHtml(sale, { paper: selectedPaper, autoPrint: true, templateId });
+    const popup = window.open(
+      "",
+      "_blank",
+      selectedPaper === "thermal" ? "width=420,height=700" : "width=900,height=900",
+    );
+    if (!popup) {
+      return Promise.resolve({
+        ok: false, state: "blocked",
+        error: "Print window was blocked. Allow popups for this app, then retry the saved invoice.",
+      });
+    }
+    try {
+      popup.document.write(html);
+      popup.document.close();
+    } catch (error) {
+      try { popup.close(); } catch { /* popup may already be unavailable */ }
+      throw error;
+    }
+    return Promise.resolve({ ok: true, state: "browser-window-opened" });
+  } catch (error) {
+    return Promise.resolve({
+      ok: false,
+      state: "blocked",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 export function printSaleInvoice(sale: Sale, paper?: "a4" | "thermal", templateId?: string) {
