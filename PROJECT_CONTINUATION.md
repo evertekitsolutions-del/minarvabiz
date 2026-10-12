@@ -1,3 +1,9 @@
+## OFFLINE-NATIVE-05 — Journalled Windows SQLite restore and fail-closed startup recovery (PR #354 CI pending)
+
+- Baseline verified main before branch: `be5602816a0221511087741bc860b3811a01b9e4`, 25 passes/5 optional skips, 0 open PRs. Full Master Vision ~51%; stable customer installer remains v1.0.15.
+- PR #354 introduces an fsynced same-volume versioned restore journal before the first live DB rename, pre-renderer inspection and verified rollback if the live DB is missing. Surviving valid DBs are never overwritten; orphan/malformed/multiple workspaces or corrupt images block startup without deleting customer data. Pending evidence also fences repeat restore. Failed first-time restores no longer leave an invalid new live image.
+- Real-path helper crash-window tests and production static wiring assertions included; exact-head and post-merge GitHub CI, NTFS sudden-failure, disk/antivirus/updater and installed Windows customer UAT remain required. No production migrations, HR005 enablement, customer writes, paid services or Windows release. See `docs/WINDOWS_SQLITE_RESTORE_RECOVERY_JOURNAL.md`.
+
 ## OFFLINE-NATIVE-04 — Exclusive, fsynced restore staging (source verification pending)
 
 - Baseline main `e97c675ce79a8e2ef9a1ec67cd4b5f34fcc2cb47`, 25 successful/5 optional skipped checks, 0 failures/pending; 0 open PRs. Existing #350–#352 protections preserved.
