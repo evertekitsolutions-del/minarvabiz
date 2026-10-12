@@ -174,7 +174,7 @@ export function BackupPanel({
         <Card><CardContent className="p-4"><div className="text-xs font-medium uppercase tracking-wide text-slate-500">Backup health</div><div className="mt-1 text-lg font-semibold text-slate-900">{backupHealth}</div><div className="text-xs text-slate-500">{latestAutomatic ? `${latestAutomaticAgeHours!.toFixed(1)}h since latest automatic backup` : "Automatic backup will be created by the desktop runtime"}</div></CardContent></Card>
         <Card><CardContent className="p-4"><div className="text-xs font-medium uppercase tracking-wide text-slate-500">Automatic backups</div><div className="mt-1 text-lg font-semibold text-slate-900">{automaticBackups.length}</div><div className="text-xs text-slate-500">Retention is managed by the desktop runtime</div></CardContent></Card>
         <Card><CardContent className="p-4"><div className="text-xs font-medium uppercase tracking-wide text-slate-500">Stored backups</div><div className="mt-1 text-lg font-semibold text-slate-900">{backups.length}</div><div className="text-xs text-slate-500">{backups.filter((backup) => backup.verified).length} verified SQLite file{backups.filter((backup) => backup.verified).length === 1 ? "" : "s"}</div></CardContent></Card>
-      </div>      }
+      </div>}
 
       {message && <p role="status" className="text-sm text-slate-700">{message}</p>}
 
