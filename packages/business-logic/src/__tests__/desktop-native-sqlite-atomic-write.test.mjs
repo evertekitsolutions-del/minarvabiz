@@ -15,8 +15,12 @@ const {writeValidatedSqliteBinaryAtomically}=require(
 const nativeMain=fs.readFileSync("apps/desktop/electron/main.ts","utf8");
 assert.match(nativeMain,/requireTrustedRenderer\(event\);\s*if \(!\(data instanceof Uint8Array\)/,
   "SQLite IPC writer must retain trusted-renderer and size checks");
-assert.match(nativeMain,/return sqliteGate\.write\(\(\) => writeValidatedSqliteBinaryAtomically\(sqlitePath\(\), data, isValidSqliteFile\)\)/,
-  "Production IPC must call the tested native atomic writer");
+assert.match(nativeMain,/return sqliteGate\.write\(\(\) => \{/,
+  "Production IPC must preserve the single-process write gate");
+assert.match(nativeMain,/writeValidatedSqliteBinaryAtomically\(\s*sqlitePath\(\), data, isValidSqliteFile, fs,/,
+  "Production IPC must call the tested native atomic writer with its final fingerprint check");
+assert.match(nativeMain,/sqliteFingerprintFence\.acceptCommittedImage\(data\)/,
+  "Only a successful SQLite image commit may advance the renderer fingerprint");
 assert.doesNotMatch(nativeMain,/\$\{file\}\.restore-\$\{process\.pid\}-\$\{Date\.now\(\)\}/,
   "Native IPC must not reuse timestamp-based staging names");
 const initSqlJs=require("sql.js");
