@@ -68,6 +68,12 @@ try {
     assert.equal(r.ok,false); assert.equal(fs.existsSync(target),false);
   }
   {
+    const {target} = state('empty-workspace'); fs.writeFileSync(target,'valid old');
+    const r = await recoverSqliteRestoreAtStartup(target,valid);
+    assert.deepEqual(r,{ok:true,recovered:false,retainedWorkspaces:0});
+    assert.equal(fs.readFileSync(target,'utf8'),'valid old');
+  }
+  {
     const {target} = state('missing-journal'); fs.writeFileSync(target,'valid old');
     const r = await recoverSqliteRestoreAtStartup(target,valid);
     assert.equal(r.ok,false); assert.equal(fs.readFileSync(target,'utf8'),'valid old');
