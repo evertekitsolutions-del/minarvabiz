@@ -108,6 +108,8 @@ export default function SettingsPage() {
       />
 
       <SyncPanel
+        cloudSyncAvailable={snap.cloudSyncAvailable}
+        demoMode={snap.demoMode}
         online={snap.online}
         outboxStats={snap.outboxStats}
         sessions={snap.sessions}
