@@ -16,7 +16,7 @@ import {
 import {
   calculateCartTotals, cartLineToSaleItem, allocatePayment, validateCart, settleTenderReceipts,
 } from "./sales";
-import { applyStockMovement, isLowStock, parseNonNegativeStockQuantity } from "./inventory";
+import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
 import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remoteCreateSale, remoteCreatePayment, remoteCollectCustomerPayment, remoteAdjustStock } from "./remote-write";
 import { auditAction } from "./audit-actions";
@@ -24,7 +24,8 @@ import { enqueueOutbox } from "./outbox-bridge";
 import { assertPermission } from "./permissions";
 import { planSalePosting, planCollectionPosting } from "./sales-accounting";
 import { planAutomaticPosting } from "./accounting-store";
-import { consumeWarehouseStock, warehouseSaleableQuantity } from "./warehouse-store";
+import { consumeWarehouseStock } from "./warehouse-store";
+import { planManualStockAdjustment, stockCountDelta } from "./stock-adjustment-guard";
 import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
 import { validateLiveSaleCheckout, costSaleLinesFromLiveProducts } from "./sale-checkout-guard";
@@ -395,52 +396,26 @@ export function deleteProduct(id: UUID): Product | null {
 }
 
 export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "adjustment", quantity: number, notes?: string | null): Product | null {
-  assertPermission("inventory.adjust");
-  if (!Number.isFinite(quantity)) return null;
-  const p = getProduct(productId);
-  if (!p) return null;
+  assertPermission("inventory.adjust"); if (!Number.isFinite(quantity)) return null;
+  const p = getProduct(productId); if (!p) return null;
   const before = p.stockQuantity;
-  const next = applyStockMovement(before, type, quantity);
-  if (!Number.isFinite(next) || next < -1e-9 || !Number.isSafeInteger(Math.round(next * 1000))) {
-    throw new Error("Insufficient stock or unsafe quantity for inventory adjustment");
-  }
-  // Validate BEFORE WMS/product mutation: foreign-branch allocations, reserved
-  // orders and in-transit transfers never fund a manual stock reduction.
-  const reduction = type === "stock_out" || (type === "adjustment" && quantity < 0)
-    ? Math.abs(quantity) : 0;
-  if (reduction > 0) {
-    const available = warehouseSaleableQuantity(p.id, before, p.branchId ?? null);
-    if (reduction > available + 1e-9) {
-      throw new Error(`Insufficient unreserved stock for inventory adjustment (requested ${reduction}, saleable ${available}; reserved, in transit or other branch)`);
-    }
-    consumeWarehouseStock(p.id, reduction, p.branchId ?? null);
-  }
-  p.stockQuantity = Math.round(next * 1000) / 1000;
-  touchProduct(p);
+  const { next, reduction } = planManualStockAdjustment(p.id, p.branchId, before, type, quantity);
+  if (reduction > 0) consumeWarehouseStock(p.id, reduction, p.branchId ?? null);
+  p.stockQuantity = next; touchProduct(p);
   void remoteAdjustStock({ ...p }, type, quantity, notes);
-  auditAction("inventory.adjust", "products", p.id, { stockQuantity: before }, { stockQuantity: p.stockQuantity, type, quantity, notes: notes ?? null });
+  auditAction("inventory.adjust", "products", p.id, { stockQuantity: before }, { stockQuantity: next, type, quantity, notes: notes ?? null });
   return p;
 }
 
-/**
- * Set a target quantity from a stock-count form. Requires the quantity seen
- * when the editor opened, preventing a stale editor from overwriting a sale.
- */
 export function adjustStockToQuantity(productId: UUID, rawTarget: string, expectedCurrentStock: number, notes?: string | null): Product {
   assertPermission("inventory.adjust");
-  const target = parseNonNegativeStockQuantity(rawTarget);
   const p = getProduct(productId);
   if (!p) throw new Error("Product not found");
-  if (!Number.isFinite(expectedCurrentStock) || Math.abs(p.stockQuantity - expectedCurrentStock) > 1e-9) {
-    throw new Error("Product stock changed while editing. Reopen Adjust Stock to review the latest quantity.");
-  }
-  const delta = Math.round((target - p.stockQuantity) * 1000) / 1000;
+  const delta = stockCountDelta(rawTarget, p.stockQuantity, expectedCurrentStock);
   if (delta === 0) return p;
-  const updated = adjustStock(productId, "adjustment", delta, notes);
-  if (!updated) throw new Error("Stock adjustment could not be completed");
+  const updated = adjustStock(productId, "adjustment", delta, notes); if (!updated) throw new Error("Stock adjustment could not be completed");
   return updated;
 }
-
 
 /**
  * Legacy product-record transfer entry point.
