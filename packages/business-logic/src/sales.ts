@@ -111,15 +111,24 @@ export function validateTender(total: number, splits: TenderSplit[]): TenderVali
   const errors: string[] = [];
   let payableMinor: MoneyMinor;
   try {
-    payableMinor = toMinorUnits(Math.max(0, total));
+    if (!Number.isFinite(total) || total < 0) throw new Error("invalid payable");
+    payableMinor = toMinorUnits(total);
   } catch {
     return { tendered: 0, collectible: 0, balanceDue: 0, changeDue: 0, cashTendered: 0, errors: ["Payable amount is invalid"] };
   }
 
   const normalized: Array<{ method: PaymentMethod; amountMinor: MoneyMinor; reference: string | null }> = [];
   for (const split of splits) {
+    if (!["cash", "bank", "card", "upi", "online", "other"].includes(split.method)) {
+      errors.push("Invalid payment method");
+      continue;
+    }
+    if (typeof split.amount !== "number" || !Number.isFinite(split.amount)) {
+      errors.push(`${split.method}: payment amount must be finite and within range`);
+      continue;
+    }
     try {
-      const amountMinor = toMinorUnits(Number(split.amount) || 0);
+      const amountMinor = toMinorUnits(split.amount);
       normalized.push({ method: split.method, amountMinor, reference: split.reference ?? null });
     } catch {
       errors.push(`${split.method}: payment amount must be finite and within range`);
@@ -173,14 +182,29 @@ export function saleGrossProfit(total: number, items: Array<{ quantity: number; 
  */
 export function validateCart(lines: CartLine[], options?: { allowNegativeStock?: boolean }): string[] {
   const errors: string[] = [];
+  const requestedByProduct = new Map<string, { productName: string; quantity: number; stock: number }>();
   if (lines.length === 0) errors.push("Cart is empty");
   for (const line of lines) {
     if (!Number.isFinite(line.quantity) || line.quantity <= 0) errors.push(`${line.productName}: quantity must be positive`);
     if (!Number.isFinite(line.unitPrice) || line.unitPrice < 0) errors.push(`${line.productName}: price cannot be negative`);
     if (!Number.isFinite(line.discountPercent)) errors.push(`${line.productName}: discount must be a finite number`);
     if (!Number.isFinite(line.taxRate)) errors.push(`${line.productName}: tax rate must be a finite number`);
-    if (!options?.allowNegativeStock && line.quantity > line.stockQuantity) {
-      errors.push(`${line.productName}: insufficient stock (available ${line.stockQuantity})`);
+    if (!Number.isFinite(line.costPrice) || line.costPrice < 0) errors.push(`${line.productName}: cost must be a finite non-negative amount`);
+    if (typeof line.productId !== "string" || !line.productId) errors.push(`${line.productName}: valid product is required`);
+    if (Number.isFinite(line.quantity) && line.quantity > 0 && line.productId) {
+      const current = requestedByProduct.get(line.productId);
+      requestedByProduct.set(line.productId, {
+        productName: line.productName,
+        quantity: (current?.quantity ?? 0) + line.quantity,
+        stock: Math.min(current?.stock ?? Infinity, line.stockQuantity),
+      });
+    }
+  }
+  if (!options?.allowNegativeStock) {
+    for (const { productName, quantity, stock } of requestedByProduct.values()) {
+      if (!Number.isFinite(stock) || stock < 0 || quantity > stock) {
+        errors.push(`${productName}: insufficient stock (available ${stock})`);
+      }
     }
   }
   return errors;
