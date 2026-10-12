@@ -10,12 +10,14 @@ import { minarvaBackupSchemaError } from "./sqlite-backup-validation";
 import { writeValidatedSqliteBinaryAtomically } from "./sqlite-native-atomic-write";
 import { NativeSqliteBusyError, NativeSqliteIpcGate } from "./sqlite-ipc-gate";
 import { prepareSqliteRestoreStage, cleanupSqliteRestoreStage, type SqliteRestoreStage } from "./sqlite-restore-staging";
+import { beginSqliteRestoreJournal, clearSqliteRestoreJournal, recoverSqliteRestoreAtStartup } from "./sqlite-restore-recovery";
 import { claimPrimaryDesktopInstance } from "./single-instance-owner";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 const runtimeSmoke = process.env.MINARVA_RUNTIME_SMOKE === "1";
 const MAX_SQLITE_IPC_BYTES = 256 * 1024 * 1024;
 const sqliteGate = new NativeSqliteIpcGate();
+let sqliteRestoreReviewRequired = false;
 const isPrimaryDesktopInstance = claimPrimaryDesktopInstance(
   () => app.requestSingleInstanceLock(),
   () => app.quit(),
@@ -363,7 +365,35 @@ async function listBackupFiles() {
 }
 
 app.disableHardwareAcceleration();
-if (isPrimaryDesktopInstance) app.whenReady().then(() => { Menu.setApplicationMenu(null); runtimeSmokeLog(`app-ready platform=${process.platform} version=${app.getVersion()} userData=${app.getPath("userData")}`); process.env.MINARVA_SQLITE_PATH = sqlitePath(); process.env.MINARVA_MODE = process.env.MINARVA_MODE || "production"; fs.mkdirSync(app.getPath("userData"), { recursive: true }); configureDesktopSession(); registerDesktopLicenseIpc(getDeviceId, requireTrustedRenderer); createWindow(); app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); }); });
+if (isPrimaryDesktopInstance) app.whenReady().then(async () => {
+  Menu.setApplicationMenu(null);
+  runtimeSmokeLog(`app-ready platform=${process.platform} version=${app.getVersion()} userData=${app.getPath("userData")}`);
+  process.env.MINARVA_SQLITE_PATH = sqlitePath();
+  process.env.MINARVA_MODE = process.env.MINARVA_MODE || "production";
+  fs.mkdirSync(app.getPath("userData"), { recursive: true });
+  try {
+    // Do not create a renderer or accept database IPC until restore recovery is settled.
+    const recovery = await recoverSqliteRestoreAtStartup(sqlitePath(), minarvaSqliteValidationError);
+    if (!recovery.ok) {
+      dialog.showErrorBox("Minarva Biz database recovery blocked",
+        `${recovery.error}\n\nYour database and restore files were not deleted. Contact support before moving any files. Database folder: ${app.getPath("userData")}`);
+      app.quit();
+      return;
+    }
+    sqliteRestoreReviewRequired = recovery.retainedWorkspaces > 0;
+    if (recovery.recovered) runtimeSmokeLog("sqlite-restore-startup-recovered-previous-image");
+    if (sqliteRestoreReviewRequired) runtimeSmokeLog("sqlite-restore-evidence-retained-manual-review-required");
+  } catch (error) {
+    dialog.showErrorBox("Minarva Biz database recovery error",
+      `Safe startup blocked: ${error instanceof Error ? error.message : String(error)}. Preserve the database and restore workspace for manual review.`);
+    app.quit();
+    return;
+  }
+  configureDesktopSession();
+  registerDesktopLicenseIpc(getDeviceId, requireTrustedRenderer);
+  createWindow();
+  app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+});
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 
 ipcMain.handle("app:getVersion", (event) => { requireTrustedRenderer(event); return app.getVersion(); });
@@ -522,6 +552,7 @@ ipcMain.handle("backup:pruneAutomatic", (event, retention?: number) => {
 });
 ipcMain.handle("backup:restoreFromFile", async (event) => {
   requireTrustedRenderer(event);
+  if (sqliteRestoreReviewRequired) return { ok: false, error: "An interrupted restore workspace needs manual review before another restore. No files were deleted." };
   const result = await dialog.showOpenDialog({
     title: "Restore Minarva Biz Backup",
     properties: ["openFile"],
@@ -539,10 +570,12 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
 
   const target = sqlitePath();
   let stage: SqliteRestoreStage | null = null;
+  let journalStarted = false;
   let temp = "";
   let rollback = "";
   const hadTarget = fs.existsSync(target);
   let targetMoved = false;
+  let newImageInstalled = false;
   let preRestoreBackup: string | null = null;
 
   if (hadTarget) {
@@ -562,11 +595,14 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
       return { ok: false, error: `Restore staging file failed Minarva Biz validation: ${stagedError}` };
     }
 
+    beginSqliteRestoreJournal(stage, target);
+    journalStarted = true;
     if (hadTarget) {
       fs.renameSync(target, rollback);
       targetMoved = true;
     }
     fs.renameSync(temp, target);
+    newImageInstalled = true;
 
     const restoredError = await minarvaSqliteValidationError(target);
     if (restoredError) throw new Error(`Restored database failed Minarva Biz validation: ${restoredError}`);
@@ -574,10 +610,20 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
     if (targetMoved) {
       try { fs.unlinkSync(rollback); } catch {}
     }
+    // Never remove the journal while a prior database image is stranded.
+    if (journalStarted && !fs.existsSync(rollback)) {
+      try { clearSqliteRestoreJournal(stage); } catch {}
+    }
     return { ok: true, source, preRestoreBackup };
   } catch (error) {
     try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch {}
     try { if (targetMoved && fs.existsSync(target)) fs.unlinkSync(target); } catch {}
+    // A fresh install has no previous image to roll back. On post-install
+    // validation failure, return the untrusted image to staging instead of
+    // leaving a corrupt new live database behind.
+    if (!hadTarget && newImageInstalled && fs.existsSync(target)) {
+      try { fs.renameSync(target, temp); } catch {}
+    }
 
     let rollbackError: string | null = null;
     if (targetMoved && fs.existsSync(rollback)) {
@@ -587,6 +633,13 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
       } catch (rollbackFailure) {
         rollbackError = rollbackFailure instanceof Error ? rollbackFailure.message : String(rollbackFailure);
       }
+    }
+    // Preserve the journal if rollback is missing, incomplete or unverified.
+    const priorStateRestored = hadTarget
+      ? (targetMoved ? rollbackError === null && fs.existsSync(target) : fs.existsSync(target))
+      : !fs.existsSync(target);
+    if (stage && journalStarted && !fs.existsSync(rollback) && priorStateRestored) {
+      try { clearSqliteRestoreJournal(stage); } catch {}
     }
     const rollbackStatus = rollbackError
       ? ` Previous database rollback validation failed: ${rollbackError}`

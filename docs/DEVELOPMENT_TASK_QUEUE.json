@@ -83,7 +83,7 @@
       "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "OFFLINE-NATIVE-04 adds exclusive same-volume restore staging with file fsync and rollback-preserving cleanup; exact-head/postmerge verification required. PRs #350\u2013#352 already merged and green. Next durable restore journal and startup recovery, external-writer policy, renderer retry, actual NTFS failure/updater/multi-launch UAT. HR005 authenticated enrollment, audited server receipts and transactional APPLIED sequence/hydration/conflicts remain undone. Production HR005 migration unapplied and flag OFF.",
+      "nextAction": "OFFLINE-NATIVE-05 PR #354 adds a native fsynced restore journal, fail-closed pre-renderer startup recovery, rollback validation, preserved evidence and a fresh-profile invalid-restore fix. Verify latest exact-head CI, merge only after all required checks are green, verify post-merge main and installed NTFS/UAT separately. Next: external-writer locking, rollback-journal Windows power-loss acceptance, renderer recovery retry, authorized HR005 enrollment/receipt application and tenant-safe hydration. HR005 hosted migration remains unapplied and flag OFF.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",
@@ -106,7 +106,8 @@
         "docs/WINDOWS_SQLITE_ATOMIC_WRITE_HARDENING.md",
         "docs/WINDOWS_SQLITE_BACKUP_RESTORE_FENCE.md",
         "docs/WINDOWS_ELECTRON_SINGLE_INSTANCE_FENCE.md",
-        "docs/WINDOWS_SQLITE_RESTORE_STAGING.md"
+        "docs/WINDOWS_SQLITE_RESTORE_STAGING.md",
+        "docs/WINDOWS_SQLITE_RESTORE_RECOVERY_JOURNAL.md"
       ]
     }
   ]
