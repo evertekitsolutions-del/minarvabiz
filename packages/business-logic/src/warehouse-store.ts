@@ -524,14 +524,26 @@ export function warehouseStockSummary(productTotalById: Record<string, number>) 
  * Keep the invariant using the existing WMS summary rather than duplicating
  * allocation logic in POS/Normal Billing/returns exchange validators.
  */
-export function warehouseSaleableQuantity(productId: UUID, productTotalStock: number): number {
+export function warehouseSaleableQuantity(productId: UUID, productTotalStock: number, branchId?: UUID | null): number {
   if (!Number.isFinite(productTotalStock) || productTotalStock <= 0) return 0;
   const row = warehouseStockSummary({ [productId]: productTotalStock }).find(s => s.productId === productId);
   if (!row) return 0;
   // Never create fictitious stock from stale physical allocations. The two
   // independent limits defend against over-allocation and transit double count.
   const unencumbered = row.total - row.reserved - row.inTransit;
-  const physicallySellable = row.availableAllocated + row.unallocated;
+  // Match consumeWarehouseStock's branch scope. Foreign allocations remain
+  // physically owned by their warehouse; they cannot become fictitious
+  // unallocated stock just because the current branch cannot consume them.
+  const availableAllocated = branchId
+    ? stock.reduce((sum, position) => {
+      if (position.productId !== productId) return sum;
+      const warehouse = warehouses.find(w => w.id === position.warehouseId);
+      return warehouse?.branchId === branchId
+        ? sum + Math.max(0, position.onHand - position.reserved)
+        : sum;
+    }, 0)
+    : row.availableAllocated;
+  const physicallySellable = availableAllocated + row.unallocated;
   return roundQty(Math.max(0, Math.min(row.total, unencumbered, physicallySellable)));
 }
 

@@ -73,9 +73,9 @@ export function validateLiveSaleCheckout(
         // Available total stock is not all saleable: WMS reservations and
         // dispatched/in-transit transfers remain protected until released or
         // received. This checks aggregate demand before ANY sale mutation.
-        const saleable = warehouseSaleableQuantity(productId, live.stockQuantity);
+        const saleable = warehouseSaleableQuantity(productId, live.stockQuantity, live.branchId);
         if (requested > saleable + 1e-9) {
-          errors.push(`${live.name}: insufficient unreserved stock (requested ${requested}, saleable ${saleable}; reserved or in transit)`);
+          errors.push(`${live.name}: insufficient unreserved stock (requested ${requested}, saleable ${saleable}; reserved, in transit or allocated to another branch)`);
         }
       }
     }
