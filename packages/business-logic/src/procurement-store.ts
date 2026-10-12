@@ -1,3 +1,4 @@
+import { planManualStockAdjustment } from "./stock-adjustment-guard";
 import { planPurchaseInvoicePosting, planPurchaseInvoiceCancellation } from "./procurement-accounting";
 /**
  * Procurement workflow — Purchase Orders and Goods Receipts.
@@ -385,6 +386,22 @@ export function receivePurchaseOrder(input: {
   }
   if (errors.length || !receiptLines.length) {
     return { goodsReceipt: null, purchaseOrder: cloneOrder(po), errors: errors.length ? errors : ["Nothing to receive"] };
+  }
+
+  // Validate the entire batch before advancing any PO line or product.
+  // Different order lines may replenish the same product.
+  const projectedStock = new Map<UUID, number>();
+  for (const line of receiptLines) {
+    if (!line.productId) continue;
+    const product = mainStore.getProduct(line.productId)!;
+    try {
+      const current = projectedStock.get(product.id) ?? product.stockQuantity;
+      projectedStock.set(product.id, planManualStockAdjustment(
+        product.id, product.branchId, current, "stock_in", line.receivedQuantity,
+      ).next);
+    } catch {
+      return { goodsReceipt: null, purchaseOrder: cloneOrder(po), errors: [`${line.description}: stock is invalid or unsafe for goods receipt`] };
+    }
   }
 
   const before = cloneOrder(po);

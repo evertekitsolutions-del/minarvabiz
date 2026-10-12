@@ -33,7 +33,7 @@
       "acceptanceEvidence": [],
       "dependsOn": [],
       "owner": "unassigned",
-      "nextAction": "First-customer setup workflow: validated reversible user+branch browser confirmations and optional v15-compatible backup snapshot field are implemented on a source branch. Verify PR exact-head and postmerge CI; then perform first paying-customer licensed Windows physical UAT (sales/stock/printing/backup/restore/update/support), record precise blockers, and separately authorize the signed installer. No UAT or commercial acceptance claimed."
+      "nextAction": "Verify linked purchase/sale/refund/recovery source PR and postmerge CI (docs/COMMERCIAL_JOURNEY_ACCEPTANCE.md). Then complete authorized Web/Hybrid customer and physical licensed Windows UAT for the mapped first-customer packets, including printer, native backup/restore and updater. Record release evidence before accepting the outcome. Do not treat six engineering evidence mappings or PR counts as accepted packets or an extra global 1%; an audited weighted baseline is still absent."
     },
     {
       "id": "A-SYNC-V2",

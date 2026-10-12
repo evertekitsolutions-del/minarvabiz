@@ -1,3 +1,10 @@
+## A-FIRST-CUSTOMER — Linked purchase/sale/refund/recovery verification (source CI pending)
+
+- Base main `75e3b14cc9623034320153f0490461cd9a761a65` (#378). User requested a material delivery batch, not another arbitrary percentage increase.
+- New production-runtime scenario executes PO -> partial goods receipt -> vendor invoice -> partial/full supplier settlement -> cashier split sale -> partial refund -> exchange -> exact stock/cash/COGS/profit reconciliation -> full snapshot imported by a fresh Node process, retaining pending outbox event identities.
+- Reproduced and fixed goods-receipt partial mutation on later unsafe stock and unsupported refund precision/unsafe-number exceptions. Negative tests include same-product cumulative overflow, refused receipt correction/retry, cashier denial and exchange refusal before mutation.
+- `docs/COMMERCIAL_JOURNEY_ACCEPTANCE.md` maps six existing first-customer tracker packets to the precise engineering evidence and their remaining gates. It does NOT mark them accepted or manufacture +1%; the PDF and repository contain no audited weighted global baseline. Physical licensed Windows/printer, authenticated hosted/Hybrid customer acceptance and a separately authorized installer remain outstanding. No production writes, dependency or paid service.
+
 ## A-FIRST-CUSTOMER — Atomic return restock preflight (source CI pending)
 
 - Base main `c5728a79cc19ce417681ae6a27c9b2064ec3c379` (#377); its postmerge checks passed 25 with 5 optional skipped.
