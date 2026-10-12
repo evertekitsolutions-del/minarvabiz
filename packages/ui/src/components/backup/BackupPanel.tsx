@@ -29,6 +29,7 @@ export function BackupPanel({
   onRestore,
   canManage = true,
   retentionCount = 14,
+  legacyPartialArchive = false,
 }: {
   backups: BackupMeta[];
   onCreate?: () => void | Promise<void>;
@@ -38,11 +39,14 @@ export function BackupPanel({
   onRestore?: () => void | Promise<void>;
   canManage?: boolean;
   retentionCount?: number;
+  /** Existing Web v1 partial exports are NOT full recovery backups. */
+  legacyPartialArchive?: boolean;
 }) {
   const [nativeBackups, setNativeBackups] = React.useState<NativeBackup[] | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const native = desktopApi();
+  const limitedWebArchive = legacyPartialArchive && !native?.listBackups;
 
   const refreshNative = React.useCallback(async (): Promise<NativeBackup[] | null> => {
     if (!native?.listBackups) return null;
@@ -133,7 +137,10 @@ export function BackupPanel({
       return;
     }
     const ok = onVerify?.(backup.id);
-    setMessage(ok === undefined ? "Backup verification completed" : ok ? "Backup verified OK" : "Verification failed");
+    setMessage(limitedWebArchive
+      ? (ok ? "Legacy partial export format checked. This is NOT a complete recovery backup."
+            : "Legacy partial export verification failed.")
+      : ok === undefined ? "Backup verification completed" : ok ? "Backup verified OK" : "Verification failed");
   };
 
   const inspect = async (backup: NativeBackup) => {
@@ -151,23 +158,25 @@ export function BackupPanel({
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Backup & Restore</h2>
-          <p className="text-sm text-slate-500">Full local SQLite backups with a safety backup before restore</p>
+          <h2 className="text-xl font-semibold text-slate-900">{limitedWebArchive ? "Previous limited exports" : "Backup & Restore"}</h2>
+          <p className="text-sm text-slate-500">{limitedWebArchive
+            ? "Legacy Web archives hold only a subset of business records. They are not full recovery snapshots. Use the complete local business snapshot download above."
+            : "Full local SQLite backups with a safety backup before restore"}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        {!limitedWebArchive && <div className="flex flex-wrap gap-2">
           <Button variant="outline" disabled={busy || !canManage} onClick={() => void run(restore, "Restore completed")}>Restore backup</Button>
           <Button variant="outline" disabled={busy || !canManage || !native?.createAutomaticBackup} onClick={() => void run(createAutomatic, "Automatic backup created")}>Run automatic backup</Button>
           <Button disabled={busy || !canManage} onClick={() => void run(create, "Backup created")}>Create backup</Button>
-        </div>
+        </div>}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      {!limitedWebArchive && <div className="grid gap-3 sm:grid-cols-3">
         <Card><CardContent className="p-4"><div className="text-xs font-medium uppercase tracking-wide text-slate-500">Backup health</div><div className="mt-1 text-lg font-semibold text-slate-900">{backupHealth}</div><div className="text-xs text-slate-500">{latestAutomatic ? `${latestAutomaticAgeHours!.toFixed(1)}h since latest automatic backup` : "Automatic backup will be created by the desktop runtime"}</div></CardContent></Card>
         <Card><CardContent className="p-4"><div className="text-xs font-medium uppercase tracking-wide text-slate-500">Automatic backups</div><div className="mt-1 text-lg font-semibold text-slate-900">{automaticBackups.length}</div><div className="text-xs text-slate-500">Retention is managed by the desktop runtime</div></CardContent></Card>
         <Card><CardContent className="p-4"><div className="text-xs font-medium uppercase tracking-wide text-slate-500">Stored backups</div><div className="mt-1 text-lg font-semibold text-slate-900">{backups.length}</div><div className="text-xs text-slate-500">{backups.filter((backup) => backup.verified).length} verified SQLite file{backups.filter((backup) => backup.verified).length === 1 ? "" : "s"}</div></CardContent></Card>
-      </div>
+      </div>      }
 
-      {message && <p className="text-sm text-emerald-600">{message}</p>}
+      {message && <p role="status" className="text-sm text-slate-700">{message}</p>}
 
       <div className="space-y-2">
         {backups.length === 0 && <p className="rounded-xl border border-dashed border-slate-200 bg-white py-12 text-center text-slate-400">No backups yet</p>}
