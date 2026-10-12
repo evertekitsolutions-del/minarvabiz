@@ -33,3 +33,15 @@ A successful opt-in run produces an Actions artifact `minarva-reviewed-source-pr
 Run `node --test scripts/agent-queue-gate.test.mjs scripts/agent-patch-audit.test.mjs`.
 
 Customer Windows installer stays **v1.0.15**. Full Master Vision remains approximately **51%** until independently verified wider acceptance.
+
+
+## Verified scheduled execution audit — 2026-10-12
+
+GitHub Actions schedule runs `38191475382` and `38178546959` each passed the read-only `preflight` job while their actual `source_patch` job was **skipped**. Preflight logs showed `MINARVA_AI_ENABLED` empty. This confirms that **the autonomous coding agent has NOT generated code** from these runs. Do not describe a successful workflow as autonomous coding.
+
+Scheduled preflight now prints one explicit source-agent execution state:
+- `DISABLED_NO_CODING`: opt-in unset/false and no code generation permitted;
+- `BLOCKED_NO_CODING`: task/PR/SHA gate rejected execution;
+- `REVIEW_PATCH_JOB_ELIGIBLE`: gating permits a review-only patch *attempt*, but it is not a generated patch, PR or merge.
+
+GitHub Actions retains the cost-opt-in guard. No billing variable was changed. Review `docs/DELIVERY_ACCELERATION_POLICY.md` and `docs/PRODUCT_DELIVERY_BACKLOG.json` for new user-facing priorities; the HR-only queue does not represent overall product completion. The read-only workflow audits all registry groups at no AI inference cost. For free local coding see `docs/LOCAL_OLLAMA_AGENT_WORKFLOW.md`; a powered-on local host plus a running agent is still required.
