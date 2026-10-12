@@ -59,6 +59,7 @@ export * from "./loyalty";
 export * from "./delivery";
 export * from "./shortcuts";
 export * from "./onboarding";
+export * from "./onboarding-browser-preferences";
 export * from "./system-health";
 export * from "./remote-write";
 export * from "./invoice";

@@ -20,6 +20,7 @@ import * as warehouseStore from "./warehouse-store";
 import * as procurementStore from "./procurement-store";
 import * as accountingStore from "./accounting-store";
 import * as shopProfile from "./shop-profile";
+import * as onboarding from "./onboarding";
 import * as taxConfig from "./tax-config";
 import * as autoBackup from "./auto-backup";
 import * as printSettings from "./print-settings";
@@ -66,6 +67,7 @@ export interface DomainSnapshot {
   branches: Branch[];
   activeBranchId?: string | null;
   shopProfile?: ShopProfile | null;
+  onboardingCompletedIds?: string[];
   taxConfig?: TaxConfig | null;
   autoBackup?: { settings: AutoBackupSettings; history: BackupMeta[] } | null;
   printSettings?: ReturnType<typeof printSettings.getPrintSettings> | null;
@@ -116,6 +118,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     branches: phase9Store.listBranches(),
     activeBranchId: phase9Store.getActiveBranch()?.id ?? null,
     shopProfile: shopProfile.getShopProfile(),
+    onboardingCompletedIds: onboarding.exportOnboardingIds(),
     taxConfig: taxConfig.getTaxConfig(),
     autoBackup: autoBackup.exportAutoBackupState(),
     printSettings: printSettings.getPrintSettings(),
@@ -185,6 +188,7 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     returns: collection(input.returns, "returns"),
     audit: collection(input.audit, "audit"),
     branches: collection(input.branches, "branches"),
+    onboardingCompletedIds: onboarding.validateOnboardingIds(input.onboardingCompletedIds ?? []),
     outbox: input.outbox == null ? undefined : collection(input.outbox, "outbox"),
     quotations: input.quotations == null ? undefined : collection(input.quotations, "quotations"),
     cashSessions: input.cashSessions == null ? undefined : collection(input.cashSessions, "cashSessions"),
@@ -237,6 +241,7 @@ function applyDomainSnapshot(snap: DomainSnapshot): void {
   if (snap.procurement) procurementStore.hydrateProcurementState(snap.procurement);
   if (snap.accounting) accountingStore.hydrateAccountingState(snap.accounting);
   if (snap.shopProfile) shopProfile.hydrateShopProfile(snap.shopProfile);
+  onboarding.hydrateOnboarding(snap.onboardingCompletedIds ?? []);
   if (snap.taxConfig) taxConfig.hydrateTaxConfig(snap.taxConfig);
   if (snap.autoBackup) autoBackup.hydrateAutoBackup(snap.autoBackup);
   if (snap.printSettings) printSettings.hydratePrintSettings(snap.printSettings);

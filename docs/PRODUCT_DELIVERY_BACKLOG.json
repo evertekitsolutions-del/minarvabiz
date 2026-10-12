@@ -29,10 +29,11 @@
         "Documents / support / workflow"
       ],
       "criticalOutcome": "Customer can install or sign in, enter real opening data, transact, print, backup/restore, update and request support without developer-only steps",
-      "status": "acceptance_not_verified",
+      "status": "in_progress",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "First-customer setup workflow: validated reversible user+branch browser confirmations and optional v15-compatible backup snapshot field are implemented on a source branch. Verify PR exact-head and postmerge CI; then perform first paying-customer licensed Windows physical UAT (sales/stock/printing/backup/restore/update/support), record precise blockers, and separately authorize the signed installer. No UAT or commercial acceptance claimed."
     },
     {
       "id": "A-SYNC-V2",
