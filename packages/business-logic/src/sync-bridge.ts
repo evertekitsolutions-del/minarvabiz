@@ -8,6 +8,8 @@ import {
 } from "@minarvabiz/sync";
 import type { UUID } from "@minarvabiz/types";
 import { generateId } from "@minarvabiz/utils";
+import { getRuntimeMode, isDemoMode } from "./runtime-mode";
+import { assertMemorySyncDemoMode } from "./sync-demo-policy";
 
 const deviceId = (typeof globalThis !== "undefined" &&
   (globalThis as { __minarvaDeviceId?: string }).__minarvaDeviceId) ||
@@ -25,7 +27,9 @@ syncEngine.registerDevice("Minarva Primary", "web");
 
 export function getSyncSnapshot() {
   return {
-    online: syncEngine.isOnline(),
+    cloudSyncAvailable: false,
+    demoMode: isDemoMode(),
+    online: isDemoMode() && syncEngine.isOnline(),
     outboxStats: syncEngine.outbox.stats(),
     sessions: syncEngine.listSessions(),
     conflicts: syncEngine.listConflicts(true),
@@ -35,10 +39,12 @@ export function getSyncSnapshot() {
 }
 
 export async function runSync() {
+  assertMemorySyncDemoMode(getRuntimeMode());
   return syncEngine.sync();
 }
 
 export function enqueueDemoWrite() {
+  assertMemorySyncDemoMode(getRuntimeMode());
   const id = generateId() as UUID;
   syncEngine.writeLocal(
     "customers",
@@ -54,9 +60,11 @@ export function enqueueDemoWrite() {
 }
 
 export function setSyncOnline(online: boolean) {
+  assertMemorySyncDemoMode(getRuntimeMode());
   syncEngine.setOnline(online);
 }
 
 export function resolveSyncConflict(id: UUID, choice: "local" | "remote") {
+  assertMemorySyncDemoMode(getRuntimeMode());
   return syncEngine.resolveConflictManually(id, choice);
 }
