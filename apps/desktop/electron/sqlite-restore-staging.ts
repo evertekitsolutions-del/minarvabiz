@@ -2,7 +2,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-type Io = Pick<typeof fs, "mkdtempSync" | "copyFileSync" | "openSync" |
+type Io = Pick<typeof fs, "mkdtempSync" | "copyFileSync" | "chmodSync" | "openSync" |
   "fsyncSync" | "closeSync" | "unlinkSync" | "rmdirSync">;
 export type SqliteRestoreStage = { directory: string; temp: string; rollback: string };
 
@@ -20,6 +20,8 @@ export function prepareSqliteRestoreStage(source: string, target: string, io: Io
   let fd: number | null = null;
   try {
     io.copyFileSync(source, stage.temp, fs.constants.COPYFILE_EXCL);
+    // Copy may inherit a read-only source mode; change only our private copy.
+    io.chmodSync(stage.temp, 0o600);
     fd = io.openSync(stage.temp, "r+");
     io.fsyncSync(fd);
     io.closeSync(fd);

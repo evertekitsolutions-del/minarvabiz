@@ -24,9 +24,12 @@ try {
   const db = new SQL.Database(); db.run('CREATE TABLE evidence(value TEXT); INSERT INTO evidence VALUES (\'saved\')');
   const bytes = Buffer.from(db.export()); db.close();
   fs.writeFileSync(source, bytes); fs.writeFileSync(target, bytes);
+  fs.chmodSync(source, 0o400);
   let syncs = 0;
-  const a = prepareSqliteRestoreStage(source, target, { ...fs, fsyncSync(fd) { syncs++; fs.fsyncSync(fd); } });
+  let stageMode;
+  const a = prepareSqliteRestoreStage(source, target, { ...fs, chmodSync(file, mode) { stageMode = mode; fs.chmodSync(file, mode); }, fsyncSync(fd) { syncs++; fs.fsyncSync(fd); } });
   const b = prepareSqliteRestoreStage(source, target);
+  assert.equal(stageMode, 0o600, "Private staged copy must be writable even for read-only backup sources");
   assert.notEqual(a.directory, b.directory);
   assert.equal(path.dirname(a.directory), dir);
   assert.equal(syncs, 1, 'Staging must be flushed before caller can move the live database');
@@ -41,7 +44,7 @@ try {
   fs.unlinkSync(a.rollback); cleanupSqliteRestoreStage(a);
   assert.equal(fs.existsSync(a.directory), false);
   cleanupSqliteRestoreStage(b);
-  for (const operation of ['copyFileSync', 'openSync', 'fsyncSync', 'closeSync']) {
+  for (const operation of ['copyFileSync', 'chmodSync', 'openSync', 'fsyncSync', 'closeSync']) {
     const io = { ...fs, [operation](...args) {
       if (operation === 'copyFileSync') fs.writeFileSync(args[1], 'partial');
       if (operation === 'closeSync') { fs.closeSync(args[0]); }
