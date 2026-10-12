@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createCheckoutSubmitGate } from "./checkout-submit-gate";
 import type { CartLine, Customer, PaymentMethod, Product } from "@minarvabiz/types";
 import { calculateCartTotals } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
@@ -34,6 +35,11 @@ export function NormalBilling({
   const [notes, setNotes] = React.useState("");
   const [message, setMessage] = React.useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [lastSale, setLastSale] = React.useState<{ id: string; invoice: string } | null>(null);
+  const checkoutSubmitGate = React.useRef(createCheckoutSubmitGate());
+
+  React.useEffect(() => {
+    if (lines.length === 0) checkoutSubmitGate.current.release();
+  }, [lines.length]);
   const selectedProduct = products.find((p) => p.id === productId);
   const totals = React.useMemo(() => calculateCartTotals(lines), [lines]);
 
@@ -88,20 +94,29 @@ export function NormalBilling({
       setMessage({ type: "err", text: "Paid amount must be a valid non-negative number." });
       return;
     }
-    const result = onCompleteSale({
-      customerId: customerId || null,
-      lines,
-      paidAmount: payment,
-      paymentMethod: method,
-      notes: notes.trim() || undefined,
-    });
-    if (!result.success) {
-      setMessage({ type: "err", text: (result.errors || ["Sale failed"]).join("; ") });
-      return;
+    // A successful synchronous submit remains latched until the cleared cart
+    // is committed. React setState does not immediately change this closure.
+    if (!checkoutSubmitGate.current.tryStart()) return;
+    try {
+      const result = onCompleteSale({
+        customerId: customerId || null,
+        lines,
+        paidAmount: payment,
+        paymentMethod: method,
+        notes: notes.trim() || undefined,
+      });
+      if (!result.success) {
+        checkoutSubmitGate.current.release();
+        setMessage({ type: "err", text: (result.errors || ["Sale failed"]).join("; ") });
+        return;
+      }
+      setMessage({ type: "ok", text: `Invoice ${result.invoiceNumber || ""} saved.` });
+      setLastSale(result.saleId && result.invoiceNumber ? { id: result.saleId, invoice: result.invoiceNumber } : null);
+      setLines([]); setPaidAmount(""); setNotes(""); setCustomerId("");
+    } catch (error) {
+      checkoutSubmitGate.current.release();
+      setMessage({ type: "err", text: error instanceof Error ? error.message : String(error) });
     }
-    setMessage({ type: "ok", text: `Invoice ${result.invoiceNumber || ""} saved.` });
-    setLastSale(result.saleId && result.invoiceNumber ? { id: result.saleId, invoice: result.invoiceNumber } : null);
-    setLines([]); setPaidAmount(""); setNotes(""); setCustomerId("");
   }
 
   return (
