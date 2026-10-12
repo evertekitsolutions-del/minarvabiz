@@ -20,7 +20,7 @@ export type StockMovementType =
  */
 export function parseNonNegativeStockQuantity(raw: string): number {
   const value = raw.trim();
-  if (!/^\\d+(?:\\.\\d{1,3})?$/.test(value)) {
+  if (!/^[0-9]+(?:[.][0-9]{1,3})?$/.test(value)) {
     throw new Error("Stock quantity must be a non-negative number with up to 3 decimal places");
   }
   const quantity = Number(value);
