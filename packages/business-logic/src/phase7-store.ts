@@ -81,6 +81,18 @@ export function createReturn(input: {
   if (unavailableRestocks.length) {
     return { ret: null, errors: unavailableRestocks, paidRefund: 0, receivableReduction: 0 };
   }
+  // Prove every sequential restock before changing any product or consuming
+  // a return number. Multiple invoice lines may target the same product.
+  const restockBalances = new Map<UUID, number>();
+  for (const item of quote.items) {
+    if (!item.restock) continue;
+    const current = restockBalances.get(item.productId) ?? mainStore.getProduct(item.productId)!.stockQuantity;
+    try {
+      restockBalances.set(item.productId, applyStockMovement(current, "return", item.quantity));
+    } catch {
+      return { ret: null, errors: [`${item.productName}: stock is invalid or unsafe for restocking`], paidRefund: 0, receivableReduction: 0 };
+    }
+  }
   const returnId = generateId();
   const returnItems: SaleReturnItem[] = quote.items.map(item => ({ ...item, id: generateId(), returnId }));
   const totalRefund = quote.totalRefund;
