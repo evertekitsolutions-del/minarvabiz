@@ -14,7 +14,7 @@ import {
   type MoneyMinor,
 } from "@minarvabiz/utils";
 import {
-  calculateCartTotals, cartLineToSaleItem, allocatePayment, validateCart, validateTender,
+  calculateCartTotals, cartLineToSaleItem, allocatePayment, validateCart, settleTenderReceipts,
 } from "./sales";
 import { applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
@@ -526,16 +526,16 @@ export function createSale(input: {
       amount: split.amount,
       reference: split.reference ?? null,
     }));
-  const tender = validateTender(fromMinorUnits(remainingAfterCreditMinor), rawSplits);
+  const tender = settleTenderReceipts(fromMinorUnits(remainingAfterCreditMinor), rawSplits);
   if (tender.errors.length) {
     return { sale: null as unknown as Sale, payment: null, payments: [], errors: tender.errors };
   }
-  const requestedSplits = rawSplits
-    .map((split) => {
-      const amountMinor = toMinorUnits(split.amount);
-      return { ...split, amount: fromMinorUnits(amountMinor), amountMinor };
-    })
-    .filter((split) => split.amountMinor !== 0);
+  // Change is returned in cash, never retained as revenue. The same
+  // net receipt splits must drive payments, journal entries and sync.
+  const requestedSplits = tender.settledSplits.map((split) => ({
+    ...split,
+    amountMinor: toMinorUnits(split.amount),
+  }));
   const actualPaymentMinor = toMinorUnits(tender.collectible);
   const actualPayment = fromMinorUnits(actualPaymentMinor);
   const creditApplied = fromMinorUnits(creditAppliedMinor);

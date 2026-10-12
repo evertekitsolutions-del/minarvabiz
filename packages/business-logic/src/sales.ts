@@ -163,6 +163,50 @@ export function validateTender(total: number, splits: TenderSplit[]): TenderVali
   };
 }
 
+/**
+ * Convert gross POS tenders into actual method-by-method receipts.
+ *
+ * Cash given as change is not business revenue and MUST be subtracted from
+ * cash only, even when a cash split precedes card/UPI/bank in the input.
+ * This preserves card and bank settlement amounts independently of UI order.
+ * Monetary arithmetic stays in integer minor units (no floating drift).
+ *
+ * Consumers must persist these net receipts (not gross tender rows) to both
+ * payment records and accounting; the original changeDue remains available
+ * for the cash drawer receipt.
+ */
+export function settleTenderReceipts(
+  total: number,
+  splits: TenderSplit[],
+): TenderValidation & { settledSplits: TenderSplit[] } {
+  const validation = validateTender(total, splits);
+  if (validation.errors.length) return { ...validation, settledSplits: [] };
+
+  let changeRemaining: MoneyMinor = toMinorUnits(validation.changeDue);
+  const settledSplits: TenderSplit[] = [];
+  for (const split of splits) {
+    let receiptMinor = toMinorUnits(split.amount);
+    if (split.method === "cash" && changeRemaining > 0) {
+      const returnedMinor = Math.min(receiptMinor, changeRemaining);
+      receiptMinor = subtractMinorUnits(receiptMinor, returnedMinor);
+      changeRemaining = subtractMinorUnits(changeRemaining, returnedMinor);
+    }
+    if (receiptMinor > 0) {
+      settledSplits.push({ ...split, amount: fromMinorUnits(receiptMinor) });
+    }
+  }
+
+  const collectedMinor = addMinorUnits(...settledSplits.map((split) => toMinorUnits(split.amount)));
+  if (changeRemaining !== 0 || collectedMinor !== toMinorUnits(validation.collectible)) {
+    return {
+      ...validation,
+      errors: ["Tender method allocation does not reconcile to net amount collected"],
+      settledSplits: [],
+    };
+  }
+  return { ...validation, settledSplits };
+}
+
 /** Cost of goods for a sale (inventory cost) */
 export function saleCostOfGoods(items: Array<{ quantity: number; costPrice: number }>): number {
   let totalMinor: MoneyMinor = 0;
