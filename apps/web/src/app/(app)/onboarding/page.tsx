@@ -12,7 +12,7 @@ import {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [steps, setSteps] = React.useState(() => getOnboardingSteps());
+  const [steps, setSteps] = React.useState(() => getOnboardingSteps().map(step => ({ ...step, done: false })));
   const [scopeKey, setScopeKey] = React.useState<string | null>(null);
   const [loaded, setLoaded] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
