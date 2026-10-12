@@ -83,7 +83,7 @@
       "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "OFFLINE-NATIVE-02 PR #351 already merged main 7411b4b37e529be81d8aea9841d29305d11c463e, exact-head/main CI green. OFFLINE-NATIVE-03 now adds actual Electron app.requestSingleInstanceLock fail-closed second-process protection, preserving current single-main-process SQLite backup/restore gate and fsync-before-rename. Required exact-head/postmerge CI and real Windows multi-launch/updater UAT. Still need native external-writer/file lock policy, restore unique journal/recovery, UI retry, OS/NTFS stress tests. HR005 signed staging NOT wired; authenticated device registration, audited server receipts/APPLIED sequence/atomic hydration, conflict reconciliation remain undone. HR005 migration unapplied, flag OFF, no customer data modifications.",
+      "nextAction": "OFFLINE-NATIVE-04 adds exclusive same-volume restore staging with file fsync and rollback-preserving cleanup; exact-head/postmerge verification required. PRs #350\u2013#352 already merged and green. Next durable restore journal and startup recovery, external-writer policy, renderer retry, actual NTFS failure/updater/multi-launch UAT. HR005 authenticated enrollment, audited server receipts and transactional APPLIED sequence/hydration/conflicts remain undone. Production HR005 migration unapplied and flag OFF.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",
@@ -105,7 +105,8 @@
         "docs/HR005_SIGNED_RECEIPT_SQLITE_STAGING.md",
         "docs/WINDOWS_SQLITE_ATOMIC_WRITE_HARDENING.md",
         "docs/WINDOWS_SQLITE_BACKUP_RESTORE_FENCE.md",
-        "docs/WINDOWS_ELECTRON_SINGLE_INSTANCE_FENCE.md"
+        "docs/WINDOWS_ELECTRON_SINGLE_INSTANCE_FENCE.md",
+        "docs/WINDOWS_SQLITE_RESTORE_STAGING.md"
       ]
     }
   ]
