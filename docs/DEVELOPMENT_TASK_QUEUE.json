@@ -83,7 +83,7 @@
       "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "PR for OFFLINE-NATIVE-06 adds SHA-256 whole-image optimistic fencing in trusted Electron read/write/exists, a before-rename recheck, fail-closed read errors and mandatory app restart after restore, protecting stale full-file snapshot overwrite after out-of-band writes. Requires latest exact-head CI, safe merge and post-merge verification. This is NOT an OS-wide file lock; next native OS single-writer authority, backup/restore external writer handling and real NTFS/updater/customer UAT remain. HR005 audited server receipts, registered device authority, APPLIED transaction and hydration remain blocked; hosted migration unapplied, flag OFF.",
+      "nextAction": "OFFLINE-NATIVE-05 PR #354 and OFFLINE-NATIVE-06 PR #355 both merged with exact-head/postmerge green as of 2026-10-12. No published Windows installer beyond v1.0.15. Stop further optional SQLite micro-hardening unless an evidenced release blocker. Focus on authorized receipt/APPLIED state, registered device authority, tenant-safe Cloud↔Offline holiday hydration, real customer UAT and shared commercial release gates. Hosted HR005 migration unapplied, feature flag OFF. OS-level writer lock/NTFS power-loss remain tracked blockers requiring appropriate owner and actual Windows acceptance.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",
@@ -111,5 +111,9 @@
         "docs/WINDOWS_SQLITE_EXTERNAL_IMAGE_FENCE.md"
       ]
     }
-  ]
+  ],
+  "productDeliveryBacklog": "docs/PRODUCT_DELIVERY_BACKLOG.json",
+  "productPriorityRule": "Product-delivery outcomes A-FIRST-CUSTOMER then A-SYNC-V2 then A-LICENSE-CUTOVER take precedence over optional hardening and ancillary read-only previews, unless a documented data-loss/security release blocker makes that impossible. This HR implementation queue is not the full product roadmap.",
+  "deliveryAcceptanceRule": "A product outcome can be accepted only with reviewed source, CI, customer UAT and release/deployment evidence. Current 51% is historical provisional estimate; registry scope coverage is not implementation completion.",
+  "backgroundAgentReality": "Current scheduled minarva-source-agent.yml is a free read-only preflight. Copilot source_patch is disabled until repository owner explicitly approves entitlement/billing and sets opt-in; even enabled, output is review-only artifact, not automatic PR, merge or continuous coding."
 }
