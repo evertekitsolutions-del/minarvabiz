@@ -41,6 +41,7 @@ export * as accountingStore from "./accounting-store";
 export * from "./feature-gates";
 export * from "./persistence";
 export * from "./browser-snapshot-download";
+export * from "./browser-snapshot-recovery";
 export * from "./session";
 export * from "./autosave";
 export * from "./receipt";
