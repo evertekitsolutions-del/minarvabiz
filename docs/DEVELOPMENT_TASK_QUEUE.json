@@ -83,7 +83,7 @@
       "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "PR for OFFLINE-NATIVE-06 adds SHA-256 whole-image optimistic fencing in trusted Electron read/write/exists, a before-rename recheck and fail-closed read errors, protecting stale full-file snapshot overwrite after out-of-band writes. Requires latest exact-head CI, safe merge and post-merge verification. This is NOT an OS-wide file lock; next native OS single-writer authority, backup/restore external writer handling and real NTFS/updater/customer UAT remain. HR005 audited server receipts, registered device authority, APPLIED transaction and hydration remain blocked; hosted migration unapplied, flag OFF.",
+      "nextAction": "PR for OFFLINE-NATIVE-06 adds SHA-256 whole-image optimistic fencing in trusted Electron read/write/exists, a before-rename recheck, fail-closed read errors and mandatory app restart after restore, protecting stale full-file snapshot overwrite after out-of-band writes. Requires latest exact-head CI, safe merge and post-merge verification. This is NOT an OS-wide file lock; next native OS single-writer authority, backup/restore external writer handling and real NTFS/updater/customer UAT remain. HR005 audited server receipts, registered device authority, APPLIED transaction and hydration remain blocked; hosted migration unapplied, flag OFF.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",
