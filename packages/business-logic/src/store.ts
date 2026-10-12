@@ -27,7 +27,7 @@ import { planAutomaticPosting } from "./accounting-store";
 import { consumeWarehouseStock } from "./warehouse-store";
 import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
-import { validateLiveSaleCheckout } from "./sale-checkout-guard";
+import { validateLiveSaleCheckout, costSaleLinesFromLiveProducts } from "./sale-checkout-guard";
 import { assertBusinessDayOpen } from "./business-day-state";
 
 const categories: Category[] = [];
@@ -500,15 +500,16 @@ export function createSale(input: {
 }): { sale: Sale; payment: Payment | null; payments: Payment[]; errors: string[] } {
   assertPermission("sales.create");
   assertBusinessDayOpen();
+  const costedLines = costSaleLinesFromLiveProducts(input.lines, getProduct);
   const errors = validateLiveSaleCheckout(
-    input.lines,
+    costedLines,
     { allowNegativeStock: input.allowNegativeStock, customerId: input.customerId, paidAmount: input.paidAmount },
     getProduct,
     getCustomer,
   );
   if (errors.length) return { sale: null as unknown as Sale, payment: null, payments: [], errors };
 
-  const totals = calculateCartTotals(input.lines);
+  const totals = calculateCartTotals(costedLines);
   const grandTotalMinor = toMinorUnits(totals.grandTotal);
   let requestedCreditMinor: MoneyMinor;
   try {
@@ -552,7 +553,7 @@ export function createSale(input: {
     date: new Date(),
   });
   const saleId = generateId();
-  const items: SaleItem[] = input.lines.map((line) => cartLineToSaleItem(line, saleId, generateId()));
+  const items: SaleItem[] = costedLines.map((line) => cartLineToSaleItem(line, saleId, generateId()));
   const customer = input.customerId ? getCustomer(input.customerId) : undefined;
   const sale: Sale = {
     id: saleId, invoiceNumber, customerId: input.customerId ?? null, customerName: customer?.name ?? null,

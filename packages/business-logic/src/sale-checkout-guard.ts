@@ -1,4 +1,23 @@
 /**
+ * Refresh COGS from current product master before posting a sale.
+ * Cart prices/discounts are cashier-controlled, but cart costPrice is only a
+ * snapshot. A changed/forged cost must not corrupt inventory asset journals.
+ * Legacy products lacking a cost field retain the checkout line's basis until
+ * their master data is migrated, to keep old saved carts compatible.
+ */
+export function costSaleLinesFromLiveProducts(
+  lines: CartLine[],
+  getProduct: (id: UUID) => Product | undefined,
+): CartLine[] {
+  return lines.map((line) => {
+    const currentCost = getProduct(line.productId)?.costPrice;
+    return typeof currentCost === "number"
+      ? { ...line, costPrice: currentCost }
+      : { ...line };
+  });
+}
+
+/**
  * Final synchronous preflight for POS and Normal Billing checkout.
  * Uses authoritative live product/customer state, not stale cart quantities.
  * Must run before any stock, receivable, payment, journal or outbox mutation.
