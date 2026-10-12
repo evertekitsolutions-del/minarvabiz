@@ -33,10 +33,10 @@ async function verifyWebLocalSnapshotDownload(ws) {
     "Download full current-device snapshot"], 20000);
   const setup = await evalIn(ws, [
     "(() => {",
-    "const state = {prompt:'',blob:null,filename:'',originalConfirm:window.confirm,",
+    "const state = {prompt:'',blob:null,filename:'',allow:false,originalConfirm:window.confirm,",
     " originalBlobUrl:URL.createObjectURL,originalAnchorClick:HTMLAnchorElement.prototype.click};",
     "window.__minarvaSnapshotSmoke=state;",
-    "window.confirm = message => {state.prompt=String(message); return true;};",
+    "window.confirm = message => {state.prompt=String(message); return state.allow;};",
     "URL.createObjectURL = function(blob){state.blob=blob;return state.originalBlobUrl.call(URL,blob);};",
     "HTMLAnchorElement.prototype.click = function(...args){",
     " if(this.download.startsWith('minarvabiz-local-business-snapshot-')){state.filename=this.download;return;}",
@@ -47,6 +47,18 @@ async function verifyWebLocalSnapshotDownload(ws) {
   ].join("\n"));
   if (setup !== true) throw new Error("Unable to instrument Web snapshot smoke");
   try {
+    // Rejecting the sensitive-data prompt must not create or download a Blob.
+    await clickButtonText(ws,"DECLINE_LOCAL_SNAPSHOT",["download full current-device snapshot"],200);
+    const denied = await evalIn(ws, [
+      "(()=>{const state=window.__minarvaSnapshotSmoke;",
+      "return {prompt:state.prompt,download:state.filename,hasBlob:!!state.blob};})()",
+    ].join("\\n"));
+    if (!denied.prompt.includes("NOT an export of all hosted cloud records") ||
+        denied.download || denied.hasBlob) {
+      throw new Error("Cancelled sensitive snapshot unexpectedly generated a download: " +
+        JSON.stringify(denied));
+    }
+    await evalIn(ws,"(()=>{window.__minarvaSnapshotSmoke.allow=true;return true;})()");
     await clickButtonText(ws,"DOWNLOAD_LOCAL_SNAPSHOT",["download full current-device snapshot"],600);
     await waitFor(ws,["download requested","not a cloud-server backup"],20000);
     const result = await evalIn(ws, [
