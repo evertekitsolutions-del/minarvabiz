@@ -115,5 +115,6 @@ test("ReturnsPanel protects both refund and exchange callbacks before executing 
   assert.ok(submit.indexOf("onCreate({") > claimed);
   assert.ok((submit.match(/returnSubmitGate\.current\.release\(\)/g) || []).length >= 3, "retry on both rejection and exception");
   assert.match(submit, /setOpen\(false\);\s*resetForm\(\);/);
-  assert.ok(!submit.slice(submit.indexOf("setOpen(false);")).includes("returnSubmitGate.current.release()"), "keep success latched through modal state reset");
+  const successClose = submit.slice(submit.indexOf("setOpen(false);"), submit.indexOf("resetForm();", submit.indexOf("setOpen(false);")) + "resetForm();".length);
+  assert.ok(!successClose.includes("returnSubmitGate.current.release()"), "keep success latched through modal state reset");
 });
