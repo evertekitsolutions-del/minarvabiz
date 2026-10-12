@@ -83,7 +83,7 @@
       "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "OFFLINE-NATIVE-01 PR #350 merged main 9fedafea7ec79c9600e01f2b4a96ae1de47694e8 (25 main checks passed/5 skipped). OFFLINE-NATIVE-02 adds a same-main-process IPC reservation across async manual/automatic backups and full restore validation/rollback, rejecting concurrent renderer writes and false-empty reads during restore; fresh exact-head and postmerge CI required. Still need true OS-wide single instance/cross-process lock, Windows NTFS stress/power-loss UAT, unique backup restore recovery names and user-visible retry UX. HR005 signed staging NOT wired; server device registration, audited issuance, APPLIED sequence/atomic cache hydration and Offline/Hybrid conflicts remain pending. HR005 migration not deployed; holiday feature OFF.",
+      "nextAction": "OFFLINE-NATIVE-02 PR #351 already merged main 7411b4b37e529be81d8aea9841d29305d11c463e, exact-head/main CI green. OFFLINE-NATIVE-03 now adds actual Electron app.requestSingleInstanceLock fail-closed second-process protection, preserving current single-main-process SQLite backup/restore gate and fsync-before-rename. Required exact-head/postmerge CI and real Windows multi-launch/updater UAT. Still need native external-writer/file lock policy, restore unique journal/recovery, UI retry, OS/NTFS stress tests. HR005 signed staging NOT wired; authenticated device registration, audited server receipts/APPLIED sequence/atomic hydration, conflict reconciliation remain undone. HR005 migration unapplied, flag OFF, no customer data modifications.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",
@@ -104,7 +104,8 @@
         "docs/HR005_SERVER_SIGNING_KERNEL.md",
         "docs/HR005_SIGNED_RECEIPT_SQLITE_STAGING.md",
         "docs/WINDOWS_SQLITE_ATOMIC_WRITE_HARDENING.md",
-        "docs/WINDOWS_SQLITE_BACKUP_RESTORE_FENCE.md"
+        "docs/WINDOWS_SQLITE_BACKUP_RESTORE_FENCE.md",
+        "docs/WINDOWS_ELECTRON_SINGLE_INSTANCE_FENCE.md"
       ]
     }
   ]
