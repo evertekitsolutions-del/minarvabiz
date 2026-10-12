@@ -6,6 +6,16 @@ export type ReturnSelection = { saleItemId: UUID; productId: UUID; quantity: num
 
 /** Quote from the recorded invoice, including its discount and tax. No mutations. */
 export function quoteSaleReturn(sale: Sale, history: SaleReturn[], selection: ReturnSelection[]) {
+  try {
+    return calculateReturnQuote(sale, history, selection);
+  } catch {
+    // Quoting is pure: malformed legacy quantities/money must never escape
+    // into a partially committed refund or exchange workflow.
+    return { items: [], totalRefund: 0, errors: ["Invalid or unsafe invoice/return quantity or monetary value"] };
+  }
+}
+
+function calculateReturnQuote(sale: Sale, history: SaleReturn[], selection: ReturnSelection[]) {
   const errors: string[] = [];
   const items: Array<ReturnSelection & { productName: string; unitPrice: number; refundAmount: number }> = [];
   const previous = history.filter(r => r.saleId === sale.id && r.status === "completed").flatMap(r => r.items);
@@ -24,6 +34,10 @@ export function quoteSaleReturn(sale: Sale, history: SaleReturn[], selection: Re
     const returnedQuantityMilli = prior.reduce((sum, i) => sum + toQuantityMilli(i.quantity), 0);
     const selectedQuantityMilli = toQuantityMilli(selected.quantity);
     const originalQuantityMilli = toQuantityMilli(original.quantity);
+    if (selectedQuantityMilli <= 0 || Math.abs(selectedQuantityMilli / 1000 - selected.quantity) > 1e-9 ||
+        !Number.isSafeInteger(returnedQuantityMilli)) {
+      errors.push(`${original.productName}: return quantity must be safe and have at most 3 decimal places`); continue;
+    }
     const cumulativeQuantityMilli = returnedQuantityMilli + selectedQuantityMilli;
     const returnedMinor = addMinorUnits(...prior.map((i) => toMinorUnits(i.refundAmount)));
     if (returnedQuantityMilli < 0 || cumulativeQuantityMilli > originalQuantityMilli) {
@@ -41,7 +55,7 @@ export function quoteSaleReturn(sale: Sale, history: SaleReturn[], selection: Re
     if (!Number.isFinite(lineTotal) || lineTotal < 0 || returnedMinor < 0 || refundMinor < 0) {
       errors.push(`${original.productName}: invalid invoice or previous return value`); continue;
     }
-    items.push({ ...selected, productName: original.productName, unitPrice: original.unitPrice, refundAmount: fromMinorUnits(refundMinor) });
+    items.push({ ...selected, quantity: selectedQuantityMilli / 1000, productName: original.productName, unitPrice: original.unitPrice, refundAmount: fromMinorUnits(refundMinor) });
   }
   const totalMinor = addMinorUnits(...items.map((i) => toMinorUnits(i.refundAmount)));
   const availableMinor = toMinorUnits(sale.total);
