@@ -1,3 +1,9 @@
+## OFFLINE-NATIVE-06 — External SQLite image mutation detection (source PR verification pending)
+
+- Baseline verified live main `6767171fe9cad42f5a1eee576c1aa6b7ac467f17` (PR #354 merged; post-merge checks 25 passed/5 optional skipped, 0 failed/pending; zero open PRs). Full Master Vision ~51%; published installer v1.0.15.
+- New SHA-256 optimistic native SQLite image fingerprint detects changes to a previously read customer database (including same-length/stale-mtime changes and external create/delete), denies stale full-image saves, rechecks immediately before atomic rename, advances only after successful save, and requires fresh read after validated restore. Electron db:readBinary no longer converts EACCES/EIO into an empty new DB. Real SQL.js cases, staging race fault injection and trusted IPC assertions added.
+- This is NOT cross-process OS locking and does NOT close the last comparison-to-rename race; real NTFS concurrent external writer, backup/restore cross-process, disk/antivirus failure, updater and installed customer UAT remain pending. No HR005 migration/flag or actual customer data change. See `docs/WINDOWS_SQLITE_EXTERNAL_IMAGE_FENCE.md`. Verify PR exact-head/postmerge CI independently.
+
 ## OFFLINE-NATIVE-05 — Journalled Windows SQLite restore and fail-closed startup recovery (PR #354 CI pending)
 
 - Baseline verified main before branch: `be5602816a0221511087741bc860b3811a01b9e4`, 25 passes/5 optional skips, 0 open PRs. Full Master Vision ~51%; stable customer installer remains v1.0.15.
