@@ -20,3 +20,13 @@ test("source patch is review-only and cannot invoke network or shell via model",
  assert.match(content,/minarva-reviewed-source-proposal/);
  assert.match(content,/persist-credentials: false/g);
 });
+
+test("scheduled agent checks entire product scope and cannot fake code-production state", () => {
+ assert.match(content,/node scripts\/product-delivery-audit\.mjs/);
+ const gate=fs.readFileSync("scripts/agent-queue-gate.mjs","utf8");
+ assert.match(gate,/DISABLED_NO_CODING/);
+ assert.match(gate,/BLOCKED_NO_CODING/);
+ assert.match(gate,/REVIEW_PATCH_JOB_ELIGIBLE/);
+ assert.match(gate,/execution_state=/);
+ assert.match(gate,/codeGenerated: false/);
+});
