@@ -147,3 +147,28 @@ test("branch checkout combines own unreserved allocation with unallocated stock 
   assert.equal(positions.find(p => p.id === "foreign").onHand, 4);
   assert.equal(accounting.buildBalanceSheet().balanced, true);
 });
+
+
+test("manual stock adjustment denies a reduction sourced from another branch", () => {
+  setup({ allocated: 8 });
+  store.getProduct("fabric").branchId = "branch-a";
+  const state = warehouse.exportWarehouseState();
+  state.warehouses[0].branchId = "branch-b";
+  warehouse.hydrateWarehouseState(state);
+  const before = snapshot();
+  assert.throws(() => store.adjustStock("fabric", "adjustment", -3, "count correction"), /insufficient unreserved stock/i);
+  assert.equal(snapshot(), before, "rejection must not mutate stock, WMS allocations, ledger or outbox");
+  assert.equal(store.adjustStock("fabric", "adjustment", -2, "count correction").stockQuantity, 8);
+  assert.equal(warehouse.listWarehouseStock({ productId: "fabric" })[0].onHand, 8);
+});
+
+test("manual stock adjustment respects reservations and stock in transit", () => {
+  for (const config of [{ allocated: 8, reserved: 7 }, { allocated: 7, inTransit: 3 }]) {
+    setup(config);
+    const available = warehouse.warehouseSaleableQuantity("fabric", 10);
+    const before = snapshot();
+    assert.throws(() => store.adjustStock("fabric", "adjustment", -(available + 1)), /insufficient unreserved stock/i);
+    assert.equal(snapshot(), before);
+    assert.equal(store.adjustStock("fabric", "adjustment", -available).stockQuantity, 10 - available);
+  }
+});
