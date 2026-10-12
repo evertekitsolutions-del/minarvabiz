@@ -575,6 +575,7 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
   let rollback = "";
   const hadTarget = fs.existsSync(target);
   let targetMoved = false;
+  let newImageInstalled = false;
   let preRestoreBackup: string | null = null;
 
   if (hadTarget) {
@@ -601,6 +602,7 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
       targetMoved = true;
     }
     fs.renameSync(temp, target);
+    newImageInstalled = true;
 
     const restoredError = await minarvaSqliteValidationError(target);
     if (restoredError) throw new Error(`Restored database failed Minarva Biz validation: ${restoredError}`);
@@ -616,6 +618,12 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
   } catch (error) {
     try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch {}
     try { if (targetMoved && fs.existsSync(target)) fs.unlinkSync(target); } catch {}
+    // A fresh install has no previous image to roll back. On post-install
+    // validation failure, return the untrusted image to staging instead of
+    // leaving a corrupt new live database behind.
+    if (!hadTarget && newImageInstalled && fs.existsSync(target)) {
+      try { fs.renameSync(target, temp); } catch {}
+    }
 
     let rollbackError: string | null = null;
     if (targetMoved && fs.existsSync(rollback)) {
@@ -627,8 +635,10 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
       }
     }
     // Preserve the journal if rollback is missing, incomplete or unverified.
-    if (stage && journalStarted && !fs.existsSync(rollback) &&
-        (!targetMoved || (rollbackError === null && fs.existsSync(target)))) {
+    const priorStateRestored = hadTarget
+      ? (targetMoved ? rollbackError === null && fs.existsSync(target) : fs.existsSync(target))
+      : !fs.existsSync(target);
+    if (stage && journalStarted && !fs.existsSync(rollback) && priorStateRestored) {
       try { clearSqliteRestoreJournal(stage); } catch {}
     }
     const rollbackStatus = rollbackError
