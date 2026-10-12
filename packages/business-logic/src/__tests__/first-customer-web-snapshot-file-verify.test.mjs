@@ -78,5 +78,7 @@ test("Web verification requires backup permission and never invokes cloud write/
   assert.match(page,/setVerifiedSnapshot\(inspection\)/);
   assert.match(page,/This is not a verified restore/);
   assert.match(page,/No data was restored or uploaded/);
-  assert.doesNotMatch(page,/importDomainSnapshotJson\(|importDomainSnapshot\(|supabase\.from\(|\.upsert\(/);
+  assert.match(page,/restoreEmptyLocalBrowserSnapshot\(/);
+  assert.match(page,/isSupabaseConfigured\(\) \|\| desktop/);
+  assert.doesNotMatch(page,/supabase\.from\(|\.upsert\(/);
 });

@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
+import { isSupabaseConfigured } from "@minarvabiz/database";
 import { BackupPanel, AuditLogList } from "@minarvabiz/ui";
 import {
-  can, exportDomainSnapshotJson, inspectBrowserSnapshotForRecovery,
+  can, exportDomainSnapshotJson, importDomainSnapshotJson, inspectBrowserSnapshotForRecovery,
   MAX_BROWSER_SNAPSHOT_VERIFY_BYTES, phase7Store, prepareBrowserSnapshotDownload,
-  SNAPSHOT_VERSION, validateDomainSnapshot,
+  restoreEmptyLocalBrowserSnapshot, SNAPSHOT_VERSION, validateDomainSnapshot,
 } from "@minarvabiz/business-logic";
 import type { BackupMeta, AuditLogEntry } from "@minarvabiz/types";
 import type { BrowserSnapshotInspection } from "@minarvabiz/business-logic";
@@ -17,6 +18,8 @@ export default function BackupPage() {
   const [downloadStatus, setDownloadStatus] = React.useState<string | null>(null);
   const [verifyStatus, setVerifyStatus] = React.useState<string | null>(null);
   const [verifiedSnapshot, setVerifiedSnapshot] = React.useState<BrowserSnapshotInspection | null>(null);
+  const [verifiedFile, setVerifiedFile] = React.useState<File | null>(null);
+  const [restoring, setRestoring] = React.useState(false);
   const [verifying, setVerifying] = React.useState(false);
   const verifyRequest = React.useRef(0);
 
@@ -66,6 +69,7 @@ export default function BackupPage() {
   async function verifyDownloadedSnapshot(file: File | undefined) {
     const request = ++verifyRequest.current;
     setVerifiedSnapshot(null);
+    setVerifiedFile(null);
     setVerifyStatus(null);
     if (!file) return;
     if (!can("backup.manage")) {
@@ -86,6 +90,7 @@ export default function BackupPage() {
       if (!validated.ok) throw new Error(validated.error);
       if (request !== verifyRequest.current) return;
       setVerifiedSnapshot(inspection);
+      setVerifiedFile(file);
       setVerifyStatus("Snapshot structure verified for local v15 data. No data was restored or uploaded.");
     } catch (error) {
       if (request !== verifyRequest.current) return;
@@ -93,6 +98,47 @@ export default function BackupPage() {
       setVerifyStatus("Snapshot rejected: " + safe);
     } finally {
       if (request === verifyRequest.current) setVerifying(false);
+    }
+  }
+
+  async function restoreStandaloneLocalWorkspace() {
+    if (!verifiedFile || restoring) return;
+    if (!can("backup.manage")) {
+      setVerifyStatus("Backup management permission is required.");
+      return;
+    }
+    const desktop = Boolean((window as Window & { minarvaDesktop?: unknown }).minarvaDesktop);
+    if (isSupabaseConfigured() || desktop) {
+      setVerifyStatus("JSON recovery is disabled for hosted, hybrid and native SQLite editions.");
+      return;
+    }
+    if (!window.confirm(
+      "Restore this file into a NEW EMPTY standalone browser workspace? " +
+      "This cannot recover a cloud tenant or native Windows SQLite database. " +
+      "Any existing business data or unsent sync events will block recovery. Continue?",
+    )) return;
+    setRestoring(true);
+    try {
+      if (verifiedFile.size <= 0 || verifiedFile.size > MAX_BROWSER_SNAPSHOT_VERIFY_BYTES) {
+        throw new Error("Snapshot size is invalid");
+      }
+      const text = await verifiedFile.text();
+      const inspected = inspectBrowserSnapshotForRecovery(text, SNAPSHOT_VERSION, verifiedFile.size);
+      const valid = validateDomainSnapshot(JSON.parse(text));
+      if (!valid.ok) throw new Error(valid.error);
+      const result = restoreEmptyLocalBrowserSnapshot(
+        window.localStorage, text, exportDomainSnapshotJson(),
+        { authorized: can("backup.manage"), cloudConfigured: isSupabaseConfigured(), nativeDesktop: desktop },
+        importDomainSnapshotJson,
+      );
+      if (!result.ok) throw new Error(result.error);
+      setVerifiedSnapshot(inspected);
+      setVerifyStatus("Local recovery committed. Reloading restored standalone workspace.");
+      window.location.reload();
+    } catch (error) {
+      setVerifyStatus("Recovery blocked: " + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -161,6 +207,23 @@ export default function BackupPage() {
             </label>
             {verifying && <p role="status" className="text-sm text-slate-600">Checking local snapshot…</p>}
             {verifyStatus && <p role="status" className="text-sm text-slate-700">{verifyStatus}</p>}
+            {verifiedFile && !isSupabaseConfigured() && (
+              <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <p className="text-sm text-amber-900">
+                  Standalone browser only: restore into a new empty local workspace. Existing
+                  data, company identity and pending sync events block recovery. For Online,
+                  Hybrid or Windows SQLite use the authorized edition-specific recovery flow.
+                </p>
+                <button
+                  type="button"
+                  disabled={restoring || !can("backup.manage")}
+                  className="rounded-lg bg-amber-800 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                  onClick={() => void restoreStandaloneLocalWorkspace()}
+                >
+                  {restoring ? "Restoring local workspace…" : "Restore to empty standalone workspace"}
+                </button>
+              </div>
+            )}
             {verifiedSnapshot && (
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">
                 <p>Snapshot version {verifiedSnapshot.version}, exported {verifiedSnapshot.exportedAt}</p>
