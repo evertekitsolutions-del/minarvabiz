@@ -2,7 +2,7 @@
  * Inventory stock calculations — pure functions.
  */
 
-import { roundMoney } from "@minarvabiz/utils";
+import { roundMoney, toQuantityMilli, QUANTITY_MILLI_FACTOR } from "@minarvabiz/utils";
 
 export type StockMovementType =
   | "stock_in"
@@ -30,6 +30,13 @@ export function parseNonNegativeStockQuantity(raw: string): number {
   return quantity;
 }
 
+/** Add quantities in the same integer milli-units used by billing and WMS. */
+export function addStockQuantities(current: number, delta: number): number {
+  const total = toQuantityMilli(current) + toQuantityMilli(delta);
+  if (!Number.isSafeInteger(total)) throw new Error("Stock quantity exceeds the safe range");
+  return total / QUANTITY_MILLI_FACTOR;
+}
+
 /** Apply a movement to current quantity. Returns new quantity. */
 export function applyStockMovement(
   currentQty: number,
@@ -41,15 +48,15 @@ export function applyStockMovement(
     case "stock_in":
     case "purchase":
     case "return":
-      return currentQty + q;
+      return addStockQuantities(currentQty, q);
     case "stock_out":
     case "sale":
-      return currentQty - q;
+      return addStockQuantities(currentQty, -q);
     case "adjustment":
       // quantity is the delta (can be signed) or absolute depending on caller convention
-      return currentQty + quantity;
+      return addStockQuantities(currentQty, quantity);
     case "transfer":
-      return currentQty - q; // outbound side; inbound is separate stock_in
+      return addStockQuantities(currentQty, -q); // outbound side; inbound is separate stock_in
     default:
       return currentQty;
   }

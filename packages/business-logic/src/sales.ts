@@ -8,8 +8,11 @@ import {
   multiplyMinorByQuantity,
   subtractMinorUnits,
   toMinorUnits,
+  toQuantityMilli,
+  QUANTITY_MILLI_FACTOR,
   type MoneyMinor,
 } from "@minarvabiz/utils";
+import { addStockQuantities } from "./inventory";
 import type { CartLine, SaleItem, PaymentMethod } from "@minarvabiz/types";
 import { calculateLineItem, calculateInvoiceTotals } from "@minarvabiz/billing";
 
@@ -237,11 +240,19 @@ export function validateCart(lines: CartLine[], options?: { allowNegativeStock?:
     if (typeof line.productId !== "string" || !line.productId) errors.push(`${line.productName}: valid product is required`);
     if (Number.isFinite(line.quantity) && line.quantity > 0 && line.productId) {
       const current = requestedByProduct.get(line.productId);
-      requestedByProduct.set(line.productId, {
-        productName: line.productName,
-        quantity: (current?.quantity ?? 0) + line.quantity,
-        stock: Math.min(current?.stock ?? Infinity, line.stockQuantity),
-      });
+      try {
+        const normalized = toQuantityMilli(line.quantity) / QUANTITY_MILLI_FACTOR;
+        if (normalized <= 0 || Math.abs(normalized - line.quantity) > 1e-9) {
+          errors.push(`${line.productName}: quantity must have at most 3 decimal places`);
+        }
+        requestedByProduct.set(line.productId, {
+          productName: line.productName,
+          quantity: addStockQuantities(current?.quantity ?? 0, line.quantity),
+          stock: Math.min(current?.stock ?? Infinity, addStockQuantities(line.stockQuantity, 0)),
+        });
+      } catch {
+        errors.push(`${line.productName}: quantity exceeds the safe range`);
+      }
     }
   }
   if (!options?.allowNegativeStock) {

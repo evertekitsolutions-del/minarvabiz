@@ -1,3 +1,10 @@
+## A-FIRST-CUSTOMER — Fractional checkout conservation (source CI pending)
+
+- Continue from verified main `8b2c0893597fe000daa4832b302ee92de2b30dd1` (#376), 25 passed/5 optional skipped checks, zero open PRs at branch start.
+- Reproduced two-line 0.1 + 0.2 sale rejection against 0.3 stock and residual product balances after fractional sales. Shared cart/live preflight and inventory arithmetic now reuse existing integer milli-quantity utilities, aligned with billing/WMS. Existing persisted floating residuals are normalized during comparison; unsupported sale precision, unsafe demand and invalid live balances fail before WMS/accounting/outbox writes, including negative-stock override.
+- Regression tests cover exact product/WMS depletion, money/COGS reconciliation, oversale no-write, invalid precision, negative override with corrupt live stock, and historical residuals. Independent code review approved after adding the historical residual case. See `docs/FIRST_CUSTOMER_FRACTIONAL_CHECKOUT.md`.
+- No dependencies, production mutations, migration, paid service or new installer. Exact-head/postmerge CI and physical licensed Windows/Online/Offline/Hybrid UAT remain separate gates. Whole Master Vision historical estimate remains provisional ~51%; published customer release remains v1.0.15.
+
 ## DELIVERY-FIRST-01 — Product priorities, evidence integrity and honest agent reporting (PR verification pending)
 
 - Verified live main before branch: `b4d89621d7439246a32003ef14040abc9c18d089`, 25 checks passed/5 optional skipped, 0 open PRs. Source PR #355 merged, latest published customer installer v1.0.15, full Master Vision historic estimate ~51% (NOT a newly calculated acceptance percentage).

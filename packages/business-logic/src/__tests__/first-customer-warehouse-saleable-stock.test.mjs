@@ -183,3 +183,70 @@ test("stock-count target refuses stale or malformed edits before any mutation", 
   assert.equal(store.adjustStockToQuantity("fabric", "9.125", 10, "recount").stockQuantity, 9.125);
   assert.equal(warehouse.listWarehouseStock({ productId: "fabric" })[0].reserved, 1);
 });
+
+test("fractional split lines sell the exact remaining fabric without phantom stock", () => {
+  setup({ allocated: 0.3 });
+  store.getProduct("fabric").stockQuantity = 0.3;
+  const result = store.createSale({
+    customerId: "buyer", lines: [cart(0.1), cart(0.2)], paidAmount: 30, paymentMethod: "cash",
+  });
+  assert.deepEqual(result.errors, []);
+  assert.equal(store.getProduct("fabric").stockQuantity, 0);
+  assert.equal(warehouse.listWarehouseStock({ productId: "fabric" })[0].onHand, 0);
+  assert.equal(balance("cash"), 30);
+  assert.equal(balance("cogs"), 6);
+  assert.equal(accounting.buildBalanceSheet().balanced, true);
+});
+
+test("successive fractional sales preserve an exact available balance", () => {
+  setup({ allocated: 0.3 });
+  store.getProduct("fabric").stockQuantity = 0.3;
+  assert.deepEqual(sell(0.1).errors, []);
+  assert.equal(store.getProduct("fabric").stockQuantity, 0.2);
+  assert.deepEqual(sell(0.2).errors, []);
+  assert.equal(store.getProduct("fabric").stockQuantity, 0);
+  assert.equal(warehouse.listWarehouseStock({ productId: "fabric" })[0].onHand, 0);
+});
+
+test("fractional oversale is denied without side effects", () => {
+  setup({ allocated: 0.3 });
+  store.getProduct("fabric").stockQuantity = 0.3;
+  const before = snapshot();
+  const result = store.createSale({
+    customerId: "buyer", lines: [cart(0.1), cart(0.201)], paidAmount: 30.1, paymentMethod: "cash",
+  });
+  assert.match(result.errors.join(" "), /insufficient.*stock/i);
+  assert.equal(snapshot(), before);
+});
+
+test("checkout refuses quantities beyond warehouse precision before mutation", () => {
+  for (const quantity of [0.0004, 0.1004, 1e20]) {
+    setup();
+    const before = snapshot();
+    const result = sell(quantity);
+    assert.ok(result.errors.length > 0);
+    assert.equal(snapshot(), before);
+  }
+});
+
+test("negative-stock override does not permit corrupt live quantities or partial WMS writes", () => {
+  for (const stock of [NaN, Infinity, 1e20]) {
+    setup({ allocated: 2 });
+    store.getProduct("fabric").stockQuantity = stock;
+    const before = snapshot();
+    const result = store.createSale({
+      lines: [cart(1)], paidAmount: 100, paymentMethod: "cash", allowNegativeStock: true,
+    });
+    assert.ok(result.errors.length > 0);
+    assert.equal(snapshot(), before);
+  }
+});
+
+test("checkout accepts remaining stock with a historical floating-point residual", () => {
+  setup({ allocated: 0.2 });
+  store.getProduct("fabric").stockQuantity = 0.3 - 0.1;
+  const result = sell(0.2);
+  assert.deepEqual(result.errors, []);
+  assert.equal(store.getProduct("fabric").stockQuantity, 0);
+  assert.equal(warehouse.listWarehouseStock({ productId: "fabric" })[0].onHand, 0);
+});

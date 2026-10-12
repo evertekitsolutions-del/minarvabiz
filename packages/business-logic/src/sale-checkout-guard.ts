@@ -23,6 +23,7 @@ export function costSaleLinesFromLiveProducts(
  * Must run before any stock, receivable, payment, journal or outbox mutation.
  */
 import type { CartLine, Product, Customer, UUID } from "@minarvabiz/types";
+import { addStockQuantities } from "./inventory";
 import { validateCart } from "./sales";
 import { warehouseSaleableQuantity } from "./warehouse-store";
 
@@ -61,18 +62,30 @@ export function validateLiveSaleCheckout(
     }
     if (live.isActive === false) errors.push(`${live.name}: product is inactive`);
     if (Number.isFinite(line.quantity) && line.quantity > 0) {
-      demanded.set(live.id, (demanded.get(live.id) ?? 0) + line.quantity);
+      try {
+        demanded.set(live.id, addStockQuantities(demanded.get(live.id) ?? 0, line.quantity));
+      } catch {
+        errors.push(`${live.name}: quantity exceeds the safe range`);
+      }
     }
   }
-  if (!options.allowNegativeStock) {
-    for (const [productId, requested] of demanded) {
-      const live = lookup(productId)!;
-      if (!Number.isFinite(requested) || requested > live.stockQuantity) {
-        errors.push(`${live.name}: insufficient live stock (requested ${requested}, available ${live.stockQuantity})`);
+  // Validate every resulting balance before WMS writes, including explicit
+  // negative-stock sales. The override never authorizes non-finite/unsafe data.
+  for (const [productId, requested] of demanded) {
+    const live = lookup(productId)!;
+    let available: number;
+    try {
+      available = addStockQuantities(live.stockQuantity, 0);
+      addStockQuantities(available, -requested);
+    } catch {
+      errors.push(`${live.name}: live stock quantity is invalid or unsafe`);
+      continue;
+    }
+    if (!options.allowNegativeStock) {
+      if (!Number.isFinite(requested) || requested > available) {
+        errors.push(`${live.name}: insufficient live stock (requested ${requested}, available ${available})`);
       } else {
-        // Available total stock is not all saleable: WMS reservations and
-        // dispatched/in-transit transfers remain protected until released or
-        // received. This checks aggregate demand before ANY sale mutation.
+        // Protect reserved, dispatched and foreign-branch stock before ANY write.
         const saleable = warehouseSaleableQuantity(productId, live.stockQuantity, live.branchId);
         if (requested > saleable + 1e-9) {
           errors.push(`${live.name}: insufficient unreserved stock (requested ${requested}, saleable ${saleable}; reserved, in transit or allocated to another branch)`);
