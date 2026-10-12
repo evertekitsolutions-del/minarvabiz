@@ -30,6 +30,12 @@ export const customerSchema = z.object({
   notes: z.string().max(2000).optional().nullable(),
 });
 
+export const stockQuantitySchema = z.number().finite().nonnegative().refine(
+  (value) => Number.isSafeInteger(Math.round(value * 1000)) &&
+    Math.abs(value * 1000 - Math.round(value * 1000)) < 1e-6,
+  { message: "Stock quantity supports up to 3 decimal places" },
+);
+
 export const productSchema = z.object({
   name: nonEmptyStringSchema,
   sku: z.string().max(64).optional().nullable(),
@@ -43,8 +49,8 @@ export const productSchema = z.object({
   sellingPrice: moneySchema,
   discount: percentageSchema.optional().nullable(),
   taxRate: percentageSchema.optional().nullable(),
-  stockQuantity: z.number().int().default(0),
-  minimumStock: z.number().int().min(0).default(0),
+  stockQuantity: stockQuantitySchema.default(0),
+  minimumStock: stockQuantitySchema.default(0),
   supplierId: z.string().uuid().optional().nullable(),
   notes: z.string().max(2000).optional().nullable(),
   isActive: z.boolean().default(true),
