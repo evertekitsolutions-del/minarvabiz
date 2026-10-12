@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createCheckoutSubmitGate } from "./checkout-submit-gate";
 import type { Product, Customer, CartLine, PaymentMethod } from "@minarvabiz/types";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
@@ -88,6 +89,12 @@ export function PosBilling({
   const [heldSaleId, setHeldSaleId] = React.useState("");
   const [message, setMessage] = React.useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [lastSale, setLastSale] = React.useState<{ id: string; invoice: string } | null>(null);
+  const checkoutSubmitGate = React.useRef(createCheckoutSubmitGate());
+
+  React.useEffect(() => {
+    // Only a committed empty-cart render permits the next business transaction.
+    if (cart.length === 0) checkoutSubmitGate.current.release();
+  }, [cart.length]);
 
   const totals = React.useMemo(() => calculateCartTotals(cart), [cart]);
   const tenderState = React.useMemo(
@@ -222,6 +229,8 @@ export function PosBilling({
       return;
     }
 
+    // React state resets are batched; a second click can still see the old cart.
+    if (!checkoutSubmitGate.current.tryStart()) return;
     try {
       const result = submit({
         customerId: customerId || null,
@@ -236,9 +245,11 @@ export function PosBilling({
         setLastSale(result.saleId && result.invoiceNumber ? { id: result.saleId, invoice: result.invoiceNumber } : null);
         resetCheckout();
       } else {
+        checkoutSubmitGate.current.release();
         setMessage({ type: "err", text: (result.errors || ["Sale failed"]).join("; ") });
       }
     } catch (error) {
+      checkoutSubmitGate.current.release();
       setMessage({ type: "err", text: error instanceof Error ? error.message : String(error) });
     }
   }
