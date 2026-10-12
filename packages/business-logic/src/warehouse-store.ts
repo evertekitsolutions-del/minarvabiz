@@ -515,6 +515,26 @@ export function warehouseStockSummary(productTotalById: Record<string, number>) 
   });
 }
 
+/**
+ * Effective quantity eligible for a new sale at the company-wide stock level.
+ * Reservations protect accepted orders, and in-transit units have left their
+ * source warehouse but are not yet sellable at the destination. Unallocated
+ * product stock remains sellable; the WMS is a location overlay on Product.
+ *
+ * Keep the invariant using the existing WMS summary rather than duplicating
+ * allocation logic in POS/Normal Billing/returns exchange validators.
+ */
+export function warehouseSaleableQuantity(productId: UUID, productTotalStock: number): number {
+  if (!Number.isFinite(productTotalStock) || productTotalStock <= 0) return 0;
+  const row = warehouseStockSummary({ [productId]: productTotalStock }).find(s => s.productId === productId);
+  if (!row) return 0;
+  // Never create fictitious stock from stale physical allocations. The two
+  // independent limits defend against over-allocation and transit double count.
+  const unencumbered = row.total - row.reserved - row.inTransit;
+  const physicallySellable = row.availableAllocated + row.unallocated;
+  return roundQty(Math.max(0, Math.min(row.total, unencumbered, physicallySellable)));
+}
+
 export function hydrateWarehouseState(input: {
   warehouses?: Warehouse[];
   locations?: WarehouseLocation[];
