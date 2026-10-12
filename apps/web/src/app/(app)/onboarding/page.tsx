@@ -90,7 +90,7 @@ export default function OnboardingPage() {
             </div>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => router.push(s.href)}>Open</Button>
-              <Button size="sm" disabled={!loaded || !scopeKey} variant={s.done ? "outline" : "default"}
+              <Button size="sm" disabled={!loaded || !scopeKey} variant={s.done ? "outline" : "primary"}
                 onClick={() => setConfirmation(s.id, !s.done)}>
                 {s.done ? "Undo confirmation" : "I completed this"}
               </Button>
