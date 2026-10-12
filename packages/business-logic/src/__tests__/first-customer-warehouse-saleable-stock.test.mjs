@@ -172,3 +172,14 @@ test("manual stock adjustment respects reservations and stock in transit", () =>
     assert.equal(store.adjustStock("fabric", "adjustment", -available).stockQuantity, 10 - available);
   }
 });
+
+test("stock-count target refuses stale or malformed edits before any mutation", () => {
+  setup({ allocated: 3, reserved: 1 });
+  const before = snapshot();
+  assert.throws(() => store.adjustStockToQuantity("fabric", "", 10, "recount"), /stock quantity/i);
+  assert.throws(() => store.adjustStockToQuantity("fabric", "2.7505", 10, "recount"), /stock quantity/i);
+  assert.throws(() => store.adjustStockToQuantity("fabric", "8", 9, "recount"), /stock changed while editing/i);
+  assert.equal(snapshot(), before);
+  assert.equal(store.adjustStockToQuantity("fabric", "9.125", 10, "recount").stockQuantity, 9.125);
+  assert.equal(warehouse.listWarehouseStock({ productId: "fabric" })[0].reserved, 1);
+});
