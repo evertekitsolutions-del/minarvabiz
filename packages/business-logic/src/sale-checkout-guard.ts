@@ -24,6 +24,7 @@ export function costSaleLinesFromLiveProducts(
  */
 import type { CartLine, Product, Customer, UUID } from "@minarvabiz/types";
 import { validateCart } from "./sales";
+import { warehouseSaleableQuantity } from "./warehouse-store";
 
 export function validateLiveSaleCheckout(
   lines: CartLine[],
@@ -68,6 +69,14 @@ export function validateLiveSaleCheckout(
       const live = lookup(productId)!;
       if (!Number.isFinite(requested) || requested > live.stockQuantity) {
         errors.push(`${live.name}: insufficient live stock (requested ${requested}, available ${live.stockQuantity})`);
+      } else {
+        // Available total stock is not all saleable: WMS reservations and
+        // dispatched/in-transit transfers remain protected until released or
+        // received. This checks aggregate demand before ANY sale mutation.
+        const saleable = warehouseSaleableQuantity(productId, live.stockQuantity);
+        if (requested > saleable + 1e-9) {
+          errors.push(`${live.name}: insufficient unreserved stock (requested ${requested}, saleable ${saleable}; reserved or in transit)`);
+        }
       }
     }
   }
