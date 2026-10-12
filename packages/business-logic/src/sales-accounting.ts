@@ -45,9 +45,11 @@ export function planSalePosting(sale: Sale, tenders: Array<{ method: PaymentMeth
       return invalid('Invalid sale tender');
     }
     const tenderMinor = toMinorUnits(tender.amount);
-    const appliedMinor = Math.min(remainingMinor, tenderMinor);
-    lines.push({ key: tenderKey(tender.method), debit: fromMinorUnits(appliedMinor) });
-    remainingMinor = subtractMinorUnits(remainingMinor, appliedMinor);
+    // Never silently cap a method's posted receipt. If a caller passes gross
+    // tender instead of net-of-cash-change, reject before committing journals.
+    if (tenderMinor > remainingMinor) return invalid('Sale tender allocation exceeds net receipts');
+    lines.push({ key: tenderKey(tender.method), debit: fromMinorUnits(tenderMinor) });
+    remainingMinor = subtractMinorUnits(remainingMinor, tenderMinor);
   }
   if (remainingMinor !== 0) return invalid('Sale tender allocation does not match paid amount');
 
