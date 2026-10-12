@@ -102,7 +102,9 @@ export function createReturn(input: {
       if (p) {
         p.stockQuantity = applyStockMovement(p.stockQuantity, "return", item.quantity);
         p.updatedAt = nowISO();
-        enqueueOutbox("products", p.id, "update", p);
+        p.version = (p.version ?? 1) + 1;
+        // Queue a fixed versioned event, not a reference that later returns can mutate.
+        enqueueOutbox("products", p.id, "update", { ...p });
       }
     }
   }
@@ -122,6 +124,7 @@ export function createReturn(input: {
       c.totalSpending = Math.max(0, Math.round((c.totalSpending - paidRefund) * 100) / 100);
       c.outstandingBalance = Math.max(0, Math.round((c.outstandingBalance - receivableReduction) * 100) / 100);
       c.updatedAt = nowISO();
+      c.version = (c.version ?? 1) + 1;
       updatedCustomer = c;
     }
   }
@@ -138,9 +141,10 @@ export function createReturn(input: {
     notes: `Refund ${ret.returnNumber} for invoice ${sale.invoiceNumber}`,
   });
 
-  enqueueOutbox("returns", ret.id, "insert", ret);
-  enqueueOutbox("sales", sale.id, "update", sale);
-  if (updatedCustomer) enqueueOutbox("customers", updatedCustomer.id, "update", updatedCustomer);
+  // Preserve event-time state across subsequent partial returns and exchanges.
+  enqueueOutbox("returns", ret.id, "insert", { ...ret, items: ret.items.map(item => ({ ...item })) });
+  enqueueOutbox("sales", sale.id, "update", { ...sale, items: sale.items.map(item => ({ ...item })) });
+  if (updatedCustomer) enqueueOutbox("customers", updatedCustomer.id, "update", { ...updatedCustomer });
 
   audit("sale.return", "returns", ret.id, oldSale, { returnNumber: ret.returnNumber, invoiceNumber: sale.invoiceNumber,
     totalRefund, paidRefund, receivableReduction, refundPaymentId: refundPayment?.id ?? null, refundMethod: input.refundMethod, refundMode: input.refundMode ?? "refund" });
@@ -282,7 +286,7 @@ export function createExchange(input: {
   returned.ret.exchangeSaleId = replacement.sale.id;
   returned.ret.exchangeInvoiceNumber = replacement.sale.invoiceNumber;
   returned.ret.storeCreditApplied = storeCreditApplied;
-  enqueueOutbox("returns", returned.ret.id, "update", returned.ret);
+  enqueueOutbox("returns", returned.ret.id, "update", { ...returned.ret, items: returned.ret.items.map(item => ({ ...item })) });
 
   planExchangeRefundPosting(returned.ret.id, extraRefund, input.refundMethod).commit();
   let extraRefundPaymentId: string | null = null;
