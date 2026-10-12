@@ -16,6 +16,8 @@ export function SyncPanel({
   onToggleOnline,
   onResolveConflict,
   syncing,
+  cloudSyncAvailable = true,
+  demoMode = false,
 }: {
   online: boolean;
   outboxStats: { total: number; pending: number; synced: number; conflict: number; error: number };
@@ -27,14 +29,31 @@ export function SyncPanel({
   onToggleOnline?: () => void;
   onResolveConflict?: (id: string, choice: "local" | "remote") => void;
   syncing?: boolean;
+  cloudSyncAvailable?: boolean;
+  demoMode?: boolean;
 }) {
+  // The legacy SyncPanel uses an in-memory cloud simulator. Never represent
+  // it as authenticated cross-device sync or a durable remote backup.
+  if (!cloudSyncAvailable && !demoMode) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Cloud Sync</CardTitle></CardHeader>
+        <CardContent className="space-y-2 text-sm text-slate-700">
+          <p role="status" className="font-semibold">Cloud synchronization is not configured for this screen.</p>
+          <p>No data is uploaded by this sync panel. Its memory adapter is not a real remote backup or device synchronization service.</p>
+          <p>The authenticated Online data path, where configured, is separate. Offline-first billing and local backup remain available independently.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Hybrid Sync</h2>
+          <h2 className="text-xl font-semibold text-slate-900">{demoMode ? "Sync demonstration" : "Hybrid Sync"}</h2>
           <p className="text-sm text-slate-500">
-            Local-first offline queue · cloud push/pull · conflict resolution
+            {demoMode ? "In-memory simulation only — no cross-device Cloud Sync or remote backup" : "Local-first offline queue · cloud push/pull · conflict resolution"}
           </p>
         </div>
         <div className="flex gap-2">
