@@ -123,13 +123,14 @@ try {
   assert.deepEqual(pending(), []);
   assert.throws(() => during.assertBeforeWrite(fileBytes()), NativeSqliteExternalChangeError);
 
-  // A known successful, validated manual restore intentionally rebases the
-  // fence, but a NEW read is required before any subsequent write.
-  during.resetAfterRestore();
-  assert.throws(() => during.assertBeforeWrite(fileBytes()), NativeSqliteExternalChangeError);
-  const reloaded = new NativeSqliteFingerprintFence();
-  reloaded.observeRead(fileBytes());
-  assert.doesNotThrow(() => reloaded.assertBeforeWrite(fileBytes()));
+  // A successful restore forces a process relaunch, never reuse stale renderer
+  // memory, even if it happens to call readSqliteBinary before restarting.
+  during.requireRestartAfterRestore();
+  assert.throws(() => during.observeRead(fileBytes()), /restart Minarva Biz/);
+  assert.throws(() => during.assertBeforeWrite(fileBytes()), /restart Minarva Biz/);
+  const relaunched = new NativeSqliteFingerprintFence();
+  relaunched.observeRead(fileBytes());
+  assert.doesNotThrow(() => relaunched.assertBeforeWrite(fileBytes()));
   console.log("Native SQLite mutation fence: real SQLite, same-size/timestamp edits, lost/create, late-stage race, fail-closed and restore rebase PASS");
 } finally {
   fs.rmSync(folder, { recursive: true, force: true });
