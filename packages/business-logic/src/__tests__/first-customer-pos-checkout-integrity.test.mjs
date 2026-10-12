@@ -106,3 +106,26 @@ test("valid split quantities still sell, decrement stock once and post a balance
   assert.equal(journals[0].totalDebit, journals[0].totalCredit);
   assert.equal(accounting.buildBalanceSheet().balanced, true);
 });
+
+test("billing UIs preserve fractional quantity and do not silently coerce bad tender input", () => {
+  const normal = fs.readFileSync("packages/ui/src/components/sales/NormalBilling.tsx", "utf8");
+  const pos = fs.readFileSync("packages/ui/src/components/sales/PosBilling.tsx", "utf8");
+  assert.match(normal, /const quantity = Number\(qty\)/);
+  assert.match(normal, /step="any" value=\{qty\}/);
+  assert.match(normal, /Paid amount must be a valid non-negative number/);
+  assert.match(pos, /function parsedTenderAmount\(value: string\)/);
+  assert.match(pos, /amount: parsedTenderAmount\(row.amount\)/);
+  assert.doesNotMatch(pos, /Math.max\(0, Number\(row.amount\) \|\| 0\)/);
+});
+
+test("fractional textile quantities post exact stock and payment without rounding to whole units", () => {
+  reset();
+  const result = sale([line(1.5), line(2.5)], { paidAmount: 400 });
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.sale.total, 400);
+  assert.equal(result.sale.items[0].quantity, 1.5);
+  assert.equal(result.sale.items[1].quantity, 2.5);
+  assert.equal(store.getProduct("item").stockQuantity, 1);
+  assert.equal(result.sale.paidAmount, 400);
+  assert.equal(accounting.buildBalanceSheet().balanced, true);
+});
