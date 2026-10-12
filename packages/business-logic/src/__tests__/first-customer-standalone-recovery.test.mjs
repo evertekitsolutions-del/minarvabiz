@@ -119,4 +119,6 @@ test("Web recovery is gated and never sends the snapshot to Supabase", () => {
   assert.match(page, /can\("backup\.manage"\)/);
   assert.match(page, /importDomainSnapshotJson/);
   assert.doesNotMatch(page, /supabase\.from\(|\.upsert\(/);
+  const layout = fs.readFileSync("apps/web/src/components/AppLayoutClient.tsx", "utf8");
+  assert.match(layout, /if \(!isSupabaseConfigured\(\)\) bootstrapFromLocalStorage\(\)/);
 });
