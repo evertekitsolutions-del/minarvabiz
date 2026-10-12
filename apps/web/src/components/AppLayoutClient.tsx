@@ -127,7 +127,9 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   }, [searchOpen]);
 
   React.useEffect(() => {
-    bootstrapFromLocalStorage();
+    // Hosted tenants must never hydrate an unrelated browser's cached business data.
+    // Cloud data must arrive only through authorized Supabase hydration.
+    if (!isSupabaseConfigured()) bootstrapFromLocalStorage();
     const u = getSessionUser();
     const token = getSessionToken();
     const runtimeMode = getRuntimeMode();
