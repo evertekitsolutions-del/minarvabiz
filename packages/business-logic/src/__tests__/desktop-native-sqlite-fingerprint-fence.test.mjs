@@ -29,7 +29,7 @@ assert.match(writeIPC, /sqliteFingerprintFence\.assertBeforeWrite\(readNativeSql
 assert.match(writeIPC, /sqliteFingerprintFence\.acceptCommittedImage\(data\)/);
 assert.match(existsIPC, /sqliteFingerprintFence\.observeRead\(image\)/);
 assert.match(main, /if \(\(error as NodeJS\.ErrnoException\)\.code === "ENOENT"\) return null/);
-assert.match(main, /sqliteFingerprintFence\.resetAfterRestore\(\)/);
+assert.match(main, /sqliteFingerprintFence\.requireRestartAfterRestore\(\)/);
 
 const initSqlJs = require("sql.js");
 const SQL = await initSqlJs();
