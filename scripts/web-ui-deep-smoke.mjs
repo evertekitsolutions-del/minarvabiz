@@ -89,7 +89,7 @@ async function verifyWebLocalSnapshotDownload(ws) {
       "files.items.add(new File([state.blob],'qa-business-snapshot-v15.json',{type:'application/json'}));",
       "input.files=files.files;input.dispatchEvent(new Event('change',{bubbles:true}));",
       "return true;})()",
-    ].join("\\n"));
+    ].join("\n"));
     if (!upload) throw new Error("Unable to select current-device snapshot for Web verification");
     await waitFor(ws, ["Snapshot structure verified for local v15 data", "Customers:",
       "Sales:", "Purchases:", "Accounting:"], 20000);
@@ -102,7 +102,7 @@ async function verifyWebLocalSnapshotDownload(ws) {
       "'legacy-partial.json',{type:'application/json'}));",
       "input.files=files.files;input.dispatchEvent(new Event('change',{bubbles:true}));",
       "return true;})()",
-    ].join("\\n"));
+    ].join("\n"));
     if (!rejectPartial) throw new Error("Unable to test rejected historical partial archive");
     await waitFor(ws, ["Snapshot rejected:", "Incomplete business snapshot"], 20000);
     console.log("WEB_LEGACY_PARTIAL_SNAPSHOT_REJECTED PASS");
