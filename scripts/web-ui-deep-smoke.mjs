@@ -52,7 +52,7 @@ async function verifyWebLocalSnapshotDownload(ws) {
     const denied = await evalIn(ws, [
       "(()=>{const state=window.__minarvaSnapshotSmoke;",
       "return {prompt:state.prompt,download:state.filename,hasBlob:!!state.blob};})()",
-    ].join("\\n"));
+    ].join("\n"));
     if (!denied.prompt.includes("NOT an export of all hosted cloud records") ||
         denied.download || denied.hasBlob) {
       throw new Error("Cancelled sensitive snapshot unexpectedly generated a download: " +
