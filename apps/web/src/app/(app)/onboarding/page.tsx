@@ -18,14 +18,16 @@ export default function OnboardingPage() {
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    const user = getSessionUser();
-    const scope = onboardingPreferenceKey(
-      user?.id ?? null,
-      phase9Store.getActiveBranch()?.id ?? null,
-      getRuntimeMode() === "demo",
-    );
-    setScopeKey(scope);
+    let currentScope: string | null = null;
     function reload() {
+      const user = getSessionUser();
+      const scope = onboardingPreferenceKey(
+        user?.id ?? null,
+        phase9Store.getActiveBranch()?.id ?? null,
+        getRuntimeMode() === "demo",
+      );
+      currentScope = scope;
+      setScopeKey(scope);
       if (!scope) {
         hydrateOnboarding([]);
         setError("A signed-in user and selected branch are required to save setup confirmations.");
@@ -42,11 +44,16 @@ export default function OnboardingPage() {
       setLoaded(true);
     }
     reload();
+    // Identity/branch may be hydrated after this page's first React effect.
     const onStorage = (event: StorageEvent) => {
-      if (event.key === scope || event.key === null) reload();
+      if (event.key === currentScope || event.key === null) reload();
     };
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener("minarva:data-hydrated", reload);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("minarva:data-hydrated", reload);
+    };
   }, []);
 
   function setConfirmation(id: string, done: boolean) {
