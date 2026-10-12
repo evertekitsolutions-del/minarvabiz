@@ -9,6 +9,7 @@ import { checkForSecureUpdate, downloadVerifiedUpdate, getDownloadedVerifiedUpda
 import { minarvaBackupSchemaError } from "./sqlite-backup-validation";
 import { writeValidatedSqliteBinaryAtomically } from "./sqlite-native-atomic-write";
 import { NativeSqliteBusyError, NativeSqliteIpcGate } from "./sqlite-ipc-gate";
+import { prepareSqliteRestoreStage, cleanupSqliteRestoreStage, type SqliteRestoreStage } from "./sqlite-restore-staging";
 import { claimPrimaryDesktopInstance } from "./single-instance-owner";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
@@ -537,8 +538,9 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
   }
 
   const target = sqlitePath();
-  const temp = `${target}.restore-${process.pid}-${Date.now()}`;
-  const rollback = `${target}.rollback-${process.pid}-${Date.now()}`;
+  let stage: SqliteRestoreStage | null = null;
+  let temp = "";
+  let rollback = "";
   const hadTarget = fs.existsSync(target);
   let targetMoved = false;
   let preRestoreBackup: string | null = null;
@@ -552,7 +554,8 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
   }
 
   try {
-    copySqlite(source, temp);
+    stage = prepareSqliteRestoreStage(source, target);
+    ({ temp, rollback } = stage);
     const stagedError = await minarvaSqliteValidationError(temp);
     if (stagedError) {
       try { fs.unlinkSync(temp); } catch {}
@@ -595,6 +598,8 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
       error: `Restore failed: ${error instanceof Error ? error.message : String(error)}.${rollbackStatus}`,
       preRestoreBackup,
     };
+  } finally {
+    if (stage) cleanupSqliteRestoreStage(stage);
   }
     });
   } catch (error) {

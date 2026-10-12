@@ -1,3 +1,9 @@
+## OFFLINE-NATIVE-04 — Exclusive, fsynced restore staging (source verification pending)
+
+- Baseline main `e97c675ce79a8e2ef9a1ec67cd4b5f34fcc2cb47`, 25 successful/5 optional skipped checks, 0 failures/pending; 0 open PRs. Existing #350–#352 protections preserved.
+- Restore now reserves a unique same-volume workspace, copies exclusively, fsyncs/closes before validation or moving live data, and cleans without deleting stranded rollback images. Real SQLite reopen and IO-fault regressions added. See `docs/WINDOWS_SQLITE_RESTORE_STAGING.md`.
+- Still pending: durable restore journal/startup recovery, native external-writer locking, actual Windows NTFS shutdown/low-disk/antivirus and updater UAT, HR005 authorized synchronization. No production migration/flags/customer data/installer changes. Full Master Vision ~51%, latest stable v1.0.15. PR and post-merge results must be independently checked.
+
 ## OFFLINE-NATIVE-03 — Electron primary process ownership fence (source CI pending)
 
 - Verified live main before branch `7411b4b37e529be81d8aea9841d29305d11c463e` (#351 backup/restore IPC gate already merged), main CI 27 pass/7 optional skipped, 0 open PRs; whole Master Vision baseline ~51%, last customer Windows installer v1.0.15.
