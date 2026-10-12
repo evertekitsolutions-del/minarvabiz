@@ -74,7 +74,8 @@ try {
     assert.equal(fs.readFileSync(target,'utf8'),'valid old');
   }
   {
-    const {target} = state('missing-journal'); fs.writeFileSync(target,'valid old');
+    const {target,stage} = state('missing-journal'); fs.writeFileSync(target,'valid old');
+    fs.writeFileSync(stage.temp,'unverified stranded backup');
     const r = await recoverSqliteRestoreAtStartup(target,valid);
     assert.equal(r.ok,false); assert.equal(fs.readFileSync(target,'utf8'),'valid old');
   }
