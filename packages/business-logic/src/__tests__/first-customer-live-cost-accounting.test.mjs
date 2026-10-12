@@ -33,7 +33,7 @@ const cart = (quantity = 1, override = {}) => ({
 function reset(liveCost = 37.50) {
   accounting.hydrateAccountingState({ accounts: structuredClone(originalAccounts), journals: [], journalSequence: 0 });
   store.hydrateCore({
-    products: [{ id: "fabric", name: "Linen (meter)", sku: "FAB-001", stockQuantity: 10, costPrice: liveCost, sellingPrice: 100, isActive: true, version: 1 }],
+    products: [{ id: "fabric", name: "Linen (meter)", sku: "FAB-001", stockQuantity: 10, ...(liveCost === null ? {} : { costPrice: liveCost }), sellingPrice: 100, isActive: true, version: 1 }],
     customers: [{ id: "buyer", name: "Buyer", totalSpending: 0, outstandingBalance: 0 }],
     sales: [], payments: [],
   });
@@ -98,7 +98,7 @@ test("invalid live cost fails before stock, sale, payments, ledgers or outbox mu
 });
 
 test("legacy product missing master cost retains valid cart basis without breaking old offline carts", () => {
-  reset(undefined);
+  reset(null);
   const original = [cart(1, { costPrice: 18 })];
   const resolved = guard.costSaleLinesFromLiveProducts(original, store.getProduct);
   assert.equal(resolved[0].costPrice, 18);
