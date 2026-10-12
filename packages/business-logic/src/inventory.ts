@@ -13,6 +13,23 @@ export type StockMovementType =
   | "return"
   | "purchase";
 
+/**
+ * Parse user-entered product/stock quantities without silently rounding,
+ * truncating fractional units or turning empty/invalid inputs into zero.
+ * WMS positions use a maximum of three decimal places.
+ */
+export function parseNonNegativeStockQuantity(raw: string): number {
+  const value = raw.trim();
+  if (!/^\\d+(?:\\.\\d{1,3})?$/.test(value)) {
+    throw new Error("Stock quantity must be a non-negative number with up to 3 decimal places");
+  }
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity) || quantity < 0 || !Number.isSafeInteger(Math.round(quantity * 1000))) {
+    throw new Error("Stock quantity must be a finite non-negative safe quantity");
+  }
+  return quantity;
+}
+
 /** Apply a movement to current quantity. Returns new quantity. */
 export function applyStockMovement(
   currentQty: number,
