@@ -35,11 +35,25 @@ export function validateLiveSaleCheckout(
   getProduct: (id: UUID) => Product | undefined,
   getCustomer: (id: UUID) => Customer | undefined,
 ): string[] {
-  const errors = validateCart(lines, { allowNegativeStock: options.allowNegativeStock });
+  // The cart's stockQuantity is a snapshot from when the product was added.
+  // Replenishment may have happened since then: validate against one coherent
+  // live product snapshot, never reject a valid sale solely for stale cart stock.
+  // The existing pure validateCart still enforces all other numeric and
+  // aggregated-demand checks; the live check below remains fail-closed.
+  const productSnapshot = new Map<UUID, Product | undefined>();
+  const lookup = (id: UUID): Product | undefined => {
+    if (!productSnapshot.has(id)) productSnapshot.set(id, getProduct(id));
+    return productSnapshot.get(id);
+  };
+  const currentLines = lines.map(line => {
+    const current = lookup(line.productId);
+    return current ? { ...line, stockQuantity: current.stockQuantity } : { ...line };
+  });
+  const errors = validateCart(currentLines, { allowNegativeStock: options.allowNegativeStock });
   const demanded = new Map<string, number>();
 
   for (const line of lines) {
-    const live = getProduct(line.productId);
+    const live = lookup(line.productId);
     if (!live) {
       errors.push(`Product not found: ${line.productName}`);
       continue;
@@ -51,7 +65,7 @@ export function validateLiveSaleCheckout(
   }
   if (!options.allowNegativeStock) {
     for (const [productId, requested] of demanded) {
-      const live = getProduct(productId)!;
+      const live = lookup(productId)!;
       if (!Number.isFinite(requested) || requested > live.stockQuantity) {
         errors.push(`${live.name}: insufficient live stock (requested ${requested}, available ${live.stockQuantity})`);
       }
