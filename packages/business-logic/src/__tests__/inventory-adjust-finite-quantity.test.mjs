@@ -14,7 +14,11 @@ assert.match(adjustBlock, /if \(!Number\.isFinite\(quantity\)\) return null/);
 
 const finiteGuard = adjustBlock.indexOf("if (!Number.isFinite(quantity)) return null");
 const warehouseConsume = adjustBlock.indexOf("consumeWarehouseStock");
-const stockMutation = adjustBlock.indexOf("p.stockQuantity = applyStockMovement");
+const stockMutation = adjustBlock.indexOf("p.stockQuantity = next");
+const preflight = adjustBlock.indexOf("planManualStockAdjustment");
+assert.ok(preflight > finiteGuard && preflight < warehouseConsume, "shared preflight must run before WMS consumption");
+const stockGuard = fs.readFileSync(new URL("../stock-adjustment-guard.ts", import.meta.url), "utf8");
+assert.match(stockGuard, /warehouseSaleableQuantity\(/, "shared preflight must check reserved, transit and branch WMS stock");
 assert.ok(finiteGuard >= 0, "finite-quantity guard must exist");
 assert.ok(warehouseConsume < 0 || finiteGuard < warehouseConsume, "finite guard must run before WMS consumption");
 assert.ok(stockMutation > finiteGuard, "finite guard must run before product stock mutation");

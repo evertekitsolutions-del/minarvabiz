@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { store, generateProductBarcode, printBarcodeLabels } from "@minarvabiz/business-logic";
+import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 
@@ -16,6 +16,7 @@ export default function ProductsPage() {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [stockProduct, setStockProduct] = React.useState<Product | null>(null);
   const [stockQty, setStockQty] = React.useState("");
+  const [stockError, setStockError] = React.useState<string | null>(null);
   const [labelProduct, setLabelProduct] = React.useState<Product | null>(null);
   const [labelCopies, setLabelCopies] = React.useState("1");
   const [categoryOpen, setCategoryOpen] = React.useState(false);
@@ -66,20 +67,20 @@ export default function ProductsPage() {
   }
 
   function handleSave() {
-    const parsed = productSchema.safeParse({
-      name: form.name,
-      sku: form.sku || null,
-      barcode: form.barcode || null,
-      categoryId: form.categoryId || null,
-      unit: form.unit,
-      costPrice: parseFloat(form.costPrice) || 0,
-      sellingPrice: parseFloat(form.sellingPrice) || 0,
-      stockQuantity: parseInt(form.stockQuantity, 10) || 0,
-      minimumStock: parseInt(form.minimumStock, 10) || 0,
-      isActive: true,
-    });
-    if (!parsed.success) { setError(parsed.error.errors[0]?.message ?? "Invalid input"); return; }
     try {
+      const parsed = productSchema.safeParse({
+        name: form.name,
+        sku: form.sku || null,
+        barcode: form.barcode || null,
+        categoryId: form.categoryId || null,
+        unit: form.unit,
+        costPrice: parseFloat(form.costPrice) || 0,
+        sellingPrice: parseFloat(form.sellingPrice) || 0,
+        stockQuantity: parseNonNegativeStockQuantity(form.stockQuantity),
+        minimumStock: parseNonNegativeStockQuantity(form.minimumStock),
+        isActive: true,
+      });
+      if (!parsed.success) { setError(parsed.error.errors[0]?.message ?? "Invalid input"); return; }
       if (editingId) {
         const patch: Partial<Product> = { ...parsed.data };
         delete patch.stockQuantity;
@@ -95,10 +96,14 @@ export default function ProductsPage() {
 
   function adjustStock() {
     if (!stockProduct) return;
-    const next = Math.max(0, parseInt(stockQty, 10) || 0);
-    const delta = next - stockProduct.stockQuantity;
-    if (delta !== 0) store.adjustStock(stockProduct.id, "adjustment", delta, "Manual stock correction");
-    setStockProduct(null); refresh();
+    try {
+      store.adjustStockToQuantity(stockProduct.id, stockQty, stockProduct.stockQuantity, "Manual stock correction");
+      setStockError(null);
+      setStockProduct(null);
+      refresh();
+    } catch (err) {
+      setStockError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   return (
@@ -113,7 +118,7 @@ export default function ProductsPage() {
         onAddCategory={() => setCategoryOpen(true)}
         onAdd={() => { resetForm(); setOpen(true); }}
         onEdit={openEdit}
-        onAdjustStock={(p) => { setStockProduct(p); setStockQty(String(p.stockQuantity)); }}
+        onAdjustStock={(p) => { setStockProduct({ ...p }); setStockQty(String(p.stockQuantity)); setStockError(null); }}
         onArchive={(product, reason) => { const result = store.archiveProduct(product.id, reason); if (result.error) return { error: result.error }; refresh(); return { success: true }; }}
         onPrintBarcode={(p) => { setLabelProduct(p); setLabelCopies("1"); }}
       />
@@ -176,16 +181,16 @@ export default function ProductsPage() {
             <input className={inputClass} type="number" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} />
           </FormField>
           <FormField label={editingId ? "Stock qty (use Adjust Stock)" : "Opening stock"}>
-            <input className={inputClass} type="number" value={form.stockQuantity} disabled={!!editingId} onChange={(e) => setForm({ ...form, stockQuantity: e.target.value })} />
+            <input className={inputClass} type="number" min="0" step="0.001" value={form.stockQuantity} disabled={!!editingId} onChange={(e) => setForm({ ...form, stockQuantity: e.target.value })} />
           </FormField>
           <FormField label="Min stock">
-            <input className={inputClass} type="number" value={form.minimumStock} onChange={(e) => setForm({ ...form, minimumStock: e.target.value })} />
+            <input className={inputClass} type="number" min="0" step="0.001" value={form.minimumStock} onChange={(e) => setForm({ ...form, minimumStock: e.target.value })} />
           </FormField>
           {error && <p className="sm:col-span-2 text-sm text-rose-600">{error}</p>}
         </div>
       </Modal>
-      <Modal open={!!stockProduct} title="Update Stock Quantity" onClose={() => setStockProduct(null)} footer={<><Button variant="outline" onClick={() => setStockProduct(null)}>Cancel</Button><Button onClick={adjustStock}>Update Stock</Button></>}>
-        <div className="space-y-3"><p className="text-sm text-slate-600">{stockProduct?.name} · Current stock: <strong>{stockProduct?.stockQuantity}</strong></p><FormField label="New stock quantity"><input className={inputClass} type="number" min="0" value={stockQty} onChange={(e) => setStockQty(e.target.value)} /></FormField></div>
+      <Modal open={!!stockProduct} title="Update Stock Quantity" onClose={() => { setStockProduct(null); setStockError(null); }} footer={<><Button variant="outline" onClick={() => { setStockProduct(null); setStockError(null); }}>Cancel</Button><Button onClick={adjustStock}>Update Stock</Button></>}>
+        <div className="space-y-3"><p className="text-sm text-slate-600">{stockProduct?.name} · Current stock: <strong>{stockProduct?.stockQuantity}</strong></p><FormField label="New stock quantity"><input className={inputClass} type="number" min="0" step="0.001" value={stockQty} onChange={(e) => { setStockQty(e.target.value); setStockError(null); }} /></FormField>{stockError && <p role="alert" className="text-sm text-rose-600">{stockError}</p>}</div>
       </Modal>
       <Modal open={!!labelProduct} title="Print Barcode Label" onClose={() => setLabelProduct(null)} footer={<><Button variant="outline" onClick={() => setLabelProduct(null)}>Cancel</Button><Button onClick={() => { if (!labelProduct?.barcode) { setError("Generate a barcode before printing."); return; } const category = categories.find((cat) => cat.id === labelProduct.categoryId); printBarcodeLabels(labelProduct, Math.max(1, parseInt(labelCopies, 10) || 1), category?.name || null); }}>Print Label</Button></>}>
         <div className="space-y-3"><p className="text-sm font-medium">{labelProduct?.name}</p><p className="text-xs text-slate-500">Barcode: {labelProduct?.barcode || "Not generated"}</p><FormField label="Copies"><input className={inputClass} type="number" min="1" max="100" value={labelCopies} onChange={(e) => setLabelCopies(e.target.value)} /></FormField></div>

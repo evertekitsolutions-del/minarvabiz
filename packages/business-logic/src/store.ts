@@ -25,6 +25,7 @@ import { assertPermission } from "./permissions";
 import { planSalePosting, planCollectionPosting } from "./sales-accounting";
 import { planAutomaticPosting } from "./accounting-store";
 import { consumeWarehouseStock } from "./warehouse-store";
+import { planManualStockAdjustment, stockCountDelta } from "./stock-adjustment-guard";
 import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
 import { validateLiveSaleCheckout, costSaleLinesFromLiveProducts } from "./sale-checkout-guard";
@@ -395,21 +396,26 @@ export function deleteProduct(id: UUID): Product | null {
 }
 
 export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "adjustment", quantity: number, notes?: string | null): Product | null {
-  assertPermission("inventory.adjust");
-  if (!Number.isFinite(quantity)) return null;
-  const p = getProduct(productId);
-  if (!p) return null;
+  assertPermission("inventory.adjust"); if (!Number.isFinite(quantity)) return null;
+  const p = getProduct(productId); if (!p) return null;
   const before = p.stockQuantity;
-  if (type === "stock_out" || (type === "adjustment" && quantity < 0)) {
-    consumeWarehouseStock(p.id, type === "stock_out" ? Math.abs(quantity) : Math.abs(quantity), p.branchId ?? null);
-  }
-  p.stockQuantity = applyStockMovement(p.stockQuantity, type, quantity);
-  touchProduct(p);
+  const { next, reduction } = planManualStockAdjustment(p.id, p.branchId, before, type, quantity);
+  if (reduction > 0) consumeWarehouseStock(p.id, reduction, p.branchId ?? null);
+  p.stockQuantity = next; touchProduct(p);
   void remoteAdjustStock({ ...p }, type, quantity, notes);
-  auditAction("inventory.adjust", "products", p.id, { stockQuantity: before }, { stockQuantity: p.stockQuantity, type, quantity, notes: notes ?? null });
+  auditAction("inventory.adjust", "products", p.id, { stockQuantity: before }, { stockQuantity: next, type, quantity, notes: notes ?? null });
   return p;
 }
 
+export function adjustStockToQuantity(productId: UUID, rawTarget: string, expectedCurrentStock: number, notes?: string | null): Product {
+  assertPermission("inventory.adjust");
+  const p = getProduct(productId);
+  if (!p) throw new Error("Product not found");
+  const delta = stockCountDelta(rawTarget, p.stockQuantity, expectedCurrentStock);
+  if (delta === 0) return p;
+  const updated = adjustStock(productId, "adjustment", delta, notes); if (!updated) throw new Error("Stock adjustment could not be completed");
+  return updated;
+}
 
 /**
  * Legacy product-record transfer entry point.
