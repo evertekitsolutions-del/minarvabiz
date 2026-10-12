@@ -1,3 +1,9 @@
+## OFFLINE-NATIVE-03 — Electron primary process ownership fence (source CI pending)
+
+- Verified live main before branch `7411b4b37e529be81d8aea9841d29305d11c463e` (#351 backup/restore IPC gate already merged), main CI 27 pass/7 optional skipped, 0 open PRs; whole Master Vision baseline ~51%, last customer Windows installer v1.0.15.
+- `apps/desktop/electron/main.ts` now uses native `app.requestSingleInstanceLock()` before `app.whenReady()` to reject second app processes on the SAME Electron userData profile; second launch focuses/restores owner window, no second-process DB/window/license bootstrap. Fail-closed on denied/errors, keeps existing fsync SQLite writer and same-main IPC backup/restore reservations. Added pure test suite `packages/business-logic/src/__tests__/desktop-single-instance-owner.test.mjs`, docs `docs/WINDOWS_ELECTRON_SINGLE_INSTANCE_FENCE.md`.
+- This is real app startup integration, NOT an OS-wide file lock against external SQLite writers or alternate profiles. Pending exact-head and post-merge CI, actual Windows multi-instance/updater/restart stress testing, NTFS crash/low-storage UAT. HR005 live server issuance, authorized device enrollment, atomic accepted-sequence hydration, conflicts/legal rules remain pending. HR005 migration/feature flag OFF, no customer data or paid API usage.
+
 ## OFFLINE-NATIVE-02 — SQLite backup/restore same-process IPC fence (source CI pending)
 
 - Continue existing main from `9fedafea7ec79c9600e01f2b4a96ae1de47694e8`, PR #350 exact-head/postmerge green, 0 open PRs. Whole Master Vision ~51%, latest published Windows v1.0.15.

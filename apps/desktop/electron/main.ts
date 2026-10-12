@@ -9,11 +9,18 @@ import { checkForSecureUpdate, downloadVerifiedUpdate, getDownloadedVerifiedUpda
 import { minarvaBackupSchemaError } from "./sqlite-backup-validation";
 import { writeValidatedSqliteBinaryAtomically } from "./sqlite-native-atomic-write";
 import { NativeSqliteBusyError, NativeSqliteIpcGate } from "./sqlite-ipc-gate";
+import { claimPrimaryDesktopInstance } from "./single-instance-owner";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 const runtimeSmoke = process.env.MINARVA_RUNTIME_SMOKE === "1";
 const MAX_SQLITE_IPC_BYTES = 256 * 1024 * 1024;
 const sqliteGate = new NativeSqliteIpcGate();
+const isPrimaryDesktopInstance = claimPrimaryDesktopInstance(
+  () => app.requestSingleInstanceLock(),
+  () => app.quit(),
+  (focusOwner) => { app.on("second-instance", focusOwner); },
+  () => BrowserWindow.getAllWindows(),
+);
 const MAX_TRIAL_EMAIL_CHARS = 254;
 const MAX_TRIAL_PHONE_CHARS = 50;
 const MAX_TRIAL_ORG_CHARS = 200;
@@ -355,7 +362,7 @@ async function listBackupFiles() {
 }
 
 app.disableHardwareAcceleration();
-app.whenReady().then(() => { Menu.setApplicationMenu(null); runtimeSmokeLog(`app-ready platform=${process.platform} version=${app.getVersion()} userData=${app.getPath("userData")}`); process.env.MINARVA_SQLITE_PATH = sqlitePath(); process.env.MINARVA_MODE = process.env.MINARVA_MODE || "production"; fs.mkdirSync(app.getPath("userData"), { recursive: true }); configureDesktopSession(); registerDesktopLicenseIpc(getDeviceId, requireTrustedRenderer); createWindow(); app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); }); });
+if (isPrimaryDesktopInstance) app.whenReady().then(() => { Menu.setApplicationMenu(null); runtimeSmokeLog(`app-ready platform=${process.platform} version=${app.getVersion()} userData=${app.getPath("userData")}`); process.env.MINARVA_SQLITE_PATH = sqlitePath(); process.env.MINARVA_MODE = process.env.MINARVA_MODE || "production"; fs.mkdirSync(app.getPath("userData"), { recursive: true }); configureDesktopSession(); registerDesktopLicenseIpc(getDeviceId, requireTrustedRenderer); createWindow(); app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); }); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 
 ipcMain.handle("app:getVersion", (event) => { requireTrustedRenderer(event); return app.getVersion(); });
