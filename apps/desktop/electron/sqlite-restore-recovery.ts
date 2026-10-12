@@ -83,6 +83,11 @@ export async function recoverSqliteRestoreAtStartup(
     try {
       const st = fs.lstatSync(directory);
       if (!st.isDirectory() || st.isSymbolicLink()) throw new Error("workspace is not a directory");
+      // A crash after successful journal removal but before rmdir leaves
+      // only an EMPTY workspace. This contains no recoverable data/evidence:
+      // ignore it rather than permanently blocking a valid installation.
+      // Never delete or ignore a nonempty unjournalled workspace.
+      if (fs.readdirSync(directory).length === 0) continue;
       const journal = journalForWorkspace(directory, target);
       const rollback = path.join(directory, "rollback.db");
       if (fs.existsSync(rollback)) {
@@ -94,6 +99,7 @@ export async function recoverSqliteRestoreAtStartup(
       return { ok: false, error: `Unverified restore workspace ${name}: ${error instanceof Error ? error.message : String(error)}. Preserve files for manual recovery.` };
     }
   }
+  if (workspaces.length === 0) return { ok: true, recovered: false, retainedWorkspaces: 0 };
   if (workspaces.length > 1) return { ok: false, error: "Multiple unfinished restore workspaces; manual review required. No files changed." };
 
   const current = workspaces[0];
