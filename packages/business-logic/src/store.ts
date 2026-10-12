@@ -27,6 +27,7 @@ import { planAutomaticPosting } from "./accounting-store";
 import { consumeWarehouseStock } from "./warehouse-store";
 import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
+import { validateLiveSaleCheckout } from "./sale-checkout-guard";
 import { assertBusinessDayOpen } from "./business-day-state";
 
 const categories: Category[] = [];
@@ -499,14 +500,12 @@ export function createSale(input: {
 }): { sale: Sale; payment: Payment | null; payments: Payment[]; errors: string[] } {
   assertPermission("sales.create");
   assertBusinessDayOpen();
-  const errors = validateCart(input.lines, { allowNegativeStock: input.allowNegativeStock });
-  if (!input.allowNegativeStock) {
-    for (const line of input.lines) {
-      const live = getProduct(line.productId);
-      if (!live) errors.push(`Product not found: ${line.productName}`);
-      else if (line.quantity > live.stockQuantity) errors.push(`${live.name}: insufficient stock (available ${live.stockQuantity})`);
-    }
-  }
+  const errors = validateLiveSaleCheckout(
+    input.lines,
+    { allowNegativeStock: input.allowNegativeStock, customerId: input.customerId, paidAmount: input.paidAmount },
+    getProduct,
+    getCustomer,
+  );
   if (errors.length) return { sale: null as unknown as Sale, payment: null, payments: [], errors };
 
   const totals = calculateCartTotals(input.lines);
@@ -524,7 +523,7 @@ export function createSale(input: {
     : [{ method: input.paymentMethod, amount: input.paidAmount }])
     .map((split) => ({
       method: split.method,
-      amount: Number(split.amount) || 0,
+      amount: split.amount,
       reference: split.reference ?? null,
     }));
   const tender = validateTender(fromMinorUnits(remainingAfterCreditMinor), rawSplits);

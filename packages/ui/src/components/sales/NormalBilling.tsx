@@ -43,10 +43,18 @@ export function NormalBilling({
 
   function addLine() {
     const p = selectedProduct;
-    const quantity = Math.max(1, parseInt(qty, 10) || 1);
+    const quantity = Number(qty);
     if (!p) { setMessage({ type: "err", text: "Select a product." }); return; }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setMessage({ type: "err", text: "Quantity must be a positive number." });
+      return;
+    }
     if (quantity > p.stockQuantity) { setMessage({ type: "err", text: `Only ${p.stockQuantity} in stock for ${p.name}.` }); return; }
-    const price = Math.max(0, parseFloat(unitPrice) || 0);
+    const price = Number(unitPrice);
+    if (!unitPrice.trim() || !Number.isFinite(price) || price < 0) {
+      setMessage({ type: "err", text: "Enter a valid non-negative selling price." });
+      return;
+    }
     setLines((prev) => {
       const existing = prev.find((line) => line.productId === p.id);
       if (existing) {
@@ -75,10 +83,15 @@ export function NormalBilling({
 
   function complete() {
     if (!lines.length) { setMessage({ type: "err", text: "Add at least one item." }); return; }
+    const payment = paidAmount.trim() === "" ? 0 : Number(paidAmount);
+    if (!Number.isFinite(payment) || payment < 0) {
+      setMessage({ type: "err", text: "Paid amount must be a valid non-negative number." });
+      return;
+    }
     const result = onCompleteSale({
       customerId: customerId || null,
       lines,
-      paidAmount: Math.max(0, parseFloat(paidAmount) || 0),
+      paidAmount: payment,
       paymentMethod: method,
       notes: notes.trim() || undefined,
     });
@@ -111,7 +124,7 @@ export function NormalBilling({
               </select>
               {onAddProduct && <Button type="button" variant="outline" onClick={onAddProduct}>+ Product</Button>}
             </div>
-            <input className="h-10 rounded-lg border border-slate-200 px-3 text-sm" type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="Qty" />
+            <input className="h-10 rounded-lg border border-slate-200 px-3 text-sm" type="number" min="0.001" step="any" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="Qty" />
             <input className="h-10 rounded-lg border border-slate-200 px-3 text-sm" type="number" min="0" step="0.01" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} placeholder="Rate" />
             <Button type="button" onClick={addLine}>Add item</Button>
           </div>
@@ -122,7 +135,8 @@ export function NormalBilling({
               <tbody>{lines.length === 0 ? <tr><td colSpan={5} className="px-3 py-8 text-center text-slate-400">No items added</td></tr> : lines.map((line) => (
                 <tr key={line.productId} className="border-t border-slate-100">
                   <td className="px-3 py-2 font-medium">{line.productName}</td>
-                  <td className="px-3 py-2"><input className="h-8 w-20 rounded border border-slate-200 px-2" type="number" min="1" max={line.stockQuantity} value={line.quantity} onChange={(e) => updateLine(line.productId, { quantity: Math.max(1, Math.min(line.stockQuantity, parseInt(e.target.value, 10) || 1)) })} /></td>
+                  <td className="px-3 py-2"><input className="h-8 w-20 rounded border border-slate-200 px-2" type="number" min="0.001" step="any" max={line.stockQuantity} value={line.quantity} onChange={(e) => updateLine(line.productId, { quantity: Number.isFinite(Number(e.target.value)) && Number(e.target.value) > 0
+                    ? Math.min(line.stockQuantity, Number(e.target.value)) : line.quantity })} /></td>
                   <td className="px-3 py-2"><input className="h-8 w-28 rounded border border-slate-200 px-2" type="number" min="0" step="0.01" value={line.unitPrice} onChange={(e) => updateLine(line.productId, { unitPrice: Math.max(0, parseFloat(e.target.value) || 0) })} /></td>
                   <td className="px-3 py-2 text-right font-semibold">{formatMoney(line.quantity * line.unitPrice)}</td>
                   <td className="px-3 py-2 text-right"><Button size="sm" variant="outline" onClick={() => setLines((prev) => prev.filter((x) => x.productId !== line.productId))}>Remove</Button></td>
