@@ -81,7 +81,7 @@ assert.match(mainSource,
   /if \(isPrimaryDesktopInstance\) app\.whenReady\(\)\.then\(/,
   "Unauthorized second process must not run whenReady bootstrap");
 assert.match(mainSource, /app\.on\("second-instance", focusOwner\)/);
-assert.match(mainSource, /sqliteGate\.write\(\(\) => writeValidatedSqliteBinaryAtomically\(/,
+assert.match(mainSource, /sqliteGate\.write\(\(\) => \{\s*\/\/ The UI persists full images/,
   "Existing same-process transaction gate must stay enabled");
 assert.match(mainSource, /sqliteGate\.reserve\("restore"/,
   "Existing async restore reservation must stay enabled");
