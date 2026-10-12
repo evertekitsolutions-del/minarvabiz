@@ -53,7 +53,9 @@ test("Fail closed on partial archive, malformed JSON, unsupported version and ba
     const data={...snap};delete data[missing];
     assert.throws(()=>inspect(data),/Incomplete business snapshot/);
   }
-  for(const text of ["","{broken","[]","null"]){
+  assert.throws(()=>inspect(""),/empty|128 MiB/i,
+    "Empty files must be rejected before attempting JSON parsing");
+  for(const text of ["{broken","[]","null"]){
     assert.throws(()=>inspect(text),/JSON|business snapshot/i);
   }
   assert.throws(()=>inspect({...snap,version:14}),/version mismatch/);
