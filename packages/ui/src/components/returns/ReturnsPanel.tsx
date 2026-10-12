@@ -9,6 +9,7 @@ import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { formatMoney } from "../customers/format";
 import { createCheckoutSubmitGate } from "../sales/checkout-submit-gate";
+import { resolveReturnRestock } from "./return-stock-disposition";
 
 type ReturnItemInput = {
   saleItemId: string;
@@ -69,6 +70,7 @@ export function ReturnsPanel({
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
   const [qtyMap, setQtyMap] = React.useState<Record<string, number>>({});
+  const [restockByItem, setRestockByItem] = React.useState<Record<string, boolean>>({});
   const [replacementProductId, setReplacementProductId] = React.useState("");
   const [replacementQty, setReplacementQty] = React.useState("1");
   const [replacementLines, setReplacementLines] = React.useState<CartLine[]>([]);
@@ -98,6 +100,7 @@ export function ReturnsPanel({
     setSaleId(preferredSaleId);
     setMode("return");
     setQtyMap({});
+    setRestockByItem({});
     setReplacementLines([]);
     setError(null);
     setSuccess(null);
@@ -117,9 +120,9 @@ export function ReturnsPanel({
         productName: item.productName,
         quantity: qtyMap[item.id],
         unitPrice: item.unitPrice,
-        restock: true,
+        restock: resolveReturnRestock(reason, restockByItem[item.id]),
       }));
-  }, [sale, qtyMap]);
+  }, [sale, qtyMap, reason, restockByItem]);
 
   const returnQuote = React.useMemo(
     () => sale ? quoteSaleReturn(sale, returns, selectedReturnItems) : null,
@@ -199,6 +202,7 @@ export function ReturnsPanel({
     setMethod("cash");
     setNotes("");
     setQtyMap({});
+    setRestockByItem({});
     setReplacementProductId("");
     setReplacementQty("1");
     setReplacementLines([]);
@@ -435,7 +439,7 @@ export function ReturnsPanel({
       >
         <div className="space-y-4">
           <FormField label="Original sale *">
-            <select className={selectClass} value={saleId} onChange={(e) => { setSaleId(e.target.value); setQtyMap({}); setReplacementLines([]); }}>
+            <select className={selectClass} value={saleId} onChange={(e) => { setSaleId(e.target.value); setQtyMap({}); setRestockByItem({}); setReplacementLines([]); }}>
               <option value="">Select invoice</option>
               {sales.map((s) => <option key={s.id} value={s.id}>{s.invoiceNumber} — {formatMoney(s.total)} — {s.customerName || "Walk-in"}</option>)}
             </select>
@@ -445,19 +449,40 @@ export function ReturnsPanel({
             <div className="space-y-2 rounded-xl border border-slate-100 p-3">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Items being returned</div>
               {sale.items.map((item) => (
-                <div key={item.id} className="flex items-center justify-between gap-2 text-sm">
-                  <span className="flex-1">{item.productName} (remaining {remainingQuantity(item)})</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={remainingQuantity(item)}
-                    step="any"
-                    className="h-8 w-20 rounded border border-slate-200 px-2 text-center"
-                    value={qtyMap[item.id] ?? 0}
-                    onChange={(e) => setQtyMap({ ...qtyMap, [item.id]: Math.max(0, Math.min(remainingQuantity(item), Number(e.target.value) || 0)) })}
-                  />
+                <div key={item.id} className="grid items-center gap-2 border-b border-slate-100 pb-2 text-sm last:border-b-0 sm:grid-cols-[minmax(0,1fr)_90px_155px]">
+                  <span>{item.productName} (remaining {remainingQuantity(item)})</span>
+                  <label className="flex flex-col gap-1 text-xs text-slate-600">
+                    Return qty
+                    <input
+                      type="number"
+                      min={0}
+                      max={remainingQuantity(item)}
+                      step="any"
+                      aria-label={`Return quantity for ${item.productName}`}
+                      className="h-8 w-full rounded border border-slate-200 px-2 text-center"
+                      value={qtyMap[item.id] ?? 0}
+                      onChange={(e) => setQtyMap({ ...qtyMap, [item.id]: Math.max(0, Math.min(remainingQuantity(item), Number(e.target.value) || 0)) })}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-slate-600">
+                    Returned stock
+                    <select
+                      className={selectClass}
+                      aria-label={`Stock disposition for ${item.productName}`}
+                      value={resolveReturnRestock(reason, restockByItem[item.id]) ? "restock" : "do-not-restock"}
+                      onChange={(e) => setRestockByItem((prev) => ({ ...prev, [item.id]: e.target.value === "restock" }))}
+                      disabled={(qtyMap[item.id] ?? 0) <= 0}
+                    >
+                      <option value="restock">Restock sellable</option>
+                      <option value="do-not-restock">Do not restock</option>
+                    </select>
+                  </label>
                 </div>
               ))}
+              <p className="text-xs text-slate-500">
+                Defective goods default to Do not restock. Check each item's sellable condition before adding it back to inventory.
+                A refund can be issued without restocking damaged or discontinued products.
+              </p>
               {selectedReturnItems.length > 0 && returnQuote?.errors.map(message => <p key={message} className="text-sm text-rose-600">{message}</p>)}
               {selectedReturnItems.length > 0 && (
                 <div className="flex justify-between border-t border-slate-100 pt-2 text-sm font-medium">
