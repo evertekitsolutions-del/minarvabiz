@@ -81,6 +81,31 @@ async function verifyWebLocalSnapshotDownload(ws) {
       throw new Error("Web snapshot download did not contain valid full local business data: " +
         JSON.stringify(result));
     }
+    const upload = await evalIn(ws, [
+      "(()=>{const state=window.__minarvaSnapshotSmoke;",
+      "const input=document.querySelector('input[aria-label=\"Choose local snapshot file to verify\"]');",
+      "if(!state?.blob || !input || input.disabled)return false;",
+      "const files=new DataTransfer();",
+      "files.items.add(new File([state.blob],'qa-business-snapshot-v15.json',{type:'application/json'}));",
+      "input.files=files.files;input.dispatchEvent(new Event('change',{bubbles:true}));",
+      "return true;})()",
+    ].join("\n"));
+    if (!upload) throw new Error("Unable to select current-device snapshot for Web verification");
+    await waitFor(ws, ["Snapshot structure verified for local v15 data", "Customers:",
+      "Sales:", "Purchases:", "Accounting:"], 20000);
+    console.log("WEB_LOCAL_V15_SNAPSHOT_FILE_INSPECTION PASS");
+    const rejectPartial = await evalIn(ws, [
+      "(()=>{const input=document.querySelector('input[aria-label=\"Choose local snapshot file to verify\"]');",
+      "if(!input || input.disabled)return false;",
+      "const files=new DataTransfer();files.items.add(new File([JSON.stringify({version:15,",
+      "exportedAt:'2026-10-12T00:00:00.000Z',customers:[]})],",
+      "'legacy-partial.json',{type:'application/json'}));",
+      "input.files=files.files;input.dispatchEvent(new Event('change',{bubbles:true}));",
+      "return true;})()",
+    ].join("\n"));
+    if (!rejectPartial) throw new Error("Unable to test rejected historical partial archive");
+    await waitFor(ws, ["Snapshot rejected:", "Incomplete business snapshot"], 20000);
+    console.log("WEB_LEGACY_PARTIAL_SNAPSHOT_REJECTED PASS");
     console.log("WEB_LOCAL_V15_SNAPSHOT_DOWNLOAD_AND_SCOPE PASS");
   } finally {
     await evalIn(ws, [

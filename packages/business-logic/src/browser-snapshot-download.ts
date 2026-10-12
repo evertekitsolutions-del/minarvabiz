@@ -61,3 +61,59 @@ export function prepareBrowserSnapshotDownload(
     recordCounts,
   };
 }
+
+/** A bounded browser file-read limit; larger datasets must be inspected via desktop tools. */
+export const MAX_BROWSER_SNAPSHOT_VERIFY_BYTES = 128 * 1024 * 1024;
+
+export interface BrowserSnapshotInspection {
+  version: number;
+  exportedAt: string;
+  recordCounts: Record<string, number>;
+  sections: {
+    accounting: boolean;
+    warehouse: boolean;
+    procurement: boolean;
+    taxConfig: boolean;
+    shopProfile: boolean;
+    outbox: boolean;
+  };
+}
+
+/**
+ * Inspect a user-selected local v15 snapshot without importing or mutating
+ * business state. Ensures this is not one of the old partial Web archives.
+ * Caller must separately run the shared-core import validator: structural
+ * inspection does not prove independent recovery or cloud completeness.
+ */
+export function inspectBrowserSnapshotForRecovery(
+  content: string,
+  expectedVersion: number,
+  byteSize: number,
+): BrowserSnapshotInspection {
+  if (!Number.isSafeInteger(byteSize) || byteSize <= 0 ||
+      byteSize > MAX_BROWSER_SNAPSHOT_VERIFY_BYTES) {
+    throw new Error("Snapshot file is empty, invalid or exceeds the 128 MiB browser verification limit");
+  }
+  let prepared: BrowserSnapshotDownload;
+  try {
+    prepared = prepareBrowserSnapshotDownload(content, expectedVersion);
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error("Snapshot is not valid JSON");
+    throw error;
+  }
+  // The export helper already enforced all mandatory v15 collections.
+  const snapshot = JSON.parse(prepared.content) as Record<string, unknown>;
+  return {
+    version: expectedVersion,
+    exportedAt: snapshot.exportedAt as string,
+    recordCounts: prepared.recordCounts,
+    sections: {
+      accounting: snapshot.accounting != null,
+      warehouse: snapshot.warehouse != null,
+      procurement: snapshot.procurement != null,
+      taxConfig: snapshot.taxConfig != null,
+      shopProfile: snapshot.shopProfile != null,
+      outbox: Array.isArray(snapshot.outbox),
+    },
+  };
+}
