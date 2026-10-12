@@ -11,6 +11,9 @@ assert.ok(main.indexOf('recoverSqliteRestoreAtStartup(sqlitePath(), minarvaSqlit
 assert.ok(restore.indexOf('beginSqliteRestoreJournal(stage, target)') < restore.indexOf('fs.renameSync(target, rollback)'),
   'Journal must be persisted before moving the last live SQLite image');
 assert.match(restore, /sqliteRestoreReviewRequired/, 'Pending recovery workspaces must block subsequent restores');
+assert.match(restore, /newImageInstalled = true/, 'Restore must track the installed stage for a fresh database');
+assert.match(restore, /!hadTarget && newImageInstalled && fs\.existsSync\(target\)/, 'Failed fresh restore must not leave an unvalidated live image');
+assert.match(restore, /const priorStateRestored = hadTarget/, 'Journal cleanup must wait until the prior database state is restored');
 const require = createRequire(import.meta.url);
 const ts = require('typescript');
 require.extensions['.ts'] = (module, file) => module._compile(ts.transpileModule(
