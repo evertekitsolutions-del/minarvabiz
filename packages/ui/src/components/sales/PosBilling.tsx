@@ -60,6 +60,10 @@ const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> = [
 
 type PaymentRow = { method: PaymentMethod; amount: string; reference: string };
 
+function parsedTenderAmount(value: string): number {
+  return value.trim() === "" ? 0 : Number(value);
+}
+
 export function PosBilling({
   products,
   customers,
@@ -86,16 +90,12 @@ export function PosBilling({
   const [lastSale, setLastSale] = React.useState<{ id: string; invoice: string } | null>(null);
 
   const totals = React.useMemo(() => calculateCartTotals(cart), [cart]);
-  const totalTendered = React.useMemo(
-    () => payments.reduce((sum, row) => sum + Math.max(0, Number(row.amount) || 0), 0),
-    [payments]
-  );
   const tenderState = React.useMemo(
     () => validateTender(
       totals.grandTotal,
       payments.map((row) => ({
         method: row.method,
-        amount: Number(row.amount) || 0,
+        amount: parsedTenderAmount(row.amount),
         reference: row.reference.trim() || null,
       }))
     ),
@@ -211,7 +211,7 @@ export function PosBilling({
     const paymentSplits: PosPaymentSplit[] = payments
       .map((row) => ({
         method: row.method,
-        amount: Math.max(0, Number(row.amount) || 0),
+        amount: parsedTenderAmount(row.amount),
         reference: row.reference.trim() || null,
       }))
       .filter((row) => row.amount > 0);
@@ -476,7 +476,7 @@ export function PosBilling({
                 </div>
               ))}
               <div className="grid grid-cols-3 gap-2 text-xs">
-                <div className="rounded-lg bg-white p-2 text-slate-600">Tendered <strong className="float-right text-slate-900">{formatMoney(totalTendered)}</strong></div>
+                <div className="rounded-lg bg-white p-2 text-slate-600">Tendered <strong className="float-right text-slate-900">{formatMoney(tenderState.tendered)}</strong></div>
                 <div className="rounded-lg bg-white p-2 text-slate-600">Balance <strong className="float-right text-slate-900">{formatMoney(balanceDue)}</strong></div>
                 <div className="rounded-lg bg-white p-2 text-slate-600">Change <strong className="float-right text-emerald-700">{formatMoney(changeDue)}</strong></div>
               </div>
