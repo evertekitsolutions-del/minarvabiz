@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { PosBilling, NormalBilling, SalesList, Button, Modal, FormField, inputClass } from "@minarvabiz/ui";
-import { store, printSaleInvoice, buildSaleInvoiceHtml, assertLimit } from "@minarvabiz/business-logic";
+import { store, requestSaleInvoicePrint, buildSaleInvoiceHtml, assertLimit } from "@minarvabiz/business-logic";
 import type { Product, Customer, Sale, CartLine, PaymentMethod } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
@@ -15,6 +15,10 @@ export default function SalesPage() {
   const [sales, setSales] = React.useState<Sale[]>([]);
   const [heldSales, setHeldSales] = React.useState(() => store.listHeldSales());
   const [customerOpen, setCustomerOpen] = React.useState(false);
+  const printRequestId = React.useRef(0);
+  const [printNotice, setPrintNotice] = React.useState<{
+    saleId: string; invoice: string; state: "pending" | "ok" | "error"; message: string;
+  } | null>(null);
   const [customerError, setCustomerError] = React.useState<string | null>(null);
   const [customerForm, setCustomerForm] = React.useState({ name: "", phone: "", email: "", address: "", notes: "" });
 
@@ -26,6 +30,42 @@ export default function SalesPage() {
   }, []);
 
   React.useEffect(() => { refresh(); }, [refresh]);
+
+  function printExistingInvoice(saleId: string, paper: "a4" | "thermal") {
+    const sale = store.getSale(saleId);
+    const id = ++printRequestId.current;
+    if (!sale) {
+      setPrintNotice({
+        saleId, invoice: "Unknown invoice", state: "error",
+        message: "Saved invoice could not be found. Check Sales History before attempting any new sale.",
+      });
+      return;
+    }
+    setPrintNotice({
+      saleId, invoice: sale.invoiceNumber, state: "pending",
+      message: `Invoice ${sale.invoiceNumber} is saved. Requesting ${paper.toUpperCase()} print…`,
+    });
+    // This call starts the print synchronously in the click handler;
+    // awaiting first would trigger browser popup blocking.
+    void requestSaleInvoicePrint(sale, paper).then((result) => {
+      if (id !== printRequestId.current) return;
+      setPrintNotice({
+        saleId, invoice: sale.invoiceNumber,
+        state: result.ok ? "ok" : "error",
+        message: result.ok
+          ? (result.state === "native-accepted"
+            ? `Invoice ${sale.invoiceNumber} saved. Printer accepted the request; check physical output.`
+            : `Invoice ${sale.invoiceNumber} saved. Print window opened; complete the print dialog.`)
+          : `Invoice ${sale.invoiceNumber} is saved, but printing failed: ${result.error}`,
+      });
+    }).catch((error: unknown) => {
+      if (id !== printRequestId.current) return;
+      setPrintNotice({
+        saleId, invoice: sale.invoiceNumber, state: "error",
+        message: `Invoice ${sale.invoiceNumber} is saved, but printing failed: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    });
+  }
 
   function handleComplete(payload: {
     customerId: string | null;
@@ -47,11 +87,7 @@ export default function SalesPage() {
       return { success: false, errors: result.errors };
     }
     refresh();
-    try {
-      printSaleInvoice(result.sale, "a4");
-    } catch {
-      /* print blocked */
-    }
+    printExistingInvoice(result.sale.id, "a4");
     return { success: true, invoiceNumber: result.sale.invoiceNumber, saleId: result.sale.id };
   }
 
@@ -98,6 +134,24 @@ export default function SalesPage() {
           <Button variant={tab === "history" ? "primary" : "outline"} onClick={() => setTab("history")}>History</Button>
         </div>
       </div>
+      {printNotice && (
+        <div
+          role={printNotice.state === "error" ? "alert" : "status"}
+          aria-live={printNotice.state === "error" ? "assertive" : "polite"}
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-sm ${
+            printNotice.state === "error"
+              ? "border-amber-300 bg-amber-50 text-amber-950"
+              : "border-slate-200 bg-slate-50 text-slate-800"
+          }`}
+        >
+          <p>{printNotice.message}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => printExistingInvoice(printNotice.saleId, "a4")}>Retry A4</Button>
+            <Button size="sm" variant="outline" onClick={() => printExistingInvoice(printNotice.saleId, "thermal")}>Retry Thermal</Button>
+            <Button size="sm" variant="outline" onClick={() => setTab("history")}>View saved invoice</Button>
+          </div>
+        </div>
+      )}
       {tab === "pos" && (
         <PosBilling
           products={products}
@@ -119,11 +173,11 @@ export default function SalesPage() {
             store.removeHeldSale(id);
             refresh();
           }}
-          onPrintSale={(id, paper) => { const sale = store.getSale(id); if (sale) printSaleInvoice(sale, paper); }}
+          onPrintSale={printExistingInvoice}
         />
       )}
-      {tab === "normal" && <NormalBilling products={products} customers={customers} onCompleteSale={handleComplete} onAddCustomer={openCustomerQuickAdd} onPrintSale={(id, paper) => { const sale = store.getSale(id); if (sale) printSaleInvoice(sale, paper); }} />}
-      {tab === "history" && <SalesList sales={sales} customers={customers} buildPreviewHtml={(sale, paper) => buildSaleInvoiceHtml(sale, { paper, autoPrint: false })} onPrintA4={(sale) => printSaleInvoice(sale, "a4")} onPrintThermal={(sale) => printSaleInvoice(sale, "thermal")} onCreateReturn={(sale) => router.push(`/returns?saleId=${encodeURIComponent(sale.id)}`)} />}
+      {tab === "normal" && <NormalBilling products={products} customers={customers} onCompleteSale={handleComplete} onAddCustomer={openCustomerQuickAdd} onPrintSale={printExistingInvoice} />}
+      {tab === "history" && <SalesList sales={sales} customers={customers} buildPreviewHtml={(sale, paper) => buildSaleInvoiceHtml(sale, { paper, autoPrint: false })} onPrintA4={(sale) => printExistingInvoice(sale.id, "a4")} onPrintThermal={(sale) => printExistingInvoice(sale.id, "thermal")} onCreateReturn={(sale) => router.push(`/returns?saleId=${encodeURIComponent(sale.id)}`)} />}
 
       <Modal
         open={customerOpen}
