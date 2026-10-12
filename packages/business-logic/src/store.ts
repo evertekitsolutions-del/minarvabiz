@@ -27,6 +27,7 @@ import { planAutomaticPosting } from "./accounting-store";
 import { consumeWarehouseStock } from "./warehouse-store";
 import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
+import { validateLiveSaleCheckout } from "./sale-checkout-guard";
 import { assertBusinessDayOpen } from "./business-day-state";
 
 const categories: Category[] = [];
@@ -499,35 +500,12 @@ export function createSale(input: {
 }): { sale: Sale; payment: Payment | null; payments: Payment[]; errors: string[] } {
   assertPermission("sales.create");
   assertBusinessDayOpen();
-  const errors = validateCart(input.lines, { allowNegativeStock: input.allowNegativeStock });
-  // Recheck live stock at the last mutation boundary. A stale POS tab or a
-  // programmatic caller can submit repeated lines for the same product.
-  const demanded = new Map<string, number>();
-  for (const line of input.lines) {
-    const live = getProduct(line.productId);
-    if (!live) {
-      errors.push(`Product not found: ${line.productName}`);
-      continue;
-    }
-    if (live.isActive === false) errors.push(`${live.name}: product is inactive`);
-    if (Number.isFinite(line.quantity) && line.quantity > 0) {
-      demanded.set(live.id, (demanded.get(live.id) ?? 0) + line.quantity);
-    }
-  }
-  if (!input.allowNegativeStock) {
-    for (const [productId, requested] of demanded) {
-      const live = getProduct(productId)!;
-      if (!Number.isFinite(requested) || requested > live.stockQuantity) {
-        errors.push(`${live.name}: insufficient live stock (requested ${requested}, available ${live.stockQuantity})`);
-      }
-    }
-  }
-  if (input.customerId && !getCustomer(input.customerId)) {
-    errors.push("Selected customer no longer exists");
-  }
-  if (!Number.isFinite(input.paidAmount) || input.paidAmount < 0) {
-    errors.push("Paid amount must be finite and non-negative");
-  }
+  const errors = validateLiveSaleCheckout(
+    input.lines,
+    { allowNegativeStock: input.allowNegativeStock, customerId: input.customerId, paidAmount: input.paidAmount },
+    getProduct,
+    getCustomer,
+  );
   if (errors.length) return { sale: null as unknown as Sale, payment: null, payments: [], errors };
 
   const totals = calculateCartTotals(input.lines);
