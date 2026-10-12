@@ -1,3 +1,10 @@
+## DELIVERY-FIRST-01 — Product priorities, evidence integrity and honest agent reporting (PR verification pending)
+
+- Verified live main before branch: `b4d89621d7439246a32003ef14040abc9c18d089`, 25 checks passed/5 optional skipped, 0 open PRs. Source PR #355 merged, latest published customer installer v1.0.15, full Master Vision historic estimate ~51% (NOT a newly calculated acceptance percentage).
+- Root cause: five HR-only technical task queue items could not represent all phases of the Master Product Plan; numerous source-only security/data safety PRs did not provide measurable customer end-to-end acceptance. New `docs/PRODUCT_DELIVERY_BACKLOG.json` maps 23 outcomes over phases A–F to all 18 registered business/control capability groups (329 IDs), all 111 AI feature IDs, and the industry packs. No features removed, no outcomes marked accepted without UAT evidence.
+- `scripts/product-delivery-audit.mjs` checks scope and evidence gates; CI regression tests prevent accidental registry/phase loss and fabricated completion counts. Source agent scheduled preflight now reports actual coding-disabled state and performs no-cost product scope validation. Two observed schedule runs had source_patch skipped; **no autonomous coding confirmed**; paid Copilot variable remains unset and unmodified.
+- Commercial priority: first customer Windows/Online/Hybrid released workflow, Sync v2 data reliability, License Admin/provider-neutral entitlement, then large industry/commerce/marketing/AI integration modules. No migration, SaaS release, paid AI or customer data write. See `docs/DELIVERY_ACCELERATION_POLICY.md`. Next: verify source PR exact-head, postmerge, then implement a blocked customer-visible flow.
+
 ## OFFLINE-NATIVE-06 — External SQLite image mutation detection (source PR verification pending)
 
 - Baseline verified live main `6767171fe9cad42f5a1eee576c1aa6b7ac467f17` (PR #354 merged; post-merge checks 25 passed/5 optional skipped, 0 failed/pending; zero open PRs). Full Master Vision ~51%; published installer v1.0.15.

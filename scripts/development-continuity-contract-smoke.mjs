@@ -61,6 +61,7 @@ try {
     " const ep=args[1];",
     " if(ep.includes('/branches/main'))out('916cdd4c1cf1ea799bb1f46a14ff5fc789e8bbde');",
     " else if(ep.includes('/contents/docs/DEVELOPMENT_TASK_QUEUE.json'))out(Buffer.from(fs.readFileSync('docs/DEVELOPMENT_TASK_QUEUE.json')).toString('base64'));",
+    " else if(ep.includes('/contents/docs/PRODUCT_DELIVERY_BACKLOG.json'))out(Buffer.from(fs.readFileSync('docs/PRODUCT_DELIVERY_BACKLOG.json')).toString('base64'));",
     " else if(ep.includes('/check-runs'))out({check_runs:[{conclusion:process.env.MOCK_FAIL==='1'?'failure':'success'}, {conclusion:process.env.MOCK_PENDING==='1'?null:'skipped'}]});",
     " else throw Error('Unexpected API ' + ep);",
     "}else if(args[0]==='pr' && args[1]==='list')out('');",
@@ -87,6 +88,10 @@ try {
   let issue=run();
   assert.equal(issue.title,"Minarva Biz — Development Continuity Dashboard");
   assert.match(issue.body,/HR-004C-REVIEW-LIFECYCLE/);
+  assert.match(issue.body,/## Next customer-visible delivery outcome/);
+  assert.match(issue.body,/A-FIRST-CUSTOMER/);
+  assert.match(issue.body,/## Commercial delivery priorities/);
+  assert.match(issue.body,/## Technical subqueue/);
   assert.match(issue.body,/916cdd4c1cf1ea799bb1f46a14ff5fc789e8bbde/);
   assert.match(issue.body,/~51%/);
   assert.match(issue.body,/NOT an autonomous coding agent/);

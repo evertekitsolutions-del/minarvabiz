@@ -1,0 +1,359 @@
+{
+  "schemaVersion": 1,
+  "project": "Minarva Biz",
+  "repository": "evertekitsolutions-del/minarvabiz",
+  "baseline": {
+    "fullMasterVisionEstimatePercent": 51,
+    "type": "provisional historical estimate, NOT recalculated or earned by PR count",
+    "asOf": "2026-10-12"
+  },
+  "scopePolicy": "Never remove or simplify capabilities; all registry groups, AI features, industry packs and long-term phases remain included",
+  "statusSemantics": "acceptance_not_verified means unknown until real source, CI, deployment and customer UAT evidence is reviewed, not necessarily unimplemented",
+  "sharedAcceptance": [
+    "Real end-to-end customer workflow and failure/retry paths verified",
+    "Online, Offline Windows and Hybrid behavior verified, or documented reason a surface is inapplicable",
+    "Multi-branch, roles/RLS, audit, backup/recovery and portability verified where applicable",
+    "Regression and security tests green at exact PR head and after merge",
+    "Customer-facing UAT and release/deployment evidence recorded, not inferred from CI"
+  ],
+  "aiRegistry": "docs/AI_CAPABILITY_REGISTRY.md",
+  "capabilityRegistry": "docs/CAPABILITY_REGISTRY.md",
+  "initiatives": [
+    {
+      "id": "A-FIRST-CUSTOMER",
+      "phase": "A",
+      "priority": 1,
+      "title": "First paying-customer onboarding and released Windows/Online/Hybrid acceptance",
+      "registryGroups": [
+        "Billing / sales / POS",
+        "Documents / support / workflow"
+      ],
+      "criticalOutcome": "Customer can install or sign in, enter real opening data, transact, print, backup/restore, update and request support without developer-only steps",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "A-SYNC-V2",
+      "phase": "A",
+      "priority": 2,
+      "title": "Local-first Sync v2 and multi-branch correctness",
+      "registryGroups": [
+        "Local-first sync",
+        "Platform / tenancy"
+      ],
+      "criticalOutcome": "Offline writes survive reconnection, conflict/replay/duplicate handling works and branch/warehouse correctness is proven",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "A-LICENSE-CUTOVER",
+      "phase": "A",
+      "priority": 3,
+      "title": "Provider-neutral License Admin and Render removal",
+      "registryGroups": [
+        "Control plane / SaaS business model"
+      ],
+      "criticalOutcome": "No mandatory Render production dependency, licensed Windows renewal/verification and rollback complete",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "A-ENTITLEMENTS",
+      "phase": "A",
+      "priority": 4,
+      "title": "Self-service subscription, device and entitlement lifecycle",
+      "registryGroups": [
+        "Control plane / SaaS business model"
+      ],
+      "criticalOutcome": "Tenant-controlled plans, device seats, trial, renewals and permitted offline grace verified without forced paid services",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "A-GLOBAL-CORE",
+      "phase": "A",
+      "priority": 5,
+      "title": "Country-neutral shared core and first India country pack",
+      "registryGroups": [
+        "Tax / compliance",
+        "Platform / tenancy"
+      ],
+      "criticalOutcome": "Core currency, dates, addresses, tax and invoice numbering are locale-neutral and legal rules stay in country adapters",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "A-CORE-PARITY",
+      "phase": "A",
+      "priority": 6,
+      "title": "Vyapar-parity accepted billing/inventory/finance purchasing flows",
+      "registryGroups": [
+        "Accounting / finance",
+        "Inventory / warehouse",
+        "Procurement / vendors",
+        "Billing / sales / POS"
+      ],
+      "criticalOutcome": "Customer can complete sale-to-ledger-to-return and purchase-to-stock-to-payables across branches with real reconciled totals",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "A-AI-FOUNDATION",
+      "phase": "A",
+      "priority": 7,
+      "title": "Provider-neutral consent-controlled AI gateway foundation",
+      "registryGroups": [],
+      "criticalOutcome": "AI assists existing modules through replaceable provider interface with cost caps, human approval and no obligatory paid inference",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "A-SUPPORT-UPDATER",
+      "phase": "A",
+      "priority": 8,
+      "title": "Onboarding support, privacy, diagnostics and secure updater",
+      "registryGroups": [
+        "Documents / support / workflow"
+      ],
+      "criticalOutcome": "Verified user-safe diagnostics, accessible support inbox, secure signed installer upgrades and recoverable migrations",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "B-ACCOUNTING-INVENTORY",
+      "phase": "B",
+      "priority": 9,
+      "title": "Deep accounting, finance, inventory and procurement",
+      "registryGroups": [
+        "Accounting / finance",
+        "Inventory / warehouse",
+        "Procurement / vendors"
+      ],
+      "criticalOutcome": "Financial and stock workflows withstand period close, returns, batch/serial, landed cost and multi-company reconciliation",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "B-CRM-GROWTH",
+      "phase": "B",
+      "priority": 10,
+      "title": "CRM, loyalty and customer automation",
+      "registryGroups": [
+        "CRM / customer growth"
+      ],
+      "criticalOutcome": "Customer 360, follow-ups, consent, purchase history, rewards and channels operate across permitted business surfaces",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "B-HR-PAYROLL",
+      "phase": "B",
+      "priority": 11,
+      "title": "Attendance Grid, HR roster/holidays, payroll and self-service",
+      "registryGroups": [
+        "HR / Attendance Grid / payroll"
+      ],
+      "criticalOutcome": "Approved roster and holiday policies drive signed attendance/payroll records in Online/Offline/Hybrid modes",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [
+        "A-SYNC-V2",
+        "A-GLOBAL-CORE"
+      ],
+      "owner": "unassigned"
+    },
+    {
+      "id": "B-COMMERCE",
+      "phase": "B",
+      "priority": 12,
+      "title": "Minarva Commerce store, business website and domain integration",
+      "registryGroups": [
+        "Commerce / website / domain"
+      ],
+      "criticalOutcome": "Inventory-to-store publish, cart, checkout, orders, shipping, refunds, website/domain and branch stock synchronization verified",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [
+        "A-SYNC-V2",
+        "A-CORE-PARITY"
+      ],
+      "owner": "unassigned"
+    },
+    {
+      "id": "B-MARKETING",
+      "phase": "B",
+      "priority": 13,
+      "title": "Campaigns, segmentation and marketing analytics",
+      "registryGroups": [
+        "Marketing"
+      ],
+      "criticalOutcome": "Consent-aware campaigns, templates, scheduled journeys, attribution and cancel/retry behavior verified",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [
+        "B-CRM-GROWTH"
+      ],
+      "owner": "unassigned"
+    },
+    {
+      "id": "B-REPORTING",
+      "phase": "B",
+      "priority": 14,
+      "title": "Advanced analytics, reports and BI",
+      "registryGroups": [
+        "Analytics / reports"
+      ],
+      "criticalOutcome": "All key sales, tax, payroll, cash, operations and multi-branch reports reconcile to source records",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "C-MANUFACTURING",
+      "phase": "C",
+      "priority": 15,
+      "title": "Manufacturing pack",
+      "registryGroups": [
+        "Manufacturing"
+      ],
+      "criticalOutcome": "BOM, production costing, materials, capacity and traceability with inventory/accounting integration verified",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "C-SERVICE-FIELD",
+      "phase": "C",
+      "priority": 16,
+      "title": "Service, field service and AMC packs",
+      "registryGroups": [
+        "Service / field service / AMC"
+      ],
+      "criticalOutcome": "Ticket to dispatch, technician work, parts, SLA, contract, invoice and after-service flows verified",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "C-PROJECTS",
+      "phase": "C",
+      "priority": 17,
+      "title": "Professional service and project operations",
+      "registryGroups": [
+        "Projects / professional services"
+      ],
+      "criticalOutcome": "Scope, milestones, timesheets, budget, billing, approvals and profitability verified",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "C-INDUSTRY-PACKS",
+      "phase": "C",
+      "priority": 18,
+      "title": "Restaurant, retail, boutique/tailoring, laundry, pharmacy and jewellery packs",
+      "registryGroups": [],
+      "criticalOutcome": "Each agreed industry workflow reuses shared core and has complete acceptance incl. returns, permissions, country rules and offline",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "D-GLOBAL-PACKS",
+      "phase": "D",
+      "priority": 19,
+      "title": "Global country packs and multi-currency localization",
+      "registryGroups": [
+        "Tax / compliance"
+      ],
+      "criticalOutcome": "India, GCC, UK/EU, US, AU/CA packs meet actual rule tests without hard-coding legislation in core",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "D-RESIDENCY",
+      "phase": "D",
+      "priority": 20,
+      "title": "Regional settings, currency and data residency",
+      "registryGroups": [
+        "Platform / tenancy",
+        "Local-first sync"
+      ],
+      "criticalOutcome": "Country/tenant-safe data placement, export and recovery work with authorized locale and timezone rules",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "E-INTEGRATIONS",
+      "phase": "E",
+      "priority": 21,
+      "title": "Integrations, developer APIs and hardware ecosystem",
+      "registryGroups": [
+        "Integrations / hardware / developer ecosystem"
+      ],
+      "criticalOutcome": "Portable documented adapters, hardware integration, API auth, rate limits, contract tests and ownership verified",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "E-MARKETPLACE",
+      "phase": "E",
+      "priority": 22,
+      "title": "Marketplace, partners, white-label and autonomous workflows",
+      "registryGroups": [
+        "Control plane / SaaS business model"
+      ],
+      "criticalOutcome": "Permissioned partners/marketplace/white-label lifecycle, reviewable AI actions and audit accepted",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    },
+    {
+      "id": "F-OWNED-INFRA",
+      "phase": "F",
+      "priority": 23,
+      "title": "Minarva-controlled provider-neutral infrastructure",
+      "registryGroups": [
+        "Local-first sync",
+        "Control plane / SaaS business model"
+      ],
+      "criticalOutcome": "Own PostgreSQL, S3-compatible objects, API/queues, monitoring, disaster recovery and self-host AI are proven without rebuild",
+      "status": "acceptance_not_verified",
+      "acceptanceEvidence": [],
+      "dependsOn": [],
+      "owner": "unassigned"
+    }
+  ]
+}

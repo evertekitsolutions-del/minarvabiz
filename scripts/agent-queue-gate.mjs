@@ -31,6 +31,28 @@ export function decideAgentRun({ queue, pulls, checkoutSha, mainSha, repo, ref }
   return {eligible: true, reason: "source_only_ready", taskId: task.id};
 }
 
+/**
+ * Distinguish a healthy read-only queue gate from a working coding agent.
+ * This is intentionally independent of the eligibility decision.
+ */
+export function describeAgentExecution(decision, aiEnabled) {
+  if (aiEnabled !== "true") return {
+    state: "DISABLED_NO_CODING",
+    codeGenerated: false,
+    detail: "Coding is disabled: MINARVA_COPILOT_AUTOCODE_ENABLED is not true. Preflight success is NOT code output."
+  };
+  if (!decision.eligible) return {
+    state: "BLOCKED_NO_CODING",
+    codeGenerated: false,
+    detail: "Coding gate blocked: " + decision.reason
+  };
+  return {
+    state: "REVIEW_PATCH_JOB_ELIGIBLE",
+    codeGenerated: false,
+    detail: "A review-only source patch job may start. No code, PR, merge or release can be claimed until separately verified."
+  };
+}
+
 async function github(path, token) {
   const result = await fetch("https://api.github.com/repos/" + REPOSITORY + "/" + path, {
     headers: {Accept: "application/vnd.github+json", Authorization: "Bearer " + token,
@@ -50,16 +72,18 @@ async function main() {
   ]);
   const decision = decideAgentRun({queue, pulls, checkoutSha: process.env.GITHUB_SHA,
     mainSha: branch.commit.sha, repo: process.env.GITHUB_REPOSITORY, ref: process.env.GITHUB_REF});
+  const execution = describeAgentExecution(decision, process.env.MINARVA_AI_ENABLED);
   const output = "eligible=" + decision.eligible + "\ntask_id=" + decision.taskId + "\nreason=" +
-    decision.reason + "\nmain_sha=" + branch.commit.sha + "\n";
+    decision.reason + "\nmain_sha=" + branch.commit.sha + "\nexecution_state=" + execution.state + "\n";
   if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, output);
   const summary = "### Minarva Biz agent guard\n\n- Main: " + branch.commit.sha +
     "\n- Decision: **" + decision.reason + "**\n- AI requested: **" +
     (process.env.MINARVA_AI_ENABLED === "true" ? "explicitly enabled" : "disabled by default") +
     "**\n- Selected source task: " + (decision.taskId || "none") +
-    "\n- This read-only preflight does **not** write code or incur AI charges.\n";
+    "\n- **Actual coding state: " + execution.state + "**\n- " + execution.detail +
+    "\n- This preflight wrote no source code and incurred no AI inference charges.\n";
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
-  console.log("MINARVA_AGENT_PREFLIGHT " + JSON.stringify({mainSha:branch.commit.sha,...decision}));
+  console.log("MINARVA_AGENT_PREFLIGHT " + JSON.stringify({mainSha:branch.commit.sha,...decision,...execution}));
 }
 
 if (process.argv[1] && import.meta.url === new URL("file://" + process.argv[1]).href) {
