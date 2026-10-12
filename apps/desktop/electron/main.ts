@@ -8,6 +8,7 @@ import { registerDesktopLicenseIpc, getDesktopLicenseState } from "./license";
 import { checkForSecureUpdate, downloadVerifiedUpdate, getDownloadedVerifiedUpdate } from "./updater";
 import { minarvaBackupSchemaError } from "./sqlite-backup-validation";
 import { writeValidatedSqliteBinaryAtomically } from "./sqlite-native-atomic-write";
+import { NativeSqliteFingerprintFence } from "./sqlite-fingerprint-fence";
 import { NativeSqliteBusyError, NativeSqliteIpcGate } from "./sqlite-ipc-gate";
 import { prepareSqliteRestoreStage, cleanupSqliteRestoreStage, type SqliteRestoreStage } from "./sqlite-restore-staging";
 import { beginSqliteRestoreJournal, clearSqliteRestoreJournal, recoverSqliteRestoreAtStartup } from "./sqlite-restore-recovery";
@@ -17,6 +18,7 @@ const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 const runtimeSmoke = process.env.MINARVA_RUNTIME_SMOKE === "1";
 const MAX_SQLITE_IPC_BYTES = 256 * 1024 * 1024;
 const sqliteGate = new NativeSqliteIpcGate();
+const sqliteFingerprintFence = new NativeSqliteFingerprintFence();
 let sqliteRestoreReviewRequired = false;
 const isPrimaryDesktopInstance = claimPrimaryDesktopInstance(
   () => app.requestSingleInstanceLock(),
@@ -34,6 +36,15 @@ const MAX_PRINTER_DEVICE_CHARS = 256;
 function deviceIdPath() { return path.join(app.getPath("userData"), "device-id"); }
 function trialStatePath() { return path.join(app.getPath("userData"), "trial-state.bin"); }
 function sqlitePath() { return path.join(app.getPath("userData"), "minarvabiz.db"); }
+function readNativeSqliteImage(): Uint8Array | null {
+  try { return fs.readFileSync(sqlitePath()); }
+  catch (error) {
+    // Only a genuine missing file may be interpreted as a fresh database.
+    // EACCES, EIO and all other read failures MUST propagate, never return null.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+}
 function backupDir() { return path.join(app.getPath("userData"), "backups"); }
 function backupDestinationConfigPath() { return path.join(app.getPath("userData"), "backup-destination.txt"); }
 function configuredBackupDir(): string | null { try { const value = fs.readFileSync(backupDestinationConfigPath(), "utf8").trim(); return value ? path.resolve(value) : null; } catch { return null; } }
@@ -398,13 +409,37 @@ app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(
 
 ipcMain.handle("app:getVersion", (event) => { requireTrustedRenderer(event); return app.getVersion(); });
 ipcMain.handle("app:getDeviceId", (event) => { requireTrustedRenderer(event); return getDeviceId(); });
-ipcMain.handle("db:readBinary", (event) => { requireTrustedRenderer(event); return sqliteGate.read(() => { try { return fs.existsSync(sqlitePath()) ? fs.readFileSync(sqlitePath()) : null; } catch { return null; } }); });
+ipcMain.handle("db:readBinary", (event) => {
+  requireTrustedRenderer(event);
+  return sqliteGate.read(() => {
+    const image = readNativeSqliteImage();
+    sqliteFingerprintFence.observeRead(image);
+    return image;
+  });
+});
 ipcMain.handle("db:writeBinary", (event, data: unknown) => {
   requireTrustedRenderer(event);
   if (!(data instanceof Uint8Array) || data.byteLength === 0 || data.byteLength > MAX_SQLITE_IPC_BYTES) return false;
-  return sqliteGate.write(() => writeValidatedSqliteBinaryAtomically(sqlitePath(), data, isValidSqliteFile));
+  return sqliteGate.write(() => {
+    // The UI persists full images. A stale in-memory snapshot must not replace
+    // bytes changed by another process since the last trusted renderer read.
+    sqliteFingerprintFence.assertBeforeWrite(readNativeSqliteImage());
+    const saved = writeValidatedSqliteBinaryAtomically(
+      sqlitePath(), data, isValidSqliteFile, fs,
+      () => sqliteFingerprintFence.assertBeforeWrite(readNativeSqliteImage()),
+    );
+    if (saved) sqliteFingerprintFence.acceptCommittedImage(data);
+    return saved;
+  });
 });
-ipcMain.handle("db:exists", (event) => { requireTrustedRenderer(event); return sqliteGate.read(() => fs.existsSync(sqlitePath())); });
+ipcMain.handle("db:exists", (event) => {
+  requireTrustedRenderer(event);
+  return sqliteGate.read(() => {
+    const image = readNativeSqliteImage();
+    sqliteFingerprintFence.observeRead(image);
+    return image !== null;
+  });
+});
 ipcMain.handle("trial:getState", async (event) => { requireTrustedRenderer(event); const license = await getDesktopLicenseState(getDeviceId()); if (license.status === "active" || license.status === "grace") return { activated: true, status: "active", daysRemaining: license.daysRemaining ?? 0, trialStartedAt: null, trialExpiresAt: null, registration: null, synced: true }; return trialSnapshot(); });
 ipcMain.handle("trial:activate", (event, registration: unknown) => {
   requireTrustedRenderer(event);
@@ -614,6 +649,7 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
     if (journalStarted && !fs.existsSync(rollback)) {
       try { clearSqliteRestoreJournal(stage); } catch {}
     }
+    sqliteFingerprintFence.requireRestartAfterRestore();
     return { ok: true, source, preRestoreBackup };
   } catch (error) {
     try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch {}

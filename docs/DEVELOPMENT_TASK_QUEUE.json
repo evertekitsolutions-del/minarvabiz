@@ -83,7 +83,7 @@
       "status": "in_progress",
       "capability": "HR-005 country and company holiday calendars",
       "title": "Complete holidays policy and attendance/roster integration",
-      "nextAction": "OFFLINE-NATIVE-05 PR #354 adds a native fsynced restore journal, fail-closed pre-renderer startup recovery, rollback validation, preserved evidence and a fresh-profile invalid-restore fix. Verify latest exact-head CI, merge only after all required checks are green, verify post-merge main and installed NTFS/UAT separately. Next: external-writer locking, rollback-journal Windows power-loss acceptance, renderer recovery retry, authorized HR005 enrollment/receipt application and tenant-safe hydration. HR005 hosted migration remains unapplied and flag OFF.",
+      "nextAction": "PR for OFFLINE-NATIVE-06 adds SHA-256 whole-image optimistic fencing in trusted Electron read/write/exists, a before-rename recheck, fail-closed read errors and mandatory app restart after restore, protecting stale full-file snapshot overwrite after out-of-band writes. Requires latest exact-head CI, safe merge and post-merge verification. This is NOT an OS-wide file lock; next native OS single-writer authority, backup/restore external writer handling and real NTFS/updater/customer UAT remain. HR005 audited server receipts, registered device authority, APPLIED transaction and hydration remain blocked; hosted migration unapplied, flag OFF.",
       "acceptance": [
         "Tenant/country/branch holiday scopes and history",
         "Attendance and payroll/roster integration without statutory assumptions",
@@ -107,7 +107,8 @@
         "docs/WINDOWS_SQLITE_BACKUP_RESTORE_FENCE.md",
         "docs/WINDOWS_ELECTRON_SINGLE_INSTANCE_FENCE.md",
         "docs/WINDOWS_SQLITE_RESTORE_STAGING.md",
-        "docs/WINDOWS_SQLITE_RESTORE_RECOVERY_JOURNAL.md"
+        "docs/WINDOWS_SQLITE_RESTORE_RECOVERY_JOURNAL.md",
+        "docs/WINDOWS_SQLITE_EXTERNAL_IMAGE_FENCE.md"
       ]
     }
   ]

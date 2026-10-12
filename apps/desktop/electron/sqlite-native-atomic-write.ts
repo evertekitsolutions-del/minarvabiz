@@ -20,6 +20,7 @@ export function writeValidatedSqliteBinaryAtomically(
   bytes: Uint8Array,
   isValidStagedDatabase: (candidate: string) => boolean,
   io: Io = fs,
+  beforeRename: () => void = () => {},
 ): boolean {
   if (!file || !(bytes instanceof Uint8Array) || bytes.byteLength === 0 ||
       typeof isValidStagedDatabase !== "function") return false;
@@ -38,6 +39,9 @@ export function writeValidatedSqliteBinaryAtomically(
     io.closeSync(fd);
     fd = null;
     if (!isValidStagedDatabase(temp)) return false;
+    // Recheck the original live-image fingerprint as close to rename as
+    // possible. A failed fence must discard staging without modifying live.
+    beforeRename();
 
     // Same-directory rename is the only point when live data changes.
     io.renameSync(temp, file);
