@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { CartLine, Customer, PaymentMethod, Product } from "@minarvabiz/types";
-import { calculateCartTotals } from "@minarvabiz/business-logic";
+import { calculateCartTotals, createCheckoutSubmissionGate } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
@@ -35,6 +35,7 @@ export function NormalBilling({
   const [message, setMessage] = React.useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [lastSale, setLastSale] = React.useState<{ id: string; invoice: string } | null>(null);
   const selectedProduct = products.find((p) => p.id === productId);
+  const checkoutGate = React.useRef(createCheckoutSubmissionGate());
   const totals = React.useMemo(() => calculateCartTotals(lines), [lines]);
 
   React.useEffect(() => {
@@ -55,6 +56,7 @@ export function NormalBilling({
       setMessage({ type: "err", text: "Enter a valid non-negative selling price." });
       return;
     }
+    checkoutGate.current.beginNewCart();
     setLines((prev) => {
       const existing = prev.find((line) => line.productId === p.id);
       if (existing) {
@@ -88,13 +90,16 @@ export function NormalBilling({
       setMessage({ type: "err", text: "Paid amount must be a valid non-negative number." });
       return;
     }
-    const result = onCompleteSale({
+    try {
+    const attempt = checkoutGate.current.submit(() => onCompleteSale({
       customerId: customerId || null,
       lines,
       paidAmount: payment,
       paymentMethod: method,
       notes: notes.trim() || undefined,
-    });
+    }));
+    if (attempt.status === "blocked") return;
+    const result = attempt.result;
     if (!result.success) {
       setMessage({ type: "err", text: (result.errors || ["Sale failed"]).join("; ") });
       return;
@@ -102,6 +107,9 @@ export function NormalBilling({
     setMessage({ type: "ok", text: `Invoice ${result.invoiceNumber || ""} saved.` });
     setLastSale(result.saleId && result.invoiceNumber ? { id: result.saleId, invoice: result.invoiceNumber } : null);
     setLines([]); setPaidAmount(""); setNotes(""); setCustomerId("");
+    } catch (error) {
+      setMessage({ type: "err", text: `Sale outcome is uncertain. Check Sales History before trying again. ${error instanceof Error ? error.message : String(error)}` });
+    }
   }
 
   return (

@@ -16,6 +16,7 @@ export * from "./laundry";
 export * from "./incentives";
 export * from "./dashboard";
 export * from "./sales";
+export * from "./checkout-submission-gate";
 export * from "./inventory";
 export * from "./orders";
 export * from "./expenses";

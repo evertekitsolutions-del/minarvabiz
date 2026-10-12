@@ -5,7 +5,7 @@ import type { Product, Customer, CartLine, PaymentMethod } from "@minarvabiz/typ
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
-import { calculateCartTotals, validateTender } from "@minarvabiz/business-logic";
+import { calculateCartTotals, validateTender, createCheckoutSubmissionGate } from "@minarvabiz/business-logic";
 
 export interface PosPaymentSplit {
   method: PaymentMethod;
@@ -89,6 +89,7 @@ export function PosBilling({
   const [message, setMessage] = React.useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [lastSale, setLastSale] = React.useState<{ id: string; invoice: string } | null>(null);
 
+  const checkoutGate = React.useRef(createCheckoutSubmissionGate());
   const totals = React.useMemo(() => calculateCartTotals(cart), [cart]);
   const tenderState = React.useMemo(
     () => validateTender(
@@ -105,6 +106,7 @@ export function PosBilling({
   const changeDue = tenderState.changeDue;
 
   function addProduct(p: Product, qty = 1) {
+    checkoutGate.current.beginNewCart();
     setCart((prev) => {
       const existing = prev.find((l) => l.productId === p.id);
       if (existing) {
@@ -223,14 +225,16 @@ export function PosBilling({
     }
 
     try {
-      const result = submit({
+      const attempt = checkoutGate.current.submit(() => submit({
         customerId: customerId || null,
         lines: cart,
         paidAmount,
         paymentMethod: primaryMethod,
         paymentSplits,
         notes: notes.trim() || undefined,
-      });
+      }));
+      if (attempt.status === "blocked") return;
+      const result = attempt.result;
       if (result.success) {
         setMessage({ type: "ok", text: `Sale completed — ${result.invoiceNumber}` });
         setLastSale(result.saleId && result.invoiceNumber ? { id: result.saleId, invoice: result.invoiceNumber } : null);
@@ -239,7 +243,7 @@ export function PosBilling({
         setMessage({ type: "err", text: (result.errors || ["Sale failed"]).join("; ") });
       }
     } catch (error) {
-      setMessage({ type: "err", text: error instanceof Error ? error.message : String(error) });
+      setMessage({ type: "err", text: `Sale outcome is uncertain. Check Sales History before trying again. ${error instanceof Error ? error.message : String(error)}` });
     }
   }
 
@@ -265,6 +269,7 @@ export function PosBilling({
       setMessage({ type: "err", text: "Select a held sale first." });
       return;
     }
+    checkoutGate.current.beginNewCart();
     setCart(held.lines.map((line) => ({ ...line })));
     setCustomerId(held.customerId || "");
     setNotes(held.notes || "");
