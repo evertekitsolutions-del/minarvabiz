@@ -8,6 +8,7 @@ import { Button } from "../Button";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { formatMoney } from "../customers/format";
+import { createCheckoutSubmitGate } from "../sales/checkout-submit-gate";
 
 type ReturnItemInput = {
   saleItemId: string;
@@ -73,6 +74,9 @@ export function ReturnsPanel({
   const [replacementLines, setReplacementLines] = React.useState<CartLine[]>([]);
   const [additionalPaid, setAdditionalPaid] = React.useState("");
   const autoOpenedSaleRef = React.useRef<string | null>(null);
+  // A successful refund/exchange must not be replayed by another click before
+  // React commits closing the modal. Re-open is the next explicit transaction.
+  const returnSubmitGate = React.useRef(createCheckoutSubmitGate());
 
   const [historyQuery, setHistoryQuery] = React.useState("");
   const [historyCustomer, setHistoryCustomer] = React.useState("");
@@ -90,6 +94,7 @@ export function ReturnsPanel({
     const target = sales.find((candidate) => candidate.id === preferredSaleId);
     if (!target) return;
     autoOpenedSaleRef.current = preferredSaleId;
+    returnSubmitGate.current.release();
     setSaleId(preferredSaleId);
     setMode("return");
     setQtyMap({});
@@ -202,6 +207,7 @@ export function ReturnsPanel({
   }
 
   function openFlow(nextMode: "return" | "exchange") {
+    returnSubmitGate.current.release();
     resetForm();
     setMode(nextMode);
     setSuccess(null);
@@ -250,29 +256,47 @@ export function ReturnsPanel({
     if (!sale) { setError("Select a sale"); return; }
     const items = buildReturnItems();
     if (!items.length) { setError("Select at least one item to return"); return; }
+    if (mode === "exchange" && !onExchange) { setError("Exchange is not enabled in this edition"); return; }
+    if (mode === "exchange" && !replacementLines.length) { setError("Add at least one replacement item"); return; }
 
-    if (mode === "exchange") {
-      if (!onExchange) { setError("Exchange is not enabled in this edition"); return; }
-      if (!replacementLines.length) { setError("Add at least one replacement item"); return; }
-      const result = onExchange({
-        saleId: sale.id,
-        reason,
-        notes,
-        refundMethod: method,
-        paymentMethod: method,
-        additionalPaidAmount: Math.max(0, parseFloat(additionalPaid) || 0),
-        returnItems: items,
-        replacementLines,
-      });
-      if (!result.success) { setError((result.errors || ["Exchange failed"]).join("; ")); return; }
-      setSuccess(`Exchange completed${result.replacementInvoiceNumber ? ` · ${result.replacementInvoiceNumber}` : ""}. Credit applied ${formatMoney(result.storeCreditApplied ?? 0)}${(result.extraRefund ?? 0) > 0 ? ` · refund ${formatMoney(result.extraRefund ?? 0)}` : ""}.`);
-    } else {
-      const result = onCreate({ saleId: sale.id, reason, notes, refundMethod: method, items });
-      if (!result.success) { setError((result.errors || ["Return failed"]).join("; ")); return; }
-      setSuccess("Return/refund completed.");
+    // React state updates are batched: a second click can otherwise re-submit
+    // the old selected quantity and issue a second financial refund.
+    if (!returnSubmitGate.current.tryStart()) return;
+    try {
+      if (mode === "exchange") {
+        const result = onExchange!({
+          saleId: sale.id,
+          reason,
+          notes,
+          refundMethod: method,
+          paymentMethod: method,
+          additionalPaidAmount: Math.max(0, parseFloat(additionalPaid) || 0),
+          returnItems: items,
+          replacementLines,
+        });
+        if (!result.success) {
+          returnSubmitGate.current.release();
+          setError((result.errors || ["Exchange failed"]).join("; "));
+          return;
+        }
+        setSuccess(`Exchange completed${result.replacementInvoiceNumber ? ` · ${result.replacementInvoiceNumber}` : ""}. Credit applied ${formatMoney(result.storeCreditApplied ?? 0)}${(result.extraRefund ?? 0) > 0 ? ` · refund ${formatMoney(result.extraRefund ?? 0)}` : ""}.`);
+      } else {
+        const result = onCreate({ saleId: sale.id, reason, notes, refundMethod: method, items });
+        if (!result.success) {
+          returnSubmitGate.current.release();
+          setError((result.errors || ["Return failed"]).join("; "));
+          return;
+        }
+        setSuccess("Return/refund completed.");
+      }
+      // Keep claimed until a fresh user-initiated openFlow()/preferredSale
+      // starts the next operation, even after closing/resetting this modal.
+      setOpen(false);
+      resetForm();
+    } catch (error) {
+      returnSubmitGate.current.release();
+      setError(error instanceof Error ? error.message : String(error));
     }
-    setOpen(false);
-    resetForm();
   }
 
   return (
