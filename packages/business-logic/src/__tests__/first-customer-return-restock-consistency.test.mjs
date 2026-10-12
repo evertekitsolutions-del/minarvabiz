@@ -123,3 +123,51 @@ test("successful active-product return still restores actual product stock and j
   assert.equal(store.listPayments().length, 2);
   assert.equal(accounting.buildBalanceSheet().balanced, true);
 });
+
+test("multi-product restock rejects invalid later balances before restoring any product", () => {
+  for (const invalid of [NaN, Infinity, 1e20]) {
+    fixture();
+    store.hydrateCore({ products: [
+      { id: "p", name: "Fabric", isActive: true, stockQuantity: 2, costPrice: 30, version: 1 },
+      { id: "q", name: "Lining", isActive: true, stockQuantity: 2, costPrice: 30, version: 1 },
+    ] });
+    const sale = store.createSale({ lines: ["p", "q"].map(productId => ({
+      productId, productName: productId, stockQuantity: 2, quantity: 1,
+      unitPrice: 100, costPrice: 30, discountPercent: 0, taxRate: 0,
+    })), paidAmount: 200, paymentMethod: "cash" }).sale;
+    store.getProduct("q").stockQuantity = invalid;
+    const before = state();
+    const result = returns.createReturn({ saleId: sale.id, reason: "other", refundMethod: "cash",
+      items: sale.items.map(item => ({ ...item, saleItemId: item.id, restock: true })),
+    });
+    assert.equal(result.ret, null);
+    assert.match(result.errors.join(" "), /stock.*(invalid|unsafe)|restock/i);
+    assert.equal(state(), before, "no partial restock, product revision, outbox, refund or ledger mutation");
+  }
+});
+
+test("repeated-product return preflights cumulative stock overflow", () => {
+  fixture();
+  const sale = store.createSale({ lines: [0.5, 0.5].map(quantity => ({
+    productId: "p", productName: "Fabric", stockQuantity: 1, quantity,
+    unitPrice: 100, costPrice: 30, discountPercent: 0, taxRate: 0,
+  })), paidAmount: 100, paymentMethod: "cash" }).sale;
+  store.getProduct("p").stockQuantity = 9007199254740;
+  const before = state();
+  const result = returns.createReturn({ saleId: sale.id, reason: "other", refundMethod: "cash",
+    items: sale.items.map(item => ({ ...item, saleItemId: item.id, restock: true })),
+  });
+  assert.equal(result.ret, null);
+  assert.match(result.errors.join(" "), /unsafe.*restocking/i);
+  assert.equal(state(), before);
+});
+
+test("no-restock refund remains available when the live stock balance is invalid", () => {
+  const sale = fixture();
+  store.getProduct("p").stockQuantity = NaN;
+  const result = refund(sale, false);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.paidRefund, 100);
+  assert.ok(Number.isNaN(store.getProduct("p").stockQuantity));
+  assert.equal(accounting.buildBalanceSheet().balanced, true);
+});

@@ -1,3 +1,9 @@
+## A-FIRST-CUSTOMER — Atomic return restock preflight (source CI pending)
+
+- Base main `c5728a79cc19ce417681ae6a27c9b2064ec3c379` (#377); its postmerge checks passed 25 with 5 optional skipped.
+- Reproduced a multi-product refund whose later product has invalid/unsafe stock: the earlier product was restored and queued before arithmetic threw. `createReturn` now preflights all sequential restocks, accumulating repeated product IDs, before consuming a return number or changing stock/payments/ledger/outbox. Existing missing-product safeguards and no-restock refunds remain available.
+- Behavioral tests cover invalid later product, cumulative repeated-product overflow and no-restock recovery. Shared Online/Offline/Hybrid implementation; no dependency, production write, migration or release. Verify exact-head/postmerge CI separately. Customer UAT remains pending; installer v1.0.15; whole Master Vision estimate ~51% provisional.
+
 ## A-FIRST-CUSTOMER — Fractional checkout conservation (source CI pending)
 
 - Continue from verified main `8b2c0893597fe000daa4832b302ee92de2b30dd1` (#376), 25 passed/5 optional skipped checks, zero open PRs at branch start.
