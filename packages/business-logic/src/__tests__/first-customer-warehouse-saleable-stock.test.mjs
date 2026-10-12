@@ -105,9 +105,45 @@ test("checkout source protects aggregated demand before mutating a sale", () => 
   const file = fs.readFileSync(new URL("../sale-checkout-guard.ts", import.meta.url), "utf8");
   const start = file.indexOf("export function validateLiveSaleCheckout");
   const body = file.slice(start);
-  assert.match(body, /warehouseSaleableQuantity\(productId, live\.stockQuantity\)/);
+  assert.match(body, /warehouseSaleableQuantity\(productId, live\.stockQuantity, live\.branchId\)/);
   assert.match(body, /requested > saleable/);
   const sale = fs.readFileSync(new URL("../store.ts", import.meta.url), "utf8");
   const submit = sale.slice(sale.indexOf("export function createSale("), sale.indexOf("export function listPayments("));
   assert.ok(submit.indexOf("validateLiveSaleCheckout(") < submit.indexOf("consumeWarehouseStock("));
+});
+
+test("branch checkout cannot sell stock allocated to another branch", () => {
+  setup({ allocated: 8 });
+  store.getProduct("fabric").branchId = "branch-a";
+  const state = warehouse.exportWarehouseState();
+  state.warehouses[0].branchId = "branch-b";
+  warehouse.hydrateWarehouseState(state);
+  const before = snapshot();
+  const denied = sell(3);
+  assert.match(denied.errors.join(" "), /insufficient unreserved stock/);
+  assert.equal(snapshot(), before, "foreign stock must not fund a sale, ledger or outbox entry");
+  assert.deepEqual(sell(2).errors, [], "genuinely unallocated stock is still available");
+  assert.equal(store.getProduct("fabric").stockQuantity, 8);
+  assert.equal(warehouse.listWarehouseStock({ productId: "fabric" })[0].onHand, 8);
+  assert.equal(balance("cash"), 200);
+});
+
+test("branch checkout combines own unreserved allocation with unallocated stock only", () => {
+  setup({ allocated: 4, reserved: 1 });
+  store.getProduct("fabric").branchId = "branch-a";
+  const state = warehouse.exportWarehouseState();
+  state.warehouses[0].branchId = "branch-a";
+  state.warehouses.push({ ...state.warehouses[0], id: "other", branchId: "branch-b" });
+  state.stock.push({ ...state.stock[0], id: "foreign", warehouseId: "other", locationId: "foreign-bin", onHand: 4, reserved: 0 });
+  warehouse.hydrateWarehouseState(state);
+  const before = snapshot();
+  assert.match(sell(6).errors.join(" "), /insufficient unreserved stock/);
+  assert.equal(snapshot(), before);
+  assert.deepEqual(sell(5).errors, []);
+  assert.equal(store.getProduct("fabric").stockQuantity, 5);
+  const positions = warehouse.listWarehouseStock({ productId: "fabric" });
+  assert.equal(positions.find(p => p.id === "p").onHand, 1);
+  assert.equal(positions.find(p => p.id === "p").reserved, 1);
+  assert.equal(positions.find(p => p.id === "foreign").onHand, 4);
+  assert.equal(accounting.buildBalanceSheet().balanced, true);
 });
