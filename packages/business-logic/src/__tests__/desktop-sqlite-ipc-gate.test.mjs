@@ -92,7 +92,8 @@ try{
   const source=fs.readFileSync("apps/desktop/electron/main.ts","utf8");
   assert.match(source,/const sqliteGate = new NativeSqliteIpcGate\(\)/);
   assert.match(source,/ipcMain\.handle\("db:readBinary"[\s\S]*?sqliteGate\.read\(\(\) =>/);
-  assert.match(source,/ipcMain\.handle\("db:writeBinary"[\s\S]*?sqliteGate\.write\(\(\) => writeValidatedSqliteBinaryAtomically/);
+  assert.match(source,/ipcMain\.handle\("db:writeBinary"[\s\S]*?sqliteGate\.write\(\(\) => \{/);
+  assert.match(source,/writeValidatedSqliteBinaryAtomically\([\s\S]*?sqliteFingerprintFence\.acceptCommittedImage\(data\)/);
   assert.match(source,/ipcMain\.handle\("db:exists"[\s\S]*?sqliteGate\.read\(\(\) =>/);
   assert.match(source,/ipcMain\.handle\("backup:createManual"[\s\S]*?sqliteGate\.reserve\("backup"/);
   assert.match(source,/ipcMain\.handle\("backup:createAutomatic"[\s\S]*?sqliteGate\.reserve\("backup"/);
