@@ -39,6 +39,7 @@ export class SyncEngine {
   private devices: DeviceRegistration[] = [];
   private lastPullAt: string | null = null;
   private online = true;
+  private inFlightSync: Promise<SyncSession> | null = null;
 
   constructor(
     private readonly deviceId: UUID,
@@ -152,7 +153,20 @@ export class SyncEngine {
   /**
    * Full sync cycle: push pending outbox, then pull remote changes.
    */
-  async sync(): Promise<SyncSession> {
+  sync(): Promise<SyncSession> {
+    // One device must never push the same pending batch twice concurrently.
+    // All overlapping triggers observe the same session/result; new writes
+    // made mid-flight remain queued for the next invocation.
+    if (this.inFlightSync) return this.inFlightSync;
+    const operation = this.runSyncCycle();
+    const shared = operation.finally(() => {
+      if (this.inFlightSync === shared) this.inFlightSync = null;
+    });
+    this.inFlightSync = shared;
+    return shared;
+  }
+
+  private async runSyncCycle(): Promise<SyncSession> {
     const session: SyncSession = {
       id: generateId(),
       deviceId: this.deviceId,
