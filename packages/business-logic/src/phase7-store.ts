@@ -21,6 +21,7 @@ import { enqueueOutbox } from "./outbox-bridge";
 import { touchPersistence } from "./autosave";
 import { planReturnPosting, planSalePosting, planExchangeRefundPosting } from "./sales-accounting";
 import { quoteSaleReturn } from "./return-value";
+import { validateLiveSaleCheckout, costSaleLinesFromLiveProducts } from "./sale-checkout-guard";
 
 const returns: SaleReturn[] = [];
 const auditLogs: AuditLogEntry[] = [];
@@ -180,21 +181,34 @@ export function createExchange(input: {
   }
   if (!Number.isFinite(input.additionalPaidAmount) || input.additionalPaidAmount < 0) errors.push("Invalid additional payment");
 
+  // The original return MUST NOT be committed before the replacement passes
+  // the same aggregated, authoritative checkout checks as a normal sale.
+  // Return quantities are projected only into this read-only validation model.
+  const projectedProducts = new Map<UUID, NonNullable<ReturnType<typeof mainStore.getProduct>>>();
   for (const line of input.replacementLines) {
     const live = mainStore.getProduct(line.productId);
-    if (!live) { errors.push(`Replacement product not found: ${line.productName}`); continue; }
-    if (!Number.isFinite(line.quantity) || line.quantity <= 0) errors.push(`${line.productName}: quantity must be greater than zero`);
-    if (!Number.isFinite(line.unitPrice) || line.unitPrice < 0) errors.push(`${line.productName}: invalid selling price`);
-    const projected = live.stockQuantity + (restockByProduct.get(live.id) ?? 0);
-    if (line.quantity > projected) errors.push(`${live.name}: insufficient replacement stock (available after return ${projected})`);
+    if (live) projectedProducts.set(live.id, {
+      ...live, stockQuantity: live.stockQuantity + (restockByProduct.get(live.id) ?? 0),
+    });
   }
+  const replacementLines = costSaleLinesFromLiveProducts(input.replacementLines, id => projectedProducts.get(id))
+    .map(line => ({
+      ...line,
+      stockQuantity: projectedProducts.get(line.productId)?.stockQuantity ?? line.stockQuantity,
+    }));
+  errors.push(...validateLiveSaleCheckout(
+    replacementLines,
+    { customerId: original.customerId, paidAmount: input.additionalPaidAmount },
+    id => projectedProducts.get(id),
+    mainStore.getCustomer,
+  ));
   if (errors.length) {
     return { ret: null, replacementSale: null, storeCreditApplied: 0, extraRefund: 0, amountDue: 0, errors };
   }
 
   const paidCreditAvailable = Math.round(Math.min(returnValue, Math.max(0, original.paidAmount)) * 100) / 100;
   const replacementTotals = calculateInvoiceTotals({
-    items: input.replacementLines.map((line) => ({
+    items: replacementLines.map((line) => ({
       quantity: line.quantity,
       unitPrice: line.unitPrice,
       discountPercent: line.discountPercent,
@@ -218,7 +232,7 @@ export function createExchange(input: {
     ...original, id: generateId(), invoiceNumber: "Exchange preview", saleDate: nowISO(),
     total: replacementTotal, taxAmount: replacementTotals.itemsTax, paidAmount: Math.round((storeCreditApplied + additionalPaid) * 100) / 100,
     balanceAmount: Math.round((amountDue - additionalPaid) * 100) / 100,
-    items: input.replacementLines.map(line => ({ ...line, id: generateId(), saleId: "preview", lineTotal: calculateInvoiceTotals({ items: [line] }).grandTotal })),
+    items: replacementLines.map(line => ({ ...line, id: generateId(), saleId: "preview", lineTotal: calculateInvoiceTotals({ items: [line] }).grandTotal })),
   };
   const previewPlan = planSalePosting(replacementPreview, [{ method: input.paymentMethod, amount: additionalPaid }], storeCreditApplied);
   const excessPlan = planExchangeRefundPosting(generateId(), extraRefund, input.refundMethod);
@@ -239,7 +253,7 @@ export function createExchange(input: {
 
   const replacement = mainStore.createSale({
     customerId: original.customerId,
-    lines: input.replacementLines,
+    lines: replacementLines,
     paidAmount: additionalPaid,
     paymentMethod: input.paymentMethod,
     creditAmount: storeCreditApplied,
