@@ -31,6 +31,8 @@ jobs:
           node-version: 24
       - name: Validate no-duplicate, exact-main, allowlisted task selection
         run: node --test scripts/agent-queue-gate.test.mjs scripts/agent-patch-audit.test.mjs scripts/agent-workflow-contract.test.mjs
+      - name: Verify full product and AI delivery scope without claiming completion
+        run: node scripts/product-delivery-audit.mjs
       - name: Read-only GitHub state and source queue gate
         id: gate
         run: node scripts/agent-queue-gate.mjs
