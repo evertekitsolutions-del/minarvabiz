@@ -25,6 +25,7 @@ import { assertPermission } from "./permissions";
 import { planSalePosting, planCollectionPosting } from "./sales-accounting";
 import { planAutomaticPosting } from "./accounting-store";
 import { consumeWarehouseStock } from "./warehouse-store";
+import { prepareCheckoutFinancialSource } from "./financial-sync-checkout";
 import { planManualStockAdjustment, stockCountDelta } from "./stock-adjustment-guard";
 import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
@@ -571,9 +572,9 @@ export function createSale(input: {
     createdAt: nowISO(), updatedAt: nowISO(), createdBy: input.createdBy ?? null, version: 1,
   };
 
+  const sourceStockProof = prepareCheckoutFinancialSource(sale, getProduct);
   const accountingPlan = planSalePosting(sale, requestedSplits, creditApplied);
   if (accountingPlan.errors.length) return { sale: null as unknown as Sale, payment: null, payments: [], errors: accountingPlan.errors };
-
   for (const line of input.lines) {
     const p = getProduct(line.productId);
     if (p) {
@@ -582,7 +583,6 @@ export function createSale(input: {
       touchProduct(p);
     }
   }
-
   if (customer) {
     customer.totalSpending = fromMinorUnits(
       addMinorUnits(toMinorUnits(customer.totalSpending), toMinorUnits(allocation.paidAmount))
@@ -617,9 +617,9 @@ export function createSale(input: {
     paymentRemainingMinor = subtractMinorUnits(paymentRemainingMinor, amountMinor);
   }
   if (salePayments.length) touchPersistence();
-
-  accountingPlan.commit();
-  void remoteCreateSale(sale, salePayments, Boolean(input.allowNegativeStock));
+  const postedJournal = accountingPlan.commit();
+  void remoteCreateSale(sale, salePayments, Boolean(input.allowNegativeStock),
+    sourceStockProof && postedJournal ? { ...sourceStockProof, journalId: postedJournal.id } : undefined);
   auditAction("sale.create", "sales", sale.id, null, {
     total: sale.total,
     invoice: sale.invoiceNumber,
