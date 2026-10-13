@@ -17,7 +17,8 @@ const remote = require("../remote-write.ts");
 function reset(writer = null) {
   remote.registerRemoteWriter(null);
   outbox.hydrateOutbox([]);
-  if (writer) remote.registerRemoteWriter(writer);
+  outbox.setOutboxScope("org-test:user-test");
+  if (writer) remote.registerRemoteWriter(writer, "org-test:user-test");
 }
 function events() {
   return outbox.exportOutbox().map(({ aggregateType, id, status }) => ({ aggregateType, id, status }));
