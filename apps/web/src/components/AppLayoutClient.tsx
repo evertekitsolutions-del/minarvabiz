@@ -17,6 +17,7 @@ import {
   can,
   purgeExpiredRecycleBinItems,
   saveToLocalStorage,
+  setOutboxScope,
 } from "@minarvabiz/business-logic";
 import { hydrateStoresFromSupabase, supabaseHydrationDomainsForPath, resolveOnlineAuthorization } from "@/lib/data-source";
 import { isSupabaseConfigured } from "@minarvabiz/database";
@@ -100,6 +101,8 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
         role: authorization.role,
       };
       setSession(session.token, authoritativeUser);
+      // Use only the org/user identity from the verified membership RPC.
+      setOutboxScope(authorization.orgId + ":" + authoritativeUser.id);
       setUserName(authoritativeUser.fullName || authoritativeUser.email);
       purgeTrashWhenAuthorized();
       return true;
