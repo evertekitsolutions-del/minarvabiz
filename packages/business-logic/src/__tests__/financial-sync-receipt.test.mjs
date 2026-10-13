@@ -53,7 +53,7 @@ test("a missing or malformed server digest and timestamp must never mark the out
   for (const digest of [null,"", "abc","A".repeat(64),"g".repeat(64)]) {
     assert.throws(()=>validateFinancialReceipt({...valid(),requestDigest:digest},expected(),scope),/digest/i);
   }
-  for (const committedAt of ["",null,"not-a-timestamp","2026-10-13",new Date(0).toISOString()]) {
+  for (const committedAt of ["",null,"not-a-timestamp","2026-10-13","2026-10-13T12:00:00"]) {
     assert.throws(()=>validateFinancialReceipt({...valid(),committedAt},expected(),scope),/committed|timestamp/i);
   }
 });
