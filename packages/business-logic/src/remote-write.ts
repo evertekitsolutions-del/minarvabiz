@@ -27,7 +27,7 @@ import type {
 } from "@minarvabiz/types";
 import type { LocalOutboxEvent } from "./outbox-bridge";
 import type { ShiftRule, RosterSlot } from "./workforce-roster";
-import { enqueueOutbox } from "./outbox-bridge";
+import { enqueueOutbox, markOutboxSynced } from "./outbox-bridge";
 
 export interface RemoteWriter {
   getAttendance?: (id: string, staffId?: string, date?: string) => Promise<StaffAttendanceRecord | null>;
@@ -84,29 +84,64 @@ export function getRemoteWriter(): RemoteWriter | null {
   return writer;
 }
 
+/**
+ * A local event is acknowledged only after the active authenticated writer
+ * reports success. Logout/tenant switching invalidates in-flight acks.
+ * Offline and unsupported destinations retain the original pending events.
+ */
+async function deliverWithCloudAcknowledgement(
+  eventIds: string[],
+  supports: (target: RemoteWriter) => boolean,
+  send: (target: RemoteWriter) => Promise<void>,
+  failureLabel: string
+): Promise<void> {
+  const activeWriter = writer;
+  const activeGeneration = writerGeneration;
+  if (!activeWriter || !supports(activeWriter)) return;
+  try {
+    await send(activeWriter);
+    if (writer === activeWriter && writerGeneration === activeGeneration) {
+      markOutboxSynced(eventIds);
+    }
+  } catch (error) {
+    console.warn("[minarvabiz] " + failureLabel, error);
+  }
+}
+
 export async function remoteUpsertCustomer(c: Customer) {
-  enqueueOutbox("customers", c.id, "insert", c);
-  try { await writer?.upsertCustomer?.(c); }
-  catch (e) { console.warn("[minarvabiz] remote customer write failed", e); }
+  const event = enqueueOutbox("customers", c.id, "insert", c);
+  await deliverWithCloudAcknowledgement(
+    [event.id], (target) => Boolean(target.upsertCustomer),
+    (target) => target.upsertCustomer!(c), "remote customer write failed"
+  );
 }
 
 export async function remoteUpsertCategory(c: Category) {
-  enqueueOutbox("categories", c.id, "insert", c);
-  try { await writer?.upsertCategory?.(c); }
-  catch (e) { console.warn("[minarvabiz] remote category write failed", e); }
+  const event = enqueueOutbox("categories", c.id, "insert", c);
+  await deliverWithCloudAcknowledgement(
+    [event.id], (target) => Boolean(target.upsertCategory),
+    (target) => target.upsertCategory!(c), "remote category write failed"
+  );
 }
 
 export async function remoteUpsertProduct(p: Product) {
-  enqueueOutbox("products", p.id, "insert", p);
-  try { await writer?.upsertProduct?.(p); }
-  catch (e) { console.warn("[minarvabiz] remote product write failed", e); }
+  const event = enqueueOutbox("products", p.id, "insert", p);
+  await deliverWithCloudAcknowledgement(
+    [event.id], (target) => Boolean(target.upsertProduct),
+    (target) => target.upsertProduct!(p), "remote product write failed"
+  );
 }
 
 export async function remoteCreateSale(s: Sale, payments: Payment[] = [], allowNegativeStock = false) {
-  enqueueOutbox("sales", s.id, "insert", s);
-  for (const payment of payments) enqueueOutbox("payments", payment.id, "insert", payment);
-  try { await writer?.createSale?.(s, payments, allowNegativeStock); }
-  catch (e) { console.warn("[minarvabiz] atomic remote sale write failed", e); }
+  const eventIds = [enqueueOutbox("sales", s.id, "insert", s).id];
+  for (const payment of payments) {
+    eventIds.push(enqueueOutbox("payments", payment.id, "insert", payment).id);
+  }
+  await deliverWithCloudAcknowledgement(
+    eventIds, (target) => Boolean(target.createSale),
+    (target) => target.createSale!(s, payments, allowNegativeStock),
+    "atomic remote sale write failed"
+  );
 }
 
 export async function remoteAdjustStock(
