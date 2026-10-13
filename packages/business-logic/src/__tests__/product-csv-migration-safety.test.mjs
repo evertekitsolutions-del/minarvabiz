@@ -72,7 +72,7 @@ const partialFailure = csv.importProductsFromCsv([
   "Unsafe row,SKU-4,9002,1,2,100000000000000000000,0,pcs",
 ].join("\n"));
 assert.equal(partialFailure.created, 0);
-assert.match(partialFailure.errors.join(" "), /rolled back safely/i);
+assert.match(partialFailure.errors.join(" "), /outside the supported safe numeric range/i);
 assert.deepEqual(store.listProducts().map((p) => p.id), before, "failed batch must not leave partially imported products");
 
 permissions.setCurrentRole(null);
