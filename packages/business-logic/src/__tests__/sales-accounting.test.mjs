@@ -16,6 +16,7 @@ function reset() {
   accounting.hydrateAccountingState({ accounts: chart, journals: [], journalSequence: 0 });
   store.hydrateCore({ products: [{ id: 'p', name: 'Dress', stockQuantity: 20, version: 1 }], customers: [{ id: 'c', name: 'Customer', outstandingBalance: 0, totalSpending: 0 }], sales: [], payments: [] });
   returns.hydratePhase7({ returns: [], auditLogs: [] }); outbox.hydrateOutbox([]);
+  outbox.setOutboxScope("org-test:user-test");
 }
 const create = (patch = {}) => store.createSale({ customerId: 'c', lines: [line], paidAmount: 40, paymentMethod: 'cash', ...patch });
 const balance = (key) => {
@@ -81,12 +82,12 @@ assert.equal(JSON.stringify({ products: store.listProducts(), customers: store.l
 // Missing accounts in old charts are created lazily; online writes await them.
 reset(); accounting.hydrateAccountingState({ accounts: chart.filter(a => a.systemKey !== 'payment_clearing') });
 const calls = [];
-remote.registerRemoteWriter({ upsertAccountingAccount: async () => calls.push('account'), upsertJournalEntry: async () => calls.push('journal') });
+remote.registerRemoteWriter({ upsertAccountingAccount: async () => calls.push('account'), upsertJournalEntry: async () => calls.push('journal') }, "org-test:user-test");
 const online = create({ paidAmount: 118, paymentMethod: 'card' }); assert.deepEqual(online.errors, []);
 await new Promise(resolve => setImmediate(resolve));
 assert.equal(calls.at(-1), 'journal'); assert(calls.slice(0, -1).every(c => c === 'account'));
 assert.equal(balance('payment_clearing'), 118);
-reset(); remote.registerRemoteWriter({ upsertAccountingAccount: async () => { throw new Error('offline'); }, upsertJournalEntry: async () => { throw new Error('must not write journal before accounts'); } });
+reset(); remote.registerRemoteWriter({ upsertAccountingAccount: async () => { throw new Error('offline'); }, upsertJournalEntry: async () => { throw new Error('must not write journal before accounts'); } }, "org-test:user-test");
 const warn = console.warn; console.warn = () => {};
 try { const offline = create(); assert.deepEqual(offline.errors, []); await new Promise(resolve => setImmediate(resolve)); for (const type of ['accounts', 'journal_entries', 'journal_entry_lines']) assert(outbox.listPendingOutbox().some(e => e.aggregateType === type)); } finally { console.warn = warn; remote.registerRemoteWriter(null); }
 console.log('Sales accounting lifecycle, tenders, collections, tax/cost reversals, exchange, rounding, legacy clearing, permissions, replay, restore and offline persistence PASS');
