@@ -88,6 +88,20 @@ export function getRemoteWriter(): RemoteWriter | null {
   return writer;
 }
 
+/** Only send local events through a writer still authorized for that owner. */
+function activeScopedWriter(): RemoteWriter | null {
+  const scope = getOutboxScope();
+  return writer && scope && verifiedWriterScope === scope ? writer : null;
+}
+
+/** Guard queued multi-step operations against a logout/tenant switch mid-flight. */
+function isCurrentScopedWriter(
+  target: RemoteWriter | null, scope: string | null, generation: number
+): target is RemoteWriter {
+  return Boolean(target && scope && writer === target &&
+    writerGeneration === generation && verifiedWriterScope === scope && getOutboxScope() === scope);
+}
+
 export interface ScopedMasterReplayStatus {
   available: boolean;
   pending: number;
@@ -213,12 +227,18 @@ async function deliverWithCloudAcknowledgement(
   send: (target: RemoteWriter) => Promise<void>,
   failureLabel: string
 ): Promise<void> {
-  const activeWriter = writer;
+  const activeWriter = activeScopedWriter();
   const activeGeneration = writerGeneration;
-  if (!activeWriter || !supports(activeWriter)) return;
+  const activeScope = getOutboxScope();
+  const eventsStillPendingForOwner = () => eventIds.every(id =>
+    exportOutbox().some(e => e.id === id && e.status === "pending" && e.ownerScope === activeScope)
+  );
+  if (!isCurrentScopedWriter(activeWriter, activeScope, activeGeneration) ||
+      !eventsStillPendingForOwner() || !supports(activeWriter)) return;
   try {
     await send(activeWriter);
-    if (writer === activeWriter && writerGeneration === activeGeneration) {
+    if (isCurrentScopedWriter(activeWriter, activeScope, activeGeneration) &&
+        eventsStillPendingForOwner()) {
       markOutboxSynced(eventIds);
     }
   } catch (error) {
@@ -269,33 +289,33 @@ export async function remoteAdjustStock(
   notes?: string | null
 ) {
   enqueueOutbox("products", product.id, "update", product);
-  try { await writer?.adjustStock?.(product, movementType, quantity, notes); }
+  try { await activeScopedWriter()?.adjustStock?.(product, movementType, quantity, notes); }
   catch (e) { console.warn("[minarvabiz] atomic remote stock adjustment failed", e); }
 }
 
 export async function remoteCreateOrder(o: ServiceOrder) {
   enqueueOutbox("orders", o.id, "insert", o);
-  try { await writer?.createOrder?.(o); }
+  try { await activeScopedWriter()?.createOrder?.(o); }
   catch (e) { console.warn("[minarvabiz] remote order write failed", e); }
 }
 
 export async function remoteCreatePayment(p: Payment) {
   enqueueOutbox("payments", p.id, "insert", p);
-  try { await writer?.createPayment?.(p); }
+  try { await activeScopedWriter()?.createPayment?.(p); }
   catch (e) { console.warn("[minarvabiz] remote payment write failed", e); }
 }
 
 export async function remoteCreateExpense(e: Expense) {
   enqueueOutbox("expenses", e.id, "insert", e);
-  try { await writer?.createExpense?.(e); }
+  try { await activeScopedWriter()?.createExpense?.(e); }
   catch (err) { console.warn("[minarvabiz] remote expense write failed", err); }
 }
 
 export async function remoteCreateSupplier(s: Supplier) {
   enqueueOutbox("suppliers", s.id, "insert", s);
   try {
-    if (writer?.upsertSupplier) await writer.upsertSupplier(s);
-    else await writer?.createSupplier?.(s);
+    if (activeScopedWriter()?.upsertSupplier) await writer.upsertSupplier(s);
+    else await activeScopedWriter()?.createSupplier?.(s);
   }
   catch (e) { console.warn("[minarvabiz] remote supplier write failed", e); }
 }
@@ -303,15 +323,15 @@ export async function remoteCreateSupplier(s: Supplier) {
 export async function remoteUpsertSupplier(s: Supplier) {
   enqueueOutbox("suppliers", s.id, "update", s);
   try {
-    if (writer?.upsertSupplier) await writer.upsertSupplier(s);
-    else await writer?.createSupplier?.(s);
+    if (activeScopedWriter()?.upsertSupplier) await writer.upsertSupplier(s);
+    else await activeScopedWriter()?.createSupplier?.(s);
   }
   catch (e) { console.warn("[minarvabiz] remote supplier update failed", e); }
 }
 
 export async function remoteCreateLaundry(o: LaundryOrder) {
   enqueueOutbox("laundry_orders", o.id, "insert", o);
-  try { await writer?.createLaundry?.(o); }
+  try { await activeScopedWriter()?.createLaundry?.(o); }
   catch (e) { console.warn("[minarvabiz] remote laundry write failed", e); }
 }
 
@@ -319,7 +339,7 @@ export async function remoteCreatePurchase(p: Purchase, supplier?: Supplier) {
   const purchase = { ...p }, supplierSnapshot = supplier ? { ...supplier } : undefined;
   enqueueOutbox("purchases", purchase.id, "insert", purchase);
   if (supplierSnapshot) enqueueOutbox("suppliers", supplierSnapshot.id, "update", supplierSnapshot);
-  const target = writer;
+  const target = activeScopedWriter();
   const write = async () => {
     try {
       await target?.createPurchase?.(purchase);
@@ -333,25 +353,25 @@ export async function remoteCreatePurchase(p: Purchase, supplier?: Supplier) {
 
 export async function remoteUpsertWarehouse(w: Warehouse) {
   enqueueOutbox("warehouses", w.id, "update", w);
-  try { await writer?.upsertWarehouse?.(w); }
+  try { await activeScopedWriter()?.upsertWarehouse?.(w); }
   catch (e) { console.warn("[minarvabiz] remote warehouse write failed", e); }
 }
 
 export async function remoteUpsertWarehouseLocation(l: WarehouseLocation) {
   enqueueOutbox("warehouse_locations", l.id, "update", l);
-  try { await writer?.upsertWarehouseLocation?.(l); }
+  try { await activeScopedWriter()?.upsertWarehouseLocation?.(l); }
   catch (e) { console.warn("[minarvabiz] remote warehouse location write failed", e); }
 }
 
 export async function remoteUpsertWarehouseStock(s: WarehouseStockPosition) {
   enqueueOutbox("warehouse_stock", s.id, "update", s);
-  try { await writer?.upsertWarehouseStock?.(s); }
+  try { await activeScopedWriter()?.upsertWarehouseStock?.(s); }
   catch (e) { console.warn("[minarvabiz] remote warehouse stock write failed", e); }
 }
 
 export async function remoteUpsertWarehouseTransfer(t: WarehouseTransfer) {
   enqueueOutbox("warehouse_transfers", t.id, "update", t);
-  try { await writer?.upsertWarehouseTransfer?.(t); }
+  try { await activeScopedWriter()?.upsertWarehouseTransfer?.(t); }
   catch (e) { console.warn("[minarvabiz] remote warehouse transfer write failed", e); }
 }
 
@@ -360,7 +380,7 @@ export async function remoteUpsertPurchaseOrder(po: PurchaseOrder) {
   for (const line of po.lines) {
     enqueueOutbox("purchase_order_lines", line.id, "update", line);
   }
-  try { await writer?.upsertPurchaseOrder?.(po); }
+  try { await activeScopedWriter()?.upsertPurchaseOrder?.(po); }
   catch (e) { console.warn("[minarvabiz] remote purchase-order write failed", e); }
 }
 
@@ -370,7 +390,7 @@ export async function remoteUpsertGoodsReceipt(receipt: GoodsReceipt) {
   for (const line of receipt.lines) {
     enqueueOutbox("goods_receipt_lines", line.id, "insert", line);
   }
-  try { await writer?.upsertGoodsReceipt?.(receipt); }
+  try { await activeScopedWriter()?.upsertGoodsReceipt?.(receipt); }
   catch (e) { console.warn("[minarvabiz] remote goods-receipt write failed", e); }
 }
 
@@ -380,21 +400,21 @@ export async function remoteUpsertPurchaseInvoice(invoice: PurchaseInvoice) {
   for (const line of invoice.lines) {
     enqueueOutbox("purchase_invoice_lines", line.id, "update", line);
   }
-  try { await writer?.upsertPurchaseInvoice?.(invoice); }
+  try { await activeScopedWriter()?.upsertPurchaseInvoice?.(invoice); }
   catch (e) { console.warn("[minarvabiz] remote purchase-invoice write failed", e); }
 }
 
 
 export async function remoteUpsertAccountingAccount(account: AccountingAccount) {
   enqueueOutbox("accounts", account.id, "update", account);
-  try { await writer?.upsertAccountingAccount?.(account); }
+  try { await activeScopedWriter()?.upsertAccountingAccount?.(account); }
   catch (e) { console.warn("[minarvabiz] remote accounting account write failed", e); }
 }
 
 export async function remoteUpsertJournalEntry(entry: JournalEntry) {
   enqueueOutbox("journal_entries", entry.id, "update", entry);
   for (const line of entry.lines) enqueueOutbox("journal_entry_lines", line.id, "update", line);
-  try { await writer?.upsertJournalEntry?.(entry); }
+  try { await activeScopedWriter()?.upsertJournalEntry?.(entry); }
   catch (e) { console.warn("[minarvabiz] remote journal write failed", e); }
 }
 
@@ -404,7 +424,7 @@ export async function remoteCreateExpenseWithJournal(expense: Expense, accounts:
   for (const account of accounts) enqueueOutbox("accounts", account.id, "update", account);
   enqueueOutbox("journal_entries", entry.id, "update", entry);
   for (const line of entry.lines) enqueueOutbox("journal_entry_lines", line.id, "update", line);
-  const target = writer;
+  const target = activeScopedWriter();
   try {
     await target?.createExpense?.(expense);
     for (const account of accounts) await target?.upsertAccountingAccount?.(account);
@@ -421,7 +441,7 @@ export async function remoteCollectCustomerPayment(payment: Payment, customer: C
   enqueueOutbox("payments", payment.id, "insert", payment);
   enqueueOutbox("customers", customer.id, "update", customer);
   for (const sale of settledSales) enqueueOutbox("sales", sale.id, "update", sale);
-  const target = writer;
+  const target = activeScopedWriter();
   const write = async () => {
     try {
       if (target?.recordCustomerPayment) {
@@ -445,7 +465,7 @@ export async function remoteAutomaticPosting(accounts: AccountingAccount[], entr
   for (const account of accounts) enqueueOutbox("accounts", account.id, "update", account);
   enqueueOutbox("journal_entries", entry.id, "update", entry);
   for (const line of entry.lines) enqueueOutbox("journal_entry_lines", line.id, "update", line);
-  const target = writer;
+  const target = activeScopedWriter();
   try {
     for (const account of accounts) await target?.upsertAccountingAccount?.(account);
     await target?.upsertJournalEntry?.(entry);
@@ -459,7 +479,7 @@ export async function remoteSupplierSettlement(payment: Payment, supplier: Suppl
   enqueueOutbox("suppliers", supplier.id, "update", supplier);
   for (const invoice of invoices) enqueueOutbox("purchase_invoices", invoice.id, "update", invoice);
   for (const purchase of purchases) enqueueOutbox("purchases", purchase.id, "update", purchase);
-  const target = writer;
+  const target = activeScopedWriter();
   const write = async () => {
     try {
       await target?.createPayment?.(payment);
