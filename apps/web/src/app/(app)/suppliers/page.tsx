@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { SupplierList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { phase5Store } from "@minarvabiz/business-logic";
+import { phase5Store, parseSupplierCsv, importSuppliersFromCsv, exportSuppliersCsv } from "@minarvabiz/business-logic";
 import type { PaymentMethod, Supplier } from "@minarvabiz/types";
 
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
@@ -20,9 +20,63 @@ export default function SuppliersPage() {
   const [supplierError, setSupplierError] = React.useState<string | null>(null);
   const [paymentForm, setPaymentForm] = React.useState({ date: todayLocal(), amount: "", paymentMethod: "cash" as PaymentMethod, reference: "", notes: "" });
   const [form, setForm] = React.useState(emptyForm);
+  const supplierCsvInput = React.useRef<HTMLInputElement>(null);
+  const [csvPreview, setCsvPreview] = React.useState<{
+    filename: string; content: string; rows: ReturnType<typeof parseSupplierCsv>["rows"]; errors: string[];
+  } | null>(null);
+  const [csvBusy, setCsvBusy] = React.useState(false);
+  const [csvStatus, setCsvStatus] = React.useState<string | null>(null);
+
 
   const refresh = React.useCallback((q?: string) => setList(phase5Store.listSuppliers(q)), []);
   React.useEffect(() => { refresh(); }, [refresh]);
+
+  function downloadSupplierCsv(content: string, filename: string) {
+    const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function previewSupplierCsv(file: File | null) {
+    if (!file) return;
+    setCsvBusy(true);
+    setCsvStatus(null);
+    try {
+      if (file.size > 2 * 1024 * 1024) throw new Error("Supplier CSV exceeds 2 MB limit");
+      const content = await file.text();
+      const parsed = parseSupplierCsv(content);
+      setCsvPreview({ filename: file.name, content, rows: parsed.rows, errors: parsed.errors });
+    } catch (error) {
+      setCsvPreview(null);
+      setCsvStatus(error instanceof Error ? error.message : "Supplier CSV preview failed");
+    } finally {
+      setCsvBusy(false);
+      if (supplierCsvInput.current) supplierCsvInput.current.value = "";
+    }
+  }
+
+  function confirmSupplierCsv() {
+    if (!csvPreview || csvBusy || csvPreview.errors.length > 0 || csvPreview.rows.length === 0) return;
+    setCsvBusy(true);
+    try {
+      const result = importSuppliersFromCsv(csvPreview.content);
+      if (result.errors.length) {
+        setCsvPreview({ ...csvPreview, errors: result.errors });
+        setCsvStatus("Supplier import refused. Review validation issues and existing duplicates.");
+      } else {
+        setCsvStatus(result.created + " supplier masters imported with zero opening payables.");
+        setCsvPreview(null);
+        refresh();
+      }
+    } catch (error) {
+      setCsvStatus(error instanceof Error ? error.message : "Supplier CSV import failed");
+    } finally {
+      setCsvBusy(false);
+    }
+  }
 
   function openCreate() { setEditTarget(null); setForm(emptyForm); setSupplierError(null); setOpen(true); }
   function openEdit(supplier: Supplier) {
@@ -61,6 +115,46 @@ export default function SuppliersPage() {
 
   return (
     <>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Button variant="outline" disabled={csvBusy} onClick={() => supplierCsvInput.current?.click()}>Preview supplier CSV</Button>
+        <Button variant="outline" onClick={() => downloadSupplierCsv(
+          "name,company,phone,email,address,category,notes\nExample Supplier,Example Company,+919876543210,supplier@example.com,Kerala,materials,Opening supplier master\n",
+          "minarvabiz-supplier-template.csv"
+        )}>Download supplier CSV template</Button>
+        <Button variant="outline" onClick={() => downloadSupplierCsv(exportSuppliersCsv(), "minarvabiz-suppliers.csv")}>Export suppliers CSV</Button>
+        <input ref={supplierCsvInput} type="file" accept=".csv,text/csv" className="hidden"
+          aria-label="Select supplier CSV file"
+          onChange={event => { void previewSupplierCsv(event.target.files?.[0] ?? null); }} />
+      </div>
+      {csvStatus && <p role="status" className="mb-3 text-sm text-slate-700">{csvStatus}</p>}
+      <Modal open={Boolean(csvPreview)} title="Supplier CSV import preview" className="max-w-xl"
+        onClose={() => { if (!csvBusy) setCsvPreview(null); }}
+        footer={<>
+          <Button variant="outline" disabled={csvBusy} onClick={() => setCsvPreview(null)}>Cancel</Button>
+          <Button disabled={!csvPreview || csvPreview.errors.length > 0 || csvPreview.rows.length === 0 || csvBusy}
+            onClick={confirmSupplierCsv}>Confirm supplier import</Button>
+        </>}>
+        <div className="space-y-3">
+          <p className="text-sm text-slate-700">{csvPreview?.filename}: {csvPreview?.rows.length ?? 0} suppliers in preview. No records have been saved.</p>
+          <p className="text-xs text-slate-600">Imports supplier master details only. Opening balances and Accounts Payable must be entered separately through reconciled accounting controls.</p>
+          {!!csvPreview?.errors.length && <div role="alert" className="rounded border border-rose-300 p-3 text-sm text-rose-700">
+            <strong>{csvPreview.errors.length} validation issue(s)</strong>
+            <ul className="mt-2 list-disc pl-5">{csvPreview.errors.slice(0, 15).map((msg, i) => <li key={i}>{msg}</li>)}</ul>
+          </div>}
+          {!!csvPreview?.rows.length && <div className="max-h-64 overflow-auto rounded border">
+            <table className="w-full text-left text-xs">
+              <thead><tr><th className="p-2">Supplier</th><th className="p-2">Company</th><th className="p-2">Phone</th><th className="p-2">Email</th></tr></thead>
+              <tbody>{csvPreview.rows.slice(0, 15).map((row, i) => (
+                <tr key={i} className="border-t">
+                  <td className="p-2">{row.name}</td><td className="p-2">{row.company || "—"}</td>
+                  <td className="p-2">{row.phone || "—"}</td><td className="p-2">{row.email || "—"}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+            {csvPreview.rows.length > 15 && <p className="p-2 text-xs text-slate-600">Showing first 15 of {csvPreview.rows.length} suppliers.</p>}
+          </div>}
+        </div>
+      </Modal>
       <SupplierList suppliers={list} onAdd={openCreate} onSearch={refresh} onPay={openPayment} onEdit={openEdit}
         onArchive={(s) => { setArchiveTarget(s); setArchiveReason(""); setSupplierError(null); }} />
       <Modal open={open} title={editTarget ? "Edit Supplier" : "Add Supplier"} onClose={() => { setOpen(false); setEditTarget(null); setSupplierError(null); }}
