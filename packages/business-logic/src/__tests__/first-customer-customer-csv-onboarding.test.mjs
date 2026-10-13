@@ -140,7 +140,7 @@ test("bulk import refuses a batch that crosses licensed customer capacity withou
   };
   try {
     const before=state();
-    const result=csv.importCustomersFromCsv("name,phone\\nFirst,1234567890\\nSecond,19876543210");
+    const result=csv.importCustomersFromCsv("name,phone\nFirst,1234567890\nSecond,19876543210");
     assert.equal(result.created,0);
     assert.match(result.errors.join(" "),/limit|plan|capacity/i);
     assert.equal(state(),before);
