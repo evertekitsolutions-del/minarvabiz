@@ -109,11 +109,15 @@ export interface ScopedMasterReplayResult {
  * Older unscoped events are deliberately not silently claimed.
  */
 function eligibleScopedMasterEvents() {
-  const queue = exportOutbox();
-  const active = queue.filter((event) => event.status === "pending" || event.status === "failed");
   const safeOwner = verifiedWriterScope && writer && getOutboxScope() === verifiedWriterScope
     ? verifiedWriterScope
     : null;
+  // Neither replay decisions nor pending counters may expose another user's
+  // unverified, legacy, or previous-organization business events.
+  const active = safeOwner ? exportOutbox().filter((event) =>
+    event.ownerScope === safeOwner &&
+    (event.status === "pending" || event.status === "failed")
+  ) : [];
   const transactionsOutstanding = active.some((event) =>
     !["categories", "customers", "products"].includes(event.aggregateType)
   );
