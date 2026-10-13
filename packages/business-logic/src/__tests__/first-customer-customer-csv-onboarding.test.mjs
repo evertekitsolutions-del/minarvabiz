@@ -13,6 +13,7 @@ const csv=require("../csv-import.ts");
 const store=require("../store.ts");
 const perms=require("../permissions.ts");
 const outbox=require("../outbox-bridge.ts");
+const licensing=require("../phase9-store.ts");
 perms.setCurrentRole("admin");perms.setRuntimeFeaturePolicy(null);
 const reset=()=>{store.hydrateCore({customers:[],products:[],categories:[],sales:[],payments:[]});outbox.hydrateOutbox([])};
 const state=()=>JSON.stringify({customers:store.listCustomers(),outbox:outbox.exportOutbox()});
@@ -126,4 +127,24 @@ test("customers screen offers preview, template, export and confirm with rejecte
   const ui=fs.readFileSync("apps/web/src/app/(app)/customers/page.tsx","utf8");
   for(const key of ["parseCustomerCsv","importCustomersFromCsv","exportCustomersCsv","Preview customer CSV","Confirm customer import","Download customer CSV template","accept=\".csv,text/csv\""])assert.ok(ui.includes(key),key);
   assert.match(ui,/csvPreview\.errors\.length/);
+});
+
+test("bulk import refuses a batch that crosses licensed customer capacity without partial writes",()=>{
+  reset();
+  const original=licensing.usageSnapshot;
+  licensing.usageSnapshot=()=>{
+    const snap=original();
+    return {...snap,limits:{...snap.limits,maxCustomers:1},
+      usage:{...snap.usage,customers:0},
+      checks:{...snap.checks,customers:{allowed:true,limit:1,remaining:1}}};
+  };
+  try {
+    const before=state();
+    const result=csv.importCustomersFromCsv("name,phone\\nFirst,1234567890\\nSecond,19876543210");
+    assert.equal(result.created,0);
+    assert.match(result.errors.join(" "),/limit|plan|capacity/i);
+    assert.equal(state(),before);
+  } finally {
+    licensing.usageSnapshot=original;
+  }
 });
