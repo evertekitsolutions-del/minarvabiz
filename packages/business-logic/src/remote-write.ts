@@ -73,7 +73,7 @@ let writerGeneration = 0;
 
 export function registerRemoteWriter(w: RemoteWriter | null, verifiedScope: string | null = null) {
   writer = w;
-  verifiedWriterScope = w && typeof verifiedScope === "string" && /^[^\\s:]+:[^\\s:]+$/.test(verifiedScope)
+  verifiedWriterScope = w && typeof verifiedScope === "string" && /^[^\s:]+:[^\s:]+$/.test(verifiedScope)
     ? verifiedScope
     : null;
   writerGeneration += 1;
