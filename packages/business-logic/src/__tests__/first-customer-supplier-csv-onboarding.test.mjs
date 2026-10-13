@@ -120,6 +120,8 @@ test("supplier CSV export escapes spreadsheet formulas, preserves international 
   assert.match(text, /\+919876543210/);
   assert.ok(!text.includes("openingBalance"));
   assert.ok(!text.includes("outstandingBalance"));
+  // Re-import preview should be validated against a fresh target store, not its own source.
+  reset();
   assert.deepEqual(csv.parseSupplierCsv(text).errors, []);
 });
 
