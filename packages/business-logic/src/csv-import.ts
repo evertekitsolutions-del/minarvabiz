@@ -39,6 +39,57 @@ function parseCsvRecord(line: string): string[] {
   return cols;
 }
 
+
+/** Parse records (not physical lines) so a quoted product name may contain CRLF. */
+function readCsvRecords(source: string): Array<{ text: string; line: number }> {
+  const records: Array<{ text: string; line: number }> = [];
+  let quoted = false, current = "", startLine = 1, line = 1;
+  for (let i = 0; i < source.length; i += 1) {
+    const ch = source[i];
+    if (ch === '"') {
+      current += ch;
+      if (quoted && source[i + 1] === '"') {
+        current += source[++i];
+      } else {
+        quoted = !quoted;
+      }
+      continue;
+    }
+    if (ch === "\r" || ch === "\n") {
+      if (ch === "\r" && source[i + 1] === "\n") i += 1;
+      if (quoted) current += "\n";
+      else {
+        if (current.trim()) records.push({ text: current, line: startLine });
+        current = "";
+        startLine = line + 1;
+      }
+      line += 1;
+      continue;
+    }
+    current += ch;
+  }
+  if (quoted) throw new Error("Row " + startLine + ": Unclosed quoted CSV field");
+  if (current.trim()) records.push({ text: current, line: startLine });
+  return records;
+}
+
+function csvNumber(value: string | undefined, field: string, line: number, errors: string[]): number {
+  if (!value?.trim()) return 0;
+  const raw = value.trim();
+  const scale = field === "stock" || field === "min" ? 1000 : 100;
+  const decimals = scale === 1000 ? 3 : 2;
+  if (!new RegExp("^\\\\d+(?:\\\\.\\\\d{1," + decimals + "})?$").test(raw)) {
+    errors.push("Row " + line + ": " + field + " must be a finite non-negative number with no more than " + decimals + " decimal places");
+    return 0;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || !Number.isSafeInteger(Math.round(parsed * scale))) {
+    errors.push("Row " + line + ": " + field + " is outside the supported safe numeric range");
+    return 0;
+  }
+  return parsed;
+}
+
 function csvCell(value: unknown): string {
   const text = String(value ?? "");
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -63,91 +114,72 @@ export function parseProductCsv(text: string): {
   rows: ProductCsvRow[];
   errors: string[];
 } {
-  const source = text.replace(/^\uFEFF/, "").trim();
-  const lines = source.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  if (lines.length < 2) return { rows: [], errors: ["CSV needs header + rows"] };
+  const errors: string[] = [];
+  let records: Array<{ text: string; line: number }>;
+  try {
+    records = readCsvRecords(text.replace(/^\\uFEFF/, ""));
+  } catch (error) {
+    return { rows: [], errors: [error instanceof Error ? error.message : String(error)] };
+  }
+  if (records.length < 2) return { rows: [], errors: ["CSV needs header + rows"] };
 
   let header: string[];
   try {
-    header = parseCsvRecord(lines[0]).map((h) => h.toLowerCase().trim());
+    header = parseCsvRecord(records[0].text).map(h => h.toLowerCase().trim());
   } catch (error) {
-    return { rows: [], errors: [`Header: ${error instanceof Error ? error.message : String(error)}`] };
+    return { rows: [], errors: ["Header: " + (error instanceof Error ? error.message : String(error))] };
   }
+  if (new Set(header).size !== header.length) errors.push("Header: duplicate column names are not allowed");
+  if (!header.includes("name")) errors.push("Missing name column");
+  if (errors.length) return { rows: [], errors };
 
   const idx = (name: string) => header.indexOf(name);
-  const nameI = idx("name");
-  if (nameI < 0) return { rows: [], errors: ["Missing name column"] };
-
   const rows: ProductCsvRow[] = [];
-  const errors: string[] = [];
+  const rowLines: number[] = [];
   const seenSku = new Set<string>();
   const seenBarcode = new Set<string>();
-
-  for (let i = 1; i < lines.length; i += 1) {
-    const rowNumber = i + 1;
+  for (const record of records.slice(1)) {
+    const number = record.line;
     let cols: string[];
-    try {
-      cols = parseCsvRecord(lines[i]);
-    } catch (error) {
-      errors.push(`Row ${rowNumber}: ${error instanceof Error ? error.message : String(error)}`);
+    try { cols = parseCsvRecord(record.text); }
+    catch (error) {
+      errors.push("Row " + number + ": " + (error instanceof Error ? error.message : String(error)));
       continue;
     }
-
-    const name = cols[nameI]?.trim();
-    if (!name) {
-      errors.push(`Row ${rowNumber}: empty name`);
+    if (cols.length !== header.length) {
+      errors.push("Row " + number + ": expected " + header.length + " columns but found " + cols.length);
       continue;
     }
-
-    const number = (field: string, fallback = 0): number => {
-      const pos = idx(field);
-      if (pos < 0 || !cols[pos]?.trim()) return fallback;
-      const parsed = Number(cols[pos]);
-      if (!Number.isFinite(parsed) || parsed < 0) {
-        errors.push(`Row ${rowNumber}: ${field} must be a finite non-negative number`);
-        return fallback;
-      }
-      return parsed;
-    };
-
+    const name = cols[idx("name")]?.trim();
+    if (!name) { errors.push("Row " + number + ": empty name"); continue; }
     const sku = idx("sku") >= 0 ? cols[idx("sku")]?.trim() || undefined : undefined;
     const barcode = idx("barcode") >= 0 ? cols[idx("barcode")]?.trim() || undefined : undefined;
-
     if (sku) {
       const key = sku.toLowerCase();
-      if (seenSku.has(key)) errors.push(`Row ${rowNumber}: duplicate SKU ${sku} in CSV`);
+      if (seenSku.has(key)) errors.push("Row " + number + ": duplicate SKU " + sku + " in CSV");
       seenSku.add(key);
     }
     if (barcode) {
-      if (seenBarcode.has(barcode)) errors.push(`Row ${rowNumber}: duplicate barcode ${barcode} in CSV`);
+      if (seenBarcode.has(barcode)) errors.push("Row " + number + ": duplicate barcode " + barcode + " in CSV");
       seenBarcode.add(barcode);
     }
-
-    rows.push({
-      name,
-      sku,
-      barcode,
-      cost: number("cost"),
-      price: number("price"),
-      stock: number("stock"),
-      min: number("min"),
-      unit: idx("unit") >= 0 ? cols[idx("unit")]?.trim() || "pcs" : "pcs",
-    });
+    const numeric = (field: string) => csvNumber(idx(field) >= 0 ? cols[idx(field)] : undefined, field, number, errors);
+    const cost = numeric("cost"), price = numeric("price"), stock = numeric("stock"), min = numeric("min");
+    if (stock > 0 && !Number.isSafeInteger(Math.round(stock * cost * 100))) {
+      errors.push("Row " + number + ": opening stock value is outside the supported safe amount");
+    }
+    rows.push({ name, sku, barcode, cost, price, stock, min,
+      unit: idx("unit") >= 0 ? cols[idx("unit")]?.trim() || "pcs" : "pcs" });
+    rowLines.push(number);
   }
-
   const existing = store.listProducts();
-  const existingSku = new Set(existing.map((p) => p.sku?.toLowerCase()).filter(Boolean));
-  const existingBarcode = new Set(existing.map((p) => p.barcode).filter(Boolean));
+  const existingSku = new Set(existing.map(p => p.sku?.toLowerCase()).filter(Boolean));
+  const existingBarcode = new Set(existing.map(p => p.barcode).filter(Boolean));
   rows.forEach((row, index) => {
-    const rowNumber = index + 2;
-    if (row.sku && existingSku.has(row.sku.toLowerCase())) {
-      errors.push(`Row ${rowNumber}: SKU ${row.sku} already exists`);
-    }
-    if (row.barcode && existingBarcode.has(row.barcode)) {
-      errors.push(`Row ${rowNumber}: barcode ${row.barcode} already exists`);
-    }
+    const number = rowLines[index];
+    if (row.sku && existingSku.has(row.sku.toLowerCase())) errors.push("Row " + number + ": SKU " + row.sku + " already exists");
+    if (row.barcode && existingBarcode.has(row.barcode)) errors.push("Row " + number + ": barcode " + row.barcode + " already exists");
   });
-
   return { rows, errors };
 }
 
