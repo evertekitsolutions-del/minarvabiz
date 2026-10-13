@@ -78,7 +78,7 @@ function csvNumber(value: string | undefined, field: string, line: number, error
   const raw = value.trim();
   const scale = field === "stock" || field === "min" ? 1000 : 100;
   const decimals = scale === 1000 ? 3 : 2;
-  if (!new RegExp("^\\\\d+(?:\\\\.\\\\d{1," + decimals + "})?$").test(raw)) {
+  if (!(scale === 1000 ? /^\d+(?:\.\d{1,3})?$/ : /^\d+(?:\.\d{1,2})?$/).test(raw)) {
     errors.push("Row " + line + ": " + field + " must be a finite non-negative number with no more than " + decimals + " decimal places");
     return 0;
   }
