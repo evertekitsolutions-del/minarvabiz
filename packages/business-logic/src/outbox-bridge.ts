@@ -3,6 +3,7 @@
  */
 import { generateId, nowISO } from "@minarvabiz/utils";
 import type { UUID } from "@minarvabiz/types";
+import type { FinancialSyncProofV1 } from "./financial-sync-contract";
 import { touchPersistence } from "./autosave";
 
 export type OutboxEventType = "insert" | "update" | "delete";
@@ -19,6 +20,8 @@ export interface LocalOutboxEvent {
   status: "pending" | "synced" | "failed" | "discarded";
   /** Verified org:user authority at enqueue time; legacy events deliberately lack it. */
   ownerScope?: string;
+  /** Optional pre-operation financial provenance; absent/legacy => financially held. */
+  financialSyncProof?: FinancialSyncProofV1;
   attempts: number;
   lastError: string | null;
 }

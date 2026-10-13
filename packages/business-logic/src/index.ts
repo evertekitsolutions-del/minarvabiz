@@ -98,3 +98,7 @@ export * from "./print-document-render";
 export * from "./recycle-bin";
 
 export { writeAttendanceRow, createSupabaseCloudAdapter } from "@minarvabiz/sync";
+
+// Sync v2 S1: read-only financial envelope/receipt schema (no replay sender).
+export * from "./financial-sync-contract";
+export * from "./financial-sync-envelope";
