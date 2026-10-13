@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { SyncPanel, PersistencePanel, Button, FormField, inputClass, selectClass, PrintTemplateManager, TrashRecoveryPanel } from "@minarvabiz/ui";
-import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage, getShopProfile, updateShopProfile, updateTaxConfig, getPrintSettings, updatePrintSettings } from "@minarvabiz/business-logic";
+import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage, getShopProfile, updateShopProfile, updateTaxConfig, getPrintSettings, updatePrintSettings, getScopedMasterReplayStatus, retryScopedMasterOutbox } from "@minarvabiz/business-logic";
 
 export default function SettingsPage() {
   const [snap, setSnap] = React.useState(() => syncBridge.getSyncSnapshot());
@@ -10,11 +10,48 @@ export default function SettingsPage() {
   const [shop, setShop] = React.useState(() => getShopProfile());
   const [shopMsg, setShopMsg] = React.useState<string | null>(null);
   const [printing, setPrinting] = React.useState(() => getPrintSettings());
+  const [masterReplay, setMasterReplay] = React.useState(() => getScopedMasterReplayStatus());
+  const [masterRetrying, setMasterRetrying] = React.useState(false);
+  const [masterReplayMessage, setMasterReplayMessage] = React.useState<string | null>(null);
+
   const [printMsg, setPrintMsg] = React.useState<string | null>(null);
 
   function refresh() {
     setSnap(syncBridge.getSyncSnapshot());
   }
+
+  const handleMasterReplay = React.useCallback(async () => {
+    if (!getScopedMasterReplayStatus().available) return;
+    setMasterRetrying(true);
+    try {
+      const result = await retryScopedMasterOutbox();
+      setMasterReplayMessage(
+        `Cloud master retry: ${result.acknowledged} acknowledged, ${result.failed} failed; ${result.remaining} events still pending or failed.`
+      );
+    } catch (error) {
+      setMasterReplayMessage(error instanceof Error ? error.message : "Cloud master retry failed.");
+    } finally {
+      setMasterRetrying(false);
+      setMasterReplay(getScopedMasterReplayStatus());
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const refreshStatus = () => setMasterReplay(getScopedMasterReplayStatus());
+    const onReconnect = () => {
+      // Only already verified owner-scoped master changes are eligible;
+      // financial entries remain in their transactional reconciliation path.
+      if (getScopedMasterReplayStatus().ready > 0) void handleMasterReplay();
+    };
+    window.addEventListener("online", onReconnect);
+    window.addEventListener("minarva:data-hydrated", refreshStatus);
+    refreshStatus();
+    return () => {
+      window.removeEventListener("online", onReconnect);
+      window.removeEventListener("minarva:data-hydrated", refreshStatus);
+    };
+  }, [handleMasterReplay]);
+
 
   async function handleSync() {
     setSyncing(true);
@@ -106,6 +143,30 @@ export default function SettingsPage() {
         onSaveLocal={() => { saveToLocalStorage(); }}
         onLoadLocal={() => { loadFromLocalStorage(); }}
       />
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" aria-labelledby="cloud-master-recovery">
+        <h2 id="cloud-master-recovery" className="text-sm font-semibold text-slate-800">Offline master-data cloud recovery</h2>
+        <p className="text-sm text-slate-600">
+          Retry previously queued customer, category and product changes using your verified organization account.
+          Unsynced financial, stock or payment transactions are held for transactional reconciliation; this is not a full Hybrid Sync.
+        </p>
+        <div className="flex flex-wrap gap-4 text-sm text-slate-700" role="status" aria-live="polite">
+          <span>Queued: <strong>{masterReplay.pending}</strong></span>
+          <span>Safe to retry: <strong>{masterReplay.ready}</strong></span>
+          <span>Held for review or unsupported: <strong>{masterReplay.blocked}</strong></span>
+        </div>
+        {!masterReplay.available && (
+          <p className="text-xs text-amber-700">Cloud retry is unavailable until your online organization membership is verified. Unscoped or other-business events will never be uploaded automatically.</p>
+        )}
+        <Button
+          variant="outline"
+          onClick={() => { void handleMasterReplay(); }}
+          disabled={!masterReplay.available || masterReplay.ready === 0 || masterRetrying}
+        >
+          {masterRetrying ? "Retrying verified cloud writes…" : "Retry safe queued records"}
+        </Button>
+        {masterReplayMessage && <p className="text-xs text-slate-700" role="status">{masterReplayMessage}</p>}
+      </section>
 
       <SyncPanel
         cloudSyncAvailable={snap.cloudSyncAvailable}
