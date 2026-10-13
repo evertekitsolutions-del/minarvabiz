@@ -15,7 +15,7 @@ Module._load=function(name,...rest){
   pgSelectAll:async (cfg,table)=>{assert.equal(cfg.accessToken,"fixture-session");requested.push(table);return {data:table==="staff_members"?[staff]:table==="staff_attendance"?[attendance]:[],error:null};},
   pgRpc:async (cfg,name,args)=>{assert.equal(cfg.accessToken,"fixture-session");calls.push({name,args});if(name==="current_user_authorization")return {data:[{auth_user_id:"fixture-user",auth_role:"admin",auth_org_id:"fixture-org",auth_full_name:"Fixture admin"}],error:null};return {data:{accepted:true},error:null};},
  };
- if(name==="@minarvabiz/business-logic")return {phase6Store:phase6,phase9Store:require("../phase9-store.ts"),createSupabaseCloudAdapter:require("../../../sync/src/supabase-adapter.ts").createSupabaseCloudAdapter,registerRemoteWriter:remote.registerRemoteWriter,getSessionUser:()=>({id:"fixture-user"}),setOutboxScope:outbox.setOutboxScope};
+ if(name==="@minarvabiz/business-logic")return {phase6Store:phase6,phase9Store:require("../phase9-store.ts"),createSupabaseCloudAdapter:require("../../../sync/src/supabase-adapter.ts").createSupabaseCloudAdapter,registerRemoteWriter:remote.registerRemoteWriter,getSessionUser:()=>({id:"fixture-user"}),getSessionToken:()=> "fixture-session",setOutboxScope:outbox.setOutboxScope};
  return load.call(this,name,...rest);
 };
 const source=require("../../../../apps/web/src/lib/data-source.ts");
