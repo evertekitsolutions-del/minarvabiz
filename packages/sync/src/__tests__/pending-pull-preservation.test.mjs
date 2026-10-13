@@ -51,6 +51,14 @@ test("a refused upload must never be overwritten by a newer cloud pull (customer
   assert.equal(local.get("customers","record-2").name,"Cloud-only customer",
     "unrelated cloud records may still hydrate");
 
+  // Repeated pulls of the same unresolved remote revision must not create
+  // duplicate review records or silently replace the still-pending local edit.
+  const repeat = await engine.sync();
+  assert.equal(repeat.conflicts,0);
+  assert.equal(engine.listConflicts().length,1);
+  assert.equal(local.get("customers",original.id).name,original.name);
+  assert.equal(engine.outbox.stats().conflict,1);
+
   const reviewed = engine.resolveConflictManually(engine.listConflicts()[0].id,"local");
   assert.equal(reviewed?.resolution,"local");
   assert.equal(local.get("customers",original.id).version,4,
