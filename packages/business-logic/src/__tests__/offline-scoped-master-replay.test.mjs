@@ -182,3 +182,10 @@ test("web replay is reachable only through server verified org/user identity and
   assert.match(settings,/retryScopedMasterOutbox\(\)/);
   assert.match(settings,/addEventListener\("online"/);
 });
+
+test("authorized cloud hydration rejects stale login tokens at writer-registration boundary", () => {
+  const source=fs.readFileSync("apps/web/src/lib/data-source.ts","utf8");
+  assert.match(source,/getSessionToken\(\) !== accessToken/);
+  assert.match(source,/registerRemoteWriter\(null\)/);
+  assert.match(source,/setOutboxScope\(null\)/);
+});
