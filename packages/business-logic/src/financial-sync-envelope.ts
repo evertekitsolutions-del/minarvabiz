@@ -37,7 +37,7 @@ const isQty = (v: unknown): v is number =>
   Math.abs(v * 1000 - Math.round(v * 1000)) < 0.0000001;
 
 function canonical(v: unknown): string {
-  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (v === null || typeof v !== "object") return JSON.stringify(v) ?? "null";
   if (Array.isArray(v)) return "[" + v.map(canonical).join(",") + "]";
   return "{" + Object.keys(v).sort()
     .filter(k => (v as Record<string, unknown>)[k] !== undefined)
@@ -106,7 +106,7 @@ export function prepareSaleFinancialStockProof(input: {
       l.warehouseId===pos.warehouseId && l.isActive && !l.deletedAt);
     if (candidateWarehouse.length!==1 || candidateLocation.length!==1 ||
         !isId(pos.warehouseId) || !isId(pos.locationId) ||
-        !Number.isSafeInteger(product.version) || (product.version ?? 0)<1 ||
+        !Number.isSafeInteger(product.version ?? NaN) || (product.version ?? 0)<1 ||
         !Number.isSafeInteger(pos.version) || pos.version<1 ||
         !Number.isFinite(product.stockQuantity) || product.stockQuantity<quantity ||
         !Number.isFinite(pos.onHand) || pos.onHand-pos.reserved<quantity ||
