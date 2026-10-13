@@ -3,6 +3,8 @@
  */
 
 import { setCurrentRole } from "./permissions";
+import { setOutboxScope } from "./outbox-bridge";
+import { registerRemoteWriter } from "./remote-write";
 
 export interface SessionUser {
   id: string;
@@ -38,6 +40,10 @@ export function setSession(token: string, user: SessionUser) {
 }
 
 export function clearSession() {
+  // Auth revocation must also revoke any writer capable of replaying queued
+  // business records. Retain the queue for later verified owner recovery.
+  registerRemoteWriter(null);
+  setOutboxScope(null);
   if (typeof sessionStorage === "undefined") return;
   sessionStorage.removeItem(SESSION_KEY);
   sessionStorage.removeItem(USER_KEY);

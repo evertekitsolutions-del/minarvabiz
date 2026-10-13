@@ -27,7 +27,7 @@ import type {
 } from "@minarvabiz/types";
 import type { LocalOutboxEvent } from "./outbox-bridge";
 import type { ShiftRule, RosterSlot } from "./workforce-roster";
-import { enqueueOutbox, markOutboxSynced } from "./outbox-bridge";
+import { enqueueOutbox, exportOutbox, getOutboxScope, markOutboxFailed, markOutboxSynced } from "./outbox-bridge";
 
 export interface RemoteWriter {
   getAttendance?: (id: string, staffId?: string, date?: string) => Promise<StaffAttendanceRecord | null>;
@@ -67,11 +67,15 @@ export interface RemoteWriter {
 }
 
 let writer: RemoteWriter | null = null;
+let verifiedWriterScope: string | null = null;
 /** Revocation generation advances for every session-bound writer replacement. */
 let writerGeneration = 0;
 
-export function registerRemoteWriter(w: RemoteWriter | null) {
+export function registerRemoteWriter(w: RemoteWriter | null, verifiedScope: string | null = null) {
   writer = w;
+  verifiedWriterScope = w && typeof verifiedScope === "string" && /^[^\s:]+:[^\s:]+$/.test(verifiedScope)
+    ? verifiedScope
+    : null;
   writerGeneration += 1;
 }
 
@@ -83,6 +87,120 @@ export function getRemoteWriterGeneration(): number {
 export function getRemoteWriter(): RemoteWriter | null {
   return writer;
 }
+
+export interface ScopedMasterReplayStatus {
+  available: boolean;
+  pending: number;
+  ready: number;
+  blocked: number;
+}
+
+export interface ScopedMasterReplayResult {
+  attempted: number;
+  acknowledged: number;
+  failed: number;
+  remaining: number;
+}
+
+/**
+ * Only independently replayable metadata is eligible. A pending sale,
+ * warehouse change, payment or other transactional event freezes customer
+ * balances and stock payloads until their atomic domain RPC is reconciled.
+ * Older unscoped events are deliberately not silently claimed.
+ */
+function eligibleScopedMasterEvents() {
+  const safeOwner = verifiedWriterScope && writer && getOutboxScope() === verifiedWriterScope
+    ? verifiedWriterScope
+    : null;
+  // Neither replay decisions nor pending counters may expose another user's
+  // unverified, legacy, or previous-organization business events.
+  const active = safeOwner ? exportOutbox().filter((event) =>
+    event.ownerScope === safeOwner &&
+    (event.status === "pending" || event.status === "failed")
+  ) : [];
+  const transactionsOutstanding = active.some((event) =>
+    !["categories", "customers", "products"].includes(event.aggregateType)
+  );
+  const candidates = safeOwner ? active.filter((event) =>
+    event.ownerScope === safeOwner &&
+    (event.eventType === "insert" || event.eventType === "update") &&
+    (event.aggregateType === "categories" ||
+      (!transactionsOutstanding && (event.aggregateType === "customers" || event.aggregateType === "products"))) &&
+    event.payload !== null && typeof event.payload === "object" &&
+    !Array.isArray(event.payload) &&
+    (event.payload as { id?: unknown }).id === event.aggregateId &&
+    (event.aggregateType === "categories" ? Boolean(writer?.upsertCategory)
+      : event.aggregateType === "customers" ? Boolean(writer?.upsertCustomer)
+      : Boolean(writer?.upsertProduct))
+  ) : [];
+  return { active, candidates };
+}
+
+export function getScopedMasterReplayStatus(): ScopedMasterReplayStatus {
+  const { active, candidates } = eligibleScopedMasterEvents();
+  return {
+    available: Boolean(writer && verifiedWriterScope && getOutboxScope() === verifiedWriterScope),
+    pending: active.length,
+    ready: candidates.length,
+    blocked: active.length - candidates.length,
+  };
+}
+
+let scopedMasterReplayInFlight: Promise<ScopedMasterReplayResult> | null = null;
+
+/**
+ * Bounded and serialized retry of verified owner-scoped business masters.
+ * Uses the existing authorized RemoteWriter (PostgreSQL/RLS), not a memory
+ * simulator. It never replays sale/payment/stock journals as blind upserts.
+ */
+export function retryScopedMasterOutbox(limit = 50): Promise<ScopedMasterReplayResult> {
+  if (scopedMasterReplayInFlight) return scopedMasterReplayInFlight;
+  const run = async (): Promise<ScopedMasterReplayResult> => {
+    const snapshotWriter = writer;
+    const snapshotScope = verifiedWriterScope;
+    const snapshotGeneration = writerGeneration;
+    const { candidates } = eligibleScopedMasterEvents();
+    let attempted = 0;
+    let acknowledged = 0;
+    let failed = 0;
+
+    for (const event of candidates.sort((a, b) => a.sequence - b.sequence).slice(0,
+      Number.isSafeInteger(limit) ? Math.min(50, Math.max(0, limit)) : 0)) {
+      if (!snapshotWriter || !snapshotScope || writer !== snapshotWriter ||
+          verifiedWriterScope !== snapshotScope ||
+          writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope) break;
+      // A change made after this retry began must not be silently reordered.
+      if (!eligibleScopedMasterEvents().candidates.some((current) => current.id === event.id)) continue;
+      attempted++;
+      try {
+        if (event.aggregateType === "categories") {
+          await snapshotWriter.upsertCategory!(event.payload as Category);
+        } else if (event.aggregateType === "customers") {
+          await snapshotWriter.upsertCustomer!(event.payload as Customer);
+        } else if (event.aggregateType === "products") {
+          await snapshotWriter.upsertProduct!(event.payload as Product);
+        }
+        if (writer !== snapshotWriter || verifiedWriterScope !== snapshotScope ||
+            writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope) break;
+        markOutboxSynced([event.id]);
+        acknowledged++;
+      } catch (error) {
+        if (writer !== snapshotWriter || verifiedWriterScope !== snapshotScope ||
+            writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope) break;
+        markOutboxFailed(event.id, error instanceof Error ? error.message : String(error));
+        failed++;
+        // Preserve causal ordering and never skip over an uncommitted earlier version.
+        break;
+      }
+    }
+    return { attempted, acknowledged, failed, remaining: getScopedMasterReplayStatus().pending };
+  };
+  const active = run();
+  const flight = active.finally(() => { if (scopedMasterReplayInFlight === flight) scopedMasterReplayInFlight = null; });
+  scopedMasterReplayInFlight = flight;
+  return flight;
+}
+
 
 /**
  * A local event is acknowledged only after the active authenticated writer

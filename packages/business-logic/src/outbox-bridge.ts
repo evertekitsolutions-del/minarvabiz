@@ -17,6 +17,8 @@ export interface LocalOutboxEvent {
   deviceId: string;
   sequence: number;
   status: "pending" | "synced" | "failed" | "discarded";
+  /** Verified org:user authority at enqueue time; legacy events deliberately lack it. */
+  ownerScope?: string;
   attempts: number;
   lastError: string | null;
 }
@@ -24,6 +26,23 @@ export interface LocalOutboxEvent {
 const queue: LocalOutboxEvent[] = [];
 let sequence = 1;
 let deviceId = generateId();
+let activeOutboxScope: string | null = null;
+
+/**
+ * Scope must originate from verified organization membership, never from
+ * arbitrary snapshot payloads or an untrusted browser preference.
+ * Unscoped legacy events are not eligible for automatic Cloud replay.
+ */
+export function setOutboxScope(scope: string | null): void {
+  activeOutboxScope = typeof scope === "string" && /^[^\s:]+:[^\s:]+$/.test(scope) && scope.length <= 256
+    ? scope
+    : null;
+}
+
+export function getOutboxScope(): string | null {
+  return activeOutboxScope;
+}
+
 
 export function setOutboxDeviceId(id: string) {
   deviceId = id;
@@ -45,6 +64,7 @@ export function enqueueOutbox(
     deviceId,
     sequence: sequence++,
     status: "pending",
+    ...(activeOutboxScope ? { ownerScope: activeOutboxScope } : {}),
     attempts: 0,
     lastError: null,
   };
