@@ -150,3 +150,35 @@ test("delete and malformed master events never become blind upserts", async () =
   assert.deepEqual(calls,[]);
   assert.equal(outstanding().length,2);
 });
+
+
+test("retry status never reveals pending counts from another org or unverified session", async () => {
+  reset(SCOPE_A);
+  await cloud.remoteUpsertCategory({id:"tenant-a-private"});
+  outbox.setOutboxScope(SCOPE_B);
+  cloud.registerRemoteWriter({upsertCategory:async ()=>{}},SCOPE_B);
+  assert.deepEqual(cloud.getScopedMasterReplayStatus(), {
+    available:true, pending:0, ready:0, blocked:0,
+  });
+  cloud.registerRemoteWriter(null);
+  assert.deepEqual(cloud.getScopedMasterReplayStatus(), {
+    available:false, pending:0, ready:0, blocked:0,
+  });
+});
+
+test("web replay is reachable only through server verified org/user identity and secure logout", () => {
+  const dataSource=fs.readFileSync("apps/web/src/lib/data-source.ts","utf8");
+  const layout=fs.readFileSync("apps/web/src/components/AppLayoutClient.tsx","utf8");
+  const session=fs.readFileSync("packages/business-logic/src/session.ts","utf8");
+  const settings=fs.readFileSync("apps/web/src/app/(app)/settings/page.tsx","utf8");
+  assert.match(dataSource,/await resolveOnlineAuthorization\(accessToken, sessionUser\.id\)/);
+  assert.match(dataSource,/registerRemoteWriter\(\{/);
+  assert.match(dataSource,/verifiedOwnerScope\)/);
+  assert.match(layout,/setOutboxScope\(authorization\.orgId \+ ":" \+ authoritativeUser\.id\)/);
+  assert.match(session,/registerRemoteWriter\(null\)/);
+  assert.match(session,/setOutboxScope\(null\)/);
+  assert.match(settings,/Retry safe queued records/);
+  assert.match(settings,/getScopedMasterReplayStatus\(\)/);
+  assert.match(settings,/retryScopedMasterOutbox\(\)/);
+  assert.match(settings,/addEventListener\("online"/);
+});
