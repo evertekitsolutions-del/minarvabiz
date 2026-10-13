@@ -4,6 +4,8 @@
  * offline finance stays pending; NEVER treat this projection as authorization.
  */
 import type { DomainSnapshot } from "./persistence";
+import type { Sale, Product } from "@minarvabiz/types";
+import type { exportWarehouseState } from "./warehouse-store";
 import type { LocalOutboxEvent } from "./outbox-bridge";
 import type {
   FinancialSyncEnvelopeV1, FinancialSyncProofV1, FinancialSyncReceiptV1,
@@ -65,6 +67,70 @@ function exactEvent(
       !Number.isSafeInteger(e.sequence) || e.sequence < 1 ||
       !isTime(e.occurredAt) || !["pending", "failed"].includes(e.status)) return null;
   return e;
+}
+
+/**
+ * Capture immutable pre-operation stock evidence BEFORE checkout changes
+ * product quantities or warehouse reservations. This is only a claim for
+ * later server verification. Missing/ambiguous physical locations return
+ * null, never a guessed "global stock" fallback.
+ */
+export function prepareSaleFinancialStockProof(input: {
+  sale: Sale;
+  products: Product[];
+  warehouse: ReturnType<typeof exportWarehouseState>;
+  currencyCode: string;
+}): Omit<FinancialSyncProofV1,"paymentEventIds" | "journalId"> | null {
+  const { sale, products, warehouse } = input;
+  if (!sale || !isId(sale.branchId) || !Array.isArray(sale.items) ||
+      !sale.items.length || !warehouse || !Array.isArray(warehouse.stock) ||
+      !TWO_DECIMAL.has(input.currencyCode)) return null;
+  const quantities = new Map<string,number>();
+  for (const line of sale.items) {
+    if (!isId(line.productId) || !isQty(line.quantity)) return null;
+    quantities.set(line.productId,(quantities.get(line.productId) ?? 0)+line.quantity);
+  }
+  const lines: FinancialSyncProofV1["stockLines"] = [];
+  const expectedVersions:Record<string,number> = {};
+  let warehouseId: string | null=null, locationId: string | null=null;
+  for (const [productId,quantity] of quantities) {
+    if (!isQty(quantity)) return null;
+    const entries=products.filter(p=>p.id===productId);
+    const positions=warehouse.stock.filter(p=>p.productId===productId &&
+      p.onHand>0);
+    if (entries.length!==1 || positions.length!==1) return null;
+    const product=entries[0], pos=positions[0];
+    const candidateWarehouse=warehouse.warehouses.filter(w=>w.id===pos.warehouseId &&
+      w.branchId===sale.branchId && w.isActive && !w.deletedAt);
+    const candidateLocation=warehouse.locations.filter(l=>l.id===pos.locationId &&
+      l.warehouseId===pos.warehouseId && l.isActive && !l.deletedAt);
+    if (candidateWarehouse.length!==1 || candidateLocation.length!==1 ||
+        !isId(pos.warehouseId) || !isId(pos.locationId) ||
+        !Number.isSafeInteger(product.version) || (product.version ?? 0)<1 ||
+        !Number.isSafeInteger(pos.version) || pos.version<1 ||
+        !Number.isFinite(product.stockQuantity) || product.stockQuantity<quantity ||
+        !Number.isFinite(pos.onHand) || pos.onHand-pos.reserved<quantity ||
+        !isQty(pos.onHand) || !isQty(product.stockQuantity) ||
+        !Number.isFinite(pos.reserved) || pos.reserved<0)
+      return null;
+    if (warehouseId && (warehouseId!==pos.warehouseId || locationId!==pos.locationId)) return null;
+    warehouseId=pos.warehouseId;locationId=pos.locationId;
+    expectedVersions[productId]=product.version!;
+    lines.push({
+      productId,quantity,expectedProductVersion:product.version!,
+      priorProductStock:product.stockQuantity,
+      resultingProductStock:Math.round((product.stockQuantity-quantity)*1000)/1000,
+      expectedWarehouseVersion:pos.version,priorOnHand:pos.onHand,
+      resultingOnHand:Math.round((pos.onHand-quantity)*1000)/1000,
+      warehouseId:pos.warehouseId,locationId:pos.locationId,
+    });
+  }
+  if (!warehouseId || !locationId) return null;
+  return {
+    schemaVersion:1,branchId:sale.branchId,warehouseId,locationId,
+    currencyCode:input.currencyCode,currencyExponent:2,expectedVersions,
+    stockLines:lines,
+  };
 }
 
 export function buildSaleFinancialEnvelope(
