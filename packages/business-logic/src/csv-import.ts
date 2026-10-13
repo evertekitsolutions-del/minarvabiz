@@ -342,8 +342,14 @@ function safeCustomerCsvCell(value: unknown): string {
 
 export function exportCustomersCsv(customers = store.listCustomers()): string {
   const lines = customers.map(customer => [
-    customer.name, customer.phone, customer.email, customer.address, customer.notes,
-  ].map(safeCustomerCsvCell).join(","));
+    safeCustomerCsvCell(customer.name),
+    // Phone is constrained to punctuation/digits by validation. +country code
+    // is a legitimate phone prefix, not a spreadsheet formula to rewrite.
+    csvCell(customer.phone),
+    csvCell(customer.email),
+    safeCustomerCsvCell(customer.address),
+    safeCustomerCsvCell(customer.notes),
+  ].join(","));
   return [customerColumns.join(","), ...lines].join("\n");
 }
 
