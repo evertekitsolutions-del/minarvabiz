@@ -24,9 +24,8 @@ import { enqueueOutbox } from "./outbox-bridge";
 import { assertPermission } from "./permissions";
 import { planSalePosting, planCollectionPosting } from "./sales-accounting";
 import { planAutomaticPosting } from "./accounting-store";
-import { consumeWarehouseStock, exportWarehouseState } from "./warehouse-store";
-import { getActiveBranch } from "./phase9-store";
-import { prepareSaleFinancialStockProof } from "./financial-sync-envelope";
+import { consumeWarehouseStock } from "./warehouse-store";
+import { prepareCheckoutFinancialSource } from "./financial-sync-checkout";
 import { planManualStockAdjustment, stockCountDelta } from "./stock-adjustment-guard";
 import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
@@ -561,12 +560,6 @@ export function createSale(input: {
     date: new Date(),
   });
   const saleId = generateId();
-  const activeBranchId = getActiveBranch()?.id;
-  // Only authoritative UUID branches can participate in S2 financial replay.
-  // Historical 'branch-hq' documents retain their original legacy shape.
-  const saleBranchId = activeBranchId &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(activeBranchId)
-    ? activeBranchId : null;
   const items: SaleItem[] = costedLines.map((line) => cartLineToSaleItem(line, saleId, generateId()));
   const customer = input.customerId ? getCustomer(input.customerId) : undefined;
   const sale: Sale = {
@@ -577,21 +570,11 @@ export function createSale(input: {
     notes: [input.notes, creditAppliedMinor > 0 ? `Exchange/store credit applied: ${formatMinorUnits(creditAppliedMinor)}` : null].filter(Boolean).join(" · ") || null,
     items,
     createdAt: nowISO(), updatedAt: nowISO(), createdBy: input.createdBy ?? null, version: 1,
-    ...(saleBranchId ? { branchId: saleBranchId } : {}),
   };
 
+  const sourceStockProof = prepareCheckoutFinancialSource(sale, getProduct);
   const accountingPlan = planSalePosting(sale, requestedSplits, creditApplied);
   if (accountingPlan.errors.length) return { sale: null as unknown as Sale, payment: null, payments: [], errors: accountingPlan.errors };
-
-  // Proof is captured before mutations, never reconstructed from remaining stock.
-  const sourceStockProof = prepareSaleFinancialStockProof({
-    sale,
-    products: sale.items.map(item => getProduct(item.productId)).filter(
-      (product): product is Product => product != null),
-    warehouse: exportWarehouseState(),
-    currencyCode: shopProfile.currency,
-  });
-
   for (const line of input.lines) {
     const p = getProduct(line.productId);
     if (p) {
@@ -600,7 +583,6 @@ export function createSale(input: {
       touchProduct(p);
     }
   }
-
   if (customer) {
     customer.totalSpending = fromMinorUnits(
       addMinorUnits(toMinorUnits(customer.totalSpending), toMinorUnits(allocation.paidAmount))
@@ -635,12 +617,9 @@ export function createSale(input: {
     paymentRemainingMinor = subtractMinorUnits(paymentRemainingMinor, amountMinor);
   }
   if (salePayments.length) touchPersistence();
-
   const postedJournal = accountingPlan.commit();
   void remoteCreateSale(sale, salePayments, Boolean(input.allowNegativeStock),
-    sourceStockProof && postedJournal
-      ? { ...sourceStockProof, journalId: postedJournal.id }
-      : undefined);
+    sourceStockProof && postedJournal ? { ...sourceStockProof, journalId: postedJournal.id } : undefined);
   auditAction("sale.create", "sales", sale.id, null, {
     total: sale.total,
     invoice: sale.invoiceNumber,
