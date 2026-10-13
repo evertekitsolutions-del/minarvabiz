@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity } from "@minarvabiz/business-logic";
+import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 
@@ -24,6 +24,13 @@ export default function ProductsPage() {
   const [categoryDescription, setCategoryDescription] = React.useState("");
   const [categoryError, setCategoryError] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const productCsvInput = React.useRef<HTMLInputElement>(null);
+  const [csvPreview, setCsvPreview] = React.useState<{
+    name: string; content: string; rows: ReturnType<typeof parseProductCsv>["rows"]; errors: string[];
+  } | null>(null);
+  const [csvBusy, setCsvBusy] = React.useState(false);
+  const [csvMessage, setCsvMessage] = React.useState<string | null>(null);
+
   const [form, setForm] = React.useState({
     name: "", sku: "", barcode: "", categoryId: "", unit: "pcs",
     costPrice: "0", sellingPrice: "0", stockQuantity: "0", minimumStock: "5",
@@ -94,6 +101,53 @@ export default function ProductsPage() {
     }
   }
 
+  function downloadCsv(content: string, filename: string) {
+    const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function previewCsvFile(file: File | null) {
+    if (!file) return;
+    setCsvMessage(null);
+    setCsvBusy(true);
+    try {
+      if (file.size > 2 * 1024 * 1024) throw new Error("CSV exceeds the 2 MB opening-data import limit");
+      const content = await file.text();
+      const result = parseProductCsv(content);
+      setCsvPreview({ name: file.name, content, rows: result.rows, errors: result.errors });
+    } catch (err) {
+      setCsvPreview(null);
+      setCsvMessage(err instanceof Error ? err.message : "Unable to read product CSV");
+    } finally {
+      setCsvBusy(false);
+      if (productCsvInput.current) productCsvInput.current.value = "";
+    }
+  }
+
+  function confirmCsvImport() {
+    if (!csvPreview || csvPreview.errors.length || !csvPreview.rows.length || csvBusy) return;
+    // The import function preflights the CSV again against the latest live
+    // SKUs/barcodes and fails without posting partial opening inventory.
+    setCsvBusy(true);
+    try {
+      const result = importProductsFromCsv(csvPreview.content);
+      if (result.errors.length) {
+        setCsvPreview({ ...csvPreview, errors: result.errors });
+        setCsvMessage("Import refused; correct the CSV before retrying.");
+      } else {
+        setCsvMessage(result.created + " products imported. Opening-stock accounting posted.");
+        setCsvPreview(null);
+        refresh();
+      }
+    } finally {
+      setCsvBusy(false);
+    }
+  }
+
   function adjustStock() {
     if (!stockProduct) return;
     try {
@@ -108,6 +162,60 @@ export default function ProductsPage() {
 
   return (
     <>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Button variant="outline" onClick={() => productCsvInput.current?.click()} disabled={csvBusy}>Preview import</Button>
+        <Button variant="outline" onClick={() => downloadCsv(
+          "name,sku,barcode,cost,price,stock,min,unit\\nExample Fabric,FAB-001,890123,12.50,20.00,1.25,0.5,m\\n",
+          "minarvabiz-product-import-template.csv"
+        )}>Download CSV template</Button>
+        <Button variant="outline" onClick={() => downloadCsv(exportProductsCsv(), "minarvabiz-products.csv")}>Export products CSV</Button>
+        <input
+          ref={productCsvInput}
+          type="file"
+          accept=".csv,text/csv"
+          aria-label="Choose product CSV to preview"
+          className="hidden"
+          onChange={(event) => { void previewCsvFile(event.target.files?.[0] || null); }}
+        />
+      </div>
+      {csvMessage && <p role="status" className="mb-3 text-sm text-slate-700">{csvMessage}</p>}
+      <Modal
+        open={!!csvPreview}
+        title="Preview product CSV opening data"
+        onClose={() => { if (!csvBusy) setCsvPreview(null); }}
+        className="max-w-xl"
+        footer={<>
+          <Button variant="outline" onClick={() => setCsvPreview(null)} disabled={csvBusy}>Cancel</Button>
+          <Button onClick={confirmCsvImport}
+            disabled={!csvPreview || csvPreview.errors.length > 0 || csvPreview.rows.length === 0 || csvBusy}>
+            Confirm import
+          </Button>
+        </>}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-700">{csvPreview?.name}: {csvPreview?.rows.length ?? 0} products in preview. Nothing has been imported yet.</p>
+          <p className="text-xs text-slate-600">Confirm only after reviewing names, quantities, costs, and SKUs. All rows must validate before any opening-stock posting.</p>
+          {!!csvPreview?.errors.length && <div role="alert" className="rounded-md border border-rose-200 p-3 text-sm text-rose-700">
+            <strong>{csvPreview.errors.length} validation issue(s)</strong>
+            <ul className="mt-2 list-disc pl-5">
+              {csvPreview.errors.slice(0, 15).map((message, index) => <li key={index}>{message}</li>)}
+            </ul>
+          </div>}
+          {!!csvPreview?.rows.length && <div className="max-h-56 overflow-auto rounded-md border">
+            <table className="w-full text-left text-xs">
+              <thead><tr><th className="px-2 py-1">Name / SKU</th><th className="px-2 py-1">Qty</th><th className="px-2 py-1">Cost</th></tr></thead>
+              <tbody>{csvPreview.rows.slice(0, 10).map((row, index) =>
+                <tr key={index} className="border-t">
+                  <td className="px-2 py-1">{row.name}<span className="block text-slate-500">{row.sku || "No SKU"}</span></td>
+                  <td className="px-2 py-1">{row.stock ?? 0} {row.unit}</td>
+                  <td className="px-2 py-1">{row.cost ?? 0}</td>
+                </tr>)}</tbody>
+            </table>
+            {csvPreview.rows.length > 10 && <p className="p-2 text-xs text-slate-500">Showing first 10 of {csvPreview.rows.length} products.</p>}
+          </div>}
+        </div>
+      </Modal>
+
       <ProductList
         products={products}
         categories={categories}
