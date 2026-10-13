@@ -26,6 +26,8 @@ import type {
   JournalEntry,
 } from "@minarvabiz/types";
 import type { LocalOutboxEvent } from "./outbox-bridge";
+import type { FinancialSyncProofV1 } from "./financial-sync-contract";
+import { touchPersistence } from "./autosave";
 import type { ShiftRule, RosterSlot } from "./workforce-roster";
 import { enqueueOutbox, exportOutbox, getOutboxScope, markOutboxFailed, markOutboxSynced } from "./outbox-bridge";
 
@@ -332,10 +334,22 @@ export async function remoteUpsertProduct(p: Product) {
   );
 }
 
-export async function remoteCreateSale(s: Sale, payments: Payment[] = [], allowNegativeStock = false) {
-  const eventIds = [enqueueOutbox("sales", s.id, "insert", s).id];
+export async function remoteCreateSale(
+  s: Sale, payments: Payment[] = [], allowNegativeStock = false,
+  sourceProof?: Omit<FinancialSyncProofV1, "paymentEventIds">
+) {
+  const saleEvent = enqueueOutbox("sales", s.id, "insert", s);
+  const eventIds = [saleEvent.id];
   for (const payment of payments) {
     eventIds.push(enqueueOutbox("payments", payment.id, "insert", payment).id);
+  }
+  if (sourceProof) {
+    // Existing grouped direct writer behavior stays unchanged. This optional
+    // immutable metadata is for later authenticated transactional S2/S3 replay.
+    saleEvent.financialSyncProof = JSON.parse(JSON.stringify({
+      ...sourceProof, paymentEventIds: eventIds.slice(1),
+    })) as FinancialSyncProofV1;
+    touchPersistence();
   }
   await deliverWithCloudAcknowledgement(
     eventIds, (target) => Boolean(target.createSale),
