@@ -79,6 +79,7 @@ const saved = JSON.parse(JSON.stringify(accounting.exportAccountingState()));
 accounting.hydrateAccountingState(saved);
 assert.equal(accounting.postExpenseJournal(cash.expense).journalEntry.id, entry.id);
 // All outbox records exist immediately, while online writes wait for dependencies.
+outbox.setOutboxScope("org-test:user-test");
 await new Promise((resolve) => setImmediate(resolve));
 const calls = [];
 let release;
@@ -87,7 +88,7 @@ remote.registerRemoteWriter({
   createExpense: async () => { calls.push('expense'); await gate; },
   upsertAccountingAccount: async () => { calls.push('account'); },
   upsertJournalEntry: async () => { calls.push('journal'); },
-});
+}, "org-test:user-test");
 const online = expenses.createExpense(input);
 const onlineEntry = find(online.expense);
 assert.deepEqual(calls, ['expense']);
@@ -96,7 +97,7 @@ assert(outbox.listPendingOutbox().some((event) => event.aggregateId === onlineEn
 release();
 await new Promise((resolve) => setImmediate(resolve));
 assert.deepEqual(calls, ['expense', 'account', 'account', 'journal']);
-remote.registerRemoteWriter({ createExpense: async () => { throw new Error('simulated offline'); } });
+remote.registerRemoteWriter({ createExpense: async () => { throw new Error('simulated offline'); } }, "org-test:user-test");
 const originalWarn = console.warn;
 console.warn = () => {};
 try {
