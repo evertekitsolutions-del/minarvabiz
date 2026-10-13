@@ -91,3 +91,26 @@ test("replacing the writer during upload still denies stale acknowledgement", as
   await request;
   assert.equal(outbox.exportOutbox()[0].status, "pending");
 });
+
+test("legacy direct expense, supplier and purchase writers refuse cross-owner data", async () => {
+  const calls = [];
+  reset(SCOPE_B, {
+    createExpense: async () => calls.push("expense"),
+    createSupplier: async () => calls.push("supplier"),
+    createPurchase: async () => calls.push("purchase"),
+  }, SCOPE_A);
+  await cloud.remoteCreateExpense({ id: "expense-B" });
+  await cloud.remoteCreateSupplier({ id: "supplier-B" });
+  await cloud.remoteCreatePurchase({ id: "purchase-B" });
+  assert.deepEqual(calls, []);
+  assert.ok(outbox.exportOutbox().every(e => e.ownerScope === SCOPE_B && e.status === "pending"));
+});
+
+test("queued customer settlement does not start after the verified session switches", async () => {
+  let calls = 0;
+  reset(SCOPE_A, { recordCustomerPayment: async () => { calls++; } }, SCOPE_A);
+  outbox.setOutboxScope(SCOPE_B);
+  await cloud.remoteCollectCustomerPayment({ id: "payment-B" }, { id: "customer-B" }, []);
+  assert.equal(calls, 0);
+  assert.ok(outbox.exportOutbox().every(e => e.ownerScope === SCOPE_B && e.status === "pending"));
+});
