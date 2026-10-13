@@ -39,7 +39,10 @@ const scope = ids.org + ":" + ids.user;
 const chart = structuredClone(account.exportAccountingState().accounts);
 const baseProfile = shop.getShopProfile();
 
-function prepare({ branchId = ids.branch, currency = "USD", quantity = 1.25, warehouse = true } = {}) {
+function prepare({
+  branchId = ids.branch, productBranchId = ids.branch, currency = "USD",
+  quantity = 1.25, warehouse = true, repeatedProduct = false,
+} = {}) {
   cloud.registerRemoteWriter(null);
   outbox.hydrateOutbox([]);
   outbox.setOutboxScope(scope);
@@ -54,7 +57,7 @@ function prepare({ branchId = ids.branch, currency = "USD", quantity = 1.25, war
   });
   account.hydrateAccountingState({ accounts: structuredClone(chart), journals: [], journalSequence: 0 });
   store.hydrateCore({
-    products: [{ id: ids.product, name: "Material", isActive: true, branchId: ids.branch,
+    products: [{ id: ids.product, name: "Material", isActive: true, branchId: productBranchId,
       stockQuantity: 7.5, costPrice: 40, sellingPrice: 100, version: 8 }],
     customers: [{ id: ids.customer, name: "Buyer", totalSpending: 0, outstandingBalance: 0, version: 1 }],
     sales: [], payments: [],
@@ -71,11 +74,11 @@ function prepare({ branchId = ids.branch, currency = "USD", quantity = 1.25, war
   // Module name is also a parameter: call through the imported module.
   require("../warehouse-store.ts").hydrateWarehouseState(w);
   return store.createSale({
-    customerId: ids.customer, lines: [{
-      productId: ids.product, productName: "Material", quantity,
+    customerId: ids.customer, lines: (repeatedProduct ? [quantity / 2, quantity / 2] : [quantity]).map(qty => ({
+      productId: ids.product, productName: "Material", quantity: qty,
       unitPrice: 100, costPrice: 40, taxRate: 0, discountPercent: 0,
       stockQuantity: 7.5,
-    }],
+    })),
     paidAmount: 125, paymentMethod: "cash",
     paymentSplits: [{ method: "cash", amount: 80 }, { method: "card", amount: 45 }],
   });
@@ -138,4 +141,18 @@ test("financial source proof remains durable across snapshot import and outbox r
   assert.equal(restore.ok, true, restore.error);
   const rebuilt = outbox.exportOutbox().find(e => e.aggregateType === "sales");
   assert.deepEqual(rebuilt.financialSyncProof, original.financialSyncProof);
+});
+
+test("a sale of another branch's product never receives a fabricated local stock proof", () => {
+  const foreign = "20000000-0000-4000-8000-000000000011";
+  const result = prepare({ productBranchId: foreign });
+  assert.deepEqual(result.errors, []);
+  assert.equal(outbox.exportOutbox().find(e => e.aggregateType === "sales").financialSyncProof, undefined);
+});
+
+test("two source mutations of the same product cannot claim only one WMS version increment", () => {
+  const result = prepare({ repeatedProduct: true });
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.sale.items.length, 2);
+  assert.equal(outbox.exportOutbox().find(e => e.aggregateType === "sales").financialSyncProof, undefined);
 });
