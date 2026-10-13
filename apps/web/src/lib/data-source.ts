@@ -21,7 +21,7 @@ import {
   type UnitOfWork,
 } from "@minarvabiz/database";
 import type { RoleName, StaffAttendanceRecord } from "@minarvabiz/types";
-import { store, ordersStore, phase5Store, phase6Store, phase9Store, warehouseStore, procurementStore, accountingStore, registerRemoteWriter, getRuntimeMode, exportOutbox, getSessionUser, setOutboxScope } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase9Store, warehouseStore, procurementStore, accountingStore, registerRemoteWriter, getRuntimeMode, exportOutbox, getSessionUser, getSessionToken, setOutboxScope } from "@minarvabiz/business-logic";
 import {
   mapCategory,
   mapSupplier,
@@ -141,7 +141,7 @@ async function hydrateRequestedStores(
   const authorization = accessToken && sessionUser
     ? await resolveOnlineAuthorization(accessToken, sessionUser.id)
     : null;
-  if (!authorization?.ok || !sessionUser) {
+  if (!authorization?.ok || !sessionUser || getSessionToken() !== accessToken) {
     registerRemoteWriter(null);
     setOutboxScope(null);
     return { ok: false, message: "Authenticated organization membership is required for cloud hydration." };
@@ -399,6 +399,13 @@ async function hydrateRequestedStores(
       journals: journalEntriesRows.length,
     });
 
+    // A slow cloud request must not resurrect an old tenant's writer after
+    // logout, token rotation or a switch to another organization.
+    if (getSessionToken() !== accessToken || getSessionUser()?.id !== sessionUser.id) {
+      registerRemoteWriter(null);
+      setOutboxScope(null);
+      return { ok: false, message: "The authenticated session changed during cloud hydration." };
+    }
     registerRemoteWriter({
       ...createAttendanceRemoteWriter(cfg),
       ...((loadRoster || hydratedDomains.has("roster")) ? createRosterRemoteWriter(cfg) : {}),
