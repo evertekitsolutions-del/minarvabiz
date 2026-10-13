@@ -4,6 +4,7 @@ import * as store from "./store";
 import { assertPermission } from "./permissions";
 import { assertLimit } from "./feature-gates";
 import * as phase9Store from "./phase9-store";
+import * as phase5Store from "./phase5-store";
 import { exportDomainSnapshotFull, importDomainSnapshot } from "./persistence";
 
 export interface ProductCsvRow {
@@ -396,6 +397,181 @@ export function importCustomersFromCsv(text: string): { created: number; errors:
     return { created: 0, errors: [
       restored.ok ? "Customer CSV import failed and local snapshot rolled back: " + message
         : "Customer CSV import failed: " + message + ". Snapshot recovery also failed: " + restored.error,
+    ] };
+  }
+}
+
+
+/**
+ * First-customer supplier master onboarding.
+ * Deliberately excludes opening balances/payables: financial opening migration
+ * requires separate reconciled postings and cannot be silently CSV-created.
+ */
+export interface SupplierCsvRow {
+  name: string;
+  company?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  category: "general" | "materials" | "laundry";
+  notes?: string;
+}
+
+const supplierColumns = ["name", "company", "phone", "email", "address", "category", "notes"] as const;
+const supplierIdentity = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+const supplierNameKey = (name: string, company?: string | null) =>
+  JSON.stringify([supplierIdentity(name), supplierIdentity(company ?? "")]);
+
+export function parseSupplierCsv(text: string): { rows: SupplierCsvRow[]; errors: string[] } {
+  if (text.length > 2 * 1024 * 1024) {
+    return { rows: [], errors: ["Supplier CSV exceeds 2 MB limit"] };
+  }
+  let records: ReturnType<typeof readCsvRecords>;
+  try {
+    records = readCsvRecords(text.replace(/^\uFEFF/, ""));
+  } catch (error) {
+    return { rows: [], errors: [error instanceof Error ? error.message : String(error)] };
+  }
+  if (records.length < 2) return { rows: [], errors: ["CSV needs header + rows"] };
+  if (records.length > 5001) return { rows: [], errors: ["Supplier CSV exceeds 5,000 rows"] };
+
+  let header: string[];
+  try {
+    header = parseCsvRecord(records[0].text).map(field => field.trim().toLowerCase());
+  } catch (error) {
+    return { rows: [], errors: ["Header: " + (error instanceof Error ? error.message : String(error))] };
+  }
+  const errors: string[] = [];
+  if (new Set(header).size !== header.length) errors.push("Header: duplicate column names");
+  if (!header.includes("name")) errors.push("Missing name column");
+  for (const field of header) {
+    if (!(supplierColumns as readonly string[]).includes(field)) {
+      errors.push("Header: unsupported column " + field + " (balances and payables require separate reconciliation)");
+    }
+  }
+  if (errors.length) return { rows: [], errors };
+
+  const rows: SupplierCsvRow[] = [];
+  const physicalLines: number[] = [];
+  const phones = new Set<string>(), emails = new Set<string>(), names = new Set<string>();
+  for (const record of records.slice(1)) {
+    let cols: string[];
+    try {
+      cols = parseCsvRecord(record.text);
+    } catch (error) {
+      errors.push("Row " + record.line + ": " + (error instanceof Error ? error.message : String(error)));
+      continue;
+    }
+    if (cols.length !== header.length) {
+      errors.push("Row " + record.line + ": expected " + header.length + " columns but found " + cols.length);
+      continue;
+    }
+    const get = (field: typeof supplierColumns[number]) =>
+      header.includes(field) ? cols[header.indexOf(field)].trim() : "";
+    const category = get("category") || "general";
+    const row: SupplierCsvRow = {
+      name: get("name"),
+      company: get("company") || undefined,
+      phone: get("phone") || undefined,
+      email: get("email") || undefined,
+      address: get("address") || undefined,
+      category: category as SupplierCsvRow["category"],
+      notes: get("notes") || undefined,
+    };
+
+    if (!row.name || row.name.length > 500) errors.push("Row " + record.line + ": name must contain 1–500 characters");
+    if (row.company && row.company.length > 500) errors.push("Row " + record.line + ": company exceeds 500 characters");
+    if (row.phone && !customerPhoneValid(row.phone)) errors.push("Row " + record.line + ": invalid phone number");
+    if (row.email && (row.email.length > 255 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email))) {
+      errors.push("Row " + record.line + ": invalid email address");
+    }
+    if (row.address && row.address.length > 1000) errors.push("Row " + record.line + ": address exceeds 1,000 characters");
+    if (row.notes && row.notes.length > 2000) errors.push("Row " + record.line + ": notes exceed 2,000 characters");
+    if (!["general", "materials", "laundry"].includes(category)) {
+      errors.push("Row " + record.line + ": unsupported supplier category " + category);
+    }
+    const nameKey = supplierNameKey(row.name, row.company);
+    if (names.has(nameKey)) errors.push("Row " + record.line + ": duplicate supplier name/company in CSV");
+    names.add(nameKey);
+    if (row.phone) {
+      const key = normalizeCustomerPhone(row.phone);
+      if (phones.has(key)) errors.push("Row " + record.line + ": duplicate phone in CSV");
+      phones.add(key);
+    }
+    if (row.email) {
+      const key = normalizeCustomerEmail(row.email);
+      if (emails.has(key)) errors.push("Row " + record.line + ": duplicate email in CSV");
+      emails.add(key);
+    }
+    rows.push(row);
+    physicalLines.push(record.line);
+  }
+
+  const existing = [...phase5Store.listSuppliers(), ...phase5Store.listArchivedSuppliers()];
+  const existingNames = new Set(existing.map(s => supplierNameKey(s.name, s.company)));
+  const existingPhones = new Set(existing.filter(s => s.phone).map(s => normalizeCustomerPhone(s.phone!)));
+  const existingEmails = new Set(existing.filter(s => s.email).map(s => normalizeCustomerEmail(s.email!)));
+  rows.forEach((row, index) => {
+    const line = physicalLines[index];
+    if (existingNames.has(supplierNameKey(row.name, row.company))) {
+      errors.push("Row " + line + ": supplier name/company already exists");
+    }
+    if (row.phone && existingPhones.has(normalizeCustomerPhone(row.phone))) {
+      errors.push("Row " + line + ": supplier phone already exists");
+    }
+    if (row.email && existingEmails.has(normalizeCustomerEmail(row.email))) {
+      errors.push("Row " + line + ": supplier email already exists");
+    }
+  });
+  return { rows, errors };
+}
+
+export function exportSuppliersCsv(suppliers = phase5Store.listSuppliers()): string {
+  const lines = suppliers.map(supplier => [
+    safeCustomerCsvCell(supplier.name),
+    safeCustomerCsvCell(supplier.company),
+    // Preserve valid international +country prefixes; safely quote legacy invalid values.
+    supplier.phone && customerPhoneValid(supplier.phone)
+      ? csvCell(supplier.phone) : safeCustomerCsvCell(supplier.phone),
+    safeCustomerCsvCell(supplier.email),
+    safeCustomerCsvCell(supplier.address),
+    safeCustomerCsvCell(supplier.category),
+    safeCustomerCsvCell(supplier.notes),
+  ].join(","));
+  return [supplierColumns.join(","), ...lines].join("\n");
+}
+
+export function importSuppliersFromCsv(text: string): { created: number; errors: string[] } {
+  // Re-parse on confirmation; never trust a stale read-only preview.
+  const preview = parseSupplierCsv(text);
+  if (preview.errors.length) return { created: 0, errors: preview.errors };
+  if (!preview.rows.length) return { created: 0, errors: ["CSV contains no supplier rows"] };
+  try {
+    assertPermission("purchases.manage");
+  } catch (error) {
+    return { created: 0, errors: [error instanceof Error ? error.message : String(error)] };
+  }
+  const rollback = exportDomainSnapshotFull();
+  try {
+    for (const row of preview.rows) {
+      phase5Store.createSupplier({
+        name: row.name,
+        company: row.company ?? null,
+        phone: row.phone ?? null,
+        email: row.email ?? null,
+        address: row.address ?? null,
+        category: row.category,
+        notes: row.notes ?? null,
+        openingBalance: 0,
+      });
+    }
+    return { created: preview.rows.length, errors: [] };
+  } catch (error) {
+    const restored = importDomainSnapshot(rollback);
+    const message = error instanceof Error ? error.message : String(error);
+    return { created: 0, errors: [
+      restored.ok ? "Supplier CSV import failed and local snapshot rolled back: " + message
+        : "Supplier CSV import failed: " + message + ". Snapshot recovery also failed: " + restored.error,
     ] };
   }
 }
