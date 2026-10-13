@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { CustomerList, CustomerProfile, Modal, Button, FormField, inputClass } from "@minarvabiz/ui";
-import { store, phase6Store, assertLimit } from "@minarvabiz/business-logic";
+import { store, phase6Store, assertLimit, parseCustomerCsv, importCustomersFromCsv, exportCustomersCsv } from "@minarvabiz/business-logic";
 import type { Customer, CustomerCrmProfile } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
@@ -17,9 +17,66 @@ export default function CustomersPage() {
   const [archiveReason, setArchiveReason] = React.useState("");
   const [form, setForm] = React.useState(emptyForm);
   const [error, setError] = React.useState<string | null>(null);
+  const csvFileRef = React.useRef<HTMLInputElement>(null);
+  const [csvPreview, setCsvPreview] = React.useState<{
+    filename: string;
+    content: string;
+    rows: ReturnType<typeof parseCustomerCsv>["rows"];
+    errors: string[];
+  } | null>(null);
+  const [csvBusy, setCsvBusy] = React.useState(false);
+  const [csvStatus, setCsvStatus] = React.useState<string | null>(null);
+
 
   const refresh = React.useCallback((q?: string) => setList(store.listCustomers(q)), []);
   React.useEffect(() => { refresh(); }, [refresh]);
+
+
+  function downloadCustomerCsv(content: string, filename: string) {
+    const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function previewCustomerCsv(file: File | null) {
+    if (!file) return;
+    setCsvBusy(true);
+    setCsvStatus(null);
+    try {
+      if (file.size > 2 * 1024 * 1024) throw new Error("Customer CSV exceeds 2 MB limit");
+      const content = await file.text();
+      const preview = parseCustomerCsv(content);
+      setCsvPreview({ filename: file.name, content, rows: preview.rows, errors: preview.errors });
+    } catch (error) {
+      setCsvPreview(null);
+      setCsvStatus(error instanceof Error ? error.message : "Customer CSV preview failed");
+    } finally {
+      setCsvBusy(false);
+      if (csvFileRef.current) csvFileRef.current.value = "";
+    }
+  }
+
+  function confirmCustomerCsv() {
+    if (!csvPreview || csvBusy || csvPreview.errors.length > 0 || csvPreview.rows.length === 0) return;
+    setCsvBusy(true);
+    try {
+      // Re-run full duplicate/license preflight against live data at confirmation time.
+      const result = importCustomersFromCsv(csvPreview.content);
+      if (result.errors.length) {
+        setCsvPreview({ ...csvPreview, errors: result.errors });
+        setCsvStatus("Customer import refused; correct the CSV or existing duplicates.");
+      } else {
+        setCsvStatus(result.created + " customers imported. No opening balances or credit was created.");
+        setCsvPreview(null);
+        refresh();
+      }
+    } finally {
+      setCsvBusy(false);
+    }
+  }
 
   function openCreate() {
     setEditTarget(null); setForm(emptyForm); setError(null); setOpen(true);
@@ -56,6 +113,54 @@ export default function CustomersPage() {
 
   return (
     <>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Button variant="outline" disabled={csvBusy} onClick={() => csvFileRef.current?.click()}>Preview customer CSV</Button>
+        <Button variant="outline" onClick={() => downloadCustomerCsv(
+          "name,phone,email,address,notes\\nSample Customer,+919876543210,sample@example.com,Kerala,Opening contact\\n",
+          "minarvabiz-customer-template.csv"
+        )}>Download customer CSV template</Button>
+        <Button variant="outline" onClick={() => downloadCustomerCsv(exportCustomersCsv(), "minarvabiz-customers.csv")}>Export customers CSV</Button>
+        <input
+          ref={csvFileRef}
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          aria-label="Select customer CSV file"
+          onChange={(event) => { void previewCustomerCsv(event.target.files?.[0] ?? null); }}
+        />
+      </div>
+      {csvStatus && <p role="status" className="mb-3 text-sm text-slate-700">{csvStatus}</p>}
+      <Modal
+        open={Boolean(csvPreview)}
+        title="Customer CSV import preview"
+        className="max-w-xl"
+        onClose={() => { if (!csvBusy) setCsvPreview(null); }}
+        footer={<>
+          <Button variant="outline" disabled={csvBusy} onClick={() => setCsvPreview(null)}>Cancel</Button>
+          <Button disabled={!csvPreview || csvPreview.errors.length > 0 || csvPreview.rows.length === 0 || csvBusy}
+            onClick={confirmCustomerCsv}>Confirm customer import</Button>
+        </>}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-700">{csvPreview?.filename}: {csvPreview?.rows.length ?? 0} customers in preview. No records have been saved yet.</p>
+          <p className="text-xs text-slate-600">Review phone numbers, emails and duplicates. Opening balances, payments and debt are never imported by this tool.</p>
+          {!!csvPreview?.errors.length && <div role="alert" className="rounded border border-rose-300 p-3 text-sm text-rose-700">
+            <strong>{csvPreview.errors.length} validation issue(s)</strong>
+            <ul className="mt-2 list-disc pl-5">{csvPreview.errors.slice(0, 15).map((msg, i) => <li key={i}>{msg}</li>)}</ul>
+          </div>}
+          {!!csvPreview?.rows.length && <div className="max-h-64 overflow-auto rounded border">
+            <table className="w-full text-left text-xs">
+              <thead><tr><th className="p-2">Customer</th><th className="p-2">Phone</th><th className="p-2">Email</th></tr></thead>
+              <tbody>{csvPreview.rows.slice(0, 15).map((row, i) => (
+                <tr key={i} className="border-t">
+                  <td className="p-2">{row.name}</td><td className="p-2">{row.phone || "—"}</td><td className="p-2">{row.email || "—"}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+            {csvPreview.rows.length > 15 && <p className="p-2 text-xs text-slate-600">Showing first 15 of {csvPreview.rows.length} customers.</p>}
+          </div>}
+        </div>
+      </Modal>
       <CustomerList customers={list} onAdd={openCreate} onSearch={refresh}
         onSelect={(c) => setProfile(phase6Store.getCustomerCrmProfile(c.id))}
         onEdit={openEdit} onArchive={(c) => { setArchiveTarget(c); setArchiveReason(""); setError(null); }} />

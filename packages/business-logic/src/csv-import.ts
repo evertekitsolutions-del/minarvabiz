@@ -1,6 +1,9 @@
 /** Product CSV import/export with preflight validation and atomic rollback. */
 import type { Product } from "@minarvabiz/types";
 import * as store from "./store";
+import { assertPermission } from "./permissions";
+import { assertLimit } from "./feature-gates";
+import * as phase9Store from "./phase9-store";
 import { exportDomainSnapshotFull, importDomainSnapshot } from "./persistence";
 
 export interface ProductCsvRow {
@@ -217,5 +220,182 @@ export function importProductsFromCsv(text: string): { created: number; errors: 
           : `Import failed: ${message}. Rollback failed: ${restore.error}`,
       ],
     };
+  }
+}
+
+
+/**
+ * First-customer migration: safe, previewable customer master CSV.
+ * Only master fields are accepted; receivables, credit and sales must go
+ * through their controlled financial migration and reconciliation.
+ */
+export interface CustomerCsvRow {
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  notes?: string;
+}
+
+const customerColumns = ["name", "phone", "email", "address", "notes"] as const;
+const normalizeCustomerPhone = (value: string) => value.replace(/\D/g, "");
+const normalizeCustomerEmail = (value: string) => value.trim().toLowerCase();
+const customerPhoneValid = (value: string) =>
+  value.length >= 7 && value.length <= 20 &&
+  /^[+\d\s\-()]+$/.test(value) &&
+  normalizeCustomerPhone(value).length >= 7;
+
+export function parseCustomerCsv(text: string): { rows: CustomerCsvRow[]; errors: string[] } {
+  if (text.length > 2 * 1024 * 1024) {
+    return { rows: [], errors: ["Customer CSV exceeds 2 MB limit"] };
+  }
+  let records: ReturnType<typeof readCsvRecords>;
+  try {
+    records = readCsvRecords(text.replace(/^\uFEFF/, ""));
+  } catch (error) {
+    return { rows: [], errors: [error instanceof Error ? error.message : String(error)] };
+  }
+  if (records.length < 2) return { rows: [], errors: ["CSV needs header + rows"] };
+  if (records.length > 5001) return { rows: [], errors: ["Customer CSV exceeds 5,000 rows"] };
+  let header: string[];
+  try {
+    header = parseCsvRecord(records[0].text).map(field => field.trim().toLowerCase());
+  } catch (error) {
+    return { rows: [], errors: ["Header: " + (error instanceof Error ? error.message : String(error))] };
+  }
+
+  const errors: string[] = [];
+  if (new Set(header).size !== header.length) errors.push("Header: duplicate column names");
+  if (!header.includes("name")) errors.push("Missing name column");
+  for (const column of header) {
+    if (!(customerColumns as readonly string[]).includes(column)) {
+      errors.push("Header: unsupported column " + column + " (financial fields cannot be imported here)");
+    }
+  }
+  if (errors.length) return { rows: [], errors };
+
+  const rows: CustomerCsvRow[] = [];
+  const lines: number[] = [];
+  const phones = new Set<string>();
+  const emails = new Set<string>();
+  for (const record of records.slice(1)) {
+    let cols: string[];
+    try {
+      cols = parseCsvRecord(record.text);
+    } catch (error) {
+      errors.push("Row " + record.line + ": " + (error instanceof Error ? error.message : String(error)));
+      continue;
+    }
+    if (cols.length !== header.length) {
+      errors.push("Row " + record.line + ": expected " + header.length + " columns but found " + cols.length);
+      continue;
+    }
+    const get = (column: typeof customerColumns[number]) =>
+      header.includes(column) ? cols[header.indexOf(column)].trim() : "";
+    const row: CustomerCsvRow = {
+      name: get("name"),
+      phone: get("phone") || undefined,
+      email: get("email") || undefined,
+      address: get("address") || undefined,
+      notes: get("notes") || undefined,
+    };
+    if (!row.name || row.name.length > 500) errors.push("Row " + record.line + ": name must contain 1–500 characters");
+    if (row.phone && !customerPhoneValid(row.phone)) errors.push("Row " + record.line + ": invalid phone number");
+    if (row.email && (row.email.length > 255 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email))) {
+      errors.push("Row " + record.line + ": invalid email address");
+    }
+    if (row.address && row.address.length > 1000) errors.push("Row " + record.line + ": address exceeds 1,000 characters");
+    if (row.notes && row.notes.length > 2000) errors.push("Row " + record.line + ": notes exceed 2,000 characters");
+    if (row.phone) {
+      const key = normalizeCustomerPhone(row.phone);
+      if (phones.has(key)) errors.push("Row " + record.line + ": duplicate phone in CSV");
+      phones.add(key);
+    }
+    if (row.email) {
+      const key = normalizeCustomerEmail(row.email);
+      if (emails.has(key)) errors.push("Row " + record.line + ": duplicate email in CSV");
+      emails.add(key);
+    }
+    rows.push(row);
+    lines.push(record.line);
+  }
+  const existing = [...store.listCustomers(), ...store.listArchivedCustomers()];
+  const existingPhones = new Set(existing.filter(c => c.phone).map(c => normalizeCustomerPhone(c.phone!)));
+  const existingEmails = new Set(existing.filter(c => c.email).map(c => normalizeCustomerEmail(c.email!)));
+  rows.forEach((row, idx) => {
+    if (row.phone && existingPhones.has(normalizeCustomerPhone(row.phone))) {
+      errors.push("Row " + lines[idx] + ": phone already exists");
+    }
+    if (row.email && existingEmails.has(normalizeCustomerEmail(row.email))) {
+      errors.push("Row " + lines[idx] + ": email already exists");
+    }
+  });
+  return { rows, errors };
+}
+
+function safeCustomerCsvCell(value: unknown): string {
+  let text = String(value ?? "");
+  // Excel-compatible exports must not evaluate customer-submitted CSV formulas.
+  if (/^[\s]*[=+\-@]/.test(text) || /^[\t\r]/.test(text)) text = "'" + text;
+  return csvCell(text);
+}
+
+export function exportCustomersCsv(customers = store.listCustomers()): string {
+  const lines = customers.map(customer => [
+    safeCustomerCsvCell(customer.name),
+    // Phone is constrained to punctuation/digits by validation. +country code
+    // is a legitimate phone prefix, not a spreadsheet formula to rewrite.
+    csvCell(customer.phone),
+    csvCell(customer.email),
+    safeCustomerCsvCell(customer.address),
+    safeCustomerCsvCell(customer.notes),
+  ].join(","));
+  return [customerColumns.join(","), ...lines].join("\n");
+}
+
+export function importCustomersFromCsv(text: string): { created: number; errors: string[] } {
+  const preview = parseCustomerCsv(text);
+  if (preview.errors.length) return { created: 0, errors: preview.errors };
+  if (!preview.rows.length) return { created: 0, errors: ["CSV contains no customer rows"] };
+
+  try {
+    // Enforce the same RBAC and plan gate as single-customer creation.
+    assertPermission("customers.manage");
+    const limit = assertLimit("customers");
+    if (!limit.allowed) return { created: 0, errors: [limit.reason ?? "Customer limit reached"] };
+    // A single-customer limit check is insufficient for a bulk operation.
+    // Refuse the entire batch before any remote or local outbox writes.
+    const usage = phase9Store.usageSnapshot();
+    const ceiling = usage.limits.maxCustomers;
+    if (ceiling >= 0 && usage.usage.customers + preview.rows.length > ceiling) {
+      return { created: 0, errors: [
+        "Customer plan limit: " + ceiling + " allowed, " + usage.usage.customers +
+        " existing, " + preview.rows.length + " proposed",
+      ] };
+    }
+  } catch (error) {
+    return { created: 0, errors: [error instanceof Error ? error.message : String(error)] };
+  }
+
+  const rollback = exportDomainSnapshotFull();
+  try {
+    for (const row of preview.rows) {
+      store.createCustomer({
+        name: row.name,
+        phone: row.phone ?? null,
+        email: row.email ?? null,
+        address: row.address ?? null,
+        notes: row.notes ?? null,
+      });
+    }
+    return { created: preview.rows.length, errors: [] };
+  } catch (error) {
+    const restored = importDomainSnapshot(rollback);
+    const message = error instanceof Error ? error.message : String(error);
+    return { created: 0, errors: [
+      restored.ok ? "Customer CSV import failed and local snapshot rolled back: " + message
+        : "Customer CSV import failed: " + message + ". Snapshot recovery also failed: " + restored.error,
+    ] };
   }
 }
