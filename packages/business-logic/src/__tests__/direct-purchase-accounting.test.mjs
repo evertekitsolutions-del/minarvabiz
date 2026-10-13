@@ -15,6 +15,7 @@ function reset() {
   procurement.hydrateProcurementState({ purchaseInvoices: [] });
   orders.hydrateOrders({ orders: [{ id: 'o', orderNumber: 'ORD-1', expenses: [], orderExpensesTotal: 0, version: 1 }] });
   outbox.hydrateOutbox([]);
+  outbox.setOutboxScope('org-test:user-test');
 }
 const buy = (extra = {}) => suppliers.createPurchase({ description: 'Fabric supplies', supplierId: 's', amount: 500, paidAmount: 200, paymentMethod: 'cash', kind: 'general', date: '2026-09-20', ...extra });
 const balance = key => { const a = accounting.getSystemAccount(key); const row = accounting.buildTrialBalance().find(r => r.accountId === a?.id); return Math.round(((row?.debit ?? 0) - (row?.credit ?? 0))*100)/100; };
@@ -48,12 +49,12 @@ assert.equal(balance('accounts_payable'), 0); assert.equal(balance('legacy_settl
 // Snapshot ordering: slow purchase insert must finish before a subsequent settlement.
 await new Promise(resolve => setImmediate(resolve)); reset();
 let release; const gate = new Promise(resolve => { release = resolve; }); const writes = [];
-remote.registerRemoteWriter({ createPurchase: async p => { writes.push(['create', p.paidAmount]); await gate; }, upsertSupplier: async s => writes.push(['supplier', s.outstandingBalance]), createPayment: async p => writes.push(['payment', p.amount]), updatePurchaseSettlement: async p => writes.push(['settle', p.paidAmount]) });
+remote.registerRemoteWriter({ createPurchase: async p => { writes.push(['create', p.paidAmount]); await gate; }, upsertSupplier: async s => writes.push(['supplier', s.outstandingBalance]), createPayment: async p => writes.push(['payment', p.amount]), updatePurchaseSettlement: async p => writes.push(['settle', p.paidAmount]) }, 'org-test:user-test');
 buy(); suppliers.recordSupplierPayment({ supplierId: 's', amount: 300, paymentMethod: 'cash' });
 await new Promise(resolve => setImmediate(resolve)); assert.deepEqual(writes, [['create', 200]]);
 release(); await new Promise(resolve => setImmediate(resolve)); assert.deepEqual(writes, [['create', 200], ['supplier', 300], ['payment', 300], ['settle', 500], ['supplier', 0]]);
 remote.registerRemoteWriter(null); reset(); const warn = console.warn; console.warn = () => {};
-remote.registerRemoteWriter({ createPurchase: async () => { throw Error('offline'); }, upsertAccountingAccount: async () => { throw Error('offline'); } });
+remote.registerRemoteWriter({ createPurchase: async () => { throw Error('offline'); }, upsertAccountingAccount: async () => { throw Error('offline'); } }, 'org-test:user-test');
 try { assert.deepEqual(buy().errors, []); await new Promise(resolve => setImmediate(resolve)); for (const type of ['purchases', 'suppliers', 'accounts', 'journal_entries', 'journal_entry_lines']) assert(outbox.listPendingOutbox().some(e => e.aggregateType === type)); }
 finally { console.warn = warn; remote.registerRemoteWriter(null); }
 console.log('Direct purchase accounting: partial/full settlement, order cost, invalid input, restore, replay, legacy, immutable source, ordered remote snapshots and offline PASS');
