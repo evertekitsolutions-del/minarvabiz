@@ -90,6 +90,11 @@ function fixture() {
     paymentEventIds:[IDS.cashEvent,IDS.cardEvent], journalId:IDS.journal,
   };
   return { version:15, exportedAt:date, sales:[sale], payments, accounting:{accounts,journals:[journal]},
+    products:[{id:IDS.product,name:"Material",stockQuantity:6.25,version:9,branchId:IDS.branch}],
+    warehouse:{warehouses:[{id:IDS.warehouse,branchId:IDS.branch,isActive:true}],
+      locations:[{id:IDS.location,warehouseId:IDS.warehouse,isActive:true}],
+      stock:[{id:"10000000-0000-4000-8000-000000000022",productId:IDS.product,
+        warehouseId:IDS.warehouse,locationId:IDS.location,onHand:3.75,reserved:0,version:5}]},
     outbox:[saleEvent,event(IDS.cashEvent,"payments",IDS.cash,structuredClone(payments[0]),15),
       event(IDS.cardEvent,"payments",IDS.card,structuredClone(payments[1]),16)] };
 }
