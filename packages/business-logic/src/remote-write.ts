@@ -102,6 +102,59 @@ function isCurrentScopedWriter(
     writerGeneration === generation && verifiedWriterScope === scope && getOutboxScope() === scope);
 }
 
+/**
+ * A response may acknowledge only the exact durable outbox revision that
+ * was sent. Hydration/restore can replace a record using the SAME event ID;
+ * mutable payloads can also change while a request is in flight.
+ * Neither a matching ID nor an authenticated HTTP response proves that the
+ * currently queued business operation is the one the server received.
+ */
+interface OutboxReceiptFence {
+  event: LocalOutboxEvent;
+  identity: string;
+}
+
+function outboxReceiptIdentity(event: LocalOutboxEvent): string | null {
+  try {
+    return JSON.stringify([
+      event.id, event.ownerScope ?? null, event.aggregateType, event.aggregateId,
+      event.eventType, event.payload, event.occurredAt, event.deviceId, event.sequence,
+    ]) ?? null;
+  } catch {
+    // Non-serializable/circular payload: hold for review, never acknowledge.
+    return null;
+  }
+}
+
+function captureOutboxReceiptFence(events: LocalOutboxEvent[]): OutboxReceiptFence[] | null {
+  if (!events.length) return null;
+  const current = exportOutbox();
+  const fences: OutboxReceiptFence[] = [];
+  for (const event of events) {
+    // A restored duplicate identifier must not mark two records synced.
+    if (current.filter(item => item.id === event.id).length !== 1 || !current.includes(event))
+      return null;
+    const identity = outboxReceiptIdentity(event);
+    if (identity === null) return null;
+    fences.push({ event, identity });
+  }
+  if (new Set(events.map(e => e.id)).size !== events.length) return null;
+  return fences;
+}
+
+function outboxReceiptFenceCurrent(
+  fences: OutboxReceiptFence[] | null, allowedStatuses: readonly LocalOutboxEvent["status"][]
+): boolean {
+  if (!fences?.length) return false;
+  const current = exportOutbox();
+  return fences.every(({ event, identity }) =>
+    current.includes(event) &&
+    current.filter(item => item.id === event.id).length === 1 &&
+    allowedStatuses.includes(event.status) &&
+    outboxReceiptIdentity(event) === identity
+  );
+}
+
 export interface ScopedMasterReplayStatus {
   available: boolean;
   pending: number;
@@ -183,8 +236,10 @@ export function retryScopedMasterOutbox(limit = 50): Promise<ScopedMasterReplayR
       if (!snapshotWriter || !snapshotScope || writer !== snapshotWriter ||
           verifiedWriterScope !== snapshotScope ||
           writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope) break;
-      // A change made after this retry began must not be silently reordered.
-      if (!eligibleScopedMasterEvents().candidates.some((current) => current.id === event.id)) continue;
+      // Capture the exact revision; a backup restore can reuse the same ID.
+      const eventFence = captureOutboxReceiptFence([event]);
+      if (!outboxReceiptFenceCurrent(eventFence, ["pending", "failed"]) ||
+          !eligibleScopedMasterEvents().candidates.includes(event)) break;
       attempted++;
       try {
         if (event.aggregateType === "categories") {
@@ -195,12 +250,14 @@ export function retryScopedMasterOutbox(limit = 50): Promise<ScopedMasterReplayR
           await snapshotWriter.upsertProduct!(event.payload as Product);
         }
         if (writer !== snapshotWriter || verifiedWriterScope !== snapshotScope ||
-            writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope) break;
+            writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope ||
+            !outboxReceiptFenceCurrent(eventFence, ["pending", "failed"])) break;
         markOutboxSynced([event.id]);
         acknowledged++;
       } catch (error) {
         if (writer !== snapshotWriter || verifiedWriterScope !== snapshotScope ||
-            writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope) break;
+            writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope ||
+            !outboxReceiptFenceCurrent(eventFence, ["pending", "failed"])) break;
         markOutboxFailed(event.id, error instanceof Error ? error.message : String(error));
         failed++;
         // Preserve causal ordering and never skip over an uncommitted earlier version.
@@ -230,9 +287,14 @@ async function deliverWithCloudAcknowledgement(
   const activeWriter = activeScopedWriter();
   const activeGeneration = writerGeneration;
   const activeScope = getOutboxScope();
-  const eventsStillPendingForOwner = () => eventIds.every(id =>
-    exportOutbox().some(e => e.id === id && e.status === "pending" && e.ownerScope === activeScope)
-  );
+  const queued = exportOutbox();
+  const matchedEvents = eventIds.map(id => queued.find(e => e.id === id));
+  const eventFence = matchedEvents.every((e): e is LocalOutboxEvent => e !== undefined)
+    ? captureOutboxReceiptFence(matchedEvents as LocalOutboxEvent[])
+    : null;
+  const eventsStillPendingForOwner = () =>
+    outboxReceiptFenceCurrent(eventFence, ["pending"]) &&
+    eventFence!.every(({ event }) => event.ownerScope === activeScope);
   if (!isCurrentScopedWriter(activeWriter, activeScope, activeGeneration) ||
       !eventsStillPendingForOwner() || !supports(activeWriter)) return;
   try {
