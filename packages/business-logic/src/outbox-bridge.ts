@@ -64,7 +64,7 @@ export function enqueueOutbox(
     deviceId,
     sequence: sequence++,
     status: "pending",
-    ownerScope: activeOutboxScope ?? undefined,
+    ...(activeOutboxScope ? { ownerScope: activeOutboxScope } : {}),
     attempts: 0,
     lastError: null,
   };
