@@ -112,7 +112,7 @@ test("exported customer CSV escapes formulas and quotes without leaking financia
 });
 test("customer CSV import enforces customer role permissions even when all rows validate",()=>{
   reset();
-  perms.setCurrentRole("cashier");
+  perms.setCurrentRole("staff");
   const before=state();
   try{
     const result=csv.importCustomersFromCsv("name,phone\nA,1234567890");
