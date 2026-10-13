@@ -314,8 +314,9 @@ export async function remoteCreateExpense(e: Expense) {
 export async function remoteCreateSupplier(s: Supplier) {
   enqueueOutbox("suppliers", s.id, "insert", s);
   try {
-    if (activeScopedWriter()?.upsertSupplier) await writer.upsertSupplier(s);
-    else await activeScopedWriter()?.createSupplier?.(s);
+    const target = activeScopedWriter();
+    if (target?.upsertSupplier) await target.upsertSupplier(s);
+    else await target?.createSupplier?.(s);
   }
   catch (e) { console.warn("[minarvabiz] remote supplier write failed", e); }
 }
@@ -323,8 +324,9 @@ export async function remoteCreateSupplier(s: Supplier) {
 export async function remoteUpsertSupplier(s: Supplier) {
   enqueueOutbox("suppliers", s.id, "update", s);
   try {
-    if (activeScopedWriter()?.upsertSupplier) await writer.upsertSupplier(s);
-    else await activeScopedWriter()?.createSupplier?.(s);
+    const target = activeScopedWriter();
+    if (target?.upsertSupplier) await target.upsertSupplier(s);
+    else await target?.createSupplier?.(s);
   }
   catch (e) { console.warn("[minarvabiz] remote supplier update failed", e); }
 }
@@ -340,10 +342,14 @@ export async function remoteCreatePurchase(p: Purchase, supplier?: Supplier) {
   enqueueOutbox("purchases", purchase.id, "insert", purchase);
   if (supplierSnapshot) enqueueOutbox("suppliers", supplierSnapshot.id, "update", supplierSnapshot);
   const target = activeScopedWriter();
+  const scope = getOutboxScope(), generation = writerGeneration;
   const write = async () => {
     try {
-      await target?.createPurchase?.(purchase);
-      if (supplierSnapshot) await target?.upsertSupplier?.(supplierSnapshot);
+      if (!isCurrentScopedWriter(target, scope, generation)) return;
+      await target.createPurchase?.(purchase);
+      if (supplierSnapshot && isCurrentScopedWriter(target, scope, generation)) {
+        await target.upsertSupplier?.(supplierSnapshot);
+      }
     } catch (e) { console.warn("[minarvabiz] remote purchase write failed", e); }
   };
   supplierSettlementQueue = supplierSettlementQueue.then(write, write);
@@ -425,10 +431,15 @@ export async function remoteCreateExpenseWithJournal(expense: Expense, accounts:
   enqueueOutbox("journal_entries", entry.id, "update", entry);
   for (const line of entry.lines) enqueueOutbox("journal_entry_lines", line.id, "update", line);
   const target = activeScopedWriter();
+  const scope = getOutboxScope(), generation = writerGeneration;
   try {
-    await target?.createExpense?.(expense);
-    for (const account of accounts) await target?.upsertAccountingAccount?.(account);
-    await target?.upsertJournalEntry?.(entry);
+    if (!isCurrentScopedWriter(target, scope, generation)) return;
+    await target.createExpense?.(expense);
+    for (const account of accounts) {
+      if (!isCurrentScopedWriter(target, scope, generation)) return;
+      await target.upsertAccountingAccount?.(account);
+    }
+    if (isCurrentScopedWriter(target, scope, generation)) await target.upsertJournalEntry?.(entry);
   } catch (error) {
     console.warn("[minarvabiz] expense accounting write pending in outbox", error);
   }
@@ -442,14 +453,19 @@ export async function remoteCollectCustomerPayment(payment: Payment, customer: C
   enqueueOutbox("customers", customer.id, "update", customer);
   for (const sale of settledSales) enqueueOutbox("sales", sale.id, "update", sale);
   const target = activeScopedWriter();
+  const scope = getOutboxScope(), generation = writerGeneration;
   const write = async () => {
     try {
-      if (target?.recordCustomerPayment) {
+      if (!isCurrentScopedWriter(target, scope, generation)) return;
+      if (target.recordCustomerPayment) {
         await target.recordCustomerPayment(payment, settledSales);
       } else {
-        await target?.createPayment?.(payment);
-        for (const sale of settledSales) await target?.updateSaleSettlement?.(sale);
-        await target?.upsertCustomer?.(customer);
+        await target.createPayment?.(payment);
+        for (const sale of settledSales) {
+          if (!isCurrentScopedWriter(target, scope, generation)) return;
+          await target.updateSaleSettlement?.(sale);
+        }
+        if (isCurrentScopedWriter(target, scope, generation)) await target.upsertCustomer?.(customer);
       }
     } catch (error) {
       console.warn("[minarvabiz] customer collection pending in outbox", error);
@@ -466,9 +482,13 @@ export async function remoteAutomaticPosting(accounts: AccountingAccount[], entr
   enqueueOutbox("journal_entries", entry.id, "update", entry);
   for (const line of entry.lines) enqueueOutbox("journal_entry_lines", line.id, "update", line);
   const target = activeScopedWriter();
+  const scope = getOutboxScope(), generation = writerGeneration;
   try {
-    for (const account of accounts) await target?.upsertAccountingAccount?.(account);
-    await target?.upsertJournalEntry?.(entry);
+    for (const account of accounts) {
+      if (!isCurrentScopedWriter(target, scope, generation)) return;
+      await target.upsertAccountingAccount?.(account);
+    }
+    if (isCurrentScopedWriter(target, scope, generation)) await target.upsertJournalEntry?.(entry);
   } catch (error) { console.warn("[minarvabiz] automatic accounting pending in outbox", error); }
 }
 
@@ -480,12 +500,20 @@ export async function remoteSupplierSettlement(payment: Payment, supplier: Suppl
   for (const invoice of invoices) enqueueOutbox("purchase_invoices", invoice.id, "update", invoice);
   for (const purchase of purchases) enqueueOutbox("purchases", purchase.id, "update", purchase);
   const target = activeScopedWriter();
+  const scope = getOutboxScope(), generation = writerGeneration;
   const write = async () => {
     try {
-      await target?.createPayment?.(payment);
-      for (const invoice of invoices) await target?.upsertPurchaseInvoice?.(invoice);
-      for (const purchase of purchases) await target?.updatePurchaseSettlement?.(purchase);
-      await target?.upsertSupplier?.(supplier);
+      if (!isCurrentScopedWriter(target, scope, generation)) return;
+      await target.createPayment?.(payment);
+      for (const invoice of invoices) {
+        if (!isCurrentScopedWriter(target, scope, generation)) return;
+        await target.upsertPurchaseInvoice?.(invoice);
+      }
+      for (const purchase of purchases) {
+        if (!isCurrentScopedWriter(target, scope, generation)) return;
+        await target.updatePurchaseSettlement?.(purchase);
+      }
+      if (isCurrentScopedWriter(target, scope, generation)) await target.upsertSupplier?.(supplier);
     } catch (error) { console.warn("[minarvabiz] supplier settlement pending in outbox", error); }
   };
   supplierSettlementQueue = supplierSettlementQueue.then(write, write);
