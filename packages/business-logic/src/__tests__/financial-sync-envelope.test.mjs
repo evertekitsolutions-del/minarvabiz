@@ -12,7 +12,7 @@ require.extensions[".ts"] = (mod, filename) => mod._compile(
     },
   }).outputText, filename,
 );
-const { buildSaleFinancialEnvelope } = require("../financial-sync-envelope.ts");
+const { buildSaleFinancialEnvelope, prepareSaleFinancialStockProof } = require("../financial-sync-envelope.ts");
 
 const IDS = {
   org: "10000000-0000-4000-8000-000000000001",
@@ -184,6 +184,38 @@ test("corrupt, unrelated, repeated IDs and invalid device sequences stay held", 
   const wrong=fixture();
   wrong.outbox[0].financialSyncProof.paymentEventIds=[IDS.cashEvent,IDS.cashEvent];
   assert.ok("held" in buildSaleFinancialEnvelope(wrong,IDS.saleEvent,scope));
+});
+
+test("capture pre-sale warehouse and product versions without mutating existing checkout data", () => {
+  const snap=fixture();
+  const beforeStock=structuredClone(snap.warehouse);
+  const beforeProducts=[{...snap.products[0],version:8,stockQuantity:7.5}];
+  beforeStock.stock[0].onHand=5;
+  beforeStock.stock[0].version=4;
+  const input={sale:snap.sales[0],products:beforeProducts,warehouse:beforeStock,currencyCode:"USD"};
+  const original=structuredClone(input);
+  const proof=prepareSaleFinancialStockProof(input);
+  assert.equal(proof.expectedVersions[IDS.product],8);
+  assert.equal(proof.stockLines[0].priorOnHand,5);
+  assert.equal(proof.stockLines[0].expectedWarehouseVersion,4);
+  assert.deepEqual(input,original);
+  const restored={...input,warehouse:{...beforeStock,stock:[]}};
+  assert.equal(prepareSaleFinancialStockProof(restored),null,"unallocated stock must stay held");
+});
+
+test("multi-location or unknown branch checkout never invents authority", () => {
+  const snap=fixture();
+  const pre=snap.warehouse;
+  pre.stock[0].onHand=5; pre.stock[0].version=4;
+  const products=[{...snap.products[0],version:8,stockQuantity:7.5}];
+  assert.equal(prepareSaleFinancialStockProof({
+    sale:{...snap.sales[0],branchId:null},products,warehouse:pre,currencyCode:"USD",
+  }),null);
+  const duplicated=structuredClone(pre);
+  duplicated.stock.push({...duplicated.stock[0],id:"10000000-0000-4000-8000-000000000023"});
+  assert.equal(prepareSaleFinancialStockProof({
+    sale:snap.sales[0],products,warehouse:duplicated,currencyCode:"USD",
+  }),null);
 });
 
 export { fixture, IDS, scope };
