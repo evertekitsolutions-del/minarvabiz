@@ -12,6 +12,7 @@ function reset(balance = 250) {
   suppliers.hydratePhase5({ suppliers: [{ id: 's', name: 'Supplier', outstandingBalance: balance, createdAt: stamp, updatedAt: stamp }], purchases: [{ id: 'p', purchaseNumber: 'PUR-1', supplierId: 's', date: '2026-09-18', amount: 100, paidAmount: 50, balanceAmount: 50, createdAt: stamp, updatedAt: stamp, version: 1 }] });
   procurement.hydrateProcurementState({ purchaseInvoices: [invoice('new', '2026-09-19'), invoice('old', '2026-09-17'), invoice('draft', '2026-09-01', { status: 'draft' }), invoice('cancelled', '2026-09-01', { status: 'cancelled' }), invoice('other', '2026-09-01', { supplierId: 'other' })] });
   store.hydrateCore({ payments: [] }); outbox.hydrateOutbox([]);
+  outbox.setOutboxScope("org-test:user-test");
 }
 const pay = (amount, extra = {}) => suppliers.recordSupplierPayment({ supplierId: 's', amount, paymentMethod: 'cash', ...extra });
 reset();
@@ -44,13 +45,13 @@ procurement.hydrateProcurementState({ purchaseInvoices: [invoice('bad', '2026-09
 assert(pay(10).errors.length); assert.equal(store.listPayments().length, 0);
 // Writes are single-insert and ordered; later settlements cannot be overwritten by an older slow request.
 reset(); let release; const gate = new Promise(resolve => { release = resolve; }); let calls = 0; const balances = [];
-remote.registerRemoteWriter({ createPayment: async () => { if (++calls === 1) await gate; }, upsertPurchaseInvoice: async i => balances.push(i.balanceAmount), upsertSupplier: async () => {} });
+remote.registerRemoteWriter({ createPayment: async () => { if (++calls === 1) await gate; }, upsertPurchaseInvoice: async i => balances.push(i.balanceAmount), upsertSupplier: async () => {} }, "org-test:user-test");
 pay(40, { purchaseInvoiceId: 'old' }); pay(60, { purchaseInvoiceId: 'old' });
 await new Promise(resolve => setImmediate(resolve)); assert.equal(calls, 1); assert.deepEqual(balances, []);
 release(); await new Promise(resolve => setImmediate(resolve)); assert.equal(calls, 2); assert.deepEqual(balances, [60, 0]);
 reset(); const writes = [];
-remote.registerRemoteWriter({ createPayment: async () => writes.push('payment'), upsertPurchaseInvoice: async () => writes.push('invoice'), updatePurchaseSettlement: async () => writes.push('purchase-update'), upsertSupplier: async () => writes.push('supplier'), createPurchase: async () => { throw Error('must not insert existing purchase'); } });
+remote.registerRemoteWriter({ createPayment: async () => writes.push('payment'), upsertPurchaseInvoice: async () => writes.push('invoice'), updatePurchaseSettlement: async () => writes.push('purchase-update'), upsertSupplier: async () => writes.push('supplier'), createPurchase: async () => { throw Error('must not insert existing purchase'); } }, "org-test:user-test");
 pay(150); await new Promise(resolve => setImmediate(resolve)); assert.deepEqual(writes, ['payment', 'invoice', 'purchase-update', 'supplier']);
-reset(); remote.registerRemoteWriter({ createPayment: async () => { throw Error('offline'); } }); const warn = console.warn; console.warn = () => {};
+reset(); remote.registerRemoteWriter({ createPayment: async () => { throw Error('offline'); } }, "org-test:user-test"); const warn = console.warn; console.warn = () => {};
 try { const pending = pay(150); await new Promise(resolve => setImmediate(resolve)); for (const type of ['payments', 'suppliers', 'purchase_invoices', 'purchases']) assert(outbox.listPendingOutbox().some(e => e.aggregateType === type)); assert(outbox.listPendingOutbox().some(e => e.aggregateId === pending.payment.id)); } finally { console.warn = warn; remote.registerRemoteWriter(null); }
 console.log('Supplier settlement FIFO, selected invoice, actual cap, direct purchases, aging, restore, invalid input, permissions and ordered online/offline writes PASS');

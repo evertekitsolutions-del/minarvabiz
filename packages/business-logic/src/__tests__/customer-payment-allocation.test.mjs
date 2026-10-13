@@ -25,6 +25,7 @@ const cancelled = { ...invoice('INV-CANCELLED', 'c', '2026-09-01'), status: 'can
 store.hydrateCore({ customers: [customer('c', 230), customer('other', 90)], sales: [newer, unrelated, cancelled, older], payments: [] });
 orders.hydrateOrders({ orders: [], measurements: [] });
 outbox.hydrateOutbox([]);
+outbox.setOutboxScope("org-test:user-test");
 const result = store.recordCustomerPayment({ customerId: 'c', amount: 120, method: 'cash', reference: 'REC-1', notes: 'Counter collection' });
 assert.deepEqual(result.errors, []);
 assert.equal(older.paidAmount, 100); assert.equal(older.balanceAmount, 0); assert.equal(older.status, 'completed');
@@ -63,7 +64,7 @@ assert.equal(store.getCustomer('bad').outstandingBalance, 80); assert.equal(stor
 // Online updates use settlement updates, never duplicate invoice creation.
 store.hydrateCore({ customers: [customer('online', 90)], sales: [invoice('ONLINE', 'online', stamp)], payments: [] });
 const calls = [];
-remote.registerRemoteWriter({ createPayment: async () => calls.push('payment'), updateSaleSettlement: async (sale) => { assert.equal(sale.balanceAmount, 0); calls.push('settlement'); }, upsertCustomer: async () => calls.push('customer'), createSale: async () => { throw new Error('must not insert invoice'); } });
+remote.registerRemoteWriter({ createPayment: async () => calls.push('payment'), updateSaleSettlement: async (sale) => { assert.equal(sale.balanceAmount, 0); calls.push('settlement'); }, upsertCustomer: async () => calls.push('customer'), createSale: async () => { throw new Error('must not insert invoice'); } }, "org-test:user-test");
 const online = store.recordCustomerPayment({ customerId: 'online', amount: 90, method: 'upi' });
 assert.deepEqual(online.errors, []);
 await new Promise((resolve) => setImmediate(resolve));
@@ -74,7 +75,7 @@ let releaseFirst;
 const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
 const balances = [];
 let writeCount = 0;
-remote.registerRemoteWriter({ createPayment: async () => { if (++writeCount === 1) await firstGate; }, updateSaleSettlement: async (sale) => balances.push(sale.balanceAmount) });
+remote.registerRemoteWriter({ createPayment: async () => { if (++writeCount === 1) await firstGate; }, updateSaleSettlement: async (sale) => balances.push(sale.balanceAmount) }, "org-test:user-test");
 store.recordCustomerPayment({ customerId: 'serial', amount: 50, method: 'cash' });
 store.recordCustomerPayment({ customerId: 'serial', amount: 40, method: 'cash' });
 await new Promise((resolve) => setImmediate(resolve));
@@ -83,7 +84,7 @@ releaseFirst();
 await new Promise((resolve) => setImmediate(resolve));
 assert.equal(writeCount, 2); assert.deepEqual(balances, [40, 0]);
 store.hydrateCore({ customers: [customer('offline', 90)], sales: [invoice('OFFLINE', 'offline', stamp)], payments: [] });
-remote.registerRemoteWriter({ createPayment: async () => { throw new Error('offline'); } });
+remote.registerRemoteWriter({ createPayment: async () => { throw new Error('offline'); } }, "org-test:user-test");
 const warn = console.warn; console.warn = () => {};
 try {
   const offline = store.recordCustomerPayment({ customerId: 'offline', amount: 90, method: 'cash' });
