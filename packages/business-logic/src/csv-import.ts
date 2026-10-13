@@ -3,6 +3,7 @@ import type { Product } from "@minarvabiz/types";
 import * as store from "./store";
 import { assertPermission } from "./permissions";
 import { assertLimit } from "./feature-gates";
+import * as phase9Store from "./phase9-store";
 import { exportDomainSnapshotFull, importDomainSnapshot } from "./persistence";
 
 export interface ProductCsvRow {
@@ -363,6 +364,16 @@ export function importCustomersFromCsv(text: string): { created: number; errors:
     assertPermission("customers.manage");
     const limit = assertLimit("customers");
     if (!limit.allowed) return { created: 0, errors: [limit.reason ?? "Customer limit reached"] };
+    // A single-customer limit check is insufficient for a bulk operation.
+    // Refuse the entire batch before any remote or local outbox writes.
+    const usage = phase9Store.usageSnapshot();
+    const ceiling = usage.limits.maxCustomers;
+    if (ceiling >= 0 && usage.usage.customers + preview.rows.length > ceiling) {
+      return { created: 0, errors: [
+        "Customer plan limit: " + ceiling + " allowed, " + usage.usage.customers +
+        " existing, " + preview.rows.length + " proposed",
+      ] };
+    }
   } catch (error) {
     return { created: 0, errors: [error instanceof Error ? error.message : String(error)] };
   }
