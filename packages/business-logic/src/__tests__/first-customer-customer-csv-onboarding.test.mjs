@@ -102,12 +102,13 @@ test("preview never writes, confirmed import creates all customers and one outbo
 });
 test("exported customer CSV escapes formulas and quotes without leaking financial balances",()=>{
   reset();
-  store.createCustomer({name:'=HYPERLINK("url")',phone:"1234567890",notes:"+CMD\nnotes"});
+  store.createCustomer({name:'=HYPERLINK("url")',phone:"+919876543210",notes:"+CMD\nnotes"});
   const exported=csv.exportCustomersCsv();
   assert.match(exported,/'=HYPERLINK/);
   assert.match(exported,/"?'\+CMD/);
   assert.ok(!exported.includes("outstandingBalance"));
   assert.ok(!exported.includes("totalSpending"));
+  assert.doesNotMatch(exported,/\x27\+919876543210/, "international phone must remain export/import compatible");
   assert.match(exported,/name,phone,email,address,notes/);
 });
 test("customer CSV import enforces customer role permissions even when all rows validate",()=>{
