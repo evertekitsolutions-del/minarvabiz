@@ -34,7 +34,7 @@ let activeOutboxScope: string | null = null;
  * Unscoped legacy events are not eligible for automatic Cloud replay.
  */
 export function setOutboxScope(scope: string | null): void {
-  activeOutboxScope = typeof scope === "string" && /^[^\\s:]+:[^\\s:]+$/.test(scope) && scope.length <= 256
+  activeOutboxScope = typeof scope === "string" && /^[^\s:]+:[^\s:]+$/.test(scope) && scope.length <= 256
     ? scope
     : null;
 }
