@@ -244,6 +244,34 @@ export class SyncEngine {
           existing.version === record.version &&
           JSON.stringify(existing) !== JSON.stringify(record);
 
+        // A cloud pull is not an acknowledgement of an offline write.
+        // A failed/rejected push must NEVER let an incoming record replace
+        // unacknowledged customer, stock, payment or accounting changes.
+        const unacknowledged = this.outbox.all().filter(
+          (event) => event.aggregateType === tableName &&
+            event.aggregateId === record.id &&
+            (event.status === "pending" || event.status === "error" || event.status === "conflict")
+        );
+        if (unacknowledged.length &&
+          (sameVersionDiverged || compareVersions(existing, record) === "remote")) {
+          const alreadyOpen = this.conflicts.some(
+            (conflict) => !conflict.resolution &&
+              conflict.tableName === tableName &&
+              conflict.recordId === record.id &&
+              conflict.localVersion === existing.version &&
+              conflict.remoteVersion === record.version
+          );
+          if (!alreadyOpen) {
+            this.conflicts.push(createConflict({
+              tableName, recordId: record.id, local: existing, remote: record,
+              strategy: "manual",
+            }));
+            session.conflicts += 1;
+          }
+          for (const event of unacknowledged) this.outbox.markConflict(event.id);
+          continue;
+        }
+
         if (sameVersionDiverged) {
           const alreadyOpen = this.conflicts.some(
             (c) =>
