@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [email, setEmail] = React.useState("");
   const [fullName, setFullName] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
@@ -78,7 +79,7 @@ export default function LoginPage() {
         </div>
         {setup && <label className="block text-sm"><span className="text-slate-600">Full name</span><input className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" autoComplete="name" value={fullName} onChange={e => setFullName(e.target.value)} required /></label>}
         <label className="block text-sm"><span className="text-slate-600">Email</span><input type="email" autoComplete="email" className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={email} onChange={e => setEmail(e.target.value)} required /></label>
-        <label className="block text-sm"><span className="text-slate-600">Password</span><input type="password" autoComplete={setup ? "new-password" : "current-password"} minLength={8} className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={password} onChange={e => setPassword(e.target.value)} required /></label>
+        <label className="block text-sm"><span className="text-slate-600">Password</span><span className="mt-1 flex items-center gap-2"><input type={showPassword ? "text" : "password"} autoComplete={setup ? "new-password" : "current-password"} minLength={8} className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm" value={password} onChange={e => setPassword(e.target.value)} required /><button type="button" aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword} onClick={() => setShowPassword(value => !value)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">{showPassword ? "Hide" : "Show"}</button></span></label>
         {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
         <p role="status" aria-live="polite" className="sr-only">{loading ? "Signing in, please wait" : ""}</p>
         <Button type="submit" className="w-full" disabled={loading}>{loading ? "Please wait…" : setup ? "Create Administrator" : "Sign in"}</Button>
