@@ -5,6 +5,7 @@ import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "
 import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
+import { parseProductPrice } from "../../../lib/parse-product-price";
 
 export default function ProductsPage() {
   const [products, setProducts] = React.useState<Product[]>([]);
@@ -81,8 +82,8 @@ export default function ProductsPage() {
         barcode: form.barcode || null,
         categoryId: form.categoryId || null,
         unit: form.unit,
-        costPrice: parseFloat(form.costPrice) || 0,
-        sellingPrice: parseFloat(form.sellingPrice) || 0,
+        costPrice: parseProductPrice(form.costPrice, "Cost price"),
+        sellingPrice: parseProductPrice(form.sellingPrice, "Selling price"),
         stockQuantity: parseNonNegativeStockQuantity(form.stockQuantity),
         minimumStock: parseNonNegativeStockQuantity(form.minimumStock),
         isActive: true,
@@ -284,10 +285,10 @@ export default function ProductsPage() {
             <input className={inputClass} value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} />
           </FormField>
           <FormField label="Cost price">
-            <input className={inputClass} type="number" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} />
+            <input className={inputClass} type="number" min="0" step="any" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} />
           </FormField>
           <FormField label="Selling price">
-            <input className={inputClass} type="number" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} />
+            <input className={inputClass} type="number" min="0" step="any" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} />
           </FormField>
           <FormField label={editingId ? "Stock qty (use Adjust Stock)" : "Opening stock"}>
             <input className={inputClass} type="number" min="0" step="0.001" value={form.stockQuantity} disabled={!!editingId} onChange={(e) => setForm({ ...form, stockQuantity: e.target.value })} />

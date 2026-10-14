@@ -85,3 +85,20 @@ assert.equal(finiteUpdate.stockQuantity, 3);
 assert.equal(finiteUpdate.taxRate, -5);
 
 console.log("Product master finite-numeric mutation tests passed");
+
+const { parseProductPrice } = require("../../../../apps/web/src/lib/parse-product-price.ts");
+assert.equal(parseProductPrice("0", "Cost price"), 0);
+assert.equal(parseProductPrice("19.95", "Selling price"), 19.95);
+assert.equal(parseProductPrice(".5", "Cost price"), 0.5);
+for (const invalid of ["", " ", "-1", "Infinity", "NaN", "12abc", "1e309", "0x10", "1,200", "999999999999999999"]) {
+  assert.throws(
+    () => parseProductPrice(invalid, "Selling price"),
+    /must be a valid non-negative amount|outside the supported monetary range/,
+    `invalid price ${JSON.stringify(invalid)} must be rejected`
+  );
+}
+const productsUi = fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/products/page.tsx", import.meta.url), "utf8");
+assert.match(productsUi, /costPrice: parseProductPrice\(form\.costPrice, "Cost price"\)/);
+assert.match(productsUi, /sellingPrice: parseProductPrice\(form\.sellingPrice, "Selling price"\)/);
+assert.doesNotMatch(productsUi, /parseFloat\(form\.(?:costPrice|sellingPrice)\)/);
+console.log("Products UI strict price parsing tests passed");
