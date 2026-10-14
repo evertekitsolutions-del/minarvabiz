@@ -84,15 +84,22 @@ export default function ToolsPage() {
             onChange={async (e) => {
               const f = e.target.files?.[0];
               if (!f) return;
-              const text = await f.text();
-              const result = importProductsFromCsv(text);
-              setCsvMsg(result.errors.length
-                ? `Import blocked. ${result.errors.join("; ")}`
-                : `Imported ${result.created} product(s) safely.`);
-              e.currentTarget.value = "";
+              const input = e.currentTarget;
+              setCsvMsg(null);
+              try {
+                const text = await f.text();
+                const result = importProductsFromCsv(text);
+                setCsvMsg(result.errors.length
+                  ? `Import blocked. ${result.errors.join("; ")}`
+                  : `Imported ${result.created} product(s) safely.`);
+              } catch {
+                setCsvMsg("Unable to read or import this CSV. Check the file format and try again.");
+              } finally {
+                input.value = "";
+              }
             }}
           />
-          {csvMsg && <p className="text-sm text-slate-600">{csvMsg}</p>}
+          {csvMsg && <p role="status" aria-live="polite" className="text-sm text-slate-600">{csvMsg}</p>}
         </CardContent>
       </Card>
 
