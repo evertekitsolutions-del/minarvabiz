@@ -10,21 +10,25 @@ export default function ForgotPasswordPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [submittedEmail, setSubmittedEmail] = React.useState<string | null>(null);
+  const [pendingEmail, setPendingEmail] = React.useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (loading || (submittedEmail !== null && submittedEmail === email.trim().toLowerCase())) return;
+    const requestedEmail = email.trim().toLowerCase();
+    setPendingEmail(requestedEmail);
     setLoading(true); setError(null); setMessage(null);
     try {
       const redirectTo = `${window.location.origin}/reset-password`;
-      const result = await requestPasswordReset(email, redirectTo);
+      const result = await requestPasswordReset(requestedEmail, redirectTo);
       if (!result.ok) { setError(result.error); return; }
-      setSubmittedEmail(email.trim().toLowerCase());
+      setSubmittedEmail(requestedEmail);
       setMessage("If this email belongs to an online Minarva Biz account, a password reset link has been sent.");
     } catch {
       setError("Unable to request a password reset. Please check your connection and try again.");
     } finally {
       setLoading(false);
+      setPendingEmail(null);
     }
   }
 
@@ -39,8 +43,8 @@ export default function ForgotPasswordPage() {
           <span className="text-slate-600">Email</span>
           <input type="email" autoComplete="email" required className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
-        {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
-        {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
+        {message && submittedEmail === email.trim().toLowerCase() && <p role="status" className="text-sm text-emerald-700">{message}</p>}
+        {error && pendingEmail === null && <p role="alert" className="text-sm text-rose-600">{error}</p>}
         <Button type="submit" className="w-full" disabled={loading || (submittedEmail !== null && submittedEmail === email.trim().toLowerCase())}>{loading ? "Sending…" : "Send reset link"}</Button>
         <div className="text-center"><a href="/login" className="text-sm font-medium text-indigo-600 hover:underline">Back to sign in</a></div>
       </form>
