@@ -6,7 +6,7 @@ import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { inputClass, selectClass } from "../forms/FormField";
-import { SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS } from "@minarvabiz/business-logic";
+import { SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, exportServiceOrdersCsv } from "@minarvabiz/business-logic";
 import { isOverdueServiceOrder, localBusinessDate } from "./order-overdue-filter";
 
 const statusStyle: Record<string, string> = {
@@ -55,6 +55,7 @@ export function OrderList({
   const [deliveryDateFrom, setDeliveryDateFrom] = React.useState("");
   const [deliveryDateTo, setDeliveryDateTo] = React.useState("");
   const [overdueOnly, setOverdueOnly] = React.useState(false);
+  const [exportFeedback, setExportFeedback] = React.useState<{ error: boolean; text: string } | null>(null);
   const businessDay = localBusinessDate();
   const visibleOrders = React.useMemo(
     () => overdueOnly ? orders.filter((order) => isOverdueServiceOrder(order, businessDay)) : orders,
@@ -81,6 +82,30 @@ export function OrderList({
     onFilterDeliveryDateTo?.("");
   };
 
+  function downloadVisibleOrdersCsv() {
+    if (visibleOrders.length === 0) return;
+    try {
+      const csv = exportServiceOrdersCsv(visibleOrders);
+      const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff), csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "minarvabiz-service-orders-" + new Date().toISOString().slice(0, 10) + ".csv";
+      document.body.appendChild(link);
+      try {
+        link.click();
+        setExportFeedback({ error: false, text: "Export requested for " + visibleOrders.length + " displayed service order(s)." });
+      } finally {
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (error) {
+      setExportFeedback({
+        error: true,
+        text: error instanceof Error ? "Service orders CSV export failed: " + error.message : "Service orders CSV export failed.",
+      });
+    }
+  }
+
   const columns: Column<ServiceOrder>[] = [
     { key: "actions", header: "Actions", render: (order) => onSelect ? (
       <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); onSelect(order); }}>
@@ -104,11 +129,13 @@ export function OrderList({
           <p role="status" className="text-sm text-slate-500">{visibleOrders.length} of {orders.length} matching orders</p>
         </div>
         <div className="flex gap-2">
+          <Button size="sm" variant="outline" disabled={visibleOrders.length === 0} onClick={downloadVisibleOrdersCsv}>Export filtered CSV</Button>
           <Button size="sm" variant="outline" onClick={clearFilters}>Clear filters</Button>
           <Button onClick={onAdd ?? onCreate}>+ New Order</Button>
         </div>
       </div>
 
+      {exportFeedback && <p role={exportFeedback.error ? "alert" : "status"} className={`text-sm ${exportFeedback.error ? "text-rose-700" : "text-slate-600"}`}>{exportFeedback.text}</p>}
       <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" className="size-4 accent-indigo-600" checked={overdueOnly} onChange={(event) => setOverdueOnly(event.target.checked)} />Overdue deliveries only</label>
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-6">
         <label className="text-xs font-medium text-slate-600 lg:col-span-2">
