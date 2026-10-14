@@ -77,6 +77,7 @@ export default function OnboardingPage() {
 
   const completed = steps.filter(step => step.done).length;
   const completionPercent = steps.length ? Math.round((completed / steps.length) * 100) : 0;
+  const visibleSteps = steps.filter(s => (!showIncompleteOnly || !s.done) && s.title.toLowerCase().includes(searchQuery.trim().toLowerCase()));
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <header className="space-y-2">
@@ -97,7 +98,7 @@ export default function OnboardingPage() {
       <label className="block text-sm font-medium text-slate-700">Search setup steps<input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Find a setup task" className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" /></label>
       <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={showIncompleteOnly} onChange={(event) => setShowIncompleteOnly(event.target.checked)} className="size-4 accent-indigo-600" />Show incomplete steps only</label>
       {error && <p role="alert" className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
-      {steps.filter(s => (!showIncompleteOnly || !s.done) && s.title.toLowerCase().includes(searchQuery.trim().toLowerCase())).map(s => (
+      {visibleSteps.map(s => (
         <Card key={s.id}>
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -114,6 +115,7 @@ export default function OnboardingPage() {
           </CardContent>
         </Card>
       ))}
+      {loaded && visibleSteps.length === 0 && searchQuery.trim() && <p role="status" className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">No setup steps match your search.</p>}
       {loaded && showIncompleteOnly && completed === steps.length && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">All checklist steps have been confirmed in this browser.</p>}
     </div>
   );
