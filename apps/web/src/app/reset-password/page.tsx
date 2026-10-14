@@ -11,8 +11,9 @@ function readRecoveryToken(): string {
   const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
   const query = new URLSearchParams(url.search);
   const token = hash.get("access_token") || query.get("access_token") || "";
+  const linkType = hash.get("type") || query.get("type");
 
-  for (const key of ["access_token", "refresh_token", "provider_token", "provider_refresh_token"]) {
+  for (const key of ["access_token", "refresh_token", "provider_token", "provider_refresh_token", "token_type"]) {
     hash.delete(key);
     query.delete(key);
   }
@@ -25,7 +26,8 @@ function readRecoveryToken(): string {
     (sanitizedHash ? `#${sanitizedHash}` : "");
   window.history.replaceState(null, "", sanitized);
 
-  return token;
+  // A token explicitly issued for signup/invite must not be used for password recovery.
+  return linkType && linkType !== "recovery" ? "" : token;
 }
 
 export default function ResetPasswordPage() {
