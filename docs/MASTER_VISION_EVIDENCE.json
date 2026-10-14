@@ -25,6 +25,30 @@
         "verifiedBy": "ChatGPT source review",
         "verifiedAt": "2026-10-14"
       }
+    },
+    "INV-010": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/977683e2972cfac85db543729182f1f7b4c2fadc/packages/business-logic/src/store.ts",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/977683e2972cfac85db543729182f1f7b4c2fadc/packages/business-logic/src/__tests__/opening-stock-accounting.test.mjs",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      }
+    },
+    "PUR-003": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/977683e2972cfac85db543729182f1f7b4c2fadc/packages/business-logic/src/procurement-store.ts",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/977683e2972cfac85db543729182f1f7b4c2fadc/packages/business-logic/src/__tests__/commercial-purchase-sale-recovery.test.mjs",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      }
     }
   }
 }
