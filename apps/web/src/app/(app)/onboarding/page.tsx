@@ -15,6 +15,7 @@ export default function OnboardingPage() {
   const [steps, setSteps] = React.useState(() => getOnboardingSteps().map(step => ({ ...step, done: false })));
   const [scopeKey, setScopeKey] = React.useState<string | null>(null);
   const [loaded, setLoaded] = React.useState(false);
+  const [showIncompleteOnly, setShowIncompleteOnly] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -92,8 +93,9 @@ export default function OnboardingPage() {
         </div>
         <p className="text-xs text-slate-600">{completionPercent}% of this browser checklist confirmed — not deployment or product readiness.</p>
       </header>
+      <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={showIncompleteOnly} onChange={(event) => setShowIncompleteOnly(event.target.checked)} className="size-4 accent-indigo-600" />Show incomplete steps only</label>
       {error && <p role="alert" className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
-      {steps.map(s => (
+      {steps.filter(s => !showIncompleteOnly || !s.done).map(s => (
         <Card key={s.id}>
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -110,6 +112,7 @@ export default function OnboardingPage() {
           </CardContent>
         </Card>
       ))}
+      {loaded && showIncompleteOnly && completed === steps.length && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">All checklist steps have been confirmed in this browser.</p>}
     </div>
   );
 }
