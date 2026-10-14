@@ -49,6 +49,66 @@
         "verifiedBy": "ChatGPT source review",
         "verifiedAt": "2026-10-14"
       }
+    },
+    "SAL-002": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/quotations.ts",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/__tests__/quotations.test.mjs",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      }
+    },
+    "SAL-011": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/phase7-store.ts",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/__tests__/first-customer-return-restock-consistency.test.mjs",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      }
+    },
+    "FIN-003": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/accounting-store.ts",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/__tests__/commercial-purchase-sale-recovery.test.mjs",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      }
+    },
+    "INV-015": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/warehouse-store.ts",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/__tests__/warehouse-transfer-conservation.test.mjs",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      }
+    },
+    "PUR-001": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/phase5-store.ts",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/__tests__/master-data-customer-supplier-controls.test.mjs",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      }
     }
   }
 }
