@@ -30,5 +30,5 @@ assert.match(header, /event\.key === "Escape"/);
 assert.match(web, /showSearch:\s*true/);
 
 // The Products tab must highlight Products, not Dashboard, on its real route.
-assert.match(web, /"\\/products"\\s*:\\s*"products"/);
+assert.ok(web.includes('"/products": "products"'), "Products route must resolve to Products active nav");
 console.log("Frontend mobile navigation and search contract PASS");
