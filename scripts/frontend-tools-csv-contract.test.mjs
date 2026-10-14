@@ -7,3 +7,17 @@ assert.match(source, /finally\s*\{\s*input\.value = ""/);
 assert.match(source, /role="status" aria-live="polite"/);
 assert.match(source, /const input = e\.currentTarget/);
 console.log("Product CSV frontend error handling PASS");
+
+const customers = fs.readFileSync(new URL("../apps/web/src/app/(app)/customers/page.tsx", import.meta.url), "utf8");
+const confirm = customers.match(/function confirmCustomerCsv\(\) \{([\s\S]*?)\n  \}\n\n  function openCreate/);
+assert.ok(confirm, "Customer import confirmation must remain testable");
+assert.match(confirm[1], /catch\s*\(error\)\s*\{/);
+assert.match(confirm[1], /setCsvStatusIsError\(true\)/);
+assert.match(confirm[1], /setCsvBusy\(false\)/);
+assert.match(confirm[1], /setCsvPreview\(null\)/);
+assert.match(customers, /role=\{csvStatusIsError \? "alert" : "status"\}/);
+assert.match(customers, /const lastSearchRef = React\.useRef\(""{0,1}\)/);
+assert.match(customers, /if \(nextQuery !== undefined\) lastSearchRef\.current = nextQuery/);
+assert.match(customers, /store\.listCustomers\(lastSearchRef\.current\)/);
+assert.match(customers, /setProfile\(phase6Store\.getCustomerCrmProfile\(editTarget\.id\)\)/);
+console.log("Customer CSV error recovery and persistent list search contract PASS");
