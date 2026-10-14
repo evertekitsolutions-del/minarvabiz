@@ -34,6 +34,8 @@ jobs:
         run: node scripts/frontend-tools-csv-contract.test.mjs
       - name: Verify notification frontend
         run: node scripts/frontend-notifications-contract.test.mjs
+      - name: Verify onboarding progress frontend
+        run: node scripts/frontend-onboarding-progress-contract.test.mjs
       - name: Verify authentication frontend accessibility
         run: node scripts/frontend-auth-accessibility-contract.test.mjs
       - name: Verify Master Vision pointwise scoring and scope
