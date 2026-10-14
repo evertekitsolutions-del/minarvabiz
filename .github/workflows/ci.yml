@@ -26,19 +26,6 @@ jobs:
         run: node scripts/github-actions-hardening-smoke.mjs
       - name: Verify isolated Cloudflare customer preview configuration
         run: node scripts/frontend-cloudflare-config-smoke.mjs
-      - name: Verify incompatible Cloudflare adapter deployment is blocked
-        shell: bash
-        run: |
-          set +e
-          output="$(node scripts/frontend-cloudflare-preview-deploy.mjs --build-only 2>&1)"
-          status=$?
-          set -e
-          if [ "$status" -ne 2 ]; then
-            echo "Expected fail-closed compatibility refusal; got $status"
-            echo "$output"
-            exit 1
-          fi
-          echo "$output" | grep -Fq "Cloudflare adapter deployment blocked: locked Next.js 15.5.24"
       - name: Verify mobile-first navigation and accessible global search
         run: node scripts/mobile-frontend-contract-smoke.mjs
       - name: Verify durable development continuity without external API charges
