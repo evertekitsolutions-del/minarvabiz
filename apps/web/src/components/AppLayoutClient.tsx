@@ -31,6 +31,7 @@ const requireAuthByDefault =
 const pathToNav: Record<string, NavItemId> = {
   "/dashboard": "dashboard",
   "/sales": "sales",
+  "/products": "products",
   "/warehouse": "warehouse",
   "/inventory": "products",
   "/variants": "products",
@@ -234,7 +235,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
               logoSrc: "/logo-mark.png",
             }}
             header={{
-              showSearch: pathname !== "/dashboard",
+              showSearch: true,
               onSearch: (q: string) => {
                 if (!q.trim()) {
                   setSearchResults([]);
