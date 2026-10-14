@@ -34,8 +34,13 @@ export default function LoginPage() {
           return;
         }
         setSetup(false);
-        setSession((await login(email, password)).session!.token, {
-          id: result.user.id, email: result.user.email, fullName: result.user.fullName, role: result.user.role,
+        const signedIn = await login(email, password);
+        if (signedIn.error || !signedIn.session || !signedIn.user) {
+          setError(signedIn.error || "Administrator created, but sign-in failed. Please sign in again.");
+          return;
+        }
+        setSession(signedIn.session.token, {
+          id: signedIn.user.id, email: signedIn.user.email, fullName: signedIn.user.fullName, role: signedIn.user.role,
         });
         router.push("/dashboard");
         return;
