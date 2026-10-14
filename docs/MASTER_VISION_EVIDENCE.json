@@ -1,5 +1,30 @@
 {
   "schemaVersion": 1,
   "assessmentPolicy": "Each gate needs a real evidence URL, named reviewer, verified date. Empty register means not assessed, NOT unimplemented.",
-  "assessments": {}
+  "assessments": {
+    "HR-002": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/b1dda393e97c39c34ef2fd36e0e1d833d5d6767c/apps/web/src/app/(app)/attendance/page.tsx",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/b1dda393e97c39c34ef2fd36e0e1d833d5d6767c/packages/business-logic/src/__tests__/attendance-grid.test.mjs",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      }
+    },
+    "SAL-001": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/b1dda393e97c39c34ef2fd36e0e1d833d5d6767c/apps/web/src/app/(app)/sales/page.tsx",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/b1dda393e97c39c34ef2fd36e0e1d833d5d6767c/packages/business-logic/src/__tests__/commercial-purchase-sale-recovery.test.mjs",
+        "verifiedBy": "ChatGPT source review",
+        "verifiedAt": "2026-10-14"
+      }
+    }
+  }
 }
