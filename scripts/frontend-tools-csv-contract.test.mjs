@@ -21,3 +21,16 @@ assert.match(customers, /if \(nextQuery !== undefined\) lastSearchRef\.current =
 assert.match(customers, /store\.listCustomers\(lastSearchRef\.current\)/);
 assert.match(customers, /setProfile\(phase6Store\.getCustomerCrmProfile\(editTarget\.id\)\)/);
 console.log("Customer CSV error recovery and persistent list search contract PASS");
+
+for (const [label, relativePath] of [
+  ["customers", "../apps/web/src/app/(app)/customers/page.tsx"],
+  ["products", "../apps/web/src/app/(app)/products/page.tsx"],
+]) {
+  const page = fs.readFileSync(new URL(relativePath, import.meta.url), "utf8");
+  const literal = page.match(/"name,[^"]+"/)?.[0];
+  assert.ok(literal, `${label} download template string exists`);
+  const csv = JSON.parse(literal);
+  assert.equal(csv.split("\n").filter(Boolean).length, 2, `${label} CSV template must have header and sample row`);
+  assert.doesNotMatch(csv, /\\n/, `${label} template must not export literal backslash-n text`);
+}
+console.log("Customer and product downloadable CSV templates contain proper record separators");

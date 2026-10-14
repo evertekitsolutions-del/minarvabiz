@@ -131,7 +131,7 @@ export default function CustomersPage() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Button variant="outline" disabled={csvBusy} onClick={() => csvFileRef.current?.click()}>Preview customer CSV</Button>
         <Button variant="outline" onClick={() => downloadCustomerCsv(
-          "name,phone,email,address,notes\\nSample Customer,+919876543210,sample@example.com,Kerala,Opening contact\\n",
+          "name,phone,email,address,notes\nSample Customer,+919876543210,sample@example.com,Kerala,Opening contact\n",
           "minarvabiz-customer-template.csv"
         )}>Download customer CSV template</Button>
         <Button variant="outline" onClick={() => downloadCustomerCsv(exportCustomersCsv(), "minarvabiz-customers.csv")}>Export customers CSV</Button>
