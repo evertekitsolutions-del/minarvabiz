@@ -7,6 +7,7 @@ import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { inputClass, selectClass } from "../forms/FormField";
 import { SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS } from "@minarvabiz/business-logic";
+import { isOverdueServiceOrder, localBusinessDate } from "./order-overdue-filter";
 
 const statusStyle: Record<string, string> = {
   pending: "bg-amber-50 text-amber-700 ring-amber-200",
@@ -53,6 +54,12 @@ export function OrderList({
   const [orderDateTo, setOrderDateTo] = React.useState("");
   const [deliveryDateFrom, setDeliveryDateFrom] = React.useState("");
   const [deliveryDateTo, setDeliveryDateTo] = React.useState("");
+  const [overdueOnly, setOverdueOnly] = React.useState(false);
+  const businessDay = localBusinessDate();
+  const visibleOrders = React.useMemo(
+    () => overdueOnly ? orders.filter((order) => isOverdueServiceOrder(order, businessDay)) : orders,
+    [orders, overdueOnly, businessDay],
+  );
 
   const clearFilters = () => {
     setQ("");
@@ -63,6 +70,7 @@ export function OrderList({
     setOrderDateTo("");
     setDeliveryDateFrom("");
     setDeliveryDateTo("");
+    setOverdueOnly(false);
     onSearch?.("");
     onFilterStatus?.(null);
     onFilterType?.(null);
@@ -93,7 +101,7 @@ export function OrderList({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Services & Orders</h2>
-          <p className="text-sm text-slate-500">{orders.length} matching orders</p>
+          <p role="status" className="text-sm text-slate-500">{visibleOrders.length} of {orders.length} matching orders</p>
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={clearFilters}>Clear filters</Button>
@@ -101,6 +109,7 @@ export function OrderList({
         </div>
       </div>
 
+      <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" className="size-4 accent-indigo-600" checked={overdueOnly} onChange={(event) => setOverdueOnly(event.target.checked)} />Overdue deliveries only</label>
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-6">
         <label className="text-xs font-medium text-slate-600 lg:col-span-2">
           Search order, customer or notes
@@ -157,7 +166,7 @@ export function OrderList({
         </div>
       </div>
 
-      <DataTable columns={columns} rows={orders} onRowClick={onSelect} emptyMessage="No orders match the selected filters" />
+      <DataTable columns={columns} rows={visibleOrders} onRowClick={onSelect} emptyMessage={overdueOnly ? "No overdue orders match the selected filters" : "No orders match the selected filters"} />
     </div>
   );
 }
