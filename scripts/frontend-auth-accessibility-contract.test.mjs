@@ -11,4 +11,9 @@ assert.match(read("login/page.tsx"), /autoComplete=\{setup \? "new-password" : "
 assert.match(read("login/page.tsx"), /autoComplete="name"/);
 assert.match(read("login/page.tsx"), /aria-pressed=\{showPassword\}/);
 assert.match(read("login/page.tsx"), /type="button" aria-label=\{showPassword \? "Hide password" : "Show password"\}/);
+for (const path of ["forgot-password/page.tsx", "reset-password/page.tsx"]) {
+ const source = read(path);
+ assert.match(source, /catch\s*\{/, path + " must display a recoverable network failure");
+ assert.match(source, /finally\s*\{\s*setLoading\(false\)/, path + " must reset loading even when request throws");
+}
 console.log("Authentication frontend accessibility contract PASS");

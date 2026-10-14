@@ -13,11 +13,16 @@ export default function ForgotPasswordPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true); setError(null); setMessage(null);
-    const redirectTo = `${window.location.origin}/reset-password`;
-    const result = await requestPasswordReset(email, redirectTo);
-    setLoading(false);
-    if (!result.ok) { setError(result.error); return; }
-    setMessage("If this email belongs to an online Minarva Biz account, a password reset link has been sent.");
+    try {
+      const redirectTo = `${window.location.origin}/reset-password`;
+      const result = await requestPasswordReset(email, redirectTo);
+      if (!result.ok) { setError(result.error); return; }
+      setMessage("If this email belongs to an online Minarva Biz account, a password reset link has been sent.");
+    } catch {
+      setError("Unable to request a password reset. Please check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

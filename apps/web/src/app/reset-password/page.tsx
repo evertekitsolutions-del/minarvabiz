@@ -44,11 +44,16 @@ export default function ResetPasswordPage() {
     if (password.length < 8) { setError("Password must contain at least 8 characters."); return; }
     if (password !== confirm) { setError("Passwords do not match."); return; }
     setLoading(true);
-    const result = await updatePasswordFromRecovery(token, password);
-    setLoading(false);
-    if (!result.ok) { setError(result.error); return; }
-    setMessage("Password updated successfully. You can now sign in with the new password.");
-    setPassword(""); setConfirm("");
+    try {
+      const result = await updatePasswordFromRecovery(token, password);
+      if (!result.ok) { setError(result.error); return; }
+      setMessage("Password updated successfully. You can now sign in with the new password.");
+      setPassword(""); setConfirm("");
+    } catch {
+      setError("Unable to update your password. Please check your connection and request a new link if needed.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
