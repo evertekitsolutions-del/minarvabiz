@@ -78,7 +78,7 @@ export default function LoginPage() {
         </div>
         {setup && <label className="block text-sm"><span className="text-slate-600">Full name</span><input className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" autoComplete="name" value={fullName} onChange={e => setFullName(e.target.value)} required /></label>}
         <label className="block text-sm"><span className="text-slate-600">Email</span><input type="email" autoComplete="email" className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={email} onChange={e => setEmail(e.target.value)} required /></label>
-        <label className="block text-sm"><span className="text-slate-600">Password</span><input type="password" autoComplete="current-password" minLength={8} className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={password} onChange={e => setPassword(e.target.value)} required /></label>
+        <label className="block text-sm"><span className="text-slate-600">Password</span><input type="password" autoComplete={setup ? "new-password" : "current-password"} minLength={8} className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={password} onChange={e => setPassword(e.target.value)} required /></label>
         {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
         <p role="status" aria-live="polite" className="sr-only">{loading ? "Signing in, please wait" : ""}</p>
         <Button type="submit" className="w-full" disabled={loading}>{loading ? "Please wait…" : setup ? "Create Administrator" : "Sign in"}</Button>
