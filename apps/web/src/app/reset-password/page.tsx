@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Button } from "@minarvabiz/ui";
 import { updatePasswordFromRecovery } from "@/lib/data-source";
+import { isRecoveryPurpose } from "@/lib/recovery-purpose";
 
 function readRecoveryToken(): string {
   if (typeof window === "undefined") return "";
@@ -11,8 +12,9 @@ function readRecoveryToken(): string {
   const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
   const query = new URLSearchParams(url.search);
   const token = hash.get("access_token") || query.get("access_token") || "";
+  const allowedPurpose = isRecoveryPurpose(hash.get("type"), query.get("type"));
 
-  for (const key of ["access_token", "refresh_token", "provider_token", "provider_refresh_token"]) {
+  for (const key of ["access_token", "refresh_token", "provider_token", "provider_refresh_token", "token_type"]) {
     hash.delete(key);
     query.delete(key);
   }
@@ -25,7 +27,7 @@ function readRecoveryToken(): string {
     (sanitizedHash ? `#${sanitizedHash}` : "");
   window.history.replaceState(null, "", sanitized);
 
-  return token;
+  return allowedPurpose ? token : "";
 }
 
 export default function ResetPasswordPage() {
