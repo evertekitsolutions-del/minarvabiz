@@ -26,6 +26,11 @@ jobs:
         run: node scripts/github-actions-hardening-smoke.mjs
       - name: Verify isolated Cloudflare customer preview configuration
         run: node scripts/frontend-cloudflare-config-smoke.mjs
+      - name: Verify Master Vision pointwise scoring and scope
+        run: |
+          node --test scripts/master-vision-measurement.test.mjs
+          node scripts/master-vision-measurement.mjs --json > /tmp/minarva-measurement.json
+          node -e 'const m=require("/tmp/minarva-measurement.json"); if(m.totalCapabilities !== 440 || m.totalPoints !== 2200 || m.actualCompletionPercent !== null) process.exit(1)'
       - name: Verify mobile-first navigation and accessible global search
         run: node scripts/mobile-frontend-contract-smoke.mjs
       - name: Verify durable development continuity without external API charges
