@@ -105,3 +105,4 @@ export * from "./financial-sync-contract";
 export * from "./financial-sync-envelope";
 
 export { exportReorderCsv } from "./reorder-csv";
+export { exportSalesHistoryCsv } from "./sales-history-csv";

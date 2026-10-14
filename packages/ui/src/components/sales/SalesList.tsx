@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import type { Sale, Customer } from "@minarvabiz/types";
+import { exportSalesHistoryCsv } from "@minarvabiz/business-logic";
 import { DataTable, type Column } from "../data/DataTable";
 import { formatMoney } from "../customers/format";
 import { Button } from "../Button";
@@ -48,6 +49,7 @@ export function SalesList({
   const [status, setStatus] = React.useState("");
   const [dateFrom, setDateFrom] = React.useState("");
   const [dateTo, setDateTo] = React.useState("");
+  const [exportNotice, setExportNotice] = React.useState<{ error: boolean; text: string } | null>(null);
 
   const filteredSales = React.useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -75,6 +77,30 @@ export function SalesList({
     setDateFrom("");
     setDateTo("");
   };
+
+  function downloadFilteredCsv() {
+    if (filteredSales.length === 0) return;
+    try {
+      const content = exportSalesHistoryCsv(filteredSales);
+      const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff), content], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `minarvabiz-sales-history-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      try {
+        link.click();
+        setExportNotice({ error: false, text: `Export requested for ${filteredSales.length} filtered invoice(s).` });
+      } finally {
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (error) {
+      setExportNotice({
+        error: true,
+        text: error instanceof Error ? `Invoice CSV export failed: ${error.message}` : "Invoice CSV export failed.",
+      });
+    }
+  }
 
   const columns: Column<Sale>[] = [
     {
@@ -113,8 +139,14 @@ export function SalesList({
             <p className="text-sm text-slate-500">{filteredSales.length} of {sales.length} invoices</p>
             <p className="mt-1 text-sm text-slate-500">To cancel a posted bill, choose Cancel / Return / Refund and select all remaining items. The original invoice stays in history.</p>
           </div>
-          <Button size="sm" variant="outline" onClick={clearFilters}>Clear filters</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={downloadFilteredCsv} disabled={filteredSales.length === 0}>Export filtered CSV</Button>
+            <Button size="sm" variant="outline" onClick={clearFilters}>Clear filters</Button>
+          </div>
         </div>
+
+        {exportNotice && <p role={exportNotice.error ? "alert" : "status"} className={`text-sm ${exportNotice.error ? "text-rose-700" : "text-slate-600"}`}>{exportNotice.text}</p>}
+        <p className="text-xs text-slate-500">CSV exports exactly the displayed invoice selection, including any cancelled or returned bills. For net revenue and tax totals, use Reports.</p>
 
         <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="text-xs font-medium text-slate-600 lg:col-span-2">
