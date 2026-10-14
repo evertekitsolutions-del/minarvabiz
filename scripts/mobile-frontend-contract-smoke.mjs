@@ -28,4 +28,7 @@ assert.match(header, /aria-label="Search customers, orders, products and invoice
 assert.match(header, /onSearch\?\.\(e\.target\.value\)/);
 assert.match(header, /event\.key === "Escape"/);
 assert.match(web, /showSearch:\s*true/);
+
+// The Products tab must highlight Products, not Dashboard, on its real route.
+assert.match(web, /"\\/products"\\s*:\\s*"products"/);
 console.log("Frontend mobile navigation and search contract PASS");
