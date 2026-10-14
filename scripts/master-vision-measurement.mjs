@@ -25,8 +25,11 @@ export function parseCapabilityRegistry(markdown, isAi = false) {
     parsed.push({ id: match[1], name: match[2].trim(), group, kind: isAi ? "ai" : "product" });
   }
   if (isAi && parsed.length === 0) {
-    const unique = [...new Set(markdown.match(/\bAI-[A-Z]+-\d{3}\b/g) ?? [])];
-    return unique.map(id => ({ id, name: id, group: "AI capabilities", kind: "ai" }));
+    const headings = [...markdown.matchAll(/^#{2,4}\s+(AI-[A-Z]+-\d{3})\s+[—–-]\s+(.+)$/gm)];
+    const unique = new Map(headings.map(x => [x[1], x[2].trim()]));
+    const listed = new Set(markdown.match(/\bAI-[A-Z]+-\d{3}\b/g) ?? []);
+    for (const id of listed) if (!unique.has(id)) unique.set(id, id);
+    return [...unique].map(([id, name]) => ({ id, name, group: "AI capabilities", kind: "ai" }));
   }
   return parsed;
 }
