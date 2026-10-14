@@ -30,6 +30,10 @@ jobs:
         run: node scripts/master-vision-source-inventory.mjs --summary
       - name: Verify linked help workflows
         run: node scripts/frontend-help-workflows-contract.test.mjs
+      - name: Verify CSV frontend safety
+        run: node scripts/frontend-tools-csv-contract.test.mjs
+      - name: Verify notification frontend
+        run: node scripts/frontend-notifications-contract.test.mjs
       - name: Verify authentication frontend accessibility
         run: node scripts/frontend-auth-accessibility-contract.test.mjs
       - name: Verify Master Vision pointwise scoring and scope
