@@ -43,7 +43,7 @@ assert.equal(exportSalesHistoryCsv([]), "invoice_date,invoice_number,customer,st
 assert.throws(() => exportSalesHistoryCsv([row({ total: Infinity })]), /invalid numeric amount/);
 assert.throws(() => exportSalesHistoryCsv([row({ taxAmount: NaN })]), /invalid numeric amount/);
 
-const ui = fs.readFileSync(new URL("../../../../ui/src/components/sales/SalesList.tsx", import.meta.url), "utf8");
+const ui = fs.readFileSync(new URL("../../../ui/src/components/sales/SalesList.tsx", import.meta.url), "utf8");
 assert.match(ui, /exportSalesHistoryCsv\(filteredSales\)/, "export must use the same filtered sales as the table");
 assert.match(ui, /disabled=\{filteredSales\.length === 0\}/, "empty export must be blocked");
 assert.match(ui, /onClick=\{downloadFilteredCsv\}/);
