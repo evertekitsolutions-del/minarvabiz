@@ -9,4 +9,6 @@ for (const path of ["login/page.tsx", "forgot-password/page.tsx", "reset-passwor
 }
 assert.match(read("login/page.tsx"), /autoComplete=\{setup \? "new-password" : "current-password"\}/);
 assert.match(read("login/page.tsx"), /autoComplete="name"/);
+assert.match(read("login/page.tsx"), /aria-pressed=\{showPassword\}/);
+assert.match(read("login/page.tsx"), /type="button" aria-label=\{showPassword \? "Hide password" : "Show password"\}/);
 console.log("Authentication frontend accessibility contract PASS");
