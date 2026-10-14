@@ -166,7 +166,7 @@ export default function ProductsPage() {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Button variant="outline" onClick={() => productCsvInput.current?.click()} disabled={csvBusy}>Preview import</Button>
         <Button variant="outline" onClick={() => downloadCsv(
-          "name,sku,barcode,cost,price,stock,min,unit\\nExample Fabric,FAB-001,890123,12.50,20.00,1.25,0.5,m\\n",
+          "name,sku,barcode,cost,price,stock,min,unit\nExample Fabric,FAB-001,890123,12.50,20.00,1.25,0.5,m\n",
           "minarvabiz-product-import-template.csv"
         )}>Download CSV template</Button>
         <Button variant="outline" onClick={() => downloadCsv(exportProductsCsv(), "minarvabiz-products.csv")}>Export products CSV</Button>
