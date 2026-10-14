@@ -26,9 +26,13 @@ export default function CustomersPage() {
   } | null>(null);
   const [csvBusy, setCsvBusy] = React.useState(false);
   const [csvStatus, setCsvStatus] = React.useState<string | null>(null);
+  const [csvStatusIsError, setCsvStatusIsError] = React.useState(false);
+  const lastSearchRef = React.useRef("");
 
-
-  const refresh = React.useCallback((q?: string) => setList(store.listCustomers(q)), []);
+  const refresh = React.useCallback((nextQuery?: string) => {
+    if (nextQuery !== undefined) lastSearchRef.current = nextQuery;
+    setList(store.listCustomers(lastSearchRef.current));
+  }, []);
   React.useEffect(() => { refresh(); }, [refresh]);
 
 
@@ -45,6 +49,7 @@ export default function CustomersPage() {
     if (!file) return;
     setCsvBusy(true);
     setCsvStatus(null);
+    setCsvStatusIsError(false);
     try {
       if (file.size > 2 * 1024 * 1024) throw new Error("Customer CSV exceeds 2 MB limit");
       const content = await file.text();
@@ -52,6 +57,7 @@ export default function CustomersPage() {
       setCsvPreview({ filename: file.name, content, rows: preview.rows, errors: preview.errors });
     } catch (error) {
       setCsvPreview(null);
+      setCsvStatusIsError(true);
       setCsvStatus(error instanceof Error ? error.message : "Customer CSV preview failed");
     } finally {
       setCsvBusy(false);
@@ -62,17 +68,25 @@ export default function CustomersPage() {
   function confirmCustomerCsv() {
     if (!csvPreview || csvBusy || csvPreview.errors.length > 0 || csvPreview.rows.length === 0) return;
     setCsvBusy(true);
+    setCsvStatus(null);
+    setCsvStatusIsError(false);
     try {
       // Re-run full duplicate/license preflight against live data at confirmation time.
       const result = importCustomersFromCsv(csvPreview.content);
       if (result.errors.length) {
         setCsvPreview({ ...csvPreview, errors: result.errors });
+        setCsvStatusIsError(true);
         setCsvStatus("Customer import refused; correct the CSV or existing duplicates.");
       } else {
         setCsvStatus(result.created + " customers imported. No opening balances or credit was created.");
         setCsvPreview(null);
         refresh();
       }
+    } catch (error) {
+      // Keep the preview so a failed import never appears successful.
+      // Inspect the customer list before retrying if storage failed mid-write.
+      setCsvStatusIsError(true);
+      setCsvStatus(error instanceof Error ? `Customer import interrupted: ${error.message}` : "Customer import interrupted. Check the customer list before retrying.");
     } finally {
       setCsvBusy(false);
     }
@@ -99,6 +113,7 @@ export default function CustomersPage() {
         if (!limit.allowed) throw new Error(limit.reason ?? "Customer limit reached");
         store.createCustomer(parsed.data);
       }
+      if (editTarget && profile?.customer.id === editTarget.id) setProfile(phase6Store.getCustomerCrmProfile(editTarget.id));
       setOpen(false); setEditTarget(null); setForm(emptyForm); setError(null); refresh();
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to save customer"); }
   }
@@ -129,7 +144,7 @@ export default function CustomersPage() {
           onChange={(event) => { void previewCustomerCsv(event.target.files?.[0] ?? null); }}
         />
       </div>
-      {csvStatus && <p role="status" className="mb-3 text-sm text-slate-700">{csvStatus}</p>}
+      {csvStatus && <p role={csvStatusIsError ? "alert" : "status"} className={`mb-3 text-sm ${csvStatusIsError ? "text-rose-700" : "text-slate-700"}`}>{csvStatus}</p>}
       <Modal
         open={Boolean(csvPreview)}
         title="Customer CSV import preview"
