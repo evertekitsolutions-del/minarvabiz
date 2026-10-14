@@ -36,11 +36,13 @@ export default function ResetPasswordPage() {
   const [message, setMessage] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [completed, setCompleted] = React.useState(false);
 
   React.useEffect(() => { setToken(readRecoveryToken()); }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (completed || !token || loading) return;
     setError(null); setMessage(null);
     if (password.length < 8) { setError("Password must contain at least 8 characters."); return; }
     if (password !== confirm) { setError("Passwords do not match."); return; }
@@ -49,6 +51,7 @@ export default function ResetPasswordPage() {
       const result = await updatePasswordFromRecovery(token, password);
       if (!result.ok) { setError(result.error); return; }
       setMessage("Password updated successfully. You can now sign in with the new password.");
+      setCompleted(true);
       setPassword(""); setConfirm("");
     } catch {
       setError("Unable to update your password. Please check your connection and request a new link if needed.");
@@ -70,7 +73,7 @@ export default function ResetPasswordPage() {
         <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={showPasswords} onChange={event => setShowPasswords(event.target.checked)} />Show passwords</label>
         {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
         {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
-        <Button type="submit" className="w-full" disabled={loading || !token}>{loading ? "Updating…" : "Update password"}</Button>
+        <Button type="submit" className="w-full" disabled={loading || !token || completed}>{loading ? "Updating…" : "Update password"}</Button>
         <div className="text-center"><a href="/login" className="text-sm font-medium text-indigo-600 hover:underline">Back to sign in</a></div>
       </form>
     </main>
