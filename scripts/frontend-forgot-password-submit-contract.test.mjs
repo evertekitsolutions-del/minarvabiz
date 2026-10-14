@@ -5,4 +5,7 @@ assert.match(src, /submittedEmail, setSubmittedEmail/);
 assert.match(src, /if \(loading \|\| \(submittedEmail !== null/);
 assert.match(src, /setSubmittedEmail\(email\.trim\(\)\.toLowerCase\(\)\)/);
 assert.match(src, /disabled=\{loading \|\| \(submittedEmail !== null/);
+assert.match(src, /const requestedEmail = email\.trim\(\)\.toLowerCase\(\)/);
+assert.match(src, /requestPasswordReset\(requestedEmail, redirectTo\)/);
+assert.match(src, /setSubmittedEmail\(requestedEmail\)/);
 console.log("Forgot-password duplicate request guard PASS");
