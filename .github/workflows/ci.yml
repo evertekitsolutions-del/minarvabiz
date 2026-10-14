@@ -32,6 +32,8 @@ jobs:
         run: node scripts/frontend-help-workflows-contract.test.mjs
       - name: Verify CSV frontend safety
         run: node scripts/frontend-tools-csv-contract.test.mjs
+      - name: Verify safe notification navigation
+        run: node scripts/frontend-safe-notification-navigation.test.mjs
       - name: Verify notification frontend
         run: node scripts/frontend-notifications-contract.test.mjs
       - name: Verify onboarding search
