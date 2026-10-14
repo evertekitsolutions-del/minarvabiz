@@ -29,8 +29,8 @@ export default function ForgotPasswordPage() {
     } catch {
       setError("Unable to request a password reset. Please check your connection and try again.");
     } finally {
-      submitInFlight.current = false;
       setLoading(false);
+      submitInFlight.current = false;
       setPendingEmail(null);
     }
   }
