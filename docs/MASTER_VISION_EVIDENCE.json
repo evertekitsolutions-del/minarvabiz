@@ -2,112 +2,358 @@
   "schemaVersion": 1,
   "assessmentPolicy": "Each gate needs a real evidence URL, named reviewer, verified date. Empty register means not assessed, NOT unimplemented.",
   "assessments": {
-    "HR-002": {
+    "PLT-009": {
       "source": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/b1dda393e97c39c34ef2fd36e0e1d833d5d6767c/apps/web/src/app/(app)/attendance/page.tsx",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/phase7-store.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Audit event attribution in isolated runtime.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
       },
       "tests": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/b1dda393e97c39c34ef2fd36e0e1d833d5d6767c/packages/business-logic/src/__tests__/attendance-grid.test.mjs",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/audit-log-professional-controls.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Audit event attribution in isolated runtime.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed audit-log-professional-controls.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
+      }
+    },
+    "PLT-019": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/browser-snapshot-recovery.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Standalone browser empty-workspace recovery; native Windows recovery unverified.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/first-customer-standalone-recovery.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Standalone browser empty-workspace recovery; native Windows recovery unverified.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed first-customer-standalone-recovery.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
+      }
+    },
+    "PLT-020": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/recycle-bin.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Recycle-bin restore and retention behavior in isolated runtime.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/recycle-bin-recovery.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Recycle-bin restore and retention behavior in isolated runtime.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed recycle-bin-recovery.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
       }
     },
     "SAL-001": {
       "source": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/b1dda393e97c39c34ef2fd36e0e1d833d5d6767c/apps/web/src/app/(app)/sales/page.tsx",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/invoice.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Invoice rendering and print-request failure handling; physical printing unverified.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
       },
       "tests": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/b1dda393e97c39c34ef2fd36e0e1d833d5d6767c/packages/business-logic/src/__tests__/commercial-purchase-sale-recovery.test.mjs",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/first-customer-invoice-print-recovery.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Invoice rendering and print-request failure handling; physical printing unverified.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed first-customer-invoice-print-recovery.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
       }
     },
-    "INV-010": {
+    "SAL-008": {
       "source": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/977683e2972cfac85db543729182f1f7b4c2fadc/packages/business-logic/src/store.ts",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/store.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "POS checkout stock/tender validation and accounting in isolated runtime.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
       },
       "tests": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/977683e2972cfac85db543729182f1f7b4c2fadc/packages/business-logic/src/__tests__/opening-stock-accounting.test.mjs",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/first-customer-pos-checkout-integrity.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "POS checkout stock/tender validation and accounting in isolated runtime.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed first-customer-pos-checkout-integrity.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
       }
     },
-    "PUR-003": {
+    "SAL-010": {
       "source": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/977683e2972cfac85db543729182f1f7b4c2fadc/packages/business-logic/src/procurement-store.ts",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/sales.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Split tender reconciliation and rejection cases in isolated runtime.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
       },
       "tests": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/977683e2972cfac85db543729182f1f7b4c2fadc/packages/business-logic/src/__tests__/commercial-purchase-sale-recovery.test.mjs",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
-      }
-    },
-    "SAL-002": {
-      "source": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/quotations.ts",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/first-customer-split-tender-reconciliation.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Split tender reconciliation and rejection cases in isolated runtime.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
       },
-      "tests": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/__tests__/quotations.test.mjs",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed first-customer-split-tender-reconciliation.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
       }
     },
     "SAL-011": {
       "source": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/phase7-store.ts",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/phase7-store.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Refund/return restock invariants in isolated runtime.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
       },
       "tests": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/__tests__/first-customer-return-restock-consistency.test.mjs",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/first-customer-return-restock-consistency.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Refund/return restock invariants in isolated runtime.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed first-customer-return-restock-consistency.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
+      }
+    },
+    "FIN-001": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/accounting-store.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Sales-linked ledger and accounting invariants in isolated runtime.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/sales-accounting.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Sales-linked ledger and accounting invariants in isolated runtime.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed sales-accounting.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
+      }
+    },
+    "PUR-003": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/procurement-store.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Purchase-order approval and linked commercial journey in isolated runtime.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/commercial-purchase-sale-recovery.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Purchase-order approval and linked commercial journey in isolated runtime.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed commercial-purchase-sale-recovery.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
+      }
+    },
+    "PUR-004": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/procurement-store.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Goods-receipt and partial receipt validation in isolated runtime.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/commercial-purchase-sale-recovery.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Goods-receipt and partial receipt validation in isolated runtime.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed commercial-purchase-sale-recovery.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
+      }
+    },
+    "HR-002": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/apps/web/src/app/(app)/attendance/page.tsx",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Attendance business logic and validation; real operator UAT unverified.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/attendance-grid.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Attendance business logic and validation; real operator UAT unverified.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed attendance-grid.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
+      }
+    },
+    "INV-010": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/opening-balances.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Opening-stock journal, quantity and permissions in isolated runtime.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/opening-stock-accounting.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Opening-stock journal, quantity and permissions in isolated runtime.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed opening-stock-accounting.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
+      }
+    },
+    "SAL-002": {
+      "source": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/quotations.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Quotation lifecycle edits/status/archive with negative cases; arithmetic-only test excluded.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
+      },
+      "tests": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/quotation-record-management.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Quotation lifecycle edits/status/archive with negative cases; arithmetic-only test excluded.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed quotation-record-management.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
       }
     },
     "FIN-003": {
       "source": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/accounting-store.ts",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/accounting-store.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Manual journal create/post/validation/permissions and failure invariants.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
       },
       "tests": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/__tests__/commercial-purchase-sale-recovery.test.mjs",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/journal-validation.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Manual journal create/post/validation/permissions and failure invariants.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed journal-validation.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
       }
     },
     "INV-015": {
       "source": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/warehouse-store.ts",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
-      },
-      "tests": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/__tests__/warehouse-transfer-conservation.test.mjs",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/warehouse-store.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Warehouse transfer source inspected; available conservation test is static source-pattern test, NOT qualifying behavioral test.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
       }
     },
     "PUR-001": {
       "source": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/phase5-store.ts",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/phase5-store.ts",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Supplier edit/archive guards and outstanding-balance refusal in isolated runtime.",
+        "limitations": "Inspected source; no live deployment, customer acceptance or full cross-edition verification implied."
       },
       "tests": {
-        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/9f4600fe7629d8879dcfea20e4874508dd58dd6b/packages/business-logic/src/__tests__/master-data-customer-supplier-controls.test.mjs",
-        "verifiedBy": "ChatGPT source review",
-        "verifiedAt": "2026-10-14"
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/blob/769b1667b3aa01bc941bfe993eedeb019f10e3ed/packages/business-logic/src/__tests__/master-data-customer-supplier-controls.test.mjs",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Supplier edit/archive guards and outstanding-balance refusal in isolated runtime.",
+        "limitations": "Relevant runtime behavioral test inspected; does not prove full feature or customer workflow."
+      },
+      "ci": {
+        "reference": "https://github.com/evertekitsolutions-del/minarvabiz/actions/runs/38541413089/job/115776814091",
+        "verifiedBy": "ChatGPT GPT-6 automated source/test/CI audit (independent PR review pending)",
+        "verifiedAt": "2026-10-14",
+        "scope": "Exact main SHA 769b1667b3aa01bc941bfe993eedeb019f10e3ed: desktop job executed master-data-customer-supplier-controls.test.mjs successfully.",
+        "limitations": "GitHub CI execution is not physical deployment or customer UAT."
       }
     }
   }
