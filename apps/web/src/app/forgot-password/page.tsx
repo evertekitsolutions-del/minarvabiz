@@ -11,10 +11,12 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = React.useState(false);
   const [submittedEmail, setSubmittedEmail] = React.useState<string | null>(null);
   const [pendingEmail, setPendingEmail] = React.useState<string | null>(null);
+  const submitInFlight = React.useRef(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (loading || (submittedEmail !== null && submittedEmail === email.trim().toLowerCase())) return;
+    if (submitInFlight.current || (submittedEmail !== null && submittedEmail === email.trim().toLowerCase())) return;
+    submitInFlight.current = true;
     const requestedEmail = email.trim().toLowerCase();
     setPendingEmail(requestedEmail);
     setLoading(true); setError(null); setMessage(null);
@@ -28,6 +30,7 @@ export default function ForgotPasswordPage() {
       setError("Unable to request a password reset. Please check your connection and try again.");
     } finally {
       setLoading(false);
+      submitInFlight.current = false;
       setPendingEmail(null);
     }
   }
