@@ -1,0 +1,20 @@
+import assert from "node:assert/strict";
+
+const supplied = process.env.MINARVA_CLOUDFLARE_PREVIEW_URL;
+assert.ok(supplied, "Set MINARVA_CLOUDFLARE_PREVIEW_URL to a real deployed Cloudflare preview.");
+const origin = new URL(supplied);
+assert.equal(origin.protocol, "https:", "Preview must be HTTPS");
+assert.ok(origin.hostname.endsWith(".workers.dev") || origin.hostname.endsWith(".pages.dev"), "Use a verified Cloudflare preview hostname");
+const get = (path) => fetch(new URL(path, origin), { redirect: "manual", cache: "no-store" });
+const root = await get("/");
+assert.equal(root.status, 200, "Public homepage must not redirect to authenticated app");
+const html = await root.text();
+assert.match(html, /Minarva Biz/i);
+assert.ok(html.includes('id="features"') && html.includes('id="download"'));
+assert.ok(root.headers.get("content-security-policy"), "Expected nonce CSP on public homepage");
+assert.ok(root.headers.get("x-content-type-options") === "nosniff");
+const login = await get("/login");
+assert.equal(login.status, 200, "Existing login route must load on the same deployment");
+const invalid = await get("/this-route-does-not-exist-frontend-02");
+assert.ok([404, 410].includes(invalid.status), "Unknown public route must not serve authenticated dashboard");
+console.log("Cloudflare public preview deployment acceptance PASS:", origin.origin);
