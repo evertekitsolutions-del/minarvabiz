@@ -50,6 +50,8 @@ jobs:
         run: node scripts/frontend-forgot-password-submit-contract.test.mjs
       - name: Verify recovery password visibility
         run: node scripts/frontend-recovery-visibility-contract.test.mjs
+      - name: Verify recovery token purpose and URL hygiene
+        run: node scripts/frontend-recovery-purpose.test.mjs
       - name: Verify login concurrent request protection
         run: node scripts/frontend-login-submit-lock.test.mjs
       - name: Verify authentication frontend accessibility
