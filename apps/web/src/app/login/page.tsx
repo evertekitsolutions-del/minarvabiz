@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const submitInFlight = React.useRef(false);
 
   React.useEffect(() => {
     const local = !isSupabaseConfigured() && getRuntimeMode() !== "demo";
@@ -24,6 +25,8 @@ export default function LoginPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitInFlight.current) return;
+    submitInFlight.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -71,6 +74,7 @@ export default function LoginPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
+      submitInFlight.current = false;
       setLoading(false);
     }
   }
