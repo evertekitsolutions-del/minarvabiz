@@ -9,14 +9,28 @@ import {
   exportProductsCsv,
   getTaxConfig,
   updateTaxConfig,
+  parseDefaultTaxRateInput,
   openWhatsApp,
   templatePaymentDue,
 } from "@minarvabiz/business-logic";
 
 export default function ToolsPage() {
   const [tax, setTax] = React.useState(() => getTaxConfig());
+  const [rateDraft, setRateDraft] = React.useState(() => String(getTaxConfig().defaultRatePercent));
+  const [rateError, setRateError] = React.useState<string | null>(null);
   const [csvMsg, setCsvMsg] = React.useState<string | null>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
+
+  function saveDefaultTaxRate() {
+    try {
+      const defaultRatePercent = parseDefaultTaxRateInput(rateDraft);
+      setTax(updateTaxConfig({ defaultRatePercent }));
+      setRateDraft(String(defaultRatePercent));
+      setRateError(null);
+    } catch (error) {
+      setRateError(error instanceof Error ? error.message : "Unable to save the default GST rate.");
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -33,17 +47,23 @@ export default function ToolsPage() {
             />
             Enable GST on invoices
           </label>
-          <label className="block text-sm">
-            Default rate %
+          <label htmlFor="default-tax-rate" className="block text-sm">Default rate %</label>
+          <div className="flex flex-wrap items-center gap-2">
             <input
+              id="default-tax-rate"
               type="number"
-              className="mt-1 h-9 w-32 rounded-lg border border-slate-200 px-2"
-              value={tax.defaultRatePercent}
-              onChange={(e) =>
-                setTax(updateTaxConfig({ defaultRatePercent: parseFloat(e.target.value) || 0 }))
-              }
+              min="0"
+              max="100"
+              step="any"
+              aria-invalid={Boolean(rateError)}
+              aria-describedby={rateError ? "default-tax-rate-error" : undefined}
+              className="h-9 w-32 rounded-lg border border-slate-200 px-2"
+              value={rateDraft}
+              onChange={(e) => { setRateDraft(e.target.value); setRateError(null); }}
             />
-          </label>
+            <Button type="button" variant="outline" onClick={saveDefaultTaxRate} disabled={rateDraft.trim() === String(tax.defaultRatePercent)}>Save default rate</Button>
+          </div>
+          {rateError && <p id="default-tax-rate-error" role="alert" className="text-sm text-rose-700">{rateError}</p>}
           <p className="text-xs text-slate-500">Rates: {tax.rates.map((r) => r.name).join(", ")}</p>
         </CardContent>
       </Card>
