@@ -139,6 +139,8 @@ jobs:
           exit 1
       - name: Browser-driven commercial workflow smoke
         run: node scripts/web-ui-deep-smoke.mjs
+      - name: Verify mobile navigation and search with headless Chrome
+        run: node scripts/mobile-frontend-browser-smoke.mjs
       - name: Verify actual Chrome IndexedDB roster recovery after reload
         run: node scripts/hr004-indexeddb-browser-smoke.mjs
       - name: Verify manager drafts and administrator policy review UI in Chrome
