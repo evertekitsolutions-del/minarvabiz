@@ -16,6 +16,7 @@ export default function OnboardingPage() {
   const [scopeKey, setScopeKey] = React.useState<string | null>(null);
   const [loaded, setLoaded] = React.useState(false);
   const [showIncompleteOnly, setShowIncompleteOnly] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -93,9 +94,10 @@ export default function OnboardingPage() {
         </div>
         <p className="text-xs text-slate-600">{completionPercent}% of this browser checklist confirmed — not deployment or product readiness.</p>
       </header>
+      <label className="block text-sm font-medium text-slate-700">Search setup steps<input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Find a setup task" className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" /></label>
       <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={showIncompleteOnly} onChange={(event) => setShowIncompleteOnly(event.target.checked)} className="size-4 accent-indigo-600" />Show incomplete steps only</label>
       {error && <p role="alert" className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
-      {steps.filter(s => !showIncompleteOnly || !s.done).map(s => (
+      {steps.filter(s => (!showIncompleteOnly || !s.done) && s.title.toLowerCase().includes(searchQuery.trim().toLowerCase())).map(s => (
         <Card key={s.id}>
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
