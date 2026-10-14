@@ -16,7 +16,7 @@ export default function NotificationsPage() {
 
   React.useEffect(() => { refresh(); }, [refresh]);
 
-  const unreadCount = list.filter((notification) => !notification.isRead).length;
+  const unreadCount = list.filter((notification) => !notification.read).length;
 
   return (
     <section className="space-y-4" aria-labelledby="notifications-heading">
