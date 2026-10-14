@@ -1,15 +1,5 @@
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import { createRequire } from "node:module";
-const require = createRequire(import.meta.url);
-const ts = require("typescript");
-const file = new URL("../reorder-csv.ts", import.meta.url);
-const js = ts.transpileModule(fs.readFileSync(file, "utf8"), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-const mod = { exports: {} };
-new Function("module", "exports", js)(mod, mod.exports);
-const { exportReorderCsv } = mod.exports;
+import { exportReorderCsv } from "../reorder-csv.ts";
 const rows = [
   { name: 'Cotton, Grade "A"', sku: "COT-1", stockQuantity: 2.5, minimumStock: 5.25, unit: "m" },
   { name: "=HYPERLINK(\"https://malicious.invalid\")", sku: "@SKU", stockQuantity: 0, minimumStock: 1, unit: "pcs" },
