@@ -76,10 +76,11 @@ export default function LoginPage() {
           <h1 className="text-xl font-bold text-slate-900">Minarva Biz</h1>
           <p className="mt-1 text-sm text-slate-500">{setup ? "Create the first administrator" : "Sign in to continue"}</p>
         </div>
-        {setup && <label className="block text-sm"><span className="text-slate-600">Full name</span><input className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={fullName} onChange={e => setFullName(e.target.value)} required /></label>}
-        <label className="block text-sm"><span className="text-slate-600">Email</span><input type="email" className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={email} onChange={e => setEmail(e.target.value)} required /></label>
-        <label className="block text-sm"><span className="text-slate-600">Password</span><input type="password" minLength={8} className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={password} onChange={e => setPassword(e.target.value)} required /></label>
-        {error && <p className="text-sm text-rose-600">{error}</p>}
+        {setup && <label className="block text-sm"><span className="text-slate-600">Full name</span><input className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" autoComplete="name" value={fullName} onChange={e => setFullName(e.target.value)} required /></label>}
+        <label className="block text-sm"><span className="text-slate-600">Email</span><input type="email" autoComplete="email" className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={email} onChange={e => setEmail(e.target.value)} required /></label>
+        <label className="block text-sm"><span className="text-slate-600">Password</span><input type="password" autoComplete="current-password" minLength={8} className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={password} onChange={e => setPassword(e.target.value)} required /></label>
+        {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
+        <p role="status" aria-live="polite" className="sr-only">{loading ? "Signing in, please wait" : ""}</p>
         <Button type="submit" className="w-full" disabled={loading}>{loading ? "Please wait…" : setup ? "Create Administrator" : "Sign in"}</Button>
         {!setup && <div className="text-center"><a href="/forgot-password" className="text-sm font-medium text-indigo-600 hover:underline">Forgot password?</a></div>}
         {setup && <p className="text-center text-[11px] text-slate-400">No default password is shipped. Choose your administrator credentials now.</p>}

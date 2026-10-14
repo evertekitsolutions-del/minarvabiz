@@ -31,8 +31,8 @@ export default function ForgotPasswordPage() {
           <span className="text-slate-600">Email</span>
           <input type="email" autoComplete="email" required className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
-        {message && <p className="text-sm text-emerald-700">{message}</p>}
-        {error && <p className="text-sm text-rose-600">{error}</p>}
+        {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
+        {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
         <Button type="submit" className="w-full" disabled={loading}>{loading ? "Sending…" : "Send reset link"}</Button>
         <div className="text-center"><a href="/login" className="text-sm font-medium text-indigo-600 hover:underline">Back to sign in</a></div>
       </form>

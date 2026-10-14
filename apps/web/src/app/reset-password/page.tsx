@@ -61,8 +61,8 @@ export default function ResetPasswordPage() {
         {!token && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">This recovery link is missing its access token or has expired. Request a new reset email.</p>}
         <label className="block text-sm"><span className="text-slate-600">New password</span><input type="password" minLength={8} autoComplete="new-password" required className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
         <label className="block text-sm"><span className="text-slate-600">Confirm password</span><input type="password" minLength={8} autoComplete="new-password" required className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={confirm} onChange={(e) => setConfirm(e.target.value)} /></label>
-        {message && <p className="text-sm text-emerald-700">{message}</p>}
-        {error && <p className="text-sm text-rose-600">{error}</p>}
+        {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
+        {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
         <Button type="submit" className="w-full" disabled={loading || !token}>{loading ? "Updating…" : "Update password"}</Button>
         <div className="text-center"><a href="/login" className="text-sm font-medium text-indigo-600 hover:underline">Back to sign in</a></div>
       </form>
