@@ -9,6 +9,9 @@ const html = await response.text();
 for (const fragment of ['Minarva Biz', 'id="features"', 'id="industries"', 'id="editions"', 'id="download"', 'id="faq"', 'href="/login"', '/minarvabiz/releases/tag/v1.0.15']) {
   assert.ok(html.includes(fragment), `Missing public homepage contract: ${fragment}`);
 }
+for (const fragment of ['aria-label="Mobile navigation"', 'aria-label="Main navigation"', '<summary', 'Browse sections']) {
+  assert.ok(html.includes(fragment), `Missing responsive accessible navigation: ${fragment}`);
+}
 assert.doesNotMatch(html, /<form[^>]*action=["']?\/signup/i, "Must not present nonfunctional signup as live");
 const login = await fetch(new URL("/login", baseUrl), { redirect: "manual" });
 assert.equal(login.status, 200, "Existing customer login route must remain available");
