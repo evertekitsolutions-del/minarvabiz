@@ -77,7 +77,7 @@ export default function OnboardingPage() {
 
   const completed = steps.filter(step => step.done).length;
   const completionPercent = steps.length ? Math.round((completed / steps.length) * 100) : 0;
-  const visibleSteps = steps.filter(s => (!showIncompleteOnly || !s.done) && s.title.toLowerCase().includes(searchQuery.trim().toLowerCase()));
+  const visibleSteps = (loaded ? steps : []).filter(s => (!showIncompleteOnly || !s.done) && s.title.toLowerCase().includes(searchQuery.trim().toLowerCase()));
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <header className="space-y-2">
