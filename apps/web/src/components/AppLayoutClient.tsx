@@ -31,6 +31,7 @@ const requireAuthByDefault =
 const pathToNav: Record<string, NavItemId> = {
   "/dashboard": "dashboard",
   "/sales": "sales",
+  "/products": "products",
   "/warehouse": "warehouse",
   "/inventory": "products",
   "/variants": "products",
