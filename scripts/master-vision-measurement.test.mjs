@@ -34,5 +34,5 @@ test("only documented verified gates earn points; unaudited claims do not", () =
 test("reject out-of-scope evidence and inconsistent completion", () => {
   const r = "## Inventory\n| INV-001 | Product | Core |";
   assert.throws(()=>buildMeasurement({capabilityMarkdown:r,aiMarkdown:"",assessments:{schemaVersion:1,assessments:{"BOGUS-100":{}}}}),/Unknown capability/);
-  assert.throws(()=>buildMeasurement({capabilityMarkdown:r,aiMarkdown:"",assessments:{schemaVersion:1,assessments:{"INV-001":{uat:{reference:"https://example.com/uat",verifiedBy:"r",verifiedAt:"2026-10-14"}}}}}),/UAT requires/);
+  assert.throws(()=>buildMeasurement({capabilityMarkdown:r,aiMarkdown:"",assessments:{schemaVersion:1,assessments:{"INV-001":{uat:{reference:"https://example.com/uat",verifiedBy:"reviewer",verifiedAt:"2026-10-14"}}}}}),/UAT requires/);
 });
