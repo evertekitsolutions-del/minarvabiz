@@ -6,6 +6,10 @@ import { NotificationCenter } from "@minarvabiz/ui";
 import { phase6Store } from "@minarvabiz/business-logic";
 import type { AppNotification } from "@minarvabiz/types";
 
+function isSafeInternalPath(href: string): boolean {
+  return href.startsWith("/") && !href.startsWith("//") && !href.includes("\\") && !/[\u0000-\u001f]/.test(href);
+}
+
 export default function NotificationsPage() {
   const router = useRouter();
   const [list, setList] = React.useState<AppNotification[]>([]);
@@ -35,7 +39,7 @@ export default function NotificationsPage() {
         notifications={list}
         onMarkRead={(id) => { phase6Store.markNotificationRead(id); refresh(); }}
         onMarkAllRead={() => { phase6Store.markAllNotificationsRead(); refresh(); }}
-        onNavigate={(href) => router.push(href)}
+        onNavigate={(href) => { if (isSafeInternalPath(href)) router.push(href); }}
       />
     </section>
   );
