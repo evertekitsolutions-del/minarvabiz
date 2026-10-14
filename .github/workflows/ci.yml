@@ -44,6 +44,8 @@ jobs:
         run: node scripts/frontend-onboarding-progress-contract.test.mjs
       - name: Verify first admin login failure handling
         run: node scripts/frontend-first-admin-login-contract.test.mjs
+      - name: Verify forgot-password duplicate guard
+        run: node scripts/frontend-forgot-password-submit-contract.test.mjs
       - name: Verify recovery password visibility
         run: node scripts/frontend-recovery-visibility-contract.test.mjs
       - name: Verify authentication frontend accessibility
