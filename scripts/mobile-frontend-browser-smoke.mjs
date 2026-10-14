@@ -73,6 +73,11 @@ try {
   await waitFor(browser.evaluate, 'location.pathname === "/sales"', "mobile Sales navigation");
   await waitFor(browser.evaluate, `${mobileNav}.querySelector('button[aria-current="page"]')?.innerText.trim() === "Sales"`, "Sales active state");
 
+  await browser.evaluate(`[...${mobileNav}.querySelectorAll("button")].find(b => b.textContent.trim() === "Products").click()`);
+  await waitFor(browser.evaluate, 'location.pathname === "/products"', "mobile Products navigation");
+  await waitFor(browser.evaluate, `${mobileNav}.querySelector('button[aria-current="page"]')?.innerText.trim() === "Products"`, "Products active state");
+
+
   await browser.evaluate(`${mobileNav}.querySelector('button[aria-label="More modules"]').click()`);
   await waitFor(browser.evaluate, '!!document.querySelector(\'[role="dialog"][aria-label="Navigation menu"]\')', "mobile full menu");
   assert.equal(await browser.evaluate(`${mobileNav}.querySelector('button[aria-label="More modules"]').getAttribute("aria-expanded")`), "true");
