@@ -7,6 +7,6 @@ for (const path of ["login/page.tsx", "forgot-password/page.tsx", "reset-passwor
  assert.match(source, /role="status"/, path + " should announce success or loading state to screen readers");
  assert.match(source, /autoComplete="/, path + " should provide credential autofill semantics");
 }
-assert.match(read("login/page.tsx"), /autoComplete="current-password"/);
+assert.match(read("login/page.tsx"), /autoComplete=\{setup \? "new-password" : "current-password"\}/);
 assert.match(read("login/page.tsx"), /autoComplete="name"/);
 console.log("Authentication frontend accessibility contract PASS");
