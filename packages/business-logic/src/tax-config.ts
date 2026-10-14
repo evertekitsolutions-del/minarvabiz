@@ -1,6 +1,7 @@
 /** GST / tax configuration for invoices */
 import { nowISO } from "@minarvabiz/utils";
 import { touchPersistence } from "./autosave";
+import { isValidDefaultTaxRate } from "./tax-rate-validation";
 
 export interface TaxRate {
   id: string;
@@ -35,6 +36,9 @@ export function getTaxConfig(): TaxConfig {
 }
 
 export function updateTaxConfig(patch: Partial<TaxConfig>): TaxConfig {
+  if (patch.defaultRatePercent !== undefined && !isValidDefaultTaxRate(patch.defaultRatePercent)) {
+    throw new Error("Default tax rate must be a finite percentage between 0 and 100.");
+  }
   config = { ...config, ...patch, updatedAt: nowISO() };
   if (patch.gstin !== undefined) {
     void import("./shop-profile").then((m) => {
