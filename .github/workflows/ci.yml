@@ -26,6 +26,8 @@ jobs:
         run: node scripts/github-actions-hardening-smoke.mjs
       - name: Verify isolated Cloudflare customer preview configuration
         run: node scripts/frontend-cloudflare-config-smoke.mjs
+      - name: Audit capability source inventory
+        run: node scripts/master-vision-source-inventory.mjs --summary
       - name: Verify Master Vision pointwise scoring and scope
         run: |
           node --test scripts/master-vision-measurement.test.mjs
