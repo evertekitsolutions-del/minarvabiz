@@ -115,7 +115,7 @@ export default function OnboardingPage() {
           </CardContent>
         </Card>
       ))}
-      {loaded && visibleSteps.length === 0 && searchQuery.trim() && <p role="status" className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">No setup steps match your search.</p>}
+      {loaded && visibleSteps.length === 0 && searchQuery.trim() && <p role="status" className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">No setup steps match your search. <button type="button" className="font-semibold underline" onClick={() => { setSearchQuery(""); setShowIncompleteOnly(false); }}>Clear filters</button></p>}
       {loaded && showIncompleteOnly && completed === steps.length && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">All checklist steps have been confirmed in this browser.</p>}
     </div>
   );

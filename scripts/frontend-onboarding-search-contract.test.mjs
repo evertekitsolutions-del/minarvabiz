@@ -5,4 +5,7 @@ assert.match(src,/type="search"/);
 assert.match(src,/searchQuery\.trim\(\)\.toLowerCase\(\)/);
 assert.ok(src.includes("!showIncompleteOnly || !s.done"), "Incomplete-only filtering must remain active");
 assert.ok(src.includes("(loaded ? steps : []).filter"), "Pending hydration must not render preset setup cards");
+assert.ok(src.includes("Clear filters"));
+assert.ok(src.includes("setSearchQuery(\"\")"));
+assert.ok(src.includes("setShowIncompleteOnly(false)"));
 console.log("Onboarding search and incomplete filter contract PASS");
