@@ -82,7 +82,7 @@ export function SalesList({
     if (filteredSales.length === 0) return;
     try {
       const content = exportSalesHistoryCsv(filteredSales);
-      const url = URL.createObjectURL(new Blob(["\\uFEFF".replace("\\\\uFEFF", "\\uFEFF"), content], { type: "text/csv;charset=utf-8" }));
+      const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff), content], { type: "text/csv;charset=utf-8" }));
       const link = document.createElement("a");
       link.href = url;
       link.download = `minarvabiz-sales-history-${new Date().toISOString().slice(0, 10)}.csv`;
