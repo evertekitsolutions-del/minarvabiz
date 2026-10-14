@@ -67,7 +67,7 @@ export default function ResetPasswordPage() {
           <h1 className="text-xl font-bold text-slate-900">Choose a new password</h1>
           <p className="mt-1 text-sm text-slate-500">Use the recovery link from your email.</p>
         </div>
-        {!token && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">This recovery link is missing its access token or has expired. Request a new reset email.</p>}
+        {!token && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">This recovery link is missing its access token or has expired. <a href="/forgot-password" className="font-semibold underline">Request a new reset email</a>.</p>}
         <label className="block text-sm"><span className="text-slate-600">New password</span><input type={showPasswords ? "text" : "password"} minLength={8} autoComplete="new-password" required className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
         <label className="block text-sm"><span className="text-slate-600">Confirm password</span><input type={showPasswords ? "text" : "password"} minLength={8} autoComplete="new-password" required className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={confirm} onChange={(e) => setConfirm(e.target.value)} /></label>
         <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={showPasswords} onChange={event => setShowPasswords(event.target.checked)} />Show passwords</label>

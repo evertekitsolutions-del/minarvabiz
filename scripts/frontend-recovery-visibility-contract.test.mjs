@@ -9,4 +9,5 @@ assert.match(src, /autoComplete="new-password"/);
 assert.match(src, /if \(completed \|\| !token \|\| loading\) return/);
 assert.match(src, /setCompleted\(true\)/);
 assert.match(src, /disabled=\{loading \|\| !token \|\| completed\}/);
+assert.ok(src.includes('href="/forgot-password"'));
 console.log("Password recovery visibility frontend contract PASS");
