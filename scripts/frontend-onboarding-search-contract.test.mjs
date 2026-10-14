@@ -8,4 +8,5 @@ assert.ok(src.includes("(loaded ? steps : []).filter"), "Pending hydration must 
 assert.ok(src.includes("Clear filters"));
 assert.ok(src.includes("setSearchQuery(\"\")"));
 assert.ok(src.includes("setShowIncompleteOnly(false)"));
+assert.ok(src.includes("showIncompleteOnly && !searchQuery.trim() && completed === steps.length"), "Completion notice should not override active search");
 console.log("Onboarding search and incomplete filter contract PASS");
