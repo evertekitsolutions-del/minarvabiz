@@ -6,4 +6,5 @@ assert.equal((src.match(/type=\{showPasswords \? "text" : "password"\}/g) || [])
 assert.match(src, /checked=\{showPasswords\}/);
 assert.match(src, /Show passwords/);
 assert.match(src, /autoComplete="new-password"/);
+assert.ok(src.includes('href="/forgot-password"'));
 console.log("Password recovery visibility frontend contract PASS");
