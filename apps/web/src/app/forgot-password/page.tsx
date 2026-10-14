@@ -9,14 +9,17 @@ export default function ForgotPasswordPage() {
   const [message, setMessage] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [submittedEmail, setSubmittedEmail] = React.useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading || (submittedEmail !== null && submittedEmail === email.trim().toLowerCase())) return;
     setLoading(true); setError(null); setMessage(null);
     try {
       const redirectTo = `${window.location.origin}/reset-password`;
       const result = await requestPasswordReset(email, redirectTo);
       if (!result.ok) { setError(result.error); return; }
+      setSubmittedEmail(email.trim().toLowerCase());
       setMessage("If this email belongs to an online Minarva Biz account, a password reset link has been sent.");
     } catch {
       setError("Unable to request a password reset. Please check your connection and try again.");
@@ -38,7 +41,7 @@ export default function ForgotPasswordPage() {
         </label>
         {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
         {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
-        <Button type="submit" className="w-full" disabled={loading}>{loading ? "Sending…" : "Send reset link"}</Button>
+        <Button type="submit" className="w-full" disabled={loading || (submittedEmail !== null && submittedEmail === email.trim().toLowerCase())}>{loading ? "Sending…" : "Send reset link"}</Button>
         <div className="text-center"><a href="/login" className="text-sm font-medium text-indigo-600 hover:underline">Back to sign in</a></div>
       </form>
     </main>
