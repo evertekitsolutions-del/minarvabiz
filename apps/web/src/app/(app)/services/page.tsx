@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { parseServiceOrderPriceDraft } from "@/lib/service-order-price-draft";
 import {
   OrderList, OrderForm, emptyOrderForm, OrderDetail, Modal,
   type OrderFormValues,
@@ -53,34 +54,35 @@ export default function ServicesOrdersPage() {
   }
 
   function handleCreate() {
-    const price =
-      form.serviceType === "tshirt_printing"
-        ? form.tshirt.customerPrice
-        : form.serviceType === "wholesale" || form.serviceType === "uniform"
-          ? (parseFloat(form.unitPrice) || 0) * (parseInt(form.quantity, 10) || 1)
-          : parseFloat(form.price) || 0;
-
-    const result = ordersStore.createOrder({
-      customerId: form.customerId,
-      serviceType: form.serviceType,
-      deliveryDate: form.deliveryDate || null,
-      price,
-      discount: parseFloat(form.discount) || 0,
-      advance: parseFloat(form.advance) || 0,
-      advancePaymentMethod: form.advancePaymentMethod,
-      notes: form.notes || null,
-      materialDetails: form.materialDetails || null,
-      customerSuppliedMaterial: form.customerSuppliedMaterial,
-      shopSuppliedMaterial: form.shopSuppliedMaterial,
-      measurements: form.measurements,
-      measurementProfileId: form.measurementProfileId || null,
-      externalMaterialCost: parseFloat(form.externalMaterialCost) || 0,
-      quantity: parseInt(form.quantity, 10) || 1,
-      unitPrice: parseFloat(form.unitPrice) || undefined,
-      bulkDiscount: parseFloat(form.bulkDiscount) || 0,
-      tshirt: form.serviceType === "tshirt_printing" ? form.tshirt : null,
-    });
-
+    let result: ReturnType<typeof ordersStore.createOrder>;
+    try {
+      const pricing = parseServiceOrderPriceDraft(form);
+      result = ordersStore.createOrder({
+        customerId: form.customerId,
+        serviceType: form.serviceType,
+        deliveryDate: form.deliveryDate || null,
+        price: pricing.price,
+        discount: pricing.discount,
+        advance: pricing.advance,
+        advancePaymentMethod: form.advancePaymentMethod,
+        notes: form.notes || null,
+        materialDetails: form.materialDetails || null,
+        customerSuppliedMaterial: form.customerSuppliedMaterial,
+        shopSuppliedMaterial: form.shopSuppliedMaterial,
+        measurements: form.measurements,
+        measurementProfileId: form.measurementProfileId || null,
+        externalMaterialCost: pricing.externalMaterialCost,
+        quantity: pricing.quantity,
+        unitPrice: pricing.unitPrice,
+        bulkDiscount: pricing.bulkDiscount,
+        tshirt: form.serviceType === "tshirt_printing"
+          ? { ...form.tshirt, customerPrice: pricing.price }
+          : null,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create service order.");
+      return;
+    }
     if (result.errors.length || !result.order) {
       setError(result.errors.join("; ") || "Failed to create order");
       return;
