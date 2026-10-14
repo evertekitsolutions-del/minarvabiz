@@ -32,6 +32,7 @@ export default function ResetPasswordPage() {
   const [token, setToken] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
+  const [showPasswords, setShowPasswords] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -64,8 +65,9 @@ export default function ResetPasswordPage() {
           <p className="mt-1 text-sm text-slate-500">Use the recovery link from your email.</p>
         </div>
         {!token && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">This recovery link is missing its access token or has expired. Request a new reset email.</p>}
-        <label className="block text-sm"><span className="text-slate-600">New password</span><input type="password" minLength={8} autoComplete="new-password" required className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-        <label className="block text-sm"><span className="text-slate-600">Confirm password</span><input type="password" minLength={8} autoComplete="new-password" required className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={confirm} onChange={(e) => setConfirm(e.target.value)} /></label>
+        <label className="block text-sm"><span className="text-slate-600">New password</span><input type={showPasswords ? "text" : "password"} minLength={8} autoComplete="new-password" required className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+        <label className="block text-sm"><span className="text-slate-600">Confirm password</span><input type={showPasswords ? "text" : "password"} minLength={8} autoComplete="new-password" required className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm" value={confirm} onChange={(e) => setConfirm(e.target.value)} /></label>
+        <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={showPasswords} onChange={event => setShowPasswords(event.target.checked)} />Show passwords</label>
         {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
         {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
         <Button type="submit" className="w-full" disabled={loading || !token}>{loading ? "Updating…" : "Update password"}</Button>
