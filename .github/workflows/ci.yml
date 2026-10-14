@@ -34,6 +34,8 @@ jobs:
         run: node scripts/frontend-tools-csv-contract.test.mjs
       - name: Verify notification frontend
         run: node scripts/frontend-notifications-contract.test.mjs
+      - name: Verify onboarding search
+        run: node scripts/frontend-onboarding-search-contract.test.mjs
       - name: Verify onboarding incomplete filter
         run: node scripts/frontend-onboarding-filter-contract.test.mjs
       - name: Verify onboarding progress frontend
