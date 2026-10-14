@@ -74,6 +74,7 @@ export default function OnboardingPage() {
   }
 
   const completed = steps.filter(step => step.done).length;
+  const completionPercent = steps.length ? Math.round((completed / steps.length) * 100) : 0;
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <header className="space-y-2">
@@ -86,6 +87,10 @@ export default function OnboardingPage() {
         <p aria-live="polite" className="text-sm font-medium">
           {loaded ? `${completed} of ${steps.length} steps confirmed` : "Loading checklist…"}
         </p>
+        <div role="progressbar" aria-label="Setup checklist progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={completionPercent} className="h-3 overflow-hidden rounded-full bg-slate-200">
+          <div className="h-full rounded-full bg-indigo-600 transition-[width]" style={{ width: `${completionPercent}%` }} />
+        </div>
+        <p className="text-xs text-slate-600">{completionPercent}% of this browser checklist confirmed — not deployment or product readiness.</p>
       </header>
       {error && <p role="alert" className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
       {steps.map(s => (
