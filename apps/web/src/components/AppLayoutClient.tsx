@@ -234,7 +234,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
               logoSrc: "/logo-mark.png",
             }}
             header={{
-              showSearch: pathname !== "/dashboard",
+              showSearch: true,
               onSearch: (q: string) => {
                 if (!q.trim()) {
                   setSearchResults([]);
