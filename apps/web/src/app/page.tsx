@@ -44,10 +44,19 @@ export default function PublicHomePage() {
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-8">
           <Wordmark />
-          <nav aria-label="Main navigation" className="order-3 flex w-full flex-wrap gap-x-5 gap-y-2 text-sm font-medium text-slate-600 lg:order-2 lg:w-auto">
-            {navigation.map((item) => <a key={item.href} className="transition hover:text-indigo-700 focus-visible:underline" href={item.href}>{item.title}</a>)}
+          <nav aria-label="Main navigation" className="order-3 hidden items-center gap-5 text-sm font-medium text-slate-600 lg:order-2 lg:flex">
+            {navigation.map((item) => <a key={item.href} className="rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-indigo-600 transition hover:text-indigo-700" href={item.href}>{item.title}</a>)}
           </nav>
-          <a href="/login" className="order-2 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 lg:order-3">Customer login <span aria-hidden="true">→</span></a>
+          <a href="/login" className="order-2 rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 lg:order-3">Customer login <span aria-hidden="true">→</span></a>
+          <details className="group order-4 w-full lg:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 [&::-webkit-details-marker]:hidden">
+              <span>Browse sections</span>
+              <span aria-hidden="true" className="group-open:rotate-180 transition-transform">⌄</span>
+            </summary>
+            <nav aria-label="Mobile navigation" className="mt-2 grid gap-1 rounded-xl border border-slate-200 bg-white p-2">
+              {navigation.map((item) => <a key={item.href} href={item.href} className="rounded-lg px-3 py-3 text-sm font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600">{item.title}</a>)}
+            </nav>
+          </details>
         </div>
       </header>
 
