@@ -34,6 +34,8 @@ jobs:
         run: node packages/business-logic/src/__tests__/product-reorder-csv.test.mjs
       - name: Verify CSV frontend safety
         run: node scripts/frontend-tools-csv-contract.test.mjs
+      - name: Verify default GST rate validation and explicit-save UI
+        run: node packages/business-logic/src/__tests__/tax-rate-validation.test.mjs
       - name: Verify safe notification navigation
         run: node scripts/frontend-safe-notification-navigation.test.mjs
       - name: Verify notification frontend
