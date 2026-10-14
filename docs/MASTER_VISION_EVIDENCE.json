@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "assessmentPolicy": "Each gate needs a real evidence URL, named reviewer, verified date. Empty register means not assessed, NOT unimplemented.",
+  "assessments": {}
+}
