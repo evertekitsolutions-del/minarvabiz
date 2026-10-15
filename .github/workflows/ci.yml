@@ -34,10 +34,14 @@ jobs:
         run: node scripts/frontend-service-order-quick-customer.test.mjs
       - name: Verify customers outstanding-only filter
         run: node --experimental-strip-types packages/ui/src/components/customers/__tests__/customer-dues-filter.test.mjs
+      - name: Verify supplier payables-only filter and safe payment action
+        run: node --experimental-strip-types packages/ui/src/components/suppliers/__tests__/supplier-payables-filter.test.mjs
       - name: Verify strict supplier payment amount before posting
         run: node --experimental-strip-types apps/web/src/lib/__tests__/supplier-payment-draft.test.mjs
       - name: Verify sales unpaid-only invoice filter
         run: node --experimental-strip-types packages/ui/src/components/sales/__tests__/unpaid-sale-filter.test.mjs
+      - name: Verify Sales History customer due collection actions
+        run: node --experimental-strip-types packages/ui/src/components/sales/__tests__/sale-customer-collection.test.mjs
       - name: Verify customer due collection deep link and amounts
         run: node --experimental-strip-types packages/ui/src/components/payments/__tests__/collection-prefill.test.mjs
       - name: Verify installed attendance smoke waits for save completion
