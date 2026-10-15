@@ -30,6 +30,9 @@ function csvCell(value: string | number | null | undefined): string {
 /** Pure CSV ledger extract; never modify or reconcile transactions during export. */
 export function exportPaymentHistoryCsv(rows: readonly PaymentHistoryExportRow[]): string {
   const lines = rows.map((row) => {
+    if (row.direction !== "inflow" && row.direction !== "outflow") {
+      throw new Error("Payment history contains an invalid direction.");
+    }
     if (!Number.isFinite(row.amount) || row.amount < 0 ||
       !Number.isSafeInteger(Math.round(row.amount * 100))) {
       throw new Error("Payment history contains an invalid amount.");
