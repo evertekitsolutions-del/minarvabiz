@@ -18,3 +18,22 @@ export function parseSupplierPaymentAmount(raw: string, outstanding: number): nu
   }
   return amountMinor / 100;
 }
+
+/**
+ * Prevent repeat supplier-payment posting from a stale dialog before React
+ * commits the modal-close render. Keep the gate locked after success and reset
+ * it only when a new dialog opens or a failed attempt may be retried.
+ */
+export function createSupplierPaymentSubmitGate() {
+  let locked = false;
+  return {
+    acquire(): boolean {
+      if (locked) return false;
+      locked = true;
+      return true;
+    },
+    reset(): void {
+      locked = false;
+    },
+  };
+}
