@@ -141,7 +141,7 @@ export function OrderDetail({
         </div>
         <div className="flex flex-wrap gap-2">
           {onCollectBalance && canCollectServiceOrderBalance(order) && (
-            <Button variant="outline" onClick={() => onCollectBalance(order)}>Collect Balance</Button>
+            <Button variant="outline" onClick={() => onCollectBalance(order)}>Collect Customer Due</Button>
           )}
           <Button variant="outline" onClick={() => setPrintPreviewPaper("a4")}>Preview A4</Button>
           <Button variant="outline" onClick={() => setPrintPreviewPaper("thermal")}>Preview Thermal</Button>
