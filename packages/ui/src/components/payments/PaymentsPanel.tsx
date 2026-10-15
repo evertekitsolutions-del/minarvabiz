@@ -8,6 +8,7 @@ import { DataTable, type Column } from "../data/DataTable";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { Modal } from "../forms/Modal";
 import { formatMoney } from "../customers/format";
+import { findCollectionCustomer, parseCollectionAmount } from "./collection-prefill";
 
 function dateKey(value: string) {
   return String(value || "").slice(0, 10);
@@ -34,6 +35,7 @@ export function PaymentsPanel({
   suppliers = [],
   onCollect,
   onRemind,
+  requestedCustomerId,
 }: {
   outstanding: Customer[];
   payments: Payment[];
@@ -46,6 +48,7 @@ export function PaymentsPanel({
     notes?: string;
   }) => { ok: boolean; error?: string };
   onRemind?: (customer: Customer) => void;
+  requestedCustomerId?: string | null;
 }) {
   const [open, setOpen] = React.useState(false);
   const [customerId, setCustomerId] = React.useState("");
@@ -53,6 +56,24 @@ export function PaymentsPanel({
   const [method, setMethod] = React.useState<PaymentMethod>("cash");
   const [notes, setNotes] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
+  const [collectionLinkNotice, setCollectionLinkNotice] = React.useState<string | null>(null);
+  const processedCustomerLink = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!requestedCustomerId || processedCustomerLink.current === requestedCustomerId) return;
+    processedCustomerLink.current = requestedCustomerId;
+    const customer = findCollectionCustomer(outstanding, requestedCustomerId);
+    if (!customer) {
+      setCollectionLinkNotice("Selected customer has no outstanding balance or is unavailable. No payment has been recorded.");
+      return;
+    }
+    setCustomerId(customer.id);
+    setAmount(String(customer.outstandingBalance));
+    setNotes("");
+    setError(null);
+    setCollectionLinkNotice(null);
+    setOpen(true);
+  }, [outstanding, requestedCustomerId]);
 
   const [historyQuery, setHistoryQuery] = React.useState("");
   const [historySource, setHistorySource] = React.useState("");
@@ -197,6 +218,8 @@ export function PaymentsPanel({
         </Button>
       </div>
 
+      {collectionLinkNotice && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{collectionLinkNotice}</p>}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-semibold">Outstanding customers</CardTitle>
@@ -304,14 +327,22 @@ export function PaymentsPanel({
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button
               onClick={() => {
-                const result = onCollect({
-                  customerId,
-                  amount: parseFloat(amount) || 0,
-                  method,
-                  notes: notes || undefined,
-                });
-                if (!result.ok) {
-                  setError(result.error || "Failed");
+                try {
+                  const liveCustomer = findCollectionCustomer(outstanding, customerId);
+                  if (!liveCustomer) throw new Error("Select a customer with an outstanding balance.");
+                  const validatedAmount = parseCollectionAmount(amount, liveCustomer.outstandingBalance);
+                  const result = onCollect({
+                    customerId: liveCustomer.id,
+                    amount: validatedAmount,
+                    method,
+                    notes: notes || undefined,
+                  });
+                  if (!result.ok) {
+                    setError(result.error || "Unable to record payment.");
+                    return;
+                  }
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Unable to record payment.");
                   return;
                 }
                 setOpen(false);
@@ -352,7 +383,7 @@ export function PaymentsPanel({
           <FormField label="Notes">
             <input className={inputClass} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </FormField>
-          {error && <p className="text-sm text-rose-600">{error}</p>}
+          {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
         </div>
       </Modal>
     </div>
