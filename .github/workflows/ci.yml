@@ -30,6 +30,10 @@ jobs:
         run: node scripts/master-vision-source-inventory.mjs --summary
       - name: Verify linked help workflows
         run: node scripts/frontend-help-workflows-contract.test.mjs
+      - name: Verify customers outstanding-only filter
+        run: node --experimental-strip-types packages/ui/src/components/customers/__tests__/customer-dues-filter.test.mjs
+      - name: Verify installed attendance smoke waits for save completion
+        run: node scripts/windows-attendance-eventual-save-contract.test.mjs
       - name: Verify reorder CSV safety and quantities
         run: node packages/business-logic/src/__tests__/product-reorder-csv.test.mjs
       - name: Verify filtered invoice CSV export and injection safety

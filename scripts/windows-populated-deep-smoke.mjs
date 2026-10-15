@@ -138,6 +138,24 @@ async function assertMain(ws, name, patterns) {
   console.log(`VIEW_${name} PASS`);
 }
 
+async function assertMainEventually(ws, name, patterns, timeoutMs = 20000) {
+  const deadline = Date.now() + timeoutMs;
+  const snapshotCode = "JSON.stringify((document.querySelector('[data-testid=\"app-content\"]')?.innerText||'').slice(0,12000))";
+  let last = "";
+  while (true) {
+    last = JSON.parse(await evalIn(ws, snapshotCode));
+    if (patterns.every((pattern) => last.toLowerCase().includes(String(pattern).toLowerCase()))) {
+      console.log("VIEW_" + name + " PASS");
+      return;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(name + " marker missing after " + timeoutMs + "ms. Expected " +
+        patterns.join(" + ") + ". Main: " + last.slice(0, 2000));
+    }
+    await sleep(300);
+  }
+}
+
 // Check cart state rather than matching product text already visible in the catalog.
 async function assertCart(ws, name, empty) {
   const state = JSON.parse(await evalIn(ws, `JSON.stringify((()=>{const main=document.querySelector('[data-testid="app-content"]');const button=[...(main?.querySelectorAll('button')||[])].find(b=>(b.innerText||'').trim()==='Complete Sale');return {found:!!button,disabled:button?.disabled,empty:(main?.innerText||'').includes('Cart is empty')};})())`));
@@ -520,7 +538,8 @@ async function main() {
     await setField(ws,"Attendance details","Overtime minutes","45");
     await setField(ws,"Attendance details","Notes","QA SQLite attendance retained");
     await clickDialogButton(ws,"SAVE_ATTENDANCE","Attendance details","Save attendance");
-    await assertMain(ws,"ATTENDANCE_WORKED_TIME",["510m","45m"]);
+    // Native/renderer attendance save is async; verify the settled result, not a 650ms race.
+    await assertMainEventually(ws,"ATTENDANCE_WORKED_TIME",["510m","45m"]);
     await setByAriaLabel(ws,`QA Tailor attendance ${attendanceDate}`,"Half day");await sleep(800);
     // Verify the native SQLite write has completed before deliberately reloading the renderer.
     const flushed = await evalIn(ws,`window.__minarvaDesktopFlush?.()`);

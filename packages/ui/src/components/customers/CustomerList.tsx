@@ -5,6 +5,7 @@ import type { Customer } from "@minarvabiz/types";
 import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "./format";
+import { hasOutstandingCustomerBalance } from "./customer-dues-filter";
 
 export function CustomerList({
   customers,
@@ -22,6 +23,11 @@ export function CustomerList({
   onArchive?: (c: Customer) => void;
 }) {
   const [q, setQ] = React.useState("");
+  const [withDuesOnly, setWithDuesOnly] = React.useState(false);
+  const visibleCustomers = React.useMemo(
+    () => withDuesOnly ? customers.filter(hasOutstandingCustomerBalance) : customers,
+    [customers, withDuesOnly],
+  );
   const columns: Column<Customer>[] = [
     {
       key: "id",
@@ -66,7 +72,7 @@ export function CustomerList({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Customers</h2>
-          <p className="text-sm text-slate-500">{customers.length} customers</p>
+          <p role="status" className="text-sm text-slate-500">{visibleCustomers.length} of {customers.length} customers</p>
         </div>
         <div className="flex gap-2">
           <input
@@ -82,7 +88,14 @@ export function CustomerList({
           <Button onClick={onAdd}>+ Add Customer</Button>
         </div>
       </div>
-      <DataTable columns={columns} rows={customers} onRowClick={onSelect} emptyMessage="No customers yet" />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" className="size-4 accent-indigo-600" checked={withDuesOnly} onChange={(event) => setWithDuesOnly(event.target.checked)} />
+          Outstanding balance only
+        </label>
+        <Button size="sm" variant="outline" onClick={() => { setQ(""); setWithDuesOnly(false); onSearch?.(""); }}>Clear filters</Button>
+      </div>
+      <DataTable columns={columns} rows={visibleCustomers} onRowClick={onSelect} emptyMessage={withDuesOnly ? "No customers with outstanding balances match this search" : "No customers match this search"} />
     </div>
   );
 }
