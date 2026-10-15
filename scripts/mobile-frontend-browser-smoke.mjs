@@ -62,10 +62,12 @@ try {
   await browser.call("Emulation.setDeviceMetricsOverride", {
     width: 390, height: 844, deviceScaleFactor: 1, mobile: true,
   });
-  await browser.evaluate(`location.assign(${JSON.stringify(appBase + "/dashboard")})`);
+  // A prior page may already display mobile nav while location.assign starts a full reload.
+  // Mark the old Window and require a fresh document before querying its navigation DOM.
+  await browser.evaluate(`window.__minarvaMobilePreReload = true; location.assign(${JSON.stringify(appBase + "/dashboard")})`);
   const mobileNav = 'document.querySelector(\'nav[aria-label="Mobile quick navigation"]\')';
   const visible = '(el => !!el && getComputedStyle(el).display !== "none" && el.getBoundingClientRect().height > 0)';
-  await waitFor(browser.evaluate, `${visible}(${mobileNav})`, "mobile navigation");
+  await waitFor(browser.evaluate, `location.pathname === "/dashboard" && window.__minarvaMobilePreReload !== true && ${visible}(${mobileNav})`, "fresh dashboard mobile navigation after reload");
   assert.equal(await browser.evaluate(`${mobileNav}.querySelectorAll("button").length`), 5);
   assert.equal(await browser.evaluate(`${mobileNav}.querySelector('button[aria-current="page"]')?.innerText.trim()`), "Home");
 

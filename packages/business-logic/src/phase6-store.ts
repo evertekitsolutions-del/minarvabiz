@@ -9,6 +9,7 @@ import { generateId, nowISO } from "@minarvabiz/utils";
 import { calculateIncentive } from "./incentives";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
+import { canAssignServiceOrder } from "./order-assignment-guard";
 import * as phase9Store from "./phase9-store";
 import { checkRosterSlot, rosterRange, validateShiftRule, type ShiftRule, type RosterSlot, type RosterPolicy } from "./workforce-roster";
 
@@ -124,7 +125,55 @@ export async function resolveAttendanceConflict(id:UUID,choice:"local"|"remote",
 export function attendanceSummary(from:string,to:string){const rows=listAttendance({from,to});const summary=new Map<UUID,{present:number;absent:number;halfDay:number;leave:number;holiday:number;overtimeMinutes:number}>();for(const row of rows){const v=summary.get(row.staffId)??{present:0,absent:0,halfDay:0,leave:0,holiday:0,overtimeMinutes:0};if(row.status==="present")v.present++;else if(row.status==="absent")v.absent++;else if(row.status==="half_day")v.halfDay++;else if(row.status==="leave")v.leave++;else if(row.status==="holiday")v.holiday++;v.overtimeMinutes+=row.overtimeMinutes;summary.set(row.staffId,v);}return summary;}
 
 export function listAssignments(opts?:{staffId?:UUID;orderId?:UUID}){let list=[...assignments];if(opts?.staffId)list=list.filter(a=>a.staffId===opts.staffId);if(opts?.orderId)list=list.filter(a=>a.orderId===opts.orderId);return list.sort((a,b)=>b.assignedAt.localeCompare(a.assignedAt));}
-export function assignStaffToOrder(input:{staffId:UUID;orderId:UUID;notes?:string|null}){assertPermission("orders.assign");const member=getStaff(input.staffId);if(!member)return{assignment:null,errors:["Staff not found"]};if(member.status!=="active")return{assignment:null,errors:["Only active staff can receive new assignments"]};const order=ordersStore.getOrder(input.orderId);if(!order)return{assignment:null,errors:["Order not found"]};const existing=assignments.find(a=>a.orderId===input.orderId&&a.staffId===input.staffId&&a.status!=="cancelled");if(existing)return{assignment:null,errors:["Already assigned"]};const a:StaffAssignment={id:generateId(),staffId:input.staffId,staffName:member.name,orderId:input.orderId,orderNumber:order.orderNumber,serviceType:order.serviceType,assignedAt:nowISO(),status:"assigned",notes:input.notes??null};assignments.push(a);enqueueOutbox("staff_assignments",a.id,"insert",a);order.assignedTailorId=input.staffId;order.updatedAt=nowISO();order.version+=1;pushNotification({kind:"system",title:"Order assigned",body:`${order.orderNumber} assigned to ${member.name}`,href:"/services"});touchPersistence();return{assignment:a,errors:[]};}
+export function assignStaffToOrder(input: { staffId: UUID; orderId: UUID; notes?: string | null }) {
+  assertPermission("orders.assign");
+  const member = getStaff(input.staffId);
+  if (!member) return { assignment: null, errors: ["Staff not found"] };
+  if (member.status !== "active") return { assignment: null, errors: ["Only active staff can receive new assignments"] };
+  const order = ordersStore.getOrder(input.orderId);
+  if (!order) return { assignment: null, errors: ["Order not found"] };
+  if (!canAssignServiceOrder(order)) return { assignment: null, errors: ["Delivered or cancelled service orders cannot be assigned"] };
+  const existing = assignments.find(
+    (assignment) => assignment.orderId === input.orderId &&
+      assignment.staffId === input.staffId && assignment.status !== "cancelled"
+  );
+  if (existing) return { assignment: null, errors: ["Already assigned"] };
+
+  const before = structuredClone(order);
+  const now = nowISO();
+  const assignment: StaffAssignment = {
+    id: generateId(),
+    staffId: input.staffId,
+    staffName: member.name,
+    orderId: input.orderId,
+    orderNumber: order.orderNumber,
+    serviceType: order.serviceType,
+    assignedAt: now,
+    status: "assigned",
+    notes: input.notes ?? null,
+  };
+  assignments.push(assignment);
+  enqueueOutbox("staff_assignments", assignment.id, "insert", { ...assignment });
+
+  // Keep the existing assignedTailorId compatibility field as well as the
+  // generic service staff assignment field in the offline/hybrid order record.
+  order.assignedTailorId = input.staffId;
+  order.assignedStaffId = input.staffId;
+  order.updatedAt = now;
+  order.version += 1;
+  enqueueOutbox("orders", order.id, "update", { ...order });
+  auditAction("service_order.assign", "orders", order.id, before, {
+    ...order, assignmentId: assignment.id, assignedStaffName: member.name,
+  });
+  pushNotification({
+    kind: "system",
+    title: "Order assigned",
+    body: `${order.orderNumber} assigned to ${member.name}`,
+    href: "/services",
+  });
+  touchPersistence();
+  return { assignment, errors: [] };
+}
 export function completeAssignment(id:UUID){assertPermission("orders.assign");const a=assignments.find(x=>x.id===id);if(!a||a.status==="cancelled")return null;a.status="completed";a.completedAt=nowISO();enqueueOutbox("staff_assignments",a.id,"update",a);const order=ordersStore.getOrder(a.orderId);if(order){const rule=findRule(order.serviceType);if(rule){const amount=calculateIncentive(order.price,{type:rule.type,value:rule.value,serviceType:rule.serviceType??undefined});if(amount>0&&!payouts.some(p=>p.orderId===a.orderId&&p.staffId===a.staffId&&p.ruleId===rule.id)){payouts.push({id:generateId(),staffId:a.staffId,staffName:a.staffName,orderId:a.orderId,orderNumber:a.orderNumber,ruleId:rule.id,amount,calculatedAt:nowISO(),paid:false});enqueueOutbox("staff_incentive_payouts",payouts[payouts.length-1].id,"insert",payouts[payouts.length-1]);}}}touchPersistence();return a;}
 export function listIncentiveRules(){return incentiveRules.filter(r=>r.isActive);}
 export function upsertIncentiveRule(input:{id?:UUID;name:string;serviceType?:string|null;type:"fixed"|"percentage";value:number}){assertPermission("staff.manage");if(input.id){const existing=incentiveRules.find(r=>r.id===input.id);if(existing){Object.assign(existing,input,{updatedAt:nowISO()});enqueueOutbox("incentive_rules",existing.id,"update",existing);touchPersistence();return existing;}}const r:IncentiveRuleRecord={id:generateId(),name:input.name,serviceType:input.serviceType??null,type:input.type,value:input.value,isActive:true,createdAt:nowISO(),updatedAt:nowISO()};incentiveRules.push(r);enqueueOutbox("incentive_rules",r.id,"insert",r);touchPersistence();return r;}
