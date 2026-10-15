@@ -177,7 +177,7 @@ export default function SalesPage() {
         />
       )}
       {tab === "normal" && <NormalBilling products={products} customers={customers} onCompleteSale={handleComplete} onAddCustomer={openCustomerQuickAdd} onPrintSale={printExistingInvoice} />}
-      {tab === "history" && <SalesList sales={sales} customers={customers} buildPreviewHtml={(sale, paper) => buildSaleInvoiceHtml(sale, { paper, autoPrint: false })} onPrintA4={(sale) => printExistingInvoice(sale.id, "a4")} onPrintThermal={(sale) => printExistingInvoice(sale.id, "thermal")} onCreateReturn={(sale) => router.push(`/returns?saleId=${encodeURIComponent(sale.id)}`)} />}
+      {tab === "history" && <SalesList sales={sales} customers={customers} buildPreviewHtml={(sale, paper) => buildSaleInvoiceHtml(sale, { paper, autoPrint: false })} onPrintA4={(sale) => printExistingInvoice(sale.id, "a4")} onPrintThermal={(sale) => printExistingInvoice(sale.id, "thermal")} onCreateReturn={(sale) => router.push(`/returns?saleId=${encodeURIComponent(sale.id)}`)} onCollectCustomerDue={(sale) => { if (sale.customerId) router.push(`/payments?customerId=${encodeURIComponent(sale.customerId)}`); }} />}
 
       <Modal
         open={customerOpen}
