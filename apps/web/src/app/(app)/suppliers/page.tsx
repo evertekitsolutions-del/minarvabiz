@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { parseSupplierPaymentAmount } from "@/lib/supplier-payment-draft";
 import { SupplierList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
 import { phase5Store, parseSupplierCsv, importSuppliersFromCsv, exportSuppliersCsv } from "@minarvabiz/business-logic";
 import type { PaymentMethod, Supplier } from "@minarvabiz/types";
@@ -108,9 +109,31 @@ export default function SuppliersPage() {
   }
   function savePayment() {
     if (!paymentSupplier) return;
-    const result = phase5Store.recordSupplierPayment({ supplierId: paymentSupplier.id, amount: parseFloat(paymentForm.amount) || 0, paymentMethod: paymentForm.paymentMethod, date: paymentForm.date, reference: paymentForm.reference || null, notes: paymentForm.notes || null });
-    if (result.errors.length) { setPaymentError(result.errors.join("; ")); return; }
-    setPaymentOpen(false); setPaymentError(null); refresh();
+    setPaymentError(null);
+    try {
+      // Re-read the live payable; old dialog prefill may have become stale.
+      const supplier = phase5Store.listSuppliers().find((item) => item.id === paymentSupplier.id);
+      if (!supplier) throw new Error("Supplier no longer exists.");
+      const amount = parseSupplierPaymentAmount(paymentForm.amount, supplier.outstandingBalance);
+      const result = phase5Store.recordSupplierPayment({
+        supplierId: supplier.id,
+        amount,
+        paymentMethod: paymentForm.paymentMethod,
+        date: paymentForm.date,
+        reference: paymentForm.reference || null,
+        notes: paymentForm.notes || null,
+      });
+      if (result.errors.length || !result.payment) {
+        setPaymentError(result.errors.join("; ") || "Supplier payment was not recorded.");
+        return;
+      }
+      setPaymentOpen(false);
+      setPaymentSupplier(null);
+      setPaymentError(null);
+      refresh();
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : "Supplier payment was not recorded.");
+    }
   }
 
   return (
@@ -181,7 +204,7 @@ export default function SuppliersPage() {
         </div>
       </Modal>
       <Modal open={paymentOpen} title="Record Supplier Payment" onClose={() => setPaymentOpen(false)} footer={<><Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button><Button onClick={savePayment}>Record Payment</Button></>}>
-        <div className="space-y-3"><p className="text-sm text-slate-600">{paymentSupplier?.name} · Outstanding <strong>{paymentSupplier?.outstandingBalance.toFixed(2)}</strong></p><FormField label="Date"><input className={inputClass} type="date" value={paymentForm.date} onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })} /></FormField><FormField label="Amount"><input className={inputClass} type="number" min="0" step="0.01" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} /></FormField><FormField label="Payment method"><select className={selectClass} value={paymentForm.paymentMethod} onChange={(e) => setPaymentForm({ ...paymentForm, paymentMethod: e.target.value as PaymentMethod })}><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank">Bank</option><option value="online">Online</option><option value="other">Other</option></select></FormField><FormField label="Reference"><input className={inputClass} value={paymentForm.reference} onChange={(e) => setPaymentForm({ ...paymentForm, reference: e.target.value })} /></FormField><FormField label="Notes"><input className={inputClass} value={paymentForm.notes} onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })} /></FormField>{paymentError && <p className="text-sm text-rose-600">{paymentError}</p>}</div>
+        <div className="space-y-3"><p className="text-sm text-slate-600">{paymentSupplier?.name} · Outstanding <strong>{paymentSupplier?.outstandingBalance.toFixed(2)}</strong>. The amount cannot exceed the current payable.</p><FormField label="Date"><input className={inputClass} type="date" value={paymentForm.date} onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })} /></FormField><FormField label="Amount"><input className={inputClass} type="number" min="0.01" step="0.01" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} /></FormField><FormField label="Payment method"><select className={selectClass} value={paymentForm.paymentMethod} onChange={(e) => setPaymentForm({ ...paymentForm, paymentMethod: e.target.value as PaymentMethod })}><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank">Bank</option><option value="online">Online</option><option value="other">Other</option></select></FormField><FormField label="Reference"><input className={inputClass} value={paymentForm.reference} onChange={(e) => setPaymentForm({ ...paymentForm, reference: e.target.value })} /></FormField><FormField label="Notes"><input className={inputClass} value={paymentForm.notes} onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })} /></FormField>{paymentError && <p role="alert" className="text-sm text-rose-600">{paymentError}</p>}</div>
       </Modal>
     </>
   );
