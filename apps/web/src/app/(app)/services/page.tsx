@@ -8,10 +8,10 @@ import {
   OrderList, OrderForm, emptyOrderForm, OrderDetail, Modal, Button, FormField, inputClass,
   type OrderFormValues,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, printOrderReceipt, templateFromOrderReady, assertLimit } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, printOrderReceipt, templateFromOrderReady, assertLimit, can } from "@minarvabiz/business-logic";
 import { customerSchema } from "@minarvabiz/validation";
 import type {
-  ServiceOrder, Customer, ExpenseCategory, MeasurementProfile, PaymentMethod, ServiceType, OrderStatus,
+  ServiceOrder, Customer, ExpenseCategory, MeasurementProfile, PaymentMethod, ServiceType, OrderStatus, StaffMember, StaffAssignment,
 } from "@minarvabiz/types";
 
 const emptyCustomerForm = { name: "", phone: "", email: "", address: "", notes: "" };
@@ -22,6 +22,8 @@ export default function ServicesOrdersPage() {
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [profiles, setProfiles] = React.useState<MeasurementProfile[]>([]);
   const [expenseCategories, setExpenseCategories] = React.useState<ExpenseCategory[]>([]);
+  const [staffMembers, setStaffMembers] = React.useState<StaffMember[]>([]);
+  const [staffAssignments, setStaffAssignments] = React.useState<StaffAssignment[]>([]);
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<OrderStatus | null>(null);
   const [serviceType, setServiceType] = React.useState<ServiceType | null>(null);
@@ -42,6 +44,7 @@ export default function ServicesOrdersPage() {
   const refresh = React.useCallback(() => {
     setCustomers(store.listCustomers());
     setExpenseCategories(phase5Store.listExpenseCategories());
+    setStaffMembers(phase6Store.listStaff({ status: "active" }));
     setOrders(ordersStore.listOrders({
       query: query || undefined,
       status: status ?? undefined,
@@ -152,6 +155,7 @@ export default function ServicesOrdersPage() {
     setError(null);
     refresh();
     setSelected(result.order);
+    setStaffAssignments([]);
     try { printOrderReceipt(result.order); } catch { /* blocked */ }
   }
 
@@ -191,6 +195,23 @@ export default function ServicesOrdersPage() {
     setStatusError(null);
     setSelected({ ...result.order });
     refresh();
+  }
+
+  function handleStaffAssignment(staffId: string): { ok: boolean; error?: string } {
+    if (!selected) return { ok: false, error: "Select a service order first." };
+    try {
+      const result = phase6Store.assignStaffToOrder({ orderId: selected.id, staffId });
+      if (result.errors.length || !result.assignment) {
+        return { ok: false, error: result.errors.join("; ") || "Could not assign staff." };
+      }
+      setStaffAssignments(phase6Store.listAssignments({ orderId: selected.id }));
+      const updated = ordersStore.getOrder(selected.id);
+      if (updated) setSelected({ ...updated });
+      refresh();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Could not assign staff." };
+    }
   }
 
   function handleExpense(input: { description: string; amount: number; categoryId: string; paymentMethod: PaymentMethod }) {
@@ -240,7 +261,7 @@ export default function ServicesOrdersPage() {
           onFilterOrderDateTo={setOrderDateTo}
           onFilterDeliveryDateFrom={setDeliveryDateFrom}
           onFilterDeliveryDateTo={setDeliveryDateTo}
-          onSelect={setSelected}
+          onSelect={(order) => { setSelected(order); setStaffAssignments(phase6Store.listAssignments({ orderId: order.id })); setStatusError(null); }}
         />
       )}
       {selected && (
@@ -249,6 +270,10 @@ export default function ServicesOrdersPage() {
           <OrderDetail
           order={selected}
           expenseCategories={expenseCategories}
+          staffMembers={staffMembers}
+          staffAssignments={staffAssignments}
+          canAssignStaff={can("orders.assign")}
+          onAssignStaff={handleStaffAssignment}
           onStatusChange={handleStatus}
           onAddExpense={handleExpense}
           onCollectBalance={(order) => router.push(`/payments?customerId=${encodeURIComponent(order.customerId)}`)}
