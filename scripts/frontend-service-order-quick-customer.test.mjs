@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-const services = fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/services/page.tsx", import.meta.url), "utf8");
-const orderForm = fs.readFileSync(new URL("../../../../packages/ui/src/components/orders/OrderForm.tsx", import.meta.url), "utf8");
+const services = fs.readFileSync(new URL("../apps/web/src/app/(app)/services/page.tsx", import.meta.url), "utf8");
+const orderForm = fs.readFileSync(new URL("../packages/ui/src/components/orders/OrderForm.tsx", import.meta.url), "utf8");
 
 assert.match(orderForm, /onClick=\{onAddCustomer\}/, "order customer + action must call supplied handler");
 assert.match(services, /onAddCustomer=\{openCustomerQuickAdd\}/);
