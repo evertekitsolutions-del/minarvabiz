@@ -5,13 +5,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { parseServiceOrderPriceDraft } from "@/lib/service-order-price-draft";
 import {
-  OrderList, OrderForm, emptyOrderForm, OrderDetail, Modal,
+  OrderList, OrderForm, emptyOrderForm, OrderDetail, Modal, Button, FormField, inputClass,
   type OrderFormValues,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, printOrderReceipt, templateFromOrderReady } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, printOrderReceipt, templateFromOrderReady, assertLimit } from "@minarvabiz/business-logic";
+import { customerSchema } from "@minarvabiz/validation";
 import type {
   ServiceOrder, Customer, ExpenseCategory, MeasurementProfile, PaymentMethod, ServiceType, OrderStatus,
 } from "@minarvabiz/types";
+
+const emptyCustomerForm = { name: "", phone: "", email: "", address: "", notes: "" };
 
 export default function ServicesOrdersPage() {
   const router = useRouter();
@@ -28,6 +31,9 @@ export default function ServicesOrdersPage() {
   const [deliveryDateFrom, setDeliveryDateFrom] = React.useState("");
   const [deliveryDateTo, setDeliveryDateTo] = React.useState("");
   const [createOpen, setCreateOpen] = React.useState(false);
+  const [customerQuickAddOpen, setCustomerQuickAddOpen] = React.useState(false);
+  const [customerForm, setCustomerForm] = React.useState(emptyCustomerForm);
+  const [customerAddError, setCustomerAddError] = React.useState<string | null>(null);
   const [form, setForm] = React.useState<OrderFormValues>(emptyOrderForm());
   const [error, setError] = React.useState<string | null>(null);
   const [selected, setSelected] = React.useState<ServiceOrder | null>(null);
@@ -49,6 +55,49 @@ export default function ServicesOrdersPage() {
   }, [query, status, serviceType, customerId, orderDateFrom, orderDateTo, deliveryDateFrom, deliveryDateTo]);
 
   React.useEffect(() => { refresh(); }, [refresh]);
+
+  function openCustomerQuickAdd() {
+    setCustomerAddError(null);
+    setCustomerQuickAddOpen(true);
+  }
+
+  function closeCustomerQuickAdd() {
+    setCustomerQuickAddOpen(false);
+    setCustomerAddError(null);
+  }
+
+  function saveCustomerForOrder() {
+    const parsed = customerSchema.safeParse({
+      name: customerForm.name,
+      phone: customerForm.phone || null,
+      email: customerForm.email || null,
+      address: customerForm.address || null,
+      notes: customerForm.notes || null,
+    });
+    if (!parsed.success) {
+      setCustomerAddError(parsed.error.errors[0]?.message ?? "Invalid customer details");
+      return;
+    }
+    try {
+      const limit = assertLimit("customers");
+      if (!limit.allowed) throw new Error(limit.reason ?? "Customer limit reached");
+      const customer = store.createCustomer(parsed.data);
+      // Preserve order details but clear the previous customer's private measurements.
+      setForm((current) => ({
+        ...current,
+        customerId: customer.id,
+        measurementProfileId: "",
+        measurements: {},
+      }));
+      setProfiles([]);
+      refresh();
+      setCustomerQuickAddOpen(false);
+      setCustomerForm(emptyCustomerForm);
+      setCustomerAddError(null);
+    } catch (error) {
+      setCustomerAddError(error instanceof Error ? error.message : "Unable to create customer");
+    }
+  }
 
   function loadProfiles(customerId: string) {
     if (customerId) setProfiles(ordersStore.listMeasurementProfiles(customerId));
@@ -221,10 +270,30 @@ export default function ServicesOrdersPage() {
           value={form}
           onChange={setForm}
           onLoadProfiles={loadProfiles}
+          onAddCustomer={openCustomerQuickAdd}
           onSubmit={handleCreate}
           onCancel={() => setCreateOpen(false)}
           error={error}
         />
+      </Modal>
+      <Modal
+        open={customerQuickAddOpen}
+        title="Add Customer for Service Order"
+        onClose={closeCustomerQuickAdd}
+        footer={<>
+          <Button variant="outline" onClick={closeCustomerQuickAdd}>Cancel</Button>
+          <Button onClick={saveCustomerForOrder}>Save & Select Customer</Button>
+        </>}
+      >
+        <div className="space-y-3">
+          <p className="text-xs text-slate-600">The service order draft will remain open. The new customer will be selected automatically.</p>
+          <FormField label="Name *"><input autoFocus className={inputClass} value={customerForm.name} onChange={(event) => setCustomerForm({ ...customerForm, name: event.target.value })} /></FormField>
+          <FormField label="Phone"><input className={inputClass} value={customerForm.phone} onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })} /></FormField>
+          <FormField label="Email"><input className={inputClass} type="email" value={customerForm.email} onChange={(event) => setCustomerForm({ ...customerForm, email: event.target.value })} /></FormField>
+          <FormField label="Address"><input className={inputClass} value={customerForm.address} onChange={(event) => setCustomerForm({ ...customerForm, address: event.target.value })} /></FormField>
+          <FormField label="Notes"><textarea className={inputClass + " h-20 py-2"} value={customerForm.notes} onChange={(event) => setCustomerForm({ ...customerForm, notes: event.target.value })} /></FormField>
+          {customerAddError && <p role="alert" className="text-sm text-rose-700">{customerAddError}</p>}
+        </div>
       </Modal>
     </>
   );
