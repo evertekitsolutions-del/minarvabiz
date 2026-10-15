@@ -5,6 +5,7 @@ import type { Sale, Customer } from "@minarvabiz/types";
 import { exportSalesHistoryCsv } from "@minarvabiz/business-logic";
 import { DataTable, type Column } from "../data/DataTable";
 import { formatMoney } from "../customers/format";
+import { isUnpaidSale } from "./unpaid-sale-filter";
 import { Button } from "../Button";
 import { Modal } from "../forms/Modal";
 import { inputClass, selectClass } from "../forms/FormField";
@@ -47,6 +48,7 @@ export function SalesList({
   const [query, setQuery] = React.useState("");
   const [customerId, setCustomerId] = React.useState("");
   const [status, setStatus] = React.useState("");
+  const [unpaidOnly, setUnpaidOnly] = React.useState(false);
   const [dateFrom, setDateFrom] = React.useState("");
   const [dateTo, setDateTo] = React.useState("");
   const [exportNotice, setExportNotice] = React.useState<{ error: boolean; text: string } | null>(null);
@@ -57,6 +59,7 @@ export function SalesList({
       if (customerId === "__walkin" && sale.customerId) return false;
       if (customerId && customerId !== "__walkin" && sale.customerId !== customerId) return false;
       if (status && sale.status !== status) return false;
+      if (unpaidOnly && !isUnpaidSale(sale)) return false;
       const key = dateKey(sale.saleDate);
       if (dateFrom && key < dateFrom) return false;
       if (dateTo && key > dateTo) return false;
@@ -68,12 +71,13 @@ export function SalesList({
         ...sale.items.flatMap((item) => [item.productName, item.sku || ""]),
       ].some((value) => value.toLowerCase().includes(normalized));
     });
-  }, [sales, customerId, status, dateFrom, dateTo, query]);
+  }, [sales, customerId, status, unpaidOnly, dateFrom, dateTo, query]);
 
   const clearFilters = () => {
     setQuery("");
     setCustomerId("");
     setStatus("");
+    setUnpaidOnly(false);
     setDateFrom("");
     setDateTo("");
   };
@@ -179,6 +183,11 @@ export function SalesList({
             </label>
           </div>
         </div>
+
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" className="size-4 accent-indigo-600" checked={unpaidOnly} onChange={(event) => setUnpaidOnly(event.target.checked)} />
+          Unpaid invoices only
+        </label>
 
         <DataTable
           columns={columns}
