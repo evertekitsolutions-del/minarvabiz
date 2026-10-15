@@ -107,6 +107,7 @@ export * from "./financial-sync-envelope";
 export { exportReorderCsv } from "./reorder-csv";
 export { exportSalesHistoryCsv } from "./sales-history-csv";
 export { exportServiceOrdersCsv } from "./service-orders-csv";
+export { canAssignServiceOrder } from "./order-assignment-guard";
 export { exportPaymentHistoryCsv } from "./payment-history-csv";
 export type { PaymentHistoryExportRow } from "./payment-history-csv";
 export { exportLaundryTicketsCsv } from "./laundry-tickets-csv";
