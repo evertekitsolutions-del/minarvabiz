@@ -5,7 +5,7 @@ import type { Sale, Customer } from "@minarvabiz/types";
 import { exportSalesHistoryCsv } from "@minarvabiz/business-logic";
 import { DataTable, type Column } from "../data/DataTable";
 import { formatMoney } from "../customers/format";
-import { isUnpaidSale } from "./unpaid-sale-filter";
+import { isUnpaidSale, canCollectCustomerDueFromSale } from "./unpaid-sale-filter";
 import { Button } from "../Button";
 import { Modal } from "../forms/Modal";
 import { inputClass, selectClass } from "../forms/FormField";
@@ -32,6 +32,7 @@ export function SalesList({
   onPrintA4,
   onPrintThermal,
   onCreateReturn,
+  onCollectCustomerDue,
   buildPreviewHtml,
 }: {
   sales: Sale[];
@@ -40,6 +41,7 @@ export function SalesList({
   onPrintA4?: (sale: Sale) => void;
   onPrintThermal?: (sale: Sale) => void;
   onCreateReturn?: (sale: Sale) => void;
+  onCollectCustomerDue?: (sale: Sale) => void;
   buildPreviewHtml?: SalePreviewBuilder;
 }) {
   const [previewSale, setPreviewSale] = React.useState<Sale | null>(null);
@@ -113,6 +115,7 @@ export function SalesList({
       render: (row) => (
         <div className="flex flex-wrap gap-1" onClick={(event) => event.stopPropagation()}>
           <Button size="sm" variant="outline" onClick={() => setDetailSale(row)}>Details</Button>
+          {onCollectCustomerDue && canCollectCustomerDueFromSale(row) && <Button size="sm" variant="outline" onClick={() => onCollectCustomerDue(row)}>Collect customer due</Button>}
           {buildPreviewHtml && <Button size="sm" variant="outline" onClick={() => { setPreviewPaper("a4"); setPreviewSale(row); }}>Preview</Button>}
           {onPrintA4 && <Button size="sm" variant="outline" onClick={() => onPrintA4(row)}>A4</Button>}
           {onPrintThermal && <Button size="sm" variant="outline" onClick={() => onPrintThermal(row)}>Thermal</Button>}
@@ -151,6 +154,7 @@ export function SalesList({
 
         {exportNotice && <p role={exportNotice.error ? "alert" : "status"} className={`text-sm ${exportNotice.error ? "text-rose-700" : "text-slate-600"}`}>{exportNotice.text}</p>}
         <p className="text-xs text-slate-500">CSV exports exactly the displayed invoice selection, including any cancelled or returned bills. For net revenue and tax totals, use Reports.</p>
+        {onCollectCustomerDue && <p className="text-xs text-slate-500">Collect customer due opens Payments. Payments settle the customer’s oldest unpaid receivables first; the collection is not reserved for this particular invoice. Walk-in invoices without a customer account cannot use this action.</p>}
 
         <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="text-xs font-medium text-slate-600 lg:col-span-2">
@@ -203,6 +207,7 @@ export function SalesList({
         onClose={() => setDetailSale(null)}
         footer={detailSale ? <>
           <Button variant="outline" onClick={() => setDetailSale(null)}>Close</Button>
+          {onCollectCustomerDue && canCollectCustomerDueFromSale(detailSale) && <Button onClick={() => { onCollectCustomerDue(detailSale); setDetailSale(null); }}>Collect customer due</Button>}
           {onCreateReturn && ["completed", "partial"].includes(detailSale.status) && <Button onClick={() => { onCreateReturn(detailSale); setDetailSale(null); }}>Cancel / Return / Refund</Button>}
         </> : undefined}
       >
