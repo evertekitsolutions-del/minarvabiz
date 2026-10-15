@@ -82,7 +82,7 @@ export default function ServicesOrdersPage() {
       const limit = assertLimit("customers");
       if (!limit.allowed) throw new Error(limit.reason ?? "Customer limit reached");
       const customer = store.createCustomer(parsed.data);
-      // Preserve entered order price, tailoring type, material and measurement drafts.
+      // Preserve order details but clear the previous customer's private measurements.
       setForm((current) => ({
         ...current,
         customerId: customer.id,
