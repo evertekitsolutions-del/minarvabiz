@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { AuditLogEntry, ExpenseCategory, MeasurementProfile, PaymentMethod, ServiceOrder, OrderStatus } from "@minarvabiz/types";
+import type { AuditLogEntry, ExpenseCategory, MeasurementProfile, PaymentMethod, ServiceOrder, OrderStatus, StaffAssignment, StaffMember } from "@minarvabiz/types";
 import { Button } from "../Button";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass } from "../forms/FormField";
@@ -11,7 +11,7 @@ import { formatMoney } from "../customers/format";
 import { canCollectServiceOrderBalance } from "./service-order-collection";
 import {
   SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_FLOW,
-  measurementRevisionHistory, ordersStore, buildOrderInvoiceHtml, printOrderInvoice,
+  measurementRevisionHistory, ordersStore, buildOrderInvoiceHtml, printOrderInvoice, canAssignServiceOrder,
 } from "@minarvabiz/business-logic";
 
 function auditReason(entry: AuditLogEntry): string | null {
@@ -52,6 +52,10 @@ export function OrderDetail({
   onAddExpense,
   onUpdateOperationalDetails,
   onCollectBalance,
+  staffMembers = [],
+  staffAssignments = [],
+  canAssignStaff = false,
+  onAssignStaff,
   auditHistory = [],
   onClose,
 }: {
@@ -63,6 +67,10 @@ export function OrderDetail({
   onAddExpense?: (input: { description: string; amount: number; categoryId: string; paymentMethod: PaymentMethod }) => void;
   onUpdateOperationalDetails?: (input: { deliveryDate: string | null; notes: string | null; materialDetails: string | null }, reason: string) => void;
   onCollectBalance?: (order: ServiceOrder) => void;
+  staffMembers?: StaffMember[];
+  staffAssignments?: StaffAssignment[];
+  canAssignStaff?: boolean;
+  onAssignStaff?: (staffId: string) => { ok: boolean; error?: string };
   auditHistory?: AuditLogEntry[];
   onClose?: () => void;
 }) {
@@ -76,6 +84,8 @@ export function OrderDetail({
   const [qcIssues, setQcIssues] = React.useState<string[]>([]);
   const [printPreviewPaper, setPrintPreviewPaper] = React.useState<"a4" | "thermal" | null>(null);
   const [editOpen, setEditOpen] = React.useState(false);
+  const [staffToAssign, setStaffToAssign] = React.useState("");
+  const [staffAssignError, setStaffAssignError] = React.useState<string | null>(null);
   const [editDeliveryDate, setEditDeliveryDate] = React.useState("");
   const [editNotes, setEditNotes] = React.useState("");
   const [editMaterialDetails, setEditMaterialDetails] = React.useState("");
@@ -97,6 +107,23 @@ export function OrderDetail({
     ? measurementRevisionHistory(profiles, selectedProfile)
     : [];
   const qualityCheck = order.qualityCheck ?? null;
+
+  const assignedStaffIds = new Set(
+    staffAssignments.filter((assignment) => assignment.status !== "cancelled").map((assignment) => assignment.staffId),
+  );
+  const availableStaff = staffMembers.filter((member) => member.status === "active" && !assignedStaffIds.has(member.id));
+  const canAssignToThisOrder = canAssignStaff && canAssignServiceOrder(order);
+
+  function submitStaffAssignment() {
+    if (!onAssignStaff || !staffToAssign || !availableStaff.some((member) => member.id === staffToAssign)) return;
+    const result = onAssignStaff(staffToAssign);
+    if (!result.ok) {
+      setStaffAssignError(result.error || "Unable to assign staff.");
+      return;
+    }
+    setStaffToAssign("");
+    setStaffAssignError(null);
+  }
 
   function openOperationalEditor() {
     setEditDeliveryDate(order.deliveryDate ? String(order.deliveryDate).slice(0, 10) : "");
@@ -236,6 +263,39 @@ export function OrderDetail({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle className="text-sm font-semibold text-slate-800">Staff allocation</CardTitle></CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          {staffAssignments.filter((assignment) => assignment.status !== "cancelled").length ? (
+            <ul className="space-y-1">
+              {staffAssignments.filter((assignment) => assignment.status !== "cancelled").map((assignment) => (
+                <li key={assignment.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span>{assignment.staffName || assignment.staffId}</span>
+                  <span className="text-xs text-slate-500">{assignment.status.replaceAll("_", " ")} · {new Date(assignment.assignedAt).toLocaleDateString("en-IN")}</span>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="text-slate-500">No staff assigned to this service order.</p>}
+          {canAssignToThisOrder && onAssignStaff && (
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="min-w-44 flex-1 text-xs font-medium text-slate-600">
+                Assign active staff
+                <select aria-label="Assign active service staff" className={inputClass + " mt-1"} value={staffToAssign}
+                  onChange={(event) => { setStaffToAssign(event.target.value); setStaffAssignError(null); }}>
+                  <option value="">Select staff member</option>
+                  {availableStaff.map((member) => <option key={member.id} value={member.id}>{member.name} ({member.role})</option>)}
+                </select>
+              </label>
+              <Button variant="outline" disabled={!availableStaff.some((member) => member.id === staffToAssign)}
+                onClick={submitStaffAssignment}>Assign Staff</Button>
+            </div>
+          )}
+          {canAssignToThisOrder && availableStaff.length === 0 && <p className="text-xs text-slate-500">No additional active staff available.</p>}
+          {staffAssignError && <p role="alert" className="text-sm text-rose-700">{staffAssignError}</p>}
+          <p className="text-xs text-slate-500">Staff assignments are recorded in order history and synced for Online / Offline / Hybrid editions.</p>
+        </CardContent>
+      </Card>
 
       {(order.status === "qc" || qualityCheck) && (
         <Card>
