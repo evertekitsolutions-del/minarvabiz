@@ -109,3 +109,4 @@ export { exportSalesHistoryCsv } from "./sales-history-csv";
 export { exportServiceOrdersCsv } from "./service-orders-csv";
 export { exportPaymentHistoryCsv } from "./payment-history-csv";
 export type { PaymentHistoryExportRow } from "./payment-history-csv";
+export { exportLaundryTicketsCsv } from "./laundry-tickets-csv";

@@ -7,6 +7,7 @@ import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
+import { exportLaundryTicketsCsv } from "@minarvabiz/business-logic";
 
 type LaundryEditResult = { success: boolean; error?: string; order?: LaundryOrder };
 
@@ -53,6 +54,7 @@ export function LaundryList({
   const [editGarment, setEditGarment] = React.useState("");
   const [editNotes, setEditNotes] = React.useState("");
   const [editError, setEditError] = React.useState<string | null>(null);
+  const [csvFeedback, setCsvFeedback] = React.useState<{ failed: boolean; message: string } | null>(null);
 
   const customerOptions = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -122,6 +124,27 @@ export function LaundryList({
     setEditError(null);
   };
 
+  function downloadFilteredTickets() {
+    if (!filtered.length) return;
+    try {
+      const csv = exportLaundryTicketsCsv(filtered);
+      const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff), csv], { type: "text/csv;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "minarvabiz-laundry-" + new Date().toISOString().slice(0, 10) + ".csv";
+      document.body.appendChild(anchor);
+      try {
+        anchor.click();
+        setCsvFeedback({ failed: false, message: "Export requested for " + filtered.length + " displayed laundry ticket(s)." });
+      } finally {
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (error) {
+      setCsvFeedback({ failed: true, message: error instanceof Error ? error.message : "Laundry CSV export failed." });
+    }
+  }
+
   const columns: Column<LaundryOrder>[] = [
     { key: "orderNumber", header: "Order", render: (r) => <span className="font-medium">{r.orderNumber}</span> },
     { key: "customerName", header: "Customer", render: (r) => r.customerName || "—" },
@@ -166,12 +189,15 @@ export function LaundryList({
             <p className="text-sm text-slate-500">{filtered.length} of {orders.length} tickets</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" disabled={filtered.length === 0} onClick={downloadFilteredTickets}>Export filtered CSV</Button>
             <Button size="sm" variant="outline" onClick={clearFilters}>Clear filters</Button>
             <Button variant="outline" onClick={ironing}>+ In-house Ironing</Button>
             <Button onClick={outsourced}>+ Outsourced Laundry</Button>
           </div>
         </div>
 
+        {csvFeedback && <p role={csvFeedback.failed ? "alert" : "status"} className={`text-sm ${csvFeedback.failed ? "text-rose-700" : "text-slate-600"}`}>{csvFeedback.message}</p>}
+        <p className="text-xs text-slate-500">CSV includes displayed cancelled tickets for traceability. Use Reports for reconciled financial totals.</p>
         <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-7">
           <label className="text-xs font-medium text-slate-600 lg:col-span-2">
             Search ticket, customer, garment or supplier
