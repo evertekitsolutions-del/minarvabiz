@@ -34,6 +34,8 @@ jobs:
         run: node scripts/frontend-service-order-quick-customer.test.mjs
       - name: Verify customers outstanding-only filter
         run: node --experimental-strip-types packages/ui/src/components/customers/__tests__/customer-dues-filter.test.mjs
+      - name: Verify supplier payables-only filter and safe payment action
+        run: node --experimental-strip-types packages/ui/src/components/suppliers/__tests__/supplier-payables-filter.test.mjs
       - name: Verify sales unpaid-only invoice filter
         run: node --experimental-strip-types packages/ui/src/components/sales/__tests__/unpaid-sale-filter.test.mjs
       - name: Verify Sales History customer due collection actions
