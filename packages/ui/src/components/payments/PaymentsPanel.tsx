@@ -8,6 +8,7 @@ import { DataTable, type Column } from "../data/DataTable";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { Modal } from "../forms/Modal";
 import { formatMoney } from "../customers/format";
+import { exportPaymentHistoryCsv } from "@minarvabiz/business-logic";
 import { findCollectionCustomer, parseCollectionAmount } from "./collection-prefill";
 
 function dateKey(value: string) {
@@ -83,6 +84,7 @@ export function PaymentsPanel({
   const [historyDateFrom, setHistoryDateFrom] = React.useState("");
   const [historyDateTo, setHistoryDateTo] = React.useState("");
   const [detailPayment, setDetailPayment] = React.useState<Payment | null>(null);
+  const [csvFeedback, setCsvFeedback] = React.useState<{ failed: boolean; message: string } | null>(null);
 
   const selected = outstanding.find((c) => c.id === customerId);
 
@@ -133,6 +135,40 @@ export function PaymentsPanel({
       ].some((value) => value.toLowerCase().includes(query));
     });
   }, [payments, historyQuery, historySource, historyMethod, historyDirection, historyCounterparty, historyDateFrom, historyDateTo, counterpartyName]);
+
+  function downloadFilteredPaymentHistoryCsv() {
+    if (!filteredPayments.length) return;
+    try {
+      const csv = exportPaymentHistoryCsv(filteredPayments.map((payment) => ({
+        id: payment.id,
+        paidAt: payment.paidAt,
+        amount: payment.amount,
+        method: payment.method,
+        referenceType: payment.referenceType,
+        referenceId: payment.referenceId,
+        notes: payment.notes,
+        counterparty: counterpartyName(payment),
+        direction: paymentDirection(payment),
+      })));
+      const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff), csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "minarvabiz-payment-history-" + new Date().toISOString().slice(0, 10) + ".csv";
+      document.body.appendChild(link);
+      try {
+        link.click();
+        setCsvFeedback({ failed: false, message: "Export requested for " + filteredPayments.length + " selected payment record(s)." });
+      } finally {
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (error) {
+      setCsvFeedback({
+        failed: true,
+        message: error instanceof Error ? error.message : "Payment history CSV export failed.",
+      });
+    }
+  }
 
   const clearHistoryFilters = () => {
     setHistoryQuery("");
@@ -232,9 +268,14 @@ export function PaymentsPanel({
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-semibold">Payment history</CardTitle>
-          <p className="text-xs text-slate-500">{filteredPayments.length} of {payments.length} payment records</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-slate-500">{filteredPayments.length} of {payments.length} payment records</p>
+            <Button size="sm" variant="outline" disabled={filteredPayments.length === 0} onClick={downloadFilteredPaymentHistoryCsv}>Export filtered CSV</Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
+          {csvFeedback && <p role={csvFeedback.failed ? "alert" : "status"} className={`text-sm ${csvFeedback.failed ? "text-rose-700" : "text-slate-600"}`}>{csvFeedback.message}</p>}
+          <p className="text-xs text-slate-500">Includes all displayed inflow and outflow transactions. This extract is not a bank or tax reconciliation report.</p>
           <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-7">
             <label className="text-xs font-medium text-slate-600 lg:col-span-2">
               Search counterparty, reference, allocation or source
