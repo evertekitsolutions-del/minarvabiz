@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { CustomerList, CustomerProfile, Modal, Button, FormField, inputClass } from "@minarvabiz/ui";
 import { store, phase6Store, assertLimit, parseCustomerCsv, importCustomersFromCsv, exportCustomersCsv } from "@minarvabiz/business-logic";
 import type { Customer, CustomerCrmProfile } from "@minarvabiz/types";
@@ -9,6 +10,7 @@ import { customerSchema } from "@minarvabiz/validation";
 const emptyForm = { name: "", phone: "", email: "", address: "", notes: "" };
 
 export default function CustomersPage() {
+  const router = useRouter();
   const [list, setList] = React.useState<Customer[]>([]);
   const [profile, setProfile] = React.useState<CustomerCrmProfile | null>(null);
   const [open, setOpen] = React.useState(false);
@@ -177,6 +179,7 @@ export default function CustomersPage() {
         </div>
       </Modal>
       <CustomerList customers={list} onAdd={openCreate} onSearch={refresh}
+        onCollect={(customer) => router.push(`/payments?customerId=${encodeURIComponent(customer.id)}`)}
         onSelect={(c) => setProfile(phase6Store.getCustomerCrmProfile(c.id))}
         onEdit={openEdit} onArchive={(c) => { setArchiveTarget(c); setArchiveReason(""); setError(null); }} />
       {profile && <div className="mt-6"><CustomerProfile profile={profile} onClose={() => setProfile(null)} /></div>}
