@@ -9,3 +9,16 @@ export function isUnpaidSale(sale: CollectibleSale): boolean {
     sale.balanceAmount > 0 &&
     Number.isSafeInteger(Math.round(sale.balanceAmount * 100));
 }
+
+
+/**
+ * Collection is allocated by the customer ledger (oldest open receivables first),
+ * not specifically to the invoice on which this action is displayed.
+ */
+export function canCollectCustomerDueFromSale(
+  sale: Pick<Sale, "status" | "balanceAmount" | "customerId">,
+): boolean {
+  return isUnpaidSale(sale) &&
+    typeof sale.customerId === "string" &&
+    sale.customerId.trim().length > 0;
+}
