@@ -10,6 +10,8 @@ export default function PaymentsPage() {
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
   const [payments, setPayments] = React.useState<Payment[]>([]);
+  const [requestedCustomerId, setRequestedCustomerId] = React.useState<string | null>(null);
+  const [loaded, setLoaded] = React.useState(false);
 
   const refresh = React.useCallback(() => {
     setOutstanding(store.listOutstandingCustomers());
@@ -18,10 +20,18 @@ export default function PaymentsPage() {
     setPayments(store.listPayments());
   }, []);
 
-  React.useEffect(() => { refresh(); }, [refresh]);
+  React.useEffect(() => {
+    refresh();
+    // Resolve query parameters only in the browser, after local/offline data hydration.
+    setRequestedCustomerId(new URLSearchParams(window.location.search).get("customerId"));
+    setLoaded(true);
+  }, [refresh]);
+
+  if (!loaded) return <p role="status" className="text-sm text-slate-600">Loading payments…</p>;
 
   return (
     <PaymentsPanel
+      requestedCustomerId={requestedCustomerId}
       outstanding={outstanding}
       payments={payments}
       customers={customers}
