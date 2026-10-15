@@ -8,6 +8,7 @@ import { FormField, inputClass } from "../forms/FormField";
 import { PrintPreviewModal } from "../printing/PrintPreviewModal";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
+import { canCollectServiceOrderBalance } from "./service-order-collection";
 import {
   SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_FLOW,
   measurementRevisionHistory, ordersStore, buildOrderInvoiceHtml, printOrderInvoice,
@@ -50,6 +51,7 @@ export function OrderDetail({
   expenseCategories = [],
   onAddExpense,
   onUpdateOperationalDetails,
+  onCollectBalance,
   auditHistory = [],
   onClose,
 }: {
@@ -60,6 +62,7 @@ export function OrderDetail({
   expenseCategories?: ExpenseCategory[];
   onAddExpense?: (input: { description: string; amount: number; categoryId: string; paymentMethod: PaymentMethod }) => void;
   onUpdateOperationalDetails?: (input: { deliveryDate: string | null; notes: string | null; materialDetails: string | null }, reason: string) => void;
+  onCollectBalance?: (order: ServiceOrder) => void;
   auditHistory?: AuditLogEntry[];
   onClose?: () => void;
 }) {
@@ -137,6 +140,9 @@ export function OrderDetail({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {onCollectBalance && canCollectServiceOrderBalance(order) && (
+            <Button variant="outline" onClick={() => onCollectBalance(order)}>Collect Customer Due</Button>
+          )}
           <Button variant="outline" onClick={() => setPrintPreviewPaper("a4")}>Preview A4</Button>
           <Button variant="outline" onClick={() => setPrintPreviewPaper("thermal")}>Preview Thermal</Button>
           {onUpdateOperationalDetails && order.status !== "delivered" && order.status !== "cancelled" && (

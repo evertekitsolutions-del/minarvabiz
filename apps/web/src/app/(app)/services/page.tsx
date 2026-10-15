@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { parseServiceOrderPriceDraft } from "@/lib/service-order-price-draft";
 import {
   OrderList, OrderForm, emptyOrderForm, OrderDetail, Modal,
@@ -13,6 +14,7 @@ import type {
 } from "@minarvabiz/types";
 
 export default function ServicesOrdersPage() {
+  const router = useRouter();
   const [orders, setOrders] = React.useState<ServiceOrder[]>([]);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [profiles, setProfiles] = React.useState<MeasurementProfile[]>([]);
@@ -200,6 +202,7 @@ export default function ServicesOrdersPage() {
           expenseCategories={expenseCategories}
           onStatusChange={handleStatus}
           onAddExpense={handleExpense}
+          onCollectBalance={(order) => router.push(`/payments?customerId=${encodeURIComponent(order.customerId)}`)}
           onUpdateOperationalDetails={handleOperationalUpdate}
           auditHistory={phase7Store.listAuditLogs(500).filter((entry) => entry.tableName === "orders" && entry.recordId === selected.id)}
           onClose={() => { setSelected(null); setStatusError(null); }}

@@ -50,6 +50,8 @@ jobs:
         run: node packages/business-logic/src/__tests__/tax-rate-validation.test.mjs
       - name: Verify service order overdue delivery filter
         run: node --experimental-strip-types packages/ui/src/components/orders/__tests__/order-overdue-filter.test.mjs
+      - name: Verify service order unpaid balance collection navigation
+        run: node --experimental-strip-types packages/ui/src/components/orders/__tests__/service-order-collection.test.mjs
       - name: Verify safe notification navigation
         run: node scripts/frontend-safe-notification-navigation.test.mjs
       - name: Verify notification frontend
