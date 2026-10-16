@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { parseExpenseAmount, parsePurchaseAmounts } from "@/lib/finance-entry-draft";
 import { isDashboardCreateIntent } from "@/lib/dashboard-quick-create";
 import {
   ExpenseList, PurchaseList, Modal, Button, FormField, inputClass, selectClass,
@@ -41,16 +42,27 @@ export default function ExpensesPage() {
   }, []);
 
   function saveExpense() {
-    const result = phase5Store.createExpense({
-      date: expForm.date,
-      categoryId: expForm.categoryId,
-      amount: parseFloat(expForm.amount) || 0,
-      paymentMethod: expForm.paymentMethod,
-      description: expForm.description || null,
-      orderId: expForm.orderId || null,
-    });
-    if (result.errors.length) { setError(result.errors.join("; ")); return; }
-    setExpOpen(false); setError(null); setExpForm((v) => ({ ...v, date: todayLocal(), amount: "", description: "", orderId: "" })); refresh();
+    setError(null);
+    try {
+      const amount = parseExpenseAmount(expForm.amount);
+      const result = phase5Store.createExpense({
+        date: expForm.date,
+        categoryId: expForm.categoryId,
+        amount,
+        paymentMethod: expForm.paymentMethod,
+        description: expForm.description || null,
+        orderId: expForm.orderId || null,
+      });
+      if (result.errors.length || !result.expense) {
+        setError(result.errors.join("; ") || "Unable to save expense.");
+        return;
+      }
+      setExpOpen(false);
+      setExpForm((v) => ({ ...v, date: todayLocal(), amount: "", description: "", orderId: "" }));
+      refresh();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to save expense.");
+    }
   }
 
   function reverseExpense(expense: Expense, reason: string) {
@@ -68,19 +80,31 @@ export default function ExpensesPage() {
   }
 
   function savePurchase() {
-    const result = phase5Store.createPurchase({
-      date: purForm.date,
-      description: purForm.description,
-      amount: parseFloat(purForm.amount) || 0,
-      paidAmount: parseFloat(purForm.paidAmount) || 0,
-      paymentMethod: purForm.paymentMethod,
-      kind: purForm.kind,
-      orderId: purForm.orderId || null,
-      supplierId: purForm.supplierId || null,
-    });
-    if (result.errors.length) { setError(result.errors.join("; ")); return; }
-    setPurOpen(false); setError(null); setPurForm((v) => ({ ...v, date: todayLocal(), description: "", amount: "", paidAmount: "", orderId: "" })); refresh();
+    setError(null);
+    try {
+      const amounts = parsePurchaseAmounts(purForm.amount, purForm.paidAmount);
+      const result = phase5Store.createPurchase({
+        date: purForm.date,
+        description: purForm.description,
+        amount: amounts.amount,
+        paidAmount: amounts.paidAmount,
+        paymentMethod: purForm.paymentMethod,
+        kind: purForm.kind,
+        orderId: purForm.orderId || null,
+        supplierId: purForm.supplierId || null,
+      });
+      if (result.errors.length || !result.purchase) {
+        setError(result.errors.join("; ") || "Unable to save purchase.");
+        return;
+      }
+      setPurOpen(false);
+      setPurForm((v) => ({ ...v, date: todayLocal(), description: "", amount: "", paidAmount: "", orderId: "" }));
+      refresh();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to save purchase.");
+    }
   }
+
 
   return (
     <div className="space-y-4">
@@ -100,7 +124,7 @@ export default function ExpensesPage() {
           <FormField label="Description"><input className={inputClass} value={expForm.description} onChange={(e) => setExpForm({ ...expForm, description: e.target.value })} /></FormField>
           <FormField label="Payment method"><select className={selectClass} value={expForm.paymentMethod} onChange={(e) => setExpForm({ ...expForm, paymentMethod: e.target.value as PaymentMethod })}><option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="bank">Bank</option></select></FormField>
           <FormField label="Link to order (optional — becomes order-specific)"><select className={selectClass} value={expForm.orderId} onChange={(e) => setExpForm({ ...expForm, orderId: e.target.value })}><option value="">General expense</option>{orders.map((o) => <option key={o.id} value={o.id}>{o.orderNumber} — {o.customerName}</option>)}</select></FormField>
-          {error && <p className="text-sm text-rose-600">{error}</p>}
+          {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
         </div>
       </Modal>
 
@@ -112,7 +136,7 @@ export default function ExpensesPage() {
           <FormField label="Paid amount"><input type="number" className={inputClass} value={purForm.paidAmount} onChange={(e) => setPurForm({ ...purForm, paidAmount: e.target.value })} /></FormField>
           <FormField label="Kind"><select className={selectClass} value={purForm.kind} onChange={(e) => setPurForm({ ...purForm, kind: e.target.value as "general" | "order_specific" })}><option value="general">General (shop stock)</option><option value="order_specific">Order-specific</option></select></FormField>
           {purForm.kind === "order_specific" && <FormField label="Order *"><select className={selectClass} value={purForm.orderId} onChange={(e) => setPurForm({ ...purForm, orderId: e.target.value })}><option value="">Select order</option>{orders.map((o) => <option key={o.id} value={o.id}>{o.orderNumber} — {o.customerName}</option>)}</select></FormField>}
-          {error && <p className="text-sm text-rose-600">{error}</p>}
+          {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
         </div>
       </Modal>
     </div>

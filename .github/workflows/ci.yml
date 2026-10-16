@@ -30,6 +30,8 @@ jobs:
         run: node scripts/master-vision-source-inventory.mjs --summary
       - name: Verify linked help workflows
         run: node scripts/frontend-help-workflows-contract.test.mjs
+      - name: Verify exact expense and purchase amount entry
+        run: node --experimental-strip-types apps/web/src/lib/__tests__/finance-entry-draft.test.mjs
       - name: Verify dashboard direct-create quick actions
         run: node --experimental-strip-types apps/web/src/lib/__tests__/dashboard-quick-create.test.mjs
       - name: Verify service order customer quick-add wiring
