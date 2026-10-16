@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100" fill="none" role="img" aria-label="Minarva Biz">
+  <defs>
+    <linearGradient id="minarva-blue" x1="8" y1="12" x2="108" y2="92" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#24ADFF"/>
+      <stop offset=".43" stop-color="#096BEE"/>
+      <stop offset="1" stop-color="#0943B6"/>
+    </linearGradient>
+    <linearGradient id="minarva-deep" x1="48" y1="18" x2="112" y2="91" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#167CF2"/>
+      <stop offset="1" stop-color="#092E94"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 79 25 31c2-8 5-11 11-11 5 0 8 2 12 8l14 23-13 19-13-21-8 32c-1 5-5 8-10 8h-1c-5 0-7-4-5-10Z" fill="url(#minarva-blue)"/>
+  <path d="m40 26 20 26 15-25c4-7 7-9 13-9 7 0 11 4 13 13l12 46c2 7-1 12-8 12h-4c-5 0-8-2-10-8l-8-28-16 27c-4 7-12 7-16 0L36 57l4-31Z" fill="url(#minarva-deep)"/>
+  <path d="M38 27 55 51 47 65 33 44Z" fill="#4ABEFF" opacity=".68"/>
+</svg>

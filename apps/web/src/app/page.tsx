@@ -41,7 +41,7 @@ function Icon({ name, className = "size-5" }: { name: IconName; className?: stri
 }
 function Logo({ inverse = false }: { inverse?: boolean }) {
   return <a href="/" aria-label="Minarva Biz home" className="inline-flex shrink-0 items-center gap-2.5 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1760ef]">
-    <img src="/logo-mark.png" alt="" width={40} height={40} decoding="async" className="size-10 shrink-0 rounded-xl bg-white object-contain shadow-[0_4px_13px_rgba(22,89,231,0.12)]" />
+    <img src="/minarva-biz-mark.svg" alt="" width={46} height={40} decoding="async" className="h-10 w-[46px] shrink-0 object-contain" />
     <span className={"text-[21px] font-black tracking-[-0.06em] " + (inverse ? "text-white" : "text-[#091e43]")}>Minarva <span className="text-[#1764ed]">Biz</span></span>
   </a>;
 }
