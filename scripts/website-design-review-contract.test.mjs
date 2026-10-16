@@ -22,7 +22,7 @@ for (const tab of ["billing", "stock", "service", "reports"]) {
 assert.match(html, /role="tablist"/);
 assert.match(html, /aria-controls="panel-billing"/);
 assert.match(html, /aria-selected="true"/);
-assert.match(html, /event\.preventDefault\(\)/, "Keyboard navigation must work");
+assert.match(html, /e\.preventDefault\(\)/, "Keyboard navigation must work");
 assert.match(html, /rel="noopener noreferrer"/, "Release link must be isolated");
 assert.match(html, /releases\/tag\/v1\.0\.15/, "Only published installer release may be offered");
 assert.doesNotMatch(html, /<iframe|<form|<input[^>]*type=["']password/i);
