@@ -65,7 +65,7 @@ function WorkspaceContent({ selected }: { selected: Workflow }) {
             <tbody className="text-slate-700">{invoiceLines.map((line) => <tr key={line.name} className="border-t border-slate-100"><td className="px-3 py-3 font-semibold">{line.name}</td><td className="px-3 py-3">{line.qty}</td><td className="px-3 py-3">{line.rate}</td><td className="px-3 py-3 text-right font-bold">{line.total}</td></tr>)}</tbody>
           </table>
         </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4"><div className="text-[11px] text-slate-500">Illustrative subtotal <strong className="ml-2 text-lg text-slate-900">₹1,549</strong></div><span className="rounded-lg bg-[#157d66] px-4 py-2 text-[11px] font-bold text-white">Preview invoice</span></div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 p-4"><div className="text-[11px] text-slate-500">Illustrative subtotal <strong className="ml-2 text-lg text-slate-900">₹1,549</strong></div><span className="rounded-lg bg-[#1461ee] px-4 py-2 text-[11px] font-bold text-white">Preview invoice</span></div>
       </>;
     case "inventory":
       return <>
@@ -76,14 +76,14 @@ function WorkspaceContent({ selected }: { selected: Workflow }) {
     case "service":
       return <>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Service management</p><h4 className="mt-1 text-lg font-extrabold tracking-tight text-slate-900">Job tracking board</h4></div><Status tone="blue">Sample workflow</Status></div>
-        <div className="grid gap-3">{jobs.map(job => <div key={job.code} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3.5"><div className="flex min-w-0 items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e9f5ee] text-[#147e65]"><Icon name="services"/></span><div className="min-w-0"><p className="text-[10px] font-semibold text-slate-400">{job.code}</p><p className="truncate text-xs font-bold text-slate-800">{job.title}</p></div></div><Status tone={job.tone as "green" | "amber" | "blue"}>{job.stage}</Status></div>)}</div>
-        <div className="mt-4 rounded-xl bg-[#edf6f1] p-4"><p className="text-[11px] font-bold text-[#115d50]">A clear service journey</p><div className="mt-3 grid grid-cols-4 gap-1.5 text-center">{["Register", "Assign", "Visit", "Close"].map((x, i)=><div key={x}><div className={"h-1.5 rounded-full " + (i < 3 ? "bg-[#1b9c77]" : "bg-[#b5d9c7]")}/><p className="mt-2 text-[9px] font-semibold text-[#43766a]">{x}</p></div>)}</div><p className="mt-3 text-[10px] text-[#527b70]">Customer notifications and feedback automations require verified integration before use.</p></div>
+        <div className="grid gap-3">{jobs.map(job => <div key={job.code} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3.5"><div className="flex min-w-0 items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e9f2ff] text-[#1461e8]"><Icon name="services"/></span><div className="min-w-0"><p className="text-[10px] font-semibold text-slate-400">{job.code}</p><p className="truncate text-xs font-bold text-slate-800">{job.title}</p></div></div><Status tone={job.tone as "green" | "amber" | "blue"}>{job.stage}</Status></div>)}</div>
+        <div className="mt-4 rounded-xl bg-[#eaf3ff] p-4"><p className="text-[11px] font-bold text-[#134ea3]">A clear service journey</p><div className="mt-3 grid grid-cols-4 gap-1.5 text-center">{["Register", "Assign", "Visit", "Close"].map((x, i)=><div key={x}><div className={"h-1.5 rounded-full " + (i < 3 ? "bg-[#1465e8]" : "bg-[#b8d2f5]")}/><p className="mt-2 text-[9px] font-semibold text-[#4c6e9c]">{x}</p></div>)}</div><p className="mt-3 text-[10px] text-[#5d789d]">Customer notifications and feedback automations require verified integration before use.</p></div>
       </>;
     case "reports":
       return <>
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Management reports</p><h4 className="mt-1 text-lg font-extrabold tracking-tight text-slate-900">Business snapshot</h4></div><Status>Illustrative data</Status></div>
         <div className="grid grid-cols-3 gap-2.5">{[["Sales", "₹24.5k"], ["Orders", "18"], ["Bills", "12"]].map(x=><div key={x[0]} className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4"><p className="text-[10px] text-slate-400">{x[0]}</p><p className="mt-2 text-lg font-extrabold text-slate-900 sm:text-2xl">{x[1]}</p></div>)}</div>
-        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5"><p className="text-[11px] font-bold text-slate-700">Sales activity · example only</p><div aria-label="Illustrative column chart" className="mt-5 flex h-[146px] items-end gap-2 border-b border-slate-100">{reportBars.map((h, i)=><span key={i} className={"min-w-0 flex-1 rounded-t-md " + (i===11?"bg-[#0c8067]":"bg-[#bfe5cf]")} style={{height:h+"%"}}/>)}</div><div className="mt-2 flex justify-between text-[10px] text-slate-400"><span>Earlier</span><span>Later</span></div></div>
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-5"><p className="text-[11px] font-bold text-slate-700">Sales activity · example only</p><div aria-label="Illustrative column chart" className="mt-5 flex h-[146px] items-end gap-2 border-b border-slate-100">{reportBars.map((h, i)=><span key={i} className={"min-w-0 flex-1 rounded-t-md " + (i===11?"bg-[#145fe9]":"bg-[#bfdbff]")} style={{height:h+"%"}}/>)}</div><div className="mt-2 flex justify-between text-[10px] text-slate-400"><span>Earlier</span><span>Later</span></div></div>
       </>;
   }
 }
@@ -106,33 +106,33 @@ export default function ProductTourClient() {
 
   return <div className="grid gap-9 lg:grid-cols-[0.72fr_1.28fr] lg:items-center lg:gap-16">
     <div>
-      <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-[#128369]">Inside Minarva Biz</p>
-      <h2 className="mt-5 max-w-lg text-4xl font-extrabold leading-[1.09] tracking-[-0.055em] text-[#133138] sm:text-5xl">Less explaining.<br/><span className="text-[#158267]">More showing.</span></h2>
-      <p className="mt-5 max-w-md text-sm leading-8 text-[#59766e]">Explore a guided look at the everyday work Minarva Biz is being built to simplify — from the first bill to the end-of-day report.</p>
+      <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-[#1b64e8]">Inside Minarva Biz</p>
+      <h2 className="mt-5 max-w-lg text-4xl font-extrabold leading-[1.09] tracking-[-0.055em] text-[#0c284e] sm:text-5xl">Less explaining.<br/><span className="text-[#1462ed]">More showing.</span></h2>
+      <p className="mt-5 max-w-md text-sm leading-8 text-[#657e9e]">Explore a guided look at the everyday work Minarva Biz is being built to simplify — from the first bill to the end-of-day report.</p>
       <div role="tablist" aria-label="Explore business workflows" className="mt-8 grid grid-cols-2 gap-2 sm:max-w-md">
-        {workflows.map((item,index)=><button key={item.id} id={"tour-tab-"+item.id} role="tab" type="button" aria-selected={selected===item.id} aria-controls="tour-workspace-panel" tabIndex={selected===item.id?0:-1} onClick={()=>setSelected(item.id)} onKeyDown={e=>handleKeys(e,index)} className={"flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 py-3 text-xs font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#14836a] sm:text-sm "+(selected===item.id?"border-[#11453b] bg-[#11453b] text-white shadow-lg shadow-emerald-900/10":"border-[#d9e6db] bg-white text-[#526b62] hover:border-[#13866b] hover:text-[#135e50]")}><Icon name={iconFor[item.id]}/>{item.label}</button>)}
+        {workflows.map((item,index)=><button key={item.id} id={"tour-tab-"+item.id} role="tab" type="button" aria-selected={selected===item.id} aria-controls="tour-workspace-panel" tabIndex={selected===item.id?0:-1} onClick={()=>setSelected(item.id)} onKeyDown={e=>handleKeys(e,index)} className={"flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 py-3 text-xs font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1460ed] sm:text-sm "+(selected===item.id?"border-[#145fec] bg-[#145fec] text-white shadow-lg shadow-blue-900/10":"border-[#d5e4fa] bg-white text-[#4c6c93] hover:border-[#1260ed] hover:text-[#145acf]")}><Icon name={iconFor[item.id]}/>{item.label}</button>)}
       </div>
       <div aria-live="polite" className="mt-8 max-w-md">
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#20886c]">{active.eyebrow}</p>
-        <h3 className="mt-2 text-xl font-extrabold tracking-[-0.025em] text-[#14343a]">{active.title}</h3>
-        <p className="mt-2 text-sm leading-7 text-[#687f75]">{active.description}</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#2164d8]">{active.eyebrow}</p>
+        <h3 className="mt-2 text-xl font-extrabold tracking-[-0.025em] text-[#143153]">{active.title}</h3>
+        <p className="mt-2 text-sm leading-7 text-[#6c839f]">{active.description}</p>
       </div>
-      <p className="mt-6 max-w-md text-[11px] leading-6 text-[#7a8c83]"><strong>Illustrative product walkthrough</strong> using sample records, not an authenticated live app or screenshot. Feature availability varies by edition and acceptance status.</p>
+      <p className="mt-6 max-w-md text-[11px] leading-6 text-[#7287a0]"><strong>Illustrative product walkthrough</strong> using sample records, not an authenticated live app or screenshot. Feature availability varies by edition and acceptance status.</p>
     </div>
     <div className="relative min-w-0">
-      <div aria-hidden="true" className="absolute -inset-6 rounded-[3rem] bg-[#bedbca]/25 blur-3xl"/>
-      <div className="relative overflow-hidden rounded-[1.45rem] border border-[#cadae0] bg-white shadow-[0_35px_85px_rgba(19,59,54,0.15)]">
+      <div aria-hidden="true" className="absolute -inset-6 rounded-[3rem] bg-[#bedaff]/35 blur-3xl"/>
+      <div className="relative overflow-hidden rounded-[1.45rem] border border-[#cbdcf2] bg-white shadow-[0_35px_85px_rgba(22,79,169,0.14)]">
         <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-[#fcfdfc] px-4 py-3">
           <div className="flex items-center gap-2"><span className="size-2 rounded-full bg-[#f4ad9f]"/><span className="size-2 rounded-full bg-[#f4d28e]"/><span className="size-2 rounded-full bg-[#91d6b0]"/></div>
           <span className="hidden truncate rounded-md bg-slate-100 px-3 py-1.5 text-[10px] font-medium text-slate-500 sm:block">Minarva Biz / Product walkthrough</span>
           <span className="text-[9px] font-semibold text-slate-400">ILLUSTRATIVE</span>
         </div>
         <div className="grid grid-cols-[46px_minmax(0,1fr)] sm:grid-cols-[128px_minmax(0,1fr)]">
-          <aside className="min-h-[430px] border-r border-slate-200 bg-[#113139] p-2 sm:p-3" aria-label="Illustrative workspace navigation">
-            <div className="mb-6 flex items-center gap-2 px-1 pt-1 sm:px-2"><span className="grid size-7 shrink-0 place-items-center rounded-lg bg-[#c4edbc] text-sm font-black text-[#144737]">M</span><span className="hidden text-xs font-extrabold text-white sm:block">minarva<span className="text-[#b5e9ae]">biz</span></span></div>
+          <aside className="min-h-[430px] border-r border-slate-200 bg-[#0d2c58] p-2 sm:p-3" aria-label="Illustrative workspace navigation">
+            <div className="mb-6 flex items-center gap-2 px-1 pt-1 sm:px-2"><span className="grid size-7 shrink-0 place-items-center rounded-lg bg-[#d6e8ff] text-sm font-black text-[#1554bf]">M</span><span className="hidden text-xs font-extrabold text-white sm:block">minarva<span className="text-[#91c8ff]">biz</span></span></div>
             {[["grid","Home"],["bill","Sales"],["stock","Inventory"],["services","Services"],["chart","Reports"]].map(([icon,label])=><div key={label} className={"mb-1 flex items-center gap-2 rounded-lg px-2 py-2.5 text-[11px] font-semibold "+((label==="Sales"&&selected==="billing")||(label==="Inventory"&&selected==="inventory")||(label==="Services"&&selected==="service")||(label==="Reports"&&selected==="reports")?"bg-white/15 text-white":"text-[#a4bfc0]")}><Icon name={icon as "grid"|"bill"|"stock"|"services"|"chart"}/><span className="hidden sm:inline">{label}</span></div>)}
           </aside>
-          <div id="tour-workspace-panel" role="tabpanel" aria-labelledby={"tour-tab-"+selected} tabIndex={0} className="min-w-0 bg-[#f8faf9] p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#15886d] sm:p-5">
+          <div id="tour-workspace-panel" role="tabpanel" aria-labelledby={"tour-tab-"+selected} tabIndex={0} className="min-w-0 bg-[#f8fbff] p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#1464eb] sm:p-5">
             <WorkspaceContent selected={selected}/>
           </div>
         </div>

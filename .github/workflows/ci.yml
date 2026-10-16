@@ -30,6 +30,8 @@ jobs:
         run: node --test scripts/cloudflare-customer-preview-gate.test.mjs
       - name: Verify premium public homepage content and navigation
         run: node scripts/public-homepage-design-contract.test.mjs
+      - name: Verify owner-approved blue product homepage and honest imagery
+        run: node scripts/approved-blue-homepage-contract.test.mjs
       - name: Verify accessible interactive product walkthrough and marketing honesty
         run: node scripts/public-product-tour-contract.test.mjs
       - name: Verify portable responsive design review preview
