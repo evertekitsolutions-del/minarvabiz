@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { buildManualServiceWhatsAppLink, availableServiceWhatsAppTemplates } from "../manual-service-whatsapp.ts";
+import { parseGoogleReviewUrl } from "../google-review-link.ts";
 
 const order = (status, deliveryDate = "2026-10-20", balance = 125) => ({ status, deliveryDate, balance });
 const options = (data) => availableServiceWhatsAppTemplates(data).map((x) => x.id);
@@ -27,8 +28,20 @@ for (const input of ["", "+", "+0", "123", "+91123", "javascript:alert(1)", "987
   assert.throws(() => buildManualServiceWhatsAppLink(input, "Hello"), /WhatsApp number|country code/);
 }
 assert.throws(() => buildManualServiceWhatsAppLink("+919876543210", " \t"), /cannot be empty/);
+assert.equal(parseGoogleReviewUrl("  https://g.page/r/ABC/review  "), "https://g.page/r/ABC/review");
+assert.equal(parseGoogleReviewUrl("https://search.google.com/local/writereview?placeid=ABC"), "https://search.google.com/local/writereview?placeid=ABC");
+assert.equal(parseGoogleReviewUrl(""), "");
+for (const url of ["http://g.page/r/ABC/review", "javascript:alert(1)", "https://g.page.evil.invalid/review", "https://g.page@evil.invalid/review", "https://example.org/review", "not a url"]) {
+  assert.throws(() => parseGoogleReviewUrl(url), /Google review/);
+}
+const shopSettings = fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/settings/page.tsx", import.meta.url), "utf8");
+assert.match(shopSettings, /label="Google review link"/);
+assert.match(shopSettings, /parseGoogleReviewUrl\(shop\.googleReviewUrl \?\? ""\)/);
+assert.match(shopSettings, /role=\{shopMsgIsError \? "alert" : "status"\}/);
+
 const templates = fs.readFileSync(new URL("../notification-templates.ts", import.meta.url), "utf8");
 assert.match(templates, /amount: formatMoney\(order\.balance\)/, "payment_due must not show undefined");
+assert.match(templates, /parseGoogleReviewUrl\(getShopProfile\(\)\.googleReviewUrl \?\? ""\)/, "only validated Google review URL may be inserted");
 
 const orderDetail = fs.readFileSync(new URL("../../../ui/src/components/orders/OrderDetail.tsx", import.meta.url), "utf8");
 const servicesPage = fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/services/page.tsx", import.meta.url), "utf8");
