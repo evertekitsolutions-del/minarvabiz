@@ -2,6 +2,15 @@
 
 Status: **separate Cloudflare customer preview deployed; authenticated commercial cutover NOT yet accepted**.
 
+## 2026-10-16 — Separate premium visual design-review preview (not the application)
+
+- Visual concept: https://minarvabiz-design-review.minarva-biz.workers.dev/
+- Dedicated isolated Worker: `minarvabiz-design-review`; deployment ID `b7280dff-a431-4af4-b22b-29c193969fdc`, version `4991c030-8688-493c-9320-8aaa5ae85165`; workers.dev enabled, preview URLs disabled, no production domain route or new storage.
+- Portable original HTML in `docs/previews/minarva-biz-premium-design-review.html`, regression contract in `scripts/website-design-review-contract.test.mjs`; sample UI and numbers must always be labeled illustrative. The preview is noindex and has no authentication, form handling, telemetry, customer data, or paid backend.
+- This page is a **separate design-review site**, **not** proof that `apps/web` deployed to Cloudflare. Customer web Worker `minarvabiz-customer-web-preview` remains on its earlier version until its authenticated Next/OpenNext bundle passes deployment authority and rollout gates. Do not point customers to the concept site as a production app.
+- Owner-visible preview is confirmed deployed in the Cloudflare API; separate unauthenticated outside-HTTP/browser test from this session is unavailable, so customer device/browser acceptance remains needed.
+- The original PR #462 interactive product tour is already integrated in `apps/web`; this concept is for rapid visual review only, not a replacement for product source or real verified application screenshots.
+
 ## 2026-10-16 — Premium homepage Cloudflare CI/CD (preview deployment not yet verified)
 
 The premium homepage was merged in PR #460, main commit 8d50a112685c8d655da876160125e875a26f90e6, but the deployed Cloudflare Worker has not yet been updated to this commit.
