@@ -318,7 +318,7 @@ export function OrderDetail({
               </label>
               <Button variant="outline" disabled={!selectedWhatsAppTemplate} onClick={shareStatusViaWhatsApp}>Open WhatsApp</Button>
             </div>
-            <p className="text-xs text-slate-500">This only opens a prefilled WhatsApp message. Review it and press Send yourself; nothing is sent automatically. For a missing or invalid number, update the customer contact first. You may add your Google review link before sending a feedback request.</p>
+            <p className="text-xs text-slate-500">This only opens a prefilled WhatsApp message. Review it and press Send yourself; nothing is sent automatically. For a missing or invalid number, update the customer contact first. Set your official Google review link in Settings to include it automatically in feedback messages.</p>
             {whatsAppError && <p role="alert" className="text-sm text-rose-700">{whatsAppError}</p>}
           </CardContent>
         </Card>
