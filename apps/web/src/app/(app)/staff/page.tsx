@@ -13,6 +13,7 @@ export default function StaffPage() {
   const [staff, setStaff] = React.useState<StaffMember[]>([]);
   const [selected, setSelected] = React.useState<StaffMember | null>(null);
   const [assignments, setAssignments] = React.useState<StaffAssignment[]>([]);
+  const [staffActionError, setStaffActionError] = React.useState<string | null>(null);
   const [payouts, setPayouts] = React.useState<StaffIncentivePayout[]>([]);
   const [rules, setRules] = React.useState<IncentiveRuleRecord[]>([]);
   const [open, setOpen] = React.useState(false);
@@ -29,6 +30,7 @@ export default function StaffPage() {
   React.useEffect(() => { refresh(); }, [refresh]);
 
   function selectStaff(s: StaffMember) {
+    setStaffActionError(null);
     setSelected(s);
     setAssignments(phase6Store.listAssignments({ staffId: s.id }));
     setPayouts(phase6Store.listIncentivePayouts(s.id));
@@ -69,14 +71,35 @@ export default function StaffPage() {
         rules={rules}
         productivity={prod}
         ordersForAssign={openOrders}
+        actionError={staffActionError}
         onAssign={(orderId) => {
-          phase6Store.assignStaffToOrder({ staffId: selected.id, orderId });
-          selectStaff(selected);
-          refresh();
+          try {
+            const result = phase6Store.assignStaffToOrder({ staffId: selected.id, orderId });
+            if (result.errors.length || !result.assignment) {
+              setStaffActionError(result.errors.join("; ") || "Unable to assign staff.");
+              return;
+            }
+            selectStaff(selected);
+            refresh();
+          } catch (error) {
+            setStaffActionError(error instanceof Error ? error.message : "Unable to assign staff.");
+          }
+        }}
+        onStartAssignment={(id) => {
+          try {
+            if (!phase6Store.startAssignment(id)) throw new Error("Assignment can no longer be started.");
+            selectStaff(selected);
+          } catch (error) {
+            setStaffActionError(error instanceof Error ? error.message : "Unable to start assignment.");
+          }
         }}
         onCompleteAssignment={(id) => {
-          phase6Store.completeAssignment(id);
-          selectStaff(selected);
+          try {
+            if (!phase6Store.completeAssignment(id)) throw new Error("Assignment cannot be completed.");
+            selectStaff(selected);
+          } catch (error) {
+            setStaffActionError(error instanceof Error ? error.message : "Unable to complete assignment.");
+          }
         }}
         onMarkPaid={(id) => {
           phase6Store.markIncentivePaid(id);

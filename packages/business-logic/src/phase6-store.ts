@@ -9,7 +9,7 @@ import { generateId, nowISO } from "@minarvabiz/utils";
 import { calculateIncentive } from "./incentives";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
-import { canAssignServiceOrder } from "./order-assignment-guard";
+import { canAssignServiceOrder, canStartServiceAssignment, canCompleteServiceAssignment } from "./order-assignment-guard";
 import * as phase9Store from "./phase9-store";
 import { checkRosterSlot, rosterRange, validateShiftRule, type ShiftRule, type RosterSlot, type RosterPolicy } from "./workforce-roster";
 
@@ -174,7 +174,63 @@ export function assignStaffToOrder(input: { staffId: UUID; orderId: UUID; notes?
   touchPersistence();
   return { assignment, errors: [] };
 }
-export function completeAssignment(id:UUID){assertPermission("orders.assign");const a=assignments.find(x=>x.id===id);if(!a||a.status==="cancelled")return null;a.status="completed";a.completedAt=nowISO();enqueueOutbox("staff_assignments",a.id,"update",a);const order=ordersStore.getOrder(a.orderId);if(order){const rule=findRule(order.serviceType);if(rule){const amount=calculateIncentive(order.price,{type:rule.type,value:rule.value,serviceType:rule.serviceType??undefined});if(amount>0&&!payouts.some(p=>p.orderId===a.orderId&&p.staffId===a.staffId&&p.ruleId===rule.id)){payouts.push({id:generateId(),staffId:a.staffId,staffName:a.staffName,orderId:a.orderId,orderNumber:a.orderNumber,ruleId:rule.id,amount,calculatedAt:nowISO(),paid:false});enqueueOutbox("staff_incentive_payouts",payouts[payouts.length-1].id,"insert",payouts[payouts.length-1]);}}}touchPersistence();return a;}
+export function startAssignment(id: UUID): StaffAssignment | null {
+  assertPermission("orders.assign");
+  const assignment = assignments.find((entry) => entry.id === id);
+  const order = assignment ? ordersStore.getOrder(assignment.orderId) : null;
+  if (!assignment || !order || !canStartServiceAssignment(assignment, order)) return null;
+  const before = { ...assignment };
+  assignment.status = "in_progress";
+  enqueueOutbox("staff_assignments", assignment.id, "update", { ...assignment });
+  auditAction("service_order.assignment.start", "orders", order.id,
+    { assignment: before }, { assignment: { ...assignment } });
+  touchPersistence();
+  return assignment;
+}
+
+export function completeAssignment(id: UUID): StaffAssignment | null {
+  assertPermission("orders.assign");
+  const assignment = assignments.find((entry) => entry.id === id);
+  if (!assignment) return null;
+  // A repeat click or retried offline command must not grant another incentive
+  // or mutate the completion timestamp / audit history.
+  if (assignment.status === "completed") return assignment;
+  const order = ordersStore.getOrder(assignment.orderId);
+  if (!order || !canCompleteServiceAssignment(assignment, order)) return null;
+  const before = { ...assignment };
+  assignment.status = "completed";
+  assignment.completedAt = nowISO();
+  enqueueOutbox("staff_assignments", assignment.id, "update", { ...assignment });
+
+  const rule = findRule(order.serviceType);
+  if (rule) {
+    const amount = calculateIncentive(order.price, {
+      type: rule.type, value: rule.value, serviceType: rule.serviceType ?? undefined,
+    });
+    if (amount > 0 && !payouts.some((payout) =>
+      payout.orderId === assignment.orderId &&
+      payout.staffId === assignment.staffId &&
+      payout.ruleId === rule.id)) {
+      const payout: StaffIncentivePayout = {
+        id: generateId(),
+        staffId: assignment.staffId,
+        staffName: assignment.staffName,
+        orderId: assignment.orderId,
+        orderNumber: assignment.orderNumber,
+        ruleId: rule.id,
+        amount,
+        calculatedAt: nowISO(),
+        paid: false,
+      };
+      payouts.push(payout);
+      enqueueOutbox("staff_incentive_payouts", payout.id, "insert", { ...payout });
+    }
+  }
+  auditAction("service_order.assignment.complete", "orders", order.id,
+    { assignment: before }, { assignment: { ...assignment } });
+  touchPersistence();
+  return assignment;
+}
 export function listIncentiveRules(){return incentiveRules.filter(r=>r.isActive);}
 export function upsertIncentiveRule(input:{id?:UUID;name:string;serviceType?:string|null;type:"fixed"|"percentage";value:number}){assertPermission("staff.manage");if(input.id){const existing=incentiveRules.find(r=>r.id===input.id);if(existing){Object.assign(existing,input,{updatedAt:nowISO()});enqueueOutbox("incentive_rules",existing.id,"update",existing);touchPersistence();return existing;}}const r:IncentiveRuleRecord={id:generateId(),name:input.name,serviceType:input.serviceType??null,type:input.type,value:input.value,isActive:true,createdAt:nowISO(),updatedAt:nowISO()};incentiveRules.push(r);enqueueOutbox("incentive_rules",r.id,"insert",r);touchPersistence();return r;}
 export function listIncentivePayouts(staffId?:UUID){let list=[...payouts];if(staffId)list=list.filter(p=>p.staffId===staffId);return list.sort((a,b)=>b.calculatedAt.localeCompare(a.calculatedAt));}
