@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { parseGoogleReviewUrl } from "@minarvabiz/business-logic";
 import { SyncPanel, PersistencePanel, Button, FormField, inputClass, selectClass, PrintTemplateManager, TrashRecoveryPanel } from "@minarvabiz/ui";
 import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage, getShopProfile, updateShopProfile, updateTaxConfig, getPrintSettings, updatePrintSettings, getScopedMasterReplayStatus, retryScopedMasterOutbox } from "@minarvabiz/business-logic";
 
@@ -9,6 +10,7 @@ export default function SettingsPage() {
   const [syncing, setSyncing] = React.useState(false);
   const [shop, setShop] = React.useState(() => getShopProfile());
   const [shopMsg, setShopMsg] = React.useState<string | null>(null);
+  const [shopMsgIsError, setShopMsgIsError] = React.useState(false);
   const [printing, setPrinting] = React.useState(() => getPrintSettings());
   const [masterReplay, setMasterReplay] = React.useState(() => getScopedMasterReplayStatus());
   const [masterRetrying, setMasterRetrying] = React.useState(false);
@@ -91,17 +93,25 @@ export default function SettingsPage() {
           <FormField label="Phone"><input className={inputClass} value={shop.phone} onChange={(e) => setShop({ ...shop, phone: e.target.value })} /></FormField>
           <FormField label="Email"><input className={inputClass} type="email" value={shop.email} onChange={(e) => setShop({ ...shop, email: e.target.value })} /></FormField>
           <FormField label="Website"><input className={inputClass} value={shop.website} onChange={(e) => setShop({ ...shop, website: e.target.value })} /></FormField>
+          <FormField label="Google review link"><input className={inputClass} type="url" value={shop.googleReviewUrl ?? ""} onChange={(e) => setShop({ ...shop, googleReviewUrl: e.target.value })} placeholder="https://g.page/r/.../review" /><p className="mt-1 text-xs text-slate-500">Optional. An official HTTPS Google link is included in post-delivery feedback WhatsApp messages.</p></FormField>
           <FormField label="Currency"><select className={selectClass} value={shop.currency} onChange={(e) => setShop({ ...shop, currency: e.target.value })}><option value="INR">INR — Indian Rupee</option><option value="OMR">OMR — Omani Rial</option><option value="AED">AED — UAE Dirham</option><option value="USD">USD — US Dollar</option></select></FormField>
           <FormField label="Receipt footer" className="sm:col-span-2"><input className={inputClass} value={shop.receiptFooter} onChange={(e) => setShop({ ...shop, receiptFooter: e.target.value })} /></FormField>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => {
-            const next = updateShopProfile(shop);
-            updateTaxConfig({ gstin: next.gstin });
-            setShop(next);
-            setShopMsg("Business profile saved");
+            try {
+              const googleReviewUrl = parseGoogleReviewUrl(shop.googleReviewUrl ?? "");
+              const next = updateShopProfile({ ...shop, googleReviewUrl });
+              updateTaxConfig({ gstin: next.gstin });
+              setShop(next);
+              setShopMsgIsError(false);
+              setShopMsg("Business profile saved");
+            } catch (error) {
+              setShopMsgIsError(true);
+              setShopMsg(error instanceof Error ? error.message : "Unable to save business profile.");
+            }
           }}>Save shop profile</Button>
-          {shopMsg && <span className="text-sm text-emerald-600">{shopMsg}</span>}
+          {shopMsg && <span role={shopMsgIsError ? "alert" : "status"} className={shopMsgIsError ? "text-sm text-rose-700" : "text-sm text-emerald-600"}>{shopMsg}</span>}
         </div>
       </div>
 
