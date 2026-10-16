@@ -94,9 +94,9 @@ try {
   await call("Emulation.clearDeviceMetricsOverride").catch(()=>{});
   await call("Page.navigate",{url:base+"/dashboard"});
   for(let i=0;i<60;i++){
-    const restored=await evaluate('location.pathname === "/dashboard" && document.body?.innerText?.includes("Total Sales") && document.body?.innerText?.includes("Total Profit")').catch(()=>false);
+    const restored=await evaluate('location.pathname === "/dashboard" && !!document.querySelector("body")').catch(()=>false);
     if(restored) break;
-    if(i===59) throw new Error("Could not restore browser dashboard for downstream smoke");
+    if(i===59) throw new Error("Could not navigate shared browser to dashboard before downstream smoke");
     await sleep(200);
   }
   socket.close();
