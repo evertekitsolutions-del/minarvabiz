@@ -64,6 +64,8 @@ jobs:
         run: node --experimental-strip-types packages/ui/src/components/orders/__tests__/order-overdue-filter.test.mjs
       - name: Verify service-order direct staff allocation and sync
         run: node --experimental-strip-types packages/business-logic/src/__tests__/service-staff-direct-allocation.test.mjs
+      - name: Verify manual service WhatsApp sharing and safe templates
+        run: node --experimental-strip-types packages/business-logic/src/__tests__/service-whatsapp-manual.test.mjs
       - name: Verify service staff assignment start and completion
         run: node --experimental-strip-types packages/business-logic/src/__tests__/service-staff-lifecycle.test.mjs
       - name: Verify mobile reload browser readiness contract
