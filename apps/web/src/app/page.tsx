@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import ProductTourClient from "./ProductTourClient";
 
 export const metadata: Metadata = {
   title: "Minarva Biz | A Smarter Way to Run Your Business",
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
 const releaseUrl = "https://github.com/evertekitsolutions-del/minarvabiz/releases/tag/v1.0.15";
 
 const navigation = [
+  { title: "Product tour", href: "#product-tour" },
   { title: "Features", href: "#features" },
   { title: "Industries", href: "#industries" },
   { title: "Editions", href: "#editions" },
@@ -242,8 +244,8 @@ export default function PublicHomePage() {
                 Billing, inventory, customers, accounts and everyday operations — brought together in one thoughtfully designed business platform.
               </p>
               <div className="mt-9 flex flex-wrap gap-3">
-                <a href="#features" className="inline-flex min-h-12 items-center justify-center gap-3 rounded-full bg-[#c8e9b6] px-6 py-3.5 text-sm font-bold text-[#11382e] transition hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#c8e9b6]">
-                  Explore the platform <ArrowIcon />
+                <a href="#product-tour" className="inline-flex min-h-12 items-center justify-center gap-3 rounded-full bg-[#c8e9b6] px-6 py-3.5 text-sm font-bold text-[#11382e] transition hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#c8e9b6]">
+                  Explore the product <ArrowIcon />
                 </a>
                 <a href="#download" className="inline-flex min-h-12 items-center justify-center gap-3 rounded-full border border-[#739189] px-6 py-3.5 text-sm font-bold text-white transition hover:border-white hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">
                   Windows download <ArrowIcon diagonal />
@@ -262,6 +264,10 @@ export default function PublicHomePage() {
               <span className="flex items-center gap-3"><span aria-hidden="true" className="size-1.5 rounded-full bg-[#b9ddad]" /> Designed to grow with you</span>
             </div>
           </div>
+        </section>
+
+        <section id="product-tour" className="scroll-mt-28 mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-28">
+          <ProductTourClient />
         </section>
 
         <section id="features" className="scroll-mt-28 mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-28">
@@ -366,6 +372,7 @@ export default function PublicHomePage() {
         <div className="mx-auto grid max-w-7xl gap-10 px-5 py-12 sm:px-8 lg:grid-cols-[1fr_auto] lg:gap-16">
           <div><Mark /><p className="mt-5 max-w-md text-sm leading-7 text-[#62786e]">Thoughtful business management for everyday operations. Product availability and verified support resources will be updated as delivery progresses.</p></div>
           <nav aria-label="Footer navigation" className="flex flex-wrap items-start gap-x-7 gap-y-4 text-sm font-bold text-[#34574e]">
+            <a href="#product-tour" className="hover:text-[#148466]">Product tour</a>
             <a href="#features" className="hover:text-[#148466]">Features</a>
             <a href="#editions" className="hover:text-[#148466]">Editions</a>
             <a href="/login" className="hover:text-[#148466]">Customer login</a>

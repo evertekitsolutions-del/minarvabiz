@@ -30,6 +30,8 @@ jobs:
         run: node --test scripts/cloudflare-customer-preview-gate.test.mjs
       - name: Verify premium public homepage content and navigation
         run: node scripts/public-homepage-design-contract.test.mjs
+      - name: Verify accessible interactive product walkthrough and marketing honesty
+        run: node scripts/public-product-tour-contract.test.mjs
       - name: Refuse Cloudflare customer authentication bypass
         run: node scripts/cloudflare-preview-auth-guard.test.mjs
       - name: Audit capability source inventory
