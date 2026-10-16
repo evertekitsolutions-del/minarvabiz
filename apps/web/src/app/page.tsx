@@ -287,6 +287,10 @@ export default function PublicHomePage() {
           <a href="#product-tour" className="hover:text-[#175ce5]">Product tour</a><a href="#features" className="hover:text-[#175ce5]">Features</a><a href="#editions" className="hover:text-[#175ce5]">Editions</a><a href="/login" className="hover:text-[#175ce5]">Customer login</a><a href={releaseUrl} target="_blank" rel="noopener noreferrer" className="hover:text-[#175ce5]">Windows release</a>
         </nav>
       </div>
+      <nav aria-label="Industry guides" className="mx-auto flex max-w-[1720px] flex-wrap items-center gap-x-5 gap-y-3 border-t border-[#dce8f6] px-5 py-5 text-[11px] lg:px-9">
+        <span className="font-black uppercase tracking-wide text-[#6b85a5]">Browse industries</span>
+        {industries.map(ind=><a key={ind.slug} href={"/industries/"+ind.slug} className="font-semibold text-[#315a89] hover:text-[#175de2] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1562ee]">{ind.title}</a>)}
+      </nav>
       <div className="mx-auto flex max-w-[1720px] flex-col justify-between gap-3 border-t border-[#dce8f6] px-5 py-5 text-[11px] text-[#6682a0] sm:flex-row lg:px-9"><span>© Minarva Biz · A connected business platform.</span><span>Online · Windows Offline · Hybrid</span></div>
     </footer>
   </div>;
