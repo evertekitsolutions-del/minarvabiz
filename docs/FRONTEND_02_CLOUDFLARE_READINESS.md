@@ -2,6 +2,15 @@
 
 Status: **audit / pre-deployment; public Cloudflare storefront NOT yet deployed**.
 
+## 2026-10-16 — Customer hosting cutover safety
+
+- **Vercel auto-deploy for every Git branch is disabled** in both repository-level `vercel.json` and `apps/web/vercel.json` via `git.deploymentEnabled: false`; legacy GitHub integration is also disabled. This is covered by a required CI contract test.
+- The **last working Vercel production deployment is intentionally retained temporarily for rollback and existing customer access**. This is **not** an assertion that Cloudflare customer hosting works yet.
+- Existing Cloudflare Pages project `minarvabiz-license-admin` and Workers `minarva-biz-free-ai`, `minarva-biz-license-edge` **are not** a verified hosted customer web application. Do not redirect or delete customer access until a real Cloudflare Worker deployment is tested end-to-end.
+- `apps/web/wrangler.jsonc` is *preview configuration only*. `scripts/frontend-cloudflare-preview-deploy.mjs` fails closed until the locked Next.js version is patched to the supported adapter baseline and pinned OpenNext/Wrangler dependencies are in the lockfile.
+- Before permanent Vercel removal, replace or verify remaining operational URLs including `VITE_SUPPORT_API_URL` in `.github/workflows/release-windows.yml`; verify customer auth, tenant isolation, support requests, CSP/middleware, email recovery, Windows/Hybrid behavior, and rollback.
+- No recurring paid infrastructure or AI service is authorized by this change.
+
 ## Verified repository and platform facts (2026-10-14)
 
 - Existing Next.js 15 app: `apps/web`. Public homepage merged in PR #395, commit `7c71471010c9568a791371ab044da8e504ecca1f`.

@@ -28,8 +28,10 @@ assert.match(middleware, /isSupportApi && method === "POST"/);
 assert.match(middleware, /status: 405/);
 assert.match(middleware, /isSupportApi \? "GET, HEAD, POST, OPTIONS" : "GET, HEAD, OPTIONS"/);
 
-assert.equal(appVercel.git.deploymentEnabled.staging, true);
-assert.equal(rootVercel.git.deploymentEnabled.staging, true);
+assert.equal(appVercel.git.deploymentEnabled, false, "Staging tests must not require Vercel deployment");
+assert.equal(rootVercel.git.deploymentEnabled, false, "Staging tests must not require Vercel deployment");
+assert.equal(appVercel.github?.enabled, false);
+assert.equal(rootVercel.github?.enabled, false);
 assert.ok(policy.performance.maxP95TtfbMs > 0);
 assert.ok(policy.performance.maxP95TotalMs >= policy.performance.maxP95TtfbMs);
 assert.ok(policy.performance.maxDocumentBytes >= 1024 * 1024);
