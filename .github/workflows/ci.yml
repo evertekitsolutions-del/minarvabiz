@@ -32,6 +32,8 @@ jobs:
         run: node scripts/public-homepage-design-contract.test.mjs
       - name: Verify owner-approved blue product homepage and honest imagery
         run: node scripts/approved-blue-homepage-contract.test.mjs
+      - name: Verify desktop width, compact typography and substantive workflow content
+        run: node scripts/desktop-homepage-density-contract.test.mjs
       - name: Verify new Minarva Biz logo and browser icon consistency
         run: node scripts/minarva-biz-logo-contract.test.mjs
       - name: Verify accessible interactive product walkthrough and marketing honesty
@@ -286,6 +288,8 @@ jobs:
           done
           cat /tmp/minarva-chrome.log || true
           exit 1
+      - name: Verify real desktop and mobile homepage density in headless Chrome
+        run: node scripts/public-homepage-viewport-browser-smoke.mjs
       - name: Browser-driven commercial workflow smoke
         run: node scripts/web-ui-deep-smoke.mjs
       - name: Verify mobile navigation and search with headless Chrome

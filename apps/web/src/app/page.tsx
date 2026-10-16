@@ -11,6 +11,7 @@ const releaseUrl = "https://github.com/evertekitsolutions-del/minarvabiz/release
 const navigation = [
   { title: "Product tour", href: "#product-tour" },
   { title: "Features", href: "#features" },
+  { title: "Workflows", href: "#workflows" },
   { title: "Industries", href: "#industries" },
   { title: "Editions", href: "#editions" },
   { title: "Download", href: "#download" },
@@ -74,7 +75,7 @@ export default function PublicHomePage() {
   return <div className="min-h-screen overflow-x-clip bg-white text-[#10243e]">
     <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[90] focus:rounded-lg focus:bg-white focus:p-3">Skip to content</a>
     <header className="sticky top-0 z-50 border-b border-[#e5edfa] bg-white/95 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-[1320px] flex-wrap items-center justify-between gap-4 px-5 py-3.5 lg:px-9">
+      <div className="mx-auto flex max-w-[1720px] flex-wrap items-center justify-between gap-4 px-5 py-3.5 lg:px-9">
         <Logo/>
         <nav aria-label="Main navigation" className="hidden items-center gap-6 text-[12px] font-bold text-[#44566c] lg:flex">
           {navigation.map(n=><a key={n.href} href={n.href} className="rounded-md transition hover:text-[#145bea] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1760ef]">{n.title}</a>)}
@@ -96,19 +97,19 @@ export default function PublicHomePage() {
     <main id="main">
       <section className="relative isolate overflow-hidden bg-[linear-gradient(110deg,#f0f7ff_0%,#f8fbff_50%,#ffffff_100%)]">
         <div className="pointer-events-none absolute -right-20 -top-60 size-[700px] rounded-full bg-[#dbeafa]/45 blur-[95px]" aria-hidden="true"/>
-        <div className="relative mx-auto grid max-w-[1320px] items-center gap-10 px-5 py-14 sm:py-20 lg:grid-cols-[0.82fr_1.18fr] lg:gap-7 lg:px-9 lg:py-[100px]">
+        <div className="relative mx-auto grid max-w-[1720px] items-center gap-7 px-5 py-9 sm:py-11 lg:grid-cols-[0.88fr_1.12fr] lg:gap-8 lg:px-9 lg:py-12">
           <div className="relative z-10">
             <span className="inline-flex items-center gap-2 rounded-full border border-[#d7e7ff] bg-[#e6f1ff] px-4 py-2 text-[10px] font-extrabold uppercase tracking-[0.16em] text-[#1459e7]">Business management · Reimagined</span>
-            <h1 className="mt-7 max-w-[650px] text-[clamp(2.8rem,5.1vw,4.75rem)] font-black leading-[1.095] tracking-[-0.067em] text-[#0b2146]">
-              Manage Your Business<br/><span className="text-[#1463ee]">Smarter with<br/>Minarva Biz.</span>
+            <h1 className="mt-4 max-w-[740px] text-[clamp(2.1rem,3.35vw,3.65rem)] font-black leading-[1.12] tracking-[-0.054em] text-[#0b2146]">
+              Manage Your Business<br/><span className="text-[#1463ee]">Smarter with Minarva Biz.</span>
             </h1>
-            <p className="mt-7 max-w-[560px] text-[15px] leading-8 text-[#536b86] sm:text-[17px]">
+            <p className="mt-4 max-w-[670px] text-[14px] leading-6 text-[#536b86] sm:text-[15px] sm:leading-7">
               Billing, inventory, accounts, services, tailoring, laundry and more — brought into one connected business workspace.
             </p>
-            <div className="mt-7 flex flex-wrap gap-2.5 text-[11px] font-bold text-[#3b5b7a] sm:text-xs">
+            <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-bold text-[#3b5b7a] sm:text-xs">
               {["Built around real workflows","Windows local-first","Flexible business modules"].map(x=><span key={x} className="inline-flex items-center gap-1.5 rounded-full border border-[#dbeaf8] bg-white/90 px-3 py-2"><Icon name="check" className="size-4 text-[#0ca569]"/>{x}</span>)}
             </div>
-            <div className="mt-9 flex flex-wrap gap-3">
+            <div className="mt-5 flex flex-wrap gap-3">
               <a href={releaseUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#1260f1] px-6 py-3.5 text-sm font-extrabold text-white shadow-[0_15px_32px_rgba(21,93,220,.23)] transition hover:-translate-y-0.5 hover:bg-[#0e4fca]">
                 <Icon name="monitor" className="size-[18px]"/> Download for Windows <Icon name="arrow" className="size-4"/>
               </a>
@@ -116,13 +117,13 @@ export default function PublicHomePage() {
                 <span aria-hidden="true" className="grid size-6 place-items-center rounded-full bg-[#e7f0ff] text-[#135dec]">▶</span> Explore product tour
               </a>
             </div>
-            <p className="mt-5 max-w-[560px] text-xs leading-6 text-[#6d8199]">
+            <p className="mt-3 max-w-[670px] text-[11px] leading-5 text-[#6d8199]">
               Official published Windows release: v1.0.15. Self-service signup and some cross-edition acceptance steps are still in progress.
             </p>
           </div>
-          <div className="relative min-w-0 pb-7">
+          <div className="relative min-w-0 pb-3">
             <div className="absolute -inset-5 rounded-[3rem] bg-[#bdd9fc]/35 blur-3xl" aria-hidden="true"/>
-            <div className="relative ml-auto overflow-hidden rounded-[22px] border-[7px] border-[#162b49] bg-white shadow-[0_28px_75px_rgba(24,49,85,.22)] sm:border-[10px]">
+            <div className="relative ml-auto overflow-hidden rounded-[17px] border-[5px] border-[#162b49] bg-white shadow-[0_20px_54px_rgba(24,49,85,.19)] sm:border-[7px]">
               <div className="flex h-9 items-center gap-1.5 border-b border-[#e7edf8] bg-[#f8fbff] px-4"><span className="size-2 rounded-full bg-[#ffab91]"/><span className="size-2 rounded-full bg-[#fad280]"/><span className="size-2 rounded-full bg-[#85d8ae]"/><span className="ml-auto rounded-md bg-[#edf3fa] px-3 py-1 text-[9px] font-semibold text-[#778aa2]">Minarva Biz · Interface reference</span></div>
               <img src="/marketing-dashboard.jpg" alt="Minarva Biz boutique business dashboard design reference with navigation, reporting charts and order information" width={1500} height={1000} loading="eager" decoding="async" className="block h-auto w-full object-contain"/>
             </div>
@@ -133,20 +134,28 @@ export default function PublicHomePage() {
                 {["Sales","Stock","Customers","Services","Reports","More"].map((x,i)=><span key={x} className="rounded-md border border-[#e1eaf5] bg-[#f7fbff] p-1.5 text-center text-[8px] font-semibold text-[#315573]"><span className={"mx-auto mb-1 block size-2 rounded-md "+(i%2?"bg-[#55b7f4]":"bg-[#1763ed]")}/>{x}</span>)}
               </div>
             </div>
-            <p className="relative mt-6 pl-[34%] text-right text-[10px] leading-5 text-[#66809a] sm:pl-28">
+            <p className="relative mt-3 pl-[34%] text-right text-[10px] leading-4 text-[#66809a] sm:pl-28">
               Illustrative interface reference — not a live application screenshot or real customer data.
             </p>
           </div>
         </div>
       </section>
-      <div className="border-y border-[#e6edf8] bg-white">
-        <div className="mx-auto grid max-w-[1320px] grid-cols-2 gap-4 px-5 py-6 text-[11px] font-extrabold text-[#405b7b] sm:grid-cols-4 lg:grid-cols-4 lg:gap-8 lg:px-9">
-          {([{name:"Windows desktop",icon:"monitor"},{name:"Browser workspace",icon:"cloud"},{name:"Mobile-friendly web",icon:"smartphone"},{name:"Online + offline foundation",icon:"check"}] as const).map(x=><div key={x.name} className="flex items-center gap-2.5"><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#ebf3ff] text-[#145eed]"><Icon name={x.icon} className="size-5"/></span><span>{x.name}</span></div>)}
+      <section aria-label="Explore business modules" className="border-y border-[#d9e6fb] bg-[#f8fbff]">
+        <div className="mx-auto max-w-[1720px] px-5 py-4 lg:px-9">
+          <p className="mb-3 text-[10px] font-extrabold uppercase tracking-[0.15em] text-[#3973bf]">Explore 8 connected business modules</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+            {features.map((item) => (
+              <a key={item.title} href="#features" className="flex min-h-[58px] items-center gap-2.5 rounded-xl border border-[#e0eafb] bg-white px-3 py-2.5 text-[12px] font-bold leading-4 text-[#20436d] transition hover:border-[#9cc1fc] hover:bg-[#edf5ff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1464ed]">
+                <span className={"grid size-9 shrink-0 place-items-center rounded-lg "+item.tone}><Icon name={item.icon} className="size-4.5"/></span>
+                <span>{item.title}</span>
+              </a>
+            ))}
+          </div>
         </div>
-      </div>
-      <section id="features" className="scroll-mt-28 mx-auto max-w-[1320px] px-5 py-20 sm:py-24 lg:px-9">
+      </section>
+      <section id="features" className="scroll-mt-28 mx-auto max-w-[1720px] px-5 py-14 sm:py-16 lg:px-9">
         <div className="flex flex-wrap items-end justify-between gap-5">
-          <div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#1b68eb]">One business. All the essentials.</p><h2 className="mt-4 text-4xl font-black tracking-[-0.05em] text-[#0b2347] sm:text-5xl">Everything you need to<br/><span className="text-[#1463ee]">manage your business.</span></h2></div>
+          <div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#1b68eb]">One business. All the essentials.</p><h2 className="mt-3 text-[clamp(1.75rem,2.65vw,2.8rem)] font-black tracking-[-0.04em] text-[#0b2347] sm:text-5xl">Everything you need to<br/><span className="text-[#1463ee]">manage your business.</span></h2></div>
           <p className="max-w-[385px] text-sm leading-7 text-[#657b93]">Practical tools for everyday operations, from a busy checkout to the service team and business owner.</p>
         </div>
         <div className="mt-11 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -159,10 +168,60 @@ export default function PublicHomePage() {
         </div>
         <p className="mt-5 text-xs leading-6 text-[#6e8296]">Feature availability depends on edition and verified deployment readiness.</p>
       </section>
-      <section id="industries" className="scroll-mt-28 border-y border-[#e6eef9] bg-[#f3f8ff]">
-        <div className="mx-auto max-w-[1320px] px-5 py-20 sm:py-24 lg:px-9">
+      <section id="workflows" className="scroll-mt-28 border-y border-[#e4edfa] bg-[linear-gradient(180deg,#f8fbff,#eef5ff)]">
+        <div className="mx-auto max-w-[1720px] px-5 py-14 sm:py-16 lg:px-9">
           <div className="flex flex-wrap items-end justify-between gap-5">
-            <div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#1661e6]">Designed around your work</p><h2 className="mt-4 text-4xl font-black tracking-[-0.05em] text-[#0d2a4d] sm:text-5xl">Perfect for different<br/><span className="text-[#1765ee]">types of businesses.</span></h2></div>
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#1762df]">Built around the working day</p>
+              <h2 className="mt-3 text-[clamp(1.75rem,2.65vw,2.8rem)] font-black leading-[1.17] tracking-[-0.04em] text-[#0c2750]">From your first sale to the<br/><span className="text-[#1761e9]">end-of-day report.</span></h2>
+            </div>
+            <p className="max-w-[485px] text-[13px] leading-7 text-[#587596]">See how everyday business tasks fit together — sales, purchases, customer work, services, stock and closing reports. Each example below uses illustrative data.</p>
+          </div>
+          <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              {number:"01",time:"OPEN FOR BUSINESS",title:"Get your stock ready",detail:"Review product records, check availability and organize purchases before the rush.",icon:"box" as IconName},
+              {number:"02",time:"BUSY SALES HOURS",title:"Create the next invoice",detail:"Handle products, services, payments and quotations in a structured sales workflow.",icon:"receipt" as IconName},
+              {number:"03",time:"CUSTOMER & SERVICE WORK",title:"Keep each job moving",detail:"Register tailoring, laundry or field-service work and follow the order status.",icon:"tool" as IconName},
+              {number:"04",time:"CLOSE THE DAY",title:"Review what changed",detail:"Look across expenses, sales, stock movements and business reports.",icon:"chart" as IconName},
+            ].map(step=><article key={step.number} className="rounded-[18px] border border-[#d8e7fb] bg-white p-5 shadow-[0_8px_25px_rgba(33,93,163,.04)]">
+              <div className="flex items-center justify-between"><span className="text-[11px] font-black tracking-[0.15em] text-[#2169d6]">{step.time}</span><span className="text-[20px] font-black text-[#bed5f6]">{step.number}</span></div>
+              <span className="mt-4 grid size-11 place-items-center rounded-xl bg-[#e9f2ff] text-[#1461e5]"><Icon name={step.icon} className="size-6"/></span>
+              <h3 className="mt-4 text-[16px] font-black text-[#153657]">{step.title}</h3>
+              <p className="mt-2 text-[12px] leading-6 text-[#607b98]">{step.detail}</p>
+            </article>)}
+          </div>
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <article className="overflow-hidden rounded-[21px] border border-[#d8e6fa] bg-white shadow-[0_12px_38px_rgba(21,79,157,.055)]">
+              <div className="flex items-start justify-between gap-4 px-5 pt-6 sm:px-7"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-[#206ce0]">Billing and payments</p><h3 className="mt-2 text-xl font-black tracking-tight text-[#133459]">A cleaner checkout experience.</h3><p className="mt-2 max-w-md text-[13px] leading-6 text-[#66809a]">Products, quantities and service items can be reviewed together in an illustrative invoice view.</p></div><span className="hidden rounded-lg bg-[#eaf3ff] p-3 text-[#1764ea] sm:block"><Icon name="receipt" className="size-6"/></span></div>
+              <div className="mx-5 mb-5 mt-5 overflow-hidden rounded-xl border border-[#dbe7f8] bg-[#f8fbff] sm:mx-7">
+                <div className="flex items-center justify-between border-b border-[#e4ebf7] bg-white px-4 py-3"><span className="text-[12px] font-extrabold text-[#264369]">Sample invoice · INV-DEMO-001</span><span className="rounded-md bg-[#e7f6ee] px-2 py-1 text-[10px] font-bold text-[#178451]">Preview</span></div>
+                <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-[#dfeafa] px-4 py-2 text-[10px] font-black uppercase tracking-wider text-[#8194ab]"><span>Product / service</span><span>Qty</span><span>Amount</span></div>
+                {([{name:"Cotton fabric",qty:"2 m",price:"₹900"},{name:"Tailoring service",qty:"1",price:"₹350"},{name:"Canvas tote bag",qty:"1",price:"₹299"}] as const).map(line=><div key={line.name} className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-[#e8eff9] bg-white px-4 py-3 text-[12px] text-[#445d7c]"><span className="font-semibold">{line.name}</span><span>{line.qty}</span><span className="font-extrabold text-[#214b8a]">{line.price}</span></div>)}
+                <div className="flex items-center justify-between px-4 py-3 text-[13px]"><span className="font-bold text-[#647b99]">Sample subtotal</span><strong className="text-[17px] text-[#175de0]">₹1,549</strong></div>
+              </div>
+            </article>
+            <article className="overflow-hidden rounded-[21px] border border-[#d8e6fa] bg-white shadow-[0_12px_38px_rgba(21,79,157,.055)]">
+              <div className="flex items-start justify-between gap-4 px-5 pt-6 sm:px-7"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-[#206ce0]">Service & customer orders</p><h3 className="mt-2 text-xl font-black tracking-tight text-[#133459]">Know the next step for every job.</h3><p className="mt-2 max-w-md text-[13px] leading-6 text-[#66809a]">A structured workflow for service registrations, technician allocations and order follow-up.</p></div><span className="hidden rounded-lg bg-[#eaf3ff] p-3 text-[#1764ea] sm:block"><Icon name="tool" className="size-6"/></span></div>
+              <div className="mx-5 mb-5 mt-5 overflow-hidden rounded-xl border border-[#dbe7f8] bg-[#f8fbff] sm:mx-7">
+                <div className="flex items-center justify-between border-b border-[#e4ebf7] bg-white px-4 py-3"><span className="text-[12px] font-extrabold text-[#264369]">Sample service tracker</span><span className="text-[10px] font-bold text-[#7893b1]">Job progress</span></div>
+                {[
+                  {name:"Laptop service",code:"SRV-101",status:"Registered",tone:"bg-[#ebf2ff] text-[#2262d3]"},
+                  {name:"CCTV camera check",code:"SRV-102",status:"Assigned",tone:"bg-[#fff4df] text-[#ab7016]"},
+                  {name:"Alteration pickup",code:"SRV-103",status:"Completed",tone:"bg-[#e8f7ee] text-[#19824d]"},
+                ].map(job=><div key={job.code} className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e8eff9] bg-white px-4 py-3">
+                  <div><strong className="text-[12px] text-[#26476b]">{job.name}</strong><span className="ml-2 text-[10px] text-[#869bb2]">{job.code}</span></div><span className={"rounded-full px-3 py-1 text-[10px] font-bold "+job.tone}>{job.status}</span>
+                </div>)}
+                <div className="flex items-center justify-between gap-2 px-4 py-3 text-[10px] font-extrabold text-[#3970b4]"><span>Register</span><Icon name="arrow" className="size-4"/><span>Assign</span><Icon name="arrow" className="size-4"/><span>Complete</span></div>
+              </div>
+            </article>
+          </div>
+          <p className="mt-5 text-[11px] leading-5 text-[#6f88a7]">These are illustrative examples — not screenshots of a verified customer account. Availability of notifications and integrations depends on deployment readiness.</p>
+        </div>
+      </section>
+      <section id="industries" className="scroll-mt-28 border-y border-[#e6eef9] bg-[#f3f8ff]">
+        <div className="mx-auto max-w-[1720px] px-5 py-14 sm:py-16 lg:px-9">
+          <div className="flex flex-wrap items-end justify-between gap-5">
+            <div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#1661e6]">Designed around your work</p><h2 className="mt-3 text-[clamp(1.75rem,2.65vw,2.8rem)] font-black tracking-[-0.04em] text-[#0d2a4d] sm:text-5xl">Perfect for different<br/><span className="text-[#1765ee]">types of businesses.</span></h2></div>
             <p className="max-w-sm text-sm leading-7 text-[#627893]">One platform direction, with workflows for retail, specialized orders and services.</p>
           </div>
           <div className="mt-11 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -179,13 +238,13 @@ export default function PublicHomePage() {
           <p className="mt-6 text-xs text-[#6683a1]">Illustrative industry graphics; these are not photographs of customer premises.</p>
         </div>
       </section>
-      <section id="product-tour" className="scroll-mt-28 mx-auto max-w-[1320px] px-5 py-20 sm:py-24 lg:px-9">
+      <section id="product-tour" className="scroll-mt-28 mx-auto max-w-[1720px] px-5 py-14 sm:py-16 lg:px-9">
         <ProductTourClient />
       </section>
       <section id="editions" className="scroll-mt-28 bg-[linear-gradient(135deg,#0c2b54,#0b3e83)] text-white">
-        <div className="mx-auto max-w-[1320px] px-5 py-20 sm:py-24 lg:px-9">
+        <div className="mx-auto max-w-[1720px] px-5 py-14 sm:py-16 lg:px-9">
           <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#a8d2ff]">One platform. Your way.</p>
-          <h2 className="mt-4 text-4xl font-black tracking-[-0.05em] sm:text-5xl">Choose how you work.</h2>
+          <h2 className="mt-3 text-[clamp(1.75rem,2.65vw,2.8rem)] font-black tracking-[-0.04em] sm:text-5xl">Choose how you work.</h2>
           <p className="mt-5 max-w-2xl text-sm leading-8 text-[#c8dcf4]">A connected core designed for the different ways your business runs. Cross-edition acceptance remains ongoing.</p>
           <div className="mt-11 grid gap-4 lg:grid-cols-3">
             {[
@@ -206,13 +265,13 @@ export default function PublicHomePage() {
         </div>
       </section>
       <section id="download" className="scroll-mt-28 bg-[#eaf3ff]">
-        <div className="mx-auto flex max-w-[1320px] flex-col items-start justify-between gap-6 px-5 py-14 sm:py-20 lg:flex-row lg:items-center lg:px-9">
+        <div className="mx-auto flex max-w-[1720px] flex-col items-start justify-between gap-6 px-5 py-14 sm:py-20 lg:flex-row lg:items-center lg:px-9">
           <div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#1664eb]">Windows desktop edition</p><h2 className="mt-3 text-3xl font-black tracking-[-0.05em] text-[#0d2b55] sm:text-4xl">Explore Minarva Biz on Windows.</h2><p className="mt-4 max-w-2xl text-sm leading-7 text-[#5b7393]">Official published installer: v1.0.15. Review the release notes and assets before installation; customer onboarding and Hybrid acceptance are still being verified.</p></div>
           <a href={releaseUrl} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-[#1461ee] px-7 py-4 text-sm font-extrabold text-white shadow-[0_14px_25px_rgba(12,77,193,.18)] transition hover:bg-[#0c50ce]">View official Windows release <Icon name="arrow" className="size-4"/></a>
         </div>
       </section>
-      <section id="faq" className="scroll-mt-28 mx-auto grid max-w-[1320px] gap-10 px-5 py-20 sm:py-24 lg:grid-cols-[0.7fr_1fr] lg:px-9">
-        <div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#1562e9]">Good to know</p><h2 className="mt-4 text-4xl font-black tracking-[-0.05em] text-[#102a4c] sm:text-5xl">Questions,<br/>answered.</h2><p className="mt-5 max-w-xs text-sm leading-7 text-[#687f96]">Clear information about access, readiness and download options.</p></div>
+      <section id="faq" className="scroll-mt-28 mx-auto grid max-w-[1720px] gap-10 px-5 py-20 sm:py-24 lg:grid-cols-[0.7fr_1fr] lg:px-9">
+        <div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#1562e9]">Good to know</p><h2 className="mt-3 text-[clamp(1.75rem,2.65vw,2.8rem)] font-black tracking-[-0.04em] text-[#102a4c] sm:text-5xl">Questions,<br/>answered.</h2><p className="mt-5 max-w-xs text-sm leading-7 text-[#687f96]">Clear information about access, readiness and download options.</p></div>
         <div className="divide-y divide-[#e1e9f5] border-y border-[#e1e9f5]">
           {faqs.map(q=><details key={q.question} className="group py-5">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-5 rounded-md text-[15px] font-extrabold text-[#1b3559] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1661ee] [&::-webkit-details-marker]:hidden"><span>{q.question}</span><span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#edf4ff] text-lg font-normal text-[#1661ee] transition group-open:rotate-45" aria-hidden="true">+</span></summary>
@@ -222,13 +281,13 @@ export default function PublicHomePage() {
       </section>
     </main>
     <footer className="border-t border-[#dce8f6] bg-[#f4f8ff]">
-      <div className="mx-auto grid max-w-[1320px] gap-8 px-5 py-12 lg:grid-cols-[1fr_auto] lg:px-9">
+      <div className="mx-auto grid max-w-[1720px] gap-8 px-5 py-12 lg:grid-cols-[1fr_auto] lg:px-9">
         <div><Logo/><p className="mt-5 max-w-md text-sm leading-7 text-[#67809b]">Business management built around everyday work. Current product availability and acceptance are being verified.</p></div>
         <nav aria-label="Footer navigation" className="flex flex-wrap items-start gap-5 text-xs font-bold text-[#3c6084]">
           <a href="#product-tour" className="hover:text-[#175ce5]">Product tour</a><a href="#features" className="hover:text-[#175ce5]">Features</a><a href="#editions" className="hover:text-[#175ce5]">Editions</a><a href="/login" className="hover:text-[#175ce5]">Customer login</a><a href={releaseUrl} target="_blank" rel="noopener noreferrer" className="hover:text-[#175ce5]">Windows release</a>
         </nav>
       </div>
-      <div className="mx-auto flex max-w-[1320px] flex-col justify-between gap-3 border-t border-[#dce8f6] px-5 py-5 text-[11px] text-[#6682a0] sm:flex-row lg:px-9"><span>© Minarva Biz · A connected business platform.</span><span>Online · Windows Offline · Hybrid</span></div>
+      <div className="mx-auto flex max-w-[1720px] flex-col justify-between gap-3 border-t border-[#dce8f6] px-5 py-5 text-[11px] text-[#6682a0] sm:flex-row lg:px-9"><span>© Minarva Biz · A connected business platform.</span><span>Online · Windows Offline · Hybrid</span></div>
     </footer>
   </div>;
 }
