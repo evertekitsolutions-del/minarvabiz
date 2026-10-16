@@ -8,8 +8,9 @@ import {
   OrderList, OrderForm, emptyOrderForm, OrderDetail, Modal, Button, FormField, inputClass,
   type OrderFormValues,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, printOrderReceipt, templateFromOrderReady, assertLimit, can } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, printOrderReceipt, templateFromOrderReady, assertLimit, can, templateForOrder, buildManualServiceWhatsAppLink } from "@minarvabiz/business-logic";
 import { customerSchema } from "@minarvabiz/validation";
+import type { TemplateId } from "@minarvabiz/business-logic";
 import type {
   ServiceOrder, Customer, ExpenseCategory, MeasurementProfile, PaymentMethod, ServiceType, OrderStatus, StaffMember, StaffAssignment,
 } from "@minarvabiz/types";
@@ -298,6 +299,20 @@ export default function ServicesOrdersPage() {
           onAssignStaff={handleStaffAssignment}
           onStartAssignment={(id) => handleStaffTransition(id, "start")}
           onCompleteAssignment={(id) => handleStaffTransition(id, "complete")}
+          onShareWhatsApp={(templateId: TemplateId) => {
+            try {
+              const contact = store.getCustomer(selected.customerId);
+              if (!contact) return { ok: false, error: "Customer contact not found. Update customer details first." };
+              const body = templateForOrder(templateId, selected, contact).body;
+              const url = buildManualServiceWhatsAppLink(
+                contact.whatsapp?.trim() || contact.phone?.trim() || "", body,
+              );
+              window.open(url, "_blank", "noopener,noreferrer");
+              return { ok: true };
+            } catch (error) {
+              return { ok: false, error: error instanceof Error ? error.message : "Unable to prepare WhatsApp message." };
+            }
+          }}
           onStatusChange={handleStatus}
           onAddExpense={handleExpense}
           onCollectBalance={(order) => router.push(`/payments?customerId=${encodeURIComponent(order.customerId)}`)}

@@ -220,7 +220,7 @@ export function OrderList({
         </div>
       </div>
 
-      <DataTable columns={columns} rows={visibleOrders} onRowClick={onSelect} emptyMessage={overdueOnly || assignedStaffFilter ? "No orders match overdue/staff filters" : "No orders match the selected filters"} />
+      <DataTable columns={columns} rows={visibleOrders} onRowClick={onSelect} emptyMessage={overdueOnly ? "No overdue orders match the selected filters" : assignedStaffFilter ? "No orders match the assigned staff filter" : "No orders match the selected filters"} />
     </div>
   );
 }
