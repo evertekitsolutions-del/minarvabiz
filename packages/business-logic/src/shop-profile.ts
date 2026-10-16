@@ -18,6 +18,7 @@ export interface ShopProfile {
   phone: string;
   email: string;
   website: string;
+  googleReviewUrl?: string;
   gstin: string;
   receiptFooter: string;
   currency: string;
