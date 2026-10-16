@@ -11,6 +11,7 @@ const releaseUrl = "https://github.com/evertekitsolutions-del/minarvabiz/release
 const navigation = [
   { title: "Product tour", href: "#product-tour" },
   { title: "Features", href: "#features" },
+  { title: "Workflows", href: "#workflows" },
   { title: "Industries", href: "#industries" },
   { title: "Editions", href: "#editions" },
   { title: "Download", href: "#download" },
@@ -166,6 +167,56 @@ export default function PublicHomePage() {
           </article>)}
         </div>
         <p className="mt-5 text-xs leading-6 text-[#6e8296]">Feature availability depends on edition and verified deployment readiness.</p>
+      </section>
+      <section id="workflows" className="scroll-mt-28 border-y border-[#e4edfa] bg-[linear-gradient(180deg,#f8fbff,#eef5ff)]">
+        <div className="mx-auto max-w-[1720px] px-5 py-14 sm:py-16 lg:px-9">
+          <div className="flex flex-wrap items-end justify-between gap-5">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#1762df]">Built around the working day</p>
+              <h2 className="mt-3 text-[clamp(1.75rem,2.65vw,2.8rem)] font-black leading-[1.17] tracking-[-0.04em] text-[#0c2750]">From your first sale to the<br/><span className="text-[#1761e9]">end-of-day report.</span></h2>
+            </div>
+            <p className="max-w-[485px] text-[13px] leading-7 text-[#587596]">See how everyday business tasks fit together — sales, purchases, customer work, services, stock and closing reports. Each example below uses illustrative data.</p>
+          </div>
+          <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              {number:"01",time:"OPEN FOR BUSINESS",title:"Get your stock ready",detail:"Review product records, check availability and organize purchases before the rush.",icon:"box" as IconName},
+              {number:"02",time:"BUSY SALES HOURS",title:"Create the next invoice",detail:"Handle products, services, payments and quotations in a structured sales workflow.",icon:"receipt" as IconName},
+              {number:"03",time:"CUSTOMER & SERVICE WORK",title:"Keep each job moving",detail:"Register tailoring, laundry or field-service work and follow the order status.",icon:"tool" as IconName},
+              {number:"04",time:"CLOSE THE DAY",title:"Review what changed",detail:"Look across expenses, sales, stock movements and business reports.",icon:"chart" as IconName},
+            ].map(step=><article key={step.number} className="rounded-[18px] border border-[#d8e7fb] bg-white p-5 shadow-[0_8px_25px_rgba(33,93,163,.04)]">
+              <div className="flex items-center justify-between"><span className="text-[11px] font-black tracking-[0.15em] text-[#2169d6]">{step.time}</span><span className="text-[20px] font-black text-[#bed5f6]">{step.number}</span></div>
+              <span className="mt-4 grid size-11 place-items-center rounded-xl bg-[#e9f2ff] text-[#1461e5]"><Icon name={step.icon} className="size-6"/></span>
+              <h3 className="mt-4 text-[16px] font-black text-[#153657]">{step.title}</h3>
+              <p className="mt-2 text-[12px] leading-6 text-[#607b98]">{step.detail}</p>
+            </article>)}
+          </div>
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <article className="overflow-hidden rounded-[21px] border border-[#d8e6fa] bg-white shadow-[0_12px_38px_rgba(21,79,157,.055)]">
+              <div className="flex items-start justify-between gap-4 px-5 pt-6 sm:px-7"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-[#206ce0]">Billing and payments</p><h3 className="mt-2 text-xl font-black tracking-tight text-[#133459]">A cleaner checkout experience.</h3><p className="mt-2 max-w-md text-[13px] leading-6 text-[#66809a]">Products, quantities and service items can be reviewed together in an illustrative invoice view.</p></div><span className="hidden rounded-lg bg-[#eaf3ff] p-3 text-[#1764ea] sm:block"><Icon name="receipt" className="size-6"/></span></div>
+              <div className="mx-5 mb-5 mt-5 overflow-hidden rounded-xl border border-[#dbe7f8] bg-[#f8fbff] sm:mx-7">
+                <div className="flex items-center justify-between border-b border-[#e4ebf7] bg-white px-4 py-3"><span className="text-[12px] font-extrabold text-[#264369]">Sample invoice · INV-DEMO-001</span><span className="rounded-md bg-[#e7f6ee] px-2 py-1 text-[10px] font-bold text-[#178451]">Preview</span></div>
+                <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-[#dfeafa] px-4 py-2 text-[10px] font-black uppercase tracking-wider text-[#8194ab]"><span>Product / service</span><span>Qty</span><span>Amount</span></div>
+                {([{name:"Cotton fabric",qty:"2 m",price:"₹900"},{name:"Tailoring service",qty:"1",price:"₹350"},{name:"Canvas tote bag",qty:"1",price:"₹299"}] as const).map(line=><div key={line.name} className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-[#e8eff9] bg-white px-4 py-3 text-[12px] text-[#445d7c]"><span className="font-semibold">{line.name}</span><span>{line.qty}</span><span className="font-extrabold text-[#214b8a]">{line.price}</span></div>)}
+                <div className="flex items-center justify-between px-4 py-3 text-[13px]"><span className="font-bold text-[#647b99]">Sample subtotal</span><strong className="text-[17px] text-[#175de0]">₹1,549</strong></div>
+              </div>
+            </article>
+            <article className="overflow-hidden rounded-[21px] border border-[#d8e6fa] bg-white shadow-[0_12px_38px_rgba(21,79,157,.055)]">
+              <div className="flex items-start justify-between gap-4 px-5 pt-6 sm:px-7"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-[#206ce0]">Service & customer orders</p><h3 className="mt-2 text-xl font-black tracking-tight text-[#133459]">Know the next step for every job.</h3><p className="mt-2 max-w-md text-[13px] leading-6 text-[#66809a]">A structured workflow for service registrations, technician allocations and order follow-up.</p></div><span className="hidden rounded-lg bg-[#eaf3ff] p-3 text-[#1764ea] sm:block"><Icon name="tool" className="size-6"/></span></div>
+              <div className="mx-5 mb-5 mt-5 overflow-hidden rounded-xl border border-[#dbe7f8] bg-[#f8fbff] sm:mx-7">
+                <div className="flex items-center justify-between border-b border-[#e4ebf7] bg-white px-4 py-3"><span className="text-[12px] font-extrabold text-[#264369]">Sample service tracker</span><span className="text-[10px] font-bold text-[#7893b1]">Job progress</span></div>
+                {[
+                  {name:"Laptop service",code:"SRV-101",status:"Registered",tone:"bg-[#ebf2ff] text-[#2262d3]"},
+                  {name:"CCTV camera check",code:"SRV-102",status:"Assigned",tone:"bg-[#fff4df] text-[#ab7016]"},
+                  {name:"Alteration pickup",code:"SRV-103",status:"Completed",tone:"bg-[#e8f7ee] text-[#19824d]"},
+                ].map(job=><div key={job.code} className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e8eff9] bg-white px-4 py-3">
+                  <div><strong className="text-[12px] text-[#26476b]">{job.name}</strong><span className="ml-2 text-[10px] text-[#869bb2]">{job.code}</span></div><span className={"rounded-full px-3 py-1 text-[10px] font-bold "+job.tone}>{job.status}</span>
+                </div>)}
+                <div className="flex items-center justify-between gap-2 px-4 py-3 text-[10px] font-extrabold text-[#3970b4]"><span>Register</span><Icon name="arrow" className="size-4"/><span>Assign</span><Icon name="arrow" className="size-4"/><span>Complete</span></div>
+              </div>
+            </article>
+          </div>
+          <p className="mt-5 text-[11px] leading-5 text-[#6f88a7]">These are illustrative examples — not screenshots of a verified customer account. Availability of notifications and integrations depends on deployment readiness.</p>
+        </div>
       </section>
       <section id="industries" className="scroll-mt-28 border-y border-[#e6eef9] bg-[#f3f8ff]">
         <div className="mx-auto max-w-[1720px] px-5 py-14 sm:py-16 lg:px-9">
