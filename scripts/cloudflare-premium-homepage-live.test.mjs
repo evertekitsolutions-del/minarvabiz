@@ -21,6 +21,11 @@ for (const phrase of ["Manage Your Business", "Smarter with", "Windows Offline",
 for (const section of ["features", "industries", "product-tour", "editions", "download", "faq"]) {
   assert.ok(html.includes('id="' + section + '"'), "Missing anchor: " + section);
 }
+assert.ok(html.includes("/minarva-biz-mark.svg"), "New Minarva Biz mark must appear in homepage HTML");
+const mark = await fetchPage("/minarva-biz-mark.svg");
+assert.equal(mark.status, 200, "Published new Minarva Biz logo must be served");
+assert.match(mark.headers.get("content-type") || "", /image\/svg\+xml/);
+assert.match(await mark.text(), /Minarva Biz/, "Logo SVG must contain expected product identity");
 assert.ok(html.includes('href="/login"'), "Customer login must remain reachable");
 assert.ok(html.includes("releases/tag/v1.0.15"), "Only published installer may be offered");
 assert.doesNotMatch(html, /sb_secret_|BEGIN (?:RSA |EC )?PRIVATE KEY/);
