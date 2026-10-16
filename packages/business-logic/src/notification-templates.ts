@@ -4,6 +4,7 @@
 import type { ServiceOrder, Customer } from "@minarvabiz/types";
 import { formatMoney } from "@minarvabiz/utils";
 import { getShopProfile } from "./shop-profile";
+import { parseGoogleReviewUrl } from "./google-review-link";
 import { SERVICE_TYPE_LABELS } from "./orders";
 
 export type TemplateId =
@@ -58,11 +59,16 @@ export function renderTemplate(
         title: "Payment received",
         body: `Dear ${data.customerName || "Customer"}, we received ${data.amount}. Thank you! — ${shop}`,
       };
-    case "feedback_request":
+    case "feedback_request": {
+      let reviewUrl = "";
+      try { reviewUrl = parseGoogleReviewUrl(getShopProfile().googleReviewUrl ?? ""); } catch { /* old invalid data: do not share */ }
       return {
         title: "Customer feedback request",
-        body: `Dear ${data.customerName || "Customer"}, thank you for choosing ${shop} for order ${data.orderNumber}. How was your experience? Please reply with your feedback; if you were happy with our service, we would appreciate a Google review. Thank you!`,
+        body: `Dear ${data.customerName || "Customer"}, thank you for choosing ${shop} for order ${data.orderNumber}. How was your experience? Please reply with your feedback.` +
+          (reviewUrl ? ` If you were happy with our service, please leave a Google review: ${reviewUrl}` : " If you were happy with our service, we would appreciate a Google review.") +
+          " Thank you!",
       };
+    }
     case "low_stock_internal":
       return {
         title: "Low stock",
