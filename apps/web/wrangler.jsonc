@@ -2,14 +2,18 @@
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "minarvabiz-customer-web-preview",
   "main": ".open-next/worker.js",
-  "compatibility_date": "2026-10-14",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_date": "2026-10-16",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "workers_dev": true,
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
   "observability": {
-    "enabled": true
-  }
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  },
+  "minify": true
 }

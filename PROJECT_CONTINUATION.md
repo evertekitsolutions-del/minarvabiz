@@ -1,3 +1,9 @@
+## CLOUDFLARE-CUSTOMER-PREVIEW — Adapter build and separate live customer Worker
+
+- Continue from main `dd35068af3751cebbb773f41561c601811fa8a87` (#458). Existing app preserved, Next 15.5.28/OpenNext 1.20.12/Wrangler 4.151.0 pinned. Separate preview https://minarvabiz-customer-web-preview.minarva-biz.workers.dev/ deployed as `7fd3c6a9efc54a75b63e6a8232e25b2b`; homepage and login browser navigation verified. Existing License Admin untouched.
+- Fixed lockfile parser and auth/demo deployment guards, including ignored env-file bypass; added actual compiled Worker CI build/runtime gate. Production adapter build, web typecheck, full business-logic suite, deployment dry-run and local Workers runtime smoke passed. See docs/FRONTEND_02_CLOUDFLARE_READINESS.md for evidence limits.
+- Not a completed commercial cutover: new Worker lacks portable support broker credential; signed-in billing/tenant/recovery/support/Windows-Hybrid acceptance pending. Keep existing Windows Vercel support URL/fallback until the replacement proves operational. No paid services, customer data, migration or installer release. Full Master Vision remains ~51% provisional; published Windows v1.0.15.
+
 ## A-FIRST-CUSTOMER — Linked purchase/sale/refund/recovery verification (source CI pending)
 
 - Base main `75e3b14cc9623034320153f0490461cd9a761a65` (#378). User requested a material delivery batch, not another arbitrary percentage increase.

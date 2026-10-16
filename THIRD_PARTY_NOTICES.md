@@ -47,3 +47,14 @@ For each commercial release:
    required review.
 
 See `docs/COMPLIANCE.md` for the release compliance checklist.
+
+## Optional Cloudflare customer web build toolchain
+
+The existing Next.js customer app can also be built for Workers with
+`@opennextjs/cloudflare` **1.20.12** (MIT, upstream
+https://github.com/opennextjs/opennextjs-cloudflare) and Wrangler **4.151.0**
+(MIT OR Apache-2.0, upstream https://github.com/cloudflare/workers-sdk).
+Next.js **15.5.28** is pinned to meet this adapter's published peer range.
+These are build/deployment tools; standard Next.js self-hosting is retained.
+No paid storage, AI model or Cloudflare service is provisioned by installation.
+Exact transitive versions and integrity hashes are recorded in pnpm-lock.yaml.
