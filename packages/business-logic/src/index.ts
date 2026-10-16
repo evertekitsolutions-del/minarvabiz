@@ -56,6 +56,7 @@ export { parseDefaultTaxRateInput } from "./tax-rate-validation";
 export * from "./barcode-labels";
 export * from "./whatsapp";
 export * from "./manual-service-whatsapp";
+export * from "./google-review-link";
 export * from "./roles-nav";
 export * from "./stock-take";
 export * from "./csv-import";
