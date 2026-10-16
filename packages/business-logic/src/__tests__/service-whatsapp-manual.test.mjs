@@ -29,4 +29,19 @@ for (const input of ["", "+", "+0", "123", "+91123", "javascript:alert(1)", "987
 assert.throws(() => buildManualServiceWhatsAppLink("+919876543210", " \t"), /cannot be empty/);
 const templates = fs.readFileSync(new URL("../notification-templates.ts", import.meta.url), "utf8");
 assert.match(templates, /amount: formatMoney\(order\.balance\)/, "payment_due must not show undefined");
+
+const orderDetail = fs.readFileSync(new URL("../../../ui/src/components/orders/OrderDetail.tsx", import.meta.url), "utf8");
+const servicesPage = fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/services/page.tsx", import.meta.url), "utf8");
+assert.match(orderDetail, /availableServiceWhatsAppTemplates\(order\)/);
+assert.match(orderDetail, /onClick=\{shareStatusViaWhatsApp\}/);
+assert.match(orderDetail, /disabled=\{!selectedWhatsAppTemplate\}/);
+assert.match(orderDetail, /nothing is sent automatically/i, "must clearly mark manual send");
+assert.match(orderDetail, /role="alert" className="text-sm text-rose-700">\{whatsAppError\}/);
+assert.match(servicesPage, /onShareWhatsApp=\{\(templateId: TemplateId\) => \{/);
+assert.match(servicesPage, /store\.getCustomer\(selected\.customerId\)/);
+assert.match(servicesPage, /templateForOrder\(templateId, selected, contact\)\.body/);
+assert.match(servicesPage, /buildManualServiceWhatsAppLink\(/);
+assert.match(servicesPage, /window\.open\(url, "_blank", "noopener,noreferrer"\)/);
+assert.doesNotMatch(servicesPage, /sendWhatsAppMessage\(/, "no unattended WhatsApp sends");
+
 console.log("Service WhatsApp allowed messages, customer phone normalization and no-send URL PASS");
