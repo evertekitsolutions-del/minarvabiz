@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -19,6 +19,8 @@ const [major, minor, patch] = version.slice(1).map(Number);
 const supported = (major === 15 && (minor > 5 || (minor === 5 && patch >= 28))) ||
   (major === 16 && (minor > 4 || (minor === 4 && patch >= 1)));
 const buildOnly = process.argv.includes("--build-only");
+const deployOnly = process.argv.includes("--deploy-only");
+if (buildOnly && deployOnly) throw new Error("Select --build-only or --deploy-only, not both");
 if (!supported) {
   console.error(`Cloudflare adapter deployment blocked: locked Next.js ${major}.${minor}.${patch} is below the current security-supported OpenNext floor (15.5.28 / 16.4.1).`);
   process.exit(2);
@@ -45,7 +47,13 @@ const buildEnv = {
   NEXT_PUBLIC_MINARVA_MODE: "production",
   NEXT_PUBLIC_REQUIRE_AUTH: "true",
 };
-for (const args of [["--filter", "@minarvabiz/web", "exec", "opennextjs-cloudflare", "build"], ...(!buildOnly ? [["--filter", "@minarvabiz/web", "exec", "wrangler", "deploy"]] : [])]) {
+if (deployOnly && !existsSync(path.join(app, ".open-next", "worker.js"))) {
+  throw new Error("No compiled customer Worker: run --build-only first in this checked checkout");
+}
+for (const args of [
+  ...(!deployOnly ? [["--filter", "@minarvabiz/web", "exec", "opennextjs-cloudflare", "build"]] : []),
+  ...(!buildOnly ? [["--filter", "@minarvabiz/web", "exec", "wrangler", "deploy"]] : []),
+]) {
   const result = spawnSync("pnpm", args, { cwd: root, env: buildEnv, stdio: "inherit", shell: false });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status || 1);
