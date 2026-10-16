@@ -2,6 +2,22 @@
 
 Status: **separate Cloudflare customer preview deployed; authenticated commercial cutover NOT yet accepted**.
 
+## 2026-10-16 — Premium homepage Cloudflare CI/CD (preview deployment not yet verified)
+
+The premium homepage was merged in PR #460, main commit 8d50a112685c8d655da876160125e875a26f90e6, but the deployed Cloudflare Worker has not yet been updated to this commit.
+
+### Separate zero-paid preview delivery lane
+
+- Workflow: .github/workflows/cloudflare-customer-preview-deploy.yml. Manual: GitHub Actions > Cloudflare Customer Preview Deploy > Run workflow (main only).
+- Auto deployment after successful main CI requires repository variable MINARVA_PREVIEW_CD_ENABLED=true. Unset/default is disabled. It accepts only CI originating from a main push.
+- Repository secrets required: MINARVA_CLOUDFLARE_ACCOUNT_ID, MINARVA_CLOUDFLARE_PREVIEW_API_TOKEN, MINARVA_PUBLIC_SUPABASE_PUBLISHABLE_KEY.
+- Repository variable required: MINARVA_PUBLIC_SUPABASE_URL, configured to the real public Supabase HTTPS URL. Use a dedicated limited Cloudflare deployment token; never commit or print credentials.
+- Missing credentials fail before dependency installation or Worker mutation. The workflow checks all mandatory exact-main workflows, refuses pending/failed/missing checks and stale heads, and checks again immediately before deployment.
+- Build once, Wrangler dry-run, then --deploy-only uploads exactly the checked compiled Worker. Production/demo bypass is refused and the fixed isolated preview Worker name is asserted.
+- Post-deployment runtime checks cover CSP/nonce, login/recovery, unknown routes, and the premium homepage content. Capture verified deployment/version ID before reporting live delivery.
+- No paid dependencies, migrations, customer data edits, production DNS changes, Vercel deletion, License Admin/Edge changes or Windows support URL cutover are part of this step.
+
+Cloudflare API token and GitHub variables/secrets still require account provisioning before the preview can be updated; this milestone is source and workflow readiness, not a verified new live deployment.
 ## 2026-10-16 — Customer Worker preview delivered
 
 - Preview: https://minarvabiz-customer-web-preview.minarva-biz.workers.dev/
