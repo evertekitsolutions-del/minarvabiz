@@ -1,13 +1,14 @@
 "use client";
 
 import * as React from "react";
-import type { ServiceOrder, ServiceType, OrderStatus, Customer } from "@minarvabiz/types";
+import type { ServiceOrder, ServiceType, OrderStatus, Customer, StaffMember, StaffAssignment } from "@minarvabiz/types";
 import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { inputClass, selectClass } from "../forms/FormField";
 import { SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, exportServiceOrdersCsv } from "@minarvabiz/business-logic";
 import { isOverdueServiceOrder, localBusinessDate } from "./order-overdue-filter";
+import { filterServiceOrdersByAssignedStaff, assignedStaffNamesForOrder } from "./order-assignment-filter";
 
 const statusStyle: Record<string, string> = {
   pending: "bg-amber-50 text-amber-700 ring-amber-200",
@@ -20,6 +21,8 @@ const statusStyle: Record<string, string> = {
 export function OrderList({
   orders,
   customers = [],
+  staffMembers = [],
+  staffAssignments = [],
   onAdd,
   onCreate,
   onSearch,
@@ -34,6 +37,8 @@ export function OrderList({
 }: {
   orders: ServiceOrder[];
   customers?: Customer[];
+  staffMembers?: StaffMember[];
+  staffAssignments?: StaffAssignment[];
   onAdd?: () => void;
   onCreate?: () => void;
   onSearch?: (q: string) => void;
@@ -55,12 +60,22 @@ export function OrderList({
   const [deliveryDateFrom, setDeliveryDateFrom] = React.useState("");
   const [deliveryDateTo, setDeliveryDateTo] = React.useState("");
   const [overdueOnly, setOverdueOnly] = React.useState(false);
+  const [assignedStaffFilter, setAssignedStaffFilter] = React.useState("");
   const [exportFeedback, setExportFeedback] = React.useState<{ error: boolean; text: string } | null>(null);
   const businessDay = localBusinessDate();
-  const visibleOrders = React.useMemo(
-    () => overdueOnly ? orders.filter((order) => isOverdueServiceOrder(order, businessDay)) : orders,
-    [orders, overdueOnly, businessDay],
-  );
+  const visibleOrders = React.useMemo(() => {
+    const dateFiltered = overdueOnly ? orders.filter((order) => isOverdueServiceOrder(order, businessDay)) : orders;
+    return filterServiceOrdersByAssignedStaff(dateFiltered, staffAssignments, assignedStaffFilter);
+  }, [orders, overdueOnly, businessDay, staffAssignments, assignedStaffFilter]);
+  const staffOptions = React.useMemo(() => {
+    const names = new Map(staffMembers.map((member) => [member.id, member.name]));
+    for (const assignment of staffAssignments) {
+      if (assignment.status !== "cancelled" && !names.has(assignment.staffId)) {
+        names.set(assignment.staffId, assignment.staffName?.trim() || assignment.staffId);
+      }
+    }
+    return [...names].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [staffMembers, staffAssignments]);
 
   const clearFilters = () => {
     setQ("");
@@ -72,6 +87,7 @@ export function OrderList({
     setDeliveryDateFrom("");
     setDeliveryDateTo("");
     setOverdueOnly(false);
+    setAssignedStaffFilter("");
     onSearch?.("");
     onFilterStatus?.(null);
     onFilterType?.(null);
@@ -114,6 +130,8 @@ export function OrderList({
     ) : null },
     { key: "orderNumber", header: "Order No.", render: (r) => <span className="font-medium text-slate-900">{r.orderNumber}</span> },
     { key: "customerName", header: "Customer", render: (r) => r.customerName || "—" },
+    { key: "assignedStaff", header: "Assigned staff", render: (r) =>
+      assignedStaffNamesForOrder(r, staffAssignments, staffMembers).join(", ") || "Unassigned" },
     { key: "serviceType", header: "Type", render: (r) => SERVICE_TYPE_LABELS[r.serviceType] ?? r.serviceType },
     { key: "status", header: "Status", render: (r) => <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${statusStyle[r.status] ?? "bg-slate-50 text-slate-600 ring-slate-200"}`}>{ORDER_STATUS_LABELS[r.status]}</span> },
     { key: "price", header: "Price", render: (r) => formatMoney(r.price) },
@@ -169,7 +187,16 @@ export function OrderList({
             {(Object.keys(SERVICE_TYPE_LABELS) as ServiceType[]).map((value) => <option key={value} value={value}>{SERVICE_TYPE_LABELS[value]}</option>)}
           </select>
         </label>
-        <div className="hidden lg:block" />
+        <label className="text-xs font-medium text-slate-600">
+          Assigned staff
+          <select aria-label="Filter service orders by assigned staff"
+            className={selectClass + " mt-1"} value={assignedStaffFilter}
+            onChange={(event) => setAssignedStaffFilter(event.target.value)}>
+            <option value="">All staff</option>
+            <option value="unassigned">Unassigned orders</option>
+            {staffOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+          </select>
+        </label>
 
         <div className="grid grid-cols-2 gap-2 lg:col-span-2">
           <label className="text-xs font-medium text-slate-600">
@@ -193,7 +220,7 @@ export function OrderList({
         </div>
       </div>
 
-      <DataTable columns={columns} rows={visibleOrders} onRowClick={onSelect} emptyMessage={overdueOnly ? "No overdue orders match the selected filters" : "No orders match the selected filters"} />
+      <DataTable columns={columns} rows={visibleOrders} onRowClick={onSelect} emptyMessage={overdueOnly || assignedStaffFilter ? "No orders match overdue/staff filters" : "No orders match the selected filters"} />
     </div>
   );
 }
