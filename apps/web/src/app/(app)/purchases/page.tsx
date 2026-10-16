@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { parsePurchaseAmounts } from "@/lib/finance-entry-draft";
 import { isDashboardCreateIntent } from "@/lib/dashboard-quick-create";
 import { PurchaseList, ProcurementPanel, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
 import { phase5Store, ordersStore, procurementStore, store, warehouseStore } from "@minarvabiz/business-logic";
@@ -55,25 +56,30 @@ export default function PurchasesPage() {
   }, []);
 
   function savePurchase() {
-    const result = phase5Store.createPurchase({
-      date: form.date,
-      description: form.description.trim(),
-      amount: parseFloat(form.amount) || 0,
-      paidAmount: parseFloat(form.paidAmount) || 0,
-      paymentMethod: form.paymentMethod,
-      kind: form.kind,
-      orderId: form.orderId || null,
-      supplierId: form.supplierId || null,
-      notes: null,
-    });
-    if (result.errors.length || !result.purchase) {
-      setError(result.errors.join("; ") || "Unable to create purchase");
-      return;
-    }
-    setOpen(false);
     setError(null);
-    setForm({ date: todayLocal(), description: "", amount: "", paidAmount: "", paymentMethod: "cash", kind: "general", orderId: "", supplierId: "" });
-    refresh();
+    try {
+      const amounts = parsePurchaseAmounts(form.amount, form.paidAmount);
+      const result = phase5Store.createPurchase({
+        date: form.date,
+        description: form.description.trim(),
+        amount: amounts.amount,
+        paidAmount: amounts.paidAmount,
+        paymentMethod: form.paymentMethod,
+        kind: form.kind,
+        orderId: form.orderId || null,
+        supplierId: form.supplierId || null,
+        notes: null,
+      });
+      if (result.errors.length || !result.purchase) {
+        setError(result.errors.join("; ") || "Unable to create purchase.");
+        return;
+      }
+      setOpen(false);
+      setForm({ date: todayLocal(), description: "", amount: "", paidAmount: "", paymentMethod: "cash", kind: "general", orderId: "", supplierId: "" });
+      refresh();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to create purchase.");
+    }
   }
 
   function saveSupplier() {
@@ -210,7 +216,7 @@ export default function PurchasesPage() {
           <FormField label="Payment method"><select className={selectClass} value={form.paymentMethod} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value as PaymentMethod })}><option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="bank">Bank</option></select></FormField>
           <FormField label="Kind"><select className={selectClass} value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as "general" | "order_specific" })}><option value="general">General (shop stock)</option><option value="order_specific">Order-specific</option></select></FormField>
           {form.kind === "order_specific" && <FormField label="Order *"><select className={selectClass} value={form.orderId} onChange={(e) => setForm({ ...form, orderId: e.target.value })}><option value="">Select order</option>{orders.map((o) => <option key={o.id} value={o.id}>{o.orderNumber} — {o.customerName}</option>)}</select></FormField>}
-          {error && <p className="text-sm text-rose-600">{error}</p>}
+          {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
         </div>
       </Modal>
 
