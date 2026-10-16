@@ -6,7 +6,7 @@ const page = readFileSync("apps/web/src/app/page.tsx", "utf8");
 
 for (const section of ["features", "industries", "editions", "download", "faq"]) {
   assert.ok(page.includes('id="' + section + '"'), "Missing visible section: " + section);
-  assert.ok(page.includes('href="#' + section + '"'), "Missing navigation target: " + section);
+  assert.ok(page.includes('href: "#' + section + '"'), "Missing navigation target: " + section);
 }
 for (const label of ["Main navigation", "Mobile navigation", "Footer navigation", "Skip to content"]) {
   assert.ok(page.includes(label), "Missing accessible landmark: " + label);
