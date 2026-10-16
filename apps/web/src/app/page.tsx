@@ -56,13 +56,13 @@ const features: { title: string; detail: string; icon: IconName; tone: string; s
   { title: "Customers & CRM", detail: "Customer records and balances beside daily operations.", icon: "users", tone: "bg-[#e9f9ef] text-[#16945c]", support: "CUSTOMERS" },
   { title: "Reports & Analytics", detail: "Management visibility across sales, purchases and operations.", icon: "chart", tone: "bg-[#e4f7f4] text-[#138d89]", support: "INSIGHTS" },
 ];
-const industries: {title:string;description:string;icon:IconName;accent:string;scene:string}[] = [
-  {title:"Retail Store",description:"Point of sale, product stock and purchases",icon:"store",accent:"from-[#fef1d8] via-[#fce2bb] to-[#edb881]",scene:"Shelf & checkout"},
-  {title:"Boutique & Fashion",description:"Readymade, fabric, tailoring and alterations",icon:"shirt",accent:"from-[#fbe7f4] via-[#ecd9f5] to-[#d9b4e5]",scene:"Fashion & garments"},
-  {title:"Computer & Electronics",description:"Products, repairs, accessories and service",icon:"monitor",accent:"from-[#d8eaff] via-[#c6dafa] to-[#8eb6f4]",scene:"Devices & service"},
-  {title:"Service Centers",description:"Field work, engineers and service jobs",icon:"camera",accent:"from-[#def8f5] via-[#c8eee8] to-[#91d4c8]",scene:"Support & repairs"},
-  {title:"Laundry & Ironing",description:"Garment orders, pickup, delivery and tracking",icon:"laundry",accent:"from-[#e4ebff] via-[#d9e2ff] to-[#a7bbed]",scene:"Cleaning & delivery"},
-  {title:"Wholesale",description:"Bulk sales, purchase orders and supplier records",icon:"warehouse",accent:"from-[#ffeedc] via-[#f8dfc5] to-[#e6ae76]",scene:"Bulk stock"},
+const industries: {title:string;description:string;icon:IconName;accent:string;scene:string;slug:string}[] = [
+  {title:"Retail Store",slug:"retail-store",description:"Point of sale, product stock and purchases",icon:"store",accent:"from-[#fef1d8] via-[#fce2bb] to-[#edb881]",scene:"Shelf & checkout"},
+  {title:"Boutique & Fashion",slug:"boutique-fashion",description:"Readymade, fabric, tailoring and alterations",icon:"shirt",accent:"from-[#fbe7f4] via-[#ecd9f5] to-[#d9b4e5]",scene:"Fashion & garments"},
+  {title:"Computer & Electronics",slug:"computer-electronics",description:"Products, repairs, accessories and service",icon:"monitor",accent:"from-[#d8eaff] via-[#c6dafa] to-[#8eb6f4]",scene:"Devices & service"},
+  {title:"Service Centers",slug:"service-centers",description:"Field work, engineers and service jobs",icon:"camera",accent:"from-[#def8f5] via-[#c8eee8] to-[#91d4c8]",scene:"Support & repairs"},
+  {title:"Laundry & Ironing",slug:"laundry-ironing",description:"Garment orders, pickup, delivery and tracking",icon:"laundry",accent:"from-[#e4ebff] via-[#d9e2ff] to-[#a7bbed]",scene:"Cleaning & delivery"},
+  {title:"Wholesale",slug:"wholesale",description:"Bulk sales, purchase orders and supplier records",icon:"warehouse",accent:"from-[#ffeedc] via-[#f8dfc5] to-[#e6ae76]",scene:"Bulk stock"},
 ];
 const faqs = [
   { question: "Can Minarva Biz work without the internet?", answer: "The Windows edition is designed for local-first workflows. Online operations and synchronization require connectivity. Real customer Offline/Hybrid acceptance is still in progress." },
@@ -225,15 +225,15 @@ export default function PublicHomePage() {
             <p className="max-w-sm text-sm leading-7 text-[#627893]">One platform direction, with workflows for retail, specialized orders and services.</p>
           </div>
           <div className="mt-11 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-            {industries.map(ind=><article key={ind.title} className="overflow-hidden rounded-[19px] border border-[#dbe7f5] bg-white shadow-[0_5px_20px_rgba(24,69,109,.045)]">
+            {industries.map(ind=><a key={ind.slug} href={"/industries/"+ind.slug} aria-label={"Explore "+ind.title+" workflows"} className="group overflow-hidden rounded-[19px] border border-[#dbe7f5] bg-white shadow-[0_5px_20px_rgba(24,69,109,.045)] transition hover:-translate-y-1 hover:border-[#9ac2fb] hover:shadow-[0_14px_32px_rgba(24,69,109,.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#145fec]">
               <div className={"relative grid h-28 place-items-center overflow-hidden bg-gradient-to-br "+ind.accent}>
                 <span className="absolute -bottom-10 -right-5 size-32 rounded-full border-[20px] border-white/25" aria-hidden="true"/>
                 <span className="absolute -left-6 top-5 size-20 rounded-full bg-white/25 blur-md" aria-hidden="true"/>
                 <span className="relative grid size-16 place-items-center rounded-[20px] border border-white/80 bg-white/60 text-[#205390] shadow-xl shadow-[#375b8820]"><Icon name={ind.icon} className="size-9"/></span>
                 <span className="absolute bottom-2 left-3 text-[9px] font-bold uppercase tracking-widest text-[#365878]">{ind.scene}</span>
               </div>
-              <div className="px-4 py-5"><h3 className="text-[13px] font-extrabold text-[#162f51]">{ind.title}</h3><p className="mt-2 text-[11px] leading-[1.7] text-[#6c8099]">{ind.description}</p></div>
-            </article>)}
+              <div className="px-4 py-5"><h3 className="text-[13px] font-extrabold text-[#162f51]">{ind.title}</h3><p className="mt-2 text-[11px] leading-[1.7] text-[#6c8099]">{ind.description}</p><span className="mt-4 inline-flex items-center gap-2 text-[11px] font-extrabold text-[#1660de] group-hover:underline">Explore workflow <span aria-hidden="true">→</span></span></div>
+            </a>)}
           </div>
           <p className="mt-6 text-xs text-[#6683a1]">Illustrative industry graphics; these are not photographs of customer premises.</p>
         </div>
