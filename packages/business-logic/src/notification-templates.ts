@@ -78,6 +78,7 @@ export function templateForOrder(
     serviceType: SERVICE_TYPE_LABELS[order.serviceType] || order.serviceType,
     deliveryDate: order.deliveryDate || "",
     balance: formatMoney(order.balance),
+    amount: formatMoney(order.balance),
   });
 }
 
