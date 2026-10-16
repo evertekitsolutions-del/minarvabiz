@@ -128,6 +128,8 @@ jobs:
         run: node packages/business-logic/src/__tests__/attendance-grid-contract.test.mjs
       - name: Verify provider-neutral web hosting contract
         run: node scripts/provider-neutral-web-hosting-smoke.mjs
+      - name: Verify Vercel automatic deployments are disabled
+        run: node packages/business-logic/src/__tests__/vercel-deployment-branch-glob.test.mjs
       - name: Verify production build rejects missing Supabase env
         shell: bash
         run: |
