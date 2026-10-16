@@ -234,6 +234,10 @@ jobs:
         env:
           MINARVA_WEB_SMOKE_URL: http://127.0.0.1:8787
         run: node scripts/public-industry-guides-runtime-smoke.mjs
+      - name: Verify eight feature detail pages and CSP in compiled Cloudflare Worker
+        env:
+          MINARVA_WEB_SMOKE_URL: http://127.0.0.1:8787
+        run: node scripts/public-feature-guides-runtime-smoke.mjs
       - name: Capture Worker diagnostics
         if: failure()
         run: cat /tmp/minarva-worker.log || true
@@ -277,6 +281,8 @@ jobs:
         run: node scripts/public-homepage-runtime-smoke.mjs
       - name: Verify all public industry guide routes in production Next.js
         run: node scripts/public-industry-guides-runtime-smoke.mjs
+      - name: Verify eight product feature pages and unknown-feature 404 in production Next.js
+        run: node scripts/public-feature-guides-runtime-smoke.mjs
       - name: Verify production main web nonce CSP runtime
         env:
           WEB_CSP_URL: http://127.0.0.1:3000/dashboard
