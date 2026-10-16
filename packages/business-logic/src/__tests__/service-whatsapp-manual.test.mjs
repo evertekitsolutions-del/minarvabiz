@@ -5,8 +5,9 @@ import { buildManualServiceWhatsAppLink, availableServiceWhatsAppTemplates } fro
 const order = (status, deliveryDate = "2026-10-20", balance = 125) => ({ status, deliveryDate, balance });
 const options = (data) => availableServiceWhatsAppTemplates(data).map((x) => x.id);
 assert.deepEqual(options(order("cancelled")), []);
-assert.deepEqual(options(order("delivered")), ["payment_due"]);
+assert.deepEqual(options(order("delivered")), ["payment_due", "feedback_request"]);
 assert.ok(options(order("qc")).includes("trial_ready"));
+assert.ok(!options(order("qc")).includes("feedback_request"));
 assert.ok(options(order("ready_to_deliver")).includes("order_ready"));
 assert.ok(!options(order("processing")).includes("order_ready"));
 assert.ok(!options(order("pending", null)).includes("delivery_reminder"));
