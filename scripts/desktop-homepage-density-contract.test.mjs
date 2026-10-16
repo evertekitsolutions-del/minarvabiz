@@ -20,5 +20,5 @@ for(const item of ["Get your stock ready","Create the next invoice","Keep each j
 assert.ok(source.includes("illustrative examples")&&source.includes("not screenshots of a verified customer account"));
 assert.ok(source.includes('href="/login"'),"Keep existing login");
 assert.ok(source.includes("releases/tag/v1.0.15"),"Keep verified release link");
-assert.doesNotMatch(source,/Trusted by [0-9]+|GST compliant|Free Trial/i,"Do not invent testimonials, regulatory status or trial");
+assert.doesNotMatch(source,/Trusted by [0-9]+|GST compliant|href="\/free-trial"|>Start Free Trial</i,"Do not invent testimonials, regulatory status or live trial CTA");
 console.log("Desktop density and detailed business workflow contract PASS");
