@@ -18,6 +18,18 @@ The premium homepage was merged in PR #460, main commit 8d50a112685c8d655da87616
 - No paid dependencies, migrations, customer data edits, production DNS changes, Vercel deletion, License Admin/Edge changes or Windows support URL cutover are part of this step.
 
 Cloudflare API token and GitHub variables/secrets still require account provisioning before the preview can be updated; this milestone is source and workflow readiness, not a verified new live deployment.
+## 2026-10-16 — Premium homepage Cloudflare preview CI/CD gate (PR #461)
+
+- PR #460 merged the premium public homepage in source. **The existing live Cloudflare customer Worker still uses the original deployed bundle until a verified deploy actually succeeds.**
+- A separate `Cloudflare Customer Preview Deploy` GitHub Action now defines a **fail-closed preview-only** release path. It accepts manual dispatch or an eligible successful main CI run when repository variable `MINARVA_PREVIEW_CD_ENABLED=true`. This variable defaults to unset/disabled.
+- The workflow checks the **current main SHA** against the initiating commit, requires all 12 mandatory **main push** workflow checks to have succeeded at that exact SHA, and refuses a newer failed rerun. It rechecks right before deployment. Missing, pending, failed, cross-branch or stale evidence blocks deployment.
+- `apps/web/wrangler.jsonc` must still target the existing `minarvabiz-customer-web-preview` Worker, remain `workers_dev:true`, have no customer-production route or new D1/R2 bindings. The License Admin, license-edge and free-AI Workers are out of scope.
+- The OpenNext Worker is built once in authenticated production mode; the exact compiled `.open-next` bundle is dry-run checked and deployed without rebuilding, then the **live preview** must pass nonce/CSP, login/recovery, unknown-route, official installer link and premium homepage assertions.
+- GitHub environment configuration must be **explicitly provisioned by an authorized account owner** (never commit actual values): repository variable `MINARVA_PUBLIC_SUPABASE_URL`; repository secrets `MINARVA_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `MINARVA_CLOUDFLARE_ACCOUNT_ID`, `MINARVA_CLOUDFLARE_PREVIEW_API_TOKEN` (scoped narrowly to the preview Worker where supported). Confirm the public key is a publishable/anon key, **not** the Supabase service-role/secret key. Credential absence fails safely before deployment.
+- The workflow file can be run from [GitHub Actions](https://github.com/evertekitsolutions-del/minarvabiz/actions/workflows/cloudflare-customer-preview-deploy.yml) after credentials are configured, or automatic *preview-only* CD can be enabled by setting the reviewable repository variable above. Do not enable the flag without owner authorization and bounded GitHub Actions usage.
+- This is **preview hosting**, not acceptance of first-customer self-service signup/trials, support broker, authenticated cross-tenant application flows, Windows/Hybrid acceptance, a production DNS switch, or permanent Vercel removal.
+- Preserve the zero-paid-before-25-customers review policy, provider-neutral Next.js fallback, and customer data. No automatic paid service, plan upgrade or Cloudflare route change is approved.
+
 ## 2026-10-16 — Customer Worker preview delivered
 
 - Preview: https://minarvabiz-customer-web-preview.minarva-biz.workers.dev/
