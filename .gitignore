@@ -32,3 +32,9 @@ logs
 coverage
 .cache
 tmp
+
+# Cloudflare adapter outputs and local secrets
+.open-next
+.wrangler
+.dev.vars
+.dev.vars.*

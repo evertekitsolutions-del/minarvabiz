@@ -1,13 +1,27 @@
 # FRONTEND-02B — Cloudflare hosting readiness and deployment gates
 
-Status: **audit / pre-deployment; public Cloudflare storefront NOT yet deployed**.
+Status: **separate Cloudflare customer preview deployed; authenticated commercial cutover NOT yet accepted**.
+
+## 2026-10-16 — Customer Worker preview delivered
+
+- Preview: https://minarvabiz-customer-web-preview.minarva-biz.workers.dev/
+- Customer login: https://minarvabiz-customer-web-preview.minarva-biz.workers.dev/login
+- Worker deployment: `7fd3c6a9efc54a75b63e6a8232e25b2b`; separate from License Admin and existing edge Workers.
+- Pinned Next.js 15.5.28, OpenNext Cloudflare 1.20.12 and Wrangler 4.151.0; production OpenNext build, web typecheck, complete business-logic suite and Wrangler dry-run passed locally.
+- Actual compiled local workerd smoke passed homepage, login/recovery pages, document nonce propagation and rotation, prohibited methods, and unknown-route 404. Live homepage returned HTTP 200 with private/no-store cache policy; browser navigation to customer login verified.
+- The deployment wrapper now parses the lockfile correctly, rejects explicit demo/auth bypass, and forces authenticated production settings into child processes so later ignored `.env*` files cannot weaken the build. CI builds and runs the compiled Worker on loopback for each PR.
+- Standard `next build` / `next start` remain available; no paid storage, AI, database or service was provisioned. No production customer data changed.
+- Remote compiled Worker runtime smoke and deployed security-header suite passed against the live preview, including nonce rotation. One initial network timeout was followed by a successful full rerun. This is unauthenticated runtime evidence, not signed-in production UAT.
+- Live `/api/support/health` returned HTTP 503 with `ready:false`, `brokerConfigured:false`, `aiOperational:false`, `paidFallbackEnabled:false`. `MINARVA_SUPPORT_SERVICE_TOKEN` is not configured on the new Worker. The existing broker requires the same portable identity at both ends. Do not expose that token to clients, invent one-sided credentials, or switch the Windows release support URL before broker submission/inbox and AI readiness are actually verified.
+- Remaining cutover gates: broker credential provisioning, signed-in tenant/role/data and billing acceptance, password recovery redirect delivery, real support inbox submission, Windows/Hybrid acceptance, release support URL change and monitored rollback. Existing Vercel production remains fallback with Git builds disabled.
+- Registry dependency audit upload was blocked by automatic approval review because it would transmit private production dependency metadata to npm; no bypass or retry was attempted.
 
 ## 2026-10-16 — Customer hosting cutover safety
 
 - **Vercel auto-deploy for every Git branch is disabled** in both repository-level `vercel.json` and `apps/web/vercel.json` via `git.deploymentEnabled: false`; legacy GitHub integration is also disabled. This is covered by a required CI contract test.
 - The **last working Vercel production deployment is intentionally retained temporarily for rollback and existing customer access**. This is **not** an assertion that Cloudflare customer hosting works yet.
 - Existing Cloudflare Pages project `minarvabiz-license-admin` and Workers `minarva-biz-free-ai`, `minarva-biz-license-edge` **are not** a verified hosted customer web application. Do not redirect or delete customer access until a real Cloudflare Worker deployment is tested end-to-end.
-- `apps/web/wrangler.jsonc` is *preview configuration only*. `scripts/frontend-cloudflare-preview-deploy.mjs` fails closed until the locked Next.js version is patched to the supported adapter baseline and pinned OpenNext/Wrangler dependencies are in the lockfile.
+- `apps/web/wrangler.jsonc` targets the separate preview Worker. The compatible adapter and framework versions are pinned; production cutover still requires the acceptance gates below.
 - Before permanent Vercel removal, replace or verify remaining operational URLs including `VITE_SUPPORT_API_URL` in `.github/workflows/release-windows.yml`; verify customer auth, tenant isolation, support requests, CSP/middleware, email recovery, Windows/Hybrid behavior, and rollback.
 - No recurring paid infrastructure or AI service is authorized by this change.
 
@@ -46,8 +60,8 @@ References:
 
 ## Current blockers
 
-- No separate Cloudflare storefront project/deployment and live URL.
-- No verified adapter build against exact Next.js 15 lockfile.
+- Production customer cutover has not been accepted; use the separate preview URL above for validation.
+- Adapter production build and local runtime passed; signed-in production acceptance remains outstanding.
 - No Cloudflare end-to-end login/API/tenant tests.
 - No authenticated self-service signup/trial bootstrap.
 

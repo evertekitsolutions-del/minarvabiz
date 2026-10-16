@@ -26,6 +26,8 @@ jobs:
         run: node scripts/github-actions-hardening-smoke.mjs
       - name: Verify isolated Cloudflare customer preview configuration
         run: node scripts/frontend-cloudflare-config-smoke.mjs
+      - name: Refuse Cloudflare customer authentication bypass
+        run: node scripts/cloudflare-preview-auth-guard.test.mjs
       - name: Audit capability source inventory
         run: node scripts/master-vision-source-inventory.mjs --summary
       - name: Verify linked help workflows
@@ -168,6 +170,52 @@ jobs:
           set -e
           grep -RIlF 'https://ci-supabase.example' apps/web/.next/static/chunks >/dev/null
           grep -RIlF 'sb_publishable_ci_test_key' apps/web/.next/static/chunks >/dev/null
+
+
+
+  cloudflare-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-supabase.example
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_test_key
+      NEXT_PUBLIC_REQUIRE_AUTH: "true"
+      NEXT_PUBLIC_MINARVA_MODE: production
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.0
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build authenticated customer Worker
+        run: node scripts/frontend-cloudflare-preview-deploy.mjs --build-only
+      - name: Validate Worker deployment bundle without publishing
+        run: pnpm --filter @minarvabiz/web exec wrangler deploy --dry-run
+      - name: Start compiled Worker locally
+        shell: bash
+        run: |
+          pnpm --filter @minarvabiz/web exec wrangler dev --ip 127.0.0.1 --port 8787 > /tmp/minarva-worker.log 2>&1 &
+          echo $! > /tmp/minarva-worker.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8787/login >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/minarva-worker.log
+          exit 1
+      - name: Verify compiled Worker pages and middleware
+        run: node scripts/cloudflare-runtime-smoke.mjs
+      - name: Capture Worker diagnostics
+        if: failure()
+        run: cat /tmp/minarva-worker.log || true
+      - name: Stop local Worker
+        if: always()
+        run: test ! -f /tmp/minarva-worker.pid || kill "$(cat /tmp/minarva-worker.pid)" || true
 
 
   web-ui-smoke:
