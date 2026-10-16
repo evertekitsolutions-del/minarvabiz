@@ -1,0 +1,109 @@
+name: Cloudflare Customer Preview Deploy
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+# Manual dispatch is explicit owner intent. Automatic preview deployment is
+# OFF unless repository variable MINARVA_PREVIEW_CD_ENABLED equals "true".
+# This job NEVER deploys to a production route or to License Admin.
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: minarva-customer-preview-deploy
+  cancel-in-progress: false
+
+jobs:
+  customer-preview:
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main' &&
+          vars.MINARVA_PREVIEW_CD_ENABLED == 'true'
+        )
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MINARVA_PREVIEW_EXPECTED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      MINARVA_CLOUDFLARE_PREVIEW_URL: https://minarvabiz-customer-web-preview.minarva-biz.workers.dev
+      MINARVA_MODE: production
+      NEXT_PUBLIC_MINARVA_MODE: production
+      NEXT_PUBLIC_REQUIRE_AUTH: "true"
+      NEXT_PUBLIC_SUPABASE_URL: ${{ vars.MINARVA_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.MINARVA_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.MINARVA_CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.MINARVA_CLOUDFLARE_PREVIEW_API_TOKEN }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - name: Checkout exact approved main SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.MINARVA_PREVIEW_EXPECTED_SHA }}
+          persist-credentials: false
+
+      - name: Install pinned pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.0
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Refuse stale SHA, failed required checks and production Worker configuration
+        run: node scripts/cloudflare-customer-preview-gate.mjs
+
+      - name: Require explicitly configured preview credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error title=Preview deployment not configured::Missing $key. No Worker was modified."
+              exit 1
+            fi
+          done
+
+      - name: Install locked dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Validate exact build input and production authentication
+        run: |
+          node scripts/frontend-cloudflare-config-smoke.mjs
+          node scripts/cloudflare-preview-auth-guard.test.mjs
+          node --test scripts/cloudflare-customer-preview-gate.test.mjs
+
+      - name: Build exact authenticated OpenNext customer Worker
+        run: node scripts/frontend-cloudflare-preview-deploy.mjs --build-only
+
+      - name: Dry-run exact compiled Worker
+        run: pnpm --filter @minarvabiz/web exec wrangler deploy --dry-run
+
+      - name: Recheck main SHA and all release gates immediately before deploy
+        run: node scripts/cloudflare-customer-preview-gate.mjs
+
+      - name: Deploy compiled bundle to isolated Cloudflare preview only
+        env:
+          MINARVA_APPROVE_CLOUDFLARE_PREVIEW_DEPLOY: "1"
+        run: node scripts/frontend-cloudflare-preview-deploy.mjs --deploy-only
+
+      - name: Verify preview security and middleware
+        run: node scripts/cloudflare-runtime-smoke.mjs
+
+      - name: Verify deployed public homepage, login and unknown-route safety
+        run: node scripts/cloudflare-customer-preview-smoke.mjs
+
+      - name: Verify premium homepage actually reached Cloudflare
+        run: node scripts/cloudflare-premium-homepage-live.test.mjs

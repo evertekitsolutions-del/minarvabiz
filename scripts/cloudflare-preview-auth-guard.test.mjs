@@ -58,6 +58,18 @@ assert.equal(process.env.NODE_ENV, "production");
   for (const name of ["MINARVA_MODE", "NEXT_PUBLIC_MINARVA_MODE", "NEXT_PUBLIC_REQUIRE_AUTH", "NODE_ENV"]) delete safeEnv[name];
   const safeBuild = spawnSync(process.execPath, [join(fixture, "scripts/preflight.mjs"), "--build-only"], { env: safeEnv, encoding: "utf8" });
   assert.equal(safeBuild.status, 0, "Build subprocess must force authenticated production mode: " + safeBuild.stderr);
+  const deployEnv = { ...safeEnv, MINARVA_APPROVE_CLOUDFLARE_PREVIEW_DEPLOY: "1" };
+  const withoutBundle = spawnSync(process.execPath, [join(fixture, "scripts/preflight.mjs"), "--deploy-only"], {
+    env: deployEnv, encoding: "utf8",
+  });
+  assert.notEqual(withoutBundle.status, 0);
+  assert.match(withoutBundle.stderr, /No compiled customer Worker/, "Never deploy an absent build");
+  mkdirSync(join(fixture, "apps/web/.open-next"), { recursive: true });
+  writeFileSync(join(fixture, "apps/web/.open-next/worker.js"), "export default {};");
+  const exactBundle = spawnSync(process.execPath, [join(fixture, "scripts/preflight.mjs"), "--deploy-only"], {
+    env: deployEnv, encoding: "utf8",
+  });
+  assert.equal(exactBundle.status, 0, "Deploy-only must reuse an existing authenticated build");
 } finally {
   rmSync(fixture, { recursive: true, force: true });
 }

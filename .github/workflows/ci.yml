@@ -26,6 +26,8 @@ jobs:
         run: node scripts/github-actions-hardening-smoke.mjs
       - name: Verify isolated Cloudflare customer preview configuration
         run: node scripts/frontend-cloudflare-config-smoke.mjs
+      - name: Verify fail-closed Cloudflare customer preview deployment authority
+        run: node --test scripts/cloudflare-customer-preview-gate.test.mjs
       - name: Verify premium public homepage content and navigation
         run: node scripts/public-homepage-design-contract.test.mjs
       - name: Refuse Cloudflare customer authentication bypass
