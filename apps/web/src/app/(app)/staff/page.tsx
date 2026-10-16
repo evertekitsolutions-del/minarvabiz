@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { parseStaffSalaryDraft } from "@/lib/staff-salary-draft";
 import {
   StaffList, StaffDetail, Modal, Button, FormField, inputClass, selectClass,
 } from "@minarvabiz/ui";
@@ -17,6 +18,7 @@ export default function StaffPage() {
   const [payouts, setPayouts] = React.useState<StaffIncentivePayout[]>([]);
   const [rules, setRules] = React.useState<IncentiveRuleRecord[]>([]);
   const [open, setOpen] = React.useState(false);
+  const [staffFormError, setStaffFormError] = React.useState<string | null>(null);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [form, setForm] = React.useState({
     name: "", phone: "", email: "", role: "tailor" as RoleName | "tailor" | "staff", salary: "15000", joiningDate: todayLocal(), status: "active" as "active" | "inactive" | "on_leave", notes: "",
@@ -37,24 +39,47 @@ export default function StaffPage() {
   }
 
   function resetForm() {
+    setStaffFormError(null);
     setEditingId(null);
     setForm({ name: "", phone: "", email: "", role: "tailor", salary: "15000", joiningDate: todayLocal(), status: "active", notes: "" });
   }
 
   function openEdit(member: StaffMember) {
+    setStaffFormError(null);
     setEditingId(member.id);
     setForm({ name: member.name, phone: member.phone || "", email: member.email || "", role: member.role, salary: String(member.salary), joiningDate: member.joiningDate || todayLocal(), status: member.status, notes: member.notes || "" });
     setOpen(true);
   }
 
   function saveStaff() {
-    if (!form.name.trim()) return;
-    const payload = { name: form.name, phone: form.phone || null, email: form.email || null, role: form.role, salary: parseFloat(form.salary) || 0, joiningDate: form.joiningDate || null, status: form.status, notes: form.notes || null };
-    if (editingId) phase6Store.updateStaff(editingId, payload);
-    else phase6Store.createStaff(payload);
-    setOpen(false);
-    resetForm();
-    refresh();
+    setStaffFormError(null);
+    if (!form.name.trim()) {
+      setStaffFormError("Staff name is required.");
+      return;
+    }
+    try {
+      const salary = parseStaffSalaryDraft(form.salary);
+      const payload = {
+        name: form.name.trim(),
+        phone: form.phone || null,
+        email: form.email || null,
+        role: form.role,
+        salary,
+        joiningDate: form.joiningDate || null,
+        status: form.status,
+        notes: form.notes || null,
+      };
+      if (editingId) {
+        if (!phase6Store.updateStaff(editingId, payload)) throw new Error("Staff member no longer exists.");
+      } else {
+        phase6Store.createStaff(payload);
+      }
+      setOpen(false);
+      resetForm();
+      refresh();
+    } catch (error) {
+      setStaffFormError(error instanceof Error ? error.message : "Unable to save staff.");
+    }
   }
 
   const openOrders = ordersStore.listOrders()
@@ -117,6 +142,7 @@ export default function StaffPage() {
         footer={<><Button variant="outline" onClick={() => { setOpen(false); resetForm(); }}>Cancel</Button>
           <Button onClick={saveStaff}>{editingId ? "Update Staff" : "Save Staff"}</Button></>}>
         <div className="space-y-3">
+          {staffFormError && <p role="alert" className="text-sm text-rose-700">{staffFormError}</p>}
           <FormField label="Name *">
             <input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </FormField>

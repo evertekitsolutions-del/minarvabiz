@@ -38,6 +38,8 @@ jobs:
         run: node --experimental-strip-types packages/ui/src/components/suppliers/__tests__/supplier-payables-filter.test.mjs
       - name: Verify strict supplier payment amount before posting
         run: node --experimental-strip-types apps/web/src/lib/__tests__/supplier-payment-draft.test.mjs
+      - name: Verify strict staff salary draft and form error feedback
+        run: node --experimental-strip-types apps/web/src/lib/__tests__/staff-salary-draft.test.mjs
       - name: Verify sales unpaid-only invoice filter
         run: node --experimental-strip-types packages/ui/src/components/sales/__tests__/unpaid-sale-filter.test.mjs
       - name: Verify Sales History customer due collection actions
