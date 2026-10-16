@@ -12,7 +12,7 @@ const response = await fetchPage("/");
 assert.equal(response.status, 200);
 assert.match(response.headers.get("content-security-policy") || "", /nonce-/);
 assert.equal(response.headers.get("x-content-type-options"), "nosniff");
-const html = await response.text();
+const html = (await response.text()).replace(/&amp;/g, "&"); // Next.js escapes literal ampersands in SSR HTML.
 for (const phrase of ["Manage Your Business", "Smarter with", "Windows Offline", "GST & Accounting", "Service Management"]) {
   assert.ok(html.includes(phrase), "Cloudflare preview is stale or incomplete: " + phrase);
 }
