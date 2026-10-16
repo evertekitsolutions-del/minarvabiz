@@ -8,11 +8,12 @@ import { FormField, inputClass } from "../forms/FormField";
 import { PrintPreviewModal } from "../printing/PrintPreviewModal";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
+import type { TemplateId } from "@minarvabiz/business-logic";
 import { canCollectServiceOrderBalance } from "./service-order-collection";
 import {
   SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_FLOW,
   measurementRevisionHistory, ordersStore, buildOrderInvoiceHtml, printOrderInvoice, canAssignServiceOrder,
-  canStartServiceAssignment, canCompleteServiceAssignment,
+  canStartServiceAssignment, canCompleteServiceAssignment, availableServiceWhatsAppTemplates,
 } from "@minarvabiz/business-logic";
 
 function auditReason(entry: AuditLogEntry): string | null {
@@ -59,6 +60,7 @@ export function OrderDetail({
   onAssignStaff,
   onStartAssignment,
   onCompleteAssignment,
+  onShareWhatsApp,
   auditHistory = [],
   onClose,
 }: {
@@ -76,6 +78,7 @@ export function OrderDetail({
   onAssignStaff?: (staffId: string) => { ok: boolean; error?: string };
   onStartAssignment?: (assignmentId: string) => { ok: boolean; error?: string };
   onCompleteAssignment?: (assignmentId: string) => { ok: boolean; error?: string };
+  onShareWhatsApp?: (templateId: TemplateId) => { ok: boolean; error?: string };
   auditHistory?: AuditLogEntry[];
   onClose?: () => void;
 }) {
@@ -91,6 +94,8 @@ export function OrderDetail({
   const [editOpen, setEditOpen] = React.useState(false);
   const [staffToAssign, setStaffToAssign] = React.useState("");
   const [staffAssignError, setStaffAssignError] = React.useState<string | null>(null);
+  const [whatsAppTemplate, setWhatsAppTemplate] = React.useState<TemplateId>("order_received");
+  const [whatsAppError, setWhatsAppError] = React.useState<string | null>(null);
   const [editDeliveryDate, setEditDeliveryDate] = React.useState("");
   const [editNotes, setEditNotes] = React.useState("");
   const [editMaterialDetails, setEditMaterialDetails] = React.useState("");
@@ -118,6 +123,19 @@ export function OrderDetail({
   );
   const availableStaff = staffMembers.filter((member) => member.status === "active" && !assignedStaffIds.has(member.id));
   const canAssignToThisOrder = canAssignStaff && canAssignServiceOrder(order);
+  const whatsAppOptions = availableServiceWhatsAppTemplates(order);
+  const selectedWhatsAppTemplate = whatsAppOptions.find((item) => item.id === whatsAppTemplate)?.id
+    ?? whatsAppOptions[0]?.id;
+  function shareStatusViaWhatsApp() {
+    if (!selectedWhatsAppTemplate || !onShareWhatsApp) return;
+    const result = onShareWhatsApp(selectedWhatsAppTemplate);
+    if (!result.ok) {
+      setWhatsAppError(result.error || "Could not prepare WhatsApp message.");
+      return;
+    }
+    setWhatsAppError(null);
+  }
+
 
   function submitStaffAssignment() {
     if (!onAssignStaff || !staffToAssign || !availableStaff.some((member) => member.id === staffToAssign)) return;
@@ -283,6 +301,28 @@ export function OrderDetail({
           </CardContent>
         </Card>
       </div>
+
+      {onShareWhatsApp && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm font-semibold text-slate-800">Customer WhatsApp updates</CardTitle></CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="min-w-48 flex-1 text-xs font-medium text-slate-600">
+                Predesigned customer message
+                <select className={inputClass + " mt-1"} aria-label="Customer WhatsApp message template"
+                  value={selectedWhatsAppTemplate ?? ""}
+                  onChange={(event) => { setWhatsAppTemplate(event.target.value as TemplateId); setWhatsAppError(null); }}>
+                  {whatsAppOptions.length === 0 && <option value="">No applicable messages</option>}
+                  {whatsAppOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                </select>
+              </label>
+              <Button variant="outline" disabled={!selectedWhatsAppTemplate} onClick={shareStatusViaWhatsApp}>Open WhatsApp</Button>
+            </div>
+            <p className="text-xs text-slate-500">This only opens a prefilled WhatsApp message. Review it and press Send yourself; nothing is sent automatically. For a missing or invalid number, update the customer contact first. You may add your Google review link before sending a feedback request.</p>
+            {whatsAppError && <p role="alert" className="text-sm text-rose-700">{whatsAppError}</p>}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader><CardTitle className="text-sm font-semibold text-slate-800">Staff allocation</CardTitle></CardHeader>
