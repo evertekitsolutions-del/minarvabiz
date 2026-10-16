@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Minarva Biz",
-  description: "Commercial Boutique Billing & Management Software",
+  description: "Minarva Biz — business management software for billing, inventory, service operations and more.",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
