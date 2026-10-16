@@ -53,11 +53,11 @@ export default async function DashboardPage() {
 
   const actions: QuickAction[] = [
     { id: "sale", label: "New Sale", description: "Create Invoice", icon: quickActionIcons.sale, tone: "blue", href: "/sales" },
-    { id: "order", label: "New Order", description: "Add Tailoring Order", icon: quickActionIcons.order, tone: "pink", href: "/services" },
-    { id: "laundry", label: "Laundry In", description: "Add Laundry Item", icon: quickActionIcons.laundry, tone: "cyan", href: "/laundry" },
-    { id: "expense", label: "Expense", description: "Add Expense", icon: quickActionIcons.expense, tone: "green", href: "/expenses" },
-    { id: "purchase", label: "Purchase", description: "Add Purchase", icon: quickActionIcons.purchase, tone: "violet", href: "/purchases" },
-    { id: "customer", label: "Customer", description: "Add New Customer", icon: quickActionIcons.customer, tone: "indigo", href: "/customers" },
+    { id: "order", label: "New Order", description: "Add Tailoring Order", icon: quickActionIcons.order, tone: "pink", href: "/services?action=new" },
+    { id: "laundry", label: "Laundry In", description: "Add Laundry Item", icon: quickActionIcons.laundry, tone: "cyan", href: "/laundry?action=new" },
+    { id: "expense", label: "Expense", description: "Add Expense", icon: quickActionIcons.expense, tone: "green", href: "/expenses?action=new" },
+    { id: "purchase", label: "Purchase", description: "Add Purchase", icon: quickActionIcons.purchase, tone: "violet", href: "/purchases?action=new" },
+    { id: "customer", label: "Customer", description: "Add New Customer", icon: quickActionIcons.customer, tone: "indigo", href: "/customers?action=new" },
     { id: "reports", label: "Reports", description: "View Reports", icon: quickActionIcons.reports, tone: "emerald", href: "/reports" },
     { id: "sms", label: "SMS / WhatsApp", description: "Send Message", icon: quickActionIcons.sms, tone: "teal", href: "/notifications" },
   ];

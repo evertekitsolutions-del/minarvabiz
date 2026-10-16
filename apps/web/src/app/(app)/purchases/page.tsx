@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { isDashboardCreateIntent } from "@/lib/dashboard-quick-create";
 import { PurchaseList, ProcurementPanel, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
 import { phase5Store, ordersStore, procurementStore, store, warehouseStore } from "@minarvabiz/business-logic";
 import type { GoodsReceipt, Purchase, PurchaseInvoice, PurchaseOrder, Product, ServiceOrder, PaymentMethod, Supplier, SupplierPayableAging, WarehouseLocation } from "@minarvabiz/types";
@@ -46,6 +47,12 @@ export default function PurchasesPage() {
   }, []);
 
   React.useEffect(() => { refresh(); }, [refresh]);
+  React.useEffect(() => {
+    if (isDashboardCreateIntent(window.location.search)) {
+      setError(null);
+      setOpen(true);
+    }
+  }, []);
 
   function savePurchase() {
     const result = phase5Store.createPurchase({

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { isDashboardCreateIntent } from "@/lib/dashboard-quick-create";
 import { LaundryList, LaundryForm, LaundryCancellationForm, Modal, Button, FormField, inputClass, selectClass, type LaundryCancellationValues } from "@minarvabiz/ui";
 import { store, phase5Store, phase7Store, assertLimit } from "@minarvabiz/business-logic";
 import type { LaundryOrder, Customer, PaymentMethod, Supplier } from "@minarvabiz/types";
@@ -29,6 +30,12 @@ export default function LaundryPage() {
   }, []);
 
   React.useEffect(() => { refresh(); }, [refresh]);
+  React.useEffect(() => {
+    if (isDashboardCreateIntent(window.location.search)) {
+      setError(null);
+      setMode("outsourced");
+    }
+  }, []);
 
   function handleSubmit(data: {
     customerId: string;

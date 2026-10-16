@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { parseServiceOrderPriceDraft } from "@/lib/service-order-price-draft";
+import { isDashboardCreateIntent } from "@/lib/dashboard-quick-create";
 import {
   OrderList, OrderForm, emptyOrderForm, OrderDetail, Modal, Button, FormField, inputClass,
   type OrderFormValues,
@@ -61,6 +62,13 @@ export default function ServicesOrdersPage() {
   }, [query, status, serviceType, customerId, orderDateFrom, orderDateTo, deliveryDateFrom, deliveryDateTo]);
 
   React.useEffect(() => { refresh(); }, [refresh]);
+  React.useEffect(() => {
+    if (isDashboardCreateIntent(window.location.search)) {
+      setForm(emptyOrderForm());
+      setError(null);
+      setCreateOpen(true);
+    }
+  }, []);
 
   function openCustomerQuickAdd() {
     setCustomerAddError(null);

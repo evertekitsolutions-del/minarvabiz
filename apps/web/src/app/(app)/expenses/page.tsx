@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { isDashboardCreateIntent } from "@/lib/dashboard-quick-create";
 import {
   ExpenseList, PurchaseList, Modal, Button, FormField, inputClass, selectClass,
 } from "@minarvabiz/ui";
@@ -31,6 +32,13 @@ export default function ExpensesPage() {
   }, []);
 
   React.useEffect(() => { refresh(); }, [refresh]);
+  React.useEffect(() => {
+    if (isDashboardCreateIntent(window.location.search)) {
+      setTab("expenses");
+      setError(null);
+      setExpOpen(true);
+    }
+  }, []);
 
   function saveExpense() {
     const result = phase5Store.createExpense({
