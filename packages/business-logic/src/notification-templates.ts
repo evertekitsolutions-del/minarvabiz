@@ -14,6 +14,7 @@ export type TemplateId =
   | "delivery_reminder"
   | "payment_due"
   | "payment_received"
+  | "feedback_request"
   | "low_stock_internal";
 
 export function renderTemplate(
@@ -57,6 +58,11 @@ export function renderTemplate(
         title: "Payment received",
         body: `Dear ${data.customerName || "Customer"}, we received ${data.amount}. Thank you! — ${shop}`,
       };
+    case "feedback_request":
+      return {
+        title: "Customer feedback request",
+        body: `Dear ${data.customerName || "Customer"}, thank you for choosing ${shop} for order ${data.orderNumber}. How was your experience? Please reply with your feedback; if you were happy with our service, we would appreciate a Google review. Thank you!`,
+      };
     case "low_stock_internal":
       return {
         title: "Low stock",
@@ -89,6 +95,7 @@ export const TEMPLATE_OPTIONS: { id: TemplateId; label: string }[] = [
   { id: "order_ready", label: "Ready for pickup" },
   { id: "delivery_reminder", label: "Delivery reminder" },
   { id: "payment_due", label: "Payment reminder" },
+  { id: "feedback_request", label: "Feedback request" },
 ];
 
 
