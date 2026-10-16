@@ -25,6 +25,7 @@ export default function ServicesOrdersPage() {
   const [expenseCategories, setExpenseCategories] = React.useState<ExpenseCategory[]>([]);
   const [staffMembers, setStaffMembers] = React.useState<StaffMember[]>([]);
   const [staffAssignments, setStaffAssignments] = React.useState<StaffAssignment[]>([]);
+  const [allAssignments, setAllAssignments] = React.useState<StaffAssignment[]>([]);
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<OrderStatus | null>(null);
   const [serviceType, setServiceType] = React.useState<ServiceType | null>(null);
@@ -46,6 +47,7 @@ export default function ServicesOrdersPage() {
     setCustomers(store.listCustomers());
     setExpenseCategories(phase5Store.listExpenseCategories());
     setStaffMembers(phase6Store.listStaff({ status: "active" }));
+    setAllAssignments(phase6Store.listAssignments());
     setOrders(ordersStore.listOrders({
       query: query || undefined,
       status: status ?? undefined,
@@ -271,6 +273,8 @@ export default function ServicesOrdersPage() {
         <OrderList
           orders={orders}
           customers={customers}
+          staffMembers={staffMembers}
+          staffAssignments={allAssignments}
           onAdd={() => { setForm(emptyOrderForm()); setCreateOpen(true); }}
           onSearch={setQuery}
           onFilterStatus={setStatus}
