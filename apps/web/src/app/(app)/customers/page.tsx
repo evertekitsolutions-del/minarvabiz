@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { isDashboardCreateIntent } from "@/lib/dashboard-quick-create";
 import { useRouter } from "next/navigation";
 import { CustomerList, CustomerProfile, Modal, Button, FormField, inputClass } from "@minarvabiz/ui";
 import { store, phase6Store, assertLimit, parseCustomerCsv, importCustomersFromCsv, exportCustomersCsv } from "@minarvabiz/business-logic";
@@ -36,6 +37,15 @@ export default function CustomersPage() {
     setList(store.listCustomers(lastSearchRef.current));
   }, []);
   React.useEffect(() => { refresh(); }, [refresh]);
+  React.useEffect(() => {
+    if (isDashboardCreateIntent(window.location.search)) {
+      setEditTarget(null);
+      setProfile(null);
+      setForm(emptyForm);
+      setError(null);
+      setOpen(true);
+    }
+  }, []);
 
 
   function downloadCustomerCsv(content: string, filename: string) {
