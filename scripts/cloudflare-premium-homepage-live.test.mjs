@@ -13,8 +13,10 @@ assert.equal(response.status, 200);
 assert.match(response.headers.get("content-security-policy") || "", /nonce-/);
 assert.equal(response.headers.get("x-content-type-options"), "nosniff");
 const html = await response.text();
+// Next/React safely HTML-escapes ampersands in server-rendered visible text.
+const visibleHtml = html.replaceAll("&amp;", "&");
 for (const phrase of ["Manage Your Business", "Smarter with", "Windows Offline", "GST & Accounting", "Service Management"]) {
-  assert.ok(html.includes(phrase), "Cloudflare preview is stale or incomplete: " + phrase);
+  assert.ok(visibleHtml.includes(phrase), "Cloudflare preview is stale or incomplete: " + phrase);
 }
 for (const section of ["features", "industries", "product-tour", "editions", "download", "faq"]) {
   assert.ok(html.includes('id="' + section + '"'), "Missing anchor: " + section);
