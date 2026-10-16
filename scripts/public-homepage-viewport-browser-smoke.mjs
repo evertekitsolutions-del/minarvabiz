@@ -88,6 +88,16 @@ try {
   assert.ok(phone.quickCount===8 && phone.productTour && phone.businessWorkflow);
   console.log("Responsive 390px homepage PASS",JSON.stringify(phone));
 } finally {
+  // This suite shares a Chrome tab with the downstream commercial E2E smoke.
+  // Reset both viewport AND route; otherwise that smoke reads the marketing page
+  // instead of its expected authenticated/demo dashboard.
   await call("Emulation.clearDeviceMetricsOverride").catch(()=>{});
+  await call("Page.navigate",{url:base+"/dashboard"});
+  for(let i=0;i<60;i++){
+    const restored=await evaluate('location.pathname === "/dashboard" && document.body?.innerText?.includes("Total Sales") && document.body?.innerText?.includes("Total Profit")').catch(()=>false);
+    if(restored) break;
+    if(i===59) throw new Error("Could not restore browser dashboard for downstream smoke");
+    await sleep(200);
+  }
   socket.close();
 }
