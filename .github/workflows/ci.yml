@@ -32,6 +32,10 @@ jobs:
         run: node scripts/public-homepage-design-contract.test.mjs
       - name: Verify accessible interactive product walkthrough and marketing honesty
         run: node scripts/public-product-tour-contract.test.mjs
+      - name: Verify portable responsive design review preview
+        run: node scripts/website-design-review-contract.test.mjs
+      - name: Verify isolated design review website is publicly reachable and honest
+        run: node scripts/website-design-review-live-smoke.mjs
       - name: Refuse Cloudflare customer authentication bypass
         run: node scripts/cloudflare-preview-auth-guard.test.mjs
       - name: Audit capability source inventory
