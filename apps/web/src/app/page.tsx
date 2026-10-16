@@ -46,15 +46,15 @@ function Logo({ inverse = false }: { inverse?: boolean }) {
     <span className={"text-[21px] font-black tracking-[-0.06em] " + (inverse ? "text-white" : "text-[#091e43]")}>Minarva <span className="text-[#1764ed]">Biz</span></span>
   </a>;
 }
-const features: { title: string; detail: string; icon: IconName; tone: string; support: string }[] = [
-  { title: "Billing & POS", detail: "Sales, quotations, payments and print-ready invoices.", icon: "receipt", tone: "bg-[#e7f0ff] text-[#155ee5]", support: "SALES" },
-  { title: "Inventory", detail: "Products, suppliers, stock movement and reorder visibility.", icon: "box", tone: "bg-[#ebf4ff] text-[#4382e9]", support: "STOCK" },
-  { title: "GST & Accounting", detail: "Tax-aware invoices, expenses and business accounts.", icon: "tax", tone: "bg-[#fff0e5] text-[#ee7e20]", support: "ACCOUNTS" },
-  { title: "Service Management", detail: "Service registration, allocations, jobs and progress tracking.", icon: "tool", tone: "bg-[#e5f4ff] text-[#1294c9]", support: "SERVICE" },
-  { title: "Tailoring", detail: "Measurements, alterations and made-to-order workflows.", icon: "shirt", tone: "bg-[#f2eaff] text-[#8652de]", support: "ORDERS" },
-  { title: "Laundry", detail: "Laundry and ironing orders, tracking and handover.", icon: "laundry", tone: "bg-[#ffe9f1] text-[#d94a79]", support: "DELIVERY" },
-  { title: "Customers & CRM", detail: "Customer records and balances beside daily operations.", icon: "users", tone: "bg-[#e9f9ef] text-[#16945c]", support: "CUSTOMERS" },
-  { title: "Reports & Analytics", detail: "Management visibility across sales, purchases and operations.", icon: "chart", tone: "bg-[#e4f7f4] text-[#138d89]", support: "INSIGHTS" },
+const features: { title: string; slug: string; detail: string; icon: IconName; tone: string; support: string }[] = [
+  { title: "Billing & POS", slug:"billing-pos", detail: "Sales, quotations, payments and print-ready invoices.", icon: "receipt", tone: "bg-[#e7f0ff] text-[#155ee5]", support: "SALES" },
+  { title: "Inventory", slug:"inventory", detail: "Products, suppliers, stock movement and reorder visibility.", icon: "box", tone: "bg-[#ebf4ff] text-[#4382e9]", support: "STOCK" },
+  { title: "GST & Accounting", slug:"gst-accounting", detail: "Tax-aware invoices, expenses and business accounts.", icon: "tax", tone: "bg-[#fff0e5] text-[#ee7e20]", support: "ACCOUNTS" },
+  { title: "Service Management", slug:"service-management", detail: "Service registration, allocations, jobs and progress tracking.", icon: "tool", tone: "bg-[#e5f4ff] text-[#1294c9]", support: "SERVICE" },
+  { title: "Tailoring", slug:"tailoring", detail: "Measurements, alterations and made-to-order workflows.", icon: "shirt", tone: "bg-[#f2eaff] text-[#8652de]", support: "ORDERS" },
+  { title: "Laundry", slug:"laundry", detail: "Laundry and ironing orders, tracking and handover.", icon: "laundry", tone: "bg-[#ffe9f1] text-[#d94a79]", support: "DELIVERY" },
+  { title: "Customers & CRM", slug:"customers-crm", detail: "Customer records and balances beside daily operations.", icon: "users", tone: "bg-[#e9f9ef] text-[#16945c]", support: "CUSTOMERS" },
+  { title: "Reports & Analytics", slug:"reports-analytics", detail: "Management visibility across sales, purchases and operations.", icon: "chart", tone: "bg-[#e4f7f4] text-[#138d89]", support: "INSIGHTS" },
 ];
 const industries: {title:string;description:string;icon:IconName;accent:string;scene:string;slug:string}[] = [
   {title:"Retail Store",slug:"retail-store",description:"Point of sale, product stock and purchases",icon:"store",accent:"from-[#fef1d8] via-[#fce2bb] to-[#edb881]",scene:"Shelf & checkout"},
@@ -145,7 +145,7 @@ export default function PublicHomePage() {
           <p className="mb-3 text-[10px] font-extrabold uppercase tracking-[0.15em] text-[#3973bf]">Explore 8 connected business modules</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
             {features.map((item) => (
-              <a key={item.title} href="#features" className="flex min-h-[58px] items-center gap-2.5 rounded-xl border border-[#e0eafb] bg-white px-3 py-2.5 text-[12px] font-bold leading-4 text-[#20436d] transition hover:border-[#9cc1fc] hover:bg-[#edf5ff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1464ed]">
+              <a key={item.slug} href={"/features/"+item.slug} className="flex min-h-[58px] items-center gap-2.5 rounded-xl border border-[#e0eafb] bg-white px-3 py-2.5 text-[12px] font-bold leading-4 text-[#20436d] transition hover:border-[#9cc1fc] hover:bg-[#edf5ff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1464ed]">
                 <span className={"grid size-9 shrink-0 place-items-center rounded-lg "+item.tone}><Icon name={item.icon} className="size-4.5"/></span>
                 <span>{item.title}</span>
               </a>
@@ -159,12 +159,12 @@ export default function PublicHomePage() {
           <p className="max-w-[385px] text-sm leading-7 text-[#657b93]">Practical tools for everyday operations, from a busy checkout to the service team and business owner.</p>
         </div>
         <div className="mt-11 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {features.map((f,i)=><article key={f.title} className="group rounded-[20px] border border-[#e1eaf5] bg-white p-6 transition hover:-translate-y-1 hover:border-[#bdd6fb] hover:shadow-[0_18px_40px_rgba(29,83,145,.09)]">
+          {features.map((f,i)=><a key={f.slug} href={"/features/"+f.slug} aria-label={"Explore "+f.title+" workflows"} className="group rounded-[20px] border border-[#e1eaf5] bg-white p-6 transition hover:-translate-y-1 hover:border-[#bdd6fb] hover:shadow-[0_18px_40px_rgba(29,83,145,.09)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1662ec]">
             <div className="flex items-start justify-between"><span className={"grid size-12 place-items-center rounded-2xl "+f.tone}><Icon name={f.icon} className="size-6"/></span><span className="text-xs font-extrabold text-[#aac0db]">{String(i+1).padStart(2,"0")}</span></div>
             <p className="mt-7 text-[10px] font-extrabold tracking-[0.14em] text-[#3770dc]">{f.support}</p>
             <h3 className="mt-2 text-lg font-black tracking-tight text-[#152d4c]">{f.title}</h3>
-            <p className="mt-3 text-[13px] leading-6 text-[#657a90]">{f.detail}</p>
-          </article>)}
+            <p className="mt-3 text-[13px] leading-6 text-[#657a90]">{f.detail}</p><span className="mt-5 inline-flex items-center gap-2 text-[11px] font-black text-[#1d65d8] group-hover:underline">Explore feature <span aria-hidden="true">→</span></span>
+          </a>)}
         </div>
         <p className="mt-5 text-xs leading-6 text-[#6e8296]">Feature availability depends on edition and verified deployment readiness.</p>
       </section>
@@ -290,6 +290,10 @@ export default function PublicHomePage() {
       <nav aria-label="Industry guides" className="mx-auto flex max-w-[1720px] flex-wrap items-center gap-x-5 gap-y-3 border-t border-[#dce8f6] px-5 py-5 text-[11px] lg:px-9">
         <span className="font-black uppercase tracking-wide text-[#6b85a5]">Browse industries</span>
         {industries.map(ind=><a key={ind.slug} href={"/industries/"+ind.slug} className="font-semibold text-[#315a89] hover:text-[#175de2] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1562ee]">{ind.title}</a>)}
+      </nav>
+      <nav aria-label="Feature guides" className="mx-auto flex max-w-[1720px] flex-wrap items-center gap-3 border-t border-[#dce8f6] px-5 py-4 text-[11px] font-bold lg:px-9">
+        <span className="text-[#6683a2]">Explore features</span>
+        {features.map(item=><a key={item.slug} href={"/features/"+item.slug} className="text-[#245897] hover:text-[#145de4] hover:underline">{item.title}</a>)}
       </nav>
       <div className="mx-auto flex max-w-[1720px] flex-col justify-between gap-3 border-t border-[#dce8f6] px-5 py-5 text-[11px] text-[#6682a0] sm:flex-row lg:px-9"><span>© Minarva Biz · A connected business platform.</span><span>Online · Windows Offline · Hybrid</span></div>
     </footer>

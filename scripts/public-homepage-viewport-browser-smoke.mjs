@@ -60,7 +60,8 @@ async function inspect(width,height,mobile) {
         contentWidth:grid.getBoundingClientRect().width,
         headingPx:parseFloat(getComputedStyle(heading).fontSize),
         quickTop:quick.getBoundingClientRect().top,
-        quickCount:quick.querySelectorAll('a[href="#features"]').length,
+        quickCount:quick.querySelectorAll('a[href^="/features/"]').length,
+        quickUnique:new Set([...quick.querySelectorAll('a[href^="/features/"]')].map(a=>a.getAttribute("href"))).size,
         imageWidth:visual.getBoundingClientRect().width,
         horizontalOverflow:document.documentElement.scrollWidth - innerWidth,
         mobileMenuVisible:(() => { const el=document.querySelector('nav[aria-label="Mobile navigation"]');return !!el && getComputedStyle(el).display !== "none" })(),
@@ -68,7 +69,7 @@ async function inspect(width,height,mobile) {
         businessWorkflow:!!document.querySelector('#workflows'),
       };
     })()`);
-    if (d && d.width===width && d.quickCount===8 && d.imageWidth>0 && d.productTour && d.businessWorkflow) return d;
+    if (d && d.width===width && d.quickCount===8 && d.quickUnique===8 && d.imageWidth>0 && d.productTour && d.businessWorkflow) return d;
     await sleep(250);
   }
   throw new Error("Homepage not ready at viewport "+width);
