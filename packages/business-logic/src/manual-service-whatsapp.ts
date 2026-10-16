@@ -8,6 +8,7 @@ export const SERVICE_WHATSAPP_TEMPLATES: ReadonlyArray<{ id: TemplateId; label: 
   { id: "order_ready", label: "Ready for pickup" },
   { id: "delivery_reminder", label: "Delivery reminder" },
   { id: "payment_due", label: "Payment reminder" },
+  { id: "feedback_request", label: "Feedback and Google review" },
 ];
 
 /** Hide communications that would contradict the order's present lifecycle. */
@@ -21,6 +22,7 @@ export function availableServiceWhatsAppTemplates(
     if (id === "trial_ready") return active && order.status === "qc";
     if (id === "order_ready") return order.status === "ready_to_deliver";
     if (id === "delivery_reminder") return active && Boolean(order.deliveryDate);
+    if (id === "feedback_request") return order.status === "delivered";
     if (id === "payment_due") {
       return order.status !== "cancelled" &&
         Number.isFinite(order.balance) && order.balance > 0 &&
