@@ -14,6 +14,8 @@ export function StaffDetail({
   productivity,
   onAssign,
   onCompleteAssignment,
+  onStartAssignment,
+  actionError,
   onMarkPaid,
   onClose,
   ordersForAssign,
@@ -25,6 +27,8 @@ export function StaffDetail({
   productivity: { assigned: number; completed: number; totalIncentive: number; unpaidIncentive: number };
   onAssign?: (orderId: string) => void;
   onCompleteAssignment?: (id: string) => void;
+  onStartAssignment?: (id: string) => void;
+  actionError?: string | null;
   onMarkPaid?: (id: string) => void;
   onClose?: () => void;
   ordersForAssign?: Array<{ id: string; label: string }>;
@@ -76,6 +80,7 @@ export function StaffDetail({
         </Card>
       )}
 
+      {actionError && <p role="alert" className="rounded-lg border border-rose-200 p-3 text-sm text-rose-700">{actionError}</p>}
       <Card>
         <CardHeader><CardTitle className="text-sm font-semibold">Assignments</CardTitle></CardHeader>
         <CardContent className="space-y-2">
@@ -86,11 +91,18 @@ export function StaffDetail({
                 <div className="font-medium">{a.orderNumber}</div>
                 <div className="text-xs text-slate-500">{a.serviceType} · {a.status}</div>
               </div>
-              {a.status === "assigned" && onCompleteAssignment && (
-                <Button size="sm" variant="outline" onClick={() => onCompleteAssignment(a.id)}>
-                  Complete
-                </Button>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {a.status === "assigned" && onStartAssignment && (
+                  <Button size="sm" variant="outline" onClick={() => onStartAssignment(a.id)}>
+                    Start Work
+                  </Button>
+                )}
+                {(a.status === "assigned" || a.status === "in_progress") && onCompleteAssignment && (
+                  <Button size="sm" variant="outline" onClick={() => onCompleteAssignment(a.id)}>
+                    Complete Work
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </CardContent>

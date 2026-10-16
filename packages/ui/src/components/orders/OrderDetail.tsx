@@ -12,6 +12,7 @@ import { canCollectServiceOrderBalance } from "./service-order-collection";
 import {
   SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_FLOW,
   measurementRevisionHistory, ordersStore, buildOrderInvoiceHtml, printOrderInvoice, canAssignServiceOrder,
+  canStartServiceAssignment, canCompleteServiceAssignment,
 } from "@minarvabiz/business-logic";
 
 function auditReason(entry: AuditLogEntry): string | null {
@@ -56,6 +57,8 @@ export function OrderDetail({
   staffAssignments = [],
   canAssignStaff = false,
   onAssignStaff,
+  onStartAssignment,
+  onCompleteAssignment,
   auditHistory = [],
   onClose,
 }: {
@@ -71,6 +74,8 @@ export function OrderDetail({
   staffAssignments?: StaffAssignment[];
   canAssignStaff?: boolean;
   onAssignStaff?: (staffId: string) => { ok: boolean; error?: string };
+  onStartAssignment?: (assignmentId: string) => { ok: boolean; error?: string };
+  onCompleteAssignment?: (assignmentId: string) => { ok: boolean; error?: string };
   auditHistory?: AuditLogEntry[];
   onClose?: () => void;
 }) {
@@ -122,6 +127,21 @@ export function OrderDetail({
       return;
     }
     setStaffToAssign("");
+    setStaffAssignError(null);
+  }
+
+  function transitionStaffAssignment(assignment: StaffAssignment, action: "start" | "complete") {
+    const allowed = action === "start"
+      ? canStartServiceAssignment(assignment, order)
+      : canCompleteServiceAssignment(assignment, order);
+    if (!canAssignStaff || !allowed) return;
+    const callback = action === "start" ? onStartAssignment : onCompleteAssignment;
+    if (!callback) return;
+    const result = callback(assignment.id);
+    if (!result.ok) {
+      setStaffAssignError(result.error || "Unable to change staff assignment.");
+      return;
+    }
     setStaffAssignError(null);
   }
 
@@ -272,7 +292,15 @@ export function OrderDetail({
               {staffAssignments.filter((assignment) => assignment.status !== "cancelled").map((assignment) => (
                 <li key={assignment.id} className="flex flex-wrap items-center justify-between gap-2">
                   <span>{assignment.staffName || assignment.staffId}</span>
-                  <span className="text-xs text-slate-500">{assignment.status.replaceAll("_", " ")} · {new Date(assignment.assignedAt).toLocaleDateString("en-IN")}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-500">{assignment.status.replaceAll("_", " ")} · {new Date(assignment.assignedAt).toLocaleDateString("en-IN")}</span>
+                    {canAssignStaff && onStartAssignment && canStartServiceAssignment(assignment, order) && (
+                      <Button size="sm" variant="outline" onClick={() => transitionStaffAssignment(assignment, "start")}>Start Work</Button>
+                    )}
+                    {canAssignStaff && onCompleteAssignment && canCompleteServiceAssignment(assignment, order) && (
+                      <Button size="sm" variant="outline" onClick={() => transitionStaffAssignment(assignment, "complete")}>Complete Work</Button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

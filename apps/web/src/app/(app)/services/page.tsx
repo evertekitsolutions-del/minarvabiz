@@ -214,6 +214,24 @@ export default function ServicesOrdersPage() {
     }
   }
 
+  function handleStaffTransition(assignmentId: string, action: "start" | "complete"): { ok: boolean; error?: string } {
+    if (!selected) return { ok: false, error: "Select a service order first." };
+    try {
+      const current = phase6Store.listAssignments({ orderId: selected.id })
+        .find((assignment) => assignment.id === assignmentId);
+      if (!current) return { ok: false, error: "Assignment does not belong to this service order." };
+      const result = action === "start"
+        ? phase6Store.startAssignment(assignmentId)
+        : phase6Store.completeAssignment(assignmentId);
+      if (!result) return { ok: false, error: "Assignment is no longer eligible for this change. Refresh the order." };
+      setStaffAssignments(phase6Store.listAssignments({ orderId: selected.id }));
+      refresh();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Staff assignment update failed." };
+    }
+  }
+
   function handleExpense(input: { description: string; amount: number; categoryId: string; paymentMethod: PaymentMethod }) {
     if (!selected) return;
     try {
@@ -274,6 +292,8 @@ export default function ServicesOrdersPage() {
           staffAssignments={staffAssignments}
           canAssignStaff={can("orders.assign")}
           onAssignStaff={handleStaffAssignment}
+          onStartAssignment={(id) => handleStaffTransition(id, "start")}
+          onCompleteAssignment={(id) => handleStaffTransition(id, "complete")}
           onStatusChange={handleStatus}
           onAddExpense={handleExpense}
           onCollectBalance={(order) => router.push(`/payments?customerId=${encodeURIComponent(order.customerId)}`)}
