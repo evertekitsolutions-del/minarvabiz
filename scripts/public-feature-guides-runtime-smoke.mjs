@@ -15,7 +15,9 @@ for(const [slug,title] of entries) {
   assert.match(res.headers.get("content-type")||"",/text\/html/i);
   assert.ok(res.headers.get("content-security-policy"),"CSP missing "+slug);
   const html=await res.text();
-  for(const phrase of ["Minarva Biz",title,"How the workflow fits together",
+  const encodedTitle=title.replace(/&/g,"&amp;");
+  assert.ok(html.includes(title)||html.includes(encodedTitle),"Feature "+slug+" missing heading "+title);
+  for(const phrase of ["Minarva Biz","How the workflow fits together",
     "What it brings together","Illustrative workflow","Feature availability depends on edition",
     'href="/login"','href="/#features"',"releases/tag/v1.0.15"]) {
     assert.ok(html.includes(phrase),"Feature "+slug+" missing "+phrase);
