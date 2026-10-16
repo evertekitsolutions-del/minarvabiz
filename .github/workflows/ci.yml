@@ -36,6 +36,8 @@ jobs:
         run: node scripts/desktop-homepage-density-contract.test.mjs
       - name: Verify six industry-specific product workflow guides and truthful content
         run: node --experimental-strip-types scripts/public-industry-guides-contract.test.mjs
+      - name: Verify eight product feature detail guides and accessible customer paths
+        run: node --experimental-strip-types scripts/public-feature-guides-contract.test.mjs
       - name: Verify new Minarva Biz logo and browser icon consistency
         run: node scripts/minarva-biz-logo-contract.test.mjs
       - name: Verify accessible interactive product walkthrough and marketing honesty
