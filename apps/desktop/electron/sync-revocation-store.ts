@@ -211,6 +211,18 @@ export function createNativeRevocationStore(trust: NativeRevocationStoreTrust) {
           nowMs: now,
         });
         if (!outcome.ok) throw Error("b1_proof_rejected: " + outcome.code);
+        if (previous) {
+          // Revocations are one-way for this enrollment. A later signed
+          // snapshot may add revocations, never silently clear an older one.
+          // Fresh enrollment uses a different device identity and journal.
+          const old = verify(previous, previous.acceptedAtMs, previous.acceptedAtMs);
+          const credentials = new Set(outcome.snapshot.revokedCredentialIds);
+          const branches = new Set(outcome.snapshot.revokedBranchIds);
+          if (old.revokedCredentialIds.some(id => !credentials.has(id)) ||
+              old.revokedBranchIds.some(id => !branches.has(id))) {
+            throw Error("b1_proof_rejected: revocations must be monotonic");
+          }
+        }
         const stored: Stored = {
           version: 1, sequence: outcome.snapshot.sequence,
           acceptedAtMs: now, sha256: sha256(token), token,
