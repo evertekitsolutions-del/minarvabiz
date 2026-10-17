@@ -205,3 +205,87 @@ SELECT test.ok((SELECT count(*) FROM public.sync_device_authority_audit)=5,
  'immutable audit entries: request/approval/grant/grant revoke/device revoke');
 RESET ROLE;
 SELECT 'B1 tenant/branch RLS, lifecycle, cross-tenant FK and audit PASS' AS result;
+
+
+-- One-time enrollment challenge is strictly server-only, tenant-bound and
+-- consumed atomically. Proof signature verification occurs in native/server
+-- code, never inside this SQL function.
+SET ROLE service_role;
+INSERT INTO public.sync_device_enrollments
+  (org_id, device_id, actor_user_id, ed25519_public_key)
+VALUES ('10000000-0000-4000-8000-000000000001',
+ 'da000000-0000-4000-8000-000000000005',
+ 'a0000000-0000-4000-8000-000000000002',
+ 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+INSERT INTO public.sync_device_enrollment_challenges
+  (org_id,device_id,challenge_id,actor_user_id,branch_id,nonce)
+VALUES (
+ '10000000-0000-4000-8000-000000000001',
+ 'da000000-0000-4000-8000-000000000005',
+ 'ca000000-0000-4000-8000-000000000005',
+ 'a0000000-0000-4000-8000-000000000002',
+ 'aa000000-0000-4000-8000-000000000001',
+ 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+);
+DO $test_challenge$
+DECLARE
+  accepted boolean;
+BEGIN
+  -- Wrong scope or nonce cannot burn a valid challenge.
+  SELECT private.b1_consume_sync_enrollment_challenge(
+    '10000000-0000-4000-8000-000000000001',
+    'da000000-0000-4000-8000-000000000005',
+    'ca000000-0000-4000-8000-000000000005',
+    'a0000000-0000-4000-8000-000000000002',
+    'aa000000-0000-4000-8000-000000000001',
+    'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA'
+  ) INTO accepted;
+  IF accepted THEN RAISE EXCEPTION 'Incorrect nonce consumed challenge'; END IF;
+  SELECT private.b1_consume_sync_enrollment_challenge(
+    '10000000-0000-4000-8000-000000000001',
+    'da000000-0000-4000-8000-000000000005',
+    'ca000000-0000-4000-8000-000000000005',
+    'a0000000-0000-4000-8000-000000000002',
+    'aa000000-0000-4000-8000-000000000001',
+    'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+  ) INTO accepted;
+  IF NOT accepted THEN RAISE EXCEPTION 'First challenge consume failed'; END IF;
+  SELECT private.b1_consume_sync_enrollment_challenge(
+    '10000000-0000-4000-8000-000000000001',
+    'da000000-0000-4000-8000-000000000005',
+    'ca000000-0000-4000-8000-000000000005',
+    'a0000000-0000-4000-8000-000000000002',
+    'aa000000-0000-4000-8000-000000000001',
+    'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+  ) INTO accepted;
+  IF accepted THEN RAISE EXCEPTION 'Consumed challenge was replayable'; END IF;
+END
+$test_challenge$;
+RESET ROLE;
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','a0000000-0000-4000-8000-000000000001',false);
+SELECT test.denied($q$
+ SELECT * FROM public.sync_device_enrollment_challenges
+$q$,'42501','authenticated clients cannot read enrollment nonce');
+SELECT test.denied($q$
+ INSERT INTO public.sync_device_enrollment_challenges
+  (org_id,device_id,challenge_id,actor_user_id,branch_id,nonce)
+ VALUES ('10000000-0000-4000-8000-000000000001',
+ 'da000000-0000-4000-8000-000000000005',
+ 'ca000000-0000-4000-8000-000000000006',
+ 'a0000000-0000-4000-8000-000000000002',
+ 'aa000000-0000-4000-8000-000000000001',
+ 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+$q$,'42501','authenticated clients cannot mint challenges');
+SELECT test.denied($q$
+ SELECT private.b1_consume_sync_enrollment_challenge(
+  '10000000-0000-4000-8000-000000000001',
+  'da000000-0000-4000-8000-000000000005',
+  'ca000000-0000-4000-8000-000000000005',
+  'a0000000-0000-4000-8000-000000000002',
+  'aa000000-0000-4000-8000-000000000001',
+  'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+$q$,'42501','authenticated clients cannot consume challenges');
+RESET ROLE;
+SELECT 'B1 one-time server-only enrollment challenge PASS' AS result;
