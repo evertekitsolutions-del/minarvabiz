@@ -86,6 +86,7 @@ export function signDeviceAuthorityDraftServerOnly(input: DeviceAuthorityServerS
       p.notBeforeMs < p.issuedAtMs ||
       p.expiresAtMs <= p.notBeforeMs ||
       p.expiresAtMs - p.issuedAtMs > MAX_TTL_MS ||
+      p.issuedAtMs < input.trustedNowMs - MAX_SKEW_MS ||
       p.issuedAtMs > input.trustedNowMs + MAX_SKEW_MS ||
       p.notBeforeMs > input.trustedNowMs + MAX_SKEW_MS ||
       input.trustedNowMs >= p.expiresAtMs)
