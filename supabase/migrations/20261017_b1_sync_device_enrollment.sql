@@ -344,6 +344,11 @@ BEGIN
       WHERE d.org_id = c.org_id AND d.device_id = c.device_id
         AND d.actor_user_id = c.actor_user_id AND d.status = 'pending'
     )
+    AND EXISTS (
+      SELECT 1 FROM public.branches b
+      WHERE b.org_id = c.org_id AND b.id = c.branch_id
+        AND b.is_active AND b.deleted_at IS NULL
+    )
   RETURNING c.challenge_id INTO consumed_id;
   RETURN consumed_id IS NOT NULL;
 END
