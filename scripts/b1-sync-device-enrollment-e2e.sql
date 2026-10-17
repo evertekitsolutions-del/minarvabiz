@@ -27,6 +27,13 @@ AS $$
 $$;
 REVOKE ALL ON FUNCTION public.user_has_org_role(uuid,text[]) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.user_has_org_role(uuid,text[]) TO authenticated;
+ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
+GRANT SELECT ON public.organization_members TO authenticated;
+CREATE POLICY b1_members_read ON public.organization_members FOR SELECT
+ TO authenticated USING (
+   user_id=auth.uid()
+   OR public.user_has_org_role(org_id,ARRAY['super_admin','admin']::text[])
+ );
 CREATE TABLE public.branches (
   id uuid PRIMARY KEY,
   org_id uuid REFERENCES public.organizations(id),
