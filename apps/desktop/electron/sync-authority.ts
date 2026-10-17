@@ -54,6 +54,7 @@ export interface DeviceAuthorityVerificationContext {
   readonly expectedBranchId: string;
   /** Previously verified, durable local revocation snapshot. */
   readonly revokedCredentialIds: ReadonlySet<string>;
+  readonly revokedBranchIds: ReadonlySet<string>;
   readonly lastTrustedRevocationCheckMs: number;
   /** Persisted high-water time; prevents trivial wall-clock rollback. */
   readonly lastTrustedClockMs: number;
@@ -134,6 +135,17 @@ export function verifyNativeDeviceAuthority(
     return failure("invalid_token");
   }
   if (!payload) return failure("invalid_token");
+  // Single canonical UTF-8 representation rejects duplicate JSON keys, escaped
+  // alternate spellings and parser-dependent payload interpretations.
+  const canonicalBody = JSON.stringify({
+    type: payload.type, version: payload.version, keyId: payload.keyId,
+    credentialId: payload.credentialId, orgId: payload.orgId,
+    deviceId: payload.deviceId, actorUserId: payload.actorUserId,
+    role: payload.role, allowedBranchIds: payload.allowedBranchIds,
+    issuedAtMs: payload.issuedAtMs, notBeforeMs: payload.notBeforeMs,
+    expiresAtMs: payload.expiresAtMs,
+  });
+  if (body.toString("utf8") !== canonicalBody) return failure("invalid_token");
   if (payload.keyId !== context.trustedKeyId ||
       !KEY_ID.test(context.trustedKeyId) ||
       !/^[0-9a-f]{64}$/i.test(context.pinnedEd25519PublicKeyHex)) {
@@ -170,8 +182,10 @@ export function verifyNativeDeviceAuthority(
       payload.issuedAtMs > context.nowMs + MAX_CLOCK_SKEW_MS) {
     return failure("expired");
   }
-  if (!(context.revokedCredentialIds instanceof Set)) return failure("revocation_stale");
-  if (context.revokedCredentialIds.has(payload.credentialId)) return failure("revoked");
+  if (!(context.revokedCredentialIds instanceof Set) ||
+      !(context.revokedBranchIds instanceof Set)) return failure("revocation_stale");
+  if (context.revokedCredentialIds.has(payload.credentialId) ||
+      context.revokedBranchIds.has(context.expectedBranchId)) return failure("revoked");
   if (context.nowMs - context.lastTrustedRevocationCheckMs > MAX_REVOCATION_AGE_MS)
     return failure("revocation_stale");
 
