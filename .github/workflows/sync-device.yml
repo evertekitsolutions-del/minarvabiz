@@ -20,4 +20,4 @@ jobs:
         with:
           node-version: 24
       - name: Verify durable identity, concurrency, corruption and retry
-        run: node --test scripts/desktop-sync-device.test.mjs scripts/desktop-sync-authority.test.mjs scripts/desktop-sync-revocations.test.mjs packages/business-logic/src/__tests__/sync-device.test.mjs
+        run: node --test scripts/desktop-sync-device.test.mjs scripts/desktop-sync-authority.test.mjs scripts/desktop-sync-revocations.test.mjs scripts/desktop-sync-revocation-store.test.mjs packages/business-logic/src/__tests__/sync-device.test.mjs
