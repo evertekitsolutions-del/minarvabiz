@@ -37,9 +37,16 @@ async function sandbox(t){
   t.after(()=>fs.rm(dir,{recursive:true,force:true}));
   return dir;
 }
+const trustedAnchors = new Map();
 function options(userData,clock){
   return {userData,expectedOrgId:orgId,expectedDeviceId:deviceId,
-    trustedKeyId:"revocation-k1",pinnedEd25519PublicKeyHex:pub,nowMs:()=>clock.now};
+    trustedKeyId:"revocation-k1",pinnedEd25519PublicKeyHex:pub,nowMs:()=>clock.now,
+    anchor:{
+      read:async()=>structuredClone(trustedAnchors.get(userData) ??
+        {sequence:0,tokenSha256:null,acceptedAtMs:0}),
+      write:async next=>{ trustedAnchors.set(userData,structuredClone(next)); },
+    },
+  };
 }
 function journal(root){
   return path.join(root,"b1-revocations",orgId+"-"+deviceId);
@@ -123,4 +130,55 @@ test("two independent writers cannot replace a committed sequence",async t=>{
   const values=await Promise.allSettled([a.accept(signed(1)),b.accept(signed(1))]);
   assert.equal(values.filter(v=>v.status==="fulfilled").length,1);
   assert.equal((await a.recover()).sequence,1);
+});
+
+
+test("deleting latest journal record cannot bypass separately anchored sequence", async t=>{
+  const dir=await sandbox(t), clock={now:nowBase};
+  const store=createNativeRevocationStore(options(dir,clock));
+  await store.accept(signed(15));
+  await store.accept(signed(16));
+  await fs.unlink(path.join(journal(dir),filename(16)));
+  await assert.rejects(store.recover(),/b1_state_rollback/);
+  await assert.rejects(store.accept(signed(17)),/b1_state_rollback/);
+  await fs.unlink(path.join(journal(dir),filename(15)));
+  await assert.rejects(store.recover(),/b1_state_rollback/,
+    "Removing all journal records must not be confused with fresh enrollment");
+});
+
+test("replacing a signed record with another valid one at the same sequence fails against anchor hash",async t=>{
+  const dir=await sandbox(t), clock={now:nowBase};
+  const store=createNativeRevocationStore(options(dir,clock));
+  await store.accept(signed(19));
+  const otherSigned=signed(19,{revokedCredentialIds:[],revokedBranchIds:[]});
+  const file=path.join(journal(dir),filename(19));
+  const record=JSON.parse(await fs.readFile(file,"utf8"));
+  record.token=otherSigned;
+  record.sha256=(await import("node:crypto")).createHash("sha256")
+    .update(otherSigned).digest("hex");
+  await fs.writeFile(file,JSON.stringify(record));
+  await assert.rejects(store.recover(),/b1_state_rollback/);
+});
+
+test("failed external anchor commit never publishes usable authority",async t=>{
+  const dir=await sandbox(t),clock={now:nowBase};
+  const config=options(dir,clock);
+  config.anchor.write=async()=>{throw Error("simulated OS secure storage failure");};
+  const store=createNativeRevocationStore(config);
+  await assert.rejects(store.accept(signed(1)),/simulated OS secure storage failure/);
+  assert.deepEqual(await fs.readdir(journal(dir)),[filename(1)],
+    "Staged signed journal remains for explicit repair; writer lock must be released");
+  await assert.rejects(store.recover(),/b1_state_rollback/,
+    "Unsigned anchor update cannot silently gain authority on reboot");
+  await assert.rejects(store.accept(signed(2)),/b1_state_rollback/,
+    "No further operations until native recovery explicitly reconciles anchor");
+});
+
+test("malformed external trust anchor is never silently treated as first enrollment",async t=>{
+  const dir=await sandbox(t),clock={now:nowBase};
+  const config=options(dir,clock);
+  config.anchor.read=async()=>({sequence:0,tokenSha256:"0".repeat(64),acceptedAtMs:0});
+  const store=createNativeRevocationStore(config);
+  await assert.rejects(store.accept(signed(1)),/b1_anchor_untrusted/);
+  await assert.rejects(store.recover(),/b1_anchor_untrusted/);
 });
