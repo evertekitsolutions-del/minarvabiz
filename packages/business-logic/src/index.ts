@@ -113,3 +113,5 @@ export { canAssignServiceOrder, canStartServiceAssignment, canCompleteServiceAss
 export { exportPaymentHistoryCsv } from "./payment-history-csv";
 export type { PaymentHistoryExportRow } from "./payment-history-csv";
 export { exportLaundryTicketsCsv } from "./laundry-tickets-csv";
+
+export * from "./sync-device";

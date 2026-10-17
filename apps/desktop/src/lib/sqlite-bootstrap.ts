@@ -6,6 +6,7 @@
 import {
   setRuntimeMode,
   setOutboxDeviceId,
+  isSyncDeviceId,
   exportDomainSnapshotFull,
   importDomainSnapshot,
   shouldRunAutoBackup,
@@ -123,7 +124,11 @@ async function initializeDesktopSqlite(): Promise<{ ok: boolean; error?: string 
       );
     }
 
-    const deviceId = (await api.getDeviceId?.()) || "desktop-win";
+    if (typeof api.getSyncDeviceId !== "function") {
+      throw new Error("Sync device identity IPC is unavailable");
+    }
+    const deviceId = await api.getSyncDeviceId();
+    if (!isSyncDeviceId(deviceId)) throw new Error("Sync device identity is invalid");
     setOutboxDeviceId(deviceId);
 
     const dbPath = "minarvabiz.db";

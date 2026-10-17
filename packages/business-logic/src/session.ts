@@ -44,11 +44,11 @@ export function clearSession() {
   // business records. Retain the queue for later verified owner recovery.
   registerRemoteWriter(null);
   setOutboxScope(null);
+  // Revoke authority before storage checks or storage operations can fail.
+  setCurrentRole(null);
   if (typeof sessionStorage === "undefined") return;
   sessionStorage.removeItem(SESSION_KEY);
   sessionStorage.removeItem(USER_KEY);
-  // Force a fresh role resolution after logout; unauthenticated state has no permissions.
-  setCurrentRole(null);
 }
 
 export function isAuthenticated(): boolean {

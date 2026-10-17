@@ -12,6 +12,7 @@ import { NativeSqliteFingerprintFence } from "./sqlite-fingerprint-fence";
 import { NativeSqliteBusyError, NativeSqliteIpcGate } from "./sqlite-ipc-gate";
 import { prepareSqliteRestoreStage, cleanupSqliteRestoreStage, type SqliteRestoreStage } from "./sqlite-restore-staging";
 import { beginSqliteRestoreJournal, clearSqliteRestoreJournal, recoverSqliteRestoreAtStartup } from "./sqlite-restore-recovery";
+import { createDesktopSyncDeviceReader } from "./sync-device";
 import { claimPrimaryDesktopInstance } from "./single-instance-owner";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
@@ -408,6 +409,13 @@ if (isPrimaryDesktopInstance) app.whenReady().then(async () => {
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 
 ipcMain.handle("app:getVersion", (event) => { requireTrustedRenderer(event); return app.getVersion(); });
+let readSyncDeviceId: (() => Promise<string>) | null = null;
+ipcMain.handle("sync:getDeviceId", (event) => {
+  requireTrustedRenderer(event);
+  if (!isPrimaryDesktopInstance) throw new Error("Desktop process does not own storage");
+  readSyncDeviceId ??= createDesktopSyncDeviceReader(app.getPath("userData"));
+  return readSyncDeviceId();
+});
 ipcMain.handle("app:getDeviceId", (event) => { requireTrustedRenderer(event); return getDeviceId(); });
 ipcMain.handle("db:readBinary", (event) => {
   requireTrustedRenderer(event);

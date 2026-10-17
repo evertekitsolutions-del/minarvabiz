@@ -1,0 +1,27 @@
+name: Sync device identity
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+jobs:
+  device-identity:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+      - name: Verify durable identity, concurrency, corruption and retry
+        run: node --test scripts/desktop-sync-device.test.mjs scripts/desktop-sync-authority.test.mjs scripts/desktop-sync-revocations.test.mjs scripts/desktop-sync-revocation-store.test.mjs scripts/desktop-sync-enrollment-proof.test.mjs packages/business-logic/src/__tests__/sync-device.test.mjs
