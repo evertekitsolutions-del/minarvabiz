@@ -63,6 +63,8 @@ async function goHome(){
 try {
   await send("Emulation.setDeviceMetricsOverride",{width:1366,height:900,mobile:false,deviceScaleFactor:1});
   await send("Emulation.setTouchEmulationEnabled",{enabled:false});
+  // Other smoke tests share this browser profile; start from a clean tab marker.
+  await evalJS('sessionStorage.removeItem("minarva-biz-marketing-trial-v2")');
   await goHome();
   assert.equal(await evalJS('matchMedia("(hover: hover) and (pointer: fine)").matches'),true);
   assert.equal(await evalJS('!!'+dialog),false,"Never show popup simply on load");
