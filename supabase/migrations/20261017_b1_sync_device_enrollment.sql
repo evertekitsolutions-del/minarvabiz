@@ -8,7 +8,805 @@ CREATE TABLE public.sync_device_enrollments (
   device_id uuid NOT NULL,
   actor_user_id uuid NOT NULL,
   ed25519_public_key text NOT NULL
-    CHECK (ed25519_public_key ~ '^[A-Za-z0-9_-]{43}$'),
+    CHECK (ed25519_public_key ~ '^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]),
+  status text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'active', 'revoked')),
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  activated_at timestamptz,
+  revoked_at timestamptz,
+  revoked_by uuid,
+  PRIMARY KEY (org_id, device_id),
+  CONSTRAINT b1_device_status_timestamps CHECK (
+    (status = 'pending' AND activated_at IS NULL AND revoked_at IS NULL)
+    OR (status = 'active' AND activated_at IS NOT NULL AND revoked_at IS NULL)
+    OR (status = 'revoked' AND revoked_at IS NOT NULL)
+  )
+);
+CREATE INDEX b1_devices_actor ON public.sync_device_enrollments (actor_user_id, org_id);
+CREATE INDEX b1_devices_live ON public.sync_device_enrollments (org_id, status)
+  WHERE status = 'active';
+
+-- Composite key prevents granting a branch from a different organization,
+-- including legacy unscoped (org_id IS NULL) branches.
+ALTER TABLE public.branches
+  ADD CONSTRAINT b1_branches_org_id_id_unique UNIQUE (org_id, id);
+CREATE TABLE public.sync_device_branch_grants (
+  org_id uuid NOT NULL,
+  device_id uuid NOT NULL,
+  branch_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  revoked_at timestamptz,
+  PRIMARY KEY (org_id, device_id, branch_id),
+  FOREIGN KEY (org_id, device_id)
+    REFERENCES public.sync_device_enrollments(org_id, device_id),
+  FOREIGN KEY (org_id, branch_id) REFERENCES public.branches(org_id, id)
+);
+CREATE INDEX b1_branch_grants_branch ON public.sync_device_branch_grants
+  (org_id, branch_id) WHERE revoked_at IS NULL;
+
+CREATE TABLE public.sync_device_authority_audit (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  org_id uuid NOT NULL,
+  device_id uuid NOT NULL,
+  branch_id uuid,
+  event_type text NOT NULL CHECK (event_type IN
+    ('device_requested', 'device_approved', 'device_revoked', 'branch_granted', 'branch_revoked')),
+  actor_user_id uuid,
+  occurred_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX b1_sync_audit_device ON public.sync_device_authority_audit
+  (org_id, device_id, occurred_at DESC);
+
+ALTER TABLE public.sync_device_enrollments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sync_device_branch_grants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sync_device_authority_audit ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.sync_device_enrollments,
+  public.sync_device_branch_grants, public.sync_device_authority_audit
+  FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON public.sync_device_enrollments TO authenticated;
+GRANT UPDATE (status) ON public.sync_device_enrollments TO authenticated;
+GRANT SELECT, INSERT ON public.sync_device_branch_grants TO authenticated;
+GRANT UPDATE (revoked_at) ON public.sync_device_branch_grants TO authenticated;
+GRANT SELECT ON public.sync_device_authority_audit TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sync_device_enrollments,
+  public.sync_device_branch_grants, public.sync_device_authority_audit TO service_role;
+GRANT USAGE, SELECT ON SEQUENCE public.sync_device_authority_audit_id_seq
+  TO service_role;
+
+CREATE POLICY b1_device_read ON public.sync_device_enrollments FOR SELECT
+  TO authenticated USING (
+    public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+    OR (actor_user_id = (SELECT auth.uid()) AND public.user_has_org_role(
+      org_id, ARRAY['super_admin','admin','manager','cashier','tailor','staff']::text[]))
+  );
+CREATE POLICY b1_device_request ON public.sync_device_enrollments FOR INSERT
+  TO authenticated WITH CHECK (
+    status = 'pending'
+    AND public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+    AND EXISTS (
+      SELECT 1 FROM public.organization_members om
+      WHERE om.org_id = sync_device_enrollments.org_id
+        AND om.user_id = sync_device_enrollments.actor_user_id
+    )
+  );
+-- The only authenticated UPDATE is a one-way revocation. Activation requires
+-- a trusted server principal AFTER proof of possession and signature issuance.
+CREATE POLICY b1_device_revoke ON public.sync_device_enrollments FOR UPDATE
+  TO authenticated
+  USING (public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[]))
+  WITH CHECK (
+    status = 'revoked'
+    AND public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+  );
+CREATE POLICY b1_grant_read ON public.sync_device_branch_grants FOR SELECT
+  TO authenticated USING (
+    public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+    OR EXISTS (
+      SELECT 1 FROM public.sync_device_enrollments d
+      WHERE d.org_id = sync_device_branch_grants.org_id
+        AND d.device_id = sync_device_branch_grants.device_id
+        AND d.actor_user_id = (SELECT auth.uid())
+    )
+  );
+CREATE POLICY b1_grant_create ON public.sync_device_branch_grants FOR INSERT
+  TO authenticated WITH CHECK (
+    public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+    AND revoked_at IS NULL
+  );
+CREATE POLICY b1_grant_revoke ON public.sync_device_branch_grants FOR UPDATE
+  TO authenticated
+  USING (public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[]))
+  WITH CHECK (
+    revoked_at IS NOT NULL
+    AND public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+  );
+CREATE POLICY b1_audit_read ON public.sync_device_authority_audit FOR SELECT
+  TO authenticated USING (
+    public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+  );
+
+CREATE FUNCTION private.b1_guard_device_enrollment()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.status <> 'pending' OR NEW.activated_at IS NOT NULL
+       OR NEW.revoked_at IS NOT NULL OR NEW.revoked_by IS NOT NULL THEN
+      RAISE EXCEPTION 'Device requests must start pending' USING ERRCODE = '23514';
+    END IF;
+    NEW.created_at := pg_catalog.clock_timestamp();
+    RETURN NEW;
+  END IF;
+  IF NEW.org_id IS DISTINCT FROM OLD.org_id
+     OR NEW.device_id IS DISTINCT FROM OLD.device_id
+     OR NEW.actor_user_id IS DISTINCT FROM OLD.actor_user_id
+     OR NEW.ed25519_public_key IS DISTINCT FROM OLD.ed25519_public_key THEN
+    RAISE EXCEPTION 'Device enrollment identity is immutable' USING ERRCODE = '23514';
+  END IF;
+  IF OLD.status = 'revoked'
+     OR (OLD.status = 'active' AND NEW.status <> 'revoked')
+     OR (OLD.status = 'pending' AND NEW.status NOT IN ('active','revoked')) THEN
+    RAISE EXCEPTION 'Invalid device status transition' USING ERRCODE = '23514';
+  END IF;
+  IF NEW.status = 'active' THEN
+    IF current_user NOT IN ('service_role','postgres') THEN
+      RAISE EXCEPTION 'Device approval requires verified server authority'
+        USING ERRCODE = '42501';
+    END IF;
+    NEW.activated_at := pg_catalog.clock_timestamp();
+    NEW.revoked_at := NULL;
+    NEW.revoked_by := NULL;
+  ELSE
+    NEW.activated_at := OLD.activated_at;
+    NEW.revoked_at := pg_catalog.clock_timestamp();
+    NEW.revoked_by := auth.uid();
+  END IF;
+  NEW.created_at := OLD.created_at;
+  RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION private.b1_guard_device_enrollment()
+  FROM PUBLIC, anon, authenticated, service_role;
+CREATE TRIGGER b1_guard_device_enrollment BEFORE INSERT OR UPDATE
+  ON public.sync_device_enrollments FOR EACH ROW
+  EXECUTE FUNCTION private.b1_guard_device_enrollment();
+
+CREATE FUNCTION private.b1_guard_branch_grant()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
+AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.org_id IS DISTINCT FROM OLD.org_id
+       OR NEW.device_id IS DISTINCT FROM OLD.device_id
+       OR NEW.branch_id IS DISTINCT FROM OLD.branch_id
+       OR OLD.revoked_at IS NOT NULL OR NEW.revoked_at IS NULL THEN
+      RAISE EXCEPTION 'Branch grant is immutable or already revoked' USING ERRCODE = '23514';
+    END IF;
+    NEW.created_at := OLD.created_at;
+    NEW.revoked_at := pg_catalog.clock_timestamp();
+    RETURN NEW;
+  END IF;
+  IF NEW.revoked_at IS NOT NULL THEN
+    RAISE EXCEPTION 'New branch grant cannot start revoked' USING ERRCODE = '23514';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.sync_device_enrollments d
+    JOIN public.branches b ON b.org_id = d.org_id
+    WHERE d.org_id = NEW.org_id AND d.device_id = NEW.device_id
+      AND d.status = 'active'
+      AND b.id = NEW.branch_id AND b.is_active AND b.deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'Active enrollment and active same-tenant branch required'
+      USING ERRCODE = '23514';
+  END IF;
+  NEW.created_at := pg_catalog.clock_timestamp();
+  RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION private.b1_guard_branch_grant()
+  FROM PUBLIC, anon, authenticated, service_role;
+CREATE TRIGGER b1_guard_branch_grant BEFORE INSERT OR UPDATE
+  ON public.sync_device_branch_grants FOR EACH ROW
+  EXECUTE FUNCTION private.b1_guard_branch_grant();
+
+CREATE FUNCTION private.b1_audit_sync_authority()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  event_name text;
+  audit_branch_id uuid;
+BEGIN
+  IF TG_TABLE_NAME = 'sync_device_enrollments' THEN
+    event_name := CASE WHEN TG_OP = 'INSERT' THEN 'device_requested'
+      WHEN NEW.status = 'active' THEN 'device_approved'
+      ELSE 'device_revoked' END;
+    audit_branch_id := NULL;
+  ELSE
+    audit_branch_id := NEW.branch_id;
+    event_name := CASE WHEN TG_OP = 'INSERT' THEN 'branch_granted'
+      ELSE 'branch_revoked' END;
+  END IF;
+  INSERT INTO public.sync_device_authority_audit
+    (org_id, device_id, branch_id, event_type, actor_user_id)
+  VALUES (NEW.org_id, NEW.device_id, audit_branch_id,
+    event_name, auth.uid());
+  RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION private.b1_audit_sync_authority()
+  FROM PUBLIC, anon, authenticated, service_role;
+CREATE TRIGGER b1_audit_device_enrollment AFTER INSERT OR UPDATE
+  ON public.sync_device_enrollments FOR EACH ROW
+  EXECUTE FUNCTION private.b1_audit_sync_authority();
+CREATE TRIGGER b1_audit_branch_grant AFTER INSERT OR UPDATE
+  ON public.sync_device_branch_grants FOR EACH ROW
+  EXECUTE FUNCTION private.b1_audit_sync_authority();
+
+-- No DELETE policies. No public approval RPC. No signed authority exchange,
+-- sync replay, financial write route or production feature switch is enabled.
+
+
+-- B1 staging: server-only one-time enrollment challenges.
+-- No authenticated/anon Data API table or RPC surface. A verified PoP still
+-- needs authenticated session, active grants and trusted credential signing.
+CREATE TABLE public.sync_device_enrollment_challenges (
+  org_id uuid NOT NULL,
+  device_id uuid NOT NULL,
+  challenge_id uuid NOT NULL,
+  actor_user_id uuid NOT NULL,
+  branch_id uuid NOT NULL,
+  nonce text NOT NULL CHECK (nonce ~ '^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048],
+  issued_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  expires_at timestamptz NOT NULL DEFAULT (clock_timestamp() + interval '5 minutes'),
+  consumed_at timestamptz,
+  PRIMARY KEY (org_id, device_id, challenge_id),
+  UNIQUE (org_id, device_id, nonce),
+  FOREIGN KEY (org_id, device_id)
+    REFERENCES public.sync_device_enrollments(org_id, device_id),
+  FOREIGN KEY (org_id, branch_id)
+    REFERENCES public.branches(org_id, id),
+  FOREIGN KEY (org_id, actor_user_id)
+    REFERENCES public.organization_members(org_id, user_id),
+  CHECK (expires_at > issued_at AND expires_at - issued_at <= interval '5 minutes')
+);
+CREATE INDEX b1_pending_challenges ON public.sync_device_enrollment_challenges
+  (org_id, device_id, expires_at)
+  WHERE consumed_at IS NULL;
+ALTER TABLE public.sync_device_enrollment_challenges ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.sync_device_enrollment_challenges FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON public.sync_device_enrollment_challenges TO service_role;
+GRANT UPDATE (consumed_at) ON public.sync_device_enrollment_challenges TO service_role;
+
+CREATE FUNCTION private.b1_guard_enrollment_challenge()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
+AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.org_id IS DISTINCT FROM OLD.org_id
+       OR NEW.device_id IS DISTINCT FROM OLD.device_id
+       OR NEW.challenge_id IS DISTINCT FROM OLD.challenge_id
+       OR NEW.actor_user_id IS DISTINCT FROM OLD.actor_user_id
+       OR NEW.branch_id IS DISTINCT FROM OLD.branch_id
+       OR NEW.nonce IS DISTINCT FROM OLD.nonce
+       OR NEW.issued_at IS DISTINCT FROM OLD.issued_at
+       OR NEW.expires_at IS DISTINCT FROM OLD.expires_at
+       OR OLD.consumed_at IS NOT NULL OR NEW.consumed_at IS NULL THEN
+      RAISE EXCEPTION 'Enrollment challenge is immutable or consumed'
+        USING ERRCODE = '23514';
+    END IF;
+    NEW.consumed_at := pg_catalog.clock_timestamp();
+    RETURN NEW;
+  END IF;
+  IF NEW.consumed_at IS NOT NULL OR NOT EXISTS (
+    SELECT 1 FROM public.sync_device_enrollments d
+    JOIN public.branches b ON b.org_id = d.org_id AND b.id = NEW.branch_id
+    WHERE d.org_id = NEW.org_id AND d.device_id = NEW.device_id
+      AND d.actor_user_id = NEW.actor_user_id AND d.status = 'pending'
+      AND b.is_active AND b.deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'Pending same-tenant enrollment and active branch required'
+      USING ERRCODE = '23514';
+  END IF;
+  NEW.issued_at := pg_catalog.clock_timestamp();
+  NEW.expires_at := NEW.issued_at + interval '5 minutes';
+  RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION private.b1_guard_enrollment_challenge()
+  FROM PUBLIC, anon, authenticated, service_role;
+CREATE TRIGGER b1_guard_enrollment_challenge BEFORE INSERT OR UPDATE
+  ON public.sync_device_enrollment_challenges FOR EACH ROW
+  EXECUTE FUNCTION private.b1_guard_enrollment_challenge();
+
+-- Atomic consumption after server-side signature/key and actor-scope checks.
+-- This function does NOT verify Ed25519 and may only be invoked by the
+-- privileged backend over a non-exposed schema using service_role.
+CREATE FUNCTION private.b1_consume_sync_enrollment_challenge(
+  p_org_id uuid, p_device_id uuid, p_challenge_id uuid,
+  p_actor_user_id uuid, p_branch_id uuid, p_nonce text
+) RETURNS boolean
+LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
+AS $$
+DECLARE
+  consumed_id uuid;
+BEGIN
+  UPDATE public.sync_device_enrollment_challenges c
+  SET consumed_at = pg_catalog.clock_timestamp()
+  WHERE c.org_id = p_org_id AND c.device_id = p_device_id
+    AND c.challenge_id = p_challenge_id
+    AND c.actor_user_id = p_actor_user_id
+    AND c.branch_id = p_branch_id
+    AND c.nonce = p_nonce
+    AND c.consumed_at IS NULL
+    AND c.expires_at > pg_catalog.clock_timestamp()
+    AND EXISTS (
+      SELECT 1 FROM public.sync_device_enrollments d
+      WHERE d.org_id = c.org_id AND d.device_id = c.device_id
+        AND d.actor_user_id = c.actor_user_id AND d.status = 'pending'
+    )
+  RETURNING c.challenge_id INTO consumed_id;
+  RETURN consumed_id IS NOT NULL;
+END
+$$;
+REVOKE ALL ON FUNCTION private.b1_consume_sync_enrollment_challenge(
+  uuid, uuid, uuid, uuid, uuid, text
+) FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON public.branches TO service_role;
+GRANT USAGE ON SCHEMA private TO service_role;
+GRANT EXECUTE ON FUNCTION private.b1_consume_sync_enrollment_challenge(
+  uuid, uuid, uuid, uuid, uuid, text
+) TO service_role;
+
+),
+  status text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'active', 'revoked')),
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  activated_at timestamptz,
+  revoked_at timestamptz,
+  revoked_by uuid,
+  PRIMARY KEY (org_id, device_id),
+  CONSTRAINT b1_device_status_timestamps CHECK (
+    (status = 'pending' AND activated_at IS NULL AND revoked_at IS NULL)
+    OR (status = 'active' AND activated_at IS NOT NULL AND revoked_at IS NULL)
+    OR (status = 'revoked' AND revoked_at IS NOT NULL)
+  )
+);
+CREATE INDEX b1_devices_actor ON public.sync_device_enrollments (actor_user_id, org_id);
+CREATE INDEX b1_devices_live ON public.sync_device_enrollments (org_id, status)
+  WHERE status = 'active';
+
+-- Composite key prevents granting a branch from a different organization,
+-- including legacy unscoped (org_id IS NULL) branches.
+ALTER TABLE public.branches
+  ADD CONSTRAINT b1_branches_org_id_id_unique UNIQUE (org_id, id);
+CREATE TABLE public.sync_device_branch_grants (
+  org_id uuid NOT NULL,
+  device_id uuid NOT NULL,
+  branch_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  revoked_at timestamptz,
+  PRIMARY KEY (org_id, device_id, branch_id),
+  FOREIGN KEY (org_id, device_id)
+    REFERENCES public.sync_device_enrollments(org_id, device_id),
+  FOREIGN KEY (org_id, branch_id) REFERENCES public.branches(org_id, id)
+);
+CREATE INDEX b1_branch_grants_branch ON public.sync_device_branch_grants
+  (org_id, branch_id) WHERE revoked_at IS NULL;
+
+CREATE TABLE public.sync_device_authority_audit (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  org_id uuid NOT NULL,
+  device_id uuid NOT NULL,
+  branch_id uuid,
+  event_type text NOT NULL CHECK (event_type IN
+    ('device_requested', 'device_approved', 'device_revoked', 'branch_granted', 'branch_revoked')),
+  actor_user_id uuid,
+  occurred_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX b1_sync_audit_device ON public.sync_device_authority_audit
+  (org_id, device_id, occurred_at DESC);
+
+ALTER TABLE public.sync_device_enrollments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sync_device_branch_grants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sync_device_authority_audit ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.sync_device_enrollments,
+  public.sync_device_branch_grants, public.sync_device_authority_audit
+  FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON public.sync_device_enrollments TO authenticated;
+GRANT UPDATE (status) ON public.sync_device_enrollments TO authenticated;
+GRANT SELECT, INSERT ON public.sync_device_branch_grants TO authenticated;
+GRANT UPDATE (revoked_at) ON public.sync_device_branch_grants TO authenticated;
+GRANT SELECT ON public.sync_device_authority_audit TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sync_device_enrollments,
+  public.sync_device_branch_grants, public.sync_device_authority_audit TO service_role;
+GRANT USAGE, SELECT ON SEQUENCE public.sync_device_authority_audit_id_seq
+  TO service_role;
+
+CREATE POLICY b1_device_read ON public.sync_device_enrollments FOR SELECT
+  TO authenticated USING (
+    public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+    OR (actor_user_id = (SELECT auth.uid()) AND public.user_has_org_role(
+      org_id, ARRAY['super_admin','admin','manager','cashier','tailor','staff']::text[]))
+  );
+CREATE POLICY b1_device_request ON public.sync_device_enrollments FOR INSERT
+  TO authenticated WITH CHECK (
+    status = 'pending'
+    AND public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+    AND EXISTS (
+      SELECT 1 FROM public.organization_members om
+      WHERE om.org_id = sync_device_enrollments.org_id
+        AND om.user_id = sync_device_enrollments.actor_user_id
+    )
+  );
+-- The only authenticated UPDATE is a one-way revocation. Activation requires
+-- a trusted server principal AFTER proof of possession and signature issuance.
+CREATE POLICY b1_device_revoke ON public.sync_device_enrollments FOR UPDATE
+  TO authenticated
+  USING (public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[]))
+  WITH CHECK (
+    status = 'revoked'
+    AND public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+  );
+CREATE POLICY b1_grant_read ON public.sync_device_branch_grants FOR SELECT
+  TO authenticated USING (
+    public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+    OR EXISTS (
+      SELECT 1 FROM public.sync_device_enrollments d
+      WHERE d.org_id = sync_device_branch_grants.org_id
+        AND d.device_id = sync_device_branch_grants.device_id
+        AND d.actor_user_id = (SELECT auth.uid())
+    )
+  );
+CREATE POLICY b1_grant_create ON public.sync_device_branch_grants FOR INSERT
+  TO authenticated WITH CHECK (
+    public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+    AND revoked_at IS NULL
+  );
+CREATE POLICY b1_grant_revoke ON public.sync_device_branch_grants FOR UPDATE
+  TO authenticated
+  USING (public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[]))
+  WITH CHECK (
+    revoked_at IS NOT NULL
+    AND public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+  );
+CREATE POLICY b1_audit_read ON public.sync_device_authority_audit FOR SELECT
+  TO authenticated USING (
+    public.user_has_org_role(org_id, ARRAY['super_admin','admin']::text[])
+  );
+
+CREATE FUNCTION private.b1_guard_device_enrollment()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.status <> 'pending' OR NEW.activated_at IS NOT NULL
+       OR NEW.revoked_at IS NOT NULL OR NEW.revoked_by IS NOT NULL THEN
+      RAISE EXCEPTION 'Device requests must start pending' USING ERRCODE = '23514';
+    END IF;
+    NEW.created_at := pg_catalog.clock_timestamp();
+    RETURN NEW;
+  END IF;
+  IF NEW.org_id IS DISTINCT FROM OLD.org_id
+     OR NEW.device_id IS DISTINCT FROM OLD.device_id
+     OR NEW.actor_user_id IS DISTINCT FROM OLD.actor_user_id
+     OR NEW.ed25519_public_key IS DISTINCT FROM OLD.ed25519_public_key THEN
+    RAISE EXCEPTION 'Device enrollment identity is immutable' USING ERRCODE = '23514';
+  END IF;
+  IF OLD.status = 'revoked'
+     OR (OLD.status = 'active' AND NEW.status <> 'revoked')
+     OR (OLD.status = 'pending' AND NEW.status NOT IN ('active','revoked')) THEN
+    RAISE EXCEPTION 'Invalid device status transition' USING ERRCODE = '23514';
+  END IF;
+  IF NEW.status = 'active' THEN
+    IF current_user NOT IN ('service_role','postgres') THEN
+      RAISE EXCEPTION 'Device approval requires verified server authority'
+        USING ERRCODE = '42501';
+    END IF;
+    NEW.activated_at := pg_catalog.clock_timestamp();
+    NEW.revoked_at := NULL;
+    NEW.revoked_by := NULL;
+  ELSE
+    NEW.activated_at := OLD.activated_at;
+    NEW.revoked_at := pg_catalog.clock_timestamp();
+    NEW.revoked_by := auth.uid();
+  END IF;
+  NEW.created_at := OLD.created_at;
+  RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION private.b1_guard_device_enrollment()
+  FROM PUBLIC, anon, authenticated, service_role;
+CREATE TRIGGER b1_guard_device_enrollment BEFORE INSERT OR UPDATE
+  ON public.sync_device_enrollments FOR EACH ROW
+  EXECUTE FUNCTION private.b1_guard_device_enrollment();
+
+CREATE FUNCTION private.b1_guard_branch_grant()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
+AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.org_id IS DISTINCT FROM OLD.org_id
+       OR NEW.device_id IS DISTINCT FROM OLD.device_id
+       OR NEW.branch_id IS DISTINCT FROM OLD.branch_id
+       OR OLD.revoked_at IS NOT NULL OR NEW.revoked_at IS NULL THEN
+      RAISE EXCEPTION 'Branch grant is immutable or already revoked' USING ERRCODE = '23514';
+    END IF;
+    NEW.created_at := OLD.created_at;
+    NEW.revoked_at := pg_catalog.clock_timestamp();
+    RETURN NEW;
+  END IF;
+  IF NEW.revoked_at IS NOT NULL THEN
+    RAISE EXCEPTION 'New branch grant cannot start revoked' USING ERRCODE = '23514';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.sync_device_enrollments d
+    JOIN public.branches b ON b.org_id = d.org_id
+    WHERE d.org_id = NEW.org_id AND d.device_id = NEW.device_id
+      AND d.status = 'active'
+      AND b.id = NEW.branch_id AND b.is_active AND b.deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'Active enrollment and active same-tenant branch required'
+      USING ERRCODE = '23514';
+  END IF;
+  NEW.created_at := pg_catalog.clock_timestamp();
+  RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION private.b1_guard_branch_grant()
+  FROM PUBLIC, anon, authenticated, service_role;
+CREATE TRIGGER b1_guard_branch_grant BEFORE INSERT OR UPDATE
+  ON public.sync_device_branch_grants FOR EACH ROW
+  EXECUTE FUNCTION private.b1_guard_branch_grant();
+
+CREATE FUNCTION private.b1_audit_sync_authority()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  event_name text;
+  audit_branch_id uuid;
+BEGIN
+  IF TG_TABLE_NAME = 'sync_device_enrollments' THEN
+    event_name := CASE WHEN TG_OP = 'INSERT' THEN 'device_requested'
+      WHEN NEW.status = 'active' THEN 'device_approved'
+      ELSE 'device_revoked' END;
+    audit_branch_id := NULL;
+  ELSE
+    audit_branch_id := NEW.branch_id;
+    event_name := CASE WHEN TG_OP = 'INSERT' THEN 'branch_granted'
+      ELSE 'branch_revoked' END;
+  END IF;
+  INSERT INTO public.sync_device_authority_audit
+    (org_id, device_id, branch_id, event_type, actor_user_id)
+  VALUES (NEW.org_id, NEW.device_id, audit_branch_id,
+    event_name, auth.uid());
+  RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION private.b1_audit_sync_authority()
+  FROM PUBLIC, anon, authenticated, service_role;
+CREATE TRIGGER b1_audit_device_enrollment AFTER INSERT OR UPDATE
+  ON public.sync_device_enrollments FOR EACH ROW
+  EXECUTE FUNCTION private.b1_audit_sync_authority();
+CREATE TRIGGER b1_audit_branch_grant AFTER INSERT OR UPDATE
+  ON public.sync_device_branch_grants FOR EACH ROW
+  EXECUTE FUNCTION private.b1_audit_sync_authority();
+
+-- No DELETE policies. No public approval RPC. No signed authority exchange,
+-- sync replay, financial write route or production feature switch is enabled.
+
+
+-- B1 staging: server-only one-time enrollment challenges.
+-- No authenticated/anon Data API table or RPC surface. A verified PoP still
+-- needs authenticated session, active grants and trusted credential signing.
+CREATE TABLE public.sync_device_enrollment_challenges (
+  org_id uuid NOT NULL,
+  device_id uuid NOT NULL,
+  challenge_id uuid NOT NULL,
+  actor_user_id uuid NOT NULL,
+  branch_id uuid NOT NULL,
+  nonce text NOT NULL CHECK (nonce ~ '^[A-Za-z0-9_-]{43}$'),
+  issued_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  expires_at timestamptz NOT NULL DEFAULT (clock_timestamp() + interval '5 minutes'),
+  consumed_at timestamptz,
+  PRIMARY KEY (org_id, device_id, challenge_id),
+  UNIQUE (org_id, device_id, nonce),
+  FOREIGN KEY (org_id, device_id)
+    REFERENCES public.sync_device_enrollments(org_id, device_id),
+  FOREIGN KEY (org_id, branch_id)
+    REFERENCES public.branches(org_id, id),
+  FOREIGN KEY (org_id, actor_user_id)
+    REFERENCES public.organization_members(org_id, user_id),
+  CHECK (expires_at > issued_at AND expires_at - issued_at <= interval '5 minutes')
+);
+CREATE INDEX b1_pending_challenges ON public.sync_device_enrollment_challenges
+  (org_id, device_id, expires_at)
+  WHERE consumed_at IS NULL;
+ALTER TABLE public.sync_device_enrollment_challenges ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.sync_device_enrollment_challenges FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON public.sync_device_enrollment_challenges TO service_role;
+GRANT UPDATE (consumed_at) ON public.sync_device_enrollment_challenges TO service_role;
+
+CREATE FUNCTION private.b1_guard_enrollment_challenge()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
+AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.org_id IS DISTINCT FROM OLD.org_id
+       OR NEW.device_id IS DISTINCT FROM OLD.device_id
+       OR NEW.challenge_id IS DISTINCT FROM OLD.challenge_id
+       OR NEW.actor_user_id IS DISTINCT FROM OLD.actor_user_id
+       OR NEW.branch_id IS DISTINCT FROM OLD.branch_id
+       OR NEW.nonce IS DISTINCT FROM OLD.nonce
+       OR NEW.issued_at IS DISTINCT FROM OLD.issued_at
+       OR NEW.expires_at IS DISTINCT FROM OLD.expires_at
+       OR OLD.consumed_at IS NOT NULL OR NEW.consumed_at IS NULL THEN
+      RAISE EXCEPTION 'Enrollment challenge is immutable or consumed'
+        USING ERRCODE = '23514';
+    END IF;
+    NEW.consumed_at := pg_catalog.clock_timestamp();
+    RETURN NEW;
+  END IF;
+  IF NEW.consumed_at IS NOT NULL OR NOT EXISTS (
+    SELECT 1 FROM public.sync_device_enrollments d
+    JOIN public.branches b ON b.org_id = d.org_id AND b.id = NEW.branch_id
+    WHERE d.org_id = NEW.org_id AND d.device_id = NEW.device_id
+      AND d.actor_user_id = NEW.actor_user_id AND d.status = 'pending'
+      AND b.is_active AND b.deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'Pending same-tenant enrollment and active branch required'
+      USING ERRCODE = '23514';
+  END IF;
+  NEW.issued_at := pg_catalog.clock_timestamp();
+  NEW.expires_at := NEW.issued_at + interval '5 minutes';
+  RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION private.b1_guard_enrollment_challenge()
+  FROM PUBLIC, anon, authenticated, service_role;
+CREATE TRIGGER b1_guard_enrollment_challenge BEFORE INSERT OR UPDATE
+  ON public.sync_device_enrollment_challenges FOR EACH ROW
+  EXECUTE FUNCTION private.b1_guard_enrollment_challenge();
+
+-- Atomic consumption after server-side signature/key and actor-scope checks.
+-- This function does NOT verify Ed25519 and may only be invoked by the
+-- privileged backend over a non-exposed schema using service_role.
+CREATE FUNCTION private.b1_consume_sync_enrollment_challenge(
+  p_org_id uuid, p_device_id uuid, p_challenge_id uuid,
+  p_actor_user_id uuid, p_branch_id uuid, p_nonce text
+) RETURNS boolean
+LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
+AS $$
+DECLARE
+  consumed_id uuid;
+BEGIN
+  UPDATE public.sync_device_enrollment_challenges c
+  SET consumed_at = pg_catalog.clock_timestamp()
+  WHERE c.org_id = p_org_id AND c.device_id = p_device_id
+    AND c.challenge_id = p_challenge_id
+    AND c.actor_user_id = p_actor_user_id
+    AND c.branch_id = p_branch_id
+    AND c.nonce = p_nonce
+    AND c.consumed_at IS NULL
+    AND c.expires_at > pg_catalog.clock_timestamp()
+    AND EXISTS (
+      SELECT 1 FROM public.sync_device_enrollments d
+      WHERE d.org_id = c.org_id AND d.device_id = c.device_id
+        AND d.actor_user_id = c.actor_user_id AND d.status = 'pending'
+    )
+  RETURNING c.challenge_id INTO consumed_id;
+  RETURN consumed_id IS NOT NULL;
+END
+$$;
+REVOKE ALL ON FUNCTION private.b1_consume_sync_enrollment_challenge(
+  uuid, uuid, uuid, uuid, uuid, text
+) FROM PUBLIC, anon, authenticated;
+GRANT USAGE ON SCHEMA private TO service_role;
+GRANT EXECUTE ON FUNCTION private.b1_consume_sync_enrollment_challenge(
+  uuid, uuid, uuid, uuid, uuid, text
+) TO service_role;
+
+),
+  issued_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  expires_at timestamptz NOT NULL DEFAULT (clock_timestamp() + interval '5 minutes'),
+  consumed_at timestamptz,
+  PRIMARY KEY (org_id, device_id, challenge_id),
+  UNIQUE (org_id, device_id, nonce),
+  FOREIGN KEY (org_id, device_id)
+    REFERENCES public.sync_device_enrollments(org_id, device_id),
+  FOREIGN KEY (org_id, branch_id)
+    REFERENCES public.branches(org_id, id),
+  FOREIGN KEY (org_id, actor_user_id)
+    REFERENCES public.organization_members(org_id, user_id),
+  CHECK (expires_at > issued_at AND expires_at - issued_at <= interval '5 minutes')
+);
+CREATE INDEX b1_pending_challenges ON public.sync_device_enrollment_challenges
+  (org_id, device_id, expires_at)
+  WHERE consumed_at IS NULL;
+ALTER TABLE public.sync_device_enrollment_challenges ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.sync_device_enrollment_challenges FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON public.sync_device_enrollment_challenges TO service_role;
+GRANT UPDATE (consumed_at) ON public.sync_device_enrollment_challenges TO service_role;
+
+CREATE FUNCTION private.b1_guard_enrollment_challenge()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
+AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.org_id IS DISTINCT FROM OLD.org_id
+       OR NEW.device_id IS DISTINCT FROM OLD.device_id
+       OR NEW.challenge_id IS DISTINCT FROM OLD.challenge_id
+       OR NEW.actor_user_id IS DISTINCT FROM OLD.actor_user_id
+       OR NEW.branch_id IS DISTINCT FROM OLD.branch_id
+       OR NEW.nonce IS DISTINCT FROM OLD.nonce
+       OR NEW.issued_at IS DISTINCT FROM OLD.issued_at
+       OR NEW.expires_at IS DISTINCT FROM OLD.expires_at
+       OR OLD.consumed_at IS NOT NULL OR NEW.consumed_at IS NULL THEN
+      RAISE EXCEPTION 'Enrollment challenge is immutable or consumed'
+        USING ERRCODE = '23514';
+    END IF;
+    NEW.consumed_at := pg_catalog.clock_timestamp();
+    RETURN NEW;
+  END IF;
+  IF NEW.consumed_at IS NOT NULL OR NOT EXISTS (
+    SELECT 1 FROM public.sync_device_enrollments d
+    JOIN public.branches b ON b.org_id = d.org_id AND b.id = NEW.branch_id
+    WHERE d.org_id = NEW.org_id AND d.device_id = NEW.device_id
+      AND d.actor_user_id = NEW.actor_user_id AND d.status = 'pending'
+      AND b.is_active AND b.deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'Pending same-tenant enrollment and active branch required'
+      USING ERRCODE = '23514';
+  END IF;
+  NEW.issued_at := pg_catalog.clock_timestamp();
+  NEW.expires_at := NEW.issued_at + interval '5 minutes';
+  RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION private.b1_guard_enrollment_challenge()
+  FROM PUBLIC, anon, authenticated, service_role;
+CREATE TRIGGER b1_guard_enrollment_challenge BEFORE INSERT OR UPDATE
+  ON public.sync_device_enrollment_challenges FOR EACH ROW
+  EXECUTE FUNCTION private.b1_guard_enrollment_challenge();
+
+-- Atomic consumption after server-side signature/key and actor-scope checks.
+-- This function does NOT verify Ed25519 and may only be invoked by the
+-- privileged backend over a non-exposed schema using service_role.
+CREATE FUNCTION private.b1_consume_sync_enrollment_challenge(
+  p_org_id uuid, p_device_id uuid, p_challenge_id uuid,
+  p_actor_user_id uuid, p_branch_id uuid, p_nonce text
+) RETURNS boolean
+LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
+AS $$
+DECLARE
+  consumed_id uuid;
+BEGIN
+  UPDATE public.sync_device_enrollment_challenges c
+  SET consumed_at = pg_catalog.clock_timestamp()
+  WHERE c.org_id = p_org_id AND c.device_id = p_device_id
+    AND c.challenge_id = p_challenge_id
+    AND c.actor_user_id = p_actor_user_id
+    AND c.branch_id = p_branch_id
+    AND c.nonce = p_nonce
+    AND c.consumed_at IS NULL
+    AND c.expires_at > pg_catalog.clock_timestamp()
+    AND EXISTS (
+      SELECT 1 FROM public.sync_device_enrollments d
+      WHERE d.org_id = c.org_id AND d.device_id = c.device_id
+        AND d.actor_user_id = c.actor_user_id AND d.status = 'pending'
+    )
+  RETURNING c.challenge_id INTO consumed_id;
+  RETURN consumed_id IS NOT NULL;
+END
+$$;
+REVOKE ALL ON FUNCTION private.b1_consume_sync_enrollment_challenge(
+  uuid, uuid, uuid, uuid, uuid, text
+) FROM PUBLIC, anon, authenticated;
+GRANT USAGE ON SCHEMA private TO service_role;
+GRANT EXECUTE ON FUNCTION private.b1_consume_sync_enrollment_challenge(
+  uuid, uuid, uuid, uuid, uuid, text
+) TO service_role;
+
+),
   status text NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'active', 'revoked')),
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
