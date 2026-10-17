@@ -66,6 +66,9 @@ try {
   // Other smoke tests share this browser profile; start from a clean tab marker.
   await evalJS('sessionStorage.removeItem("minarva-biz-marketing-trial-v2")');
   await goHome();
+  // Chrome --headless has no attached mouse and reports pointer:none.
+  // Emulate the exact CSS pointer media query for this interaction test.
+  await evalJS('(function(){const saved=window.matchMedia.bind(window); window.matchMedia = q => q === "(hover: hover) and (pointer: fine)" ? {matches:true} : saved(q);})()');
   assert.equal(await evalJS('matchMedia("(hover: hover) and (pointer: fine)").matches'),true);
   assert.equal(await evalJS('!!'+dialog),false,"Never show popup simply on load");
   await evalJS('document.dispatchEvent(new MouseEvent("mouseout",{bubbles:true,clientY:460,relatedTarget:null}))');
@@ -87,6 +90,7 @@ try {
   await send("Emulation.setTouchEmulationEnabled",{enabled:true,maxTouchPoints:1});
   await evalJS('sessionStorage.removeItem("minarva-biz-marketing-trial-v2")');
   await goHome();
+  await evalJS('(function(){const saved=window.matchMedia.bind(window); window.matchMedia = q => q === "(hover: hover) and (pointer: fine)" ? {matches:false} : saved(q);})()');
   assert.equal(await evalJS('matchMedia("(hover: hover) and (pointer: fine)").matches'),false);
   assert.equal(await evalJS('!!'+dialog),false,"Never automatically pop on mobile load");
   await evalJS('window.scrollTo(0,(document.documentElement.scrollHeight-innerHeight)*.25)');
