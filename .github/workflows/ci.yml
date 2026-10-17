@@ -44,6 +44,8 @@ jobs:
         run: node scripts/public-product-tour-contract.test.mjs
       - name: Verify portable responsive design review preview
         run: node scripts/website-design-review-contract.test.mjs
+      - name: Verify delayed 30-day trial modal and marketing accessibility
+        run: node scripts/public-30-day-trial-popup-contract.test.mjs
       - name: Verify isolated design review website is publicly reachable and honest
         run: node scripts/website-design-review-live-smoke.mjs
       - name: Refuse Cloudflare customer authentication bypass
