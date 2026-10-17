@@ -17,3 +17,8 @@ apps/web/scripts/vercel-build.mjs:generic-api-key:10
 # Public Ed25519 verification key documented temporarily in a continuation checkpoint.
 # It is public verification material, not a signing secret; the current tree now references the live endpoint instead.
 95e80d0d948bf2166cac2af65f645a3929ea38a3:PROJECT_CONTINUATION.md:generic-api-key:163
+
+# Historical false positives: browser sessionStorage display marker (not a credential).
+# Exact commit/file/rule fingerprints only; current code no longer contains an API-key-like symbol.
+7ec94c030e3056cf42a7a1b4e404dfe386313b0b:apps/web/src/app/TrialWelcomePopup.tsx:generic-api-key:13
+d054860179df7629c4944e9a40058a4308c82ff7:apps/web/src/app/TrialWelcomePopup.tsx:generic-api-key:11
