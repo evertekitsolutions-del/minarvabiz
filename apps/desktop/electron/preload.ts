@@ -44,6 +44,7 @@ function invalidLicenseState(reason: string): DesktopLicenseState {
 contextBridge.exposeInMainWorld("minarvaDesktop", {
   getVersion: () => ipcRenderer.invoke("app:getVersion"),
   platform: process.platform,
+  getSyncDeviceId: () => ipcRenderer.invoke("sync:getDeviceId") as Promise<string>,
   getDeviceId: () => ipcRenderer.invoke("app:getDeviceId") as Promise<string>,
   getTrialState: () => ipcRenderer.invoke("trial:getState") as Promise<TrialState>,
   activateTrial: (registration: TrialRegistration) => ipcRenderer.invoke("trial:activate", registration) as Promise<{ ok: boolean; error?: string; state?: TrialState }>,
@@ -99,6 +100,7 @@ export type MinarvaDesktopApi = {
   getVersion: () => Promise<string>;
   platform: NodeJS.Platform;
   getDeviceId?: () => Promise<string>;
+  getSyncDeviceId: () => Promise<string>;
   getTrialState: () => Promise<TrialState>;
   activateTrial: (registration: TrialRegistration) => Promise<{ ok: boolean; error?: string; state?: TrialState }>;
   markTrialSynced: () => Promise<boolean>;
