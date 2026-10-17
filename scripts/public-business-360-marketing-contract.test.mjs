@@ -26,13 +26,34 @@ assert.ok(solutions.includes("not yet available"),"Future e-commerce and site bu
 assert.ok(solutions.includes("not yet a live site builder"));
 assert.ok(solutions.includes("Commerce checkout is not yet available"));
 
-for(const name of ["Starter","Business Pro","Business 360","Enterprise & Custom Integrations"]) {
-  assert.ok(pricing.includes(name),"Package missing: "+name);
+for (const [name, price] of [
+  ["Starter", "₹2,299"],
+  ["Business Pro", "₹4,499"],
+  ["Business Web", "₹6,699"],
+  ["Business 360", "₹8,899"],
+]) {
+  assert.ok(pricing.includes('name: "' + name + '"'), "Approved plan missing: " + name);
+  assert.ok(pricing.includes('price: "' + price + '"'), "Incorrect owner-approved list price: " + name);
 }
-assert.match(pricing,/Pricing to be confirmed/);
-assert.match(pricing,/not yet available for purchase/);
-assert.doesNotMatch(pricing,/₹\s*[0-9]/,"Unapproved prices must not be published");
-assert.doesNotMatch(pricing,/<form[^>]*action=|\/api\/checkout|href="\/signup"/i);
+assert.match(pricing, /Custom Quote/, "Enterprise needs a negotiated quote");
+assert.match(pricing, /per year \+ GST/, "Every plan is an annual price excluding GST");
+assert.match(pricing, /All prices exclude GST/);
+assert.match(pricing, /30-day trial with supported activation/);
+assert.match(pricing, /Everything in Starter/, "Business Pro includes Starter");
+assert.match(pricing, /Everything in Business Pro/, "Business Web includes Pro");
+assert.match(pricing, /Everything in Business Web/, "Business 360 includes Website tier");
+assert.match(pricing, /Website integration in development/);
+assert.match(pricing, /E-commerce integration in development/);
+assert.match(pricing, /not yet available for purchase/);
+assert.match(pricing, /No checkout or payment collection is enabled on this website/);
+assert.doesNotMatch(pricing, /<form[^>]*action=|\/api\/checkout|href="\/signup"/i);
+const commercialPlan = get("docs/BUSINESS_360_COMMERCIAL_AND_INTEGRATION_PLAN.md");
+for (const fee of ["₹2,299", "₹4,499", "₹6,699", "₹8,899"]) {
+  assert.ok(commercialPlan.includes(fee), "Approved fee not recorded in plan: " + fee);
+}
+assert.match(commercialPlan, /Annual plan price points are owner-approved, GST excluded/);
+assert.match(commercialPlan, /Do not open checkout/);
+assert.match(commercialPlan, /Business Web \+ E-commerce \/ Online Store/);
 
 assert.match(partners,/>10%<\/strong>/);
 assert.match(partners,/first eligible subscription fee actually collected/);
