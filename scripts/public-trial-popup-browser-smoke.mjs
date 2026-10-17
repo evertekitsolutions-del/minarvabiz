@@ -73,7 +73,7 @@ try {
   await evalJS('document.dispatchEvent(new MouseEvent("mouseout",{bubbles:true,clientY:0,relatedTarget:null}))');
   await waitFor('!!'+dialog,"desktop exit-intent popup");
   assert.ok((await evalJS(dialog+'.innerText')).includes("Days Free Trial"));
-  await evalJS('document.querySelector("button[aria-label=\\"Close free trial offer\\"]").click()');
+  await evalJS('document.querySelector("button[aria-label^=Close]").click()');
   await waitFor('!'+dialog,"desktop dismissal");
 
   // Do not repeat after navigation inside the same tab.
