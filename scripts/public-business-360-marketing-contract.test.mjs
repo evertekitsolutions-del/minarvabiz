@@ -38,7 +38,7 @@ assert.match(partners,/>10%<\/strong>/);
 assert.match(partners,/first eligible subscription fee actually collected/);
 assert.match(partners,/excluding taxes, discounts, refunds and payment processing charges/);
 assert.match(partners,/30-day refund \/ verification window/);
-assert.match(partners,/one-time commission on the first paid subscription only/);
+assert.match(partners,/One-time commission on the first paid subscription only/);
 assert.match(partners,/not an active or legally binding commission offer/);
 assert.match(partners,/No personal information is collected by this website/);
 assert.match(partners,/href=\{`mailto:/,"Partner enquiry opens a mail client, not fake automatic signup");
