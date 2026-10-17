@@ -1028,3 +1028,7 @@ export interface GeneralLedgerRow {
   runningBalance: number;
   status: JournalEntryStatus;
 }
+
+// Universal 100-business UI metadata (presentation only; never checkout authority).
+export * from "#business-presets";
+export * from "#business-profile";
