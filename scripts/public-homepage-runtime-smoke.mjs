@@ -15,7 +15,7 @@ for (const fragment of ['aria-label="Mobile navigation"', 'aria-label="Main navi
 assert.doesNotMatch(html, /<form[^>]*action=["']?\/signup/i, "Must not present nonfunctional signup as live");
 for (const [urlPath, markers] of [
   ["/solutions", ["Manage. Sell. Serve.", "Online Store / E-commerce", "Staff & Attendance", "In development"]],
-  ["/pricing", ["Starter", "Business Pro", "Business 360", "Pricing to be confirmed"]],
+  ["/pricing", ["Starter", "Business Pro", "Business Web", "Business 360", "2,299", "4,499", "6,699", "8,899", "All prices exclude GST", "not yet available for purchase", "Custom Quote"]],
   ["/partners", ["Partner With Us", "10%", "Referral", "not an active or legally binding commission offer"]],
 ]) {
   const publicPage = await fetch(new URL(urlPath, baseUrl), { redirect: "manual" });
