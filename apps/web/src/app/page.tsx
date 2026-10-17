@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 
 const releaseUrl = "https://github.com/evertekitsolutions-del/minarvabiz/releases/tag/v1.0.15";
 const navigation = [
+  { title: "Product tour", href: "#product-tour" },
   { title: "Features", href: "#features" },
   { title: "Solutions", href: "/solutions" },
   { title: "Industries", href: "#industries" },
