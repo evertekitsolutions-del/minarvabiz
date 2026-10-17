@@ -288,4 +288,40 @@ SELECT test.denied($q$
   'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
 $q$,'42501','authenticated clients cannot consume challenges');
 RESET ROLE;
+
+-- A challenge minted while a branch was active must fail if that branch is
+-- disabled before the proof reaches the backend.
+SET ROLE service_role;
+INSERT INTO public.sync_device_enrollment_challenges
+  (org_id,device_id,challenge_id,actor_user_id,branch_id,nonce)
+VALUES (
+ '10000000-0000-4000-8000-000000000001',
+ 'da000000-0000-4000-8000-000000000005',
+ 'ca000000-0000-4000-8000-000000000006',
+ 'a0000000-0000-4000-8000-000000000002',
+ 'aa000000-0000-4000-8000-000000000001',
+ 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE'
+);
+RESET ROLE;
+UPDATE public.branches SET is_active = false
+ WHERE id = 'aa000000-0000-4000-8000-000000000001';
+SET ROLE service_role;
+DO $b1_branch_state$
+BEGIN
+ IF private.b1_consume_sync_enrollment_challenge(
+   '10000000-0000-4000-8000-000000000001',
+   'da000000-0000-4000-8000-000000000005',
+   'ca000000-0000-4000-8000-000000000006',
+   'a0000000-0000-4000-8000-000000000002',
+   'aa000000-0000-4000-8000-000000000001',
+   'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE'
+ ) THEN
+    RAISE EXCEPTION 'Deactivated branch challenge was consumed';
+ END IF;
+END
+$b1_branch_state$;
+RESET ROLE;
+UPDATE public.branches SET is_active = true
+ WHERE id = 'aa000000-0000-4000-8000-000000000001';
+
 SELECT 'B1 one-time server-only enrollment challenge PASS' AS result;
