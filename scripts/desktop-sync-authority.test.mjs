@@ -5,10 +5,13 @@ import { generateKeyPairSync, sign } from "node:crypto";
 
 const require = createRequire(import.meta.url);
 const { verifyNativeDeviceAuthority } = require("../apps/desktop/electron/sync-authority.ts");
+const { verifyNativeSyncRevocations } = require("../apps/desktop/electron/sync-revocations.ts");
 const domain = "MINARVA-BIZ:B1:SYNC-DEVICE-AUTHORITY:v1:";
 const now = Date.UTC(2026, 9, 17, 10, 0, 0);
 const DAY = 86_400_000;
 const pair = generateKeyPairSync("ed25519");
+const revocationPair = generateKeyPairSync("ed25519");
+const revocationKeyHex = revocationPair.publicKey.export({ format:"der",type:"spki" }).subarray(-32).toString("hex");
 const unrelated = generateKeyPairSync("ed25519");
 const publicKeyHex = pair.publicKey.export({ format: "der", type: "spki" }).subarray(-32).toString("hex");
 const orgId = "10000000-0000-4000-8000-000000000001";
@@ -41,6 +44,37 @@ function token(record = payload(), privateKey = pair.privateKey, signingDomain =
   const signature = sign(null, Buffer.from(signingDomain + body), privateKey).toString("base64url");
   return body + "." + signature;
 }
+function revocationEvidence(overrides = {}, trustOverrides = {}) {
+  const record = {
+    type: "minarvabiz-sync-revocations-v1",
+    version: 1,
+    keyId: "sync-revocation-test-1",
+    orgId,
+    deviceId,
+    sequence: 7,
+    issuedAtMs: now - DAY,
+    expiresAtMs: now + DAY,
+    revokedCredentialIds: [],
+    revokedBranchIds: [],
+    ...overrides,
+  };
+  const body = Buffer.from(JSON.stringify(record)).toString("base64url");
+  const signature = sign(null,
+    Buffer.from("MINARVA-BIZ:B1:SYNC-REVOCATIONS:v1:" + body),
+    revocationPair.privateKey).toString("base64url");
+  const verified = verifyNativeSyncRevocations(body + "." + signature, {
+    trustedKeyId: "sync-revocation-test-1",
+    pinnedEd25519PublicKeyHex: revocationKeyHex,
+    expectedOrgId: record.orgId,
+    expectedDeviceId: record.deviceId,
+    lastAcceptedSequence: 6,
+    lastTrustedClockMs: now - DAY,
+    nowMs: now,
+    ...trustOverrides,
+  });
+  assert.equal(verified.ok, true, JSON.stringify(verified));
+  return verified.snapshot;
+}
 function context(overrides = {}) {
   return {
     trustedKeyId: "sync-enrollment-test-1",
@@ -49,11 +83,9 @@ function context(overrides = {}) {
     expectedDeviceId: deviceId,
     expectedActorUserId: actorUserId,
     expectedBranchId: branchId,
-    lastTrustedRevocationCheckMs: now - DAY,
     lastTrustedClockMs: now - DAY,
     nowMs: now,
-    revokedCredentialIds: new Set(),
-    revokedBranchIds: new Set(),
+    revocationSnapshot: revocationEvidence(),
     ...overrides,
   };
 }
@@ -103,13 +135,16 @@ test("tenant, actor, native device and branch are all bound", () => {
 });
 
 test("revoked, stale revocation data and clock rollback fail closed", () => {
-  assert.equal(code(token(), context({ revokedCredentialIds: new Set([credentialId]) })), "revoked");
-  assert.equal(code(token(), context({ revokedBranchIds: new Set([branchId]) })), "revoked");
-  assert.equal(code(token(), context({ revokedBranchIds: null })), "revocation_stale");
-  assert.equal(code(token(), context({ revokedCredentialIds: new Set() ,lastTrustedRevocationCheckMs: now - 8 * DAY })), "revocation_stale");
-  assert.equal(code(token(), context({ revokedCredentialIds: null })), "revocation_stale");
+  assert.equal(code(token(), context({ revocationSnapshot: revocationEvidence({
+    revokedCredentialIds: [credentialId] }) })), "revoked");
+  assert.equal(code(token(), context({ revocationSnapshot: revocationEvidence({
+    revokedBranchIds: [branchId] }) })), "revoked");
+  assert.equal(code(token(), context({ revocationSnapshot: null })), "revocation_stale");
+  assert.equal(code(token(), context({ revocationSnapshot: { ...revocationEvidence() } })), "revocation_stale",
+    "A forged snapshot clone must lose native verification provenance");
+  assert.equal(code(token(), context({ revocationSnapshot: revocationEvidence({
+    orgId: otherOrgId }) })), "revocation_stale");
   assert.equal(code(token(), context({ lastTrustedClockMs: now + 6 * 60_000 })), "clock_untrusted");
-  assert.equal(code(token(), context({ lastTrustedRevocationCheckMs: now + 1 })), "clock_untrusted");
 });
 
 test("expired, not-yet-valid and overlong credentials fail", () => {
