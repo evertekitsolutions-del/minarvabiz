@@ -198,7 +198,7 @@ test("later signed snapshots cannot silently remove a historical credential or b
   assert.equal((await store.accept(signed(21,{
     revokedCredentialIds:[credentialId,addedCredential],
     revokedBranchIds:[branchId,addedBranch],
-  })).sequence,21);
+  }))).sequence,21);
   assert.equal((await createNativeRevocationStore(options(dir,clock)).recover()).sequence,21);
 });
 
