@@ -1,0 +1,43 @@
+name: B1 tenant device authority SQL
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/migrations/20261017_b1_sync_device_enrollment.sql"
+      - "supabase/MIGRATION_ORDER.txt"
+      - "scripts/b1-sync-device-enrollment-e2e.sql"
+      - ".github/workflows/b1-device-authority-sql.yml"
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/20261017_b1_sync_device_enrollment.sql"
+      - "supabase/MIGRATION_ORDER.txt"
+      - "scripts/b1-sync-device-enrollment-e2e.sql"
+      - ".github/workflows/b1-device-authority-sql.yml"
+permissions:
+  contents: read
+jobs:
+  tenant-rls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Verify tenant/branch enrollment, revocation and RLS against PostgreSQL
+        run: |
+          docker run --rm --network host \
+            -e PGPASSWORD=postgres \
+            -v "$PWD:/workspace" -w /workspace postgres:16 \
+            psql -X -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+              -f scripts/b1-sync-device-enrollment-e2e.sql
