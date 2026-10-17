@@ -28,7 +28,8 @@ function challenge(overrides = {}) {
 function sign(ch = challenge(), overrides = {}) {
   return signNativeEnrollmentChallenge(ch, {
     expectedOrgId:ORG,expectedDeviceId:DEVICE,expectedActorUserId:ACTOR,
-    expectedBranchId:BRANCH,privateKey:keyPair.privateKey,nowMs:NOW,...overrides,
+    expectedBranchId:BRANCH,expectedPublicKeyBase64Url:keyBase64Url,
+    privateKey:keyPair.privateKey,nowMs:NOW,...overrides,
   });
 }
 function trust(overrides = {}) {
