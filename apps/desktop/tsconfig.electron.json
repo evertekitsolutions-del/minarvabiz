@@ -12,7 +12,12 @@
     "resolveJsonModule": true,
     "declaration": false,
     "sourceMap": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ],
+    "rewriteRelativeImportExtensions": true
   },
-  "include": ["electron/**/*.ts"]
+  "include": [
+    "electron/**/*.ts"
+  ]
 }
