@@ -4,17 +4,18 @@ import TrialWelcomePopup from "./TrialWelcomePopup";
 
 export const metadata: Metadata = {
   title: "Minarva Biz | Business Management, Beautifully Connected",
-  description: "Explore the Minarva Biz business platform for billing, inventory, GST workflows, services, tailoring, laundry and reporting. Browser, Windows Offline and Hybrid editions.",
+  description: "Minarva Biz connects billing, inventory, GST and accounts, CRM, staff attendance and services, with business websites, e-commerce and marketing integrations on the roadmap. Windows Offline, Online and Hybrid.",
   robots: { index: true, follow: true },
 };
 
 const releaseUrl = "https://github.com/evertekitsolutions-del/minarvabiz/releases/tag/v1.0.15";
 const navigation = [
-  { title: "Product tour", href: "#product-tour" },
   { title: "Features", href: "#features" },
-  { title: "Workflows", href: "#workflows" },
+  { title: "Solutions", href: "/solutions" },
   { title: "Industries", href: "#industries" },
   { title: "Editions", href: "#editions" },
+  { title: "Pricing", href: "/pricing" },
+  { title: "Partner with us", href: "/partners" },
   { title: "Download", href: "#download" },
   { title: "FAQ", href: "#faq" },
 ] as const;
@@ -70,6 +71,8 @@ const faqs = [
   { question: "Does this website show real customer business data?", answer: "No. The hero dashboard is a design-reference image, not a live application screenshot; the product walkthrough is illustrative. Real customer data is not published here." },
   { question: "How long is the free trial?", answer: "The Minarva Biz trial period is 30 days. Self-service signup and automatic trial activation are still in progress; trial access requires supported activation." },
   { question: "Are all features available for every business?", answer: "Availability depends on edition, module readiness, location-specific requirements and verification. The product direction is broad, but this website does not claim universal readiness." },
+  { question: "Are e-commerce websites and business websites included?", answer: "They are part of Minarva Biz's complete platform roadmap. A customer website builder, integrated online checkout and marketing automation are in development, not yet active in the Windows release or 30-day trial." },
+  { question: "Can I earn by referring Minarva Biz?", answer: "We are preparing a referral programme with a proposed one-time 10% commission on eligible first paid subscriptions. It is not yet an active automatic payout programme. See Partner with us for draft conditions." },
   { question: "How do I download the Windows edition?", answer: "The Download button links to the official v1.0.15 GitHub release. Review the available installer assets and release notes before installing." },
 ] as const;
 export default function PublicHomePage() {
@@ -79,14 +82,14 @@ export default function PublicHomePage() {
     <header className="sticky top-0 z-50 border-b border-[#e5edfa] bg-white/95 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1720px] flex-wrap items-center justify-between gap-4 px-5 py-3.5 lg:px-9">
         <Logo/>
-        <nav aria-label="Main navigation" className="hidden items-center gap-6 text-[12px] font-bold text-[#44566c] lg:flex">
+        <nav aria-label="Main navigation" className="hidden items-center gap-4 text-[11px] font-bold text-[#44566c] xl:flex">
           {navigation.map(n=><a key={n.href} href={n.href} className="rounded-md transition hover:text-[#145bea] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1760ef]">{n.title}</a>)}
         </nav>
         <div className="ml-auto flex items-center gap-2">
           <a href="/login" className="inline-flex min-h-10 items-center justify-center rounded-xl border border-[#bcd2fc] bg-white px-4 text-xs font-bold text-[#1254dc] transition hover:bg-[#eff5ff] sm:text-sm">Customer login</a>
           <a href={releaseUrl} target="_blank" rel="noopener noreferrer" className="hidden min-h-10 items-center justify-center gap-2 rounded-xl bg-[#165fee] px-4 text-xs font-extrabold text-white shadow-[0_7px_18px_rgba(27,101,232,.2)] transition hover:bg-[#084bc9] sm:inline-flex"><Icon name="monitor" className="size-4"/>Windows download</a>
         </div>
-        <details className="group w-full lg:hidden">
+        <details className="group w-full xl:hidden">
           <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border border-[#d6e3fc] bg-[#f8fbff] px-4 py-3 text-sm font-bold text-[#243e6c] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1760ef] [&::-webkit-details-marker]:hidden">
             Browse sections <span aria-hidden="true" className="text-[#125fed] transition group-open:rotate-45">+</span>
           </summary>
@@ -106,7 +109,7 @@ export default function PublicHomePage() {
               Manage Your Business<br/><span className="text-[#1463ee]">Smarter with Minarva Biz.</span>
             </h1>
             <p className="mt-4 max-w-[670px] text-[14px] leading-6 text-[#536b86] sm:text-[15px] sm:leading-7">
-              Billing, inventory, accounts, services, tailoring, laundry and more — brought into one connected business workspace.
+              Billing, accounts, inventory, CRM, staff attendance and services in one workspace — with online stores, business websites and marketing integrations in our connected growth roadmap.
             </p>
             <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-bold text-[#3b5b7a] sm:text-xs">
               {["Built around real workflows","Windows local-first","Flexible business modules"].map(x=><span key={x} className="inline-flex items-center gap-1.5 rounded-full border border-[#dbeaf8] bg-white/90 px-3 py-2"><Icon name="check" className="size-4 text-[#0ca569]"/>{x}</span>)}
@@ -169,6 +172,32 @@ export default function PublicHomePage() {
           </a>)}
         </div>
         <p className="mt-5 text-xs leading-6 text-[#6e8296]">Feature availability depends on edition and verified deployment readiness.</p>
+      </section>
+      <section id="complete-platform" className="scroll-mt-28 border-y border-[#dce7f7] bg-[#f6faff]">
+        <div className="mx-auto max-w-[1720px] px-5 py-14 sm:py-16 lg:px-9">
+          <div className="flex flex-wrap items-end justify-between gap-5">
+            <div><p className="text-[11px] font-black uppercase tracking-[.18em] text-[#1764ec]">One connected business solution</p>
+              <h2 className="mt-3 text-[clamp(1.75rem,2.65vw,2.8rem)] font-black leading-[1.15] tracking-[-.045em] text-[#0c2951]">Manage your business.<br/><span className="text-[#1764ed]">Sell online. Grow everywhere.</span></h2></div>
+            <p className="max-w-[470px] text-sm leading-7 text-[#57728d]">Minarva Biz is being designed as your complete business operating platform — not only billing software. See what already has supported workflows and what is being built next.</p>
+          </div>
+          <div className="mt-9 grid gap-4 md:grid-cols-3">
+            {[
+              {name:"Manage",sub:"CORE BUSINESS WORKFLOWS",tone:"bg-[#e7f0ff] text-[#145ee6]",title:"Billing, Accounts & People",desc:"Billing & POS, inventory, GST-aware accounts, CRM, Staff Management, Attendance, services and reports.",status:"Supported modules · edition-dependent"},
+              {name:"Sell",sub:"INTEGRATED COMMERCE ROADMAP",tone:"bg-[#eaf8f4] text-[#0a936b]",title:"Online Store & Business Website",desc:"Your own business website, product catalogue, online orders and shared stock — a planned integrated e-commerce experience.",status:"In development · not yet for sale"},
+              {name:"Grow",sub:"CUSTOMER GROWTH ROADMAP",tone:"bg-[#fff3e7] text-[#ca7422]",title:"Marketing, Referrals & Customer Engagement",desc:"Lead capture, campaign integrations, follow-ups, customer communication and partner referrals designed around real business data.",status:"In planning · no automatic campaigns yet"},
+            ].map((cap)=><article key={cap.name} className="rounded-[21px] border border-[#e0e8f5] bg-white p-6 shadow-[0_10px_30px_rgba(33,81,140,.05)]">
+              <span className={"inline-block rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[.12em] "+cap.tone}>{cap.name}</span>
+              <p className="mt-6 text-[10px] font-extrabold tracking-[.14em] text-[#6182a1]">{cap.sub}</p>
+              <h3 className="mt-2 text-lg font-black tracking-tight text-[#173357]">{cap.title}</h3><p className="mt-3 text-[13px] leading-6 text-[#5d7692]">{cap.desc}</p>
+              <p className="mt-5 border-t border-[#e5ecf6] pt-4 text-[11px] font-bold text-[#2661ae]">{cap.status}</p>
+            </article>)}
+          </div>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <a href="/solutions" className="inline-flex min-h-11 items-center rounded-xl bg-[#1763ea] px-5 py-3 text-xs font-black text-white hover:bg-[#0f4ec8]">Explore the full solution →</a>
+            <a href="/pricing" className="inline-flex min-h-11 items-center rounded-xl border border-[#c5d9f3] bg-white px-5 py-3 text-xs font-black text-[#185aa9] hover:bg-[#eaf3ff]">See package options</a>
+            <a href="/partners" className="inline-flex min-h-11 items-center rounded-xl border border-[#c5d9f3] bg-white px-5 py-3 text-xs font-black text-[#185aa9] hover:bg-[#eaf3ff]">Partner with us · 10% proposal</a>
+          </div>
+        </div>
       </section>
       <section id="workflows" className="scroll-mt-28 border-y border-[#e4edfa] bg-[linear-gradient(180deg,#f8fbff,#eef5ff)]">
         <div className="mx-auto max-w-[1720px] px-5 py-14 sm:py-16 lg:px-9">
@@ -284,9 +313,9 @@ export default function PublicHomePage() {
     </main>
     <footer className="border-t border-[#dce8f6] bg-[#f4f8ff]">
       <div className="mx-auto grid max-w-[1720px] gap-8 px-5 py-12 lg:grid-cols-[1fr_auto] lg:px-9">
-        <div><Logo/><p className="mt-5 max-w-md text-sm leading-7 text-[#67809b]">Business management built around everyday work. Current product availability and acceptance are being verified.</p></div>
+        <div><Logo/><p className="mt-5 max-w-md text-sm leading-7 text-[#67809b]">One connected business platform for billing, accounts, customers, people, services and the future of online growth. Module readiness varies.</p></div>
         <nav aria-label="Footer navigation" className="flex flex-wrap items-start gap-5 text-xs font-bold text-[#3c6084]">
-          <a href="#product-tour" className="hover:text-[#175ce5]">Product tour</a><a href="#features" className="hover:text-[#175ce5]">Features</a><a href="#editions" className="hover:text-[#175ce5]">Editions</a><a href="/login" className="hover:text-[#175ce5]">Customer login</a><a href={releaseUrl} target="_blank" rel="noopener noreferrer" className="hover:text-[#175ce5]">Windows release</a>
+          <a href="#product-tour" className="hover:text-[#175ce5]">Product tour</a><a href="/solutions" className="hover:text-[#175ce5]">All solutions</a><a href="/pricing" className="hover:text-[#175ce5]">Pricing</a><a href="/partners" className="hover:text-[#175ce5]">Partner with us</a><a href="#features" className="hover:text-[#175ce5]">Features</a><a href="#editions" className="hover:text-[#175ce5]">Editions</a><a href="/login" className="hover:text-[#175ce5]">Customer login</a><a href={releaseUrl} target="_blank" rel="noopener noreferrer" className="hover:text-[#175ce5]">Windows release</a>
         </nav>
       </div>
       <nav aria-label="Industry guides" className="mx-auto flex max-w-[1720px] flex-wrap items-center gap-x-5 gap-y-3 border-t border-[#dce8f6] px-5 py-5 text-[11px] lg:px-9">
