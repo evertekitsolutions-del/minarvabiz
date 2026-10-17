@@ -6,6 +6,7 @@
  * the main process after trusted enrollment; NEVER from renderer IPC payloads.
  */
 import { createPublicKey, verify } from "node:crypto";
+import { isVerifiedSyncRevocationSnapshot, type VerifiedSyncRevocationSnapshot } from "./sync-revocations";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const B64URL = /^[A-Za-z0-9_-]+$/;
@@ -53,9 +54,8 @@ export interface DeviceAuthorityVerificationContext {
   readonly expectedActorUserId: string;
   readonly expectedBranchId: string;
   /** Previously verified, durable local revocation snapshot. */
-  readonly revokedCredentialIds: ReadonlySet<string>;
-  readonly revokedBranchIds: ReadonlySet<string>;
-  readonly lastTrustedRevocationCheckMs: number;
+  /** Must be native-verified and read from trusted, persisted revocation state. */
+  readonly revocationSnapshot: VerifiedSyncRevocationSnapshot;
   /** Persisted high-water time; prevents trivial wall-clock rollback. */
   readonly lastTrustedClockMs: number;
   readonly nowMs: number;
@@ -172,22 +172,24 @@ export function verifyNativeDeviceAuthority(
   }
   if (!isFiniteMillisecond(context.nowMs) ||
       !isFiniteMillisecond(context.lastTrustedClockMs) ||
-      !isFiniteMillisecond(context.lastTrustedRevocationCheckMs) ||
-      context.nowMs + MAX_CLOCK_SKEW_MS < context.lastTrustedClockMs ||
-      context.nowMs < context.lastTrustedRevocationCheckMs ||
-      context.lastTrustedRevocationCheckMs > context.nowMs + MAX_CLOCK_SKEW_MS) {
+      context.nowMs + MAX_CLOCK_SKEW_MS < context.lastTrustedClockMs) {
     return failure("clock_untrusted");
   }
   if (context.nowMs < payload.notBeforeMs || context.nowMs >= payload.expiresAtMs ||
       payload.issuedAtMs > context.nowMs + MAX_CLOCK_SKEW_MS) {
     return failure("expired");
   }
-  if (!(context.revokedCredentialIds instanceof Set) ||
-      !(context.revokedBranchIds instanceof Set)) return failure("revocation_stale");
-  if (context.revokedCredentialIds.has(payload.credentialId) ||
-      context.revokedBranchIds.has(context.expectedBranchId)) return failure("revoked");
-  if (context.nowMs - context.lastTrustedRevocationCheckMs > MAX_REVOCATION_AGE_MS)
+  const revocations = context.revocationSnapshot;
+  if (!isVerifiedSyncRevocationSnapshot(revocations) ||
+      revocations.orgId !== payload.orgId ||
+      revocations.deviceId !== payload.deviceId ||
+      context.nowMs < revocations.issuedAtMs ||
+      context.nowMs >= revocations.expiresAtMs ||
+      context.nowMs - revocations.issuedAtMs > MAX_REVOCATION_AGE_MS)
     return failure("revocation_stale");
+  if (revocations.revokedCredentialIds.includes(payload.credentialId) ||
+      revocations.revokedBranchIds.includes(context.expectedBranchId))
+    return failure("revoked");
 
   const authority = Object.freeze({
     ...payload,
