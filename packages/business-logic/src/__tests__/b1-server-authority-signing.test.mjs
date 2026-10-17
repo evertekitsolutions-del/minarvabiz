@@ -99,6 +99,7 @@ test("issuer refuses forged roles, noncanonical grants, invalid lifetimes and ex
     {...original,issuedAtMs:now+1e8,notBeforeMs:now+1e8,expiresAtMs:now+1e8+DAY},
     {...original,expiresAtMs:now+31*DAY},
     {...original,expiresAtMs:now},
+    {...original,issuedAtMs:now-10*60_000,notBeforeMs:now-10*60_000},
     {...original,extra:"untrusted"},
   ]) assert.throws(()=>issue(params({payload:badPayload})),/invalid|scope|lifetime|field|expire/i);
 });
