@@ -61,3 +61,33 @@ Rollback of schema-only incremental migration (if deployed in future) requires
 first confirming no production device authority data exists, then reversing
 dependent grants, audit objects, and enrollments in an explicitly approved
 maintenance plan. Never drop recorded authority/audit rows blindly.
+
+## 2026-10-17: native signed authority verifier (draft, disabled)
+
+Added `apps/desktop/electron/sync-authority.ts` as a native-only,
+unintegrated Ed25519 verification primitive, with
+`scripts/desktop-sync-authority.test.mjs` and Linux/Windows CI coverage.
+
+Protocol: `base64url(canonical-json).base64url(signature)`; the signature
+signs `MINARVA-BIZ:B1:SYNC-DEVICE-AUTHORITY:v1:` concatenated with the
+encoded body. Canonical JSON uses exactly the named keys/order defined
+by the native verifier. Trust uses a separately pinned enrollment Ed25519
+public key, never the license key. No signing private key is bundled.
+
+Verification is fail-closed for noncanonical tokens, invalid signatures,
+wrong trust key, org/device/actor/branch mismatches, revoked devices or
+branches, duplicated or unsorted grants, lifetime expiry, stale
+revocation evidence, and wall-clock rollback. Accepted authority
+is an immutable, symbol-branded native result.
+
+**Security boundary remains INCOMPLETE:** The verifier must never receive
+renderer-provided trust anchors, expected identities, revocation sets or
+clock evidence. It is intentionally NOT exposed by preload, not installed
+into `permissions.ts`, and not used to authorize SQLite/cloud mutations.
+Native signed enrollment issuance, authoritative key delivery, persistent
+signed revocation snapshots, clock high-water persistence, proprietor
+transition, and branch revalidation remain prerequisites to activation.
+Offline revocation cannot be instantaneous without a network; proposed
+seven-day freshness ceiling is not a guarantee of immediate revocation.
+
+Verification status: exact-head CI still required. No release claim.
