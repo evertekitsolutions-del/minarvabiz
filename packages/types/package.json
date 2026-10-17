@@ -15,6 +15,7 @@
     "typescript": "^5.7.2"
   },
   "imports": {
-    "#business-presets": "./src/business-presets.ts"
+    "#business-presets": "./src/business-presets.ts",
+    "#business-profile": "./src/universal-business-profile.ts"
   }
 }
