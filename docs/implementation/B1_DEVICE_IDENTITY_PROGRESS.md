@@ -91,3 +91,27 @@ Offline revocation cannot be instantaneous without a network; proposed
 seven-day freshness ceiling is not a guarantee of immediate revocation.
 
 Verification status: exact-head CI still required. No release claim.
+
+
+## 2026-10-17: staged native revocation anchor fencing
+
+- Journal recovery now requires an independent `NativeRevocationAnchorStore` returning
+  the last committed sequence, SHA-256 token digest, and acceptance timestamp.
+  The anchor must be held **outside userData** in rollback-resistant native storage.
+- A missing, older, same-sequence/different-hash, or malformed anchor is
+  rejected. A journal entry ahead of the committed anchor also fails closed.
+- Publication order: fsync new receipt -> exclusive hard-link -> sync directory
+  (where supported) -> `anchor.write(...)` -> return verified snapshot.
+  If anchor persistence fails, no authority is returned and a subsequent
+  restart refuses the ahead-of-anchor journal until explicit trusted repair.
+- Revocation lists are cumulative: later signed snapshots cannot remove
+  credential or branch revocations previously committed for this device.
+- Regression tests cover journal deletion, valid replacement at same sequence,
+  failed anchor commit, malformed anchor, and attempts to un-revoke identities.
+
+**UNRELEASED / SECURITY LIMIT:** This is a contract and staging module, not a
+shipped protected credential store. No OS-backed anchor implementation, TPM
+monotonic counter, enrollment credential issuance, or financial replay gate
+has been installed. The in-memory test anchor establishes state-machine
+behavior only and is not considered secure production storage. NTFS power-loss
+durability remains an explicit Windows acceptance task.
