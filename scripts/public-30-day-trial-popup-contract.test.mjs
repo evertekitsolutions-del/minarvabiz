@@ -20,8 +20,8 @@ assert.match(popup, /window\.scrollY \/ available >= MOBILE_SCROLL_FRACTION/, "M
 assert.match(popup, /document\.removeEventListener\("mouseout", onExitIntent\)/, "Remove desktop listener after trigger and unmount");
 assert.match(popup, /window\.removeEventListener\("scroll", onMobileScroll\)/, "Remove mobile listener after trigger and unmount");
 assert.doesNotMatch(popup, /setTimeout|SHOW_AFTER_MS|10_000/, "No time-based automatic popup");
-assert.match(popup, /window\.sessionStorage\.getItem\(SESSION_KEY\)/, "Check session visibility");
-assert.match(popup, /window\.sessionStorage\.setItem\(SESSION_KEY, "shown"\)/, "Avoid repeating popup on navigation during same tab session");
+assert.match(popup, /window\.sessionStorage\.getItem\(TRIAL_POPUP_SHOWN_NAME\)/, "Check session visibility");
+assert.match(popup, /window\.sessionStorage\.setItem\(TRIAL_POPUP_SHOWN_NAME, "shown"\)/, "Avoid repeating popup on navigation during same tab session");
 assert.doesNotMatch(popup, /localStorage|document\.cookie/, "No persistent tracking required");
 
 assert.match(popup, /role="dialog"/);
