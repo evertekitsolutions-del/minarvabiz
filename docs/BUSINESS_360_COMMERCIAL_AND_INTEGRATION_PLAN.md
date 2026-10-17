@@ -1,6 +1,6 @@
 # Minarva Biz — Business 360 and Commercial Plan (DRAFT)
 
-Last reviewed: 2026-10-17. Commercial terms **require owner approval** before they become active.
+Last reviewed: 2026-10-17. **Annual plan price points are owner-approved, GST excluded.** User/device limits, support SLAs, payment collection, licensing entitlements, launch timing and referral payout legal terms require separate approval and implementation.
 
 ## Product identity
 
@@ -20,16 +20,19 @@ Minarva Biz is intended to be **one connected platform to Manage, Sell and Grow 
 
 The public website's **Solutions** page must distinguish shipped workflows from in-development features. Do not sell the planned commerce tier as complete.
 
-## Proposed annual India price ladder — NOT APPROVED
+## Approved annual India price ladder — EXCLUDING GST
 
-Displayed below for owner review only; do not publish rupee prices or open checkout until approved and licensed in software. GST is additional; introductory discounts, support scope and renewal dates need explicit invoices.
+**Owner-approved 2026-10-17:** the following are the target annual subscription price points, **excluding applicable GST**. Prices may be displayed on the public Pricing page now. **Do not open checkout, promise entitlements, accept payment for incomplete modules or modify issued licenses until further commercial and release gates pass.**
 
-| Plan | Proposed fee / tenant / year | Proposed seat cap | Capabilities |
-| --- | ---: | ---: | --- |
-| Starter | ₹3,999 | 2 users, 1 branch | Core invoicing, stock, purchases, basic accounts and reports |
-| Business Pro | ₹8,999 | 5 users, 1 branch | Starter plus CRM, staff, attendance, services and operational follow-ups |
-| Business 360 | ₹17,999 | 10 users, 1 branch | Pro plus planned business website, e-commerce and marketing integrations **only after shipped** |
-| Enterprise | Scoped quotation | Contract-specific | Multi-branch, custom permissions, migrations, API/integrations, dedicated support |
+| Plan | Approved list price / business / year (ex GST) | Branch policy | Entitlements / product target |
+| --- | ---: | --- | --- |
+| Starter | ₹2,299 | 1 branch baseline; user/device limits TBD | Billing, inventory, purchases, accounts and reports |
+| Business Pro | ₹4,499 | 1 branch baseline; user/device limits TBD | Starter + CRM, staff, attendance, services and follow-ups |
+| Business Web | ₹6,699 | 1 branch baseline; user/device limits TBD | Pro + Business Website and Marketing **only after those modules are released** |
+| Business 360 | ₹8,899 | 1 branch baseline; user/device limits TBD | Business Web + E-commerce / Online Store and Marketing **only after those modules are released** |
+| Enterprise | Custom Quote | Contract-specific | Multi-branch, custom integrations, larger teams, migration and scoped support |
+
+All higher tiers include all lower-tier entitlements **when those modules are actually released**. The public pricing page must visibly label the not-yet-available Business Web and Business 360 modules; the user-approved price is not a claim that those modules are shipped.
 
 * All packages are based on 30-day supported trial eligibility; the website must not claim live online self-service trial activation.
 * Do not bill for a module before launch acceptance. Until Commerce/Website/Marketing are ready, use a waitlist or individual written quote, never a claim that the Business 360 bundle is delivered.
@@ -38,7 +41,7 @@ Displayed below for owner review only; do not publish rupee prices or open check
 * Core feature paywalls must not unexpectedly lock access to customer-owned accounting data at expiration; specify read/export and lawful access policy.
 * No recurring **paid infrastructure or paid AI** for the first 25 paying customers; 25 is a review checkpoint, not an automatic spending switch. Use fair-use limits and free/self-hostable infrastructure as long as viable.
 
-Indicative first-sale referral commissions: Starter ₹399.90, Pro ₹899.90, Business 360 ₹1,799.90 **only if** the pre-tax paid eligible fee equals the proposed list fee with no reductions. These examples are **not** owner-approved payouts.
+Indicative first-sale referral commissions at the approved list prices, before discounts or other exclusions: Starter ₹229.90, Business Pro ₹449.90, Business Web ₹669.90, Business 360 ₹889.90. These are **examples only**, not approved/owed payouts until a verified partner agreement and payment ledger exist. GST is excluded from the commission base.
 
 ## Referral partner policy — PROPOSED 10%, one-time
 
