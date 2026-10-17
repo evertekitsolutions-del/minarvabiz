@@ -115,3 +115,29 @@ monotonic counter, enrollment credential issuance, or financial replay gate
 has been installed. The in-memory test anchor establishes state-machine
 behavior only and is not considered secure production storage. NTFS power-loss
 durability remains an explicit Windows acceptance task.
+
+
+## 2026-10-17: device proof-of-possession / challenge contract (draft)
+
+- Added `apps/desktop/electron/sync-enrollment-proof.ts`: native-only
+  Ed25519 challenge proof, domain separation, key match to the pending
+  enrollment registry, strict canonical nonce/time/scope validation and
+  a server verifier with atomic, single-use challenge consumption callback.
+- `scripts/desktop-sync-enrollment-proof.test.mjs` covers valid challenge,
+  concurrent replay denial, mismatched device/org/actor/branch, tampering,
+  expired challenges, wrong registered keys and unavailable consumption.
+- Extended the still-unapplied B1 migration with the private
+  `sync_device_enrollment_challenges` table (5 minute TTL), canonical
+  base64url 32-byte nonces, tenant/actor/branch keys, no anon/auth grants,
+  pending-device guard, and `private.b1_consume_sync_enrollment_challenge`
+  for service_role-only atomic challenge consumption.
+- Added disposable PostgreSQL checks for challenge one-time use, wrong
+  nonce denial, and authenticated role isolation.
+
+**IMPORTANT:** A cryptographic proof does not authorize the device or issue
+credentials by itself. The backend must bind the challenge to an authenticated
+session, verify proof against the pending DB record, consume it atomically,
+and then issue a signed authority credential only after its own trust checks.
+No signing service, credential issuance API, desktop registration IPC,
+offline replay switch, production migration, or OS protected signing-key
+persistence has been enabled. This is an isolated acceptance increment.
