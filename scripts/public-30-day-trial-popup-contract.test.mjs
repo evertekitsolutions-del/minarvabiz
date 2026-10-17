@@ -10,9 +10,16 @@ assert.match(home, /import TrialWelcomePopup from "\.\/TrialWelcomePopup"/);
 assert.match(home, /<TrialWelcomePopup\s*\/>/, "Popup must be mounted on public homepage");
 assert.doesNotMatch(layout, /TrialWelcomePopup/, "Never interrupt authenticated app routes");
 
-assert.match(popup, /SHOW_AFTER_MS\s*=\s*10_000\s*;/, "Display after exactly 10 seconds");
-assert.match(popup, /window\.setTimeout\(/, "Timer must run after mount");
-assert.match(popup, /window\.clearTimeout\(timer\)/, "Cancel timer on unmount");
+assert.match(popup, /MOBILE_SCROLL_FRACTION\s*=\s*0\.5\s*;/, "Mobile prompt starts only after 50% scroll");
+assert.match(popup, /window\.matchMedia\("\(hover: hover\) and \(pointer: fine\)"\)/, "Desktop exit intent needs genuine pointer");
+assert.match(popup, /document\.addEventListener\("mouseout", onExitIntent\)/, "Detect desktop mouse exit");
+assert.match(popup, /event\.relatedTarget !== null/, "Never trigger when cursor just changes element");
+assert.match(popup, /event\.clientY > 8/, "Do not interrupt side or bottom exits");
+assert.match(popup, /window\.addEventListener\("scroll", onMobileScroll, \{ passive: true \}\)/, "Scroll trigger is passive");
+assert.match(popup, /window\.scrollY \/ available >= MOBILE_SCROLL_FRACTION/, "Mobile engages after half the page");
+assert.match(popup, /document\.removeEventListener\("mouseout", onExitIntent\)/, "Remove desktop listener after trigger and unmount");
+assert.match(popup, /window\.removeEventListener\("scroll", onMobileScroll\)/, "Remove mobile listener after trigger and unmount");
+assert.doesNotMatch(popup, /setTimeout|SHOW_AFTER_MS|10_000/, "No time-based automatic popup");
 assert.match(popup, /window\.sessionStorage\.getItem\(SESSION_KEY\)/, "Check session visibility");
 assert.match(popup, /window\.sessionStorage\.setItem\(SESSION_KEY, "shown"\)/, "Avoid repeating popup on navigation during same tab session");
 assert.doesNotMatch(popup, /localStorage|document\.cookie/, "No persistent tracking required");
@@ -40,4 +47,4 @@ assert.doesNotMatch(popup, /91%|crore|185K|5X more profits|4\.8/, "Never copy un
 assert.match(home, /The evaluation period is 30 days/, "Website disclosure must agree with popup");
 assert.match(home, /Self-service signup and automatic trial activation are still in progress/, "Website FAQ must not promise unready signup");
 
-console.log("Public 30-day free-trial delayed modal accessibility + honest marketing contract PASS");
+console.log("Public 30-day exit-intent and mobile-scroll trial modal contract PASS");
