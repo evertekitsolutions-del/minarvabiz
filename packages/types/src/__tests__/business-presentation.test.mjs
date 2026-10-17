@@ -13,6 +13,10 @@ for (const value of ["service", "OTHER", "", 0, null, {}, "__proto__"]) {
 }
 assert.deepEqual(resolveBusinessCapabilities("EXPIRE_BASED"), ["barcode", "expiry"]);
 assert.deepEqual(resolveBusinessCapabilities("SERVICE"), ["booking"]);
+const retailDefaults = resolveBusinessCapabilities("RETAIL");
+assert.ok(Object.isFrozen(retailDefaults), "Defaults must not allow one tenant to grant capabilities to another");
+assert.throws(() => retailDefaults.push("serial"), TypeError);
+assert.deepEqual(resolveBusinessCapabilities("RETAIL"), ["barcode"]);
 assert.throws(() => resolveBusinessCapabilities("__proto__"), /Unknown business group/);
 
 for (const cap of ["barcode", "expiry", "serial", "dimension", "booking"]) {
