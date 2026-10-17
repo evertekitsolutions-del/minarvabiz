@@ -4,11 +4,13 @@ import * as React from "react";
 
 /**
  * Marketing-only invitation, not a licensing or registration endpoint.
- * Show once per browser tab session, 10 seconds after the homepage mounts.
- * Deliberately does not change the actual trial entitlement or start a trial.
+ * Desktop: show when the mouse leaves through the top of the viewport
+ * (exit intent). Touch: show after 50% of the page has been scrolled.
+ * Show once per tab session; never use a time-based interruption.
+ * Deliberately does not change any trial entitlement or start a trial.
  */
-const SHOW_AFTER_MS = 10_000;
-const SESSION_KEY = "minarva-biz-marketing-trial-v1";
+const MOBILE_SCROLL_FRACTION = 0.5;
+const SESSION_KEY = "minarva-biz-marketing-trial-v2";
 const WINDOWS_RELEASE = "https://github.com/evertekitsolutions-del/minarvabiz/releases/tag/v1.0.15";
 
 export default function TrialWelcomePopup() {
@@ -20,17 +22,48 @@ export default function TrialWelcomePopup() {
     try {
       if (window.sessionStorage.getItem(SESSION_KEY) === "shown") return;
     } catch {
-      // Browser privacy settings may disable storage: the popup still works.
+      // Storage can be disabled; keep the dialog dismissible.
     }
-    const timer = window.setTimeout(() => {
+
+    let triggered = false;
+    const isDesktopPointer = () =>
+      window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
+    function showOnce() {
+      if (triggered) return;
+      triggered = true;
       try {
         window.sessionStorage.setItem(SESSION_KEY, "shown");
       } catch {
-        // Never prevent visitors from dismissing the invitation.
+        // No persistent tracking; the local flag still prevents repeats.
       }
       setOpen(true);
-    }, SHOW_AFTER_MS);
-    return () => window.clearTimeout(timer);
+      document.removeEventListener("mouseout", onExitIntent);
+      window.removeEventListener("scroll", onMobileScroll);
+    }
+
+    function onExitIntent(event: MouseEvent) {
+      // A genuine exit into browser chrome, not movement between elements.
+      // Ignore side/bottom exits and touch/hybrid interaction.
+      if (!isDesktopPointer() || event.relatedTarget !== null || event.clientY > 8) return;
+      showOnce();
+    }
+
+    function onMobileScroll() {
+      // Touch devices cannot express mouse exit intent.
+      if (isDesktopPointer()) return;
+      const available = document.documentElement.scrollHeight - window.innerHeight;
+      if (available > 0 && window.scrollY / available >= MOBILE_SCROLL_FRACTION) {
+        showOnce();
+      }
+    }
+
+    document.addEventListener("mouseout", onExitIntent);
+    window.addEventListener("scroll", onMobileScroll, { passive: true });
+    return () => {
+      document.removeEventListener("mouseout", onExitIntent);
+      window.removeEventListener("scroll", onMobileScroll);
+    };
   }, []);
 
   React.useEffect(() => {
