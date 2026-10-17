@@ -212,20 +212,23 @@ CREATE TRIGGER b1_guard_branch_grant BEFORE INSERT OR UPDATE
 CREATE FUNCTION private.b1_audit_sync_authority()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $$
-DECLARE event_name text;
+DECLARE
+  event_name text;
+  audit_branch_id uuid;
 BEGIN
   IF TG_TABLE_NAME = 'sync_device_enrollments' THEN
     event_name := CASE WHEN TG_OP = 'INSERT' THEN 'device_requested'
       WHEN NEW.status = 'active' THEN 'device_approved'
       ELSE 'device_revoked' END;
+    audit_branch_id := NULL;
   ELSE
+    audit_branch_id := NEW.branch_id;
     event_name := CASE WHEN TG_OP = 'INSERT' THEN 'branch_granted'
       ELSE 'branch_revoked' END;
   END IF;
   INSERT INTO public.sync_device_authority_audit
     (org_id, device_id, branch_id, event_type, actor_user_id)
-  VALUES (NEW.org_id, NEW.device_id,
-    CASE WHEN TG_TABLE_NAME = 'sync_device_branch_grants' THEN NEW.branch_id ELSE NULL END,
+  VALUES (NEW.org_id, NEW.device_id, audit_branch_id,
     event_name, auth.uid());
   RETURN NEW;
 END
