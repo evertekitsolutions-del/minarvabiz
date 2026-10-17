@@ -201,3 +201,18 @@ test("later signed snapshots cannot silently remove a historical credential or b
   })).sequence,21);
   assert.equal((await createNativeRevocationStore(options(dir,clock)).recover()).sequence,21);
 });
+
+
+test("accepted clock high-water never decreases inside tolerated skew window",async t=>{
+  const dir=await sandbox(t),clock={now:nowBase};
+  const store=createNativeRevocationStore(options(dir,clock));
+  await store.accept(signed(31));
+  clock.now=nowBase-2*60_000;
+  await store.accept(signed(32));
+  const record=JSON.parse(await fs.readFile(path.join(journal(dir),filename(32)),"utf8"));
+  assert.equal(record.acceptedAtMs,nowBase);
+  assert.equal(trustedAnchors.get(dir).acceptedAtMs,nowBase);
+  assert.equal((await store.recover()).sequence,32);
+  clock.now=nowBase-5*60_000-1;
+  await assert.rejects(store.recover(),/b1_clock_untrusted/);
+});
