@@ -6,7 +6,7 @@
  * the main process after trusted enrollment; NEVER from renderer IPC payloads.
  */
 import { createPublicKey, verify } from "node:crypto";
-import { isVerifiedSyncRevocationSnapshot, type VerifiedSyncRevocationSnapshot } from "./sync-revocations";
+import { isVerifiedSyncRevocationSnapshot, type VerifiedSyncRevocationSnapshot } from "./sync-revocations.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const B64URL = /^[A-Za-z0-9_-]+$/;
