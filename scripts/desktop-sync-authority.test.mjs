@@ -53,6 +53,7 @@ function context(overrides = {}) {
     lastTrustedClockMs: now - DAY,
     nowMs: now,
     revokedCredentialIds: new Set(),
+    revokedBranchIds: new Set(),
     ...overrides,
   };
 }
@@ -83,6 +84,15 @@ test("signature and key trust do not borrow commercial license authority", () =>
   assert.equal(code(body + "." + sig.slice(0, -1)), "invalid_token");
 });
 
+test("rejects noncanonical JSON, including signed duplicate keys", () => {
+  const raw = JSON.stringify(payload()).replace('"role":"super_admin"', '"role":"staff","role":"super_admin"');
+  const body = Buffer.from(raw).toString("base64url");
+  const signature = sign(null, Buffer.from(domain + body), pair.privateKey).toString("base64url");
+  assert.equal(code(body + "." + signature), "invalid_token");
+  const reordered = { role: "super_admin", ...payload() };
+  assert.equal(code(token(reordered)), "invalid_token");
+});
+
 test("tenant, actor, native device and branch are all bound", () => {
   for (const ctx of [
     { expectedOrgId: otherOrgId },
@@ -94,6 +104,8 @@ test("tenant, actor, native device and branch are all bound", () => {
 
 test("revoked, stale revocation data and clock rollback fail closed", () => {
   assert.equal(code(token(), context({ revokedCredentialIds: new Set([credentialId]) })), "revoked");
+  assert.equal(code(token(), context({ revokedBranchIds: new Set([branchId]) })), "revoked");
+  assert.equal(code(token(), context({ revokedBranchIds: null })), "revocation_stale");
   assert.equal(code(token(), context({ revokedCredentialIds: new Set() ,lastTrustedRevocationCheckMs: now - 8 * DAY })), "revocation_stale");
   assert.equal(code(token(), context({ revokedCredentialIds: null })), "revocation_stale");
   assert.equal(code(token(), context({ lastTrustedClockMs: now + 6 * 60_000 })), "clock_untrusted");
