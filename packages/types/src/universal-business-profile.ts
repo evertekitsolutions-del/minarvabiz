@@ -5,11 +5,11 @@ export type BusinessGroup = typeof BUSINESS_GROUPS[number];
 export type BusinessCapability = "barcode" | "expiry" | "serial" | "dimension" | "booking";
 export type BusinessProfile = Readonly<{ companyId: string; businessGroup: BusinessGroup; businessType: string; capabilities: readonly BusinessCapability[] }>;
 const defaults: Readonly<Record<BusinessGroup, readonly BusinessCapability[]>> = Object.freeze({
-  RETAIL: Object.freeze(["barcode"]),
-  EXPIRE_BASED: Object.freeze(["barcode", "expiry"]),
-  SERIALIZED: Object.freeze(["barcode", "serial"]),
-  DIMENSIONAL: Object.freeze(["barcode", "dimension"]),
-  SERVICE: Object.freeze(["booking"]),
+  RETAIL: Object.freeze(["barcode"] as const),
+  EXPIRE_BASED: Object.freeze(["barcode", "expiry"] as const),
+  SERIALIZED: Object.freeze(["barcode", "serial"] as const),
+  DIMENSIONAL: Object.freeze(["barcode", "dimension"] as const),
+  SERVICE: Object.freeze(["booking"] as const),
 });
 export function resolveBusinessCapabilities(group: BusinessGroup): readonly BusinessCapability[] {
   if (!Object.prototype.hasOwnProperty.call(defaults, group)) throw new Error("Unknown business group");
