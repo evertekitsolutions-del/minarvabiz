@@ -56,6 +56,11 @@ assert.match(commercialPlan, /Do not open checkout/);
 assert.match(commercialPlan, /Business Web \+ E-commerce \/ Online Store/);
 
 assert.match(partners,/>10%<\/strong>/);
+assert.match(partners, /import \{ approvedAnnualPlans, quoteReferralCommission \} from "\.\.\/\.\.\/lib\/partner-referral-quote"/);
+assert.match(partners, /aria-label="Referral earnings examples"/);
+assert.match(partners, /estimate\.estimatedCommissionPaise/);
+assert.match(partners, /They are estimates — not approved payouts/);
+assert.match(partners, /The programme is not live and no commission is currently payable/);
 assert.match(partners,/first eligible subscription fee actually collected/);
 assert.match(partners,/excluding taxes, discounts, refunds and payment processing charges/);
 assert.match(partners,/30-day refund \/ verification window/);

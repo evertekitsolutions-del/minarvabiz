@@ -34,6 +34,8 @@ jobs:
         run: node scripts/approved-blue-homepage-contract.test.mjs
       - name: Verify Business 360 roadmap, packages and 10% referral terms
         run: node scripts/public-business-360-marketing-contract.test.mjs
+      - name: Verify referral earnings math on approved plans, refunds and renewals
+        run: node --experimental-strip-types apps/web/src/lib/__tests__/partner-referral-quote.test.mjs
       - name: Verify desktop width, compact typography and substantive workflow content
         run: node scripts/desktop-homepage-density-contract.test.mjs
       - name: Verify six industry-specific product workflow guides and truthful content

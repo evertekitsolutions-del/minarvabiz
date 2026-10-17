@@ -83,6 +83,7 @@ jobs:
         run: |
           node scripts/frontend-cloudflare-config-smoke.mjs
           node scripts/public-business-360-marketing-contract.test.mjs
+          node --experimental-strip-types apps/web/src/lib/__tests__/partner-referral-quote.test.mjs
           node scripts/public-30-day-trial-popup-contract.test.mjs
           node scripts/cloudflare-preview-auth-guard.test.mjs
           node --test scripts/cloudflare-customer-preview-gate.test.mjs

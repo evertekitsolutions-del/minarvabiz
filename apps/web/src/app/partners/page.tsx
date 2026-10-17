@@ -1,4 +1,9 @@
 import type { Metadata } from "next";
+import { approvedAnnualPlans, quoteReferralCommission } from "../../lib/partner-referral-quote";
+
+const formatInr = (paise: number) => new Intl.NumberFormat("en-IN", {
+  style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2,
+}).format(paise / 100);
 
 export const metadata: Metadata = {
   title: "Partner With Us | Minarva Biz",
@@ -27,6 +32,39 @@ export default function PartnersPage() {
         </div>
       </section>
       <section className="mx-auto max-w-[1300px] px-5 py-16 lg:px-10"><h2 className="text-3xl font-black tracking-tight text-[#112e56]">How the proposed programme works</h2><div className="mt-8 grid gap-5 md:grid-cols-3">{commission.map((item,i)=><article key={item.heading} className="rounded-[22px] border border-[#dde9f8] p-7"><span className="grid size-12 place-items-center rounded-xl bg-[#eaf3ff] text-lg font-black text-[#1762e6]">{i+1}</span><h3 className="mt-6 text-xl font-black text-[#12365e]">{item.heading}</h3><p className="mt-3 text-sm leading-7 text-[#647f98]">{item.detail}</p></article>)}</div></section>
+      <section aria-label="Referral earnings examples" className="border-y border-[#e0eafb] bg-[#f8fbff]">
+        <div className="mx-auto max-w-[1300px] px-5 py-14 lg:px-10">
+          <p className="text-xs font-black uppercase tracking-[.16em] text-[#1460d8]">Illustrative earnings</p>
+          <h2 className="mt-3 text-3xl font-black tracking-tight text-[#123459]">What could a 10% referral earn?</h2>
+          <p className="mt-4 max-w-3xl text-sm leading-7 text-[#5e7894]">
+            These examples assume a verified first subscription at the published annual price, excluding GST,
+            with no refunds, discounts, chargebacks or payment gateway deductions. They are estimates — not approved payouts.
+          </p>
+          <div className="mt-7 overflow-x-auto rounded-[18px] border border-[#dce7f5] bg-white">
+            <table className="w-full min-w-[480px] text-left text-sm">
+              <caption className="sr-only">Proposed first-sale referral amounts for the four Minarva Biz annual plans</caption>
+              <thead className="bg-[#ebf3ff] text-xs font-black uppercase tracking-wide text-[#23528a]">
+                <tr><th scope="col" className="px-5 py-4">Annual plan</th><th scope="col" className="px-5 py-4">Price excluding GST</th><th scope="col" className="px-5 py-4">10% estimate</th></tr>
+              </thead>
+              <tbody className="divide-y divide-[#e4ecf8]">
+                {approvedAnnualPlans.map(plan => {
+                  const estimate = quoteReferralCommission({ paidExGstPaise: plan.pricePaise, isFirstSubscription: true });
+                  return <tr key={plan.name}>
+                    <th scope="row" className="px-5 py-4 font-bold text-[#193b61]">{plan.name}</th>
+                    <td className="px-5 py-4 text-[#486681]">{formatInr(plan.pricePaise)}</td>
+                    <td className="px-5 py-4 font-black text-[#1260dd]">{formatInr(estimate.estimatedCommissionPaise)}</td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-4 max-w-4xl text-xs leading-6 text-[#67819a]">
+            Actual commission, if a programme launches, is calculated on eligible net receipts after permitted deductions,
+            only for the first subscription. A 30-day refund and verification hold, partner agreement and manual approval
+            are required. The programme is not live and no commission is currently payable through this site.
+          </p>
+        </div>
+      </section>
       <section id="partner-enquiry" className="border-y border-[#dce8f8] bg-[#f4f8ff]"><div className="mx-auto max-w-[1300px] px-5 py-14 lg:px-10"><h2 className="text-3xl font-black text-[#123459]">Interested in partnering?</h2><p className="mt-4 max-w-3xl text-sm leading-8 text-[#58738e]">For now, introductions are reviewed manually. There is no automatic referral tracking, partner dashboard or commission payout capability in this website yet. Approved programme terms, identity verification and a written agreement will be required before commissions are earned.</p><a className="mt-7 inline-flex min-h-12 items-center rounded-xl bg-[#1762e9] px-6 py-3 text-sm font-black text-white hover:bg-[#0e4fc5]" href={`mailto:${partnerEmail}?subject=${encodeURIComponent(subject)}&body=${body}`}>Email partnership enquiry →</a><p className="mt-3 text-xs text-[#657c96]">Opens your email application. No personal information is collected by this website.</p></div></section>
       <section className="mx-auto max-w-[1300px] px-5 py-14 lg:px-10"><h2 className="text-2xl font-black text-[#123458]">Proposed referral terms — subject to approval</h2><ul className="mt-5 list-disc space-y-3 pl-6 text-sm leading-7 text-[#5d7791]"><li>One-time commission on the first paid subscription only; renewals and additional services are excluded unless agreed separately.</li><li>Payment becomes eligible after receipt of cleared payment and a 30-day refund / verification window.</li><li>Tax, discounts, refunds, gateway charges and chargebacks are excluded from the commission base.</li><li>Duplicate leads, self-referrals, fraudulent sales and unapproved discounts are ineligible.</li><li>Partners must not promise features that are still in development, or send unsolicited messages without required consent.</li><li>Applicable taxes, invoicing, payout threshold and jurisdiction-specific conditions will be documented before launch.</li></ul><p className="mt-6 rounded-2xl border border-[#cbdcf4] bg-[#f6faff] p-5 text-xs leading-6 text-[#476786]">The 10% rate is a proposed business policy, not an active or legally binding commission offer. Referral tracking, payout workflow and agreements are pending implementation and owner approval.</p></section>
     </main>
