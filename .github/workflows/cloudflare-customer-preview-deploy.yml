@@ -82,6 +82,7 @@ jobs:
       - name: Validate exact build input and production authentication
         run: |
           node scripts/frontend-cloudflare-config-smoke.mjs
+          node scripts/public-30-day-trial-popup-contract.test.mjs
           node scripts/cloudflare-preview-auth-guard.test.mjs
           node --test scripts/cloudflare-customer-preview-gate.test.mjs
 

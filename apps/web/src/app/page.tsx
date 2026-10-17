@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import ProductTourClient from "./ProductTourClient";
+import TrialWelcomePopup from "./TrialWelcomePopup";
 
 export const metadata: Metadata = {
   title: "Minarva Biz | Business Management, Beautifully Connected",
@@ -67,13 +68,14 @@ const industries: {title:string;description:string;icon:IconName;accent:string;s
 const faqs = [
   { question: "Can Minarva Biz work without the internet?", answer: "The Windows edition is designed for local-first workflows. Online operations and synchronization require connectivity. Real customer Offline/Hybrid acceptance is still in progress." },
   { question: "Does this website show real customer business data?", answer: "No. The hero dashboard is a design-reference image, not a live application screenshot; the product walkthrough is illustrative. Real customer data is not published here." },
-  { question: "Can I sign up for a free trial?", answer: "Self-service signup and automatic trial activation are still in progress. Existing authorized customers can use Customer login." },
+  { question: "How long is the free trial?", answer: "The Minarva Biz trial period is 30 days. Self-service signup and automatic trial activation are still in progress; trial access requires supported activation." },
   { question: "Are all features available for every business?", answer: "Availability depends on edition, module readiness, location-specific requirements and verification. The product direction is broad, but this website does not claim universal readiness." },
   { question: "How do I download the Windows edition?", answer: "The Download button links to the official v1.0.15 GitHub release. Review the available installer assets and release notes before installing." },
 ] as const;
 export default function PublicHomePage() {
   return <div className="min-h-screen overflow-x-clip bg-white text-[#10243e]">
     <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[90] focus:rounded-lg focus:bg-white focus:p-3">Skip to content</a>
+    <TrialWelcomePopup/>
     <header className="sticky top-0 z-50 border-b border-[#e5edfa] bg-white/95 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1720px] flex-wrap items-center justify-between gap-4 px-5 py-3.5 lg:px-9">
         <Logo/>
@@ -261,7 +263,7 @@ export default function PublicHomePage() {
               </ul>
             </article>)}
           </div>
-          <p className="mt-6 text-xs leading-6 text-[#c5dcf5]">Public prices and self-service trial activation are not yet available. No unverified plan or free-trial offer is advertised.</p>
+          <p className="mt-6 text-xs leading-6 text-[#c5dcf5]">The evaluation period is 30 days. Public pricing and self-service trial activation are not yet available; eligibility and activation require verification.</p>
         </div>
       </section>
       <section id="download" className="scroll-mt-28 bg-[#eaf3ff]">
