@@ -308,6 +308,8 @@ jobs:
           exit 1
       - name: Verify real desktop and mobile homepage density in headless Chrome
         run: node scripts/public-homepage-viewport-browser-smoke.mjs
+      - name: Browser-verify 30-day desktop exit-intent and mobile 50% scroll prompts
+        run: node scripts/public-trial-popup-browser-smoke.mjs
       - name: Browser-driven commercial workflow smoke
         run: node scripts/web-ui-deep-smoke.mjs
       - name: Verify mobile navigation and search with headless Chrome
