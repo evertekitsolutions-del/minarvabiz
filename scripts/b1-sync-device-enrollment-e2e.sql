@@ -131,7 +131,7 @@ SELECT test.denied($q$
   VALUES ('10000000-0000-4000-8000-000000000001',
    'da000000-0000-4000-8000-000000000001',
    'bb000000-0000-4000-8000-000000000001')
-$q$,'23503','cross-tenant branch foreign key');
+$q$,'23514','cross-tenant branch cannot pass active branch check');
 SELECT test.denied($q$
   INSERT INTO public.sync_device_branch_grants(org_id,device_id,branch_id)
   VALUES ('10000000-0000-4000-8000-000000000001',
@@ -159,7 +159,7 @@ SELECT test.denied($q$
   VALUES ('10000000-0000-4000-8000-000000000001',
    'da000000-0000-4000-8000-000000000001',
    'aa000000-0000-4000-8000-000000000001')
-$q$,'42501','tenant B cannot create A grants');
+$q$,'23514','tenant B cannot create A grants');
 RESET ROLE;
 
 SET ROLE authenticated;
@@ -193,7 +193,7 @@ UPDATE public.sync_device_enrollments SET status='revoked'
 SELECT test.denied($q$
   UPDATE public.sync_device_enrollments SET status='active'
    WHERE device_id='da000000-0000-4000-8000-000000000001'
-$q$,'42501','revoked device cannot be restored by authenticated');
+$q$,'23514','revoked device cannot be restored by authenticated');
 SELECT test.ok((SELECT count(*) FROM public.sync_device_authority_audit)=5,
  'immutable audit entries: request/approval/grant/grant revoke/device revoke');
 RESET ROLE;
