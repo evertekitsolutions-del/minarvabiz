@@ -14,6 +14,10 @@ on:
       - "supabase/MIGRATION_ORDER.txt"
       - "scripts/b1-sync-device-enrollment-e2e.sql"
       - ".github/workflows/b1-device-authority-sql.yml"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:
