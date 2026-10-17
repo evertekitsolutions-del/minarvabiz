@@ -1,8 +1,10 @@
 /**
  * B1 native-only signed revocation journal: staging, never renderer/IPC.
  * Files are immutable; stale locks and broken records fail closed.
- * A privileged filesystem attacker can still roll back the WHOLE journal:
- * this is not a substitute for an OS-backed monotonic counter.
+ * A separate durable, rollback-resistant native anchor is required for
+ * every accepted sequence. No anchor implementation is bundled here:
+ * the host MUST supply one whose integrity does not depend on userData.
+ * Never expose the trust anchor or this store to renderer IPC.
  */
 import { promises as fs } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
@@ -16,8 +18,21 @@ const MAX_BYTES = 140_000;
 const MAX_RECORDS = 10_000;
 const CLOCK_SKEW_MS = 5 * 60 * 1000;
 
+/** Must be stored outside the writable journal in OS-protected native storage. */
+export interface TrustedRevocationAnchor {
+  readonly sequence: number;
+  readonly tokenSha256: string | null;
+  readonly acceptedAtMs: number;
+}
+export interface NativeRevocationAnchorStore {
+  /** Return {sequence:0,tokenSha256:null,acceptedAtMs:0} only for first enrollment. */
+  read(): Promise<TrustedRevocationAnchor>;
+  /** Resolve ONLY after a verified durable/rollback-resistant commit. */
+  write(next: TrustedRevocationAnchor): Promise<void>;
+}
 export interface NativeRevocationStoreTrust {
   readonly userData: string;
+  readonly anchor: NativeRevocationAnchorStore;
   readonly expectedOrgId: string;
   readonly expectedDeviceId: string;
   readonly trustedKeyId: string;
@@ -40,6 +55,23 @@ function nameFor(sequence: number): string {
 }
 function sha256(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex");
+}
+function checkAnchor(anchor: TrustedRevocationAnchor, stored: Stored | null): void {
+  if (!anchor || !integer(anchor.sequence) || !integer(anchor.acceptedAtMs) ||
+      (anchor.sequence === 0 && (anchor.tokenSha256 !== null || anchor.acceptedAtMs !== 0)) ||
+      (anchor.sequence > 0 && (typeof anchor.tokenSha256 !== "string" ||
+       !/^[a-f0-9]{64}$/.test(anchor.tokenSha256)))) {
+    throw Error("b1_anchor_untrusted: Invalid native anchor");
+  }
+  if (!stored) {
+    if (anchor.sequence !== 0) throw Error("b1_state_rollback: Missing anchored snapshot");
+    return;
+  }
+  if (anchor.sequence !== stored.sequence ||
+      anchor.tokenSha256 !== stored.sha256 ||
+      anchor.acceptedAtMs !== stored.acceptedAtMs) {
+    throw Error("b1_state_rollback: Journal diverges from durable anchor");
+  }
 }
 function parse(raw: string, expectedSequence: number): Stored {
   if (Buffer.byteLength(raw) > MAX_BYTES) throw Error("b1_state_corrupt: oversized file");
@@ -70,7 +102,9 @@ async function syncDirectory(dir: string): Promise<void> {
 export function createNativeRevocationStore(trust: NativeRevocationStoreTrust) {
   if (!UUID.test(trust.expectedOrgId) || !UUID.test(trust.expectedDeviceId) ||
       !/^[a-f0-9]{64}$/i.test(trust.pinnedEd25519PublicKeyHex) ||
-      typeof trust.nowMs !== "function") {
+      typeof trust.nowMs !== "function" ||
+      !trust.anchor || typeof trust.anchor.read !== "function" ||
+      typeof trust.anchor.write !== "function") {
     throw Error("b1_untrusted_config: invalid native scope");
   }
   const dir = path.join(trust.userData, "b1-revocations",
@@ -141,6 +175,7 @@ export function createNativeRevocationStore(trust: NativeRevocationStoreTrust) {
   async function recover(): Promise<VerifiedSyncRevocationSnapshot | null> {
     return serialized(async () => {
       const state = await load();
+      checkAnchor(await trust.anchor.read(), state);
       if (!state) return null;
       const now = trust.nowMs();
       if (!integer(now) || now + CLOCK_SKEW_MS < state.acceptedAtMs)
@@ -161,6 +196,7 @@ export function createNativeRevocationStore(trust: NativeRevocationStoreTrust) {
       let temp: string | null = null;
       try {
         const previous = await load(true);
+        checkAnchor(await trust.anchor.read(), previous);
         const now = trust.nowMs();
         if (!integer(now) ||
             (previous !== null && now + CLOCK_SKEW_MS < previous.acceptedAtMs))
@@ -189,6 +225,14 @@ export function createNativeRevocationStore(trust: NativeRevocationStoreTrust) {
         // pending file that recovery ignores, without adopting its authority.
         await fs.link(temp, path.join(dir, nameFor(stored.sequence)));
         await syncDirectory(dir);
+        // A committed journal entry is NOT usable authority until the
+        // independent anchor also confirms it. On anchor write failure the
+        // journal stays ahead: all later reads reject until explicit repair.
+        await trust.anchor.write(Object.freeze({
+          sequence: stored.sequence,
+          tokenSha256: stored.sha256,
+          acceptedAtMs: stored.acceptedAtMs,
+        }));
         return outcome.snapshot;
       } finally {
         if (temp) await fs.unlink(temp).catch(error => {
