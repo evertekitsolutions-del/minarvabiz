@@ -21,7 +21,7 @@ for (const [urlPath, markers] of [
   const publicPage = await fetch(new URL(urlPath, baseUrl), { redirect: "manual" });
   assert.equal(publicPage.status, 200, "Public marketing page must not require login: " + urlPath);
   assert.ok(publicPage.headers.get("content-security-policy"), "Marketing page must retain CSP: " + urlPath);
-  const body = await publicPage.text();
+  const body = (await publicPage.text()).replace(/&amp;/g, "&"); // Next.js escapes ampersands in SSR HTML.
   for (const marker of markers) {
     assert.ok(body.includes(marker), urlPath + " missing: " + marker);
   }
