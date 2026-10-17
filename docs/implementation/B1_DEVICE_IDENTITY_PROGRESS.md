@@ -141,3 +141,26 @@ and then issue a signed authority credential only after its own trust checks.
 No signing service, credential issuance API, desktop registration IPC,
 offline replay switch, production migration, or OS protected signing-key
 persistence has been enabled. This is an isolated acceptance increment.
+
+
+## 2026-10-17: server-only signed authority issuer protocol (draft)
+
+- `apps/web/src/lib/b1-sync-authority-issuer.server.ts` issues
+  domain-separated Ed25519 tokens in the **exact** canonical serialization
+  already required by the native verifier. Its private key and pinned verifier
+  are supplied by a privileged caller; it loads no environment variables.
+- Strict checks bind signing key, key ID, tenant/device/actor, exact sorted
+  branch grants, approved role enum, short server issuance window and
+  expiry (maximum 30 days). Wrong keys or backdated credentials fail closed.
+- `packages/business-logic/src/__tests__/b1-server-authority-signing.test.mjs`
+  exercises the genuine native verifier with a separately verified signed
+  revocation snapshot, plus key/role/scope/timestamp forgery rejection.
+  The existing installed-dependency CI desktop job discovers this test file.
+
+**STAGING ONLY:** Signing is not enrollment authorization. A later private
+backend must authenticate the session, verify proof of device key ownership,
+atomically consume its challenge, check current membership/branch status,
+persist an issuance audit and use a trusted signing key before calling this
+function. This draft has **no API route and no issuer key distribution**.
+Production sync, financial writes, Windows release and database deployment
+remain disabled pending end-to-end acceptance.
