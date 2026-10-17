@@ -35,3 +35,29 @@ Keep the PR in draft. Do not enable financial replay or release this as complete
 6. Complete build/typechecks, database replay and Windows UAT.
 
 Rollback this increment by reverting its commit; preserve `sync-device-id` and all outbox history. No cloud schema or production data was changed. Older application code does not consume the new file. Do not remove it during rollback.
+
+
+## 2026-10-17: tenant-scoped enrollment schema increment (draft, unreleased)
+
+Added `supabase/migrations/20261017_b1_sync_device_enrollment.sql` to the
+authoritative replay manifest. The new server-side registry records pending,
+active, and revoked device enrollment, immutable actor/key binding, tenant-safe
+branch grants, and an append-only audit trail. Requests require same-tenant
+admin membership; ordinary authenticated sessions can only revoke, not approve
+devices. Approval is reserved to a trusted backend principal. Separate
+PostgreSQL E2E fixtures exercise actor/tenant isolation, role denial, branch
+scoping, activation and irreversible revocation. CI workflow:
+`.github/workflows/b1-device-authority-sql.yml`.
+
+**NOT shipped:** A database row with status `active` is not proof of device
+possession. No server currently issues or validates the signed enrollment
+credential. No mutation route may accept these rows as authority. Do not deploy
+the migration or enable financial replay until enrollment proof, credential
+signing/verifying, runtime revocation checks, atomic sequence allocation,
+replay and real Windows UAT pass. Review this schema with a fresh local DB,
+CI, security reviewers and a rollback plan before hosted migration.
+
+Rollback of schema-only incremental migration (if deployed in future) requires
+first confirming no production device authority data exists, then reversing
+dependent grants, audit objects, and enrollments in an explicitly approved
+maintenance plan. Never drop recorded authority/audit rows blindly.
