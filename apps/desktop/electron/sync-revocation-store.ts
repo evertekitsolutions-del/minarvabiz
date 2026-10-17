@@ -225,7 +225,10 @@ export function createNativeRevocationStore(trust: NativeRevocationStoreTrust) {
         }
         const stored: Stored = {
           version: 1, sequence: outcome.snapshot.sequence,
-          acceptedAtMs: now, sha256: sha256(token), token,
+          // Never move the trusted clock high-water backwards, even inside
+          // the permitted clock-skew tolerance window.
+          acceptedAtMs: Math.max(now, previous?.acceptedAtMs ?? 0),
+          sha256: sha256(token), token,
         };
         const body = JSON.stringify(stored);
         if (Buffer.byteLength(body) > MAX_BYTES) throw Error("b1_state_corrupt: oversized record");
