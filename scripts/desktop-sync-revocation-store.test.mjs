@@ -182,3 +182,22 @@ test("malformed external trust anchor is never silently treated as first enrollm
   await assert.rejects(store.accept(signed(1)),/b1_anchor_untrusted/);
   await assert.rejects(store.recover(),/b1_anchor_untrusted/);
 });
+
+
+test("later signed snapshots cannot silently remove a historical credential or branch revocation",async t=>{
+  const dir=await sandbox(t), clock={now:nowBase};
+  const store=createNativeRevocationStore(options(dir,clock));
+  await store.accept(signed(20));
+  await assert.rejects(store.accept(signed(21,{revokedCredentialIds:[]})),
+    /revocations must be monotonic/);
+  await assert.rejects(store.accept(signed(21,{revokedBranchIds:[]})),
+    /revocations must be monotonic/);
+  assert.equal((await store.recover()).sequence,20);
+  const addedCredential="40000000-0000-4000-8000-000000000002";
+  const addedBranch="50000000-0000-4000-8000-000000000002";
+  assert.equal((await store.accept(signed(21,{
+    revokedCredentialIds:[credentialId,addedCredential],
+    revokedBranchIds:[branchId,addedBranch],
+  })).sequence,21);
+  assert.equal((await createNativeRevocationStore(options(dir,clock)).recover()).sequence,21);
+});
