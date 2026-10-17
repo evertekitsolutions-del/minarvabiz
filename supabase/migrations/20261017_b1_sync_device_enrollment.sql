@@ -63,10 +63,10 @@ ALTER TABLE public.sync_device_authority_audit ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.sync_device_enrollments,
   public.sync_device_branch_grants, public.sync_device_authority_audit
   FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT, UPDATE (status) ON public.sync_device_enrollments
-  TO authenticated;
-GRANT SELECT, INSERT, UPDATE (revoked_at) ON public.sync_device_branch_grants
-  TO authenticated;
+GRANT SELECT, INSERT ON public.sync_device_enrollments TO authenticated;
+GRANT UPDATE (status) ON public.sync_device_enrollments TO authenticated;
+GRANT SELECT, INSERT ON public.sync_device_branch_grants TO authenticated;
+GRANT UPDATE (revoked_at) ON public.sync_device_branch_grants TO authenticated;
 GRANT SELECT ON public.sync_device_authority_audit TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.sync_device_enrollments,
   public.sync_device_branch_grants, public.sync_device_authority_audit TO service_role;
