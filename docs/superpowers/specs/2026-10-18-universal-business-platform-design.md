@@ -1,6 +1,6 @@
 # Minarva Biz — Universal Business Platform for 100+ Verticals
 
-**Design status:** Architecture APPROVED in chat on 2026-10-18 (Shared Core + Modular Capabilities). This written specification is **awaiting owner review**. No production database migration, live checkout change, or 100-vertical rollout is authorized by this document alone.
+**Design status:** Owner approved the **written specification** in chat on 2026-10-18. The implementation plan requires its own review before code execution. No production database migration, live checkout change, or 100-vertical rollout is authorized by this document alone.
 
 **Project:** `evertekitsolutions-del/minarvabiz` (Next.js 15, TypeScript, Electron, SQLite, Supabase/PostgreSQL, offline-first sync).
 
@@ -170,4 +170,4 @@ Every milestone: failing regression test first → implementation → passing fo
 
 ## 10. Owner approval and execution boundary
 
-This specification expresses the approved **Shared Core + Modular Capabilities** approach and the intended outcome. Owner review of the **written spec** is the next gate. Once accepted, create concrete task-by-task plans using the Superpowers writing-plans skill, then implement in isolated PRs with full test evidence. **Do not apply production SQL or merge an unreviewed architecture merely because this document exists.**
+This specification expresses the owner-approved **Shared Core + Modular Capabilities** approach and written requirements (approved 2026-10-18). The next gate is **owner review of the task-by-task implementation plan**. After that review, implement in isolated PRs with full test evidence. **Do not apply production SQL or merge an unreviewed architecture merely because this document exists.**
