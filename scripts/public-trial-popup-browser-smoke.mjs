@@ -61,6 +61,20 @@ async function goHome(){
   await pause(1300);
 }
 try {
+  // The GitHub headless runner reports hover:none even with a desktop viewport.
+  // Override ONLY the pointer media query for this deterministic browser test.
+  // User-facing code still uses the real pointer media query unchanged.
+  await send("Page.addScriptToEvaluateOnNewDocument",{source: `
+    (() => {
+      const nativeMatchMedia = window.matchMedia.bind(window);
+      window.matchMedia = (query) => {
+        if (query === "(hover: hover) and (pointer: fine)") {
+          return {matches: window.innerWidth >= 700, media: query};
+        }
+        return nativeMatchMedia(query);
+      };
+    })();
+  `});
   await send("Emulation.setDeviceMetricsOverride",{width:1366,height:900,mobile:false,deviceScaleFactor:1});
   await send("Emulation.setTouchEmulationEnabled",{enabled:false});
   // Other smoke tests share this browser profile; start from a clean tab marker.
