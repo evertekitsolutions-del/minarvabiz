@@ -10,7 +10,7 @@ import * as React from "react";
  * Deliberately does not change any trial entitlement or start a trial.
  */
 const MOBILE_SCROLL_FRACTION = 0.5;
-const SESSION_KEY = "minarva-biz-marketing-trial-v2";
+const TRIAL_POPUP_SHOWN_NAME = "minarva-biz-marketing-trial-v2";
 const WINDOWS_RELEASE = "https://github.com/evertekitsolutions-del/minarvabiz/releases/tag/v1.0.15";
 
 export default function TrialWelcomePopup() {
@@ -20,7 +20,7 @@ export default function TrialWelcomePopup() {
 
   React.useEffect(() => {
     try {
-      if (window.sessionStorage.getItem(SESSION_KEY) === "shown") return;
+      if (window.sessionStorage.getItem(TRIAL_POPUP_SHOWN_NAME) === "shown") return;
     } catch {
       // Storage can be disabled; keep the dialog dismissible.
     }
@@ -33,7 +33,7 @@ export default function TrialWelcomePopup() {
       if (triggered) return;
       triggered = true;
       try {
-        window.sessionStorage.setItem(SESSION_KEY, "shown");
+        window.sessionStorage.setItem(TRIAL_POPUP_SHOWN_NAME, "shown");
       } catch {
         // No persistent tracking; the local flag still prevents repeats.
       }
