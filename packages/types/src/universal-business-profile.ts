@@ -16,3 +16,14 @@ export function parseBusinessGroup(value: unknown): BusinessGroup {
   if (typeof value !== "string" || !BUSINESS_GROUPS.some(g => g === value)) throw new Error("Invalid business group");
   return value as BusinessGroup;
 }
+
+const KNOWN_CAPABILITIES: readonly BusinessCapability[] = Object.freeze(["barcode", "expiry", "serial", "dimension", "booking"]);
+
+/** Strict parser for admin-verified capability lists; not an authorization token. */
+export function parseBusinessCapabilities(value: unknown): readonly BusinessCapability[] {
+  if (!Array.isArray(value) || new Set(value).size !== value.length ||
+      value.some((v: unknown) => typeof v !== "string" || !KNOWN_CAPABILITIES.includes(v as BusinessCapability))) {
+    throw new Error("Invalid business capabilities");
+  }
+  return Object.freeze([...value] as BusinessCapability[]);
+}
