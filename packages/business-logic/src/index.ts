@@ -6,6 +6,7 @@ export * from "./material-intelligence";
 export * from "./staff-productivity";
 export * from "./business-intelligence";
 export * from "./appointments";
+export * from "./dimensional-billing";
 export * from "./design-library";
 export * from "./delivery-logistics";
 export * from "./business-modes";
