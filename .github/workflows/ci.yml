@@ -25,7 +25,7 @@ jobs:
       - name: Verify FEFO lot and IMEI/serial preflight invariants
         run: node --experimental-strip-types --test packages/business-logic/src/__tests__/tracked-inventory.test.mjs
       - name: Verify precise dimensional billing quantities (UBP-05a)
-        run: node --experimental-strip-types --test packages/business-logic/src/__tests__/dimensional-billing.test.mjs
+        run: node --experimental-strip-types --test packages/business-logic/src/__tests__/dimensional-billing.test.mjs packages/business-logic/src/__tests__/dimension-row-draft.test.mjs
       - name: Verify all 100 business presets and immutable identifiers
         run: node --experimental-strip-types packages/types/src/__tests__/business-presets.test.mjs
       - name: Verify tenant-scoped presentation and capability validation
@@ -571,6 +571,8 @@ jobs:
           done
       - name: Run operations completion contract tests
         run: node packages/business-logic/src/__tests__/operations-completion-contract.test.mjs
+      - name: Verify shared dimensional row editor rendering
+        run: node --experimental-strip-types scripts/dimension-row-editor-smoke.mjs
       - run: pnpm --filter @minarvabiz/ui typecheck
       - run: pnpm --filter @minarvabiz/desktop typecheck
       - name: Validate Windows interaction smoke syntax

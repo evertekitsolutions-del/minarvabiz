@@ -71,3 +71,39 @@ export function calculateDimensionArea(input: DimensionAreaInput): Readonly<Dime
   const quantityMilli = Number(quantity);
   return Object.freeze({ quantityMilli, quantity: quantityMilli / 1000, billableUnit: input.billableUnit, pieces });
 }
+
+/** Raw controlled form state; empty fields remain editable without numeric coercion. */
+export interface DimensionRowDraft {
+  readonly length: string;
+  readonly width: string;
+  readonly lengthUnit: DimensionUnit;
+  readonly widthUnit: DimensionUnit;
+  readonly billableUnit: BillableAreaUnit;
+  readonly pieces: string;
+}
+export type DimensionMeasurement = Readonly<DimensionAreaInput & DimensionAreaResult & {
+  readonly algorithm: 'area-v1';
+}>;
+export type DimensionRowPreview =
+  | Readonly<{ valid: true; measurement: DimensionMeasurement }>
+  | Readonly<{ valid: false; error: string }>;
+
+/** Advisory form preview only; invalid edits never return a previous quantity. */
+export function previewDimensionRow(draft: DimensionRowDraft): DimensionRowPreview {
+  try {
+    if (!draft || typeof draft.pieces !== 'string' || !/^[0-9]{1,7}$/.test(draft.pieces)) {
+      throw new Error('Enter a whole piece count from 1 to 1000000');
+    }
+    const pieces = Number(draft.pieces);
+    const input: DimensionAreaInput = {
+      length: draft.length, width: draft.width, lengthUnit: draft.lengthUnit,
+      widthUnit: draft.widthUnit, billableUnit: draft.billableUnit, pieces,
+    };
+    const result = calculateDimensionArea(input);
+    return Object.freeze({ valid: true, measurement: Object.freeze({
+      ...input, ...result, algorithm: 'area-v1' as const,
+    }) });
+  } catch (error) {
+    return Object.freeze({ valid: false, error: error instanceof Error ? error.message : 'Invalid dimensions' });
+  }
+}
