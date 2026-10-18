@@ -31,6 +31,8 @@ import { exportOutbox, hydrateOutbox, type LocalOutboxEvent } from "./outbox-bri
 import * as dayEnd from "./day-end";
 import * as recycleBin from "./recycle-bin";
 import type { ShopProfile } from "./shop-profile";
+import { parseDimensionLineMetadata } from "./dimensional-billing";
+import { toQuantityMilli, QUANTITY_MILLI_FACTOR } from "@minarvabiz/utils";
 import type { TaxConfig } from "./tax-config";
 import type { AutoBackupSettings, BackupMeta } from "./auto-backup";
 
@@ -156,6 +158,42 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     throw new Error(`Unsupported snapshot version ${String(input.version)}`);
   }
 
+  // Windows offline SQLite stores this complete domain snapshot as JSON.
+  // Validate every dimensional invoice BEFORE replacing any existing state;
+  // malformed metadata must not be partially applied or silently discarded.
+  const sales = collection(input.sales, "sales").map(sale => {
+    if (!sale || typeof sale !== "object") {
+      throw new Error("Snapshot sale must be an object");
+    }
+    // Pre-dimensional backups can omit the child collection entirely.
+    // Do not invent a new mandatory field for historic snapshots.
+    if (sale.items == null) return sale;
+    if (!Array.isArray(sale.items)) {
+      throw new Error("Snapshot sale items must be an array");
+    }
+    let dimensionFound = false;
+    const items = sale.items.map(item => {
+      if (!item || typeof item !== "object") {
+        throw new Error("Snapshot sale item must be an object");
+      }
+      if (Object.hasOwn(item, "dimension_metadata")) {
+        throw new Error("Snapshot dimensional sale metadata must use the canonical camelCase field");
+      }
+      if (item.dimensionMetadata == null) return item;
+      dimensionFound = true;
+      const milli = toQuantityMilli(item.quantity);
+      if (!Number.isFinite(item.quantity) ||
+          Math.abs(milli / QUANTITY_MILLI_FACTOR - item.quantity) > 1e-9) {
+        throw new Error("Snapshot dimension quantity has invalid precision");
+      }
+      return {
+        ...item,
+        dimensionMetadata: parseDimensionLineMetadata(item.dimensionMetadata, milli),
+      };
+    });
+    return dimensionFound ? { ...sale, items } : sale;
+  });
+
   return {
     ...input,
     version: Number(input.version),
@@ -165,7 +203,7 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     customers: collection(input.customers, "customers"),
     products: collection(input.products, "products"),
     categories: collection(input.categories, "categories"),
-    sales: collection(input.sales, "sales"),
+    sales,
     payments: collection(input.payments, "payments"),
     stockTransfers: collection(input.stockTransfers, "stockTransfers"),
     heldSales: collection(input.heldSales, "heldSales"),
