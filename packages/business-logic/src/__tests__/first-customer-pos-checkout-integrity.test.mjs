@@ -110,8 +110,8 @@ test("valid split quantities still sell, decrement stock once and post a balance
 test("billing UIs preserve fractional quantity and do not silently coerce bad tender input", () => {
   const normal = fs.readFileSync("packages/ui/src/components/sales/NormalBilling.tsx", "utf8");
   const pos = fs.readFileSync("packages/ui/src/components/sales/PosBilling.tsx", "utf8");
-  assert.match(normal, /const quantity = Number\(qty\)/);
-  assert.match(normal, /step="any" value=\{qty\}/);
+  assert.match(normal, /const quantity = areaMode \? areaApplied\?\.quantity \?\? NaN : Number\(qty\)/);
+  assert.match(normal, /disabled=\{areaMode\} value=\{qty\}/);
   assert.match(normal, /Paid amount must be a valid non-negative number/);
   assert.match(pos, /function parsedTenderAmount\(value: string\)/);
   assert.match(pos, /amount: parsedTenderAmount\(row.amount\)/);
