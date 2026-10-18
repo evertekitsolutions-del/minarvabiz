@@ -40,3 +40,20 @@ Review and verification:
 - The runtime's default pnpm 11 initially rejected the pnpm 9 lockfile. The
   repository-pinned Corepack pnpm 9.15.0 resolved installation; no lockfile edits.
 - Browser callback/focus and real POS/Windows integration are not verified by SSR.
+
+## Continuation — installed startup and browser acceptance
+
+PR #484 first Windows deep smoke failed at the initial Customers click with
+zero visible controls after `TRIAL_READY`. The renderer-ready marker is set
+before asynchronous SQLite/trial/license hydration has mounted AppShell.
+The smoke now waits for the ready renderer, visible app content and usable
+sidebar navigation. It does not click, alter trial/license state or suppress
+startup/CDP failures while polling. A 30-second timeout preserves diagnostics.
+Five regressions cover delayed workspace, stale renderer flag, fatal startup,
+locked workspace timeout and CDP failure propagation.
+
+`dimension-row-browser-smoke.mjs` renders the actual component in an isolated
+fixture in the existing local CI Chrome session. It exercises Enter/Tab,
+controlled keyboard edits, mixed units, exact immutable callback snapshots,
+and invalid/disabled Apply refusal. CI execution is required before claiming
+browser acceptance. The fixture does not invoke checkout or write customer data.

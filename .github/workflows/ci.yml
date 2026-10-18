@@ -338,6 +338,8 @@ jobs:
         run: node scripts/hr004-indexeddb-browser-smoke.mjs
       - name: Verify manager drafts and administrator policy review UI in Chrome
         run: node scripts/hr004-policy-browser-smoke.mjs
+      - name: Verify dimensional row keyboard and controlled updates in Chrome
+        run: node scripts/dimension-row-browser-smoke.mjs
       - name: Capture web UI diagnostics
         if: failure()
         shell: bash
