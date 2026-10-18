@@ -78,7 +78,10 @@ test("old ordinary lines still aggregate; one ordinary row and multiple cuts can
   assert.equal(mixed[1].quantity,1);
   assert.throws(()=>appendNormalBillingLine(mixed,cut("cut-two",a)),/stock|quantity/i);
   assert.throws(()=>appendNormalBillingLine(mixed,original(2)),/stock|quantity/i);
-  assert.throws(()=>appendNormalBillingLine([cut("cut-one",b)],original(1)),/separate|measurement|area|combine/i);
+  // With an independently keyed measured row, an ordinary row is safe too.
+  const measuredFirst=appendNormalBillingLine([cut("cut-one",b)],original(1));
+  assert.deepEqual(measuredFirst.map(x=>x.quantity),[1,1]);
+  assert.deepEqual(measuredFirst.map(x=>x.cartLineId),["cut-one",undefined]);
 });
 test("per-row edit/remove operations never modify sibling cuts or measurement quantity",()=>{
   const both=appendNormalBillingLine(
