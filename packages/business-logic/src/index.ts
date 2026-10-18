@@ -9,6 +9,7 @@ export * from "./appointments";
 export * from "./dimensional-billing";
 export * from "./dimension-sale-wire";
 export * from "./normal-area-billing";
+export * from "./pos-area-cart";
 export * from "./dimension-sale-protocol";
 export * from "./design-library";
 export * from "./delivery-logistics";
