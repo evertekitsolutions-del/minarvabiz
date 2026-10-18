@@ -89,3 +89,4 @@
 20261011_hr005_holiday_rules.sql
 20261018_ubp02_business_profile_foundation.sql
 20261018_ubp05c_dimensional_sale_line_storage.sql
+20261018_ubp05e_atomic_sale_dimension_rpc.sql
