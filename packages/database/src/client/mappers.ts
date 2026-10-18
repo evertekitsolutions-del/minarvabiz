@@ -128,7 +128,7 @@ function mapDimensionAudit(raw: unknown, quantity: number): Readonly<DimensionLi
   }
   const validDecimal = (value: unknown): value is string =>
     typeof value === "string" &&
-    /^[0-9]{1,9}(\\.[0-9]{1,6})?$/.test(value) && Number(value) > 0;
+    /^[0-9]{1,9}(\.[0-9]{1,6})?$/.test(value) && Number(value) > 0;
   const units = ["mm","cm","m","in","ft"];
   if (!validDecimal(record.length) || !validDecimal(record.width) ||
       !units.includes(String(record.lengthUnit)) ||
