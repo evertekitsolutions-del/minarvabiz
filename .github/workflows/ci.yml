@@ -32,6 +32,8 @@ jobs:
         run: node --experimental-strip-types packages/types/src/__tests__/business-exports.test.mjs
       - name: Verify UBP-02 non-destructive tenant product schema migration
         run: node packages/business-logic/src/__tests__/universal-business-schema-contract.test.mjs
+      - name: Verify tenant-safe service resource availability rules (UBP-04a)
+        run: node --experimental-strip-types --test packages/business-logic/src/__tests__/resource-booking.test.mjs
       - name: Verify GitHub Actions hardening
         run: node scripts/github-actions-hardening-smoke.mjs
       - name: Verify isolated Cloudflare customer preview configuration
