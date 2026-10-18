@@ -22,6 +22,12 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Verify all 100 business presets and immutable identifiers
+        run: node --experimental-strip-types packages/types/src/__tests__/business-presets.test.mjs
+      - name: Verify tenant-scoped presentation and capability validation
+        run: node --experimental-strip-types packages/types/src/__tests__/business-presentation.test.mjs
+      - name: Verify universal business barrel exports and unchanged POS authority
+        run: node --experimental-strip-types packages/types/src/__tests__/business-exports.test.mjs
       - name: Verify GitHub Actions hardening
         run: node scripts/github-actions-hardening-smoke.mjs
       - name: Verify isolated Cloudflare customer preview configuration
