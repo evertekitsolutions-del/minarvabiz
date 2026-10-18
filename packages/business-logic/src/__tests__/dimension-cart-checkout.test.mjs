@@ -44,6 +44,7 @@ test('dimensional cart uses the same exact quantity for checkout and frozen save
 test('tampered dimensions and stale quantity cannot pass checkout', () => {
   for (const tamper of [
     {quantity:2.999},
+    {quantity:3.0004},
     {dimensionMetadata:{...audit,length:'13'}},
     {dimensionMetadata:{...audit,pieces:3}},
     {dimensionMetadata:{...audit,extra:1}},
