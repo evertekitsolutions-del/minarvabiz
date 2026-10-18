@@ -13,6 +13,7 @@ import {
   type MoneyMinor,
 } from "@minarvabiz/utils";
 import { addStockQuantities } from "./inventory";
+import { parseDimensionLineMetadata } from "./dimensional-billing";
 import type { CartLine, SaleItem, PaymentMethod } from "@minarvabiz/types";
 import { calculateLineItem, calculateInvoiceTotals } from "@minarvabiz/billing";
 
@@ -50,6 +51,8 @@ export function cartLineToSaleItem(line: CartLine, saleId: string, itemId: strin
     discountPercent: line.discountPercent,
     taxRate: line.taxRate,
   });
+  const dimensionMetadata = line.dimensionMetadata == null ? undefined
+    : parseDimensionLineMetadata(line.dimensionMetadata, toQuantityMilli(line.quantity));
   return {
     id: itemId,
     saleId,
@@ -62,6 +65,7 @@ export function cartLineToSaleItem(line: CartLine, saleId: string, itemId: strin
     discountPercent: line.discountPercent,
     taxRate: line.taxRate,
     lineTotal: calc.total,
+    ...(dimensionMetadata ? { dimensionMetadata } : {}),
   };
 }
 
@@ -232,6 +236,13 @@ export function validateCart(lines: CartLine[], options?: { allowNegativeStock?:
   const requestedByProduct = new Map<string, { productName: string; quantity: number; stock: number }>();
   if (lines.length === 0) errors.push("Cart is empty");
   for (const line of lines) {
+    if (line.dimensionMetadata != null) {
+      try {
+        parseDimensionLineMetadata(line.dimensionMetadata, toQuantityMilli(line.quantity));
+      } catch {
+        errors.push(`${line.productName}: dimension measurement does not match sale quantity`);
+      }
+    }
     if (!Number.isFinite(line.quantity) || line.quantity <= 0) errors.push(`${line.productName}: quantity must be positive`);
     if (!Number.isFinite(line.unitPrice) || line.unitPrice < 0) errors.push(`${line.productName}: price cannot be negative`);
     if (!Number.isFinite(line.discountPercent)) errors.push(`${line.productName}: discount must be a finite number`);
