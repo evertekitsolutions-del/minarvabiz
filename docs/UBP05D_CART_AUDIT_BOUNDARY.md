@@ -21,6 +21,17 @@ cloud RPC does not support measurement metadata. It **does not** call the
 older RPC or mark the sale/payments synced. This is a deliberate
 fail-closed cutover gate, not completed online functionality.
 
+## Separate generic CloudAdapter replay guard
+
+`createSupabaseCloudAdapter.push()` rejects dimensional sale events and any
+linked payment in the same batch before direct table writes, including
+payment-first event ordering and JSON-string payloads with either
+`dimensionMetadata` or `dimension_metadata`. Rejected events are not
+acknowledged as synced; they require the future authenticated atomic
+financial RPC replay with server-side branch/stock provenance checks.
+Cross-batch legacy financial replay remains withheld by the separate
+financial sync proof/authority gate and is not claimed as safe here.
+
 ## Release boundaries
 
 No hosted database migration, customer installer, POS UI activation,
