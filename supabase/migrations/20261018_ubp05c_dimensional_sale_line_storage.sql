@@ -120,5 +120,31 @@ ALTER TABLE public.sale_items
     public.ubp_dimension_line_valid(dimension_metadata, quantity)
   ) NOT VALID;
 
+
+-- The check alone cannot protect audit history: a caller permitted to UPDATE
+-- could otherwise replace a valid record with another valid measurement.
+-- Write-once enforcement preserves existing legacy NULL lines and does not
+-- affect unrelated updates. Creation must supply metadata on INSERT.
+CREATE FUNCTION public.ubp_dimension_metadata_write_once()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = pg_catalog
+AS $ubp$
+BEGIN
+  IF OLD.dimension_metadata IS DISTINCT FROM NEW.dimension_metadata THEN
+    RAISE EXCEPTION 'Sale-line dimension metadata is immutable after insertion'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$ubp$;
+
+CREATE TRIGGER sale_items_dimension_metadata_write_once
+BEFORE UPDATE OF dimension_metadata ON public.sale_items
+FOR EACH ROW
+WHEN (OLD.dimension_metadata IS DISTINCT FROM NEW.dimension_metadata)
+EXECUTE FUNCTION public.ubp_dimension_metadata_write_once();
+
 COMMENT ON COLUMN public.sale_items.dimension_metadata IS
   'Optional validated dimension-line-v1 audit data. Not a price, tax, stock, authentication or replay authority.';
