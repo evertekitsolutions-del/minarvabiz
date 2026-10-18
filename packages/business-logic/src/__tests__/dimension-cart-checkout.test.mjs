@@ -1,7 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { previewDimensionRow } from '../dimensional-billing.ts';
-import { validateCart, cartLineToSaleItem } from '../sales.ts';
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const ts = require('typescript');
+require.extensions['.ts'] = (mod, filename) => mod._compile(
+  ts.transpileModule(fs.readFileSync(filename,'utf8'), {
+    fileName: filename,
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop:true },
+  }).outputText, filename
+);
+const { previewDimensionRow } = require('../dimensional-billing.ts');
+const { validateCart, cartLineToSaleItem } = require('../sales.ts');
 
 const measurement = previewDimensionRow({
   length:'12', width:'18', lengthUnit:'in', widthUnit:'in',
