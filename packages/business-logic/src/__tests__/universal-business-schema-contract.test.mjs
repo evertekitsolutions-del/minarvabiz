@@ -10,7 +10,11 @@ const order = fs.readFileSync(path.join(root, "supabase/MIGRATION_ORDER.txt"), "
   .split(/\r?\n/).map(s => s.trim()).filter(s => s && !s.startsWith("#"));
 
 assert.equal(order.filter(n => n === migration).length, 1, "UBP-02 migration must replay exactly once");
-assert.equal(order.at(-1), migration, "UBP-02 should be last until new migrations are added");
+for (const prerequisite of ["001_core_schema.sql", "20260927_authoritative_org_rbac.sql"]) {
+  assert.ok(order.indexOf(prerequisite) >= 0, "Missing UBP-02 migration prerequisite: " + prerequisite);
+  assert.ok(order.indexOf(prerequisite) < order.indexOf(migration),
+    "UBP-02 must replay after " + prerequisite + " regardless of later migrations");
+}
 for (const name of ["business_group", "business_type_code", "feature_config", "feature_config_version"]) {
   assert.match(sql, new RegExp("ADD COLUMN IF NOT EXISTS " + name + "\\b"), "Missing organizations." + name);
 }
