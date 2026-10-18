@@ -1,5 +1,6 @@
 import type { Sale, SaleReturn, UUID } from "@minarvabiz/types";
 import { calculateLineItem } from "@minarvabiz/billing";
+import { parseDimensionLineMetadata } from "./dimensional-billing";
 import { addMinorUnits, allocateMinorByQuantityRatio, fromMinorUnits, toMinorUnits, toQuantityMilli } from "@minarvabiz/utils";
 
 export type ReturnSelection = { saleItemId: UUID; productId: UUID; quantity: number; restock: boolean };
@@ -27,6 +28,26 @@ function calculateReturnQuote(sale: Sale, history: SaleReturn[], selection: Retu
     if (!original || original.productId !== selected.productId) { errors.push("Return item does not match the invoice"); continue; }
     if (seen.has(original.id)) { errors.push(`${original.productName}: duplicate return item`); continue; }
     seen.add(original.id);
+    // Financial credit must derive from the actual immutable invoice record,
+    // not an edited measurement attached to a historically valid line.
+    // Reject before touching return accounting, stock, or refund journals.
+    if (Object.hasOwn(original, "dimension_metadata")) {
+      errors.push(`${original.productName}: invalid dimensional invoice audit field`);
+      continue;
+    }
+    if (original.dimensionMetadata != null) {
+      try {
+        const quantityMilli = toQuantityMilli(original.quantity);
+        if (!Number.isFinite(original.quantity) ||
+            Math.abs(quantityMilli / 1000 - original.quantity) > 1e-9) {
+          throw new Error("Invalid dimensional invoice quantity precision");
+        }
+        parseDimensionLineMetadata(original.dimensionMetadata, quantityMilli);
+      } catch {
+        errors.push(`${original.productName}: invalid dimensional invoice measurement; refund blocked`);
+        continue;
+      }
+    }
     const prior = previous.filter(i => i.saleItemId === original.id);
     if (!Number.isFinite(selected.quantity) || selected.quantity <= 0 || !Number.isFinite(original.quantity) || original.quantity <= 0) {
       errors.push(`${original.productName}: return quantity exceeds remaining quantity or is invalid`); continue;
