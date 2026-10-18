@@ -68,6 +68,13 @@ for(const forged of [
 const quantityMismatch=structuredClone(exported);
 quantityMismatch.sales.find(s=>s.id===sample.id).items[0].quantity=3.0004;
 assert.equal(persistence.validateDomainSnapshot(quantityMismatch).ok,false);
+const legacyWithoutItemCollection=structuredClone(exported);
+legacyWithoutItemCollection.sales.find(s=>s.id===sample.id).items=undefined;
+assert.equal(persistence.validateDomainSnapshot(legacyWithoutItemCollection).ok,true,
+ "Existing pre-dimensional snapshots without sale item collection must remain readable");
+const invalidItemCollection=structuredClone(exported);
+invalidItemCollection.sales.find(s=>s.id===sample.id).items={not:"a list"};
+assert.equal(persistence.validateDomainSnapshot(invalidItemCollection).ok,false);
 const legacy=structuredClone(exported);
 delete legacy.sales.find(s=>s.id===sample.id).items[0].dimensionMetadata;
 assert.equal(persistence.validateDomainSnapshot(legacy).ok,true);
