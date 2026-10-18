@@ -17,6 +17,8 @@ export * from "./incentives";
 export * from "./dashboard";
 export * from "./sales";
 export * from "./inventory";
+// UBP-03a pure preflight only; authoritative inventory reservations still pending.
+export * from "./tracked-inventory";
 export * from "./orders";
 export * from "./expenses";
 export * from "./reports";
