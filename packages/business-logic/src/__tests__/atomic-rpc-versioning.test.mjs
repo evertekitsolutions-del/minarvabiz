@@ -9,6 +9,10 @@ const dataSource = fs.readFileSync(
   new URL("../../../../apps/web/src/lib/data-source.ts", import.meta.url),
   "utf8"
 );
+const saleWriter = fs.readFileSync(
+  new URL("../../../../apps/web/src/lib/data-source-sales.ts", import.meta.url),
+  "utf8"
+);
 const versionedWrite = fs.readFileSync(
   new URL("../../../../apps/web/src/lib/data-source-versioned-write.ts", import.meta.url),
   "utf8"
@@ -40,7 +44,10 @@ assert.doesNotMatch(migration, /COALESCE\(p_branch_id, v_product_branch\)/);
 assert.match(migration, /REVOKE ALL ON FUNCTION public\.create_sale[\s\S]*FROM PUBLIC, anon/);
 assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.create_sale[\s\S]*TO authenticated/);
 
-assert.match(dataSource, /pgRpc<Record<string, unknown>>\(cfg, "create_sale"/);
+assert.match(dataSource, /createSaleRemoteWriter\(cfg,/);
+assert.match(saleWriter, /pgRpc<Record<string, unknown>>\(cfg, "create_sale"/);
+assert.match(saleWriter, /requireDimensionSaleCapability\(cap.data\)/);
+assert.match(saleWriter, /requireDimensionSaleReceipt\(result.data, sale.id\)/);
 assert.match(dataSource, /pgRpc<Record<string, unknown>>\(cfg, "record_payment"/);
 assert.match(dataSource, /pgRpc<Record<string, unknown>>\(cfg, "adjust_stock"/);
 assert.match(versionedWrite, /id=eq\.\$\{id\}&version=eq\.\$\{expectedVersion\}/);

@@ -1,4 +1,5 @@
 import {optimisticVersionUpdate,optimisticVersionUpsert} from "./data-source-versioned-write";
+import { createSaleRemoteWriter } from "./data-source-sales";
 import { createAttendanceRemoteWriter, loadAttendanceStaff } from "./data-source-attendance";
 import { loadCloudRoster, ensureNoUnconfirmedRosterEvents, createRosterRemoteWriter } from "./data-source-roster";
 /**
@@ -21,7 +22,7 @@ import {
   type UnitOfWork,
 } from "@minarvabiz/database";
 import type { RoleName, StaffAttendanceRecord } from "@minarvabiz/types";
-import { store, ordersStore, phase5Store, phase6Store, phase9Store, warehouseStore, procurementStore, accountingStore, registerRemoteWriter, getRuntimeMode, exportOutbox, getSessionUser, getSessionToken, setOutboxScope } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase9Store, warehouseStore, procurementStore, accountingStore, registerRemoteWriter, getRuntimeMode, exportOutbox, getSessionUser, getSessionToken, setOutboxScope, getOutboxScope } from "@minarvabiz/business-logic";
 import {
   mapCategory,
   mapSupplier,
@@ -406,7 +407,14 @@ async function hydrateRequestedStores(
       setOutboxScope(null);
       return { ok: false, message: "The authenticated session changed during cloud hydration." };
     }
+    // Shared mapping for plain and dimensional sales. The legacy route stays
+    // identical and cannot silently ignore a dimensional audit packet.
     registerRemoteWriter({
+      ...createSaleRemoteWriter(cfg, () => Boolean(
+        accessToken && getSessionToken() === accessToken &&
+        getSessionUser()?.id === sessionUser.id &&
+        getOutboxScope() === verifiedOwnerScope
+      )),
       ...createAttendanceRemoteWriter(cfg),
       ...((loadRoster || hydratedDomains.has("roster")) ? createRosterRemoteWriter(cfg) : {}),
       upsertCustomer: async (customer) => {
@@ -452,60 +460,6 @@ async function hydrateRequestedStores(
           deleted_at: product.deletedAt ?? null, branch_id: product.branchId ?? null,
         };
         await optimisticVersionUpsert(cfg, "products", product.id, product.version || 1, row, "Product");
-      },
-      createSale: async (sale, salePayments, allowNegativeStock) => {
-        const result = await pgRpc<Record<string, unknown>>(cfg, "create_sale", {
-          p_sale: {
-            id: sale.id,
-            invoice_number: sale.invoiceNumber,
-            customer_id: sale.customerId ?? null,
-            customer_name: sale.customerName ?? null,
-            sale_date: sale.saleDate,
-            subtotal: sale.subtotal,
-            discount_amount: sale.discountAmount,
-            tax_amount: sale.taxAmount,
-            total: sale.total,
-            paid_amount: sale.paidAmount,
-            balance_amount: sale.balanceAmount,
-            status: sale.status,
-            notes: sale.notes ?? null,
-            created_at: sale.createdAt,
-            updated_at: sale.updatedAt,
-            branch_id: sale.branchId ?? null,
-            device_id: sale.deviceId ?? null,
-            created_by: sale.createdBy ?? null,
-            version: sale.version,
-            items: sale.items.map((item) => ({
-              id: item.id,
-              product_id: item.productId,
-              product_name: item.productName,
-              sku: item.sku ?? null,
-              quantity: item.quantity,
-              unit_price: item.unitPrice,
-              cost_price: item.costPrice,
-              discount_percent: item.discountPercent,
-              tax_rate: item.taxRate,
-              line_total: item.lineTotal,
-            })),
-          },
-          p_payments: salePayments.map((payment) => ({
-            id: payment.id,
-            amount: payment.amount,
-            method: payment.method,
-            reference_type: payment.referenceType,
-            reference_id: payment.referenceId,
-            customer_id: payment.customerId ?? null,
-            notes: payment.notes ?? null,
-            paid_at: payment.paidAt,
-            created_at: payment.createdAt,
-            created_by: payment.createdBy ?? null,
-            branch_id: payment.branchId ?? null,
-            device_id: payment.deviceId ?? null,
-            version: payment.version,
-          })),
-          p_allow_negative_stock: allowNegativeStock,
-        });
-        if (result.error) throw new Error(result.error.message);
       },
       recordCustomerPayment: async (payment, settledSales) => {
         const result = await pgRpc<Record<string, unknown>>(cfg, "record_payment", {

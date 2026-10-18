@@ -45,6 +45,8 @@ export interface RemoteWriter {
   upsertCategory?: (c: Category) => Promise<void>;
   upsertProduct?: (p: Product) => Promise<void>;
   createSale?: (s: Sale, payments: Payment[], allowNegativeStock: boolean) => Promise<void>;
+  /** Deployment-attested and receipt-verified dimensional atomic RPC. No legacy fallback. */
+  createDimensionalSale?: (s: Sale, payments: Payment[], allowNegativeStock: boolean) => Promise<void>;
   recordCustomerPayment?: (payment: Payment, settledSales: Sale[]) => Promise<void>;
   adjustStock?: (product: Product, movementType: "stock_in" | "stock_out" | "adjustment", quantity: number, notes?: string | null) => Promise<void>;
   updateSaleSettlement?: (sale: Sale) => Promise<void>;
@@ -356,8 +358,19 @@ export async function remoteCreateSale(
   // The durable sale/payment outbox remains visible for reviewed retry rather
   // than reporting false cloud settlement or dropping the measurement.
   if (s.items?.some(item => item.dimensionMetadata != null)) {
-    const reason = "Dimensional metadata not supported by the current atomic cloud sale RPC";
-    for (const id of eventIds) markOutboxFailed(id, reason);
+    // Never downgrade to createSale, which may target the old RPC and discard
+    // audit metadata. Only an explicitly installed, server-checked writer is
+    // permitted to atomically post the grouped financial batch.
+    if (!activeScopedWriter()?.createDimensionalSale) {
+      const reason = "Dimensional metadata not supported by the current atomic cloud sale RPC";
+      for (const id of eventIds) markOutboxFailed(id, reason);
+      return;
+    }
+    await deliverWithCloudAcknowledgement(
+      eventIds, target => Boolean(target.createDimensionalSale),
+      target => target.createDimensionalSale!(s, payments, allowNegativeStock),
+      "authenticated dimensional atomic sale write failed"
+    );
     return;
   }
   await deliverWithCloudAcknowledgement(

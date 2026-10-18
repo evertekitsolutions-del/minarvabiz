@@ -127,3 +127,49 @@ test("dimensional sale stays visible as failed durable outbox until atomic cloud
   assert.ok(queued.every(e=>/dimension.*not supported|dimension.*unsupported/i.test(e.lastError)));
   assert.deepEqual(queued[0].payload.items[0].dimensionMetadata,sale.items[0].dimensionMetadata);
 });
+
+
+test("verified dimensional writer commits sale and payment acknowledgements only after atomic receipt", async () => {
+  const gate=deferred();
+  let attempts=0, legacy=0;
+  const dimensions={
+    schema:"dimension-line-v1",algorithm:"area-v1",length:"12",width:"18",
+    lengthUnit:"in",widthUnit:"in",billableUnit:"sqft",pieces:2,quantityMilli:3000,
+  };
+  reset({
+    createSale:async()=>{legacy++;},
+    createDimensionalSale:async(s,p)=> {
+      attempts++;
+      assert.equal(s.items[0].dimensionMetadata.quantityMilli,3000);
+      assert.equal(p[0].id,"dimension-payment-ok");
+      await gate.promise;
+    },
+  });
+  const run=remote.remoteCreateSale(
+    {id:"dimension-sale-ok",items:[{id:"line-ok",quantity:3,dimensionMetadata:dimensions}]},
+    [{id:"dimension-payment-ok",amount:300}]
+  );
+  assert.equal(attempts,1);
+  assert.equal(legacy,0);
+  assert.deepEqual(events().map(x=>x.status),["pending","pending"]);
+  gate.release();
+  await run;
+  assert.deepEqual(events().map(x=>x.status),["synced","synced"]);
+});
+
+test("dimensional writer cannot acknowledge if tenant scope switches mid-request",async()=>{
+  const gate=deferred();
+  reset({createDimensionalSale:async()=>{await gate.promise;}});
+  const record={id:"dimension-switch",items:[{
+    quantity:3,dimensionMetadata:{
+      schema:"dimension-line-v1",algorithm:"area-v1",length:"12",width:"18",
+      lengthUnit:"in",widthUnit:"in",billableUnit:"sqft",pieces:2,quantityMilli:3000,
+    }
+  }]};
+  const run=remote.remoteCreateSale(record,[{id:"payment-switch"}]);
+  assert.deepEqual(events().map(x=>x.status),["pending","pending"]);
+  remote.registerRemoteWriter(null);
+  gate.release();
+  await run;
+  assert.deepEqual(events().map(x=>x.status),["pending","pending"]);
+});
