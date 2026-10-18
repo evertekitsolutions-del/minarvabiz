@@ -34,9 +34,11 @@ const preview=(billableUnit="sqft")=>previewDimensionRow({
 test("normal billing offers measurement editor only when product stock unit is area",()=>{
   assert.equal(isAreaBillableProduct(baseProduct("sqft")),true);
   assert.equal(isAreaBillableProduct(baseProduct("sqm")),true);
-  for(const unit of ["pieces","pcs","m","sq ft","",null,undefined]) {
+  for(const unit of ["pieces","pcs","m","sq ft","",null]) {
     assert.equal(isAreaBillableProduct(baseProduct(unit)),false);
   }
+  assert.equal(isAreaBillableProduct({unit:undefined}),false);
+  assert.equal(isAreaBillableProduct(null),false);
 });
 
 test("measurement must be applied canonically, recalculated and match stock unit",()=>{
