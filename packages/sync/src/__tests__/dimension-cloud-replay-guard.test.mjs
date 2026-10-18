@@ -8,6 +8,7 @@ require.extensions['.ts']=(mod,filename)=>mod._compile(
   ts.transpileModule(fs.readFileSync(filename,'utf8'),{
     fileName:filename,compilerOptions:{
       module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true,
+      inlineSourceMap:true,inlineSources:true,
     },
   }).outputText,filename
 );
