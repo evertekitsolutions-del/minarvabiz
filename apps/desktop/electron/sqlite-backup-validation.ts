@@ -25,7 +25,7 @@ export const REQUIRED_MINARVA_BACKUP_TABLES = [
   "payments",
 ] as const;
 
-export const MAX_SUPPORTED_MINARVA_BACKUP_SCHEMA_VERSION = 6;
+export const MAX_SUPPORTED_MINARVA_BACKUP_SCHEMA_VERSION = 7;
 
 function firstValue(results: SqlJsResult[]): unknown {
   return results[0]?.values?.[0]?.[0];

@@ -1,6 +1,6 @@
 # Universal business types — incremental implementation contract
 
-Status: UBP-01 preset registry, tenant presentation validation and automated tests are proposed in PR #478; **not merged or enabled in the product at this checkpoint**. UBP-02 database schema, UBP-06 dynamic billing and UBP-07 atomic journals are still unimplemented. This is **not** a claim that 100 verticals are operational.
+Status as of 2026-10-18: UBP-01 preset registry and tenant presentation parser merged in PR #478; UBP-02a cloud business-profile/product-attributes **source migration** merged in PR #479 (production application unverified). UBP-02b proposes SQLite display-cache parity and legacy preservation tests in the current branch, but does not yet sync or enable these features. UBP-03 batch/serial allocation, UBP-04 appointments, UBP-06 dynamic billing, and UBP-07 atomic journals are still unimplemented. **Do not claim all 100 verticals are operational.**
 
 ## Non-destructive integration
 Keep existing organizations/branches, products, variants, sales, payments, accounting, appointments/service and tenant RLS. **Do not introduce a second companies/items/invoices source of truth.** The requested conceptual `companies` maps to existing organizations, `items` to existing products + variants and `appointments` to existing service scheduling where available. First inspect live constraints, existing RLS and SQLite mirror before any migration.
