@@ -190,6 +190,8 @@ export interface Payment {
 }
 
 export interface CartLine {
+  /** UI/held-cart row identity, distinct for separate measured cuts of one SKU. */
+  cartLineId?: UUID;
   productId: UUID;
   productName: string;
   sku?: string | null;
