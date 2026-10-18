@@ -79,7 +79,9 @@ BEGIN
       ('pieces','3'::jsonb),
       ('quantityMilli','3001'::jsonb),
       ('schema','"v2"'::jsonb),
+      ('schema','null'::jsonb),
       ('algorithm','"area-v2"'::jsonb),
+      ('algorithm','null'::jsonb),
       ('length','"1e3"'::jsonb),
       ('length','"0"'::jsonb)
     ) AS cases(key,value)
