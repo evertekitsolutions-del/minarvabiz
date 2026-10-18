@@ -699,6 +699,9 @@ jobs:
             -f scripts/hr005-holiday-authority-e2e.sql
 
 
+      - name: Verify UBP-05e additive atomic sale RPC contract
+        run: node --test scripts/ubp05e-dimension-rpc-contract.test.mjs
+
       - name: Verify UBP-05c exact dimensional sale-line metadata in isolated PostgreSQL
         shell: bash
         run: |
