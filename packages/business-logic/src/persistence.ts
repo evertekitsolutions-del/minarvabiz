@@ -162,7 +162,13 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
   // Validate every dimensional invoice BEFORE replacing any existing state;
   // malformed metadata must not be partially applied or silently discarded.
   const sales = collection(input.sales, "sales").map(sale => {
-    if (!sale || typeof sale !== "object" || !Array.isArray(sale.items)) {
+    if (!sale || typeof sale !== "object") {
+      throw new Error("Snapshot sale must be an object");
+    }
+    // Pre-dimensional backups can omit the child collection entirely.
+    // Do not invent a new mandatory field for historic snapshots.
+    if (sale.items == null) return sale;
+    if (!Array.isArray(sale.items)) {
       throw new Error("Snapshot sale items must be an array");
     }
     let dimensionFound = false;
