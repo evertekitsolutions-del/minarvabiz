@@ -51,6 +51,29 @@ BEGIN
     RAISE EXCEPTION 'Invalid quantity update passed the SQL check';
   EXCEPTION WHEN check_violation THEN NULL; END;
 
+  -- An audited measurement must be write-once. Even a mathematically valid
+  -- replacement or late backfill would rewrite invoice history.
+  BEGIN
+    UPDATE public.sale_items SET dimension_metadata=NULL WHERE id=v_area;
+    RAISE EXCEPTION 'Allowed deletion of committed dimension metadata';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+
+  BEGIN
+    UPDATE public.sale_items
+      SET quantity=6,
+          dimension_metadata=jsonb_set(v_metadata,'{length}','"24"'::jsonb)
+      WHERE id=v_area;
+    RAISE EXCEPTION 'Allowed replacement with another valid dimension';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+
+  BEGIN
+    UPDATE public.sale_items SET dimension_metadata=v_metadata WHERE id=v_legacy;
+    RAISE EXCEPTION 'Allowed adding measurement after legacy sale completion';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+
+  -- An unchanged measurement can survive unrelated idempotent updates.
+  UPDATE public.sale_items SET dimension_metadata=v_metadata WHERE id=v_area;
+
   -- Pure verifier rejects tampering and unknown input; existing JSONB
   -- column is NOT trusted as stock/payment/tenant permission.
   IF NOT public.ubp_dimension_line_valid(v_metadata,3) THEN
