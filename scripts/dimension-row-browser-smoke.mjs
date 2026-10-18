@@ -72,7 +72,8 @@ try{
  await until(`${status}==='3 sqft'`,'initial exact preview');
  // Native keyboard activation must invoke the real callback once.
  await evaluate(`${button}.focus();true`);
- await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+ assert.equal(await evaluate(`document.activeElement===${button}`),true,'Apply button must have keyboard focus');
+ await send('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
  await send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
  await until('window.__dimensionApplied.length===1','keyboard Apply');
  assert.deepEqual(await evaluate('window.__dimensionApplied[0]'),{measurement:{length:'12',width:'18',lengthUnit:'in',widthUnit:'in',billableUnit:'sqft',pieces:2,quantityMilli:3000,quantity:3,algorithm:'area-v1'},frozen:true});
