@@ -176,7 +176,7 @@ export function parseProductCsv(text: string): {
       unit: idx("unit") >= 0 ? cols[idx("unit")]?.trim() || "pcs" : "pcs" });
     rowLines.push(number);
   }
-  const existing = store.listProducts();
+  const existing = [...store.listProducts(), ...store.listArchivedProducts()];
   const existingSku = new Set(existing.map(p => p.sku?.toLowerCase()).filter(Boolean));
   const existingBarcode = new Set(existing.map(p => p.barcode).filter(Boolean));
   rows.forEach((row, index) => {
