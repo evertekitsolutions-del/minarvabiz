@@ -1,7 +1,8 @@
 import type { CartLine, Product } from "@minarvabiz/types";
 import { addStockQuantities } from "./inventory";
+import { QUANTITY_MILLI_FACTOR, toQuantityMilli } from "@minarvabiz/utils";
 import {
-  dimensionLineMetadataFromMeasurement,
+  dimensionLineMetadataFromMeasurement, parseDimensionLineMetadata,
   type DimensionMeasurement,
 } from "./dimensional-billing";
 
@@ -11,11 +12,7 @@ export function isAreaBillableProduct(product: Pick<Product, "unit"> | null | un
   return unit === "sqft" || unit === "sqm";
 }
 
-/**
- * Apply a deliberate, already-previewed measurement to a fresh cart line.
- * A quantity/metadata pair is never inferred from the cashier's free-text
- * quantity box, and products stocked in pieces/metres cannot sell as area.
- */
+/** Apply a previewed immutable measurement to a new, separately keyed row. */
 export function attachNormalAreaMeasurement(
   line: CartLine,
   product: Pick<Product, "unit" | "stockQuantity">,
@@ -37,22 +34,119 @@ export function attachNormalAreaMeasurement(
   return { ...line, quantity, dimensionMetadata: metadata };
 }
 
+function keyOf(line: CartLine): string {
+  return line.cartLineId ?? line.productId;
+}
+
+function preciseQuantity(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error("Invalid cart quantity");
+  }
+  const milli = toQuantityMilli(value);
+  if (Math.abs(milli / QUANTITY_MILLI_FACTOR - value) > 1e-9) {
+    throw new Error("Cart quantity must have at most 3 decimals");
+  }
+  return milli / QUANTITY_MILLI_FACTOR;
+}
+
+function validatedLine(line: CartLine): CartLine {
+  const quantity = preciseQuantity(line.quantity);
+  if (line.dimensionMetadata == null) return { ...line, quantity };
+  const milli = toQuantityMilli(quantity);
+  return {
+    ...line, quantity,
+    dimensionMetadata: parseDimensionLineMetadata(line.dimensionMetadata, milli),
+  };
+}
+
+function checkCombinedStock(lines: CartLine[], productId: string): void {
+  const same = lines.filter(line => line.productId === productId);
+  if (!same.length) return;
+  let total = 0;
+  let stock = Number.POSITIVE_INFINITY;
+  for (const line of same) {
+    total = addStockQuantities(total, preciseQuantity(line.quantity));
+    stock = Math.min(stock, line.stockQuantity);
+  }
+  if (!Number.isFinite(stock) || stock < 0 || total > stock) {
+    throw new Error("Insufficient combined stock for measured and ordinary cart quantities");
+  }
+}
+
 /**
- * The current NormalBilling cart has one row per product. Two different
- * cuts of the same SKU MUST NOT be silently summed into a single forged
- * dimension invoice. Add separate-row support in a later milestone.
+ * Normal Billing allows multiple independent measured cuts of one SKU.
+ * Each added cut must have its own distinct row ID and canonical immutable
+ * dimension packet. The existing ordinary line for a SKU still aggregates.
+ * Every operation preflights the total SKU demand, not each cut alone.
  */
 export function appendNormalBillingLine(lines: CartLine[], incoming: CartLine): CartLine[] {
-  const existing = lines.find(line => line.productId === incoming.productId);
-  if (!existing) return [...lines, incoming];
-  if (existing.dimensionMetadata != null || incoming.dimensionMetadata != null) {
-    throw new Error("Cannot combine area measurements for one product; use a separate measured line");
+  const line = validatedLine(incoming);
+  const duplicates = lines.filter(existing => existing.productId === line.productId);
+  for (const existing of duplicates) validatedLine(existing);
+  if (line.cartLineId !== undefined &&
+      (typeof line.cartLineId !== "string" || !line.cartLineId.trim() ||
+       lines.some(existing => keyOf(existing) === line.cartLineId) ||
+       (line.dimensionMetadata != null && line.cartLineId === line.productId))) {
+    throw new Error("Duplicate or invalid cart line identity");
   }
-  const quantity = addStockQuantities(existing.quantity, incoming.quantity);
-  const stockQuantity = Math.min(existing.stockQuantity, incoming.stockQuantity);
-  if (quantity > stockQuantity) throw new Error("Insufficient stock for combined quantity");
-  return lines.map(line => line.productId === incoming.productId
-    ? { ...line, quantity, unitPrice: incoming.unitPrice }
-    : line
-  );
+
+  if (line.dimensionMetadata != null) {
+    if (duplicates.length && !line.cartLineId) {
+      throw new Error("Separate area measurement requires a distinct cart line identity");
+    }
+    const result = [...lines, line];
+    checkCombinedStock(result, line.productId);
+    return result;
+  }
+
+  const ordinary = duplicates.find(existing => existing.dimensionMetadata == null);
+  if (ordinary) {
+    if (line.cartLineId && line.cartLineId !== ordinary.cartLineId) {
+      throw new Error("Cannot combine distinct ordinary cart row identities");
+    }
+    const quantity = addStockQuantities(preciseQuantity(ordinary.quantity), line.quantity);
+    const result = lines.map(existing => existing === ordinary
+      ? { ...existing, quantity, unitPrice: line.unitPrice }
+      : existing);
+    checkCombinedStock(result, line.productId);
+    return result;
+  }
+
+  if (duplicates.some(existing => !existing.cartLineId) && !line.cartLineId) {
+    throw new Error("Separate area measurement requires a distinct cart row before adding ordinary stock");
+  }
+  const result = [...lines, line];
+  checkCombinedStock(result, line.productId);
+  return result;
+}
+
+/** Only rate or ordinary quantity can change; identity/audit cannot. */
+export function updateNormalBillingLine(
+  lines: CartLine[],
+  cartLineId: string,
+  patch: Partial<CartLine>,
+): CartLine[] {
+  const original = lines.find(line => keyOf(line) === cartLineId);
+  if (!original) return lines;
+  const keys = Object.keys(patch);
+  if (!keys.length || keys.some(key => key !== "quantity" && key !== "unitPrice")) {
+    throw new Error("Cart row identity and dimension audit fields are immutable");
+  }
+  if (Object.hasOwn(patch, "quantity") && original.dimensionMetadata != null) {
+    throw new Error("Measured quantity is immutable; remove and remeasure this cut");
+  }
+  if (Object.hasOwn(patch, "unitPrice") &&
+      (typeof patch.unitPrice !== "number" || !Number.isFinite(patch.unitPrice) || patch.unitPrice < 0)) {
+    throw new Error("Invalid cart unit price");
+  }
+  const quantity = Object.hasOwn(patch, "quantity") ? preciseQuantity(patch.quantity!) : original.quantity;
+  const result = lines.map(line => keyOf(line) === cartLineId
+    ? { ...line, ...patch, quantity } : line);
+  checkCombinedStock(result, original.productId);
+  return result;
+}
+
+/** Removing a cut must never remove another cut with the same productId. */
+export function removeNormalBillingLine(lines: CartLine[], cartLineId: string): CartLine[] {
+  return lines.filter(line => keyOf(line) !== cartLineId);
 }
