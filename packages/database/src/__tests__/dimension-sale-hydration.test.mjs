@@ -60,3 +60,10 @@ test("reject forged, incomplete and unknown-version read metadata without silent
   }
   assert.throws(()=>mapSaleItem({...base(),quantity:"2.999",dimension_metadata:metadata()}));
 });
+
+
+test("ordinary database sale writer cannot discard a dimensional audit packet",()=>{
+  const source=fs.readFileSync(new URL("../adapters/supabase.ts",import.meta.url),"utf8");
+  assert.match(source,/dimensionMetadata\s*!=\s*null/);
+  assert.match(source,/requires the authenticated atomic dimensional writer/);
+});
