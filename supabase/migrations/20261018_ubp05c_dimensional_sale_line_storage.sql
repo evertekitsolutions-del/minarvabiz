@@ -37,8 +37,8 @@ BEGIN
   ) THEN
     RETURN false;
   END IF;
-  IF p_measurement->>'schema' <> 'dimension-line-v1'
-     OR p_measurement->>'algorithm' <> 'area-v1'
+  IF (p_measurement->>'schema') IS DISTINCT FROM 'dimension-line-v1'
+     OR (p_measurement->>'algorithm') IS DISTINCT FROM 'area-v1'
      OR jsonb_typeof(p_measurement->'length') <> 'string'
      OR jsonb_typeof(p_measurement->'width') <> 'string'
      OR jsonb_typeof(p_measurement->'pieces') <> 'number'
