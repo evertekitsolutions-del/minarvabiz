@@ -5,9 +5,11 @@ import { createCheckoutSubmitGate } from "./checkout-submit-gate";
 import type { CartLine, Customer, PaymentMethod, Product } from "@minarvabiz/types";
 import {
   calculateCartTotals, isAreaBillableProduct, attachNormalAreaMeasurement,
-  appendNormalBillingLine, type DimensionRowDraft, type DimensionMeasurement,
+  appendNormalBillingLine, updateNormalBillingLine, removeNormalBillingLine,
+  type DimensionRowDraft, type DimensionMeasurement,
 } from "@minarvabiz/business-logic";
 import { DimensionRowEditor } from "./DimensionRowEditor";
+import { generateId } from "@minarvabiz/utils";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
@@ -83,8 +85,10 @@ export function NormalBilling({
         quantity, unitPrice: price, costPrice: p.costPrice,
         discountPercent: p.discount ?? 0, taxRate: p.taxRate ?? 0, stockQuantity: p.stockQuantity,
       };
-      const next = areaMode ? attachNormalAreaMeasurement(item, p, areaApplied) : item;
-      // Never combine two area cuts of one SKU into an unauditable invoice.
+      const next = areaMode
+        ? { ...attachNormalAreaMeasurement(item, p, areaApplied), cartLineId: generateId() }
+        : item;
+      // Each separately measured cut retains its own immutable audit and ID.
       setLines(appendNormalBillingLine(lines, next));
     } catch (error) {
       setMessage({ type: "err", text: error instanceof Error ? error.message : String(error) });
@@ -99,8 +103,14 @@ export function NormalBilling({
     setAreaDraft(emptyAreaDraft());
   }
 
-  function updateLine(productId: string, patch: Partial<CartLine>) {
-    setLines((prev) => prev.map((line) => line.productId === productId ? { ...line, ...patch } : line));
+  function updateLine(cartLineId: string, patch: Partial<CartLine>) {
+    try {
+      const next = updateNormalBillingLine(lines, cartLineId, patch);
+      setLines(next);
+      setMessage(null);
+    } catch (error) {
+      setMessage({ type: "err", text: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   function complete() {
@@ -190,7 +200,7 @@ export function NormalBilling({
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 text-left text-slate-600"><tr><th className="px-3 py-2">Item</th><th className="px-3 py-2">Qty</th><th className="px-3 py-2">Rate</th><th className="px-3 py-2 text-right">Amount</th><th className="px-3 py-2"></th></tr></thead>
               <tbody>{lines.length === 0 ? <tr><td colSpan={5} className="px-3 py-8 text-center text-slate-400">No items added</td></tr> : lines.map((line) => (
-                <tr key={line.productId} className="border-t border-slate-100">
+                <tr key={line.cartLineId ?? line.productId} className="border-t border-slate-100">
                   <td className="px-3 py-2 font-medium">{line.productName}
                     {line.dimensionMetadata && <div className="text-xs font-normal text-slate-600">
                       {line.dimensionMetadata.length} {line.dimensionMetadata.lengthUnit}
@@ -200,11 +210,10 @@ export function NormalBilling({
                     </div>}
                   </td>
                   <td className="px-3 py-2"><input className="h-8 w-20 rounded border border-slate-200 px-2" type="number" min="0.001" step="any" max={line.stockQuantity}
-                    disabled={Boolean(line.dimensionMetadata)} value={line.quantity} onChange={(e) => updateLine(line.productId, { quantity: Number.isFinite(Number(e.target.value)) && Number(e.target.value) > 0
-                    ? Math.min(line.stockQuantity, Number(e.target.value)) : line.quantity })} /></td>
-                  <td className="px-3 py-2"><input className="h-8 w-28 rounded border border-slate-200 px-2" type="number" min="0" step="0.01" value={line.unitPrice} onChange={(e) => updateLine(line.productId, { unitPrice: Math.max(0, parseFloat(e.target.value) || 0) })} /></td>
+                    disabled={Boolean(line.dimensionMetadata)} value={line.quantity} onChange={(e) => updateLine(line.cartLineId ?? line.productId, { quantity: Number(e.target.value) })} /></td>
+                  <td className="px-3 py-2"><input className="h-8 w-28 rounded border border-slate-200 px-2" type="number" min="0" step="0.01" value={line.unitPrice} onChange={(e) => updateLine(line.cartLineId ?? line.productId, { unitPrice: Number(e.target.value) })} /></td>
                   <td className="px-3 py-2 text-right font-semibold">{formatMoney(line.quantity * line.unitPrice)}</td>
-                  <td className="px-3 py-2 text-right"><Button size="sm" variant="outline" onClick={() => setLines((prev) => prev.filter((x) => x.productId !== line.productId))}>Remove</Button></td>
+                  <td className="px-3 py-2 text-right"><Button size="sm" variant="outline" onClick={() => setLines((prev) => removeNormalBillingLine(prev, line.cartLineId ?? line.productId))}>Remove</Button></td>
                 </tr>
               ))}</tbody>
             </table>
