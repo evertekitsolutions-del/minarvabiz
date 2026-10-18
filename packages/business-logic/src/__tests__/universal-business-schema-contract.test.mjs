@@ -10,7 +10,7 @@ const order = fs.readFileSync(path.join(root, "supabase/MIGRATION_ORDER.txt"), "
   .split(/\r?\n/).map(s => s.trim()).filter(s => s && !s.startsWith("#"));
 
 assert.equal(order.filter(n => n === migration).length, 1, "UBP-02 migration must replay exactly once");
-assert.equal(order.at(-1), migration, "UBP-02 should be last until new migrations are added");
+assert.ok(order.indexOf(migration) < order.indexOf("20261018_ubp03b_inventory_lot_serial_schema.sql"), "UBP-02 must precede new lot/serial tables");
 for (const name of ["business_group", "business_type_code", "feature_config", "feature_config_version"]) {
   assert.match(sql, new RegExp("ADD COLUMN IF NOT EXISTS " + name + "\\b"), "Missing organizations." + name);
 }
