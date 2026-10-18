@@ -22,6 +22,8 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Verify FEFO lot and IMEI/serial preflight invariants
+        run: node --experimental-strip-types --test packages/business-logic/src/__tests__/tracked-inventory.test.mjs
       - name: Verify all 100 business presets and immutable identifiers
         run: node --experimental-strip-types packages/types/src/__tests__/business-presets.test.mjs
       - name: Verify tenant-scoped presentation and capability validation
