@@ -14,7 +14,7 @@ require.extensions[".ts"]=(mod,filename)=>mod._compile(
   }).outputText,filename
 );
 const {previewDimensionRow}=require("../dimensional-billing.ts");
-const {appendPosMeasuredCut, removePosCartRow, updatePosCartDiscount}=require("../pos-area-cart.ts");
+const {appendPosMeasuredCut, removePosCartRow, updatePosCartDiscount, updatePosCartQuantity}=require("../pos-area-cart.ts");
 const product=(stockQuantity=5)=>({
   id:"panel",name:"Cut Panel",unit:"sqft",isActive:true,
   stockQuantity,sellingPrice:100,costPrice:60,discount:0,taxRate:0,
@@ -79,6 +79,19 @@ test("quantity is immutable for cuts while discount and removal target exact cut
   assert.deepEqual(removed.map(x=>x.cartLineId),["cut-b"]);
   assert.equal(cuts.length,2);
   assert.deepEqual(removePosCartRow(cuts,"no-such-id"),cuts);
+});
+test("editing a legacy fractional row cannot modify a measured sibling or exceed cumulative stock",()=>{
+  const first=appendPosMeasuredCut([],product(),a,"cut-a");
+  const legacy={...first[0],cartLineId:"legacy-1",quantity:1,dimensionMetadata:undefined};
+  const both=[...first,legacy];
+  const changed=updatePosCartQuantity(both,"legacy-1",1.5);
+  assert.deepEqual(changed.map(x=>x.quantity),[3,1.5]);
+  assert.throws(()=>updatePosCartQuantity(both,"legacy-1",2.001),/stock|quantity/i);
+  assert.deepEqual(updatePosCartQuantity(both,"cut-a",1),both,
+    "measured quantity cannot be changed independently of recorded dimensions");
+  assert.deepEqual(updatePosCartQuantity(both,"legacy-1",0).map(x=>x.cartLineId),["cut-a"]);
+  assert.throws(()=>updatePosCartQuantity(both,"legacy-1",Number.NaN));
+  assert.throws(()=>updatePosCartQuantity(both,"legacy-1",1.0004),/precision|quantity/i);
 });
 test("POS UI uses measured editor, stable cut keys, per-cut controls and scan protection",()=>{
   const source=fs.readFileSync(new URL("../../../ui/src/components/sales/PosBilling.tsx",import.meta.url),"utf8");
