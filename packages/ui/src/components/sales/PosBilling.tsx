@@ -6,7 +6,14 @@ import type { Product, Customer, CartLine, PaymentMethod } from "@minarvabiz/typ
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
-import { calculateCartTotals, validateTender } from "@minarvabiz/business-logic";
+import {
+  calculateCartTotals, validateTender, isAreaBillableProduct,
+  appendPosMeasuredCut, removePosCartRow, updatePosCartDiscount,
+  updatePosCartQuantity, posCartRowKey,
+  type DimensionRowDraft,
+} from "@minarvabiz/business-logic";
+import { generateId } from "@minarvabiz/utils";
+import { DimensionRowEditor } from "./DimensionRowEditor";
 
 export interface PosPaymentSplit {
   method: PaymentMethod;
@@ -61,6 +68,11 @@ const PAYMENT_METHODS: Array<{ value: PaymentMethod; label: string }> = [
 
 type PaymentRow = { method: PaymentMethod; amount: string; reference: string };
 
+const newAreaDraft = (unit: string): DimensionRowDraft => ({
+  length: "", width: "", lengthUnit: "ft", widthUnit: "ft",
+  pieces: "1", billableUnit: unit.trim().toLowerCase() === "sqm" ? "sqm" : "sqft",
+});
+
 function parsedTenderAmount(value: string): number {
   return value.trim() === "" ? 0 : Number(value);
 }
@@ -79,6 +91,8 @@ export function PosBilling({
   onRemoveHeldSale,
 }: PosBillingProps) {
   const [cart, setCart] = React.useState<CartLine[]>([]);
+  const [areaProductId, setAreaProductId] = React.useState<string | null>(null);
+  const [areaDraft, setAreaDraft] = React.useState<DimensionRowDraft>(newAreaDraft("sqft"));
   const [search, setSearch] = React.useState("");
   const [barcode, setBarcode] = React.useState("");
   const [customerId, setCustomerId] = React.useState<string>("");
@@ -108,10 +122,17 @@ export function PosBilling({
     ),
     [payments, totals.grandTotal]
   );
+  const selectedAreaProduct = products.find(p => p.id === areaProductId && p.isActive);
   const balanceDue = tenderState.balanceDue;
   const changeDue = tenderState.changeDue;
 
   function addProduct(p: Product, qty = 1) {
+    if (isAreaBillableProduct(p)) {
+      setAreaProductId(p.id);
+      setAreaDraft(newAreaDraft(p.unit));
+      setMessage(null);
+      return;
+    }
     setCart((prev) => {
       const existing = prev.find((l) => l.productId === p.id);
       if (existing) {
@@ -138,20 +159,37 @@ export function PosBilling({
     setMessage(null);
   }
 
-  function updateQty(productId: string, quantity: number) {
-    if (quantity <= 0) {
-      setCart((prev) => prev.filter((line) => line.productId !== productId));
-      return;
+  function updateQty(cartLineId: string, quantity: number) {
+    try {
+      // Validate synchronously: React may execute setState updater later,
+      // outside this click handler's error boundary.
+      const next = updatePosCartQuantity(cart, cartLineId, quantity);
+      setCart(next);
+      setMessage(null);
+    } catch (error) {
+      setMessage({type:"err",text:error instanceof Error ? error.message : String(error)});
     }
-    setCart((prev) => prev.map((line) => {
-      if (line.productId !== productId) return line;
-      return { ...line, quantity: Math.min(quantity, line.stockQuantity) };
-    }));
   }
 
-  function updateDiscount(productId: string, discountPercent: number) {
-    const safe = Math.min(100, Math.max(0, Number.isFinite(discountPercent) ? discountPercent : 0));
-    setCart((prev) => prev.map((line) => line.productId === productId ? { ...line, discountPercent: safe } : line));
+  function updateDiscount(cartLineId: string, discountPercent: number) {
+    setCart(prev => updatePosCartDiscount(prev, cartLineId, discountPercent));
+  }
+
+  function addMeasuredCut(measurement: Parameters<typeof appendPosMeasuredCut>[2]) {
+    const product = selectedAreaProduct;
+    if (!product) {
+      setMessage({type:"err",text:"Select an active area product first."});
+      return;
+    }
+    try {
+      const next = appendPosMeasuredCut(cart, product, measurement, generateId());
+      setCart(next);
+      setAreaProductId(null);
+      setAreaDraft(newAreaDraft(product.unit));
+      setMessage(null);
+    } catch (error) {
+      setMessage({type:"err",text:error instanceof Error ? error.message : String(error)});
+    }
   }
 
   function handleBarcode(e: React.FormEvent) {
@@ -195,6 +233,8 @@ export function PosBilling({
     setNotes("");
     setPayments([{ method: "cash", amount: "", reference: "" }]);
     setHeldSaleId("");
+    setAreaProductId(null);
+    setAreaDraft(newAreaDraft("sqft"));
   }
 
   function setExactPayment() {
@@ -277,6 +317,7 @@ export function PosBilling({
       return;
     }
     setCart(held.lines.map((line) => ({ ...line })));
+    setAreaProductId(null);
     setCustomerId(held.customerId || "");
     setNotes(held.notes || "");
     setPayments([{ method: "cash", amount: "", reference: "" }]);
@@ -337,6 +378,21 @@ export function PosBilling({
           </div>
         )}
 
+        {selectedAreaProduct && isAreaBillableProduct(selectedAreaProduct) && (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Measure {selectedAreaProduct.name}</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-slate-600">
+                Enter each cut separately. Available stock: {selectedAreaProduct.stockQuantity} {selectedAreaProduct.unit}.
+              </p>
+              <DimensionRowEditor value={areaDraft} onChange={setAreaDraft}
+                onApply={addMeasuredCut} />
+              <Button type="button" size="sm" variant="outline"
+                onClick={() => setAreaProductId(null)}>Cancel measurement</Button>
+            </CardContent>
+          </Card>
+        )}
+
         {filtered.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
             <p className="font-medium text-slate-700">{products.length === 0 ? "No products available for POS." : "No products match this search."}</p>
@@ -384,18 +440,26 @@ export function PosBilling({
             <div className="max-h-56 space-y-2 overflow-y-auto">
               {cart.length === 0 && <p className="py-6 text-center text-sm text-slate-400">Cart is empty</p>}
               {cart.map((line) => (
-                <div key={line.productId} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                <div key={line.cartLineId ?? line.productId} className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium">{line.productName}</div>
+                    {line.dimensionMetadata && <div className="text-xs text-slate-600">
+                      {line.dimensionMetadata.length} {line.dimensionMetadata.lengthUnit}
+                      {" × "}{line.dimensionMetadata.width} {line.dimensionMetadata.widthUnit}
+                      {" × "}{line.dimensionMetadata.pieces} pcs
+                      {" = "}{line.quantity} {line.dimensionMetadata.billableUnit}
+                    </div>}
                     <div className="text-xs text-slate-500">{formatMoney(line.unitPrice)} each</div>
                   </div>
                   <input
                     type="number"
-                    min={1}
+                    min={0.001}
+                    step="any"
                     max={line.stockQuantity}
+                    disabled={Boolean(line.dimensionMetadata)}
                     aria-label={`Quantity ${line.productName}`}
                     value={line.quantity}
-                    onChange={(e) => updateQty(line.productId, parseInt(e.target.value, 10) || 0)}
+                    onChange={(e) => updateQty(posCartRowKey(line), parseFloat(e.target.value))}
                     className="h-8 w-14 rounded border border-slate-200 px-2 text-center text-sm"
                   />
                   <div className="flex items-center gap-1">
@@ -407,7 +471,7 @@ export function PosBilling({
                       aria-label={`Discount % ${line.productName}`}
                       placeholder="Disc %"
                       value={line.discountPercent || ""}
-                      onChange={(e) => updateDiscount(line.productId, Number(e.target.value) || 0)}
+                      onChange={(e) => updateDiscount(posCartRowKey(line), Number(e.target.value) || 0)}
                       className="h-8 w-16 rounded border border-slate-200 px-2 text-center text-xs"
                     />
                     <span className="text-[10px] text-slate-400">%</span>
@@ -415,6 +479,11 @@ export function PosBilling({
                   <div className="w-20 text-right text-sm font-semibold">
                     {formatMoney(calculateCartTotals([line]).grandTotal)}
                   </div>
+                  <button type="button" className="text-xs text-rose-700"
+                    aria-label={`Remove ${line.productName} cut`}
+                    onClick={() => setCart(prev => removePosCartRow(prev, posCartRowKey(line)))}>
+                    Remove
+                  </button>
                 </div>
               ))}
             </div>
