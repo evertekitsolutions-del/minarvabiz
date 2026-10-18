@@ -14,6 +14,7 @@ require.extensions[".ts"]=(mod,filename)=>mod._compile(
   }).outputText,filename
 );
 const {previewDimensionRow}=require("../dimensional-billing.ts");
+const {validateCart,cartLineToSaleItem}=require("../sales.ts");
 const {appendPosMeasuredCut, removePosCartRow, updatePosCartDiscount, updatePosCartQuantity}=require("../pos-area-cart.ts");
 const product=(stockQuantity=5)=>({
   id:"panel",name:"Cut Panel",unit:"sqft",isActive:true,
@@ -47,6 +48,16 @@ test("different cuts of same SKU remain distinct, independently keyed immutable 
   const restored=JSON.parse(JSON.stringify(both));
   assert.deepEqual(restored.map(x=>x.cartLineId),["cut-a","cut-b"]);
   assert.deepEqual(restored.map(x=>x.dimensionMetadata.quantityMilli),[3000,1000]);
+});
+test("two measured cuts pass ordinary sale validation as separate independently audited invoice lines",()=>{
+  const cuts=appendPosMeasuredCut(
+    appendPosMeasuredCut([],product(),a,"cut-a"),product(),b,"cut-b");
+  assert.deepEqual(validateCart(cuts),[]);
+  const saved=cuts.map((line,i)=>cartLineToSaleItem(line,"sale-id","sale-item-"+i));
+  assert.deepEqual(saved.map(x=>x.quantity),[3,1]);
+  assert.deepEqual(saved.map(x=>x.id),["sale-item-0","sale-item-1"]);
+  assert.deepEqual(saved.map(x=>x.dimensionMetadata.quantityMilli),[3000,1000]);
+  assert.deepEqual(saved.map(x=>x.productId),["panel","panel"]);
 });
 test("cumulative stock demand across cuts cannot exceed product stock",()=>{
   const first=appendPosMeasuredCut([],product(3.999),a,"cut-a");
