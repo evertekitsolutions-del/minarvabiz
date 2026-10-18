@@ -19,7 +19,7 @@ const host=new URL(dbUrl).hostname;
 if(!["127.0.0.1","localhost","[::1]"].includes(host)){
   throw Error("Refusing non-local Supabase URL: "+host);
 }
-const sql=String.raw\`
+const sql=String.raw`
 BEGIN;
 DO $verify$
 DECLARE
@@ -74,7 +74,7 @@ BEGIN
 END;
 $verify$;
 ROLLBACK;
-\`;
+`;
 const out=execFileSync("psql",[dbUrl,"-X","-v","ON_ERROR_STOP=1"],{
   input:sql,encoding:"utf8",stdio:["pipe","pipe","inherit"],
 });
