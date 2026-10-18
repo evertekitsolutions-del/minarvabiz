@@ -698,6 +698,15 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f scripts/hr005-holiday-authority-e2e.sql
 
+
+      - name: Verify UBP-05c exact dimensional sale-line metadata in isolated PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Ephemeral PG17 service only; no hosted Supabase migrations.
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f scripts/ubp05c-dimension-sql-e2e.sql
+
   windows-package:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: windows-latest
