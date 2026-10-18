@@ -10,6 +10,22 @@ import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { formatMoney } from "../customers/format";
 import { createCheckoutSubmitGate } from "../sales/checkout-submit-gate";
 import { resolveReturnRestock } from "./return-stock-disposition";
+import { formatReturnDimensionEvidence } from "./return-dimension-evidence";
+
+/**
+ * Show the original invoiced area next to the refundable quantity.
+ * Presentation only; quoteSaleReturn enforces refund authorization.
+ */
+function ReturnDimensionEvidence({ item }: { item: Sale["items"][number] }) {
+  const evidence = formatReturnDimensionEvidence(item);
+  if (!evidence) return null;
+  return (
+    <p aria-label="Recorded area evidence" role={evidence.status === "invalid" ? "alert" : undefined}
+      className={evidence.status === "invalid" ? "mt-1 text-xs text-rose-700" : "mt-1 text-xs text-slate-600"}>
+      {evidence.label}
+    </p>
+  );
+}
 
 type ReturnItemInput = {
   saleItemId: string;
@@ -450,7 +466,10 @@ export function ReturnsPanel({
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Items being returned</div>
               {sale.items.map((item) => (
                 <div key={item.id} className="grid items-center gap-2 border-b border-slate-100 pb-2 text-sm last:border-b-0 sm:grid-cols-[minmax(0,1fr)_90px_155px]">
-                  <span>{item.productName} (remaining {remainingQuantity(item)})</span>
+                  <div className="min-w-0">
+                    <span>{item.productName} (remaining {remainingQuantity(item)})</span>
+                    <ReturnDimensionEvidence item={item} />
+                  </div>
                   <label className="flex flex-col gap-1 text-xs text-slate-600">
                     Return qty
                     <input
