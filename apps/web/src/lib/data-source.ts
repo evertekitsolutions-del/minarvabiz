@@ -20,8 +20,8 @@ import {
   pgRpc,
   type UnitOfWork,
 } from "@minarvabiz/database";
-import type { RoleName, StaffAttendanceRecord } from "@minarvabiz/types";
-import { store, ordersStore, phase5Store, phase6Store, phase9Store, warehouseStore, procurementStore, accountingStore, registerRemoteWriter, getRuntimeMode, exportOutbox, getSessionUser, getSessionToken, setOutboxScope } from "@minarvabiz/business-logic";
+import type { RoleName, StaffAttendanceRecord, Sale, Payment } from "@minarvabiz/types";
+import { store, ordersStore, phase5Store, phase6Store, phase9Store, warehouseStore, procurementStore, accountingStore, registerRemoteWriter, getRuntimeMode, exportOutbox, getSessionUser, getSessionToken, setOutboxScope, serializeDimensionSaleLine, requireDimensionSaleCapability, requireDimensionSaleReceipt } from "@minarvabiz/business-logic";
 import {
   mapCategory,
   mapSupplier,
@@ -406,6 +406,95 @@ async function hydrateRequestedStores(
       setOutboxScope(null);
       return { ok: false, message: "The authenticated session changed during cloud hydration." };
     }
+    // Shared mapping for plain and dimensional sales. The legacy route stays
+    // identical and cannot silently ignore a dimensional audit packet.
+    const writeAtomicSale = async (
+      sale: Sale, salePayments: Payment[], allowNegativeStock: boolean, dimensional: boolean
+    ): Promise<void> => {
+      const hasDimension = sale.items?.some(item => item.dimensionMetadata != null) ?? false;
+      if (dimensional !== hasDimension) {
+        throw new Error("Dimensional sale writer protocol mismatch");
+      }
+      if (!dimensional && sale.items?.some(item => Object.hasOwn(item, "dimension_metadata"))) {
+        throw new Error("Legacy sale cannot accept dimensional metadata");
+      }
+      if (dimensional) {
+        // No cached version: the authenticated server must attest the deployed
+        // transaction/schema for each write. Missing RPC or permission fails closed.
+        if (!accessToken || getSessionToken() !== accessToken ||
+            getSessionUser()?.id !== sessionUser.id ||
+            getOutboxScope() !== verifiedOwnerScope) {
+          throw new Error("Dimensional sale session authority changed");
+        }
+        // Validate and canonicalize every measurement BEFORE contacting the cloud.
+        for (const item of sale.items) serializeDimensionSaleLine(item);
+        const cap = await pgRpc<Record<string, unknown>>(
+          cfg, "ubp_dimension_sale_capability", {}
+        );
+        if (cap.error) throw new Error(cap.error.message);
+        requireDimensionSaleCapability(cap.data);
+        if (getSessionToken() !== accessToken ||
+            getSessionUser()?.id !== sessionUser.id ||
+            getOutboxScope() !== verifiedOwnerScope) {
+          throw new Error("Dimensional sale session revoked during negotiation");
+        }
+      }
+
+        const result = await pgRpc<Record<string, unknown>>(cfg, "create_sale", {
+          p_sale: {
+            id: sale.id,
+            invoice_number: sale.invoiceNumber,
+            customer_id: sale.customerId ?? null,
+            customer_name: sale.customerName ?? null,
+            sale_date: sale.saleDate,
+            subtotal: sale.subtotal,
+            discount_amount: sale.discountAmount,
+            tax_amount: sale.taxAmount,
+            total: sale.total,
+            paid_amount: sale.paidAmount,
+            balance_amount: sale.balanceAmount,
+            status: sale.status,
+            notes: sale.notes ?? null,
+            created_at: sale.createdAt,
+            updated_at: sale.updatedAt,
+            branch_id: sale.branchId ?? null,
+            device_id: sale.deviceId ?? null,
+            created_by: sale.createdBy ?? null,
+            version: sale.version,
+            items: sale.items.map((item) => ({
+              id: item.id,
+              product_id: item.productId,
+              product_name: item.productName,
+              sku: item.sku ?? null,
+              quantity: item.quantity,
+              unit_price: item.unitPrice,
+              cost_price: item.costPrice,
+              discount_percent: item.discountPercent,
+              tax_rate: item.taxRate,
+              line_total: item.lineTotal,
+              ...(dimensional ? serializeDimensionSaleLine(item) : {}),
+            })),
+          },
+          p_payments: salePayments.map((payment) => ({
+            id: payment.id,
+            amount: payment.amount,
+            method: payment.method,
+            reference_type: payment.referenceType,
+            reference_id: payment.referenceId,
+            customer_id: payment.customerId ?? null,
+            notes: payment.notes ?? null,
+            paid_at: payment.paidAt,
+            created_at: payment.createdAt,
+            created_by: payment.createdBy ?? null,
+            branch_id: payment.branchId ?? null,
+            device_id: payment.deviceId ?? null,
+            version: payment.version,
+          })),
+          p_allow_negative_stock: allowNegativeStock,
+        });
+        if (result.error) throw new Error(result.error.message);
+        if (dimensional) requireDimensionSaleReceipt(result.data, sale.id);
+    };
     registerRemoteWriter({
       ...createAttendanceRemoteWriter(cfg),
       ...((loadRoster || hydratedDomains.has("roster")) ? createRosterRemoteWriter(cfg) : {}),
@@ -453,60 +542,10 @@ async function hydrateRequestedStores(
         };
         await optimisticVersionUpsert(cfg, "products", product.id, product.version || 1, row, "Product");
       },
-      createSale: async (sale, salePayments, allowNegativeStock) => {
-        const result = await pgRpc<Record<string, unknown>>(cfg, "create_sale", {
-          p_sale: {
-            id: sale.id,
-            invoice_number: sale.invoiceNumber,
-            customer_id: sale.customerId ?? null,
-            customer_name: sale.customerName ?? null,
-            sale_date: sale.saleDate,
-            subtotal: sale.subtotal,
-            discount_amount: sale.discountAmount,
-            tax_amount: sale.taxAmount,
-            total: sale.total,
-            paid_amount: sale.paidAmount,
-            balance_amount: sale.balanceAmount,
-            status: sale.status,
-            notes: sale.notes ?? null,
-            created_at: sale.createdAt,
-            updated_at: sale.updatedAt,
-            branch_id: sale.branchId ?? null,
-            device_id: sale.deviceId ?? null,
-            created_by: sale.createdBy ?? null,
-            version: sale.version,
-            items: sale.items.map((item) => ({
-              id: item.id,
-              product_id: item.productId,
-              product_name: item.productName,
-              sku: item.sku ?? null,
-              quantity: item.quantity,
-              unit_price: item.unitPrice,
-              cost_price: item.costPrice,
-              discount_percent: item.discountPercent,
-              tax_rate: item.taxRate,
-              line_total: item.lineTotal,
-            })),
-          },
-          p_payments: salePayments.map((payment) => ({
-            id: payment.id,
-            amount: payment.amount,
-            method: payment.method,
-            reference_type: payment.referenceType,
-            reference_id: payment.referenceId,
-            customer_id: payment.customerId ?? null,
-            notes: payment.notes ?? null,
-            paid_at: payment.paidAt,
-            created_at: payment.createdAt,
-            created_by: payment.createdBy ?? null,
-            branch_id: payment.branchId ?? null,
-            device_id: payment.deviceId ?? null,
-            version: payment.version,
-          })),
-          p_allow_negative_stock: allowNegativeStock,
-        });
-        if (result.error) throw new Error(result.error.message);
-      },
+      createSale: (sale, payments, negative) =>
+        writeAtomicSale(sale, payments, negative, false),
+      createDimensionalSale: (sale, payments, negative) =>
+        writeAtomicSale(sale, payments, negative, true),
       recordCustomerPayment: async (payment, settledSales) => {
         const result = await pgRpc<Record<string, unknown>>(cfg, "record_payment", {
           p_payment: {
