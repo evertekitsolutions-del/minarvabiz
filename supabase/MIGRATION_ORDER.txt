@@ -87,3 +87,4 @@
 
 20261011_hr_roster_policy_resolution_selection.sql
 20261011_hr005_holiday_rules.sql
+20261018_ubp02_business_profile_foundation.sql
