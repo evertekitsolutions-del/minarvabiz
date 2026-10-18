@@ -5,6 +5,7 @@ const require=createRequire(import.meta.url),ts=require("typescript");
 require.extensions[".ts"]=(mod,file)=>mod._compile(ts.transpileModule(
   fs.readFileSync(file,"utf8"),{fileName:file,compilerOptions:{
     module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true,
+    inlineSourceMap:true,inlineSources:true,
   }}).outputText,file);
 const {buildSaleInvoiceHtml}=require("../invoice.ts");
 const meta={
@@ -49,4 +50,18 @@ for(const tamper of [
   forged.items[0].dimensionMetadata=tamper;
   assert.throws(()=>buildSaleInvoiceHtml(forged,{paper:"thermal",autoPrint:false}));
 }
+
+// Rendering may never silently round a financial quantity to 0.001 units.
+for (const invalidQuantity of [3.0004, 2.999, Number.NaN, Number.POSITIVE_INFINITY]) {
+  const altered=sale();
+  altered.items[0].quantity=invalidQuantity;
+  assert.throws(()=>buildSaleInvoiceHtml(altered,{paper:"a4",autoPrint:false}),
+    /dimension|quantity|precision/i);
+}
+// A legacy row with explicitly null metadata is not a dimensional invoice.
+const nullDimension=sale();
+nullDimension.items[0].dimensionMetadata=null;
+assert.doesNotMatch(buildSaleInvoiceHtml(nullDimension,{paper:"thermal",autoPrint:false}),
+  /12 in|18 in|2 pcs|Area:/);
+
 console.log("UBP-05j: A4 and thermal invoice dimension evidence, legacy and HTML safety PASS");
