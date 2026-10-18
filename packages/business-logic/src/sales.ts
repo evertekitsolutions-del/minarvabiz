@@ -44,6 +44,15 @@ export function calculateCartTotals(lines: CartLine[]): CartTotals {
   };
 }
 
+/** Preserve exact 0.001 stock precision before attaching area audit data. */
+function exactDimensionQuantityMilli(quantity: number): number {
+  const quantityMilli = toQuantityMilli(quantity);
+  if (Math.abs(quantityMilli / QUANTITY_MILLI_FACTOR - quantity) > 1e-9) {
+    throw new Error("Dimension quantity must have at most 3 decimal places");
+  }
+  return quantityMilli;
+}
+
 export function cartLineToSaleItem(line: CartLine, saleId: string, itemId: string): SaleItem {
   const calc = calculateLineItem({
     quantity: line.quantity,
@@ -52,7 +61,7 @@ export function cartLineToSaleItem(line: CartLine, saleId: string, itemId: strin
     taxRate: line.taxRate,
   });
   const dimensionMetadata = line.dimensionMetadata == null ? undefined
-    : parseDimensionLineMetadata(line.dimensionMetadata, toQuantityMilli(line.quantity));
+    : parseDimensionLineMetadata(line.dimensionMetadata, exactDimensionQuantityMilli(line.quantity));
   return {
     id: itemId,
     saleId,
@@ -238,7 +247,7 @@ export function validateCart(lines: CartLine[], options?: { allowNegativeStock?:
   for (const line of lines) {
     if (line.dimensionMetadata != null) {
       try {
-        parseDimensionLineMetadata(line.dimensionMetadata, toQuantityMilli(line.quantity));
+        parseDimensionLineMetadata(line.dimensionMetadata, exactDimensionQuantityMilli(line.quantity));
       } catch {
         errors.push(`${line.productName}: dimension measurement does not match sale quantity`);
       }
