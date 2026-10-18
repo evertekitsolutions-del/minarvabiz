@@ -1,3 +1,4 @@
+import { waitForDesktopWorkspace, desktopWorkspaceSnapshot } from "./desktop-workspace-ready.mjs";
 import { verifyPrintTemplates } from "./print-template-ui-smoke.mjs";
 const base = "http://127.0.0.1:9222";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -232,6 +233,7 @@ async function main() {
       await sleep(1200);
       await ready(ws);
     }
+    await waitForDesktopWorkspace(async () => JSON.parse(await evalIn(ws, desktopWorkspaceSnapshot)));
     console.log("TRIAL_READY PASS");
 
     // Customer create + row drill-down.

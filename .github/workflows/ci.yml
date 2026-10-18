@@ -36,6 +36,8 @@ jobs:
         run: node packages/business-logic/src/__tests__/universal-business-schema-contract.test.mjs
       - name: Verify tenant-safe service resource availability rules (UBP-04a)
         run: node --experimental-strip-types --test packages/business-logic/src/__tests__/resource-booking.test.mjs
+      - name: Verify desktop workspace readiness after trial activation
+        run: node --test scripts/desktop-workspace-ready.test.mjs
       - name: Verify GitHub Actions hardening
         run: node scripts/github-actions-hardening-smoke.mjs
       - name: Verify isolated Cloudflare customer preview configuration
