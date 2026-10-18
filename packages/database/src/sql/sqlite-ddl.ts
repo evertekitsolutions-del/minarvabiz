@@ -358,6 +358,50 @@ CREATE TABLE IF NOT EXISTS sale_returns (
   payload_json TEXT,
   org_id TEXT
 );
+
+-- UBP-02b: offline-only business profile and product metadata cache.
+-- NOT a signed device credential, role/license grant, or inventory authority.
+-- Existing master tables and customer financial records remain unchanged.
+CREATE TABLE IF NOT EXISTS ubp_business_profile_cache (
+  org_id TEXT PRIMARY KEY NOT NULL CHECK (length(trim(org_id)) > 0),
+  business_group TEXT CHECK (business_group IN ('RETAIL','EXPIRE_BASED','SERIALIZED','DIMENSIONAL','SERVICE')),
+  business_type_code TEXT,
+  feature_config_json TEXT NOT NULL DEFAULT '{}'
+    CHECK (json_valid(feature_config_json) AND json_type(feature_config_json) = 'object'
+      AND length(CAST(feature_config_json AS BLOB)) <= 4096),
+  feature_config_version INTEGER NOT NULL DEFAULT 1
+    CHECK (feature_config_version BETWEEN 1 AND 2147483646),
+  last_synced_at TEXT,
+  CHECK ((business_group IS NULL AND business_type_code IS NULL)
+    OR (business_group IS NOT NULL AND business_type_code IS NOT NULL)),
+  CHECK (business_type_code IS NULL OR (
+    substr(business_type_code, 1, length(lower(business_group)) + 1) = lower(business_group) || '_'
+    AND length(business_type_code) = length(lower(business_group)) + 4
+    AND substr(business_type_code, -3) GLOB '[0-9][0-9][0-9]'
+  ))
+);
+
+-- Composite parent identity prevents a product from another organization
+-- being assigned tracking metadata, without introducing a second product master.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ubp_products_org_id_pair
+  ON products(org_id, id);
+
+CREATE TABLE IF NOT EXISTS ubp_product_tracking_cache (
+  org_id TEXT NOT NULL CHECK (length(trim(org_id)) > 0),
+  product_id TEXT NOT NULL,
+  tracking_mode TEXT NOT NULL DEFAULT 'none'
+    CHECK (tracking_mode IN ('none','lot','serial')),
+  attributes_json TEXT NOT NULL DEFAULT '{}'
+    CHECK (json_valid(attributes_json) AND json_type(attributes_json) = 'object'
+      AND length(CAST(attributes_json AS BLOB)) <= 8192),
+  version INTEGER NOT NULL DEFAULT 1 CHECK (version >= 1),
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (org_id, product_id),
+  FOREIGN KEY (org_id, product_id) REFERENCES products(org_id, id)
+    DEFERRABLE INITIALLY DEFERRED
+);
+CREATE INDEX IF NOT EXISTS idx_ubp_tracking_org_mode
+  ON ubp_product_tracking_cache(org_id, tracking_mode, product_id);
 `;
 
-export const SQLITE_SCHEMA_VERSION = 6;
+export const SQLITE_SCHEMA_VERSION = 7;
