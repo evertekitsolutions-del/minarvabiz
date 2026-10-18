@@ -16,6 +16,7 @@ on:
       - "apps/license-admin/scripts/sync-emergency-authority.mjs"
       - "apps/license-admin/package.json"
       - "scripts/replay-supabase-migrations-fresh.mjs"
+      - "scripts/ubp02-profile-schema-e2e.mjs"
       - "scripts/attendance-authority-e2e.*"
       - "scripts/hr-roster-authority-e2e.*"
       - "scripts/hr-roster-events-e2e.*"
