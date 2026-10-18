@@ -161,7 +161,11 @@ export function PosBilling({
 
   function updateQty(cartLineId: string, quantity: number) {
     try {
-      setCart(prev => updatePosCartQuantity(prev, cartLineId, quantity));
+      // Validate synchronously: React may execute setState updater later,
+      // outside this click handler's error boundary.
+      const next = updatePosCartQuantity(cart, cartLineId, quantity);
+      setCart(next);
+      setMessage(null);
     } catch (error) {
       setMessage({type:"err",text:error instanceof Error ? error.message : String(error)});
     }
