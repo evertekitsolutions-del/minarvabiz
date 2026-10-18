@@ -36,6 +36,8 @@ jobs:
         run: node packages/business-logic/src/__tests__/universal-business-schema-contract.test.mjs
       - name: Verify UBP-03b typed lot and serial schema tenant security
         run: node --test packages/business-logic/src/__tests__/universal-inventory-schema-contract.test.mjs
+      - name: Verify tenant-safe service resource availability rules (UBP-04a)
+        run: node --experimental-strip-types --test packages/business-logic/src/__tests__/resource-booking.test.mjs
       - name: Verify GitHub Actions hardening
         run: node scripts/github-actions-hardening-smoke.mjs
       - name: Verify isolated Cloudflare customer preview configuration

@@ -116,3 +116,6 @@ export { canAssignServiceOrder, canStartServiceAssignment, canCompleteServiceAss
 export { exportPaymentHistoryCsv } from "./payment-history-csv";
 export type { PaymentHistoryExportRow } from "./payment-history-csv";
 export { exportLaundryTicketsCsv } from "./laundry-tickets-csv";
+
+// UBP-04a: advisory resource/slot booking availability, not a reservation authority.
+export * from "./resource-booking";
