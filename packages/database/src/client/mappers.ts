@@ -1,4 +1,4 @@
-import type { Customer, Product, Sale, SaleItem, ServiceOrder, UUID } from "@minarvabiz/types";
+import type { Customer, Product, Sale, SaleItem, DimensionLineMetadataV1, ServiceOrder, UUID } from "@minarvabiz/types";
 
 export function mapCustomer(row: Record<string, unknown>): Customer {
   return {
@@ -100,6 +100,59 @@ export function productToRow(p: Partial<Product>): Record<string, unknown> {
   return row;
 }
 
+/**
+ * PostgreSQL's UBP-05c CHECK proves exact dimensional area on write.
+ * The read mapper still rejects malformed or mismatched persisted JSON
+ * rather than hiding it when a cloud row is loaded into offline state.
+ * The business-logic calculator remains the area/math authority.
+ */
+function mapDimensionAudit(raw: unknown, quantity: number): Readonly<DimensionLineMetadataV1> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) ||
+      (Object.getPrototypeOf(raw) !== Object.prototype &&
+       Object.getPrototypeOf(raw) !== null)) {
+    throw new Error("Corrupt persisted dimension metadata");
+  }
+  const record = raw as Record<string, unknown>;
+  const keys = [
+    "schema","algorithm","length","width","lengthUnit",
+    "widthUnit","billableUnit","pieces","quantityMilli",
+  ] as const;
+  if (Object.keys(record).length !== keys.length ||
+      keys.some(key => !Object.hasOwn(record,key)) ||
+      Object.values(Object.getOwnPropertyDescriptors(record)).some(
+        desc => !Object.hasOwn(desc,"value") || !desc.enumerable
+      ) ||
+      record.schema !== "dimension-line-v1" ||
+      record.algorithm !== "area-v1") {
+    throw new Error("Unsupported persisted dimension metadata");
+  }
+  const validDecimal = (value: unknown): value is string =>
+    typeof value === "string" &&
+    /^[0-9]{1,9}(\\.[0-9]{1,6})?$/.test(value) && Number(value) > 0;
+  const units = ["mm","cm","m","in","ft"];
+  if (!validDecimal(record.length) || !validDecimal(record.width) ||
+      !units.includes(String(record.lengthUnit)) ||
+      !units.includes(String(record.widthUnit)) ||
+      (record.billableUnit !== "sqm" && record.billableUnit !== "sqft") ||
+      !Number.isSafeInteger(record.pieces) ||
+      (record.pieces as number) < 1 || (record.pieces as number) > 1_000_000 ||
+      !Number.isSafeInteger(record.quantityMilli) ||
+      (record.quantityMilli as number) < 1 ||
+      (record.quantityMilli as number) > 99_999_999_999_999 ||
+      !Number.isFinite(quantity) ||
+      quantity * 1000 !== record.quantityMilli) {
+    throw new Error("Persisted dimension metadata disagrees with sale quantity");
+  }
+  return Object.freeze({
+    schema: "dimension-line-v1", algorithm: "area-v1",
+    length: record.length as string, width: record.width as string,
+    lengthUnit: record.lengthUnit as DimensionLineMetadataV1["lengthUnit"],
+    widthUnit: record.widthUnit as DimensionLineMetadataV1["widthUnit"],
+    billableUnit: record.billableUnit as DimensionLineMetadataV1["billableUnit"],
+    pieces: record.pieces as number, quantityMilli: record.quantityMilli as number,
+  });
+}
+
 export function mapSaleItem(row: Record<string, unknown>): SaleItem {
   return {
     id: row.id as UUID,
@@ -113,6 +166,9 @@ export function mapSaleItem(row: Record<string, unknown>): SaleItem {
     discountPercent: Number(row.discount_percent || 0),
     taxRate: Number(row.tax_rate || 0),
     lineTotal: Number(row.line_total || 0),
+    ...(row.dimension_metadata == null ? {} : {
+      dimensionMetadata: mapDimensionAudit(row.dimension_metadata, Number(row.quantity)),
+    }),
   };
 }
 
