@@ -48,7 +48,7 @@ test("dimension RPC is fail-closed and stores audited metadata in the initial IN
   assert.match(saleInsert[2],/\bv_dimension_metadata\b/);
   assert.match(sql,/public\.ubp_dimension_line_valid\s*\(\s*v_dimension_metadata,\s*v_qty\s*\)/i);
   assert.match(sql,/v_item\s*\?\s*'dimensionMetadata'/);
-  assert.match(sql,/v_item\s*\?\s*'dimension_metadata'/);
+  assert.match(sql,/(?:v_item|item\.value)\s*\?\s*'dimension_metadata'/);
   assert.match(sql,/v_dimension_metadata\s+IS\s+NOT\s+NULL/);
   assert.match(sql,/RAISE EXCEPTION '.*dimension/i);
   // A retried sale with the same invoice cannot falsely acknowledge different metadata.
