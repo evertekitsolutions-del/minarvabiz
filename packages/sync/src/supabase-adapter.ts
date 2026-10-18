@@ -13,6 +13,17 @@ export interface PgClient {
   update: (table: string, match: string, patch: Record<string, unknown>) => Promise<{ error: string | null }>;
 }
 
+/** Never let legacy direct-table sync lose a dimensional sale's immutable audit. */
+function hasDimensionSaleItems(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
+  const items = (payload as Record<string, unknown>).items;
+  return Array.isArray(items) && items.some(item => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+    const row = item as Record<string, unknown>;
+    return row.dimensionMetadata != null || row.dimension_metadata != null;
+  });
+}
+
 function remoteRow(table: string, aggregateId: UUID, payload: Record<string, unknown>): Record<string, unknown> {
   switch (table) {
     case "staff_attendance": return attendanceRemoteRow(aggregateId,payload);
@@ -397,10 +408,31 @@ export function createSupabaseCloudAdapter(client: PgClient, deviceId: UUID): Cl
       const blockedAttendance=new Set<string>();
       const blockedRoster=new Set<string>();
       const blockedShiftRules=new Set<string>();
+      // Pre-scan the entire batch: linked payments must be refused even when
+      // a payment event appears before its dimensional parent sale.
+      const dimensionalSaleIds = new Set<string>();
+      for (const event of events) {
+        if (event.aggregateType !== "sales") continue;
+        try {
+          const record = typeof event.payload === "string" ? JSON.parse(event.payload) : event.payload;
+          if (hasDimensionSaleItems(record)) dimensionalSaleIds.add(String(event.aggregateId));
+        } catch {
+          // Malformed records will be rejected by normal event decoding.
+        }
+      }
       for (const ev of events) {
         try {
           const payload = typeof ev.payload === "string" ? JSON.parse(ev.payload) : ev.payload;
           const table = ev.aggregateType;
+          if ((table === "sales" &&
+               (dimensionalSaleIds.has(String(ev.aggregateId)) || hasDimensionSaleItems(payload))) ||
+              (table === "payments" &&
+               dimensionalSaleIds.has(String(
+                 (payload as Record<string, unknown>)?.referenceId ??
+                 (payload as Record<string, unknown>)?.reference_id ?? ""
+               )))) {
+            throw new Error("Dimensional sale requires the authenticated atomic cloud RPC; legacy direct-table replay is forbidden");
+          }
           if (table === "staff_attendance") {
             if(blockedAttendance.has(ev.aggregateId))throw new Error("Attendance queued behind an unacknowledged revision");
             if(ev.eventType === "delete")throw new Error("Attendance deletion is not supported; use an audited correction");
