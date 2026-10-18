@@ -146,6 +146,10 @@ function createSaleRepo(cfg: SupabaseConfig): SaleRepository {
       return mapSale(res.data[0], (itemsRes.data || []).map(mapSaleItem));
     },
     async create(sale) {
+      if (sale.items?.some(item => item.dimensionMetadata != null ||
+          Object.hasOwn(item,"dimension_metadata"))) {
+        throw new Error("Dimensioned sale requires the authenticated atomic dimensional writer");
+      }
       if (sale.paidAmount > 0) {
         throw new Error("Paid online sales must use the atomic sale writer so payment and stock commit together");
       }
