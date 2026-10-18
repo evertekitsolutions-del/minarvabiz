@@ -3,7 +3,8 @@
  */
 
 import type { Sale, ServiceOrder } from "@minarvabiz/types";
-import { formatMoney } from "@minarvabiz/utils";
+import { formatMoney, toQuantityMilli, QUANTITY_MILLI_FACTOR } from "@minarvabiz/utils";
+import { parseDimensionLineMetadata } from "./dimensional-billing";
 import { getPrintSettings, getPrintTemplate, getPrintTemplateById } from "./print-settings";
 import { escapeHtml } from "./html";
 import { requestDesktopPrintHtml, tryDesktopPrintHtml } from "./desktop-print";
@@ -13,6 +14,20 @@ import type { PrintDocumentTemplate } from "./print-templates";
 
 function templateFor(paper: "a4" | "thermal", templateId?: string): PrintDocumentTemplate {
   return (templateId ? getPrintTemplateById(templateId) : null) ?? getPrintTemplate("invoice", paper);
+}
+
+/** Customer-visible, immutable measurement evidence on both invoice formats. */
+function dimensionalInvoiceMeta(item: Sale["items"][number]): string {
+  if (item.dimensionMetadata == null) return "";
+  const milli = toQuantityMilli(item.quantity);
+  if (!Number.isFinite(item.quantity) ||
+      Math.abs(milli / QUANTITY_MILLI_FACTOR - item.quantity) > 1e-9) {
+    throw new Error("Cannot print an invoice with invalid dimension quantity precision");
+  }
+  const m = parseDimensionLineMetadata(item.dimensionMetadata, milli);
+  return `<div class="meta">Area: ${escapeHtml(m.length)} ${escapeHtml(m.lengthUnit)} ×
+    ${escapeHtml(m.width)} ${escapeHtml(m.widthUnit)} ×
+    ${m.pieces} pcs = ${m.quantityMilli / QUANTITY_MILLI_FACTOR} ${escapeHtml(m.billableUnit)}</div>`;
 }
 
 export function buildSaleInvoiceHtml(
@@ -31,7 +46,7 @@ export function buildSaleInvoiceHtml(
     const tax = Number(item.taxRate || 0);
     return `<tr>
       <td class="c">${index + 1}</td>
-      <td>${escapeHtml(item.productName)}${template.showSku && item.sku ? `<div class="meta">SKU: ${escapeHtml(item.sku)}</div>` : ""}</td>
+      <td>${escapeHtml(item.productName)}${template.showSku && item.sku ? `<div class="meta">SKU: ${escapeHtml(item.sku)}</div>` : ""}${dimensionalInvoiceMeta(item)}</td>
       <td class="r">${item.quantity}</td>
       <td class="r nowrap">${formatMoney(item.unitPrice)}</td>
       ${template.showTax ? `<td class="r">${discount ? `${discount}%` : "—"}</td><td class="r">${tax ? `${tax}%` : "—"}</td>` : ""}
