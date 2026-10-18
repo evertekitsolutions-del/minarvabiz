@@ -118,6 +118,22 @@ export interface InventoryTransaction {
   version: number;
 }
 
+/**
+ * Immutable UBP-05 dimensional invoice audit. Quantity is integer
+ * thousandths; pricing, stock and tenant authority remain separate.
+ */
+export interface DimensionLineMetadataV1 {
+  readonly schema: "dimension-line-v1";
+  readonly algorithm: "area-v1";
+  readonly length: string;
+  readonly width: string;
+  readonly lengthUnit: "mm" | "cm" | "m" | "in" | "ft";
+  readonly widthUnit: "mm" | "cm" | "m" | "in" | "ft";
+  readonly billableUnit: "sqft" | "sqm";
+  readonly pieces: number;
+  readonly quantityMilli: number;
+}
+
 export interface SaleItem {
   id: UUID;
   saleId: UUID;
@@ -130,6 +146,7 @@ export interface SaleItem {
   discountPercent: number;
   taxRate: number;
   lineTotal: number;
+  dimensionMetadata?: DimensionLineMetadataV1 | null;
 }
 
 export interface Sale {
@@ -183,6 +200,7 @@ export interface CartLine {
   discountPercent: number;
   taxRate: number;
   stockQuantity: number;
+  dimensionMetadata?: DimensionLineMetadataV1 | null;
 }
 
 

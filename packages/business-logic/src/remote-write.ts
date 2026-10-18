@@ -351,6 +351,15 @@ export async function remoteCreateSale(
     })) as FinancialSyncProofV1;
     touchPersistence();
   }
+  // Existing create_sale RPC ignores unknown item metadata; never acknowledge
+  // a dimensional sale unless the server transaction persists its audit field.
+  // The durable sale/payment outbox remains visible for reviewed retry rather
+  // than reporting false cloud settlement or dropping the measurement.
+  if (s.items?.some(item => item.dimensionMetadata != null)) {
+    const reason = "Dimensional metadata not supported by the current atomic cloud sale RPC";
+    for (const id of eventIds) markOutboxFailed(id, reason);
+    return;
+  }
   await deliverWithCloudAcknowledgement(
     eventIds, (target) => Boolean(target.createSale),
     (target) => target.createSale!(s, payments, allowNegativeStock),

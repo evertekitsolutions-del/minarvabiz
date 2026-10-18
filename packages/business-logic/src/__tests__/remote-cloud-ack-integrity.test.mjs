@@ -108,3 +108,22 @@ test("logout/tenant switch during an async cloud write never acknowledges its ol
   assert.deepEqual(events().map(e=>e.status),["pending"],
     "old-tenant acknowledgements must not be attributed to the new authentication session");
 });
+
+
+test("dimensional sale stays visible as failed durable outbox until atomic cloud RPC supports metadata", async () => {
+  let cloudAttempts=0;
+  reset({createSale:async()=>{cloudAttempts++;}});
+  const sale={
+    id:"dimension-sale-1",
+    items:[{id:"dimension-item-1",quantity:3,dimensionMetadata:{
+      schema:"dimension-line-v1",algorithm:"area-v1",length:"12",width:"18",
+      lengthUnit:"in",widthUnit:"in",billableUnit:"sqft",pieces:2,quantityMilli:3000,
+    }}],
+  };
+  await remote.remoteCreateSale(sale,[{id:"dimension-payment-1",amount:300}]);
+  assert.equal(cloudAttempts,0,"older RPC silently discards dimension_metadata");
+  const queued=outbox.exportOutbox();
+  assert.deepEqual(queued.map(e=>e.status),["failed","failed"]);
+  assert.ok(queued.every(e=>/dimension.*not supported|dimension.*unsupported/i.test(e.lastError)));
+  assert.deepEqual(queued[0].payload.items[0].dimensionMetadata,sale.items[0].dimensionMetadata);
+});
