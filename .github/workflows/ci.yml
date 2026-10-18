@@ -545,6 +545,7 @@ jobs:
           node packages/database/src/__tests__/sqlite-persist.test.mjs
           node packages/database/src/__tests__/sqlite-backup.test.mjs
           node packages/database/src/__tests__/desktop-sqlite-flow.test.mjs
+          node --experimental-strip-types packages/database/src/__tests__/ubp02-sqlite-parity.test.mjs
       - run: pnpm --filter @minarvabiz/business-logic typecheck
       - name: Run deterministic property/fuzz invariants
         run: node packages/business-logic/src/__tests__/property-fuzz-invariants.test.mjs
