@@ -72,7 +72,7 @@ try {
     "SELECT value FROM meta WHERE key='schema_version'"
   )[0].values[0][0], String(databaseSchemaVersion));
   assert.equal(damagedMetadata.exec(
-    "SELECT id FROM products"
+    "SELECT id FROM products NOT INDEXED"
   )[0].values[0][0], "backup-structural-check");
   damagedMetadata.close();
   assert.match(String(await minarvaBackupSchemaError(damaged)),
