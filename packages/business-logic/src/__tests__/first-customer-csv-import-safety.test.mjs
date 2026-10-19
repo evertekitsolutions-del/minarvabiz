@@ -107,6 +107,51 @@ test("valid two-product import posts opening stock, exports unchanged records an
   assert.equal(store.listProducts().length,beforeProducts+2);
 });
 
+for (const conflict of [
+  { name: "case-insensitive SKU", sku: "archived-sku", barcode: "UNUSED-BARCODE", error: /SKU.*already exists/ },
+  { name: "barcode", sku: "UNUSED-SKU", barcode: "ARCHIVED-BARCODE", error: /barcode.*already exists/ },
+]) {
+  test(`archived product ${conflict.name} collision refuses the full CSV batch and permits corrected retry`, () => {
+    reset();
+    const archived = store.createProduct({
+      name: "Archived product", sku: "ARCHIVED-SKU", barcode: "ARCHIVED-BARCODE",
+      unit: "pcs", costPrice: 10, sellingPrice: 20, stockQuantity: 0,
+      minimumStock: 0, isActive: true,
+    });
+    assert.equal(store.archiveProduct(archived.id, "Replaced catalogue").product?.id, archived.id);
+    const fullState = () => JSON.stringify({
+      products: store.listProducts(), archived: store.listArchivedProducts(),
+      outbox: outbox.exportOutbox(), ledger: accounting.exportAccountingState(),
+    });
+    const before = fullState();
+    const header = "name,sku,barcode,cost,price,stock,min,unit\n";
+    const firstRow = "First new product,NEW-SKU,NEW-BARCODE,10,20,2,0,pcs\n";
+    const source = header + firstRow +
+      `Conflicting product,${conflict.sku},${conflict.barcode},5,12,1.25,0,pcs`;
+    const preview = csv.parseProductCsv(source);
+    const result = csv.importProductsFromCsv(source);
+    assert.equal(result.created, 0, "a later archived collision must reject every row");
+    assert.match(preview.errors.join("; "), conflict.error);
+    assert.match(result.errors.join("; "), conflict.error);
+    assert.equal(fullState(), before, "refusal must preserve active/archived products, outbox and accounting");
+
+    const corrected = header + firstRow +
+      "Corrected product,CORRECTED-SKU,CORRECTED-BARCODE,5,12,1.25,0,pcs";
+    assert.deepEqual(csv.importProductsFromCsv(corrected), { created: 2, errors: [] });
+    assert.equal(store.listProducts().length, 2);
+    assert.equal(store.listProducts().find(product => product.sku === "NEW-SKU").stockQuantity, 2);
+    assert.equal(store.listProducts().find(product => product.sku === "CORRECTED-SKU").stockQuantity, 1.25);
+    assert.equal(store.listArchivedProducts().length, 1);
+    assert.equal(store.restoreArchivedProduct(archived.id).product?.id, archived.id);
+    assert.equal(store.listArchivedProducts().length, 0);
+    const restoredProducts = store.listProducts();
+    assert.equal(restoredProducts.length, 3);
+    assert.equal(new Set(restoredProducts.map(product => product.sku.toLowerCase())).size, 3);
+    assert.equal(new Set(restoredProducts.map(product => product.barcode)).size, 3);
+    assert.equal(store.getProductByBarcode("ARCHIVED-BARCODE")?.id, archived.id);
+  });
+}
+
 test("products UI must have file preview, explicit confirm and downloadable CSV template", () => {
   const ui=fs.readFileSync("apps/web/src/app/(app)/products/page.tsx","utf8");
   assert.match(ui,/parseProductCsv/);
