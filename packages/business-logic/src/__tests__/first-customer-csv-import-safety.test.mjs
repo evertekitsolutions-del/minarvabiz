@@ -194,3 +194,40 @@ test("product CSV export neutralizes formula-capable master data without changin
   assert.ok(exported.includes('"Premium, ""A""",SAFE-100,890123456,10,15,1.25,0,m'), "ordinary CSV text should retain quoted formatting");
   assert.equal(csv.exportProductsCsv([]), "name,sku,barcode,cost,price,stock,min,unit");
 });
+
+test("product CSV onboarding accepts UTF-8 BOM and rejects unexpected financial/tenant columns before any writes", () => {
+  reset();
+  const valid = csv.parseProductCsv("\uFEFFname,sku,cost,price,stock,min\r\nFabric,BOM-1,5,10,1.25,0");
+  assert.deepEqual(valid.errors, []);
+  assert.equal(valid.rows[0].sku, "BOM-1");
+
+  for (const input of [
+    "name,sku,openingBalance\nUnsafe,SHADOW-1,1000",
+    "name,sku,tenant_id\nUnsafe,SHADOW-1,other-company",
+    "name,price,extra\nUnsafe,10,discard-me",
+  ]) {
+    const before = snapshot();
+    const preview = csv.parseProductCsv(input);
+    assert.equal(preview.rows.length, 0, "unsupported columns cannot enter a preview");
+    assert.match(preview.errors.join("; "), /unsupported column/i);
+    assert.equal(csv.importProductsFromCsv(input).created, 0);
+    assert.equal(snapshot(), before, "invalid preflight cannot change stock, ledger or outbox");
+  }
+});
+
+test("oversized product CSV input and row count fail closed before any writes", () => {
+  reset();
+  const before = snapshot();
+  const hugeText = "name,sku\n" + "X".repeat(10 * 1024 * 1024);
+  const tooLarge = csv.parseProductCsv(hugeText);
+  assert.equal(tooLarge.rows.length, 0);
+  assert.match(tooLarge.errors.join("; "), /10 Mi characters/);
+  assert.equal(csv.importProductsFromCsv(hugeText).created, 0);
+
+  const tooManyRows = "name,sku\n" + "Fabric,NEW-ITEM\n".repeat(50_001);
+  const preview = csv.parseProductCsv(tooManyRows);
+  assert.equal(preview.rows.length, 0);
+  assert.match(preview.errors.join("; "), /50,000 rows/);
+  assert.equal(csv.importProductsFromCsv(tooManyRows).created, 0);
+  assert.equal(snapshot(), before, "resource-budget refusals must preserve all financial state");
+});

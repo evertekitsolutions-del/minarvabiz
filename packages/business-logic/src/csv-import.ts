@@ -120,18 +120,29 @@ export function exportProductsCsv(products: Product[] = store.listProducts()): s
   return [header.join(","), ...lines].join("\n");
 }
 
+const PRODUCT_CSV_COLUMNS = ["name", "sku", "barcode", "cost", "price", "stock", "min", "unit"] as const;
+const MAX_PRODUCT_CSV_CHARS = 10 * 1024 * 1024;
+const MAX_PRODUCT_CSV_ROWS = 50_000;
+
 export function parseProductCsv(text: string): {
   rows: ProductCsvRow[];
   errors: string[];
 } {
+  // Bound parser and bulk-import memory before allocating records or snapshots.
+  if (text.length > MAX_PRODUCT_CSV_CHARS) {
+    return { rows: [], errors: ["Product CSV exceeds 10 Mi characters"] };
+  }
   const errors: string[] = [];
   let records: Array<{ text: string; line: number }>;
   try {
-    records = readCsvRecords(text.replace(/^\\uFEFF/, ""));
+    records = readCsvRecords(text.replace(/^\uFEFF/, ""));
   } catch (error) {
     return { rows: [], errors: [error instanceof Error ? error.message : String(error)] };
   }
   if (records.length < 2) return { rows: [], errors: ["CSV needs header + rows"] };
+  if (records.length > MAX_PRODUCT_CSV_ROWS + 1) {
+    return { rows: [], errors: ["Product CSV exceeds 50,000 rows"] };
+  }
 
   let header: string[];
   try {
@@ -141,6 +152,11 @@ export function parseProductCsv(text: string): {
   }
   if (new Set(header).size !== header.length) errors.push("Header: duplicate column names are not allowed");
   if (!header.includes("name")) errors.push("Missing name column");
+  for (const column of header) {
+    if (!(PRODUCT_CSV_COLUMNS as readonly string[]).includes(column)) {
+      errors.push("Header: unsupported column " + column + " (only product master and opening stock fields are allowed)");
+    }
+  }
   if (errors.length) return { rows: [], errors };
 
   const idx = (name: string) => header.indexOf(name);
