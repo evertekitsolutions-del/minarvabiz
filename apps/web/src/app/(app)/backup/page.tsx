@@ -24,6 +24,12 @@ export default function BackupPage() {
   const verifyRequest = React.useRef(0);
 
   const refresh = React.useCallback(() => {
+    // Do not fetch or retain privileged backup metadata/audit events for non-admin roles.
+    if (!can("backup.manage")) {
+      setBackups([]);
+      setLogs([]);
+      return;
+    }
     setBackups(phase7Store.listBackups());
     setLogs(phase7Store.listAuditLogs());
   }, []);
@@ -150,11 +156,11 @@ export default function BackupPage() {
           className={`rounded-lg px-3 py-1.5 text-sm font-medium ${tab === "backup" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700"}`}
           onClick={() => setTab("backup")}
         >Backup</button>
-        <button
+        {can("backup.manage") && <button
           type="button"
           className={`rounded-lg px-3 py-1.5 text-sm font-medium ${tab === "audit" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700"}`}
           onClick={() => setTab("audit")}
-        >Audit log</button>
+        >Audit log</button>}
       </div>
       {tab === "backup" && (
         <>
@@ -260,7 +266,7 @@ export default function BackupPage() {
           />
         </>
       )}
-      {tab === "audit" && <AuditLogList logs={logs} />}
+      {tab === "audit" && can("backup.manage") && <AuditLogList logs={logs} />}
     </div>
   );
 }
