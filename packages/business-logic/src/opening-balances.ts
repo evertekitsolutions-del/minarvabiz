@@ -12,15 +12,29 @@ import { openCashRegister } from "./cash-register";
 import { getSystemAccount, listJournalEntries, planAutomaticPosting } from "./accounting-store";
 import { remoteUpsertCustomer, remoteUpsertSupplier } from "./remote-write";
 
+/**
+ * Opening figures must be representable at the existing accounting precision
+ * before ledger, stock or sync mutation. Rounding away entered data is unsafe.
+ * Only machine-float noise (e.g. 0.1 + 0.2) is tolerated.
+ */
+function isSupportedOpeningValue(value: number, scale: 100 | 1000): boolean {
+  if (!Number.isFinite(value) || value < 0) return false;
+  const units = Math.round(value * scale);
+  return Number.isSafeInteger(units) &&
+    Math.abs(value - units / scale) <=
+      Math.min(1e-9, 4 * Number.EPSILON * Math.max(1, Math.abs(value)));
+}
+
+
 export function setOpeningCustomerBalance(customerId: UUID, amount: number): { ok: boolean; error?: string } {
   assertPermission("settings.manage");
-  if (!Number.isFinite(amount) || amount < 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
+  if (!isSupportedOpeningValue(amount, 100)) {
     return { ok: false, error: "Opening customer balance must be a finite non-negative amount" };
   }
   const c = mainStore.getCustomer(customerId);
   if (!c) return { ok: false, error: "Customer not found" };
   const old = Number(c.outstandingBalance ?? 0);
-  if (!Number.isFinite(old) || old < 0 || !Number.isSafeInteger(Math.round(old * 100))) {
+  if (!isSupportedOpeningValue(old, 100)) {
     return { ok: false, error: "Customer balance needs reconciliation" };
   }
   const next = Math.round((amount + Number.EPSILON) * 100) / 100;
@@ -53,13 +67,13 @@ export function setOpeningCustomerBalance(customerId: UUID, amount: number): { o
 
 export function setOpeningSupplierBalance(supplierId: UUID, amount: number): { ok: boolean; error?: string } {
   assertPermission("settings.manage");
-  if (!Number.isFinite(amount) || amount < 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
+  if (!isSupportedOpeningValue(amount, 100)) {
     return { ok: false, error: "Opening supplier balance must be a finite non-negative amount" };
   }
   const s = phase5.getSupplier(supplierId);
   if (!s) return { ok: false, error: "Supplier not found" };
   const old = Number(s.outstandingBalance ?? 0);
-  if (!Number.isFinite(old) || old < 0 || !Number.isSafeInteger(Math.round(old * 100))) {
+  if (!isSupportedOpeningValue(old, 100)) {
     return { ok: false, error: "Supplier balance needs reconciliation" };
   }
   const next = Math.round((amount + Number.EPSILON) * 100) / 100;
@@ -92,17 +106,17 @@ export function setOpeningSupplierBalance(supplierId: UUID, amount: number): { o
 
 export function setOpeningStock(productId: UUID, quantity: number): { ok: boolean; error?: string } {
   assertPermission("inventory.adjust");
-  if (!Number.isFinite(quantity) || quantity < 0 || !Number.isSafeInteger(Math.round(quantity * 1000))) {
+  if (!isSupportedOpeningValue(quantity, 1000)) {
     return { ok: false, error: "Opening stock quantity must be a finite non-negative quantity" };
   }
   const p = mainStore.getProduct(productId);
   if (!p) return { ok: false, error: "Product not found" };
   const previous = Number(p.stockQuantity);
   const unitCost = Number(p.costPrice);
-  if (!Number.isFinite(previous) || previous < 0 || !Number.isSafeInteger(Math.round(previous * 1000))) {
+  if (!isSupportedOpeningValue(previous, 1000)) {
     return { ok: false, error: "Product stock needs reconciliation" };
   }
-  if (!Number.isFinite(unitCost) || unitCost < 0 || !Number.isSafeInteger(Math.round(unitCost * 100))) {
+  if (!isSupportedOpeningValue(unitCost, 100)) {
     return { ok: false, error: "Product cost needs reconciliation" };
   }
   const next = Math.round((quantity + Number.EPSILON) * 1000) / 1000;
@@ -139,7 +153,7 @@ export function setOpeningStock(productId: UUID, quantity: number): { ok: boolea
 
 export function setOpeningBank(amount: number): { ok: boolean; error?: string } {
   assertPermission("settings.manage");
-  if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
+  if (!isSupportedOpeningValue(amount, 100) || amount === 0) {
     return { ok: false, error: "Opening bank balance must be a positive finite amount" };
   }
   const existingOpening = listJournalEntries().find((entry) =>
@@ -180,7 +194,7 @@ export function setOpeningBank(amount: number): { ok: boolean; error?: string } 
 
 export function setOpeningCash(amount: number): { ok: boolean; error?: string } {
   assertPermission("settings.manage");
-  if (!Number.isFinite(amount) || amount < 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
+  if (!isSupportedOpeningValue(amount, 100)) {
     return { ok: false, error: "Opening cash must be a finite non-negative amount" };
   }
   const openingCash = Math.round((amount + Number.EPSILON) * 100) / 100;
