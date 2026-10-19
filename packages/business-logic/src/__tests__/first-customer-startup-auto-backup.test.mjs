@@ -24,7 +24,7 @@ test("first durable SQLite write gates automatic backup startup", () => {
   const backup = init.indexOf("void runStartupAutomaticBackup(", saved);
   assert.ok(saved >= 0 && rejected > saved && backup > rejected);
   assert.match(init.slice(rejected, backup), /throw new Error/);
-  assert.match(init.slice(backup), /if \(shouldRunAutoBackup\(\) && api\.createAutomaticBackup\)/);
+  assert.match(init.slice(rejected, backup), /if \(shouldRunAutoBackup\(\) && api\.createAutomaticBackup\)/);
   assert.doesNotMatch(init.slice(0, saved), /runStartupAutomaticBackup\(/);
 });
 
