@@ -22,17 +22,18 @@ export default function BackupPage() {
   const [restoring, setRestoring] = React.useState(false);
   const [verifying, setVerifying] = React.useState(false);
   const verifyRequest = React.useRef(0);
+  const canManageBackups = can("backup.manage");
 
   const refresh = React.useCallback(() => {
     // Do not fetch or retain privileged backup metadata/audit events for non-admin roles.
-    if (!can("backup.manage")) {
+    if (!canManageBackups) {
       setBackups([]);
       setLogs([]);
       return;
     }
     setBackups(phase7Store.listBackups());
     setLogs(phase7Store.listAuditLogs());
-  }, []);
+  }, [canManageBackups]);
 
   React.useEffect(() => { refresh(); }, [refresh]);
 
@@ -156,7 +157,7 @@ export default function BackupPage() {
           className={`rounded-lg px-3 py-1.5 text-sm font-medium ${tab === "backup" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700"}`}
           onClick={() => setTab("backup")}
         >Backup</button>
-        {can("backup.manage") && <button
+        {canManageBackups && <button
           type="button"
           className={`rounded-lg px-3 py-1.5 text-sm font-medium ${tab === "audit" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700"}`}
           onClick={() => setTab("audit")}
@@ -247,7 +248,7 @@ export default function BackupPage() {
           </section>
           <BackupPanel
             backups={backups}
-            canManage={can("backup.manage")}
+            canManage={canManageBackups}
             legacyPartialArchive
             onVerify={(id) => phase7Store.verifyBackup(id)}
             onInspect={(id) => phase7Store.inspectBackup(id)}
@@ -266,7 +267,7 @@ export default function BackupPage() {
           />
         </>
       )}
-      {tab === "audit" && can("backup.manage") && <AuditLogList logs={logs} />}
+      {tab === "audit" && canManageBackups && <AuditLogList logs={logs} />}
     </div>
   );
 }
