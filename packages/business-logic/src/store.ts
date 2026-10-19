@@ -515,7 +515,6 @@ export function createSale(input: {
     getCustomer,
   );
   if (errors.length) return { sale: null as unknown as Sale, payment: null, payments: [], errors };
-
   const totals = calculateCartTotals(costedLines);
   const grandTotalMinor = toMinorUnits(totals.grandTotal);
   let requestedCreditMinor: MoneyMinor;
@@ -571,7 +570,6 @@ export function createSale(input: {
     items,
     createdAt: nowISO(), updatedAt: nowISO(), createdBy: input.createdBy ?? null, version: 1,
   };
-
   let stockDebits: Map<string, number>;
   try {
     stockDebits = aggregateSaleLineQuantities(costedLines);
@@ -601,10 +599,8 @@ export function createSale(input: {
     customer.updatedAt = nowISO();
     customer.version = (customer.version ?? 1) + 1;
   }
-
   sales.push(sale);
   touchPersistence();
-
   const salePayments: Payment[] = [];
   let paymentRemainingMinor: MoneyMinor = actualPaymentMinor;
   for (const split of requestedSplits) {
@@ -637,11 +633,9 @@ export function createSale(input: {
   });
   return { sale, payment: salePayments[0] ?? null, payments: salePayments, errors: [] };
 }
-
 export function listPayments(): Payment[] {
   return [...payments].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-
 export function recordOrderAdvancePaymentEntry(input: {
   orderId: UUID;
   customerId: UUID;
@@ -681,7 +675,6 @@ export function recordOrderAdvancePaymentEntry(input: {
   });
   return payment;
 }
-
 export function recordLaundryPaymentEntry(input: {
   laundryOrderId: UUID;
   customerId: UUID;
@@ -722,7 +715,6 @@ export function recordLaundryPaymentEntry(input: {
   });
   return payment;
 }
-
 export function recordLaundryRefundPaymentEntry(input: {
   laundryOrderId: UUID;
   customerId: UUID;

@@ -18,7 +18,10 @@ assert.ok(wms.includes("export function receiveWarehouseTransfer("));
 assert.match(wms, /source\.reserved = roundQty\(source\.reserved \+ transfer\.quantity\)/);
 assert.match(wms, /source\.onHand = roundQty\(source\.onHand - transfer\.quantity\)/);
 assert.match(wms, /destination\.onHand = roundQty\(destination\.onHand \+ transfer\.quantity\)/);
-assert.match(store, /consumeWarehouseStock\(p\.id, line\.quantity/);
+// Multi-cut sales debit a SKU once, not once per dimensionally measured line.
+assert.match(store, /stockDebits = aggregateSaleLineQuantities\(costedLines\)/);
+assert.match(store, /for \(const \[productId, quantity\] of stockDebits\)/);
+assert.match(store, /consumeWarehouseStock\(p\.id, quantity/);
 assert.match(persistence, /warehouse: warehouseStore\.exportWarehouseState\(\)/);
 assert.match(persistence, /hydrateWarehouseState/);
 assert.match(sync, /"warehouse_transfers"/);
