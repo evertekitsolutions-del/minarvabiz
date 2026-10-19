@@ -312,26 +312,76 @@ async function deliverWithCloudAcknowledgement(
   }
 }
 
+/**
+ * Direct authenticated master writes cannot race older versions of the same
+ * record. Without this fence two fast changes can reach PostgreSQL out of
+ * order: the later revision commits first, then an older response overwrites
+ * it even though both local events report "synced".
+ *
+ * Serialize only by owner + type + aggregate ID, preserving concurrency for
+ * distinct customers/products. A prior pending/failed revision remains a
+ * durable ordering dependency (including across an offline reconnect). The
+ * reviewed master replay path can drain it in sequence.
+ */
+const scopedDirectMasterTails = new Map<string, Promise<void>>();
+
+function deliverMasterInOrder(
+  event: LocalOutboxEvent,
+  supports: (target: RemoteWriter) => boolean,
+  send: (target: RemoteWriter) => Promise<void>,
+  failureLabel: string,
+): Promise<void> {
+  const key = JSON.stringify([event.ownerScope ?? null, event.aggregateType, event.aggregateId]);
+  const predecessor = scopedDirectMasterTails.get(key);
+  const dispatch = async () => {
+    const current = exportOutbox();
+    const index = current.indexOf(event);
+    // A restored snapshot may have replaced the original same-ID event. It
+    // must never be sent using the stale in-memory writer payload.
+    if (index < 0) return;
+    if (current.slice(0, index).some(prior =>
+      prior.ownerScope === event.ownerScope &&
+      prior.aggregateType === event.aggregateType &&
+      prior.aggregateId === event.aggregateId &&
+      (prior.status === "pending" || prior.status === "failed")
+    )) return;
+    await deliverWithCloudAcknowledgement([event.id], supports, send, failureLabel);
+  };
+  // Preserve the old immediate-start contract for the FIRST write, including
+  // synchronous owner checks. Only later same-record revisions must wait.
+  const flight = predecessor
+    ? predecessor.catch(() => undefined).then(dispatch)
+    : dispatch();
+  scopedDirectMasterTails.set(key, flight);
+  // Both completion paths clean the same-key tail without creating an
+  // unhandled promise rejection or deleting a newer queued flight.
+  void flight.then(
+    () => { if (scopedDirectMasterTails.get(key) === flight) scopedDirectMasterTails.delete(key); },
+    () => { if (scopedDirectMasterTails.get(key) === flight) scopedDirectMasterTails.delete(key); },
+  );
+  return flight;
+}
+
 export async function remoteUpsertCustomer(c: Customer) {
   const event = enqueueOutbox("customers", c.id, "insert", c);
-  await deliverWithCloudAcknowledgement(
-    [event.id], (target) => Boolean(target.upsertCustomer),
+  await deliverMasterInOrder(
+    event, (target) => Boolean(target.upsertCustomer),
     (target) => target.upsertCustomer!(c), "remote customer write failed"
   );
 }
 
 export async function remoteUpsertCategory(c: Category) {
   const event = enqueueOutbox("categories", c.id, "insert", c);
-  await deliverWithCloudAcknowledgement(
-    [event.id], (target) => Boolean(target.upsertCategory),
+  await deliverMasterInOrder(
+    event, (target) => Boolean(target.upsertCategory),
     (target) => target.upsertCategory!(c), "remote category write failed"
   );
 }
 
 export async function remoteUpsertProduct(p: Product) {
   const event = enqueueOutbox("products", p.id, "insert", p);
-  await deliverWithCloudAcknowledgement(
-    [event.id], (target) => Boolean(target.upsertProduct),
+  await deliverMasterInOrder(
+    event, (target) => Boolean(target.upsertProduct),
     (target) => target.upsertProduct!(p), "remote product write failed"
   );
 }
