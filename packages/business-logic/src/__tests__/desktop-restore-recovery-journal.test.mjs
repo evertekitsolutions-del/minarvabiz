@@ -12,8 +12,9 @@ assert.ok(restore.indexOf('beginSqliteRestoreJournal(stage, target)') < restore.
   'Journal must be persisted before moving the last live SQLite image');
 assert.match(restore, /sqliteRestoreReviewRequired/, 'Pending recovery workspaces must block subsequent restores');
 assert.match(restore, /newImageInstalled = true/, 'Restore must track the installed stage for a fresh database');
-assert.match(restore, /!hadTarget && newImageInstalled && fs\.existsSync\(target\)/, 'Failed fresh restore must not leave an unvalidated live image');
-assert.match(restore, /const priorStateRestored = hadTarget/, 'Journal cleanup must wait until the prior database state is restored');
+assert.match(restore, /await reconcileFailedSqliteRestore\(/, 'A failed fresh restore must preserve the surviving image for review');
+assert.match(restore, /const priorStateRestored = recovery\.priorStateRestored/, 'Journal cleanup must wait until verified prior state is restored');
+assert.match(restore, /!recovery\.keepJournal/, 'Incomplete or unverified rollback must retain its journal');
 const require = createRequire(import.meta.url);
 const ts = require('typescript');
 require.extensions['.ts'] = (module, file) => module._compile(ts.transpileModule(
