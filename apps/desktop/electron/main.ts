@@ -12,6 +12,7 @@ import { NativeSqliteFingerprintFence } from "./sqlite-fingerprint-fence";
 import { NativeSqliteBusyError, NativeSqliteIpcGate } from "./sqlite-ipc-gate";
 import { prepareSqliteRestoreStage, cleanupSqliteRestoreStage, type SqliteRestoreStage } from "./sqlite-restore-staging";
 import { beginSqliteRestoreJournal, clearSqliteRestoreJournal, recoverSqliteRestoreAtStartup } from "./sqlite-restore-recovery";
+import { reconcileFailedSqliteRestore } from "./sqlite-restore-failure";
 import { claimPrimaryDesktopInstance } from "./single-instance-owner";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
@@ -653,32 +654,22 @@ ipcMain.handle("backup:restoreFromFile", async (event) => {
     return { ok: true, source, preRestoreBackup };
   } catch (error) {
     try { if (fs.existsSync(temp)) fs.unlinkSync(temp); } catch {}
-    try { if (targetMoved && fs.existsSync(target)) fs.unlinkSync(target); } catch {}
-    // A fresh install has no previous image to roll back. On post-install
-    // validation failure, return the untrusted image to staging instead of
-    // leaving a corrupt new live database behind.
-    if (!hadTarget && newImageInstalled && fs.existsSync(target)) {
-      try { fs.renameSync(target, temp); } catch {}
-    }
-
-    let rollbackError: string | null = null;
-    if (targetMoved && fs.existsSync(rollback)) {
-      try {
-        fs.renameSync(rollback, target);
-        rollbackError = await minarvaSqliteValidationError(target);
-      } catch (rollbackFailure) {
-        rollbackError = rollbackFailure instanceof Error ? rollbackFailure.message : String(rollbackFailure);
-      }
-    }
-    // Preserve the journal if rollback is missing, incomplete or unverified.
-    const priorStateRestored = hadTarget
-      ? (targetMoved ? rollbackError === null && fs.existsSync(target) : fs.existsSync(target))
-      : !fs.existsSync(target);
-    if (stage && journalStarted && !fs.existsSync(rollback) && priorStateRestored) {
+    // An error after installing a new image must never erase it before a
+    // valid rollback is located. The reconciliation routine preserves the
+    // installed image and the journal if the rollback is absent or invalid.
+    const recovery = stage
+      ? await reconcileFailedSqliteRestore({
+          target, rollback, stageDirectory: stage.directory,
+          hadTarget, targetMoved, newImageInstalled,
+        }, minarvaSqliteValidationError)
+      : { priorStateRestored: hadTarget && fs.existsSync(target),
+          rollbackError: null as string | null, keepJournal: false };
+    const priorStateRestored = recovery.priorStateRestored;
+    if (stage && journalStarted && !fs.existsSync(rollback) && priorStateRestored && !recovery.keepJournal) {
       try { clearSqliteRestoreJournal(stage); } catch {}
     }
-    const rollbackStatus = rollbackError
-      ? ` Previous database rollback validation failed: ${rollbackError}`
+    const rollbackStatus = recovery.rollbackError
+      ? ` Recovery requires review: ${recovery.rollbackError}`
       : targetMoved
         ? " Previous database was restored and revalidated."
         : "";
