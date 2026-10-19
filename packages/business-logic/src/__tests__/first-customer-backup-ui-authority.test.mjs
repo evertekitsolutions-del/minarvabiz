@@ -41,9 +41,11 @@ test("non-admin backup panel cannot load, display, inspect or export native meta
   assert.match(panel, /Cannot inspect: the current native backup list is unavailable/);
 });
 
-test("Web audit tab and privileged record reads are role-gated, even after tab changes", () => {
-  assert.match(web, /if \(!can\("backup\.manage"\)\) \{\s*setBackups\(\[\]\);\s*setLogs\(\[\]\);/);
-  assert.match(web, /\{can\("backup\.manage"\) && <button/);
-  assert.match(web, /tab === "audit" && can\("backup\.manage"\) && <AuditLogList logs=\{logs\} \/>/);
-  assert.match(web, /canManage=\{can\("backup\.manage"\)\}/);
+test("Web audit tab and privileged record reads are role-gated, including later role changes", () => {
+  assert.match(web, /const canManageBackups = can\("backup\.manage"\)/);
+  assert.match(web, /if \(!canManageBackups\) \{\s*setBackups\(\[\]\);\s*setLogs\(\[\]\);/);
+  assert.match(web, /\}, \[canManageBackups\]\);/);
+  assert.match(web, /\{canManageBackups && <button/);
+  assert.match(web, /tab === "audit" && canManageBackups && <AuditLogList logs=\{logs\} \/>/);
+  assert.match(web, /canManage=\{canManageBackups\}/);
 });
