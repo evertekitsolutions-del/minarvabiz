@@ -137,6 +137,16 @@ test("logout and rehydration cannot acknowledge old direct master writes", async
   assert.equal(restored[0].payload.name, "Restored revision");
 });
 
+test("first scoped direct master write starts synchronously, preserving existing caller contract", async () => {
+  reset();
+  let started = 0;
+  cloud.registerRemoteWriter({ upsertCategory: async () => { started++; } }, OWNER);
+  const result = cloud.remoteUpsertCategory({ id: "first-immediate", name: "First customer" });
+  assert.equal(started, 1, "Only subsequent revisions should be deferred");
+  await result;
+  assert.deepEqual(states(), ["synced"]);
+});
+
 test("source requires event revision and predecessor checks before dispatching master writes", () => {
   const src = fs.readFileSync("packages/business-logic/src/remote-write.ts", "utf8");
   assert.match(src, /current\.indexOf\(event\)/);
