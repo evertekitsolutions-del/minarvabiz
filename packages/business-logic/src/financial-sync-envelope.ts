@@ -11,6 +11,7 @@ import type {
   FinancialSyncEnvelopeV1, FinancialSyncProofV1, FinancialSyncReceiptV1,
 } from "./financial-sync-contract";
 import { aggregateSaleLineQuantities } from "./inventory";
+import { calculateInvoiceTotals, calculateLineItem } from "@minarvabiz/billing";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ISO = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)$/;
@@ -177,15 +178,35 @@ export function buildSaleFinancialEnvelope(
 
   let amounts: Map<string, number>;
   try {
+    const itemIds = new Set<string>();
     for (const item of sale.items) {
-      if (!isId(item.id) || !isId(item.productId) || item.saleId !== sale.id ||
+      if (!isId(item.id) || itemIds.has(item.id) ||
+          !isId(item.productId) || item.saleId !== sale.id ||
           !isQty(item.quantity) || !isMinor(item.unitPrice) ||
           !isMinor(item.costPrice) || !isMinor(item.lineTotal) ||
-          item.unitPrice < 0 || item.costPrice < 0 || item.lineTotal < 0)
+          item.unitPrice < 0 || item.costPrice < 0 || item.lineTotal < 0 ||
+          !Number.isFinite(item.discountPercent) || item.discountPercent < 0 ||
+          item.discountPercent > 100 ||
+          !Number.isFinite(item.taxRate) || item.taxRate < 0)
         return held("invalid_sale_item_precision");
+      itemIds.add(item.id);
+      // Do not trust a self-consistent sale/outbox snapshot if the billed
+      // line no longer agrees with quantity, discount and tax. Use the SAME
+      // integer-minor-unit billing implementation used at POS checkout.
+      const line = calculateLineItem(item);
+      if (!rounded(line.total, item.lineTotal, 100))
+        return held("sale_line_economics_conflict");
     }
+    const totals = calculateInvoiceTotals({ items: sale.items });
+    if (!rounded(totals.itemsSubtotal, sale.subtotal, 100) ||
+        !rounded(totals.itemsDiscount, sale.discountAmount, 100) ||
+        !rounded(totals.itemsTax, sale.taxAmount, 100) ||
+        !rounded(totals.grandTotal, sale.total, 100))
+      return held("sale_invoice_totals_conflict");
     amounts = aggregateSaleLineQuantities(sale.items);
   } catch {
+    // Bad numeric input, unsafe money conversion or malformed quantities
+    // cannot produce an authoritative financial reconciliation envelope.
     return held("invalid_sale_item_precision");
   }
 
