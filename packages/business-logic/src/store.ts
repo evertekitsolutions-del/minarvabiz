@@ -31,20 +31,53 @@ import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
 import { validateLiveSaleCheckout, costSaleLinesFromLiveProducts } from "./sale-checkout-guard";
 import { assertBusinessDayOpen } from "./business-day-state";
-import type { StockTransferRecord, HeldSale, CustomerReceivableItem, CustomerReceivableProvider } from "./store-records";
-export type { StockTransferRecord, HeldSale, CustomerReceivableItem, CustomerReceivableProvider } from "./store-records";
 
 const categories: Category[] = [];
 const customers: Customer[] = [];
 const products: Product[] = [];
 
+export interface StockTransferRecord {
+  id: UUID;
+  referenceNumber: string;
+  sourceProductId: UUID;
+  destinationProductId: UUID;
+  sourceBranchId?: UUID | null;
+  destinationBranchId?: UUID | null;
+  quantity: number;
+  notes?: string | null;
+  createdAt: string;
+}
 
 const stockTransfers: StockTransferRecord[] = [];
 
+export interface HeldSale {
+  id: UUID;
+  holdNumber: string;
+  customerId?: UUID | null;
+  customerName?: string | null;
+  lines: CartLine[];
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  branchId?: UUID | null;
+}
 
 const heldSales: HeldSale[] = [];
 
+export interface CustomerReceivableItem {
+  id: UUID;
+  label: string;
+  date: string;
+  balance: number;
+  postedReceivable: boolean;
+  sourceType: "service_order" | "laundry";
+}
 
+export interface CustomerReceivableProvider {
+  list(customerId: UUID): CustomerReceivableItem[];
+  validate(allocations: Array<{ item: CustomerReceivableItem; amount: number }>): string | null;
+  apply(allocations: Array<{ item: CustomerReceivableItem; amount: number }>, now: string): void;
+}
 
 const customerReceivableProviders = new Map<string, CustomerReceivableProvider>();
 
@@ -482,7 +515,6 @@ export function createSale(input: {
     getCustomer,
   );
   if (errors.length) return { sale: null as unknown as Sale, payment: null, payments: [], errors };
-
   const totals = calculateCartTotals(costedLines);
   const grandTotalMinor = toMinorUnits(totals.grandTotal);
   let requestedCreditMinor: MoneyMinor;
@@ -538,7 +570,6 @@ export function createSale(input: {
     items,
     createdAt: nowISO(), updatedAt: nowISO(), createdBy: input.createdBy ?? null, version: 1,
   };
-
   let stockDebits: Map<string, number>;
   try {
     stockDebits = aggregateSaleLineQuantities(costedLines);
@@ -568,10 +599,8 @@ export function createSale(input: {
     customer.updatedAt = nowISO();
     customer.version = (customer.version ?? 1) + 1;
   }
-
   sales.push(sale);
   touchPersistence();
-
   const salePayments: Payment[] = [];
   let paymentRemainingMinor: MoneyMinor = actualPaymentMinor;
   for (const split of requestedSplits) {
@@ -604,11 +633,9 @@ export function createSale(input: {
   });
   return { sale, payment: salePayments[0] ?? null, payments: salePayments, errors: [] };
 }
-
 export function listPayments(): Payment[] {
   return [...payments].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-
 export function recordOrderAdvancePaymentEntry(input: {
   orderId: UUID;
   customerId: UUID;
@@ -648,7 +675,6 @@ export function recordOrderAdvancePaymentEntry(input: {
   });
   return payment;
 }
-
 export function recordLaundryPaymentEntry(input: {
   laundryOrderId: UUID;
   customerId: UUID;
@@ -689,7 +715,6 @@ export function recordLaundryPaymentEntry(input: {
   });
   return payment;
 }
-
 export function recordLaundryRefundPaymentEntry(input: {
   laundryOrderId: UUID;
   customerId: UUID;
