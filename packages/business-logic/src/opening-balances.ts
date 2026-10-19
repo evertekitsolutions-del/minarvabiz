@@ -20,7 +20,8 @@ import { remoteUpsertCustomer, remoteUpsertSupplier } from "./remote-write";
 function isSupportedOpeningValue(value: number, scale: 100 | 1000): boolean {
   if (!Number.isFinite(value) || value < 0) return false;
   const units = Math.round(value * scale);
-  return Number.isSafeInteger(units) &&
+  // Never turn an explicitly positive opening amount into a zero posting.
+  return !(value > 0 && units === 0) && Number.isSafeInteger(units) &&
     Math.abs(value - units / scale) <=
       Math.min(1e-9, 4 * Number.EPSILON * Math.max(1, Math.abs(value)));
 }

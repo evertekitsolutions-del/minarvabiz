@@ -77,6 +77,7 @@ test("all five first-customer opening figures reject unsupported decimals atomic
       field.label === "stock quantity" ? 2.0005 : 12.345,
       0.0001,
       0.0000000001,
+      1e-16,
     ]) {
       reset();
       const before = state();
