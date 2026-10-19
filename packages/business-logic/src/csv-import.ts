@@ -214,6 +214,28 @@ export function importProductsFromCsv(text: string): { created: number; errors: 
   if (errors.length) return { created: 0, errors };
   if (!rows.length) return { created: 0, errors: ["CSV contains no importable product rows"] };
 
+  // A multi-row import must not bypass the same permission and licensed
+  // capacity gates as individual product creation. Validate the whole batch
+  // before taking a snapshot or queuing stock/accounting/remote writes.
+  try {
+    assertPermission("products.manage");
+    const allowed = assertLimit("products");
+    if (!allowed.allowed) return { created: 0, errors: [allowed.reason ?? "Product limit reached"] };
+    const usage = phase9Store.usageSnapshot();
+    const maxProducts = usage.limits.maxProducts;
+    if (maxProducts >= 0 && usage.usage.products + rows.length > maxProducts) {
+      return {
+        created: 0,
+        errors: [
+          "Product plan limit: " + maxProducts + " allowed, " +
+          usage.usage.products + " existing, " + rows.length + " proposed",
+        ],
+      };
+    }
+  } catch (error) {
+    return { created: 0, errors: [error instanceof Error ? error.message : String(error)] };
+  }
+
   const rollback = exportDomainSnapshotFull();
   let created = 0;
   try {
