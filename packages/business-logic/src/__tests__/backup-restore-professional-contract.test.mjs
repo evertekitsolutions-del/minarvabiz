@@ -29,7 +29,9 @@ assert.match(main, /await createLocalBackup\("pre-update"\)/);
 assert.match(main, /pruneAutomaticBackups\(Number\.isFinite\(retention\)/);
 
 assert.match(preload, /createAutomaticBackup: \(retention\?: number\)/);
-assert.match(bootstrap, /createAutomaticBackup\(getAutoBackupSettings\(\)\.retentionCount\)/);
+assert.match(bootstrap, /const retention = getAutoBackupSettings\(\)\.retentionCount/);
+assert.match(bootstrap, /void runStartupAutomaticBackup\(/);
+assert.match(bootstrap, /api\.createAutomaticBackup!\(retention\)/);
 assert.match(desktop, /createAutomaticBackup\(settings\.retentionCount\)/);
 assert.match(desktop, /canManage=\{can\("backup\.manage"\)\}/);
 assert.match(web, /const canManageBackups = can\("backup\.manage"\)/);
