@@ -162,3 +162,35 @@ test("products UI must have file preview, explicit confirm and downloadable CSV 
   assert.match(ui,/accept="\.csv,text\/csv"/);
   assert.match(ui,/csvPreview\.errors\.length/);
 });
+
+test("product CSV export neutralizes formula-capable master data without changing amounts or records", () => {
+  const products = [{
+    name: '=HYPERLINK("https://unsafe.invalid")',
+    sku: "\t@UNSAFE",
+    barcode: " \uFEFF-EXEC",
+    costPrice: 12.5,
+    sellingPrice: 20,
+    stockQuantity: 2,
+    minimumStock: 0.25,
+    unit: "+SUM(1,1)",
+  }, {
+    name: 'Premium, "A"',
+    sku: "SAFE-100",
+    barcode: "890123456",
+    costPrice: 10,
+    sellingPrice: 15,
+    stockQuantity: 1.25,
+    minimumStock: 0,
+    unit: "m",
+  }];
+  const before = JSON.stringify(products);
+  const exported = csv.exportProductsCsv(products);
+  assert.equal(JSON.stringify(products), before, "export must be read-only");
+  assert.ok(exported.includes("\"'=HYPERLINK(\"\"https://unsafe.invalid\"\")\""), "formula product names must be inert");
+  assert.ok(exported.includes("'\t@UNSAFE"), "leading tabs must not enable formulas");
+  assert.ok(exported.includes("' \uFEFF-EXEC"), "BOM/space-prefixed payloads must be inert");
+  assert.ok(exported.includes("\"'+SUM(1,1)\""), "unit metadata must be protected");
+  assert.ok(exported.includes(",12.5,20,2,0.25,"), "numeric stock/accounting fields must remain unmodified");
+  assert.ok(exported.includes('"Premium, ""A""",SAFE-100,890123456,10,15,1.25,0,m'), "ordinary CSV text should retain quoted formatting");
+  assert.equal(csv.exportProductsCsv([]), "name,sku,barcode,cost,price,stock,min,unit");
+});

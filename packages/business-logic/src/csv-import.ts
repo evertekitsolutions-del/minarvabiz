@@ -99,17 +99,23 @@ function csvCell(value: unknown): string {
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
+/** Neutralize spreadsheet formulas in untrusted product text before CSV quoting. */
+function safeProductSpreadsheetText(value: unknown): string {
+  const raw = String(value ?? "");
+  return /^[\s\uFEFF]*[=+\-@]/u.test(raw) ? "'" + raw : raw;
+}
+
 export function exportProductsCsv(products: Product[] = store.listProducts()): string {
   const header = ["name", "sku", "barcode", "cost", "price", "stock", "min", "unit"];
   const lines = products.map((p) => [
-    p.name,
-    p.sku ?? "",
-    p.barcode ?? "",
+    safeProductSpreadsheetText(p.name),
+    safeProductSpreadsheetText(p.sku ?? ""),
+    safeProductSpreadsheetText(p.barcode ?? ""),
     p.costPrice ?? 0,
     p.sellingPrice ?? 0,
     p.stockQuantity ?? 0,
     p.minimumStock ?? 0,
-    p.unit ?? "pcs",
+    safeProductSpreadsheetText(p.unit ?? "pcs"),
   ].map(csvCell).join(","));
   return [header.join(","), ...lines].join("\n");
 }
