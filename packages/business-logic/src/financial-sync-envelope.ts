@@ -10,6 +10,7 @@ import type { LocalOutboxEvent } from "./outbox-bridge";
 import type {
   FinancialSyncEnvelopeV1, FinancialSyncProofV1, FinancialSyncReceiptV1,
 } from "./financial-sync-contract";
+import { aggregateSaleLineQuantities } from "./inventory";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ISO = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)$/;
@@ -85,10 +86,14 @@ export function prepareSaleFinancialStockProof(input: {
   if (!sale || !isId(sale.branchId) || !Array.isArray(sale.items) ||
       !sale.items.length || !warehouse || !Array.isArray(warehouse.stock) ||
       !TWO_DECIMAL.has(input.currencyCode)) return null;
-  const quantities = new Map<string,number>();
-  for (const line of sale.items) {
-    if (!isId(line.productId) || !isQty(line.quantity)) return null;
-    quantities.set(line.productId,(quantities.get(line.productId) ?? 0)+line.quantity);
+  let quantities: Map<string, number>;
+  try {
+    for (const line of sale.items) {
+      if (!isId(line.productId) || !isQty(line.quantity)) return null;
+    }
+    quantities = aggregateSaleLineQuantities(sale.items);
+  } catch {
+    return null;
   }
   const lines: FinancialSyncProofV1["stockLines"] = [];
   const expectedVersions:Record<string,number> = {};
@@ -170,14 +175,18 @@ export function buildSaleFinancialEnvelope(
       !isTime(sale.saleDate) || !Array.isArray(sale.items) || !sale.items.length)
     return held("sale_amount_or_branch_conflict");
 
-  const amounts = new Map<string,number>();
-  for (const item of sale.items) {
-    if (!isId(item.id) || !isId(item.productId) || item.saleId !== sale.id ||
-        !isQty(item.quantity) || !isMinor(item.unitPrice) ||
-        !isMinor(item.costPrice) || !isMinor(item.lineTotal) ||
-        item.unitPrice < 0 || item.costPrice < 0 || item.lineTotal < 0)
-      return held("invalid_sale_item_precision");
-    amounts.set(item.productId,(amounts.get(item.productId)||0)+item.quantity);
+  let amounts: Map<string, number>;
+  try {
+    for (const item of sale.items) {
+      if (!isId(item.id) || !isId(item.productId) || item.saleId !== sale.id ||
+          !isQty(item.quantity) || !isMinor(item.unitPrice) ||
+          !isMinor(item.costPrice) || !isMinor(item.lineTotal) ||
+          item.unitPrice < 0 || item.costPrice < 0 || item.lineTotal < 0)
+        return held("invalid_sale_item_precision");
+    }
+    amounts = aggregateSaleLineQuantities(sale.items);
+  } catch {
+    return held("invalid_sale_item_precision");
   }
 
   const proofIds = proof.paymentEventIds;

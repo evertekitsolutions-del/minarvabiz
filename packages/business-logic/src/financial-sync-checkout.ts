@@ -19,10 +19,11 @@ export function prepareCheckoutFinancialSource(
   // Legacy branch-hq documents keep their old shape, not invented UUIDs.
   if (!branchId || !UUID_RE.test(branchId)) return null;
   sale.branchId = branchId;
-  // Repeated lines touch one WMS position more than once and cannot claim
-  // a single revision transition under the S1 envelope contract.
-  const productIds = sale.items.map(item => item.productId);
-  if (!productIds.length || new Set(productIds).size !== productIds.length) return null;
+  // Repeated measured cuts of one SKU share one aggregated stock debit and
+  // one product/warehouse revision. Distinct item IDs and dimension-line-v1
+  // packets stay on the sale; ambiguous multi-location stock still fails closed.
+  const productIds = [...new Set(sale.items.map(item => item.productId))];
+  if (!productIds.length) return null;
   const products: Product[] = [];
   for (const id of productIds) {
     const product = getProduct(id);

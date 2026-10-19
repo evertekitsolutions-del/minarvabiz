@@ -16,7 +16,7 @@ import {
 import {
   calculateCartTotals, cartLineToSaleItem, allocatePayment, validateCart, settleTenderReceipts,
 } from "./sales";
-import { applyStockMovement, isLowStock } from "./inventory";
+import { aggregateSaleLineQuantities, applyStockMovement, isLowStock } from "./inventory";
 import { touchPersistence } from "./autosave";
 import { remoteUpsertCustomer, remoteUpsertCategory, remoteUpsertProduct, remoteCreateSale, remoteCreatePayment, remoteCollectCustomerPayment, remoteAdjustStock } from "./remote-write";
 import { auditAction } from "./audit-actions";
@@ -572,14 +572,20 @@ export function createSale(input: {
     createdAt: nowISO(), updatedAt: nowISO(), createdBy: input.createdBy ?? null, version: 1,
   };
 
+  let stockDebits: Map<string, number>;
+  try {
+    stockDebits = aggregateSaleLineQuantities(costedLines);
+  } catch {
+    return { sale: null as unknown as Sale, payment: null, payments: [], errors: ["Sale stock quantity exceeds the safe range"] };
+  }
   const sourceStockProof = prepareCheckoutFinancialSource(sale, getProduct);
   const accountingPlan = planSalePosting(sale, requestedSplits, creditApplied);
   if (accountingPlan.errors.length) return { sale: null as unknown as Sale, payment: null, payments: [], errors: accountingPlan.errors };
-  for (const line of input.lines) {
-    const p = getProduct(line.productId);
+  for (const [productId, quantity] of stockDebits) {
+    const p = getProduct(productId);
     if (p) {
-      consumeWarehouseStock(p.id, line.quantity, p.branchId ?? null);
-      p.stockQuantity = applyStockMovement(p.stockQuantity, "sale", line.quantity);
+      consumeWarehouseStock(p.id, quantity, p.branchId ?? null);
+      p.stockQuantity = applyStockMovement(p.stockQuantity, "sale", quantity);
       touchProduct(p);
     }
   }

@@ -203,6 +203,26 @@ test("capture pre-sale warehouse and product versions without mutating existing 
   assert.equal(prepareSaleFinancialStockProof(restored),null,"unallocated stock must stay held");
 });
 
+test("two cuts of one SKU prove one milli-unit aggregate debit, not a float remainder", () => {
+  const snap=fixture();
+  const pre=snap.warehouse;
+  pre.stock[0].onHand=5; pre.stock[0].version=4;
+  const products=[{...snap.products[0],version:8,stockQuantity:7.5}];
+  const sale={
+    ...snap.sales[0],
+    items:[
+      {...snap.sales[0].items[0],id:"10000000-0000-4000-8000-000000000021",quantity:0.1},
+      {...snap.sales[0].items[0],id:"10000000-0000-4000-8000-000000000024",quantity:0.2},
+    ],
+  };
+  const proof=prepareSaleFinancialStockProof({sale,products,warehouse:pre,currencyCode:"USD"});
+  assert.equal(proof.stockLines.length,1);
+  assert.equal(proof.stockLines[0].quantity,0.3);
+  assert.equal(proof.stockLines[0].resultingProductStock,7.2);
+  assert.equal(proof.stockLines[0].resultingOnHand,4.7);
+  assert.equal(proof.expectedVersions[IDS.product],8);
+});
+
 test("multi-location or unknown branch checkout never invents authority", () => {
   const snap=fixture();
   const pre=snap.warehouse;

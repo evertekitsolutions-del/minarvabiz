@@ -37,6 +37,24 @@ export function addStockQuantities(current: number, delta: number): number {
   return total / QUANTITY_MILLI_FACTOR;
 }
 
+/**
+ * Collapse cart/sale lines into one milli-unit debit per SKU.
+ * Multi-cut dimensional lines keep distinct item IDs; stock/WMS revisions
+ * must still advance once for the authorized location of that SKU.
+ */
+export function aggregateSaleLineQuantities(
+  lines: ReadonlyArray<{ productId: string; quantity: number }>,
+): Map<string, number> {
+  const demanded = new Map<string, number>();
+  for (const line of lines) {
+    demanded.set(
+      line.productId,
+      addStockQuantities(demanded.get(line.productId) ?? 0, line.quantity),
+    );
+  }
+  return demanded;
+}
+
 /** Apply a movement to current quantity. Returns new quantity. */
 export function applyStockMovement(
   currentQty: number,

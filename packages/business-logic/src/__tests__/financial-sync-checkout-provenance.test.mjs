@@ -150,9 +150,23 @@ test("a sale of another branch's product never receives a fabricated local stock
   assert.equal(outbox.exportOutbox().find(e => e.aggregateType === "sales").financialSyncProof, undefined);
 });
 
-test("two source mutations of the same product cannot claim only one WMS version increment", () => {
+test("two measured cuts of one SKU share one aggregated stock debit and one WMS revision", () => {
   const result = prepare({ repeatedProduct: true });
   assert.deepEqual(result.errors, []);
   assert.equal(result.sale.items.length, 2);
-  assert.equal(outbox.exportOutbox().find(e => e.aggregateType === "sales").financialSyncProof, undefined);
+  assert.equal(store.getProduct(ids.product).stockQuantity, 6.25);
+  assert.equal(store.getProduct(ids.product).version, 9);
+  const position = warehouse.listWarehouseStock()[0];
+  assert.equal(position.onHand, 3.75);
+  assert.equal(position.version, 5);
+  const proof = outbox.exportOutbox().find(e => e.aggregateType === "sales").financialSyncProof;
+  assert.ok(proof, "aggregated same-SKU cuts must still prove a single stock revision");
+  assert.equal(proof.stockLines.length, 1);
+  assert.equal(proof.stockLines[0].quantity, 1.25);
+  assert.equal(proof.expectedVersions[ids.product], 8);
+  assert.equal(proof.stockLines[0].expectedWarehouseVersion, 4);
+  const envelope = buildSaleFinancialEnvelope(persistence.exportDomainSnapshot(),
+    outbox.exportOutbox().find(e => e.aggregateType === "sales").id, scope);
+  assert.equal(envelope.operation, "sale.post", JSON.stringify(envelope));
+  assert.equal(envelope.stockLines[0].resultingOnHand, 3.75);
 });
