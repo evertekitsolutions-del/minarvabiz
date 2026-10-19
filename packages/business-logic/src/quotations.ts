@@ -11,7 +11,7 @@ import * as ordersStore from "./orders-store";
 import { escapeHtml } from "./html";
 import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
-import { getPrintSettings, getPrintTemplate, getPrintTemplateById } from "./print-settings";
+import { getPrintSettings, getPrintTemplateFor } from "./print-settings";
 import { businessHeaderHtml, customerBlockHtml, documentCss, documentFooterHtml } from "./print-document-render";
 import { tryDesktopPrintHtml } from "./desktop-print";
 import type { PrintPaper } from "./print-templates";
@@ -255,7 +255,7 @@ export function buildQuotationHtml(
 ): string {
   const settings = getPrintSettings();
   const paper = opts?.paper ?? settings.defaultInvoicePaper;
-  const template = (opts?.templateId ? getPrintTemplateById(opts.templateId) : null) ?? getPrintTemplate("quotation", paper);
+  const template = getPrintTemplateFor("quotation", paper, opts?.templateId);
   const width = paper === "thermal" ? `${settings.thermalWidthMm}mm` : "210mm";
   const autoPrint = opts?.autoPrint === true;
   const customer = mainStore.getCustomer(q.customerId);

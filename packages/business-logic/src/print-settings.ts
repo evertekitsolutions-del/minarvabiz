@@ -93,6 +93,15 @@ export function getPrintTemplateById(id: string): PrintDocumentTemplate | null {
   return found ? { ...found } : null;
 }
 
+/** Explicit IDs must not override the requested document type or paper. */
+export function getPrintTemplateFor(
+  documentKind: PrintDocumentKind, paper: PrintPaper, templateId?: string,
+): PrintDocumentTemplate {
+  const selected = templateId ? getPrintTemplateById(templateId) : null;
+  return selected?.documentKind === documentKind && selected.paper === paper
+    ? selected : getPrintTemplate(documentKind, paper);
+}
+
 export function savePrintTemplate(template: PrintDocumentTemplate): PrintDocumentTemplate {
   const clean = sanitizePrintTemplate(template);
   const templates = settings.templates.map((item) => ({ ...item }));
@@ -115,9 +124,17 @@ export function savePrintTemplate(template: PrintDocumentTemplate): PrintDocumen
 export function duplicatePrintTemplate(id: string): PrintDocumentTemplate | null {
   const source = settings.templates.find((item) => item.id === id);
   if (!source) return null;
+  // Two rapid duplicate clicks may share a millisecond. Reusing the ID
+  // would make save/delete act on more than one customer template.
+  const baseId = `custom-${Date.now()}`;
+  let nextId = baseId;
+  let suffix = 1;
+  while (settings.templates.some((item) => item.id === nextId)) {
+    nextId = `${baseId}-${suffix++}`;
+  }
   const copy = sanitizePrintTemplate({
     ...source,
-    id: `custom-${Date.now()}`,
+    id: nextId,
     name: `${source.name} Copy`,
     isSystem: false,
     isDefault: false,

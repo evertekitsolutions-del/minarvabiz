@@ -5,7 +5,7 @@
 import type { Sale, ServiceOrder } from "@minarvabiz/types";
 import { formatMoney, toQuantityMilli, QUANTITY_MILLI_FACTOR } from "@minarvabiz/utils";
 import { parseDimensionLineMetadata } from "./dimensional-billing";
-import { getPrintSettings, getPrintTemplate, getPrintTemplateById } from "./print-settings";
+import { getPrintSettings, getPrintTemplateFor } from "./print-settings";
 import { escapeHtml } from "./html";
 import { requestDesktopPrintHtml, tryDesktopPrintHtml } from "./desktop-print";
 import { businessHeaderHtml, customerBlockHtml, documentCss, documentFooterHtml } from "./print-document-render";
@@ -13,7 +13,7 @@ import * as mainStore from "./store";
 import type { PrintDocumentTemplate } from "./print-templates";
 
 function templateFor(paper: "a4" | "thermal", templateId?: string): PrintDocumentTemplate {
-  return (templateId ? getPrintTemplateById(templateId) : null) ?? getPrintTemplate("invoice", paper);
+  return getPrintTemplateFor("invoice", paper, templateId);
 }
 
 /** Customer-visible, immutable measurement evidence on both invoice formats. */
