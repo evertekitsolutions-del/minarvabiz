@@ -61,6 +61,16 @@ export async function minarvaBackupSchemaError(file: string): Promise<string | n
       return `Minarva Biz backup schema version ${version} is newer than this app supports (maximum ${MAX_SUPPORTED_MINARVA_BACKUP_SCHEMA_VERSION})`;
     }
 
+    // A valid header, required tables and schema_version do not establish
+    // data safety: damaged b-tree pages/indexes can still be unreadable at
+    // restore time. Inspect the entire SQLite image before marking a backup
+    // verified or replacing a live customer database.
+    const integrity = db.exec("PRAGMA quick_check");
+    if (integrity.length !== 1 || integrity[0].values.length !== 1 ||
+        integrity[0].values[0]?.[0] !== "ok") {
+      return "Minarva Biz SQLite backup failed structural integrity verification";
+    }
+
     return null;
   } catch (error) {
     return `SQLite database could not be opened for Minarva Biz schema validation: ${error instanceof Error ? error.message : String(error)}`;
