@@ -4,6 +4,7 @@
  * not claim to restore cloud tenants or an existing occupied company.
  */
 import { inspectBrowserSnapshotForRecovery } from "./browser-snapshot-download";
+import { defaultPrintTemplates } from "./print-templates";
 
 export const BROWSER_RECOVERY_STORAGE_KEY = "minarvabiz-domain-v2";
 
@@ -44,6 +45,93 @@ function parseFullV15(text: string): Snapshot {
   return value;
 }
 
+
+/**
+ * A zero-transaction workspace may still contain a customer's setup work.
+ * Snapshot restore replaces these settings; require their actual defaults,
+ * ignoring only clock-generated updatedAt fields, before the first write.
+ */
+function sameJsonValue(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) &&
+      a.length === b.length && a.every((item, index) => sameJsonValue(item, b[index]));
+  }
+  if (a !== null && b !== null && typeof a === "object" && typeof b === "object") {
+    const left = a as Record<string, unknown>;
+    const right = b as Record<string, unknown>;
+    const keys = Object.keys(left);
+    return keys.length === Object.keys(right).length &&
+      keys.every((key) => Object.prototype.hasOwnProperty.call(right, key) &&
+        sameJsonValue(left[key], right[key]));
+  }
+  return Object.is(a, b);
+}
+
+function assertDefaultSettings(
+  actual: unknown,
+  defaults: Record<string, unknown>,
+  section: string,
+): void {
+  if (actual == null) return;
+  if (typeof actual !== "object" || Array.isArray(actual)) {
+    throw new Error("Current workspace has invalid " + section + " settings");
+  }
+  for (const [key, value] of Object.entries(actual)) {
+    if (key === "updatedAt") continue;
+    if (!Object.prototype.hasOwnProperty.call(defaults, key) ||
+        !sameJsonValue(value, defaults[key])) {
+      throw new Error("Current workspace already has " + section + " configuration");
+    }
+  }
+}
+
+function assertUnconfiguredWorkspace(value: Snapshot): void {
+  const ids = value.onboardingCompletedIds;
+  if (ids != null && (!Array.isArray(ids) || ids.length > 0)) {
+    throw new Error("Current workspace has existing onboarding confirmations");
+  }
+
+  assertDefaultSettings(value.shopProfile, {
+    shopName: "Minarva Biz", legalName: "", documentCode: "",
+    address: "", addressLine2: "", district: "", state: "", country: "India",
+    postalCode: "", phone: "", email: "", website: "", googleReviewUrl: "",
+    gstin: "", receiptFooter: "Thank you for your business!", currency: "INR",
+  }, "shop profile");
+
+  assertDefaultSettings(value.taxConfig, {
+    enableGst: true, gstin: "", defaultRatePercent: 5,
+    rates: [
+      { id: "tax-0", name: "Exempt", ratePercent: 0, isDefault: false },
+      { id: "tax-5", name: "GST 5%", ratePercent: 5, isDefault: true },
+      { id: "tax-12", name: "GST 12%", ratePercent: 12, isDefault: false },
+      { id: "tax-18", name: "GST 18%", ratePercent: 18, isDefault: false },
+    ],
+  }, "tax");
+
+  assertDefaultSettings(value.printSettings, {
+    defaultInvoicePaper: "a4", thermalWidthMm: 80,
+    a4PrinterName: "", thermalPrinterName: "", labelPrinterName: "",
+    labelWidthMm: 50, labelHeightMm: 30, labelCodeMode: "both",
+    silentDesktopPrint: false, templates: defaultPrintTemplates(),
+  }, "print");
+
+  const backups = value.autoBackup;
+  if (backups != null) {
+    if (typeof backups !== "object" || Array.isArray(backups)) {
+      throw new Error("Current workspace has invalid backup settings");
+    }
+    const state = backups as Record<string, unknown>;
+    if (Object.keys(state).some(key => key !== "settings" && key !== "history") ||
+        (state.history != null && !sameJsonValue(state.history, []))) {
+      throw new Error("Current workspace already has backup configuration");
+    }
+    assertDefaultSettings(state.settings, {
+      enabled: true, intervalHours: 24, retentionCount: 14,
+      destinationPath: "", lastBackupAt: null, lastBackupPath: null, lastError: null,
+    }, "backup");
+  }
+}
+
 function countRows(value: unknown): number {
   if (Array.isArray(value)) return value.length;
   if (!value || typeof value !== "object") return 0;
@@ -65,13 +153,7 @@ function assertEmptyDestination(value: Snapshot): void {
       (value.activeBranchId != null && value.activeBranchId !== "branch-hq")) {
     throw new Error("Current workspace already has a business branch identity");
   }
-  const profile = value.shopProfile as Record<string, unknown> | null;
-  if (profile && (
-    profile.shopName !== "Minarva Biz" ||
-    Boolean(profile.legalName) || Boolean(profile.gstin) || Boolean(profile.documentCode)
-  )) {
-    throw new Error("Current workspace already has company identity");
-  }
+  assertUnconfiguredWorkspace(value);
 }
 
 /** No imported data is applied unless every independent boundary passes. */

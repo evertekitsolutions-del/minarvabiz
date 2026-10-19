@@ -33,7 +33,13 @@ function fixture() {
     procurement: { purchaseOrders: [], goodsReceipts: [], purchaseInvoices: [] },
     accounting: { accounts: [], journals: [] },
     phase10: { productionWorkflows: [], materialRolls: [] },
-    taxConfig: { region: "IN" }, recycleBin: { items: [] },
+    taxConfig: { enableGst: true, gstin: "", defaultRatePercent: 5,
+      rates: [
+        { id: "tax-0", name: "Exempt", ratePercent: 0, isDefault: false },
+        { id: "tax-5", name: "GST 5%", ratePercent: 5, isDefault: true },
+        { id: "tax-12", name: "GST 12%", ratePercent: 12, isDefault: false },
+        { id: "tax-18", name: "GST 18%", ratePercent: 18, isDefault: false },
+      ] }, recycleBin: { items: [] },
   };
 }
 const boundary = { cloudConfigured: false, nativeDesktop: false, authorized: true };
@@ -84,6 +90,74 @@ test("fails closed before writing for cloud, desktop, missing permission, occupi
     assert.throws(() => assertStandaloneEmptyWorkspaceRecovery(source, current, null, boundary));
     assert.throws(() => assertStandaloneEmptyWorkspaceRecovery(source, old, current, boundary));
   }
+});
+
+
+test("empty-of-transactions browser recovery protects existing first-run setup and restores nothing", () => {
+  const pristine = fixture();
+  const source = JSON.stringify({ ...fixture(), products: [{ id: "restored" }] });
+  const saved = JSON.stringify(pristine);
+  const cases = [
+    { shopProfile: { ...pristine.shopProfile, phone: "+91 9999999999" } },
+    { shopProfile: { ...pristine.shopProfile, address: "Already configured address" } },
+    { shopProfile: { ...pristine.shopProfile, receiptFooter: "Custom receipt footer" } },
+    { shopProfile: { ...pristine.shopProfile, currency: "OMR" } },
+    { onboardingCompletedIds: ["shop"] },
+    { taxConfig: { ...pristine.taxConfig, defaultRatePercent: 18 } },
+    { taxConfig: { ...pristine.taxConfig, rates: [
+      { id: "custom", name: "Custom", ratePercent: 8, isDefault: true },
+    ] } },
+    { printSettings: { defaultInvoicePaper: "thermal" } },
+    { printSettings: { templates: [{ id: "custom-invoice" }] } },
+    { autoBackup: { history: [{ id: "previous-backup" }] } },
+    { autoBackup: { settings: { enabled: false } } },
+  ];
+  for (const change of cases) {
+    const occupied = JSON.stringify({ ...pristine, ...change });
+    const local = storage(occupied);
+    let applied = false;
+    const rejected = restoreEmptyLocalBrowserSnapshot(local, source, saved, boundary, () => {
+      applied = true;
+      return { ok: true };
+    });
+    assert.equal(rejected.ok, false, JSON.stringify(change));
+    assert.equal(applied, false, "guard must run before any domain hydration");
+    assert.equal(local.getItem(BROWSER_RECOVERY_STORAGE_KEY), occupied,
+      "preexisting local snapshot must never be overwritten");
+    assert.match(rejected.error, /configuration|onboarding/i);
+    assert.throws(() =>
+      assertStandaloneEmptyWorkspaceRecovery(source, saved, occupied, boundary),
+      /configuration|onboarding/i,
+      "persisted workspace must be protected even when in-memory view looks empty");
+  }
+});
+
+test("untouched default setup is accepted regardless of setting key order and timestamps", () => {
+  const current = fixture();
+  current.shopProfile = {
+    ...current.shopProfile,
+    country: "India", currency: "INR", receiptFooter: "Thank you for your business!",
+    phone: "", email: "", updatedAt: "2026-10-19T00:00:00.000Z",
+  };
+  current.printSettings = {
+    templates: require("../print-templates.ts").defaultPrintTemplates()
+      .map(template => Object.fromEntries(Object.entries(template).reverse())),
+    silentDesktopPrint: false,
+    defaultInvoicePaper: "a4", thermalWidthMm: 80,
+    a4PrinterName: "", thermalPrinterName: "", labelPrinterName: "",
+    labelWidthMm: 50, labelHeightMm: 30, labelCodeMode: "both",
+    updatedAt: "2026-10-18T00:00:00.000Z",
+  };
+  current.autoBackup = {
+    history: [], settings: {
+      enabled: true, intervalHours: 24, retentionCount: 14,
+      destinationPath: "", lastBackupAt: null, lastBackupPath: null, lastError: null,
+    },
+  };
+  assert.doesNotThrow(() => assertStandaloneEmptyWorkspaceRecovery(
+    JSON.stringify({ ...fixture(), customers: [{ id: "new" }] }),
+    JSON.stringify(current), JSON.stringify(current), boundary,
+  ));
 });
 
 test("rejects unsent restored events, incomplete archives and invalid JSON", () => {
