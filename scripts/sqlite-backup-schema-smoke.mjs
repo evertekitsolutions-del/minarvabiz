@@ -44,8 +44,40 @@ try {
       else db.run(`CREATE TABLE ${table} (id TEXT PRIMARY KEY)`);
     }
     db.run(`INSERT INTO meta(key, value) VALUES ('schema_version', '${databaseSchemaVersion}')`);
+    db.run("CREATE INDEX idx_backup_integrity_probe ON products(id)");
+    db.run("INSERT INTO products(id) VALUES ('backup-structural-check')");
   });
   assert.equal(await minarvaBackupSchemaError(valid), null);
+
+  // Corrupt an unrelated index b-tree root while preserving table metadata,
+  // the valid schema version, and customer/product rows. Schema-only
+  // validation used to incorrectly mark this SQLite image as verified.
+  const damaged = path.join(dir, "damaged-index.db");
+  const original = fs.readFileSync(valid);
+  const opened = new SQL.Database(original);
+  const rootPage = Number(opened.exec(
+    "SELECT rootpage FROM sqlite_master WHERE name='idx_backup_integrity_probe'"
+  )[0]?.values?.[0]?.[0]);
+  opened.close();
+  const pageSize = original.readUInt16BE(16) || 65536;
+  assert.ok(Number.isSafeInteger(rootPage) && rootPage > 1,
+    "Regression requires a separate index b-tree page");
+  const indexPageOffset = (rootPage - 1) * pageSize;
+  assert.ok(indexPageOffset > 0 && indexPageOffset < original.length);
+  const changed = Buffer.from(original);
+  changed[indexPageOffset] = 0; // invalid index b-tree page kind (normally 0x0a)
+  fs.writeFileSync(damaged, changed);
+  const damagedMetadata = new SQL.Database(changed);
+  assert.equal(damagedMetadata.exec(
+    "SELECT value FROM meta WHERE key='schema_version'"
+  )[0].values[0][0], String(databaseSchemaVersion));
+  assert.equal(damagedMetadata.exec(
+    "SELECT id FROM products NOT INDEXED"
+  )[0].values[0][0], "backup-structural-check");
+  damagedMetadata.close();
+  assert.match(String(await minarvaBackupSchemaError(damaged)),
+    /structural integrity verification|SQLite database could not be opened/,
+    "A corrupted backup index must not pass live-database restore validation");
 
   const foreign = path.join(dir, "foreign.db");
   writeDatabase(foreign, (db) => {
@@ -81,7 +113,7 @@ try {
     /newer than this app supports/
   );
 
-  console.log("SQLite backup schema smoke PASS: supported Minarva Biz backups accepted; foreign, malformed, and future-schema SQLite files rejected.");
+  console.log("SQLite backup schema + integrity smoke PASS: healthy backup accepted; corrupted index, foreign, missing and future-schema SQLite rejected.");
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });
 }
