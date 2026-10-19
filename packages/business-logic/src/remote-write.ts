@@ -332,8 +332,8 @@ function deliverMasterInOrder(
   failureLabel: string,
 ): Promise<void> {
   const key = JSON.stringify([event.ownerScope ?? null, event.aggregateType, event.aggregateId]);
-  const predecessor = scopedDirectMasterTails.get(key) ?? Promise.resolve();
-  const flight = predecessor.catch(() => undefined).then(async () => {
+  const predecessor = scopedDirectMasterTails.get(key);
+  const dispatch = async () => {
     const current = exportOutbox();
     const index = current.indexOf(event);
     // A restored snapshot may have replaced the original same-ID event. It
@@ -346,7 +346,12 @@ function deliverMasterInOrder(
       (prior.status === "pending" || prior.status === "failed")
     )) return;
     await deliverWithCloudAcknowledgement([event.id], supports, send, failureLabel);
-  });
+  };
+  // Preserve the old immediate-start contract for the FIRST write, including
+  // synchronous owner checks. Only later same-record revisions must wait.
+  const flight = predecessor
+    ? predecessor.catch(() => undefined).then(dispatch)
+    : dispatch();
   scopedDirectMasterTails.set(key, flight);
   // Both completion paths clean the same-key tail without creating an
   // unhandled promise rejection or deleting a newer queued flight.
