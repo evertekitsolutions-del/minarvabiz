@@ -57,9 +57,9 @@ function fixture() {
       branchId: IDS.branch, deviceId: IDS.device, paidAt: date, createdAt: date, version: 1 },
   ];
   const accounts = [
-    { id: IDS.cashAccount, code:"1000", name:"Cash",type:"asset",normalBalance:"debit",version:1 },
-    { id: IDS.clearingAccount, code:"1020", name:"Clearing",type:"asset",normalBalance:"debit",version:1 },
-    { id: IDS.salesAccount, code:"4000", name:"Product Sales",type:"income",normalBalance:"credit",version:1 },
+    { id: IDS.cashAccount, code:"1000", name:"Cash",systemKey:"cash",type:"asset",normalBalance:"debit",version:1 },
+    { id: IDS.clearingAccount, code:"1020", name:"Clearing",systemKey:"payment_clearing",type:"asset",normalBalance:"debit",version:1 },
+    { id: IDS.salesAccount, code:"4000", name:"Product Sales",systemKey:"product_sales",type:"income",normalBalance:"credit",version:1 },
   ];
   const journal = { id: IDS.journal, journalNumber: "JV-S1", entryDate:date,
     referenceType:"auto_sale", referenceId:IDS.sale, branchId:IDS.branch,

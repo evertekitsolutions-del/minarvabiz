@@ -75,7 +75,20 @@ test("finite item discounts and taxes are reconciled using checkout's minor-unit
   const journal = snap.accounting.journals[0];
   journal.totalDebit = 123.75; journal.totalCredit = 123.75;
   journal.lines[1].debit = 43.75;
-  journal.lines[2].credit = 123.75;
+  // Actual POS posting credits net sales revenue and tax separately.
+  // A balanced gross-revenue journal is not an acceptable tax ledger.
+  journal.lines[2].credit = 112.5;
+  const taxAccount = "10000000-0000-4000-8000-000000000041";
+  snap.accounting.accounts.push({
+    id:taxAccount, code:"2100", name:"Tax payable", systemKey:"tax_payable",
+    type:"liability", normalBalance:"credit", version:1,
+  });
+  journal.lines.push({
+    id:"10000000-0000-4000-8000-000000000042",
+    journalEntryId:IDS.journal,accountId:taxAccount,
+    accountCode:"2100",accountName:"Tax payable",
+    debit:0,credit:11.25,
+  });
   const result = review(snap);
   assert.equal(result.operation, "sale.post");
   assert.equal(result.sale.total, 123.75);
