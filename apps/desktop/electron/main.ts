@@ -8,6 +8,7 @@ import { registerDesktopLicenseIpc, getDesktopLicenseState } from "./license";
 import { checkForSecureUpdate, downloadVerifiedUpdate, getDownloadedVerifiedUpdate } from "./updater";
 import { minarvaBackupSchemaError } from "./sqlite-backup-validation";
 import { copySqliteBackupExclusive, sqliteBackupCopyError, uniqueSqliteBackupFilename } from "./sqlite-backup-copy";
+import { pruneVerifiedAutomaticBackups } from "./sqlite-backup-retention";
 import { writeValidatedSqliteBinaryAtomically } from "./sqlite-native-atomic-write";
 import { NativeSqliteFingerprintFence } from "./sqlite-fingerprint-fence";
 import { NativeSqliteBusyError, NativeSqliteIpcGate } from "./sqlite-ipc-gate";
@@ -340,17 +341,12 @@ async function createLocalBackup(kind: LocalBackupKind): Promise<LocalBackupResu
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
-function pruneAutomaticBackups(retention = 14) {
-  const safeRetention = Number.isFinite(retention) ? Math.max(1, Math.min(365, Math.floor(retention))) : 14;
+async function pruneAutomaticBackups(retention = 14) {
   const targetDir = backupDestinationDir();
   fs.mkdirSync(targetDir, { recursive: true });
-  const files = fs.readdirSync(targetDir)
-    .filter((f) => f.startsWith("minarvabiz-automatic-") && f.endsWith(".db"))
-    .map((name) => ({ name, time: fs.statSync(path.join(targetDir, name)).mtimeMs }))
-    .sort((a, b) => b.time - a.time);
-  for (const item of files.slice(safeRetention)) {
-    try { fs.unlinkSync(path.join(targetDir, item.name)); } catch {}
-  }
+  // Only verified, regular Minarva Biz database images consume retention.
+  // Invalid/unreadable files are retained for customer-support inspection.
+  return pruneVerifiedAutomaticBackups(targetDir, retention, minarvaSqliteValidationError);
 }
 async function listBackupFiles() {
   const internalDir = backupDir();
@@ -578,7 +574,7 @@ ipcMain.handle("backup:createAutomatic", async (event, retention?: number) => {
     return await sqliteGate.reserve("backup", async () => {
       const result = await createLocalBackup("automatic");
       if (!result.ok) return result;
-      pruneAutomaticBackups(Number.isFinite(retention) ? Number(retention) : 14);
+      await pruneAutomaticBackups(Number.isFinite(retention) ? Number(retention) : 14);
       return { ok: true, path: result.path, sizeBytes: result.sizeBytes, filename: path.basename(result.path) };
     });
   } catch (error) {
@@ -586,10 +582,17 @@ ipcMain.handle("backup:createAutomatic", async (event, retention?: number) => {
     throw error;
   }
 });
-ipcMain.handle("backup:pruneAutomatic", (event, retention?: number) => {
+ipcMain.handle("backup:pruneAutomatic", async (event, retention?: number) => {
   requireTrustedRenderer(event);
-  pruneAutomaticBackups(Number.isFinite(retention) ? Number(retention) : 14);
-  return true;
+  try {
+    return await sqliteGate.reserve("backup", async () => {
+      await pruneAutomaticBackups(Number.isFinite(retention) ? Number(retention) : 14);
+      return true;
+    });
+  } catch (error) {
+    if (error instanceof NativeSqliteBusyError) return false;
+    throw error;
+  }
 });
 ipcMain.handle("backup:restoreFromFile", async (event) => {
   requireTrustedRenderer(event);
