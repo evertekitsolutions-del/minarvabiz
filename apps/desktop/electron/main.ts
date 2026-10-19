@@ -7,6 +7,7 @@ import { pathToFileURL } from "url";
 import { registerDesktopLicenseIpc, getDesktopLicenseState } from "./license";
 import { checkForSecureUpdate, downloadVerifiedUpdate, getDownloadedVerifiedUpdate } from "./updater";
 import { minarvaBackupSchemaError } from "./sqlite-backup-validation";
+import { copySqliteBackupExclusive, sqliteBackupCopyError, uniqueSqliteBackupFilename } from "./sqlite-backup-copy";
 import { writeValidatedSqliteBinaryAtomically } from "./sqlite-native-atomic-write";
 import { NativeSqliteFingerprintFence } from "./sqlite-fingerprint-fence";
 import { NativeSqliteBusyError, NativeSqliteIpcGate } from "./sqlite-ipc-gate";
@@ -288,7 +289,7 @@ function createWindow() {
 function sqliteValidationError(file: string): string | null { try { const stat = fs.statSync(file); if (!stat.isFile() || stat.size < 100) return "SQLite file is missing or too small"; const fd = fs.openSync(file, "r"); const header = Buffer.alloc(100); fs.readSync(fd, header, 0, 100, 0); fs.closeSync(fd); const sqliteHeader = Buffer.from("SQLite format 3", "ascii"); if (!header.subarray(0, sqliteHeader.length).equals(sqliteHeader) || header[sqliteHeader.length] !== 0) return "SQLite header is invalid"; const pageSize = header.readUInt16BE(16) || 65536; if (pageSize < 512 || pageSize > 65536 || (pageSize & (pageSize - 1)) !== 0) return "SQLite page size is invalid"; if (header[20] > pageSize - 1) return "SQLite reserved-byte count is invalid"; if (header[21] !== 64 || header[22] !== 32 || header[23] !== 32) return "SQLite payload fractions are invalid"; const pageCount = header.readUInt32BE(28); if (pageCount > 0 && stat.size < pageCount * pageSize) return "SQLite file is truncated"; return null; } catch { return "SQLite file could not be read"; } }
 function isValidSqliteFile(file: string) { return sqliteValidationError(file) === null; }
 async function minarvaSqliteValidationError(file: string): Promise<string | null> { return sqliteValidationError(file) || await minarvaBackupSchemaError(file); }
-function copySqlite(source: string, destination: string) { fs.mkdirSync(path.dirname(destination), { recursive: true }); fs.copyFileSync(source, destination); return fs.statSync(destination).size; }
+function copySqlite(source: string, destination: string) { return copySqliteBackupExclusive(source, destination); }
 
 type LocalBackupKind = "manual" | "automatic" | "pre-restore" | "pre-update";
 type LocalBackupResult = { ok: true; path: string; sizeBytes: number } | { ok: false; error: string };
@@ -321,9 +322,11 @@ async function createLocalBackup(kind: LocalBackupKind): Promise<LocalBackupResu
 
   const targetDir = kind === "automatic" ? backupDestinationDir() : backupDir();
   fs.mkdirSync(targetDir, { recursive: true });
-  const destination = path.join(targetDir, `minarvabiz-${kind}-${timestamp()}.db`);
+  const destination = path.join(targetDir, uniqueSqliteBackupFilename(kind, timestamp()));
+  let createdByThisCall = false;
   try {
     const sizeBytes = copySqlite(source, destination);
+    createdByThisCall = true;
     const validationError = await minarvaSqliteValidationError(destination);
     if (validationError) {
       try { fs.unlinkSync(destination); } catch {}
@@ -331,7 +334,9 @@ async function createLocalBackup(kind: LocalBackupKind): Promise<LocalBackupResu
     }
     return { ok: true, path: destination, sizeBytes };
   } catch (error) {
-    try { if (fs.existsSync(destination)) fs.unlinkSync(destination); } catch {}
+    // COPYFILE_EXCL can reject a pre-existing customer backup. Never delete
+    // that file as part of failed-copy cleanup: it is not ours.
+    if (createdByThisCall) { try { fs.unlinkSync(destination); } catch {} }
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
@@ -503,7 +508,7 @@ ipcMain.handle("backup:createManual", async (event) => {
   } catch (error) {
     return {
       ok: false,
-      error: `A verified internal backup was preserved, but saving the selected copy failed: ${error instanceof Error ? error.message : String(error)}`,
+      error: `A verified internal backup was preserved, but saving the selected copy failed: ${sqliteBackupCopyError(error)}`,
       internalBackup: internal.path,
     };
   }
@@ -533,7 +538,7 @@ ipcMain.handle("backup:export", async (event, id: unknown) => {
     }
     return { ok: true, path: result.filePath, sizeBytes, filename: path.basename(result.filePath) };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: sqliteBackupCopyError(error) };
   }
 });
 ipcMain.handle("backup:chooseDestination", async (event) => {
