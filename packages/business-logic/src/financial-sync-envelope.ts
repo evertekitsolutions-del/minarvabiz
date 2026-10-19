@@ -12,6 +12,7 @@ import type {
 } from "./financial-sync-contract";
 import { aggregateSaleLineQuantities } from "./inventory";
 import { calculateInvoiceTotals, calculateLineItem } from "@minarvabiz/billing";
+import { addMinorUnits, multiplyMinorByQuantity, subtractMinorUnits, toMinorUnits } from "@minarvabiz/utils";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ISO = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)$/;
@@ -267,6 +268,57 @@ export function buildSaleFinancialEnvelope(
   }
   if (!rounded(debit,journal.totalDebit,100) || !rounded(credit,journal.totalCredit,100))
     return held("journal_balance_conflict");
+
+  // Overall journal balance alone is not proof of a reconciled sale. A
+  // self-consistent cash/card swap, omitted receivable, misposted tax or
+  // inventory cost would otherwise be sent as an apparently valid invoice.
+  // Compare the auto_sale ledger against the same minor-unit posting rules
+  // used by checkout; do not trust editable account codes as authority.
+  try {
+    const expected = new Map<string,{debit:number;credit:number}>();
+    const add = (key:string, side:"debit" | "credit", amount:number) => {
+      if (!Number.isSafeInteger(amount) || amount < 0) throw new Error("Unsafe journal amount");
+      if (amount === 0) return;
+      const row = expected.get(key) ?? { debit:0, credit:0 };
+      row[side] = addMinorUnits(row[side], amount);
+      expected.set(key,row);
+    };
+    for (const payment of sourcePayments) {
+      const key = payment.method === "cash" ? "cash" :
+        payment.method === "bank" ? "bank" : "payment_clearing";
+      add(key,"debit",toMinorUnits(payment.amount));
+    }
+    add("accounts_receivable","debit",toMinorUnits(sale.balanceAmount));
+    add("product_sales","credit",subtractMinorUnits(
+      toMinorUnits(sale.total),toMinorUnits(sale.taxAmount)));
+    add("tax_payable","credit",toMinorUnits(sale.taxAmount));
+    let cost = 0;
+    for (const item of sale.items) {
+      cost = addMinorUnits(cost,multiplyMinorByQuantity(
+        toMinorUnits(item.costPrice),item.quantity));
+    }
+    add("cogs","debit",cost);
+    add("inventory_asset","credit",cost);
+
+    const observed = new Map<string,{debit:number;credit:number}>();
+    for (const line of journal.lines) {
+      const account = usedAccounts.get(line.accountId);
+      const key = account?.systemKey;
+      if (typeof key !== "string" || !expected.has(key) || observed.has(key))
+        return held("sale_journal_economics_conflict");
+      observed.set(key,{
+        debit:toMinorUnits(line.debit),credit:toMinorUnits(line.credit),
+      });
+    }
+    if (observed.size !== expected.size ||
+        [...expected].some(([key,amount]) => {
+          const actual = observed.get(key);
+          return !actual || actual.debit !== amount.debit ||
+            actual.credit !== amount.credit;
+        })) return held("sale_journal_economics_conflict");
+  } catch {
+    return held("sale_journal_economics_conflict");
+  }
 
   const versions: Record<string,number>={};
   if (proof.stockLines.length !== amounts.size) return held("stock_dependency_conflict");
