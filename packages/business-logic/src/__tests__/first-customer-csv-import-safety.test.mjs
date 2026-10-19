@@ -231,3 +231,66 @@ test("oversized product CSV input and row count fail closed before any writes", 
   assert.equal(csv.importProductsFromCsv(tooManyRows).created, 0);
   assert.equal(snapshot(), before, "resource-budget refusals must preserve all financial state");
 });
+
+test("product CSV bulk import refuses plan capacity overflow before stock, ledger or outbox writes", () => {
+  reset();
+  const license = require("../phase9-store.ts");
+  const originalUsageSnapshot = license.usageSnapshot;
+  license.usageSnapshot = () => {
+    const state = originalUsageSnapshot();
+    return {
+      ...state,
+      limits: { ...state.limits, maxProducts: 1 },
+      usage: { ...state.usage, products: store.listProducts().length },
+      checks: { ...state.checks, products: {
+        allowed: store.listProducts().length < 1, limit: 1,
+        remaining: Math.max(0, 1 - store.listProducts().length),
+      }},
+    };
+  };
+  try {
+    const twoProducts = "name,sku,cost,price,stock\nFirst,CSV-1,5,10,2\nSecond,CSV-2,8,16,1";
+    const prior = snapshot();
+    const rejected = csv.importProductsFromCsv(twoProducts);
+    assert.equal(rejected.created, 0);
+    assert.match(rejected.errors.join("; "), /product plan limit/i);
+    assert.equal(snapshot(), prior, "refusal must not mutate inventory, accounting or outbox");
+
+    const oneProduct = "name,sku,cost,price,stock\nFirst,CSV-1,5,10,2";
+    assert.deepEqual(csv.importProductsFromCsv(oneProduct), { created: 1, errors: [] });
+    const acceptedState = snapshot();
+    const beyondCap = csv.importProductsFromCsv("name,sku,cost,price,stock\nSecond,CSV-2,8,16,1");
+    assert.equal(beyondCap.created, 0);
+    assert.match(beyondCap.errors.join("; "), /limit/i);
+    assert.equal(snapshot(), acceptedState, "an existing full plan cannot gain more products");
+  } finally {
+    license.usageSnapshot = originalUsageSnapshot;
+  }
+});
+
+test("product CSV importer denies cashier and inventory-disabled plans before posting opening balances", () => {
+  reset();
+  const input = "name,sku,cost,price,stock\nDenied,CSV-DENY,10,20,4";
+  const previous = snapshot();
+  permissions.setCurrentRole("cashier");
+  try {
+    const result = csv.importProductsFromCsv(input);
+    assert.equal(result.created, 0);
+    assert.match(result.errors.join("; "), /permission denied/i);
+    assert.equal(snapshot(), previous);
+  } finally {
+    permissions.setCurrentRole("admin");
+  }
+  const originalPolicy = permissions.getRuntimeFeaturePolicy();
+  const license = require("../phase9-store.ts");
+  const plan = license.usageSnapshot().features;
+  permissions.setRuntimeFeaturePolicy({ ...plan, inventory: false });
+  try {
+    const result = csv.importProductsFromCsv(input);
+    assert.equal(result.created, 0);
+    assert.match(result.errors.join("; "), /not included/i);
+    assert.equal(snapshot(), previous);
+  } finally {
+    permissions.setRuntimeFeaturePolicy(originalPolicy);
+  }
+});
