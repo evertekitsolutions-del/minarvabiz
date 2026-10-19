@@ -13,6 +13,7 @@ import {
   recordBackupSuccess,
   recordBackupFailure,
 } from "@minarvabiz/business-logic";
+import { runStartupAutomaticBackup } from "./startup-auto-backup";
 
 type SqliteDatabase = {
   save: () => void;
@@ -190,17 +191,6 @@ async function initializeDesktopSqlite(): Promise<{ ok: boolean; error?: string 
     ready = true;
     initError = null;
 
-    try {
-      if (shouldRunAutoBackup() && api.createAutomaticBackup) {
-        void api.createAutomaticBackup(getAutoBackupSettings().retentionCount).then((result) => {
-          if (result.ok && result.path) recordBackupSuccess(result.path, "auto", result.sizeBytes);
-          else if (!result.cancelled) recordBackupFailure(result.error || "Automatic backup returned no verified file");
-        });
-      }
-    } catch (e) {
-      recordBackupFailure(e instanceof Error ? e.message : String(e));
-    }
-
     (window as unknown as { __minarvaDesktopPersist?: () => void; __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopPersist =
       scheduleDomainPersistence;
     (window as unknown as { __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopFlush =
@@ -209,6 +199,19 @@ async function initializeDesktopSqlite(): Promise<{ ok: boolean; error?: string 
     const persisted = await persistDomainToSqlite();
     if (!persisted) {
       throw new Error(`SQLite native persistence failed for ${dbPath}`);
+    }
+
+    // Do not make a "successful" automatic backup of yesterday's image or an
+    // unpersisted onboarding session. The first complete SQLite IPC write is
+    // durable before we request the native backup. A failed backup is reported
+    // as a backup failure, not as failed application bootstrap.
+    if (shouldRunAutoBackup() && api.createAutomaticBackup) {
+      const retention = getAutoBackupSettings().retentionCount;
+      void runStartupAutomaticBackup(
+        () => api.createAutomaticBackup!(retention),
+        (path, sizeBytes) => { recordBackupSuccess(path, "auto", sizeBytes); },
+        (error) => { recordBackupFailure(error); },
+      );
     }
     return { ok: true };
   } catch (e) {
