@@ -22,21 +22,42 @@ function parseCsvRecord(line: string): string[] {
   const cols: string[] = [];
   let current = "";
   let quoted = false;
+  let closedQuote = false;
   for (let i = 0; i < line.length; i += 1) {
     const ch = line[i];
-    if (ch === '"') {
-      if (quoted && line[i + 1] === '"') {
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') {
         current += '"';
         i += 1;
+      } else if (ch === '"') {
+        quoted = false;
+        closedQuote = true;
       } else {
-        quoted = !quoted;
+        current += ch;
       }
-    } else if (ch === "," && !quoted) {
+      continue;
+    }
+    if (ch === ",") {
       cols.push(current.trim());
       current = "";
-    } else {
-      current += ch;
+      closedQuote = false;
+      continue;
     }
+    if (ch === '"') {
+      // Only an empty field (or whitespace before its opening quote) can
+      // begin a quoted value. A quote in plain text or after a closing
+      // quote otherwise silently changes imported customer/product names.
+      if (closedQuote || current.trim()) {
+        throw new Error("Unexpected quote in CSV field");
+      }
+      current = "";
+      quoted = true;
+      continue;
+    }
+    if (closedQuote && !/\s/.test(ch)) {
+      throw new Error("Characters after closing CSV quote");
+    }
+    current += ch;
   }
   if (quoted) throw new Error("Unclosed quoted CSV field");
   cols.push(current.trim());
