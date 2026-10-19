@@ -115,7 +115,9 @@ function hydrate({ extraProduct = false, extraLocation = false } = {}) {
       id: ids.warehouse, name: "Warehouse", code: "WH", branchId: ids.branch,
       isDefault: true, isActive: true, version: 1,
     }],
-    locations, stock, transfers: [],
+    locations, stock: stock.map((position) => ({
+      ...position, updatedAt: "2026-10-13T12:00:00.000Z",
+    })), transfers: [],
   });
 }
 
@@ -230,11 +232,13 @@ test("a concurrent extra warehouse revision after checkout holds the envelope", 
     customerId: ids.customer, lines: cuts(ids.product, 100),
     paidAmount: 500, paymentMethod: "cash",
   });
-  const position = warehouse.listWarehouseStock().find((row) => row.productId === ids.product);
-  position.version += 1;
+  // listWarehouseStock returns detached copies. Change the persisted snapshot
+  // that the envelope actually consumes, not a discarded read-only view.
+  const snapshot = persistence.exportDomainSnapshot();
+  snapshot.warehouse.stock.find((row) => row.productId === ids.product).version += 1;
   const saleEvent = outbox.exportOutbox().find((event) => event.aggregateType === "sales");
   assert.equal(
-    buildSaleFinancialEnvelope(persistence.exportDomainSnapshot(), saleEvent.id, scope).held,
+    buildSaleFinancialEnvelope(snapshot, saleEvent.id, scope).held,
     "stock_snapshot_revision_conflict",
   );
 });
