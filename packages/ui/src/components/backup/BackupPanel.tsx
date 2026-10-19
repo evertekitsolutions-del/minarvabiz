@@ -4,6 +4,7 @@ import * as React from "react";
 import type { BackupMeta } from "@minarvabiz/types";
 import { Button } from "../Button";
 import { Card, CardContent } from "../Card";
+import { backupActionMessage } from "./backup-action-message";
 
 type NativeBackup = BackupMeta;
 type NativeDesktopApi = {
@@ -49,7 +50,10 @@ export function BackupPanel({
   const limitedWebArchive = legacyPartialArchive && !native?.listBackups;
 
   const refreshNative = React.useCallback(async (): Promise<NativeBackup[] | null> => {
-    if (!native?.listBackups) return null;
+    if (!canManage || !native?.listBackups) {
+      setNativeBackups(null);
+      return null;
+    }
     try {
       const items = await native.listBackups();
       setNativeBackups(items);
@@ -58,24 +62,31 @@ export function BackupPanel({
       setMessage(error instanceof Error ? error.message : String(error));
       return null;
     }
-  }, [native]);
+  }, [native, canManage]);
 
   React.useEffect(() => {
     void refreshNative();
   }, [refreshNative]);
 
-  const backups = nativeBackups ?? fallbackBackups;
+  const backups = canManage ? (nativeBackups ?? fallbackBackups) : [];
   const automaticBackups = backups.filter((backup) => backup.kind === "automatic");
   const latestAutomatic = automaticBackups[0] ?? null;
   const latestAutomaticAgeHours = latestAutomatic ? Math.max(0, (Date.now() - new Date(latestAutomatic.createdAt).getTime()) / 3600000) : null;
   const backupHealth = latestAutomaticAgeHours == null ? "No automatic backup yet" : latestAutomaticAgeHours <= 26 ? "Healthy" : latestAutomaticAgeHours <= 48 ? "Needs attention" : "At risk";
 
-  const run = async (action: () => void | Promise<void>, success: string) => {
+  const run = async (
+    action: () => void | string | null | Promise<void | string | null>,
+    success: string,
+  ) => {
+    if (!canManage) {
+      setMessage("Backup management permission is required.");
+      return;
+    }
     setBusy(true);
     try {
-      await action();
-      setMessage(success);
-      await refreshNative();
+      const outcome = await action();
+      setMessage(backupActionMessage(outcome, success));
+      if (outcome !== null) await refreshNative();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -86,40 +97,48 @@ export function BackupPanel({
   const create = async () => {
     if (native?.createManualBackup) {
       const r = await native.createManualBackup();
-      if (r.cancelled) return;
+      if (r.cancelled) return null;
       if (!r.ok) throw new Error(r.error || "Backup failed");
-      await refreshNative();
       return;
     }
-    await onCreate?.();
+    if (!onCreate) throw new Error("Backup creation is unavailable in this edition");
+    await onCreate();
   };
 
   const createAutomatic = async () => {
     if (!native?.createAutomaticBackup) throw new Error("Automatic backup is available in the desktop edition only");
     const r = await native.createAutomaticBackup(retentionCount);
-    if (r.cancelled) return;
+    if (r.cancelled) return null;
     if (!r.ok) throw new Error(r.error || "Automatic backup failed");
-    await refreshNative();
   };
 
   const restore = async () => {
     if (!canManage) throw new Error("You do not have permission to restore backups.");
-    if (!window.confirm("Restore a backup? Minarva Biz will first create a verified safety backup of the current database, then replace the active database and restart.")) return;
+    if (!window.confirm("Restore a backup? Minarva Biz will first create a verified safety backup of the current database, then replace the active database and restart.")) return null;
     if (native?.restoreBackup) {
       const r = await native.restoreBackup();
-      if (r.cancelled) return;
+      if (r.cancelled) return null;
       if (!r.ok) throw new Error(r.error || "Restore failed");
-      setMessage(r.preRestoreBackup
-        ? "Restore successful. Verified pre-restore safety backup created. Restarting Minarva Biz…"
-        : "Restore successful. Restarting Minarva Biz…");
-      await native.relaunch?.();
-      return;
+      const safety = r.preRestoreBackup ? " Verified pre-restore safety backup created." : "";
+      let restarting = false;
+      try {
+        restarting = await native.relaunch?.() === true;
+      } catch {
+        // The restore already committed; a failed relaunch must not be reported as a failed restore.
+      }
+      return restarting
+        ? "Restore successful." + safety + " Restart requested."
+        : "Restore successful." + safety + " Close and reopen Minarva Biz manually.";
     }
     if (onRestore) await onRestore();
     else throw new Error("Restore is available in the desktop edition only");
   };
 
   const download = async (id: string) => {
+    if (!canManage) {
+      setMessage("Backup management permission is required.");
+      return;
+    }
     if (native?.exportBackup) {
       const r = await native.exportBackup(id);
       if (r.cancelled) return;
@@ -130,9 +149,17 @@ export function BackupPanel({
   };
 
   const verify = async (backup: NativeBackup) => {
+    if (!canManage) {
+      setMessage("Backup management permission is required.");
+      return;
+    }
     if (native?.listBackups) {
       const refreshed = await refreshNative();
-      const latest = refreshed?.find((item) => item.id === backup.id) ?? backup;
+      const latest = refreshed?.find((item) => item.id === backup.id);
+      if (!latest) {
+        setMessage("Cannot verify: the current native backup list is unavailable or the backup is missing.");
+        return;
+      }
       setMessage(latest.verified ? "Backup verified: valid Minarva Biz SQLite database" : "Verification failed: invalid, incompatible, or unreadable Minarva Biz backup");
       return;
     }
@@ -144,15 +171,27 @@ export function BackupPanel({
   };
 
   const inspect = async (backup: NativeBackup) => {
+    if (!canManage) {
+      setMessage("Backup management permission is required.");
+      return;
+    }
     if (native?.listBackups) {
       const refreshed = await refreshNative();
-      const latest = refreshed?.find((item) => item.id === backup.id) ?? backup;
+      const latest = refreshed?.find((item) => item.id === backup.id);
+      if (!latest) {
+        setMessage("Cannot inspect: the current native backup list is unavailable or the backup is missing.");
+        return;
+      }
       setMessage(`${latest.verified ? "Valid Minarva Biz SQLite backup" : "Invalid or incompatible Minarva Biz backup"} · ${(latest.sizeBytes / 1024).toFixed(1)} KB · ${latest.kind} · ${new Date(latest.createdAt).toLocaleString("en-IN")}`);
       return;
     }
     const result = onInspect?.(backup.id);
     setMessage(result === undefined ? "Backup inspection completed" : result.ok ? `Contains: ${Object.entries(result.summary || {}).map(([k, v]) => `${k}=${v}`).join(", ")}` : result.error || "Invalid");
   };
+
+  if (!canManage) {
+    return <p role="status" className="text-sm text-slate-600">Backup details require backup-management permission.</p>;
+  }
 
   return (
     <div className="space-y-4">

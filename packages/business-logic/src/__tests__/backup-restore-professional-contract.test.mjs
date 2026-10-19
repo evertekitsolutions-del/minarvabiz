@@ -32,7 +32,8 @@ assert.match(preload, /createAutomaticBackup: \(retention\?: number\)/);
 assert.match(bootstrap, /createAutomaticBackup\(getAutoBackupSettings\(\)\.retentionCount\)/);
 assert.match(desktop, /createAutomaticBackup\(settings\.retentionCount\)/);
 assert.match(desktop, /canManage=\{can\("backup\.manage"\)\}/);
-assert.match(web, /canManage=\{can\("backup\.manage"\)\}/);
+assert.match(web, /const canManageBackups = can\("backup\.manage"\)/);
+assert.match(web, /canManage=\{canManageBackups\}/);
 
 assert.match(panel, /window\.confirm\("Restore a backup\?/);
 assert.match(panel, /verified safety backup of the current database/);
