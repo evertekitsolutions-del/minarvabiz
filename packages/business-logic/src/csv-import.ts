@@ -407,13 +407,25 @@ function safeCustomerCsvCell(value: unknown): string {
   return csvCell(text);
 }
 
+/**
+ * Preserve genuine +country-number exports for customer/supplier round trips,
+ * but protect stale/restored legacy contact fields that bypassed form validation.
+ * A second '+' or a leading '-' must never be exported as a spreadsheet formula.
+ */
+function safeContactPhoneCsvCell(value: unknown): string {
+  const phone = String(value ?? "");
+  return phone && customerPhoneValid(phone) && /^\+?\d[\d\s()\-]*$/.test(phone)
+    ? csvCell(phone)
+    : safeCustomerCsvCell(phone);
+}
+
 export function exportCustomersCsv(customers = store.listCustomers()): string {
   const lines = customers.map(customer => [
     safeCustomerCsvCell(customer.name),
-    // Phone is constrained to punctuation/digits by validation. +country code
-    // is a legitimate phone prefix, not a spreadsheet formula to rewrite.
-    csvCell(customer.phone),
-    csvCell(customer.email),
+    // Verified +country phones remain import-compatible; unsafe legacy contacts
+    // imported from backups cannot become executable spreadsheet formulas.
+    safeContactPhoneCsvCell(customer.phone),
+    safeCustomerCsvCell(customer.email),
     safeCustomerCsvCell(customer.address),
     safeCustomerCsvCell(customer.notes),
   ].join(","));
@@ -595,9 +607,7 @@ export function exportSuppliersCsv(suppliers = phase5Store.listSuppliers()): str
   const lines = suppliers.map(supplier => [
     safeCustomerCsvCell(supplier.name),
     safeCustomerCsvCell(supplier.company),
-    // Preserve valid international +country prefixes; safely quote legacy invalid values.
-    supplier.phone && customerPhoneValid(supplier.phone)
-      ? csvCell(supplier.phone) : safeCustomerCsvCell(supplier.phone),
+    safeContactPhoneCsvCell(supplier.phone),
     safeCustomerCsvCell(supplier.email),
     safeCustomerCsvCell(supplier.address),
     safeCustomerCsvCell(supplier.category),
