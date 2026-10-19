@@ -153,6 +153,25 @@ export function buildSaleFinancialEnvelope(
     return held("missing_sale_event");
   const event = exactEvent(items, eventId, verifiedOwnerScope, primary[0].deviceId);
   if (!event) return held("sale_event_identity_conflict");
+  // An event ID can be unique while TWO independently queued insert events
+  // refer to the same sale. They must never each produce an apparently valid
+  // atomic sale.post envelope (and double-apply stock/payment/journal effects).
+  // This includes old synced or failed copies retained after a restore.
+  if (items.filter(e => e.aggregateType === "sales" &&
+      e.aggregateId === event.aggregateId && e.eventType === "insert").length !== 1)
+    return held("duplicate_sale_insert_identity");
+  // Server-side device receipts depend on a unique per-device sequence.
+  // An offline snapshot merge or corruption may re-use an otherwise valid
+  // sequence for another event. Fail closed before constructing any envelope.
+  const seenDeviceSequences = new Set<number>();
+  for (const candidate of items) {
+    if (candidate.ownerScope !== verifiedOwnerScope || candidate.deviceId !== event.deviceId)
+      continue;
+    if (!Number.isSafeInteger(candidate.sequence) || candidate.sequence < 1 ||
+        seenDeviceSequences.has(candidate.sequence))
+      return held("duplicate_device_event_sequence");
+    seenDeviceSequences.add(candidate.sequence);
+  }
   const proof = (event as LocalOutboxEvent & {financialSyncProof?: FinancialSyncProofV1}).financialSyncProof;
   if (!proof || proof.schemaVersion !== 1) return held("missing_pre_operation_authority");
   if (!isId(proof.branchId) || !isId(proof.warehouseId) || !isId(proof.locationId))
@@ -218,11 +237,20 @@ export function buildSaleFinancialEnvelope(
   );
   if (proofIds.length !== sourcePayments.length) return held("payment_dependency_missing");
   const sortedPayments: Array<Record<string,unknown>> = [];
+  const seenPaymentAggregates = new Set<string>();
   let paymentsTotal = 0;
   for (const id of proofIds) {
     const paymentEvent = exactEvent(items,id,verifiedOwnerScope,event.deviceId);
     if (!paymentEvent || paymentEvent.aggregateType !== "payments" || paymentEvent.eventType !== "insert")
       return held("payment_dependency_missing");
+    // A second event ID for the same payment may otherwise represent a
+    // second receipt against one transaction. Do not double-count or post it,
+    // even if the other copy is already marked synced.
+    if (seenPaymentAggregates.has(paymentEvent.aggregateId) ||
+        items.filter(e => e.aggregateType === "payments" &&
+          e.aggregateId === paymentEvent.aggregateId && e.eventType === "insert").length !== 1)
+      return held("duplicate_payment_insert_identity");
+    seenPaymentAggregates.add(paymentEvent.aggregateId);
     const matches = sourcePayments.filter(p=>p.id===paymentEvent.aggregateId);
     if (matches.length !== 1 || !equal(matches[0],paymentEvent.payload))
       return held("payment_revision_conflict");
