@@ -7,7 +7,7 @@ import { pathToFileURL } from "url";
 import { registerDesktopLicenseIpc, getDesktopLicenseState } from "./license";
 import { checkForSecureUpdate, downloadVerifiedUpdate, getDownloadedVerifiedUpdate } from "./updater";
 import { minarvaBackupSchemaError } from "./sqlite-backup-validation";
-import { copySqliteBackupExclusive, uniqueSqliteBackupFilename } from "./sqlite-backup-copy";
+import { copySqliteBackupExclusive, sqliteBackupCopyError, uniqueSqliteBackupFilename } from "./sqlite-backup-copy";
 import { writeValidatedSqliteBinaryAtomically } from "./sqlite-native-atomic-write";
 import { NativeSqliteFingerprintFence } from "./sqlite-fingerprint-fence";
 import { NativeSqliteBusyError, NativeSqliteIpcGate } from "./sqlite-ipc-gate";
@@ -508,7 +508,7 @@ ipcMain.handle("backup:createManual", async (event) => {
   } catch (error) {
     return {
       ok: false,
-      error: `A verified internal backup was preserved, but saving the selected copy failed: ${error instanceof Error ? error.message : String(error)}`,
+      error: `A verified internal backup was preserved, but saving the selected copy failed: ${sqliteBackupCopyError(error)}`,
       internalBackup: internal.path,
     };
   }
@@ -538,7 +538,7 @@ ipcMain.handle("backup:export", async (event, id: unknown) => {
     }
     return { ok: true, path: result.filePath, sizeBytes, filename: path.basename(result.filePath) };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: sqliteBackupCopyError(error) };
   }
 });
 ipcMain.handle("backup:chooseDestination", async (event) => {

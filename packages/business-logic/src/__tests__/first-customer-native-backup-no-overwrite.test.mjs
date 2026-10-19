@@ -13,7 +13,7 @@ require.extensions[".ts"] = (mod, filename) => mod._compile(
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText, filename,
 );
-const { copySqliteBackupExclusive, uniqueSqliteBackupFilename } =
+const { copySqliteBackupExclusive, sqliteBackupCopyError, uniqueSqliteBackupFilename } =
   require("../../../../apps/desktop/electron/sqlite-backup-copy.ts");
 
 const main = fs.readFileSync("apps/desktop/electron/main.ts", "utf8");
@@ -33,6 +33,8 @@ test("production manual/export/automatic copies never overwrite an existing back
   assert.doesNotMatch(block, /if \(fs\.existsSync\(destination\)\) fs\.unlinkSync\(destination\)/);
   assert.match(manual, /copySqlite\(internal\.path, result\.filePath\)/);
   assert.match(exporter, /copySqlite\(resolved\.file, result\.filePath\)/);
+  assert.match(manual, /sqliteBackupCopyError\(error\)/);
+  assert.match(exporter, /sqliteBackupCopyError\(error\)/);
   assert.match(main, /await minarvaSqliteValidationError\(destination\)/);
 });
 
@@ -93,4 +95,10 @@ test("exclusive refusal cannot trigger cleanup of someone else's original file",
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });
   }
+});
+
+test("customer sees distinct-filename guidance without losing the prior backup", () => {
+  assert.match(sqliteBackupCopyError(Object.assign(new Error("EEXIST"), { code: "EEXIST" })),
+    /another filename.*not changed/i);
+  assert.equal(sqliteBackupCopyError(new Error("disk full")), "disk full");
 });

@@ -27,3 +27,11 @@ export function copySqliteBackupExclusive(
   io.copyFileSync(source, destination, fs.constants.COPYFILE_EXCL);
   return io.statSync(destination).size;
 }
+
+/** Actionable error for selecting an existing backup filename. */
+export function sqliteBackupCopyError(error: unknown): string {
+  if ((error as NodeJS.ErrnoException | null)?.code === "EEXIST") {
+    return "A backup already exists at this location. Choose another filename; the existing backup was not changed.";
+  }
+  return error instanceof Error ? error.message : String(error);
+}
