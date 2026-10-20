@@ -9,3 +9,7 @@ The master onboarding checklist already contains "Add suppliers and opening paya
 - Permission, stale-form and audited-posting wiring is covered by the first-customer onboarding regression suite; opening-supplier-accounting tests cover AP/equity, rollback guards, cents, idempotency, permissions and outbox.
 - No production DB migration, release, paid service or vendor-specific dependency.
 - Onboarding remains operator-confirmed, **not** certified commercial UAT. Real Windows/Offline/Hybrid opening-balance and backup/recovery acceptance are outstanding.
+
+## Clean-room hotspot budget fix
+
+The first CI run identified a Windows App.tsx source-hotspot byte overage. The supplier Add action now opens the pre-existing modal without repeating its full default-state object in the central App (the form is already initialized/reset after save and retains a cancelled draft for editing). Source-hotspot budget is unchanged.
