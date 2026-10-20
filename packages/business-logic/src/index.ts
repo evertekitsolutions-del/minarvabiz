@@ -28,6 +28,8 @@ export * from "./tracked-inventory";
 export * from "./commerce-bundle-stock";
 // Read-only kit price calculation based on catalog selling prices.
 export * from "./commerce-bundle-quote";
+// Seller text adapter for nonbinding kit quote previews.
+export * from "./commerce-kit-quote-draft";
 export * from "./orders";
 export * from "./expenses";
 export * from "./reports";
