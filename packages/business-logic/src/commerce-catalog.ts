@@ -166,13 +166,22 @@ export function exportShareableCatalogJson(
  * All item/shop fields are escaped, all styling is self-contained, and the
  * restrictive CSP forbids scripts, images, forms, and network resources.
  */
+export interface ShareableCatalogHtmlOptions extends ShareableCatalogOptions {
+  /** Built-in, non-executable presentation variant. */
+  template?: "cards" | "compact";
+}
+
 export function exportShareableCatalogHtml(
   products: readonly ShareableCatalogProduct[],
   categories: readonly Pick<Category, "id" | "name" | "isActive" | "deletedAt">[],
   currencyCode: string,
   shopName: string,
-  options: ShareableCatalogOptions = {},
+  options: ShareableCatalogHtmlOptions = {},
 ): string {
+  const template = options.template ?? "cards";
+  if (template !== "cards" && template !== "compact") {
+    throw new Error("Unsupported catalog HTML template");
+  }
   const rows = visibleCatalogRows(products, categories, currencyCode, options);
   const title = escapeHtml(shopName.trim() || "Product Catalog");
   const cards = rows.map((r) => {
@@ -181,6 +190,15 @@ export function exportShareableCatalogHtml(
     return `<article class="product"><h2>${escapeHtml(r.name)}</h2><div class="meta">${meta}</div><div class="price">${escapeHtml(r.currency)} ${escapeHtml(r.price)}${r.unit ? ` <small>/ ${escapeHtml(r.unit)}</small>` : ""}</div></article>`;
   }).join("\n");
   const empty = rows.length ? "" : '<p class="empty">No company-wide products are available for this catalog.</p>';
+  const layoutClass = template === "compact" ? "grid catalog-compact" : "grid";
+  const compactCss = template === "compact"
+    ? ".grid.catalog-compact{grid-template-columns:minmax(0,1fr)}" +
+      ".catalog-compact .product{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:20px}" +
+      ".catalog-compact .product h2{grid-column:1}" +
+      ".catalog-compact .meta{grid-column:1;margin:6px 0}" +
+      ".catalog-compact .price{grid-column:2;grid-row:1/3;align-self:center;text-align:right}" +
+      "@media(max-width:520px){.catalog-compact .product{display:block}.catalog-compact .price{text-align:left}}"
+    : "";
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -198,9 +216,10 @@ h1{font-size:30px;margin:0 0 8px}h2{font-size:18px;margin:0;overflow-wrap:anywhe
 .price{font-weight:800;font-size:21px}.price small{font-weight:400;color:#64748b;font-size:12px}
 .foot{border-top:1px solid #e2e8f0;padding-top:14px;margin-top:30px}
 @media print{body{background:#fff}main{padding:0}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+${compactCss}
 </style></head><body><main>
 <header><h1>${title}</h1><p class="subtitle">Product catalog · Regular selling prices</p></header>
-<section class="grid" aria-label="Products">${cards}</section>${empty}
+<section class="${layoutClass}" aria-label="Products">${cards}</section>${empty}
 <footer class="foot">Prices are indicative. Contact the seller to confirm availability and final terms.</footer>
 </main></body></html>`;
 }
