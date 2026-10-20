@@ -53,6 +53,91 @@ const rounded = (a:number,b:number,factor:number) =>
   Number.isFinite(a) && Number.isFinite(b) &&
   Math.round(a * factor) === Math.round(b * factor);
 
+/**
+ * Prove an offline stock-version chain without rewriting original sale
+ * expectedVersions. These are local read-only claims; the authenticated
+ * server must still validate each atomic stock version and receipt.
+ */
+function saleUsesProduct(event: LocalOutboxEvent, productId: string): boolean {
+  return event.aggregateType === "sales" && event.eventType === "insert" &&
+    ((isObj(event.payload) && Array.isArray(event.payload.items) &&
+      event.payload.items.some(i => isObj(i) && i.productId === productId)) ||
+      event.financialSyncProof?.stockLines?.some(line => line.productId === productId) === true);
+}
+
+function sequentialLocalStockAfterSale(
+  snapshot: DomainSnapshot,
+  events: LocalOutboxEvent[],
+  current: LocalOutboxEvent,
+  proof: FinancialSyncProofV1,
+  line: FinancialSyncProofV1["stockLines"][number],
+): { productVersion:number; warehouseVersion:number; productStock:number; onHand:number } | null {
+  let productVersion = line.expectedProductVersion + 1;
+  let warehouseVersion = line.expectedWarehouseVersion + 1;
+  let productStock = line.resultingProductStock;
+  let onHand = line.resultingOnHand;
+  const successors = events.filter(e => e.ownerScope === current.ownerScope &&
+    e.deviceId === current.deviceId && e.sequence > current.sequence &&
+    saleUsesProduct(e, line.productId)
+  ).sort((a,b) => a.sequence-b.sequence);
+
+  for (const next of successors) {
+    const nextProof = next.financialSyncProof;
+    const stockRows = nextProof?.stockLines?.filter(row => row.productId === line.productId);
+    const sales = (snapshot.sales ?? []).filter(s => s.id === next.aggregateId);
+    if (next.status === "discarded" ||
+        !nextProof || nextProof.schemaVersion !== 1 ||
+        nextProof.branchId !== proof.branchId ||
+        nextProof.warehouseId !== proof.warehouseId ||
+        nextProof.locationId !== proof.locationId ||
+        nextProof.currencyCode !== proof.currencyCode ||
+        stockRows?.length !== 1 || sales.length !== 1 ||
+        !equal(sales[0],next.payload) ||
+        !Array.isArray(sales[0].items)) return null;
+    const row = stockRows[0];
+    if (!isId(row.productId) || !isQty(row.quantity) ||
+        !Number.isSafeInteger(row.expectedProductVersion) ||
+        !Number.isSafeInteger(row.expectedWarehouseVersion) ||
+        row.expectedProductVersion !== productVersion ||
+        row.expectedWarehouseVersion !== warehouseVersion ||
+        nextProof.expectedVersions?.[row.productId] !== productVersion ||
+        row.warehouseId !== line.warehouseId || row.locationId !== line.locationId ||
+        !rounded(row.priorProductStock,productStock,1000) ||
+        !rounded(row.priorOnHand,onHand,1000) ||
+        !rounded(row.priorProductStock-row.quantity,row.resultingProductStock,1000) ||
+        !rounded(row.priorOnHand-row.quantity,row.resultingOnHand,1000) ||
+        row.resultingProductStock < 0 || row.resultingOnHand < 0)
+      return null;
+    try {
+      const quantities = aggregateSaleLineQuantities(sales[0].items);
+      if (!rounded(quantities.get(line.productId) ?? -1,row.quantity,1000)) return null;
+    } catch { return null; }
+    productVersion++;
+    warehouseVersion++;
+    productStock = row.resultingProductStock;
+    onHand = row.resultingOnHand;
+  }
+  return { productVersion, warehouseVersion, productStock, onHand };
+}
+
+function hasUnacknowledgedPriorStockSale(
+  events: LocalOutboxEvent[],
+  current: LocalOutboxEvent,
+  productId: string,
+): boolean {
+  return events.some(prior => prior.ownerScope === current.ownerScope &&
+    prior.deviceId === current.deviceId && prior.sequence < current.sequence &&
+    saleUsesProduct(prior,productId) &&
+    (prior.status !== "synced" ||
+      !prior.financialSyncProof?.paymentEventIds?.every(id =>
+        events.filter(payment => payment.id === id &&
+          payment.aggregateType === "payments" &&
+          payment.eventType === "insert" &&
+          payment.ownerScope === current.ownerScope &&
+          payment.deviceId === current.deviceId &&
+          payment.status === "synced").length === 1)));
+}
+
 function scopeOrg(scope: string): string | null {
   if (typeof scope !== "string") return null;
   const parts = scope.split(":");
@@ -365,6 +450,10 @@ export function buildSaleFinancialEnvelope(
       return held("stock_pre_operation_authority_conflict");
     seenStock.add(line.productId);
     versions[line.productId]=line.expectedProductVersion;
+    if (hasUnacknowledgedPriorStockSale(items,event,line.productId))
+      return held("prior_stock_sale_receipt_pending");
+    const terminal = sequentialLocalStockAfterSale(snapshot,items,event,proof,line);
+    if (!terminal) return held("stock_successor_chain_conflict");
     const product=(snapshot.products ?? []).filter(p=>p.id===line.productId);
     const position=(snapshot.warehouse?.stock ?? []).filter(p=>p.productId===line.productId &&
       p.warehouseId===line.warehouseId && p.locationId===line.locationId);
@@ -373,10 +462,10 @@ export function buildSaleFinancialEnvelope(
     const locations=(snapshot.warehouse?.locations ?? []).filter(l=>l.id===line.locationId &&
       l.warehouseId===line.warehouseId && l.isActive && !l.deletedAt);
     if (product.length!==1 || position.length!==1 || warehouses.length!==1 || locations.length!==1 ||
-        product[0].version !== line.expectedProductVersion + 1 ||
-        position[0].version !== line.expectedWarehouseVersion + 1 ||
-        !rounded(product[0].stockQuantity,line.resultingProductStock,1000) ||
-        !rounded(position[0].onHand,line.resultingOnHand,1000))
+        product[0].version !== terminal.productVersion ||
+        position[0].version !== terminal.warehouseVersion ||
+        !rounded(product[0].stockQuantity,terminal.productStock,1000) ||
+        !rounded(position[0].onHand,terminal.onHand,1000))
       return held("stock_snapshot_revision_conflict");
   }
   if (Object.keys(proof.expectedVersions).length!==seenStock.size)
