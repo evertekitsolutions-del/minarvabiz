@@ -148,6 +148,79 @@ export function createCommerceTierDraft(input: {
   return { ...draft };
 }
 
+/**
+ * Optimistic offline edit. Never turns a draft into an active customer tariff:
+ * no branch/customer scope, publish action, remote writer or invoice mutation.
+ *
+ * Validate the entire proposed replacement, latest retail price and same-SKU
+ * thresholds BEFORE modifying the original object or incrementing revision.
+ */
+export function updateCommerceTierDraft(
+  id: string,
+  expectedVersion: number,
+  patch: { minQuantity: number; unitPrice: number },
+): CommerceTierDraft {
+  assertPermission("products.manage");
+  if (typeof id !== "string" || !id.trim() ||
+      !Number.isSafeInteger(expectedVersion) || expectedVersion < 1) {
+    throw new Error("Valid B2B draft identity and expected revision are required");
+  }
+  const position = drafts.findIndex((item) => item.id === id);
+  if (position < 0) throw new Error("B2B price-tier draft no longer exists");
+  const current = drafts[position];
+  if (current.version !== expectedVersion) {
+    throw new Error("B2B price-tier draft changed; reload before editing");
+  }
+  if (!patch || typeof patch !== "object" ||
+      Object.keys(patch).some((key) => key !== "minQuantity" && key !== "unitPrice")) {
+    throw new Error("Only draft quantity and unit price may be edited");
+  }
+  const product = store.getProduct(current.productId);
+  if (!product || !product.isActive || product.deletedAt || product.branchId != null) {
+    throw new Error("Only active company-wide products can have local draft tiers");
+  }
+  const currency = getShopProfile().currency;
+  if (current.currency !== currency) {
+    throw new Error("Local B2B draft currency differs from current shop currency");
+  }
+  // The product's price can change after a draft was saved. Re-evaluate it
+  // against the LIVE retail price rather than trusting the old draft value.
+  quoteCommerceTierPrice({
+    productId: product.id,
+    currency,
+    baseUnitPrice: product.sellingPrice,
+    quantity: patch.minQuantity,
+    tiers: [{
+      id: current.id,
+      productId: product.id,
+      minQuantity: patch.minQuantity,
+      unitPrice: patch.unitPrice,
+    }],
+  });
+  if (drafts.some((d) => d.id !== current.id &&
+      d.productId === current.productId && d.currency === current.currency &&
+      d.minQuantity === patch.minQuantity)) {
+    throw new Error("A local draft already uses this product and quantity threshold");
+  }
+  if (patch.minQuantity === current.minQuantity && patch.unitPrice === current.unitPrice) {
+    return { ...current };
+  }
+  if (current.version >= Number.MAX_SAFE_INTEGER) {
+    throw new Error("B2B price-tier revision exhausted");
+  }
+  const updated = validateDraft({
+    ...current,
+    minQuantity: patch.minQuantity,
+    unitPrice: patch.unitPrice,
+    version: current.version + 1,
+    updatedAt: nowISO(),
+  });
+  drafts[position] = updated;
+  auditAction("commerce.price_tier_draft.update", "commerce_price_tier_drafts", id, { ...current }, { ...updated });
+  touchPersistence();
+  return { ...updated };
+}
+
 export function deleteCommerceTierDraft(id: string, expectedVersion: number): boolean {
   assertPermission("products.manage");
   if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1) {
