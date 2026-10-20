@@ -32,6 +32,8 @@ export * from "./commerce-bundle-quote";
 export * from "./commerce-kit-recipes";
 // Read-only trusted warehouse lot feasibility for versioned saved kits.
 export * from "./commerce-kit-recipe-stock";
+// Versioned CAS plans for atomic kit reservation lifecycle; no direct stock writes.
+export * from "./commerce-kit-reservation-transitions";
 // Strict operator-form quantities before local kit recipe persistence.
 export * from "./commerce-kit-recipe-input";
 export * from "./orders";
