@@ -171,11 +171,12 @@ export function createSupplier(input: { name: string; company?: string | null; p
     createdAt: nowISO(),
     updatedAt: nowISO(),
   };
-  suppliers.push(s);
+  // Post opening equity/payable before adding the supplier master. A thrown
+  // commit must not leave a phantom supplier in live state or cloud replay.
   if (posting && !posting.commit()) {
-    suppliers.splice(suppliers.findIndex((supplier) => supplier.id === s.id), 1);
     throw new Error("Opening supplier balance posting failed");
   }
+  suppliers.push(s);
   touchPersistence();
   void remoteCreateSupplier(s);
   auditAction("supplier.create", "suppliers", s.id, null, { ...s });
