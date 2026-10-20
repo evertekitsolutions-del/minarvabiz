@@ -9,6 +9,7 @@
 3. **Save kit recipe draft**, or **Edit recipe** → **Save recipe changes**. Domain enforces `products.manage`, optimistic revision, active catalog SKUs and snapshot autosave. Editing is cancelled without mutation.
 4. Saved local drafts list their composition count and revision; **Delete recipe** explicitly confirms before calling version-checked deletion.
 5. Enter kit count and choose **Preview current price** for a saved recipe. Domain reads live catalog prices, aggregates repeated SKUs, computes an exact-cent estimated total and refuses inactive/foreign-branch products. Invalid count displays an error and removes stale preview.
+6. **Preview unsaved kit** calculates the current composition before saving by using the same exact-cent quote engine, normalizing Product\'s optional deletion metadata and projecting only public catalog fields. No draft is stored by this action.
 
 `parseCommerceKitRecipeRows()` parses positive operator text quantities to exact integer milli-units. It refuses negative values, exponent notation, invalid quantities, more than three decimal places and unsafe ranges. Domain CRUD independently enforces the same stock and permission invariants.
 
