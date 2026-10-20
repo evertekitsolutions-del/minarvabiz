@@ -123,3 +123,6 @@ export { exportLaundryTicketsCsv } from "./laundry-tickets-csv";
 
 // UBP-04a: advisory resource/slot booking availability, not a reservation authority.
 export * from "./resource-booking";
+
+// Native, read-only headless-commerce catalog projection; no storefront publication.
+export * from "./commerce-catalog";
