@@ -782,6 +782,12 @@ export function createPurchase(input: { date?: string; supplierId?: UUID | null;
     notes: input.notes ?? null, createdAt: nowISO(), updatedAt: nowISO(), version: 1 };
   const posting = planDirectPurchasePosting(purchase);
   if (posting.errors.length) return { purchase: null, errors: posting.errors };
+  // A purchase, supplier payable and order expense must never be published
+  // if their source ledger could not be committed. In particular, do not
+  // consume the next purchase number or enqueue cloud master changes on null.
+  if (!posting.commit()) {
+    return { purchase: null, errors: ["Direct purchase accounting journal was not committed"] };
+  }
   if (input.orderId) ordersStore.addOrderExpense(input.orderId, input.description || "Order purchase", bal.amount);
   lastPurchaseNo = purchaseNumber;
   if (supplier && nextSupplierOutstandingMinor != null) {
@@ -789,7 +795,6 @@ export function createPurchase(input: { date?: string; supplierId?: UUID | null;
     supplier.updatedAt = nowISO();
   }
   purchases.push(purchase);
-  posting.commit();
   touchPersistence();
   void remoteCreatePurchase(purchase, supplier);
   return { purchase, errors: [] };
