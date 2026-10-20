@@ -405,12 +405,12 @@ export function updateOrderStatus(
   return { order };
 }
 
-export function addOrderExpense(
+/** Check linked cost consistency before source journals or master records are created. */
+export function preflightOrderExpenseAddition(
   orderId: UUID,
-  description: string,
   amount: number,
   sourceExpenseId?: UUID
-): { order: ServiceOrder | null; error?: string } {
+): { order: ServiceOrder | null; error?: string; amountCents?: number; nextCents?: number } {
   assertPermission("orders.manage");
   assertBusinessDayOpen();
   const order = getOrder(orderId);
@@ -431,6 +431,20 @@ export function addOrderExpense(
   if (sourceExpenseId && order.expenses.some((item) => item.id === sourceExpenseId)) {
     return { order: null, error: "Order expense source already exists" };
   }
+  return { order, amountCents, nextCents };
+}
+
+export function addOrderExpense(
+  orderId: UUID,
+  description: string,
+  amount: number,
+  sourceExpenseId?: UUID
+): { order: ServiceOrder | null; error?: string } {
+  const check = preflightOrderExpenseAddition(orderId, amount, sourceExpenseId);
+  if (!check.order || check.amountCents === undefined || check.nextCents === undefined) {
+    return { order: null, error: check.error || "Order expense preflight failed" };
+  }
+  const { order, amountCents, nextCents } = check;
   const exp: OrderExpense = {
     id: sourceExpenseId ?? generateId(),
     orderId,

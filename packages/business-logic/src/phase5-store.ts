@@ -688,6 +688,12 @@ export function createExpense(input: { date?: string; categoryId: UUID; amount: 
     amount: fromMinorUnits(amountMinor), paymentMethod: input.paymentMethod, description: input.description ?? null, reference: input.reference ?? null,
     receiptUrl: input.receiptUrl ?? null, staffId: input.staffId ?? null, orderId: input.orderId ?? null, orderNumber,
     createdAt: nowISO(), updatedAt: nowISO(), version: 1 };
+  // Validate the linked cost first; accounting must not post an expense that
+  // the target order would reject due to corrupt/overflowing cost totals.
+  if (input.orderId) {
+    const eligible = ordersStore.preflightOrderExpenseAddition(input.orderId, expense.amount, expense.id);
+    if (!eligible.order) return { expense: null, errors: [eligible.error || "Unable to link order expense"] };
+  }
   // Require a posted journal receipt before exposing a new expense master.
   // Domain failures must not leave an unposted expense in a later backup.
   const posting = postExpenseJournal(expense);
@@ -793,6 +799,11 @@ export function createPurchase(input: { date?: string; supplierId?: UUID | null;
     supplierName: supplier?.name ?? null, description: input.description, amount: bal.amount, paymentMethod: input.paymentMethod,
     paidAmount: bal.paidAmount, balanceAmount: bal.balanceAmount, kind: input.kind, orderId: input.orderId ?? null, orderNumber,
     notes: input.notes ?? null, createdAt: nowISO(), updatedAt: nowISO(), version: 1 };
+  // Fail closed before creating the purchase's journal or changing payables.
+  if (input.orderId) {
+    const eligible = ordersStore.preflightOrderExpenseAddition(input.orderId, purchase.amount);
+    if (!eligible.order) return { purchase: null, errors: [eligible.error || "Unable to link order purchase"] };
+  }
   const posting = planDirectPurchasePosting(purchase);
   if (posting.errors.length) return { purchase: null, errors: posting.errors };
   // A purchase, supplier payable and order expense must never be published
