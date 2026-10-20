@@ -160,7 +160,7 @@ test("no cross-org, cross-warehouse, unrelated or duplicate stock lots can enter
     lot("wrong-warehouse", "sku-A", 2000, { warehouseId: "warehouse-B" }),
     lot("other-sku", "sku-Q", 2000),
   ]) assert.throws(() => planKitReservationCreate(request({ lots: [...request().lots, wrong] })),
-    /scope mismatch/);
+    /scope (?:or identity )?mismatch/);
   assert.throws(() => planKitReservationCreate(request({
     lots: [lot("same", "sku-A", 3000), lot("same", "sku-B", 5000)],
   })), /Duplicate/);
