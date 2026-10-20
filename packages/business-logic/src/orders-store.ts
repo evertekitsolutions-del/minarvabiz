@@ -351,6 +351,13 @@ export function updateOrderStatus(
     const reversal = planServiceOrderCancellation(order, refundPaymentMethod);
     if (reversal.errors.length) return { order: null, error: reversal.errors.join("; ") };
 
+    // A failed reversal must not cancel the operational order, lower a
+    // customer's receivable or create a refund without a posted journal.
+    // The posting is already reconciled and idempotent by order source ID.
+    if (!reversal.commit()) {
+      return { order: null, error: "Service order cancellation journal was not committed" };
+    }
+
     const beforeOrder = { ...order };
     const beforeCustomer = { ...customer };
     const now = nowISO();
@@ -360,7 +367,6 @@ export function updateOrderStatus(
     order.status = "cancelled";
     order.updatedAt = now;
     order.version += 1;
-    reversal.commit();
     const refundPayment = order.advance > 0 && refundPaymentMethod
       ? mainStore.recordOrderRefundPaymentEntry({
           orderId: order.id,
