@@ -16,6 +16,9 @@ const onboarding = require("../onboarding.ts");
 const browser = require("../onboarding-browser-preferences.ts");
 const source = fs.readFileSync("packages/business-logic/src/persistence.ts", "utf8");
 const page = fs.readFileSync("apps/web/src/app/(app)/onboarding/page.tsx", "utf8");
+const customerPage = fs.readFileSync("apps/web/src/app/(app)/customers/page.tsx", "utf8");
+const desktopCustomerPanel = fs.readFileSync("apps/desktop/src/components/DesktopCustomerMasterPanel.tsx", "utf8");
+const customerList = fs.readFileSync("packages/ui/src/components/customers/CustomerList.tsx", "utf8");
 
 function memoryStorage() {
   const data = new Map();
@@ -30,7 +33,7 @@ test("operator confirmations survive a simulated restart and are reversible", ()
   onboarding.hydrateOnboarding([]);
   assert.equal(onboarding.isOnboardingComplete(), false);
   const ids = onboarding.getOnboardingSteps().map(step => step.id);
-  assert.deepEqual(ids, ["shop", "products", "customers", "license", "backup"]);
+  assert.deepEqual(ids, ["shop", "products", "customers", "customer-balances", "suppliers", "license", "backup"]);
   assert.equal(onboarding.markOnboardingDone("shop"), true);
   assert.equal(onboarding.markOnboardingDone("backup"), true);
   assert.equal(onboarding.markOnboardingDone("made-up"), false);
@@ -102,4 +105,23 @@ test("v15/legacy import, backup and rollback integrate confirmed steps without s
   assert.match(page, /window\.addEventListener\("storage", onStorage\)/);
   assert.match(page, /Confirmed by you/);
   assert.doesNotMatch(page, /Mark done/);
+});
+
+test("opening customer balances are permission-gated in Web and Windows UI and use the shared ledger posting", () => {
+  assert.match(customerList, /onSetOpeningBalance/);
+  assert.match(customerPage, /can\(\"settings\.manage\"\)/);
+  assert.match(customerPage, /setOpeningCustomerBalance/);
+  assert.match(customerPage, /Opening Balance Equity/);
+  assert.match(desktopCustomerPanel, /can\(\"settings\.manage\"\)/);
+  assert.match(desktopCustomerPanel, /setOpeningCustomerBalance/);
+  assert.match(desktopCustomerPanel, /Opening Balance Equity/);
+});
+
+test("opening balance modal snapshots the customer and refuses stale outstanding totals", () => {
+  for (const source of [customerPage, desktopCustomerPanel]) {
+    assert.match(source, /setOpeningBalanceTarget\(\{ \.\.\.customer \}\)/);
+    assert.match(source, /openedCents !== liveCents/);
+    assert.match(source, /Customer balance changed\. Close and reopen/);
+    assert.match(source, /setOpeningCustomerBalance\(liveCustomer\.id, Number\(openingBalanceAmount\)\)/);
+  }
 });

@@ -16,6 +16,8 @@ const steps = [
   { id: "shop", title: "Set shop profile", href: "/settings" },
   { id: "products", title: "Add products", href: "/products" },
   { id: "customers", title: "Add customers", href: "/customers" },
+  { id: "customer-balances", title: "Set customer opening balances", href: "/customers" },
+  { id: "suppliers", title: "Add suppliers and opening payables", href: "/suppliers" },
   { id: "license", title: "Activate license", href: "/license" },
   { id: "backup", title: "Create first backup", href: "/backup" },
 ] as const;
