@@ -415,8 +415,18 @@ export function addOrderExpense(
   assertBusinessDayOpen();
   const order = getOrder(orderId);
   if (!order) return { order: null, error: "Order not found" };
-  if (!Number.isFinite(amount) || round2(amount) <= 0 || !Number.isSafeInteger(Math.round(amount * 100))) {
-    return { order: null, error: "Order expense amount must be positive and finite" };
+  const amountCents = Math.round(amount * 100);
+  if (!Number.isFinite(amount) || amountCents <= 0 || !Number.isSafeInteger(amountCents)
+    || Math.abs(amount - amountCents / 100) > Math.min(1e-9, 4 * Number.EPSILON * Math.max(1, Math.abs(amount)))) {
+    return { order: null, error: "Order expense amount must be positive and finite with valid cent precision" };
+  }
+  const oldCents = Math.round(order.orderExpensesTotal * 100);
+  const nextCents = oldCents + amountCents;
+  if (!Number.isFinite(order.orderExpensesTotal) || order.orderExpensesTotal < 0
+    || !Number.isSafeInteger(oldCents) || !Number.isSafeInteger(nextCents)
+    || Math.abs(order.orderExpensesTotal - oldCents / 100)
+      > Math.min(1e-9, 4 * Number.EPSILON * Math.max(1, Math.abs(order.orderExpensesTotal)))) {
+    return { order: null, error: "Order expense total needs reconciliation" };
   }
   if (sourceExpenseId && order.expenses.some((item) => item.id === sourceExpenseId)) {
     return { order: null, error: "Order expense source already exists" };
@@ -425,11 +435,11 @@ export function addOrderExpense(
     id: sourceExpenseId ?? generateId(),
     orderId,
     description,
-    amount: round2(amount),
+    amount: amountCents / 100,
     createdAt: nowISO(),
   };
   order.expenses.push(exp);
-  order.orderExpensesTotal = round2(order.orderExpensesTotal + exp.amount);
+  order.orderExpensesTotal = nextCents / 100;
   order.updatedAt = nowISO();
   order.version += 1;
   enqueueOutbox("orders", order.id, "update", { ...order, expenses: order.expenses.map((item) => ({ ...item })) });
