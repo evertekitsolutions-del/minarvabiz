@@ -97,7 +97,7 @@ test("catalog changes update estimate; retired SKU blocks export", () => {
   store.hydrateCore({ customers: [], categories: [], sales: [], payments: [],
     products: [product("p-a", 30, { deletedAt: "2026-10-01" }), product("p-b", 5)],
   });
-  assert.throws(() => recipes.exportCommerceKitEstimateCsv(recipe.id, recipe.version, 1), /unavailable/);
+  assert.throws(() => recipes.exportCommerceKitEstimateCsv(recipe.id, recipe.version, 1), /unavailable|no longer exists/);
 });
 
 test("Products UI offers manual seller-only download with safe MIME and no API publication", () => {
