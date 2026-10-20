@@ -12,7 +12,7 @@ import {
 export interface CommerceKitQuoteDraft {
   currency: string;
   kitCount: string;
-  products: readonly CommerceKitProduct[];
+  products: readonly (Omit<CommerceKitProduct, "deletedAt"> & { deletedAt?: string | null })[];
   components: readonly { productId: string; quantityPerKit: string }[];
 }
 
@@ -53,7 +53,18 @@ export function parseCommerceKitQuoteDraft(draft: CommerceKitQuoteDraft): Commer
   return quoteCommerceBundle({
     currency: draft.currency,
     kitCount: count,
-    products: draft.products,
+    // Bridge optional deletion metadata from the Product master without
+    // leaking purchase cost, supplier, stock counts or other private fields.
+    products: draft.products.map((product) => ({
+      id: product.id,
+      name: product.name,
+      sellingPrice: product.sellingPrice,
+      unit: product.unit,
+      isActive: product.isActive,
+      deletedAt: product.deletedAt ?? null,
+      branchId: product.branchId ?? null,
+      hasVariants: product.hasVariants ?? false,
+    })),
     components,
   });
 }
