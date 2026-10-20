@@ -56,6 +56,8 @@ export interface KitReservationFinalizeRequest {
   readonly reservation: KitReservationRecord;
   readonly expectedReservationVersion: number;
   readonly operation: "release" | "fulfill";
+  /** Required for fulfillment: current shop business date, never caller UTC time. */
+  readonly fulfillmentDate?: string;
   /** Current locked candidates fetched under the same tenant/warehouse scope. */
   readonly lots: readonly VersionedBundleLot[];
 }
@@ -71,6 +73,13 @@ const id = (n: unknown): n is string =>
   typeof n === "string" && n.trim().length > 0 && n === n.trim();
 const MAX = BigInt(Number.MAX_SAFE_INTEGER);
 
+/** Canonical day-only shop date; rejects impossible calendar dates. */
+function validBusinessDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false;
+  const date = new Date(value + "T00:00:00.000Z");
+  return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
+}
+
 function checkVersion(version: unknown): asserts version is number {
   if (!safePositive(version) || version >= Number.MAX_SAFE_INTEGER) {
     throw new Error("Invalid or exhausted stock/reservation version");
@@ -82,6 +91,10 @@ function checkLot(lot: VersionedBundleLot, orgId: string, warehouseId: string): 
     throw new Error("Reservation lot scope or identity mismatch");
   }
   checkVersion(lot.version);
+  if ((lot.status !== "active" && lot.status !== "blocked") ||
+      !validBusinessDate(lot.expiresOn)) {
+    throw new Error("Invalid reservation lot status or expiry date");
+  }
   if (!Number.isSafeInteger(lot.onHandMilli) || lot.onHandMilli < 0 ||
       !Number.isSafeInteger(lot.reservedMilli) || lot.reservedMilli < 0 ||
       lot.reservedMilli > lot.onHandMilli) {
@@ -238,6 +251,14 @@ export function planKitReservationFinalize(
       !safePositive(current.kitCount) || !Array.isArray(current.allocations)) {
     throw new Error("Reservation is not active at expected revision");
   }
+  if (!validBusinessDate(current.asOfDate)) {
+    throw new Error("Invalid persisted kit reservation date");
+  }
+  if (input.operation === "fulfill" &&
+      (!validBusinessDate(input.fulfillmentDate) ||
+       input.fulfillmentDate < current.asOfDate)) {
+    throw new Error("Kit fulfillment requires a valid current business date");
+  }
   const components = canonicalComponents(current.components);
   // Ensure persisted allocations cover exactly the reserved kit quantities.
   const wanted = new Map(components.map(c => [
@@ -268,6 +289,12 @@ export function planKitReservationFinalize(
     const lot = rows.get(allocation.lotId);
     if (!lot || lot.productId !== allocation.productId) {
       throw new Error("Reserved lot missing or changed SKU");
+    }
+    // A lot can become blocked or expire after its initial reservation.
+    // Release must remain possible; physical fulfillment must fail closed.
+    if (input.operation === "fulfill" &&
+        (lot.status !== "active" || lot.expiresOn < input.fulfillmentDate!)) {
+      throw new Error("Reserved kit lot is blocked or expired at fulfillment");
     }
     return patch(lot, -allocation.quantityMilli,
       input.operation === "fulfill" ? -allocation.quantityMilli : 0);
