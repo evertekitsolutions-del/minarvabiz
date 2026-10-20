@@ -179,6 +179,25 @@ export interface ScopedMasterReplayResult {
  * balances and stock payloads until their atomic domain RPC is reconciled.
  * Older unscoped events are deliberately not silently claimed.
  */
+/**
+ * A queued financial/operational mutation may change the stock quantity or
+ * customer balance represented by direct product/customer upserts. Neither
+ * the manual retry path NOR the online direct path may bypass it.
+ *
+ * Categories are independent masters and intentionally remain available
+ * while a sale is awaiting its authoritative grouped receipt.
+ */
+function isUnsettledScopedTransaction(event: LocalOutboxEvent): boolean {
+  return (event.status === "pending" || event.status === "failed") &&
+    !["categories", "customers", "products"].includes(event.aggregateType);
+}
+
+function hasUnsettledScopedTransaction(ownerScope: string | undefined): boolean {
+  return typeof ownerScope === "string" && exportOutbox().some(event =>
+    event.ownerScope === ownerScope && isUnsettledScopedTransaction(event)
+  );
+}
+
 function eligibleScopedMasterEvents() {
   const safeOwner = verifiedWriterScope && writer && getOutboxScope() === verifiedWriterScope
     ? verifiedWriterScope
@@ -189,9 +208,7 @@ function eligibleScopedMasterEvents() {
     event.ownerScope === safeOwner &&
     (event.status === "pending" || event.status === "failed")
   ) : [];
-  const transactionsOutstanding = active.some((event) =>
-    !["categories", "customers", "products"].includes(event.aggregateType)
-  );
+  const transactionsOutstanding = active.some(isUnsettledScopedTransaction);
   const candidates = safeOwner ? active.filter((event) =>
     event.ownerScope === safeOwner &&
     (event.eventType === "insert" || event.eventType === "update") &&
@@ -339,6 +356,12 @@ function deliverMasterInOrder(
     // A restored snapshot may have replaced the original same-ID event. It
     // must never be sent using the stale in-memory writer payload.
     if (index < 0) return;
+    // Safe replay already freezes product/customer masters while financial
+    // events are unresolved. The live direct path must obey the SAME rule:
+    // otherwise a newly edited customer balance or product stock can reach
+    // the cloud while older local sales/payments are still uncommitted.
+    if (event.aggregateType !== "categories" &&
+        hasUnsettledScopedTransaction(event.ownerScope)) return;
     if (current.slice(0, index).some(prior =>
       prior.ownerScope === event.ownerScope &&
       prior.aggregateType === event.aggregateType &&
