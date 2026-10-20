@@ -16,7 +16,7 @@ const onboarding = require("../onboarding.ts");
 const browser = require("../onboarding-browser-preferences.ts");
 const source = fs.readFileSync("packages/business-logic/src/persistence.ts", "utf8");
 const page = fs.readFileSync("apps/web/src/app/(app)/onboarding/page.tsx", "utf8");
-const fs.readFileSync("apps/web/src/app/(app)/customers/page.tsx", "utf8");
+const customerPage = fs.readFileSync("apps/web/src/app/(app)/customers/page.tsx", "utf8");
 const desktopCustomerPanel = fs.readFileSync("apps/desktop/src/components/DesktopCustomerMasterPanel.tsx", "utf8");
 const customerList = fs.readFileSync("packages/ui/src/components/customers/CustomerList.tsx", "utf8");
 
