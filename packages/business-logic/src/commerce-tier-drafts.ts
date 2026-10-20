@@ -3,8 +3,9 @@
  *
  * NOT a published customer price list and never used by sales, invoices,
  * purchase orders, checkout or financial/outbox writers. This store persists
- * only in the local encrypted/OS-managed domain snapshot and backup; it has
- * no remote authority until tenant-scoped sync and commercial approvals exist.
+ * only in local domain snapshots and backups; storage encryption depends on
+ * the host, not this module. There is no remote price authority until
+ * tenant-scoped sync and commercial approvals exist.
  */
 import { generateId, nowISO } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
