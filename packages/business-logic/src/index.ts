@@ -126,5 +126,7 @@ export * from "./resource-booking";
 
 // Native, read-only headless-commerce catalog projection; no storefront publication.
 export * from "./commerce-catalog";
+// Read-only B2B quantity/customer-group/branch price preview (never posts an invoice).
+export * from "./commerce-tier-pricing";
 
 export { parseServiceOrderPriceDraft, validateMoneyAmountInput } from "./service-order-price-draft";
