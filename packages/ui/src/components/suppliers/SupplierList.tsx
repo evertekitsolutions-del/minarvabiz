@@ -12,6 +12,7 @@ export function SupplierList({
   onAdd,
   onSearch,
   onPay,
+  onSetOpeningBalance,
   onEdit,
   onArchive,
 }: {
@@ -19,6 +20,7 @@ export function SupplierList({
   onAdd?: () => void;
   onSearch?: (q: string) => void;
   onPay?: (supplier: Supplier) => void;
+  onSetOpeningBalance?: (supplier: Supplier) => void;
   onEdit?: (supplier: Supplier) => void;
   onArchive?: (supplier: Supplier) => void;
 }) {
@@ -56,6 +58,7 @@ export function SupplierList({
       render: (r) => (
         <div className="flex flex-wrap gap-1">
           {onPay && <Button size="sm" variant="outline" disabled={!hasPayableSupplierBalance(r)} onClick={() => onPay(r)}>Record Payment</Button>}
+          {onSetOpeningBalance && <Button size="sm" variant="outline" onClick={() => onSetOpeningBalance(r)}>Opening payable</Button>}
           {onEdit && <Button size="sm" variant="outline" onClick={() => onEdit(r)}>Edit</Button>}
           {onArchive && <Button size="sm" variant="outline" onClick={() => onArchive(r)}>Archive</Button>}
         </div>
@@ -78,7 +81,7 @@ export function SupplierList({
             onChange={(e) => { setQ(e.target.value); onSearch?.(e.target.value); }}
             className="h-10 rounded-lg border border-slate-200 px-3 text-sm sm:w-48 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
           />
-          <Button onClick={onAdd}>+ Add Supplier</Button>
+          {onAdd && <Button onClick={onAdd}>+ Add Supplier</Button>}
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
