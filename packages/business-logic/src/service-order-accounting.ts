@@ -40,15 +40,22 @@ export function planServiceOrderCancellation(
   order: ServiceOrder,
   refundPaymentMethod?: PaymentMethod
 ): AutomaticPostingPlan {
-  const original = listJournalEntries().find((entry) =>
-    entry.referenceType === "auto_service_order" && entry.referenceId === order.id && entry.status === "posted"
-  );
-  if (!original) return invalid("Service order needs accounting reconciliation before cancellation");
   const values = [order.price, order.advance, order.balance];
   if (values.some((value) => !Number.isFinite(value) || value < 0 || !Number.isSafeInteger(cents(value)))
     || cents(order.price) !== cents(order.advance) + cents(order.balance)) {
     return invalid("Service order balances need reconciliation before cancellation");
   }
+  const original = listJournalEntries().find((entry) =>
+    entry.referenceType === "auto_service_order" && entry.referenceId === order.id && entry.status === "posted"
+  );
+  // Free service orders legitimately have no financial posting. Still
+  // reject a stray ledger entry rather than silently leaving it behind.
+  if (order.price === 0) {
+    return original
+      ? invalid("Zero-charge service order has an unexpected accounting posting")
+      : { errors: [], commit: () => null };
+  }
+  if (!original) return invalid("Service order needs accounting reconciliation before cancellation");
   if (order.advance > 0 && (!refundPaymentMethod
     || !["cash", "bank", "card", "upi", "online", "other"].includes(refundPaymentMethod))) {
     return invalid("Select a valid refund payment method for the service-order advance");

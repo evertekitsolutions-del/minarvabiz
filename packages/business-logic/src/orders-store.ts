@@ -361,7 +361,10 @@ export function updateOrderStatus(
     // A failed reversal must not cancel the operational order, lower a
     // customer's receivable or create a refund without a posted journal.
     // The posting is already reconciled and idempotent by order source ID.
-    if (!reversal.commit()) {
+    const cancellationJournal = reversal.commit();
+    // A zero-charge order has no opening journal and no money to reverse.
+    // Never bypass the receipt requirement for a charge-bearing order.
+    if (order.price > 0 && !cancellationJournal) {
       return { order: null, error: "Service order cancellation journal was not committed" };
     }
 
