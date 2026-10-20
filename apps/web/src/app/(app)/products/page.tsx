@@ -6,6 +6,7 @@ import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStoc
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 import { parseProductPrice } from "../../../lib/parse-product-price";
+import { KitRecipeManager } from "./kit-recipe-manager";
 
 export default function ProductsPage() {
   const [products, setProducts] = React.useState<Product[]>([]);
@@ -340,6 +341,7 @@ export default function ProductsPage() {
           setQuoteSavedDrafts(listCommerceTierDrafts(store.listProducts().find((p) => p.isActive)?.id ?? ""));
           setQuoteOpen(true);
         }}>B2B price quote preview</Button>
+        <KitRecipeManager />
         <Button variant="outline" disabled={store.listProducts({ lowStockOnly: true }).length === 0} onClick={() => downloadCsv(exportReorderCsv(store.listProducts({ lowStockOnly: true })), "minarvabiz-reorder-report.csv")}>Export low-stock reorder CSV</Button>
         <input
           ref={productCsvInput}
