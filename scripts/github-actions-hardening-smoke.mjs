@@ -29,7 +29,9 @@ for (const file of files) {
       }
       if (!/workflow_run:\s*\n\s+workflows:\s*\["Release Windows"\]\s*\n\s+types:\s*\[completed\]/m.test(source)) failures.push(`${file}: must trigger only from completed Release Windows runs`);
       if (!/workflow_run\.conclusion == 'success'/.test(source)) failures.push(`${file}: must require successful source workflow`);
-      if (!/workflow_run\.event == 'push'/.test(source)) failures.push(`${file}: must require source event push`);
+      if (!/workflow_run\.event == 'workflow_dispatch'/.test(source)) failures.push(`${file}: must require explicitly manually dispatched source workflow`);
+      if (!/workflow_run\.repository\.full_name == github\.repository/.test(source)) failures.push(`${file}: must require same repository source`);
+      if (/workflow_run\.event == 'push'/.test(source)) failures.push(`${file}: ordinary push must not publish a release`);
       if (!/workflow_run\.head_branch == 'main'/.test(source)) failures.push(`${file}: must require source branch main`);
       if (/actions\/checkout@/i.test(source)) failures.push(`${file}: privileged publisher must not checkout repository code`);
       if (/pull_request_target:|workflow_dispatch:/m.test(source)) failures.push(`${file}: privileged publisher must not expose alternate triggers`);
