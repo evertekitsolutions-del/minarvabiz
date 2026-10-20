@@ -34,7 +34,8 @@ function submit(changes={}) {
     persistAndRefresh(){writes.push("persist");},
     errorMessage(error){return error.message;},
   };
-  new Function(...Object.keys(bindings),match[1])(...Object.values(bindings));
+  // Match includes the outer function close; execute only its handler body.
+  new Function(...Object.keys(bindings),match[1].trimEnd().slice(0,-1))(...Object.values(bindings));
   return {writes,errors};
 }
 test("Windows preserves exact cents for valid purchases and optional zero payment",()=>{
