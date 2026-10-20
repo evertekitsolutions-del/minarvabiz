@@ -386,6 +386,65 @@ export async function remoteUpsertProduct(p: Product) {
   );
 }
 
+/**
+ * Keep grouped direct sale/payment writes in their durable per-owner order.
+ * Only the authenticated server may finally commit stock/financial receipts;
+ * the client must not race two local sales or skip an earlier unacknowledged
+ * group when the device reconnects.
+ */
+const scopedDirectSaleTails = new Map<string, Promise<void>>();
+
+function earlierFinancialSaleUnacknowledged(event: LocalOutboxEvent): boolean {
+  const entries = exportOutbox();
+  const index = entries.indexOf(event);
+  if (index < 0 || entries.filter(item => item.id === event.id).length !== 1)
+    return true;
+  return entries.slice(0, index).some(prior => {
+    if (prior.ownerScope !== event.ownerScope ||
+        prior.aggregateType !== "sales" || prior.eventType !== "insert") return false;
+    if (prior.status !== "synced") return true;
+    // A sale is settled as a group, never merely because its own event row
+    // has a synced flag while any linked payment is still pending/failed.
+    return prior.financialSyncProof?.paymentEventIds?.some(id =>
+      entries.filter(payment => payment.id === id &&
+        payment.aggregateType === "payments" &&
+        payment.eventType === "insert" &&
+        payment.ownerScope === event.ownerScope &&
+        payment.status === "synced").length !== 1) === true;
+  });
+}
+
+function deliverSaleInOrder(
+  saleEvent: LocalOutboxEvent,
+  eventIds: string[],
+  supports: (target: RemoteWriter) => boolean,
+  send: (target: RemoteWriter) => Promise<void>,
+  failureLabel: string,
+): Promise<void> {
+  const key = saleEvent.ownerScope ?? "__legacy_unverified__";
+  // Capture the entire immutable group NOW. A queued job must not send an
+  // in-place mutated payment or a restored, same-ID replacement later.
+  const events = exportOutbox();
+  const originals = eventIds.map(id => events.find(e => e.id === id));
+  const fence = originals.every((item): item is LocalOutboxEvent => item !== undefined)
+    ? captureOutboxReceiptFence(originals as LocalOutboxEvent[]) : null;
+  const predecessor = scopedDirectSaleTails.get(key);
+  const dispatch = async () => {
+    if (!outboxReceiptFenceCurrent(fence, ["pending"]) ||
+        earlierFinancialSaleUnacknowledged(saleEvent)) return;
+    await deliverWithCloudAcknowledgement(eventIds, supports, send, failureLabel);
+  };
+  // Keep the existing synchronous start contract for the first sale.
+  // Independent owners never wait on one another's financial records.
+  const flight = predecessor ? predecessor.catch(() => undefined).then(dispatch) : dispatch();
+  scopedDirectSaleTails.set(key, flight);
+  void flight.then(
+    () => { if (scopedDirectSaleTails.get(key) === flight) scopedDirectSaleTails.delete(key); },
+    () => { if (scopedDirectSaleTails.get(key) === flight) scopedDirectSaleTails.delete(key); },
+  );
+  return flight;
+}
+
 export async function remoteCreateSale(
   s: Sale, payments: Payment[] = [], allowNegativeStock = false,
   sourceProof?: Omit<FinancialSyncProofV1, "paymentEventIds">
@@ -416,15 +475,15 @@ export async function remoteCreateSale(
       for (const id of eventIds) markOutboxFailed(id, reason);
       return;
     }
-    await deliverWithCloudAcknowledgement(
-      eventIds, target => Boolean(target.createDimensionalSale),
+    await deliverSaleInOrder(
+      saleEvent, eventIds, target => Boolean(target.createDimensionalSale),
       target => target.createDimensionalSale!(s, payments, allowNegativeStock),
       "authenticated dimensional atomic sale write failed"
     );
     return;
   }
-  await deliverWithCloudAcknowledgement(
-    eventIds, (target) => Boolean(target.createSale),
+  await deliverSaleInOrder(
+    saleEvent, eventIds, (target) => Boolean(target.createSale),
     (target) => target.createSale!(s, payments, allowNegativeStock),
     "atomic remote sale write failed"
   );
