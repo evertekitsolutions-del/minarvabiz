@@ -688,9 +688,13 @@ export function createExpense(input: { date?: string; categoryId: UUID; amount: 
     amount: fromMinorUnits(amountMinor), paymentMethod: input.paymentMethod, description: input.description ?? null, reference: input.reference ?? null,
     receiptUrl: input.receiptUrl ?? null, staffId: input.staffId ?? null, orderId: input.orderId ?? null, orderNumber,
     createdAt: nowISO(), updatedAt: nowISO(), version: 1 };
-  expenses.push(expense);
+  // Require a posted journal receipt before exposing a new expense master.
+  // Domain failures must not leave an unposted expense in a later backup.
   const posting = postExpenseJournal(expense);
-  if (posting.errors.length) { expenses.pop(); return { expense: null, errors: posting.errors }; }
+  if (posting.errors.length || !posting.journalEntry) {
+    return { expense: null, errors: posting.errors.length ? posting.errors : ["Expense journal was not committed"] };
+  }
+  expenses.push(expense);
   if (input.orderId) {
     const linked = ordersStore.addOrderExpense(input.orderId, input.description || "Expense", expense.amount, expense.id);
     if (!linked.order) return { expense: null, errors: [linked.error || "Unable to link order expense"] };
