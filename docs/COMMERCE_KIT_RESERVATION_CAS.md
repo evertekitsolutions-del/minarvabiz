@@ -9,6 +9,12 @@
 - `planKitReservationFinalize`: from a persisted, active, expected-version reservation record, derive release patches (decrease reserved quantity only) or fulfillment patches (decrease both on-hand and reserved quantity), and the next versioned reservation state. It rejects stale/double-finalized states, mismatched aggregate components, missing/reassigned/duplicate lots and insufficient reserved inventory.
 - Read-only, immutable inputs and outputs. BigInt intermediate quantities and safe integer/stock-version guards prevent overflow. Expired, blocked, already reserved or out-of-scope inventory does not satisfy initial FEFO availability.
 
+## Fulfillment date and expiry safety
+
+A reserved kit may be physically fulfilled after its first reservation date, but a lot might become blocked or expire meanwhile. `planKitReservationFinalize` now requires a **valid shop business date** for fulfillment, not earlier than the original reservation date, and rejects any selected lot that is blocked or expired on that date. Releasing reservations from blocked or expired lots remains supported, to free their reserved quantity without changing on-hand stock. A malformed lot status/expiry or reservation date is rejected for all transitions.
+
+**This safety check is not a substitute for trusted warehouse authorization and the final atomic checkout writer.** No live stock transaction is performed by the planner.
+
 ## Critical trust and consistency requirements
 
 **These are transaction proposals, NOT a stock reservation implementation deployed to production.** A caller must read lot versions and idempotency rows from an authenticated, authorized database boundary. An authoritative SQLite or PostgreSQL transaction must acquire tenant/warehouse locks, enforce a unique `(organization_id, reservation_id)`, compare every expected lot AND reservation version, revalidate FEFO/expiry/ownership, and persist ALL kit reservation rows and lot movements atomically. For fulfillment, sale/invoice/payment/financial-sync idempotency must commit within the same transaction, not in a later callback. On any stale version, abort and retry from a fresh trusted read.

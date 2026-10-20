@@ -125,7 +125,7 @@ test("fulfillment reduces reserved and physical stock once for every committed l
   const rows = committedLots(input, reserved);
   const fulfilled = planKitReservationFinalize({
     reservation: reserved.reservation, expectedReservationVersion: 1,
-    operation: "fulfill", lots: rows,
+    operation: "fulfill", fulfillmentDate: "2026-10-21", lots: rows,
   });
   assert.equal(fulfilled.reservation.status, "fulfilled");
   for (const update of fulfilled.lotPatches) {
@@ -218,4 +218,65 @@ test("overflow, zero/noninteger kit counts and malformed idempotency inputs fail
   assert.throws(() => planKitReservationCreate(request({
     components: [{ productId: "sku-A", quantityMilliPerBundle: Number.MAX_SAFE_INTEGER }],
   })), /safe integer range/);
+});
+
+test("fulfillment refuses newly expired or blocked lot; release still frees reserved capacity", () => {
+  const input = request();
+  const planned = planKitReservationCreate(input);
+  const baseRows = committedLots(input, planned);
+  for (const changed of [
+    { expiresOn: "2026-10-21", status: "active" },
+    { expiresOn: "2027-06-01", status: "blocked" },
+  ]) {
+    const rows = baseRows.map(lot => lot.id === "a-first" ? { ...lot, ...changed } : lot);
+    const before = JSON.stringify(rows);
+    assert.throws(() => planKitReservationFinalize({
+      reservation: planned.reservation, expectedReservationVersion: 1,
+      operation: "fulfill", fulfillmentDate: "2026-10-22", lots: rows,
+    }), /blocked or expired/);
+    assert.equal(JSON.stringify(rows), before);
+    const released = planKitReservationFinalize({
+      reservation: planned.reservation, expectedReservationVersion: 1,
+      operation: "release", lots: rows,
+    });
+    assert.equal(released.reservation.status, "released");
+    assert.equal(released.lotPatches.length, 3);
+  }
+});
+
+test("fulfillment requires real current business date, not invalid, missing or backdated time", () => {
+  const input = request();
+  const reserved = planKitReservationCreate(input);
+  const base = {
+    reservation: reserved.reservation, expectedReservationVersion: 1,
+    operation: "fulfill", lots: committedLots(input, reserved),
+  };
+  for (const fulfillmentDate of [undefined, "", "2026-02-30", "2026-10-20",
+    "2026-10-21T03:00:00Z", "2026-13-01"]) {
+    assert.throws(() => planKitReservationFinalize({ ...base, fulfillmentDate }),
+      /valid current business date/);
+  }
+  const allowed = planKitReservationFinalize({ ...base, fulfillmentDate: "2026-10-21" });
+  assert.equal(allowed.reservation.status, "fulfilled");
+  assert.throws(() => planKitReservationFinalize({
+    ...base,
+    reservation: { ...reserved.reservation, asOfDate: "2026-02-30" },
+    fulfillmentDate: "2026-10-21",
+  }), /Invalid persisted kit reservation date/);
+});
+
+test("corrupted expiry or lot status is rejected for both release and fulfillment", () => {
+  const input = request();
+  const reserved = planKitReservationCreate(input);
+  const rows = committedLots(input, reserved);
+  for (const invalid of [
+    { expiresOn: "2027-02-30" },
+    { status: "unknown" },
+  ]) {
+    assert.throws(() => planKitReservationFinalize({
+      reservation: reserved.reservation,
+      expectedReservationVersion: 1, operation: "release",
+      lots: rows.map(lot => lot.id === "a-first" ? { ...lot, ...invalid } : lot),
+    }), /Invalid reservation lot status or expiry date/);
+  }
 });
