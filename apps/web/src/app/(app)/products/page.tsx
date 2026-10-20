@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv, exportShareableCatalogCsv, exportShareableCatalogHtml, exportShareableCatalogJson, parseCommerceQuoteDraft, createCommerceTierDraft, updateCommerceTierDraft, deleteCommerceTierDraft, listCommerceTierDrafts, can, getShopProfile } from "@minarvabiz/business-logic";
+import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv, exportShareableCatalogCsv, exportShareableCatalogHtml, exportShareableCatalogJson, parseCommerceQuoteDraft, parseCommerceKitQuoteDraft, createCommerceTierDraft, updateCommerceTierDraft, deleteCommerceTierDraft, listCommerceTierDrafts, can, getShopProfile } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 import { parseProductPrice } from "../../../lib/parse-product-price";
@@ -40,6 +40,12 @@ export default function ProductsPage() {
   const [quoteError, setQuoteError] = React.useState<string | null>(null);
   const [quoteSavedDrafts, setQuoteSavedDrafts] = React.useState<ReturnType<typeof listCommerceTierDrafts>>([]);
   const [quoteEditingDraft, setQuoteEditingDraft] = React.useState<{ id: string; version: number } | null>(null);
+  const [kitQuoteOpen, setKitQuoteOpen] = React.useState(false);
+  const [kitCountText, setKitCountText] = React.useState("1");
+  const [kitComponents, setKitComponents] = React.useState<Array<{ rowId: number; productId: string; quantityPerKit: string }>>([]);
+  const kitNextRowId = React.useRef(1);
+  const [kitQuoteResult, setKitQuoteResult] = React.useState<ReturnType<typeof parseCommerceKitQuoteDraft> | null>(null);
+  const [kitQuoteError, setKitQuoteError] = React.useState<string | null>(null);
 
   const [form, setForm] = React.useState({
     name: "", sku: "", barcode: "", categoryId: "", unit: "pcs",
@@ -212,6 +218,65 @@ export default function ProductsPage() {
     }
   }
 
+  function kitSaleableProducts() {
+    return store.listProducts().filter((product) =>
+      product.isActive && !product.deletedAt && product.branchId == null && !product.hasVariants
+    );
+  }
+
+  function openKitQuotePreview() {
+    const eligible = kitSaleableProducts();
+    if (!eligible.length) {
+      setCsvMessage("Add an active company-wide product before preparing a kit quote");
+      return;
+    }
+    kitNextRowId.current = 1;
+    setKitComponents([{ rowId: 1, productId: eligible[0].id, quantityPerKit: "1" }]);
+    setKitCountText("1");
+    setKitQuoteResult(null);
+    setKitQuoteError(null);
+    setKitQuoteOpen(true);
+  }
+
+  function calculateKitQuotePreview() {
+    try {
+      const result = parseCommerceKitQuoteDraft({
+        currency: getShopProfile().currency,
+        kitCount: kitCountText,
+        products: store.listProducts(),
+        components: kitComponents.map(({ productId, quantityPerKit }) => ({
+          productId, quantityPerKit,
+        })),
+      });
+      setKitQuoteResult(result);
+      setKitQuoteError(null);
+    } catch (error) {
+      setKitQuoteResult(null);
+      setKitQuoteError(error instanceof Error ? error.message : "Unable to calculate kit quote");
+    }
+  }
+
+  function updateKitComponent(rowId: number, patch: { productId?: string; quantityPerKit?: string }) {
+    setKitComponents((rows) => rows.map((row) => row.rowId === rowId ? { ...row, ...patch } : row));
+    setKitQuoteResult(null);
+    setKitQuoteError(null);
+  }
+
+  function addKitComponent() {
+    const first = kitSaleableProducts()[0];
+    if (!first || kitComponents.length >= 20) return;
+    const rowId = ++kitNextRowId.current;
+    setKitComponents((rows) => [...rows, { rowId, productId: first.id, quantityPerKit: "1" }]);
+    setKitQuoteResult(null);
+    setKitQuoteError(null);
+  }
+
+  function removeKitComponent(rowId: number) {
+    setKitComponents((rows) => rows.filter((row) => row.rowId !== rowId));
+    setKitQuoteResult(null);
+    setKitQuoteError(null);
+  }
+
   function downloadCsv(content: string, filename: string, mime = "text/csv;charset=utf-8") {
     const url = URL.createObjectURL(new Blob([content], { type: mime }));
     const link = document.createElement("a");
@@ -340,6 +405,10 @@ export default function ProductsPage() {
           setQuoteSavedDrafts(listCommerceTierDrafts(store.listProducts().find((p) => p.isActive)?.id ?? ""));
           setQuoteOpen(true);
         }}>B2B price quote preview</Button>
+        <Button variant="outline" onClick={openKitQuotePreview}
+          disabled={store.listProducts().every((product) => !product.isActive || product.deletedAt || product.branchId != null || product.hasVariants)}>
+          Kit price preview
+        </Button>
         <Button variant="outline" disabled={store.listProducts({ lowStockOnly: true }).length === 0} onClick={() => downloadCsv(exportReorderCsv(store.listProducts({ lowStockOnly: true })), "minarvabiz-reorder-report.csv")}>Export low-stock reorder CSV</Button>
         <input
           ref={productCsvInput}
@@ -454,6 +523,58 @@ export default function ProductsPage() {
             <p>Unit price: {quoteResult.currency} {quoteResult.unitPrice}</p>
             <p>Total: {quoteResult.currency} {quoteResult.lineTotal}</p>
             <p className="text-xs text-slate-600">{quoteResult.appliedTierId ? "Wholesale tier applied" : "Regular selling price"}. Confirm the actual price and permissions before invoicing.</p>
+          </div>}
+        </div>
+      </Modal>
+      <Modal
+        open={kitQuoteOpen}
+        title="Kit price preview"
+        onClose={() => setKitQuoteOpen(false)}
+        className="max-w-xl"
+        footer={<>
+          <Button variant="outline" onClick={() => setKitQuoteOpen(false)}>Close</Button>
+          <Button onClick={calculateKitQuotePreview}>Calculate kit price</Button>
+        </>}
+      >
+        <div className="space-y-3">
+          <p className="text-xs text-slate-600">Nonbinding catalog estimate only. No stock availability check, reservation, bundle creation, sale, tax calculation or billing.</p>
+          <FormField label="Number of kits *">
+            <input className={inputClass} type="text" inputMode="numeric"
+              value={kitCountText} onChange={(event) => {
+                setKitCountText(event.target.value); setKitQuoteResult(null); setKitQuoteError(null);
+              }} />
+          </FormField>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Components per kit</p>
+            {kitComponents.map((component, index) => <div key={component.rowId} className="grid grid-cols-1 gap-2 rounded-md border p-2 sm:grid-cols-[minmax(0,1fr)_100px_auto] sm:items-end">
+              <FormField label={"Product " + (index + 1)}>
+                <select className={selectClass} value={component.productId} onChange={(event) => updateKitComponent(component.rowId, { productId: event.target.value })}>
+                  {kitSaleableProducts().map((product) =>
+                    <option key={product.id} value={product.id}>{product.name}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Qty / kit">
+                <input className={inputClass} type="text" inputMode="decimal" value={component.quantityPerKit}
+                  onChange={(event) => updateKitComponent(component.rowId, { quantityPerKit: event.target.value })} />
+              </FormField>
+              <Button variant="outline" onClick={() => removeKitComponent(component.rowId)}
+                disabled={kitComponents.length <= 1}>Remove</Button>
+            </div>)}
+            <Button variant="outline" onClick={addKitComponent}
+              disabled={kitComponents.length >= 20}>Add kit component</Button>
+          </div>
+          {kitQuoteError && <p role="alert" className="text-sm text-rose-600">{kitQuoteError}</p>}
+          {kitQuoteResult && <div role="status" className="space-y-2 rounded-md border p-3 text-sm">
+            <p className="font-medium">Catalog kit price estimate</p>
+            <ul className="space-y-1">
+              {kitQuoteResult.lines.map((line) => <li key={line.productId}>
+                {line.productName}: {line.quantity} {line.unit} × {kitQuoteResult.currency} {line.unitPrice} = {kitQuoteResult.currency} {line.lineTotal}
+              </li>)}
+            </ul>
+            <p className="font-semibold">Total for {kitQuoteResult.kitCount} kit(s): {kitQuoteResult.currency} {kitQuoteResult.total}</p>
+            {kitQuoteResult.kitTotal
+              ? <p>Exact per-kit price: {kitQuoteResult.currency} {kitQuoteResult.kitTotal}</p>
+              : <p className="text-xs text-slate-600">Exact per-kit cents are unavailable for this aggregate total.</p>}
           </div>}
         </div>
       </Modal>
