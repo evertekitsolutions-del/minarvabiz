@@ -263,10 +263,16 @@ export default function ProductsPage() {
   }
 
   function addKitComponent() {
-    const first = kitSaleableProducts()[0];
-    if (!first || kitComponents.length >= 20) return;
+    const available = kitSaleableProducts();
+    if (!available.length || kitComponents.length >= 20) return;
+    // Prefer a new SKU by default while allowing intentional duplicate rows
+    // (the quote engine correctly aggregates their quantities).
+    const selected = new Set(kitComponents.map((item) => item.productId));
+    const nextProduct = available.find((product) => !selected.has(product.id)) ?? available[0];
     const rowId = ++kitNextRowId.current;
-    setKitComponents((rows) => [...rows, { rowId, productId: first.id, quantityPerKit: "1" }]);
+    setKitComponents((rows) => [...rows, {
+      rowId, productId: nextProduct.id, quantityPerKit: "1",
+    }]);
     setKitQuoteResult(null);
     setKitQuoteError(null);
   }
