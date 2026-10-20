@@ -60,3 +60,19 @@ test('zero prices are explicit and overflowing wholesale totals fail before post
   assert.deepEqual(overflow.writes, []);
   assert.match(overflow.errors[0], /monetary range/);
 });
+test('switching T-shirt to tailoring and back displays, previews and posts the same raw price', () => {
+  const ui = fs.readFileSync(new URL('../../../ui/src/components/orders/OrderForm.tsx', import.meta.url), 'utf8');
+  const display = ui.match(/label="Customer price \*"><input[^>]*value=\{([^}]+)\}/)[1];
+  const preview = ui.match(/const preview = React.useMemo\(\(\) => (.*), \[value, isTshirt\]\);/)[1];
+  // Real shared form expressions; capture the input passed to domain pricing.
+  const displayedPrice = new Function('value', `return ${display}`);
+  const previewInput = new Function('value', 'isTshirt', 'calculateOrderPricing', `return ${preview}`);
+  const value = {...base, serviceType:'tshirt_printing', price:'200', advance:'0', tshirt:{customerPrice:100}};
+  assert.equal(String(displayedPrice(value)), '200');
+  assert.equal(previewInput(value, true, input => input).tshirt.customerPrice, 200);
+  assert.equal(submit(value).writes[0].price, 200);
+  value.price = '0';
+  assert.equal(String(displayedPrice(value)), '0');
+  assert.equal(previewInput(value, true, input => input).tshirt.customerPrice, 0);
+  assert.equal(submit(value).writes[0].price, 0);
+});
