@@ -793,7 +793,7 @@ export function createPurchase(input: { date?: string; supplierId?: UUID | null;
     notes: input.notes ?? null, createdAt: nowISO(), updatedAt: nowISO(), version: 1 };
   // Fail closed before creating the purchase's journal or changing payables.
   if (input.orderId) {
-    const eligible = ordersStore.preflightOrderExpenseAddition(input.orderId, purchase.amount);
+    const eligible = ordersStore.preflightOrderExpenseAddition(input.orderId, purchase.amount, purchase.id);
     if (!eligible.order) return { purchase: null, errors: [eligible.error || "Unable to link order purchase"] };
   }
   const posting = planDirectPurchasePosting(purchase);
@@ -804,7 +804,7 @@ export function createPurchase(input: { date?: string; supplierId?: UUID | null;
   if (!posting.commit()) {
     return { purchase: null, errors: ["Direct purchase accounting journal was not committed"] };
   }
-  if (input.orderId) ordersStore.addOrderExpense(input.orderId, input.description || "Order purchase", bal.amount);
+  if (input.orderId) ordersStore.addOrderExpense(input.orderId, input.description || "Order purchase", bal.amount, purchase.id);
   lastPurchaseNo = purchaseNumber;
   if (supplier && nextSupplierOutstandingMinor != null) {
     supplier.outstandingBalance = fromMinorUnits(nextSupplierOutstandingMinor);
