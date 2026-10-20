@@ -26,6 +26,8 @@ export * from "./inventory";
 export * from "./tracked-inventory";
 // Preview-only multi-SKU bundle FEFO planning; never commits stock.
 export * from "./commerce-bundle-stock";
+// Read-only kit price calculation based on catalog selling prices.
+export * from "./commerce-bundle-quote";
 export * from "./orders";
 export * from "./expenses";
 export * from "./reports";
