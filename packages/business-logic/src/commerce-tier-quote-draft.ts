@@ -6,7 +6,7 @@
  * product masters, customer groups, invoices, journals, or an outbox event.
  */
 import {
-  quoteCommerceTierPrice, type CommerceTierQuote,
+  quoteCommerceTierPrice, type CommerceTierQuote, type CommercePriceTier,
 } from "./commerce-tier-pricing";
 import { validateMoneyAmountInput } from "./service-order-price-draft";
 
@@ -37,7 +37,10 @@ function positiveDraftQuantity(text: string, label: string): number {
  * Returns a nonbinding preview. The optional tier exists only for this
  * calculation; it is never saved, applied to sales or granted customer scope.
  */
-export function parseCommerceQuoteDraft(draft: CommerceQuoteDraft): CommerceTierQuote {
+export function parseCommerceQuoteDraft(
+  draft: CommerceQuoteDraft,
+  localDraftTiers: readonly CommercePriceTier[] = [],
+): CommerceTierQuote {
   if (!draft || typeof draft !== "object") throw new Error("Quote draft is required");
   const quantity = positiveDraftQuantity(draft.quantity, "Order quantity");
   const minText = draft.tierMinQuantity?.trim() ?? "";
@@ -59,13 +62,16 @@ export function parseCommerceQuoteDraft(draft: CommerceQuoteDraft): CommerceTier
     baseUnitPrice: draft.baseUnitPrice,
     quantity,
     currency: draft.currency,
-    tiers: minQuantity !== null && unitPrice !== null
-      ? [{
-          id: "one-off-wholesale-preview",
-          productId: draft.productId,
-          minQuantity,
-          unitPrice,
-        }]
-      : [],
+    tiers: [
+      ...localDraftTiers,
+      ...(minQuantity !== null && unitPrice !== null
+        ? [{
+            id: "one-off-wholesale-preview",
+            productId: draft.productId,
+            minQuantity,
+            unitPrice,
+          }]
+        : []),
+    ],
   });
 }
