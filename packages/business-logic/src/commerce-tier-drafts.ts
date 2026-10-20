@@ -41,13 +41,13 @@ function validateDraft(candidate: unknown): CommerceTierDraft {
     typeof value.productId !== "string" || !value.productId.trim() ||
     value.productId !== value.productId.trim() ||
     value.draftOnly !== true ||
-    !Number.isSafeInteger(value.version) || (value.version as number) < 1 ||
+    typeof value.version !== "number" || !Number.isSafeInteger(value.version) || value.version < 1 ||
     typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency)
   ) throw new Error("Invalid B2B draft identity, revision or currency");
   for (const field of ["createdAt", "updatedAt"] as const) {
     if (typeof value[field] !== "string" ||
       !/^\d{4}-\d{2}-\d{2}T/.test(value[field]) ||
-      !Number.isFinite(Date.parse(value[field]))) {
+      !Number.isFinite(Date.parse(value[field] as string))) {
       throw new Error("Invalid B2B draft timestamp");
     }
   }
