@@ -16,3 +16,8 @@
 - Confirm exact-head CI and Web/Windows product-page click test, including Excel UTF-8 and selected locale.
 - Design audited catalog publication consent, storefront/SEO, tenant+branch authorization, customer price lists, images, inventory ATP/reservations, orders and immutable sales/financial sync. Do not expose a public catalog route or infer branch stock from globally cached values until these controls are proven.
 - No migrations, production write or installer release in this PR. Whole-product acceptance remains historical ~51% provisional; this is a source-only delivery slice.
+
+## Follow-up: offline customer HTML and branch-safe default
+- Added self-contained **Download customer catalog HTML** with escaped text, strict CSP (no network, scripting, images or forms), print styles and honest availability disclaimer. Product page uses the current shop name/currency; no public URL or online publication.
+- Fixed implicit branch-data exposure in CSV: when branch authority is unavailable, the default exports **company-wide products only**. Explicit authorized branch filtering is available at the pure-function boundary for future verified session usage, not presented as a self-selecting permission bypass in the UI.
+- Both CSV/HTML use the same filtered projection and cent-safe selling prices. CSV export remains available. No migration, remote publishing or new library.
