@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv, exportShareableCatalogCsv, exportShareableCatalogHtml, exportShareableCatalogJson, parseCommerceQuoteDraft, createCommerceTierDraft, deleteCommerceTierDraft, listCommerceTierDrafts, can, getShopProfile } from "@minarvabiz/business-logic";
+import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv, exportShareableCatalogCsv, exportShareableCatalogHtml, exportShareableCatalogJson, parseCommerceQuoteDraft, createCommerceTierDraft, updateCommerceTierDraft, deleteCommerceTierDraft, listCommerceTierDrafts, can, getShopProfile } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 import { parseProductPrice } from "../../../lib/parse-product-price";
@@ -39,6 +39,7 @@ export default function ProductsPage() {
   const [quoteResult, setQuoteResult] = React.useState<ReturnType<typeof parseCommerceQuoteDraft> | null>(null);
   const [quoteError, setQuoteError] = React.useState<string | null>(null);
   const [quoteSavedDrafts, setQuoteSavedDrafts] = React.useState<ReturnType<typeof listCommerceTierDrafts>>([]);
+  const [quoteEditingDraft, setQuoteEditingDraft] = React.useState<{ id: string; version: number } | null>(null);
 
   const [form, setForm] = React.useState({
     name: "", sku: "", barcode: "", categoryId: "", unit: "pcs",
@@ -116,7 +117,8 @@ export default function ProductsPage() {
       if (!product || !product.isActive || product.deletedAt) {
         throw new Error("Select an active product to preview a quote");
       }
-      const localDraftTiers = listCommerceTierDrafts(product.id);
+      // An unsaved edit previews a replacement, not two overlapping rules.
+      const localDraftTiers = listCommerceTierDrafts(product.id).filter((tier) => tier.id !== quoteEditingDraft?.id);
       const currency = getShopProfile().currency;
       if (localDraftTiers.some((tier) => tier.currency !== currency)) {
         throw new Error("Local draft price currency differs from current shop currency");
@@ -151,12 +153,19 @@ export default function ProductsPage() {
         tierMinQuantity: quoteMinQuantity,
         tierUnitPrice: quoteTierUnitPrice,
       });
-      createCommerceTierDraft({
-        productId: product.id,
+      const candidate = {
         minQuantity: Number(quoteMinQuantity.trim()),
         unitPrice: Number(quoteTierUnitPrice.trim()),
-      });
+      };
+      if (quoteEditingDraft) {
+        const stillSelected = listCommerceTierDrafts(product.id).some((tier) => tier.id === quoteEditingDraft.id);
+        if (!stillSelected) throw new Error("Draft no longer belongs to the selected product");
+        updateCommerceTierDraft(quoteEditingDraft.id, quoteEditingDraft.version, candidate);
+      } else {
+        createCommerceTierDraft({ productId: product.id, ...candidate });
+      }
       setQuoteSavedDrafts(listCommerceTierDrafts(product.id));
+      setQuoteEditingDraft(null);
       setQuoteMinQuantity("");
       setQuoteTierUnitPrice("");
       setQuoteResult(null);
@@ -167,10 +176,33 @@ export default function ProductsPage() {
     }
   }
 
+  function startB2BTierDraftEdit(id: string, version: number) {
+    const saved = listCommerceTierDrafts(quoteProductId).find((tier) => tier.id === id);
+    if (!saved || saved.version !== version) {
+      setQuoteError("Draft changed; refresh this product before editing");
+      setQuoteSavedDrafts(listCommerceTierDrafts(quoteProductId));
+      return;
+    }
+    setQuoteEditingDraft({ id: saved.id, version: saved.version });
+    setQuoteMinQuantity(String(saved.minQuantity));
+    setQuoteTierUnitPrice(saved.unitPrice.toFixed(2));
+    setQuoteResult(null);
+    setQuoteError(null);
+  }
+
+  function cancelB2BTierDraftEdit() {
+    setQuoteEditingDraft(null);
+    setQuoteMinQuantity("");
+    setQuoteTierUnitPrice("");
+    setQuoteResult(null);
+    setQuoteError(null);
+  }
+
   function removeB2BTierDraft(id: string, version: number) {
     if (!window.confirm("Delete this local price-tier draft? It is not a published selling price.")) return;
     try {
       deleteCommerceTierDraft(id, version);
+      if (quoteEditingDraft?.id === id) cancelB2BTierDraftEdit();
       setQuoteSavedDrafts(listCommerceTierDrafts(quoteProductId));
       setQuoteResult(null);
       setQuoteError(null);
@@ -304,6 +336,7 @@ export default function ProductsPage() {
           setQuoteTierUnitPrice("");
           setQuoteResult(null);
           setQuoteError(null);
+          setQuoteEditingDraft(null);
           setQuoteSavedDrafts(listCommerceTierDrafts(store.listProducts().find((p) => p.isActive)?.id ?? ""));
           setQuoteOpen(true);
         }}>B2B price quote preview</Button>
@@ -370,6 +403,7 @@ export default function ProductsPage() {
           <FormField label="Product">
             <select className={selectClass} value={quoteProductId} onChange={(event) => {
               setQuoteProductId(event.target.value); setQuoteResult(null); setQuoteError(null);
+              setQuoteEditingDraft(null); setQuoteMinQuantity(""); setQuoteTierUnitPrice("");
               setQuoteSavedDrafts(listCommerceTierDrafts(event.target.value));
             }}>
               {store.listProducts().filter((p) => p.isActive).map((p) =>
@@ -397,16 +431,20 @@ export default function ProductsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={saveB2BTierDraft}
               disabled={!can("products.manage") || !quoteMinQuantity.trim() || !quoteTierUnitPrice.trim()}>
-              Save local tier draft
+              {quoteEditingDraft ? "Save draft changes" : "Save local tier draft"}
             </Button>
+            {quoteEditingDraft && <Button variant="outline" onClick={cancelB2BTierDraftEdit}>Cancel edit</Button>}
             <span className="text-xs text-slate-500">Saved in this device backup only; not synced or used in billing.</span>
           </div>
           {quoteSavedDrafts.length > 0 && <div className="rounded-md border p-3">
             <p className="mb-2 text-sm font-medium">Saved local tiers (draft only)</p>
             <ul className="space-y-2">
               {quoteSavedDrafts.map((tier) => <li key={tier.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span>From {tier.minQuantity} units: {tier.currency} {tier.unitPrice.toFixed(2)}</span>
-                {can("products.manage") && <Button variant="outline" onClick={() => removeB2BTierDraft(tier.id, tier.version)}>Delete draft</Button>}
+                <span>From {tier.minQuantity} units: {tier.currency} {tier.unitPrice.toFixed(2)} · rev {tier.version}</span>
+                {can("products.manage") && <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => startB2BTierDraftEdit(tier.id, tier.version)}>Edit draft</Button>
+                  <Button variant="outline" onClick={() => removeB2BTierDraft(tier.id, tier.version)}>Delete draft</Button>
+                </div>}
               </li>)}
             </ul>
           </div>}
