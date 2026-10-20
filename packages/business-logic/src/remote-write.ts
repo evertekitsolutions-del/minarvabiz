@@ -254,36 +254,48 @@ export function retryScopedMasterOutbox(limit = 50): Promise<ScopedMasterReplayR
 
     for (const event of candidates.sort((a, b) => a.sequence - b.sequence).slice(0,
       Number.isSafeInteger(limit) ? Math.min(50, Math.max(0, limit)) : 0)) {
-      if (!snapshotWriter || !snapshotScope || writer !== snapshotWriter ||
-          verifiedWriterScope !== snapshotScope ||
-          writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope) break;
-      // Capture the exact revision; a backup restore can reuse the same ID.
-      const eventFence = captureOutboxReceiptFence([event]);
-      if (!outboxReceiptFenceCurrent(eventFence, ["pending", "failed"]) ||
-          !eligibleScopedMasterEvents().candidates.includes(event)) break;
-      attempted++;
-      try {
-        if (event.aggregateType === "categories") {
-          await snapshotWriter.upsertCategory!(event.payload as Category);
-        } else if (event.aggregateType === "customers") {
-          await snapshotWriter.upsertCustomer!(event.payload as Customer);
-        } else if (event.aggregateType === "products") {
-          await snapshotWriter.upsertProduct!(event.payload as Product);
+      // The manual retry and the live direct writer MUST share one record
+      // flight. Otherwise a retry can upload an already-in-flight direct
+      // event twice, or an old replay can overwrite a newer direct version.
+      const disposition = await runScopedMasterFlight(event, async () => {
+        if (!snapshotWriter || !snapshotScope || writer !== snapshotWriter ||
+            verifiedWriterScope !== snapshotScope ||
+            writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope)
+          return "stop";
+        // A direct write may have completed while this retry waited in FIFO.
+        // Skip the already-synced candidate without sending another HTTP RPC.
+        if (event.status === "synced") return "skip";
+        // Capture AFTER acquiring the flight; a restore could reuse the same
+        // event ID with a different payload during the wait.
+        const eventFence = captureOutboxReceiptFence([event]);
+        if (!outboxReceiptFenceCurrent(eventFence, ["pending", "failed"]) ||
+            !eligibleScopedMasterEvents().candidates.includes(event)) return "stop";
+        attempted++;
+        try {
+          if (event.aggregateType === "categories") {
+            await snapshotWriter.upsertCategory!(event.payload as Category);
+          } else if (event.aggregateType === "customers") {
+            await snapshotWriter.upsertCustomer!(event.payload as Customer);
+          } else if (event.aggregateType === "products") {
+            await snapshotWriter.upsertProduct!(event.payload as Product);
+          }
+          if (writer !== snapshotWriter || verifiedWriterScope !== snapshotScope ||
+              writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope ||
+              !outboxReceiptFenceCurrent(eventFence, ["pending", "failed"])) return "stop";
+          markOutboxSynced([event.id]);
+          acknowledged++;
+          return "sent";
+        } catch (error) {
+          if (writer !== snapshotWriter || verifiedWriterScope !== snapshotScope ||
+              writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope ||
+              !outboxReceiptFenceCurrent(eventFence, ["pending", "failed"])) return "stop";
+          markOutboxFailed(event.id, error instanceof Error ? error.message : String(error));
+          failed++;
+          // Preserve causal ordering and never skip over a failed version.
+          return "failed";
         }
-        if (writer !== snapshotWriter || verifiedWriterScope !== snapshotScope ||
-            writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope ||
-            !outboxReceiptFenceCurrent(eventFence, ["pending", "failed"])) break;
-        markOutboxSynced([event.id]);
-        acknowledged++;
-      } catch (error) {
-        if (writer !== snapshotWriter || verifiedWriterScope !== snapshotScope ||
-            writerGeneration !== snapshotGeneration || getOutboxScope() !== snapshotScope ||
-            !outboxReceiptFenceCurrent(eventFence, ["pending", "failed"])) break;
-        markOutboxFailed(event.id, error instanceof Error ? error.message : String(error));
-        failed++;
-        // Preserve causal ordering and never skip over an uncommitted earlier version.
-        break;
-      }
+      });
+      if (disposition === "stop" || disposition === "failed") break;
     }
     return { attempted, acknowledged, failed, remaining: getScopedMasterReplayStatus().pending };
   };
@@ -342,14 +354,37 @@ async function deliverWithCloudAcknowledgement(
  */
 const scopedDirectMasterTails = new Map<string, Promise<void>>();
 
+/**
+ * One per-owner/aggregate flight is shared by live upserts AND ordered
+ * offline retries. An unrelated record remains independent. Running the
+ * first callback immediately also preserves the existing direct-write
+ * synchronous dispatch contract.
+ */
+function runScopedMasterFlight<T>(
+  event: LocalOutboxEvent,
+  dispatch: () => Promise<T>,
+): Promise<T> {
+  const key = JSON.stringify([event.ownerScope ?? null, event.aggregateType, event.aggregateId]);
+  const predecessor = scopedDirectMasterTails.get(key);
+  const result = predecessor
+    ? predecessor.then(dispatch, dispatch)
+    : dispatch();
+  // A failed flight must not poison later retry attempts or leave a dangling
+  // rejection, and cleanup must not erase a newer same-record reservation.
+  const tail = result.then(() => undefined, () => undefined);
+  scopedDirectMasterTails.set(key, tail);
+  void tail.then(() => {
+    if (scopedDirectMasterTails.get(key) === tail) scopedDirectMasterTails.delete(key);
+  });
+  return result;
+}
+
 function deliverMasterInOrder(
   event: LocalOutboxEvent,
   supports: (target: RemoteWriter) => boolean,
   send: (target: RemoteWriter) => Promise<void>,
   failureLabel: string,
 ): Promise<void> {
-  const key = JSON.stringify([event.ownerScope ?? null, event.aggregateType, event.aggregateId]);
-  const predecessor = scopedDirectMasterTails.get(key);
   const dispatch = async () => {
     const current = exportOutbox();
     const index = current.indexOf(event);
@@ -370,19 +405,7 @@ function deliverMasterInOrder(
     )) return;
     await deliverWithCloudAcknowledgement([event.id], supports, send, failureLabel);
   };
-  // Preserve the old immediate-start contract for the FIRST write, including
-  // synchronous owner checks. Only later same-record revisions must wait.
-  const flight = predecessor
-    ? predecessor.catch(() => undefined).then(dispatch)
-    : dispatch();
-  scopedDirectMasterTails.set(key, flight);
-  // Both completion paths clean the same-key tail without creating an
-  // unhandled promise rejection or deleting a newer queued flight.
-  void flight.then(
-    () => { if (scopedDirectMasterTails.get(key) === flight) scopedDirectMasterTails.delete(key); },
-    () => { if (scopedDirectMasterTails.get(key) === flight) scopedDirectMasterTails.delete(key); },
-  );
-  return flight;
+  return runScopedMasterFlight(event, dispatch);
 }
 
 export async function remoteUpsertCustomer(c: Customer) {
