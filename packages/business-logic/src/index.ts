@@ -126,3 +126,5 @@ export * from "./resource-booking";
 
 // Native, read-only headless-commerce catalog projection; no storefront publication.
 export * from "./commerce-catalog";
+
+export { parseServiceOrderPriceDraft, validateMoneyAmountInput } from "./service-order-price-draft";
