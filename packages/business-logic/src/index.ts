@@ -130,6 +130,8 @@ export * from "./resource-booking";
 export * from "./commerce-catalog";
 // Read-only B2B quantity/customer-group/branch price preview (never posts an invoice).
 export * from "./commerce-tier-pricing";
+// Seller-only local draft tier pricebook; not authoritative for invoices or POS.
+export * from "./commerce-tier-drafts";
 // Seller-only ephemeral B2B quote form parser (no persistent pricing authority).
 export * from "./commerce-tier-quote-draft";
 
