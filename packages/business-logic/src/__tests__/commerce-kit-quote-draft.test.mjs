@@ -93,3 +93,21 @@ test("seller Products page exposes a genuine read-only kit pricing workflow", ()
   assert.match(page, /No stock availability check/);
   assert.match(page, /Exact per-kit cents are unavailable/);
 });
+
+test("optional deletedAt from real Product rows normalizes without exposing private fields", () => {
+  const rawProduct = {
+    ...product("kit-a", 12.5, { deletedAt: undefined }),
+    costPrice: 9.25, supplierId: "vendor-internal", stockQuantity: 12345,
+    notes: "internal-remarks",
+  };
+  const result = parseCommerceKitQuoteDraft(draft({
+    kitCount: "1",
+    components: [{ productId: "kit-a", quantityPerKit: "2" }],
+    products: [rawProduct],
+  }));
+  assert.equal(result.total, "25.00");
+  const publicResult = JSON.stringify(result);
+  for (const internal of ["costPrice", "supplierId", "stockQuantity", "notes", "vendor-internal", "internal-remarks"]) {
+    assert.equal(publicResult.includes(internal), false, internal + " leaked into preview");
+  }
+});
