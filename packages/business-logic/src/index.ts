@@ -24,6 +24,8 @@ export * from "./sales";
 export * from "./inventory";
 // UBP-03a pure preflight only; authoritative inventory reservations still pending.
 export * from "./tracked-inventory";
+// Preview-only multi-SKU bundle FEFO planning; never commits stock.
+export * from "./commerce-bundle-stock";
 export * from "./orders";
 export * from "./expenses";
 export * from "./reports";
