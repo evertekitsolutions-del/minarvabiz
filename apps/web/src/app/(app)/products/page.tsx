@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv, exportShareableCatalogCsv, getShopProfile } from "@minarvabiz/business-logic";
+import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv, exportShareableCatalogCsv, exportShareableCatalogHtml, getShopProfile } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 import { parseProductPrice } from "../../../lib/parse-product-price";
@@ -102,8 +102,8 @@ export default function ProductsPage() {
     }
   }
 
-  function downloadCsv(content: string, filename: string) {
-    const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+  function downloadCsv(content: string, filename: string, mime = "text/csv;charset=utf-8") {
+    const url = URL.createObjectURL(new Blob([content], { type: mime }));
     const link = document.createElement("a");
     link.href = url;
     link.download = filename;
@@ -178,6 +178,19 @@ export default function ProductsPage() {
             setCsvMessage(err instanceof Error ? err.message : "Unable to export catalog");
           }
         }}>Export shareable catalog CSV</Button>
+        <Button variant="outline" onClick={() => {
+          try {
+            const shop = getShopProfile();
+            downloadCsv(
+              exportShareableCatalogHtml(store.listProducts(), store.listCategories(), shop.currency, shop.shopName),
+              "minarvabiz-customer-catalog.html",
+              "text/html;charset=utf-8",
+            );
+            setCsvMessage(null);
+          } catch (err) {
+            setCsvMessage(err instanceof Error ? err.message : "Unable to export catalog");
+          }
+        }}>Download customer catalog HTML</Button>
         <Button variant="outline" disabled={store.listProducts({ lowStockOnly: true }).length === 0} onClick={() => downloadCsv(exportReorderCsv(store.listProducts({ lowStockOnly: true })), "minarvabiz-reorder-report.csv")}>Export low-stock reorder CSV</Button>
         <input
           ref={productCsvInput}
