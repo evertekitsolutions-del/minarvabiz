@@ -16,7 +16,7 @@ const onboarding = require("../onboarding.ts");
 const browser = require("../onboarding-browser-preferences.ts");
 const source = fs.readFileSync("packages/business-logic/src/persistence.ts", "utf8");
 const page = fs.readFileSync("apps/web/src/app/(app)/onboarding/page.tsx", "utf8");
-const customerPage = fs.readFileSync("apps/web/src/app/(app)/customers/page.tsx", "utf8");
+const fs.readFileSync("apps/web/src/app/(app)/customers/page.tsx", "utf8");
 const desktopCustomerPanel = fs.readFileSync("apps/desktop/src/components/DesktopCustomerMasterPanel.tsx", "utf8");
 const customerList = fs.readFileSync("packages/ui/src/components/customers/CustomerList.tsx", "utf8");
 
@@ -115,4 +115,14 @@ test("opening customer balances are permission-gated in Web and Windows UI and u
   assert.match(desktopCustomerPanel, /can\(\"settings\.manage\"\)/);
   assert.match(desktopCustomerPanel, /setOpeningCustomerBalance/);
   assert.match(desktopCustomerPanel, /Opening Balance Equity/);
+});
+
+test("opening balance modal snapshots the customer and refuses stale outstanding totals", () => {
+  for (const source of [customerPage = fs.readFileSync("apps/web/src/app/(app)/customers/page.tsx", "utf8"),
+                       fs.readFileSync("apps/desktop/src/components/DesktopCustomerMasterPanel.tsx", "utf8")]) {
+    assert.match(source, /setOpeningBalanceTarget\(\{ \.\.\.customer \}\)/);
+    assert.match(source, /openedCents !== liveCents/);
+    assert.match(source, /Customer balance changed\. Close and reopen/);
+    assert.match(source, /setOpeningCustomerBalance\(liveCustomer\.id, Number\(openingBalanceAmount\)\)/);
+  }
 });

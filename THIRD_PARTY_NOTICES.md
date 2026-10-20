@@ -58,3 +58,32 @@ Next.js **15.5.28** is pinned to meet this adapter's published peer range.
 These are build/deployment tools; standard Next.js self-hosting is retained.
 No paid storage, AI model or Cloudflare service is provisioned by installation.
 Exact transitive versions and integrity hashes are recorded in pnpm-lock.yaml.
+
+## Open Mercato — adapted amount validation
+
+Source: https://github.com/open-mercato/open-mercato/blob/4374c48def1654927805c4b760f0e7f8648280f2/packages/core/src/modules/catalog/lib/priceValidation.ts
+
+Adapted in `packages/business-logic/src/service-order-price-draft.ts`.
+No Open Mercato runtime, enterprise package, database or service is bundled.
+
+MIT License
+
+Copyright (c) 2025-2026 Open Mercato contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -133,7 +133,7 @@ export default function CustomersPage() {
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to save customer"); }
   }
   function openOpeningBalance(customer: Customer) {
-    setOpeningBalanceTarget(customer);
+    setOpeningBalanceTarget({ ...customer });
     setOpeningBalanceAmount(String(customer.outstandingBalance ?? 0));
     setOpeningBalanceError(null);
   }
@@ -144,6 +144,14 @@ export default function CustomersPage() {
       if (!openingBalanceAmount.trim()) throw new Error("Enter an opening balance amount");
       const liveCustomer = store.getCustomer(openingBalanceTarget.id);
       if (!liveCustomer) throw new Error("Customer no longer exists");
+      // The modal holds an immutable snapshot; refuse changes posted while
+      // this form was open rather than silently rewriting a newer receivable.
+      const openedCents = Math.round(Number(openingBalanceTarget.outstandingBalance) * 100);
+      const liveCents = Math.round(Number(liveCustomer.outstandingBalance) * 100);
+      if (!Number.isSafeInteger(openedCents) || !Number.isSafeInteger(liveCents) ||
+          openedCents !== liveCents) {
+        throw new Error("Customer balance changed. Close and reopen to review the new amount.");
+      }
       const result = setOpeningCustomerBalance(liveCustomer.id, Number(openingBalanceAmount));
       if (!result.ok) throw new Error(result.error || "Opening balance was not saved");
       setOpeningBalanceTarget(null);

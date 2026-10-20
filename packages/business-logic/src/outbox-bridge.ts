@@ -57,6 +57,10 @@ export function enqueueOutbox(
   eventType: OutboxEventType,
   payload: unknown
 ): LocalOutboxEvent {
+  // Never mint an imprecise identity that could collide after restoration.
+  if (!Number.isSafeInteger(sequence) || sequence < 1) {
+    throw new Error("Outbox sequence exhausted; device re-enrollment required");
+  }
   const ev: LocalOutboxEvent = {
     id: generateId(),
     aggregateType,
@@ -100,9 +104,23 @@ export function markOutboxFailed(id: string, error: string) {
 }
 
 export function hydrateOutbox(events: LocalOutboxEvent[]) {
+  // Preflight *before* replacing the live queue. An exhausted backup must
+  // not evict pending unacknowledged events during failed restore.
+  let maximum = 0;
+  for (const event of events) {
+    if (!event || typeof event !== "object") {
+      throw new Error("Outbox snapshot contains a malformed event");
+    }
+    const candidate = event.sequence;
+    if (Number.isSafeInteger(candidate) && candidate > maximum) maximum = candidate;
+  }
+  if (maximum === Number.MAX_SAFE_INTEGER) {
+    throw new Error("Outbox sequence exhausted; device re-enrollment required");
+  }
+  // Avoid variadic spread argument limits on large (100k+) restored queues.
   queue.length = 0;
-  queue.push(...events);
-  sequence = Math.max(1, ...events.map((e) => e.sequence + 1), 1);
+  for (const event of events) queue.push(event);
+  sequence = maximum + 1;
 }
 
 export function exportOutbox(): LocalOutboxEvent[] {

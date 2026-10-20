@@ -1,3 +1,4 @@
+import { parseServiceOrderPriceDraft } from "@minarvabiz/business-logic";
 import * as React from "react";
 import {
 AppShell, Dashboard, ProductList, PosBilling, NormalBilling, SalesList,
@@ -196,8 +197,19 @@ export function App() {
   }
   function handleCreateOrder(){
     try {
-      const price=form.serviceType==="tshirt_printing"?form.tshirt.customerPrice:form.serviceType==="wholesale"||form.serviceType==="uniform"?(parseFloat(form.unitPrice)||0)*(parseInt(form.quantity,10)||1):parseFloat(form.price)||0;
-      const result=ordersStore.createOrder({customerId:form.customerId,serviceType:form.serviceType,deliveryDate:form.deliveryDate||null,price,discount:parseFloat(form.discount)||0,advance:parseFloat(form.advance)||0,advancePaymentMethod:form.advancePaymentMethod,notes:form.notes||null,materialDetails:form.materialDetails||null,customerSuppliedMaterial:form.customerSuppliedMaterial,shopSuppliedMaterial:form.shopSuppliedMaterial,measurements:form.measurements,measurementProfileId:form.measurementProfileId||null,externalMaterialCost:parseFloat(form.externalMaterialCost)||0,quantity:parseInt(form.quantity,10)||1,unitPrice:parseFloat(form.unitPrice)||undefined,bulkDiscount:parseFloat(form.bulkDiscount)||0,tshirt:form.serviceType==="tshirt_printing"?form.tshirt:null});
+      const pricing = parseServiceOrderPriceDraft(form);
+      const result = ordersStore.createOrder({
+        customerId: form.customerId, serviceType: form.serviceType,
+        deliveryDate: form.deliveryDate || null, ...pricing,
+        advancePaymentMethod: form.advancePaymentMethod,
+        notes: form.notes || null, materialDetails: form.materialDetails || null,
+        customerSuppliedMaterial: form.customerSuppliedMaterial,
+        shopSuppliedMaterial: form.shopSuppliedMaterial,
+        measurements: form.measurements,
+        measurementProfileId: form.measurementProfileId || null,
+        tshirt: form.serviceType === "tshirt_printing"
+          ? { ...form.tshirt, customerPrice: pricing.price } : null,
+      });
       if(result.errors.length||!result.order){setFormError(result.errors.join("; ")||"Failed");return;}
       setCreateOpen(false);setForm(emptyOrderForm());setFormError(null);setModuleError(null);void persistAndRefresh();setSelectedOrder(result.order);
     } catch(error){setFormError(errorMessage(error));}
