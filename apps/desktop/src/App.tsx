@@ -118,8 +118,7 @@ export function App() {
     try {
       if (!await persistDomainToSqlite()) throw new Error("The native SQLite write was rejected");
     } catch (error) {
-      // Offline production requires a durable SQLite write. A localStorage
-      // fallback would conceal data loss on the next Windows restart.
+      // Require durable SQLite; browser fallback would conceal lost writes.
       setModuleError(`SQLite save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
       console.error("[minarvabiz] SQLite save failed", error);
     }
@@ -135,7 +134,7 @@ export function App() {
     try {
       if (!await persistDomainToSqlite()) throw new Error("Attendance changes are not yet saved to SQLite. Keep the app open and retry.");
     } catch (error) {
-      // Attendance edits must not silently fall back to transient browser data.
+      // Never silently use browser-only attendance.
       throw error;
     } finally {
       refreshAll();
