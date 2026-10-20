@@ -61,7 +61,7 @@ test("zero-charge service order cancels without inventing a journal or refund", 
   assert.equal(store.getCustomer("free-c").totalSpending, 0);
   assert.equal(accounting.buildBalanceSheet().balanced, true);
   assert.ok(outbox.listPendingOutbox().some(event => event.aggregateType === "orders" &&
-    event.aggregateId === created.order.id && event.operation === "update"));
+    event.aggregateId === created.order.id && event.eventType === "update"));
   const beforeRetry = snap();
   const repeat = orders.updateOrderStatus(created.order.id, "cancelled", {
     reason: "Repeated cancellation",
