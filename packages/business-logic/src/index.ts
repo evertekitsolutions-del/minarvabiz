@@ -30,6 +30,8 @@ export * from "./commerce-bundle-stock";
 export * from "./commerce-bundle-quote";
 // Local seller-only kit composition drafts; no financial or inventory authority.
 export * from "./commerce-kit-recipes";
+// Strict operator-form quantities before local kit recipe persistence.
+export * from "./commerce-kit-recipe-input";
 export * from "./orders";
 export * from "./expenses";
 export * from "./reports";
