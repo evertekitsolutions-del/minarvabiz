@@ -19,6 +19,7 @@ import * as phase10Store from "./phase10-operations-store";
 import * as warehouseStore from "./warehouse-store";
 import * as procurementStore from "./procurement-store";
 import * as accountingStore from "./accounting-store";
+import * as commerceTierDrafts from "./commerce-tier-drafts";
 import * as shopProfile from "./shop-profile";
 import * as onboarding from "./onboarding";
 import * as taxConfig from "./tax-config";
@@ -81,6 +82,8 @@ export interface DomainSnapshot {
   warehouse?: ReturnType<typeof warehouseStore.exportWarehouseState>;
   procurement?: ReturnType<typeof procurementStore.exportProcurementState>;
   accounting?: ReturnType<typeof accountingStore.exportAccountingState>;
+  /** Offline-only seller pricebook drafts. Never an authoritative checkout tariff. */
+  commerceTierDrafts?: ReturnType<typeof commerceTierDrafts.exportCommerceTierDrafts>;
   dayEndCloses?: ReturnType<typeof dayEnd.listDayEndCloses>;
   recycleBin?: ReturnType<typeof recycleBin.exportRecycleBinState> | null;
 }
@@ -132,6 +135,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     warehouse: warehouseStore.exportWarehouseState(),
     procurement: procurementStore.exportProcurementState(),
     accounting: accountingStore.exportAccountingState(),
+    commerceTierDrafts: commerceTierDrafts.exportCommerceTierDrafts(),
     dayEndCloses: dayEnd.listDayEndCloses(),
     recycleBin: recycleBin.exportRecycleBinState(),
   };
@@ -232,6 +236,7 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     cashSessions: input.cashSessions == null ? undefined : collection(input.cashSessions, "cashSessions"),
     purchaseReturns: input.purchaseReturns == null ? undefined : collection(input.purchaseReturns, "purchaseReturns"),
     dayEndCloses: input.dayEndCloses == null ? undefined : collection(input.dayEndCloses, "dayEndCloses"),
+    commerceTierDrafts: commerceTierDrafts.validateCommerceTierDrafts(input.commerceTierDrafts ?? []),
   };
 }
 
@@ -278,6 +283,7 @@ function applyDomainSnapshot(snap: DomainSnapshot): void {
   if (snap.warehouse) warehouseStore.hydrateWarehouseState(snap.warehouse);
   if (snap.procurement) procurementStore.hydrateProcurementState(snap.procurement);
   if (snap.accounting) accountingStore.hydrateAccountingState(snap.accounting);
+  commerceTierDrafts.hydrateCommerceTierDrafts(snap.commerceTierDrafts ?? []);
   if (snap.shopProfile) shopProfile.hydrateShopProfile(snap.shopProfile);
   onboarding.hydrateOnboarding(snap.onboardingCompletedIds ?? []);
   if (snap.taxConfig) taxConfig.hydrateTaxConfig(snap.taxConfig);
@@ -333,6 +339,7 @@ export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error
       warehouseLocations: incoming.warehouse?.locations?.length ?? 0,
       accounts: incoming.accounting?.accounts?.length ?? 0,
       journals: incoming.accounting?.journals?.length ?? 0,
+      localCommerceTierDrafts: incoming.commerceTierDrafts?.length ?? 0,
     },
   };
 }
