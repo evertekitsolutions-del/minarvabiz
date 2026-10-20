@@ -60,7 +60,7 @@ export function previewUnsavedCommerceKit(input: {
   products: readonly (Omit<CommerceKitProduct, "deletedAt"> & { deletedAt?: string | null })[];
 }): CommerceKitQuote {
   if (!input || typeof input.kitCount !== "string" ||
-      !/^[1-9]\\d*$/.test(input.kitCount.trim()) ||
+      !/^[1-9]\d*$/.test(input.kitCount.trim()) ||
       !Number.isSafeInteger(Number(input.kitCount.trim()))) {
     throw new Error("Kit count must be a positive whole number");
   }
