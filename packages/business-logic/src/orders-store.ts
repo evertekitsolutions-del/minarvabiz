@@ -235,6 +235,13 @@ export function createOrder(input: {
   };
   const posting = planServiceOrderPosting(order, advancePaymentMethod);
   if (posting.errors.length) return { order: null, errors: posting.errors };
+  // An unpaid or partly paid charge must not be published as an order if its
+  // debit/credit journal was not committed. Free-of-charge orders keep their
+  // existing legitimate no-journal behavior.
+  const journal = posting.commit();
+  if (pricing.netPrice > 0 && !journal) {
+    return { order: null, errors: ["Service order accounting journal was not committed"] };
+  }
 
   lastOrderNo = orderNumber;
   if (pricing.balance > 0) customer.outstandingBalance = round2(customer.outstandingBalance + pricing.balance);
@@ -242,7 +249,6 @@ export function createOrder(input: {
   customer.updatedAt = now;
 
   orders.push(order);
-  posting.commit();
   touchPersistence();
   void remoteCreateOrder({ ...order });
   if (pricing.advance > 0) {
