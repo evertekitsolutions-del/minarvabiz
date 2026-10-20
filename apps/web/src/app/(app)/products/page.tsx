@@ -410,7 +410,7 @@ export default function ProductsPage() {
               </li>)}
             </ul>
           </div>}
-          {quoteError && <p role="alert" className="text-sm text-rose-600">{quoteError}</p>
+          {quoteError && <p role="alert" className="text-sm text-rose-600">{quoteError}</p>}
           {quoteResult && <div role="status" className="rounded-md border p-3 text-sm">
             <p className="font-medium">Nonbinding quote preview</p>
             <p>Unit price: {quoteResult.currency} {quoteResult.unitPrice}</p>
