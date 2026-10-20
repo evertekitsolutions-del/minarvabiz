@@ -447,30 +447,53 @@ export function addOrderExpense(
   return { order };
 }
 
+/** Preflight an order expense reversal without touching the order or sync queue. */
+export function preflightOrderExpenseRemoval(
+  orderId: UUID,
+  expenseId: UUID,
+  expectedAmount: number
+): { order: ServiceOrder | null; error?: string; index?: number; nextCents?: number } {
+  assertPermission("orders.manage");
+  assertBusinessDayOpen();
+  const order = getOrder(orderId);
+  if (!order) return { order: null, error: "Order not found" };
+  const index = order.expenses.findIndex(item => item.id === expenseId);
+  if (index < 0) return { order: null, error: "Order-linked expense needs source reconciliation" };
+  const item = order.expenses[index];
+  const expectedCents = Math.round(expectedAmount * 100);
+  const itemCents = Math.round(item.amount * 100);
+  const centExact = (value: number, cents: number) =>
+    Number.isFinite(value) && value > 0 && Number.isSafeInteger(cents) && cents > 0
+      && Math.abs(value - cents / 100) <= Math.min(1e-9, 4 * Number.EPSILON * Math.max(1, Math.abs(value)));
+  if (!centExact(expectedAmount, expectedCents) || !centExact(item.amount, itemCents)
+    || expectedCents !== itemCents) {
+    return { order: null, error: "Order-linked expense amount needs reconciliation" };
+  }
+  const totalCents = Math.round(order.orderExpensesTotal * 100);
+  if (!Number.isFinite(order.orderExpensesTotal) || order.orderExpensesTotal < 0
+    || !Number.isSafeInteger(totalCents) || totalCents < itemCents
+    || Math.abs(order.orderExpensesTotal - totalCents / 100)
+       > Math.min(1e-9, 4 * Number.EPSILON * Math.max(1, Math.abs(order.orderExpensesTotal)))) {
+    return { order: null, error: "Order expense total needs reconciliation" };
+  }
+  return { order, index, nextCents: totalCents - itemCents };
+}
+
 export function removeOrderExpense(
   orderId: UUID,
   expenseId: UUID,
   expectedAmount: number
 ): { order: ServiceOrder | null; error?: string } {
-  assertPermission("orders.manage");
-  assertBusinessDayOpen();
-  const order = getOrder(orderId);
-  if (!order) return { order: null, error: "Order not found" };
-  const index = order.expenses.findIndex((item) => item.id === expenseId);
-  if (index < 0) return { order: null, error: "Order-linked expense needs source reconciliation" };
-  const item = order.expenses[index];
-  if (!Number.isFinite(expectedAmount) || round2(expectedAmount) <= 0 || round2(item.amount) !== round2(expectedAmount)) {
-    return { order: null, error: "Order-linked expense amount needs reconciliation" };
+  const check = preflightOrderExpenseRemoval(orderId, expenseId, expectedAmount);
+  if (!check.order || check.index === undefined || check.nextCents === undefined) {
+    return { order: null, error: check.error || "Order expense reversal preflight failed" };
   }
-  if (!Number.isFinite(order.orderExpensesTotal) || order.orderExpensesTotal < item.amount
-    || !Number.isSafeInteger(Math.round((order.orderExpensesTotal - item.amount) * 100))) {
-    return { order: null, error: "Order expense total needs reconciliation" };
-  }
+  const { order, index, nextCents } = check;
   order.expenses.splice(index, 1);
-  order.orderExpensesTotal = round2(order.orderExpensesTotal - item.amount);
+  order.orderExpensesTotal = nextCents / 100;
   order.updatedAt = nowISO();
   order.version += 1;
-  enqueueOutbox("orders", order.id, "update", { ...order, expenses: order.expenses.map((entry) => ({ ...entry })) });
+  enqueueOutbox("orders", order.id, "update", { ...order, expenses: order.expenses.map(item => ({ ...item })) });
   touchPersistence();
   return { order };
 }

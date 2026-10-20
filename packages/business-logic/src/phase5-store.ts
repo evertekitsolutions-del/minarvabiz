@@ -722,8 +722,17 @@ export function reverseExpense(id: UUID, reason: string): { expense: Expense | n
       return { expense: null, errors: ["Order-linked expense needs source reconciliation before reversal"] };
     }
   }
+  // Reconcile the linked order *before* committing the reversing journal.
+  // A known bad or stale order must never produce an orphan reversal entry.
+  if (expense.orderId) {
+    const eligible = ordersStore.preflightOrderExpenseRemoval(expense.orderId, expense.id, fromMinorUnits(expenseMinor));
+    if (!eligible.order) return { expense: null, errors: [eligible.error || "Unable to reverse linked order expense"] };
+  }
   const reversal = planExpenseReversal(expense);
   if (reversal.errors.length) return { expense: null, errors: reversal.errors };
+  // Do not archive an expense or remove the linked cost unless the reversing
+  // accounting journal has actually been committed.
+  if (!reversal.commit()) return { expense: null, errors: ["Expense reversal journal was not committed"] };
 
   const before = { ...expense };
   if (expense.orderId) {
@@ -734,7 +743,6 @@ export function reverseExpense(id: UUID, reason: string): { expense: Expense | n
   expense.deletedAt = now;
   expense.updatedAt = now;
   expense.version = (expense.version || 1) + 1;
-  reversal.commit();
   enqueueOutbox("expenses", expense.id, "update", { ...expense });
   auditAction("expense.reverse", "expenses", expense.id, before, {
     deletedAt: expense.deletedAt,
