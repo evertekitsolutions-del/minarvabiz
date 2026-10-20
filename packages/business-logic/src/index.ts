@@ -128,5 +128,7 @@ export * from "./resource-booking";
 export * from "./commerce-catalog";
 // Read-only B2B quantity/customer-group/branch price preview (never posts an invoice).
 export * from "./commerce-tier-pricing";
+// Seller-only ephemeral B2B quote form parser (no persistent pricing authority).
+export * from "./commerce-tier-quote-draft";
 
 export { parseServiceOrderPriceDraft, validateMoneyAmountInput } from "./service-order-price-draft";

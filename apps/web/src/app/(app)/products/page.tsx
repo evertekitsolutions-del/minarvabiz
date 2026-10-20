@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv, exportShareableCatalogCsv, exportShareableCatalogHtml, exportShareableCatalogJson, getShopProfile } from "@minarvabiz/business-logic";
+import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv, exportShareableCatalogCsv, exportShareableCatalogHtml, exportShareableCatalogJson, parseCommerceQuoteDraft, getShopProfile } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 import { parseProductPrice } from "../../../lib/parse-product-price";
@@ -31,6 +31,13 @@ export default function ProductsPage() {
   } | null>(null);
   const [csvBusy, setCsvBusy] = React.useState(false);
   const [csvMessage, setCsvMessage] = React.useState<string | null>(null);
+  const [quoteOpen, setQuoteOpen] = React.useState(false);
+  const [quoteProductId, setQuoteProductId] = React.useState("");
+  const [quoteQuantity, setQuoteQuantity] = React.useState("1");
+  const [quoteMinQuantity, setQuoteMinQuantity] = React.useState("");
+  const [quoteTierUnitPrice, setQuoteTierUnitPrice] = React.useState("");
+  const [quoteResult, setQuoteResult] = React.useState<ReturnType<typeof parseCommerceQuoteDraft> | null>(null);
+  const [quoteError, setQuoteError] = React.useState<string | null>(null);
 
   const [form, setForm] = React.useState({
     name: "", sku: "", barcode: "", categoryId: "", unit: "pcs",
@@ -99,6 +106,28 @@ export default function ProductsPage() {
       setOpen(false); setError(null); resetForm(); refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function previewB2BQuote() {
+    try {
+      const product = store.getProduct(quoteProductId);
+      if (!product || !product.isActive || product.deletedAt) {
+        throw new Error("Select an active product to preview a quote");
+      }
+      const calculated = parseCommerceQuoteDraft({
+        productId: product.id,
+        baseUnitPrice: product.sellingPrice,
+        currency: getShopProfile().currency,
+        quantity: quoteQuantity,
+        tierMinQuantity: quoteMinQuantity,
+        tierUnitPrice: quoteTierUnitPrice,
+      });
+      setQuoteResult(calculated);
+      setQuoteError(null);
+    } catch (err) {
+      setQuoteResult(null);
+      setQuoteError(err instanceof Error ? err.message : "Unable to calculate quote");
     }
   }
 
@@ -219,6 +248,15 @@ export default function ProductsPage() {
             setCsvMessage(err instanceof Error ? err.message : "Unable to export catalog");
           }
         }}>Export headless catalog JSON</Button>
+        <Button variant="outline" disabled={store.listProducts().every((p) => !p.isActive)} onClick={() => {
+          setQuoteProductId(store.listProducts().find((p) => p.isActive)?.id ?? "");
+          setQuoteQuantity("1");
+          setQuoteMinQuantity("");
+          setQuoteTierUnitPrice("");
+          setQuoteResult(null);
+          setQuoteError(null);
+          setQuoteOpen(true);
+        }}>B2B price quote preview</Button>
         <Button variant="outline" disabled={store.listProducts({ lowStockOnly: true }).length === 0} onClick={() => downloadCsv(exportReorderCsv(store.listProducts({ lowStockOnly: true })), "minarvabiz-reorder-report.csv")}>Export low-stock reorder CSV</Button>
         <input
           ref={productCsvInput}
@@ -267,6 +305,53 @@ export default function ProductsPage() {
         </div>
       </Modal>
 
+      <Modal
+        open={quoteOpen}
+        title="B2B price quote preview"
+        onClose={() => setQuoteOpen(false)}
+        className="max-w-xl"
+        footer={<>
+          <Button variant="outline" onClick={() => setQuoteOpen(false)}>Close</Button>
+          <Button onClick={previewB2BQuote}>Calculate preview</Button>
+        </>}
+      >
+        <div className="space-y-3">
+          <p className="text-xs text-slate-600">Estimate only — no prices, customer terms, bills, stock or payments will be saved or changed.</p>
+          <FormField label="Product">
+            <select className={selectClass} value={quoteProductId} onChange={(event) => {
+              setQuoteProductId(event.target.value); setQuoteResult(null); setQuoteError(null);
+            }}>
+              {store.listProducts().filter((p) => p.isActive).map((p) =>
+                <option key={p.id} value={p.id}>{p.name} — {getShopProfile().currency} {p.sellingPrice.toFixed(2)}</option>)}
+            </select>
+          </FormField>
+          <FormField label="Order quantity *">
+            <input className={inputClass} type="text" inputMode="decimal" value={quoteQuantity} onChange={(event) => {
+              setQuoteQuantity(event.target.value); setQuoteResult(null); setQuoteError(null);
+            }} />
+          </FormField>
+          <p className="text-xs font-medium text-slate-700">Optional wholesale tier (applies to this preview only)</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <FormField label="Minimum quantity">
+              <input className={inputClass} type="text" inputMode="decimal" placeholder="e.g. 5" value={quoteMinQuantity} onChange={(event) => {
+                setQuoteMinQuantity(event.target.value); setQuoteResult(null); setQuoteError(null);
+              }} />
+            </FormField>
+            <FormField label="Wholesale unit price">
+              <input className={inputClass} type="text" inputMode="decimal" placeholder="e.g. 90.00" value={quoteTierUnitPrice} onChange={(event) => {
+                setQuoteTierUnitPrice(event.target.value); setQuoteResult(null); setQuoteError(null);
+              }} />
+            </FormField>
+          </div>
+          {quoteError && <p role="alert" className="text-sm text-rose-600">{quoteError}</p>}
+          {quoteResult && <div role="status" className="rounded-md border p-3 text-sm">
+            <p className="font-medium">Nonbinding quote preview</p>
+            <p>Unit price: {quoteResult.currency} {quoteResult.unitPrice}</p>
+            <p>Total: {quoteResult.currency} {quoteResult.lineTotal}</p>
+            <p className="text-xs text-slate-600">{quoteResult.appliedTierId ? "Wholesale tier applied" : "Regular selling price"}. Confirm the actual price and permissions before invoicing.</p>
+          </div>}
+        </div>
+      </Modal>
       <ProductList
         products={products}
         categories={categories}
