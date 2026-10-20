@@ -3,7 +3,7 @@
 import * as React from "react";
 import { parseSupplierPaymentAmount } from "@/lib/supplier-payment-draft";
 import { SupplierList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { phase5Store, parseSupplierCsv, importSuppliersFromCsv, exportSuppliersCsv } from "@minarvabiz/business-logic";
+import { phase5Store, parseSupplierCsv, importSuppliersFromCsv, exportSuppliersCsv, can, setOpeningSupplierBalance } from "@minarvabiz/business-logic";
 import type { PaymentMethod, Supplier } from "@minarvabiz/types";
 
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
@@ -15,6 +15,9 @@ export default function SuppliersPage() {
   const [editTarget, setEditTarget] = React.useState<Supplier | null>(null);
   const [archiveTarget, setArchiveTarget] = React.useState<Supplier | null>(null);
   const [archiveReason, setArchiveReason] = React.useState("");
+  const [openingBalanceTarget, setOpeningBalanceTarget] = React.useState<Supplier | null>(null);
+  const [openingBalanceAmount, setOpeningBalanceAmount] = React.useState("");
+  const [openingBalanceError, setOpeningBalanceError] = React.useState<string | null>(null);
   const [paymentOpen, setPaymentOpen] = React.useState(false);
   const [paymentSupplier, setPaymentSupplier] = React.useState<Supplier | null>(null);
   const [paymentError, setPaymentError] = React.useState<string | null>(null);
@@ -102,6 +105,37 @@ export default function SuppliersPage() {
     if (result.error) { setSupplierError(result.error); return; }
     setArchiveTarget(null); setArchiveReason(""); setSupplierError(null); refresh();
   }
+  function openOpeningBalance(supplier: Supplier) {
+    if (!can("settings.manage")) return;
+    setOpeningBalanceTarget({ ...supplier });
+    setOpeningBalanceAmount(String(supplier.outstandingBalance ?? 0));
+    setOpeningBalanceError(null);
+  }
+  function saveOpeningBalance() {
+    if (!openingBalanceTarget) return;
+    setOpeningBalanceError(null);
+    try {
+      if (!can("settings.manage")) throw new Error("Permission denied");
+      if (!openingBalanceAmount.trim()) throw new Error("Enter an opening payable amount");
+      const liveSupplier = phase5Store.getSupplier(openingBalanceTarget.id);
+      if (!liveSupplier) throw new Error("Supplier no longer exists");
+      // New purchases or payments can change the payable while the dialog is open.
+      // Never overwrite a newer total from an old form snapshot.
+      const openedCents = Math.round(Number(openingBalanceTarget.outstandingBalance) * 100);
+      const liveCents = Math.round(Number(liveSupplier.outstandingBalance) * 100);
+      if (!Number.isSafeInteger(openedCents) || !Number.isSafeInteger(liveCents) ||
+          openedCents !== liveCents) {
+        throw new Error("Supplier payable changed. Close and reopen to review the new amount.");
+      }
+      const result = setOpeningSupplierBalance(liveSupplier.id, Number(openingBalanceAmount));
+      if (!result.ok) throw new Error(result.error || "Opening payable was not saved");
+      setOpeningBalanceTarget(null);
+      setOpeningBalanceError(null);
+      refresh();
+    } catch (error) {
+      setOpeningBalanceError(error instanceof Error ? error.message : "Unable to save opening payable");
+    }
+  }
   function openPayment(supplier: Supplier) {
     setPaymentSupplier(supplier); setPaymentError(null);
     setPaymentForm({ date: todayLocal(), amount: String(supplier.outstandingBalance), paymentMethod: "cash", reference: "", notes: "" });
@@ -179,6 +213,7 @@ export default function SuppliersPage() {
         </div>
       </Modal>
       <SupplierList suppliers={list} onAdd={openCreate} onSearch={refresh} onPay={openPayment} onEdit={openEdit}
+        onSetOpeningBalance={can("settings.manage") ? openOpeningBalance : undefined}
         onArchive={(s) => { setArchiveTarget(s); setArchiveReason(""); setSupplierError(null); }} />
       <Modal open={open} title={editTarget ? "Edit Supplier" : "Add Supplier"} onClose={() => { setOpen(false); setEditTarget(null); setSupplierError(null); }}
         footer={<><Button variant="outline" onClick={() => { setOpen(false); setEditTarget(null); }}>Cancel</Button><Button onClick={save}>{editTarget ? "Save Changes" : "Save Supplier"}</Button></>}>
@@ -201,6 +236,16 @@ export default function SuppliersPage() {
           <p className="text-sm text-slate-600">This is a soft archive. Historical purchases, payments and audit records remain intact. Suppliers with outstanding payables cannot be archived.</p>
           <FormField label="Archive reason *"><textarea className={inputClass + " h-20 py-2"} value={archiveReason} onChange={(e) => setArchiveReason(e.target.value)} /></FormField>
           {supplierError && <p className="text-sm text-rose-600">{supplierError}</p>}
+        </div>
+      </Modal>
+      <Modal open={Boolean(openingBalanceTarget)} title="Set Supplier Opening Payable"
+        onClose={() => { setOpeningBalanceTarget(null); setOpeningBalanceError(null); }}
+        footer={<><Button variant="outline" onClick={() => { setOpeningBalanceTarget(null); setOpeningBalanceError(null); }}>Cancel</Button><Button disabled={!openingBalanceAmount.trim()} onClick={saveOpeningBalance}>Save opening payable</Button></>}>
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">Set the verified <strong>total current payable</strong> for {openingBalanceTarget?.name}. The difference is posted to Accounts Payable and Opening Balance Equity with an audit record. This is not a supplier payment.</p>
+          <p className="text-sm text-slate-700">Current outstanding: <strong>{String(openingBalanceTarget?.outstandingBalance ?? 0)}</strong>. Check existing purchases and payments before changing this value.</p>
+          <FormField label="Total opening payable"><input className={inputClass} type="number" min="0" step="0.01" value={openingBalanceAmount} onChange={(event) => setOpeningBalanceAmount(event.target.value)} /></FormField>
+          {openingBalanceError && <p role="alert" className="text-sm text-rose-600">{openingBalanceError}</p>}
         </div>
       </Modal>
       <Modal open={paymentOpen} title="Record Supplier Payment" onClose={() => setPaymentOpen(false)} footer={<><Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button><Button onClick={savePayment}>Record Payment</Button></>}>

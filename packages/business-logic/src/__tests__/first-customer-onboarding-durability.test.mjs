@@ -125,3 +125,27 @@ test("opening balance modal snapshots the customer and refuses stale outstanding
     assert.match(source, /setOpeningCustomerBalance\(liveCustomer\.id, Number\(openingBalanceAmount\)\)/);
   }
 });
+
+test("first-customer supplier payable correction is permission-gated and ledger-backed in Web and Windows", () => {
+  const supplierList = fs.readFileSync("packages/ui/src/components/suppliers/SupplierList.tsx", "utf8");
+  const webSupplier = fs.readFileSync("apps/web/src/app/(app)/suppliers/page.tsx", "utf8");
+  const desktopSupplier = fs.readFileSync("apps/desktop/src/components/DesktopSupplierOpeningBalancePanel.tsx", "utf8");
+  const desktopApp = fs.readFileSync("apps/desktop/src/App.tsx", "utf8");
+  const accounting = fs.readFileSync("packages/business-logic/src/opening-balances.ts", "utf8");
+  assert.match(supplierList, /onSetOpeningBalance/);
+  assert.match(webSupplier, /onSetOpeningBalance=\{can\("settings\.manage"\) \? openOpeningBalance : undefined\}/);
+  assert.match(desktopSupplier, /onSetOpeningBalance=\{can\("settings\.manage"\) \? openOpeningBalance : undefined\}/);
+  assert.match(desktopApp, /<DesktopSupplierOpeningBalancePanel onPersist=\{persistAndRefresh\}/);
+  for (const source of [webSupplier, desktopSupplier]) {
+    assert.match(source, /setOpeningBalanceTarget\(\{ \.\.\.supplier \}\)/);
+    assert.match(source, /openedCents !== liveCents/);
+    assert.match(source, /Supplier payable changed\. Close and reopen/);
+    assert.match(source, /phase5Store\.getSupplier\(openingBalanceTarget\.id\)/);
+    assert.match(source, /setOpeningSupplierBalance\(liveSupplier\.id, Number\(openingBalanceAmount\)\)/);
+    assert.match(source, /Accounts Payable and Opening Balance Equity/);
+    assert.match(source, /This is not a supplier payment/);
+  }
+  assert.match(accounting, /assertPermission\("settings\.manage"\)/);
+  assert.match(accounting, /referenceType: "auto_opening_supplier"/);
+  assert.match(accounting, /auditAction\("opening\.supplier_balance"/);
+});
