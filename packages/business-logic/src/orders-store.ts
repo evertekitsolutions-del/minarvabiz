@@ -1,4 +1,5 @@
 import { isDemoMode } from "./runtime-mode";
+import { validateMoneyAmountInput } from "./service-order-price-draft";
 import { assertPermission } from "./permissions";
 import { assertBusinessDayOpen } from "./business-day-state";
 /**
@@ -150,16 +151,16 @@ export function createOrder(input: {
     ["Bulk discount", input.bulkDiscount ?? 0],
   ] as const;
   for (const [label, value] of moneyInputs) {
-    if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))) {
-      errors.push(label + " must be a finite non-negative amount");
+    if (!validateMoneyAmountInput(value).ok) {
+      errors.push(label + " must be a finite non-negative amount with at most two decimal places");
     }
   }
   const advancePaymentMethod = input.advancePaymentMethod ?? "cash";
   if (!["cash", "bank", "card", "upi", "online", "other"].includes(advancePaymentMethod)) {
     errors.push("Invalid service order advance payment method");
   }
-  if (input.unitPrice != null && (!Number.isFinite(input.unitPrice) || input.unitPrice < 0 || !Number.isSafeInteger(Math.round(input.unitPrice * 100)))) {
-    errors.push("Unit price must be a finite non-negative amount");
+  if (input.unitPrice != null && !validateMoneyAmountInput(input.unitPrice).ok) {
+    errors.push("Unit price must be a finite non-negative amount with at most two decimal places");
   }
   if (input.quantity != null && (!Number.isFinite(input.quantity) || input.quantity <= 0 || !Number.isSafeInteger(Math.round(input.quantity * 1000)))) {
     errors.push("Quantity must be positive and finite");
@@ -169,7 +170,7 @@ export function createOrder(input: {
       errors.push("T-shirt quantity must be positive and finite");
     }
     for (const [label, value] of [["T-shirt printing cost", input.tshirt.printingCost], ["T-shirt customer price", input.tshirt.customerPrice]] as const) {
-      if (!Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100))) errors.push(label + " must be a finite non-negative amount");
+      if (!validateMoneyAmountInput(value).ok) errors.push(label + " must be a finite non-negative amount with at most two decimal places");
     }
   }
   if (errors.length) return { order: null, errors };
@@ -189,7 +190,7 @@ export function createOrder(input: {
     tshirt: input.tshirt,
   });
   const pricingValues = [pricing.netPrice, pricing.discount, pricing.advance, pricing.balance, pricing.externalMaterialCost, pricing.orderExpensesTotal];
-  if (pricingValues.some((value) => !Number.isFinite(value) || value < 0 || !Number.isSafeInteger(Math.round(value * 100)))) {
+  if (pricingValues.some((value) => !validateMoneyAmountInput(value).ok)) {
     return { order: null, errors: ["Service order totals are out of range"] };
   }
   if (!Number.isFinite(customer.outstandingBalance) || customer.outstandingBalance < 0
