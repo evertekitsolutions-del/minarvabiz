@@ -102,7 +102,19 @@ export function markOutboxFailed(id: string, error: string) {
 export function hydrateOutbox(events: LocalOutboxEvent[]) {
   queue.length = 0;
   queue.push(...events);
-  sequence = Math.max(1, ...events.map((e) => e.sequence + 1), 1);
+  // Restored backups may contain corrupt or legacy sequence values. Never let
+  // NaN/Infinity poison the next event or spread a large array into Math.max.
+  // Keep the source events untouched for audit and diagnostics.
+  const maximum = events.reduce((value, event) => {
+    const candidate = event.sequence;
+    return Number.isSafeInteger(candidate) && candidate > 0
+      ? Math.max(value, candidate)
+      : value;
+  }, 0);
+  if (maximum === Number.MAX_SAFE_INTEGER) {
+    throw new Error("Outbox sequence exhausted; device re-enrollment required");
+  }
+  sequence = maximum + 1;
 }
 
 export function exportOutbox(): LocalOutboxEvent[] {
