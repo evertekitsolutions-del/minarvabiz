@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv } from "@minarvabiz/business-logic";
+import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv, exportShareableCatalogCsv, getShopProfile } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 import { parseProductPrice } from "../../../lib/parse-product-price";
@@ -170,6 +170,14 @@ export default function ProductsPage() {
           "minarvabiz-product-import-template.csv"
         )}>Download CSV template</Button>
         <Button variant="outline" onClick={() => downloadCsv(exportProductsCsv(), "minarvabiz-products.csv")}>Export products CSV</Button>
+        <Button variant="outline" onClick={() => {
+          try {
+            downloadCsv("\uFEFF" + exportShareableCatalogCsv(store.listProducts(), store.listCategories(), getShopProfile().currency), "minarvabiz-shareable-catalog.csv");
+            setCsvMessage(null);
+          } catch (err) {
+            setCsvMessage(err instanceof Error ? err.message : "Unable to export catalog");
+          }
+        }}>Export shareable catalog CSV</Button>
         <Button variant="outline" disabled={store.listProducts({ lowStockOnly: true }).length === 0} onClick={() => downloadCsv(exportReorderCsv(store.listProducts({ lowStockOnly: true })), "minarvabiz-reorder-report.csv")}>Export low-stock reorder CSV</Button>
         <input
           ref={productCsvInput}
