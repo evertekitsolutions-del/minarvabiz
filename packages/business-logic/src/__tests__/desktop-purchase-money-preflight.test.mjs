@@ -11,7 +11,9 @@ require.extensions[".ts"]=(mod,file)=>mod._compile(ts.transpileModule(fs.readFil
 }).outputText,file);
 const {validateMoneyAmountInput}=require("../service-order-price-draft.ts");
 const source=fs.readFileSync(new URL("../../../../apps/desktop/src/App.tsx",import.meta.url),"utf8");
-const helper=source.match(/function parseDesktopPurchaseMoney\(raw: string, label: string, optional = false\): number \{([\s\S]*?)\n\}/);
+const helperSource=fs.readFileSync(new URL("../../../../apps/desktop/src/lib/desktop-purchase-amount.ts",import.meta.url),"utf8");
+assert.match(source,/import \{ parseDesktopPurchaseMoney \} from "\.\/lib\/desktop-purchase-amount";/);
+const helper=helperSource.match(/function parseDesktopPurchaseMoney\(raw: string, label: string, optional = false\): number \{([\s\S]*?)\n\}/);
 assert.ok(helper,"desktop purchase preflight must remain present");
 const parse=new Function("validateMoneyAmountInput","raw","label","optional",helper[1]).bind(null,validateMoneyAmountInput);
 const match=source.match(/function handleCreatePurchase\(\)\{([\s\S]*?)\n  function resetStaffForm/);

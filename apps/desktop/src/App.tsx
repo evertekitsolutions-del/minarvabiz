@@ -1,4 +1,5 @@
-import { parseServiceOrderPriceDraft, validateMoneyAmountInput } from "@minarvabiz/business-logic";
+import { parseServiceOrderPriceDraft } from "@minarvabiz/business-logic";
+import { parseDesktopPurchaseMoney } from "./lib/desktop-purchase-amount";
 import * as React from "react";
 import {
 AppShell, Dashboard, ProductList, PosBilling, NormalBilling, SalesList,
@@ -27,16 +28,6 @@ import { buildProfessionalReportData } from "./lib/report-data";
 import { NAV_FEATURE, featuresForLicense, type CommercialLicenseState } from "./lib/desktop-license-policy";
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
 const errorMessage=(error:unknown):string=>error instanceof Error?error.message:String(error);
-/** Avoid parseFloat prefix coercion before committing purchase and payable accounting. */
-function parseDesktopPurchaseMoney(raw: string, label: string, optional = false): number {
-  if (!raw.trim()) {
-    if (optional) return 0;
-    throw new Error(label + " is required.");
-  }
-  const result = validateMoneyAmountInput(raw);
-  if (!result.ok) throw new Error(label + " must be a non-negative, finite amount with at most two decimals.");
-  return result.numeric;
-}
 export function App() {
   const [dbReady, setDbReady] = React.useState(false);
   const [dbError, setDbError] = React.useState<string | null>(null);

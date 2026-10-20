@@ -5,3 +5,5 @@ The Windows Add Purchase form used `parseFloat(raw) || 0` for both total and pai
 The renderer now reuses the existing shared MIT-attributed amount validator with safe integer cents, two-decimal precision, strict format and no numeric-prefix coercion. A purchase total is required; an empty paid amount intentionally means zero. Existing server/domain validation of payable/supplier, cash account, permissions, accounting and outbox remains authoritative. Regression tests execute the real Windows handler with fake persistence/transaction boundaries and confirm that malformed amounts produce zero writes, while valid cents and blank optional payments are preserved.
 
 No new dependency, production migration, paid service or Windows installer release.
+
+The exact-head clean-room release audit initially rejected the change because the Windows `App.tsx` file exceeded its 60 KB architectural hotspot budget. The validator was extracted to `apps/desktop/src/lib/desktop-purchase-amount.ts`; the limit remains enforced without exception.
