@@ -149,3 +149,52 @@ test("first-customer supplier payable correction is permission-gated and ledger-
   assert.match(accounting, /referenceType: "auto_opening_supplier"/);
   assert.match(accounting, /auditAction\("opening\.supplier_balance"/);
 });
+
+test("Windows supplier setup refuses malformed amounts rather than posting a silent zero", () => {
+  const app = fs.readFileSync("apps/desktop/src/App.tsx", "utf8");
+  const start = app.indexOf("  function handleCreateSupplier()");
+  const end = app.indexOf("\n  function handleSaveProduct()", start);
+  assert.ok(start > 0 && end > start, "desktop create supplier handler present");
+  const handler = app.slice(start, end);
+  assert.match(handler, /openingBalance:Number\(supplierForm\.openingBalance\)/);
+  assert.doesNotMatch(handler, /Number\(supplierForm\.openingBalance\)\s*\|\|\s*0/);
+  function submit(raw) {
+    const created = [], errors = [];
+    const supplierForm = {
+      name: "Supplier A", company: "", phone: "", email: "", address: "",
+      category: "materials", openingBalance: raw, notes: "",
+    };
+    const phase5Store = {
+      createSupplier(input) {
+        // Mimics existing domain moneyMinorOrNull guard and opening posting.
+        const minor = Math.round(input.openingBalance * 100);
+        if (!Number.isFinite(input.openingBalance) ||
+            input.openingBalance < 0 ||
+            !Number.isSafeInteger(minor) ||
+            Math.abs(input.openingBalance * 100 - minor) > 0.000001) {
+          throw Error("Opening supplier balance must be a finite non-negative amount");
+        }
+        created.push(input);
+        return { id: "s1" };
+      },
+    };
+    const bindings = {
+      supplierForm, phase5Store,
+      setPurchaseForm: () => {}, setProductForm: () => {},
+      setSupplierForm: () => {}, setSupplierOpen: () => {},
+      setModuleError: error => errors.push(error),
+      persistAndRefresh: () => {}, errorMessage: error => error.message,
+    };
+    const make = new Function(...Object.keys(bindings),
+      handler + "\nreturn handleCreateSupplier;");
+    make(...Object.values(bindings))();
+    return { created, errors };
+  }
+  for (const raw of ["not a number", "NaN", "Infinity", "12.345", "-1"]) {
+    const outcome = submit(raw);
+    assert.deepEqual(outcome.created, [], raw + " must not create an unbalanced payable");
+    assert.match(outcome.errors[0], /Opening supplier balance/, raw);
+  }
+  assert.equal(submit("").created[0].openingBalance, 0);
+  assert.equal(submit("125.50").created[0].openingBalance, 125.5);
+});
