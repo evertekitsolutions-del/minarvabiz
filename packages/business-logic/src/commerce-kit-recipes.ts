@@ -123,7 +123,10 @@ export function createCommerceKitRecipe(input: {
   name: string; components: readonly CommerceKitRecipeComponent[];
 }): CommerceKitRecipeDraft {
   assertPermission("products.manage");
-  if (!input || !validName(input.name)) throw new Error("Kit recipe name is required (max 120 characters)");
+  if (!input || typeof input !== "object" || Object.keys(input).some((key) => key !== "name" && key !== "components")) {
+    throw new Error("Kit recipe creation accepts only a name and component quantities");
+  }
+  if (!validName(input.name)) throw new Error("Kit recipe name is required (max 120 characters)");
   const components = normalizeComponents(input.components);
   verifyCurrentCatalog(components);
   if (recipes.length >= MAX_RECIPES) throw new Error("Kit recipe limit exceeded");
