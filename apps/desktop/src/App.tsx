@@ -118,7 +118,7 @@ export function App() {
     try {
       if (!await persistDomainToSqlite()) throw new Error("The native SQLite write was rejected");
     } catch (error) {
-      // Require SQLite; no browser fallback.
+      // SQLite required.
       setModuleError(`SQLite save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
       console.error("[minarvabiz] SQLite save failed", error);
     }
@@ -134,7 +134,7 @@ export function App() {
     try {
       if (!await persistDomainToSqlite()) throw new Error("Attendance changes are not yet saved to SQLite. Keep the app open and retry.");
     } catch (error) {
-      // Never silently use browser-only attendance.
+      // Attendance requires SQLite.
       throw error;
     } finally {
       refreshAll();
@@ -224,7 +224,7 @@ export function App() {
   function handleLaundryStatusChange(order:import("@minarvabiz/types").LaundryOrder,status:import("@minarvabiz/types").LaundryOrder["status"]){try{const result=phase5Store.updateLaundryStatus(order.id,status);if(!result.order){setModuleError(result.error||"Unable to update laundry status");return;}setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
   function handleLaundryDetailsUpdate(order:import("@minarvabiz/types").LaundryOrder,values:{garment:string;notes:string}){try{const result=phase5Store.updateLaundryDetails(order.id,values);if(result.errors.length||!result.order)return{success:false,error:result.errors.join("; ")||"Unable to update laundry ticket"};void persistAndRefresh();return{success:true,order:result.order};}catch(error){return{success:false,error:errorMessage(error)};}}
   function handleLaundryCancel(values:LaundryCancellationValues){if(!laundryCancelOrder)return;try{const result=phase5Store.cancelLaundryOrder({orderId:laundryCancelOrder.id,reason:values.reason,refundPaymentMethod:values.refundPaymentMethod,supplierCostAction:values.supplierCostAction});if(result.errors.length||!result.order){setLaundryCancelError(result.errors.join("; ")||"Unable to cancel laundry ticket");return;}setLaundryCancelOrder(null);setLaundryCancelError(null);setModuleError(null);void persistAndRefresh();}catch(error){setLaundryCancelError(errorMessage(error));}}
-  function handleCreateExpense(){try{const result=phase5Store.createExpense({date:expenseForm.date||undefined,categoryId:expenseForm.categoryId,amount:parseFloat(expenseForm.amount)||0,paymentMethod:expenseForm.paymentMethod,description:expenseForm.description||null,reference:expenseForm.reference||null,receiptUrl:expenseForm.receiptUrl||null,staffId:expenseForm.staffId||null,orderId:expenseForm.orderId||null});if(result.errors.length||!result.expense){setModuleError(result.errors.join("; ")||"Failed to create expense");return;}setExpenseOpen(false);setModuleError(null);setExpenseForm({date:todayLocal(),categoryId:"",amount:"",paymentMethod:"cash",description:"",reference:"",receiptUrl:"",staffId:"",orderId:""});void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
+  function handleCreateExpense(){try{const result=phase5Store.createExpense({date:expenseForm.date||undefined,categoryId:expenseForm.categoryId,amount:parseDesktopPurchaseMoney(expenseForm.amount,"Expense amount"),paymentMethod:expenseForm.paymentMethod,description:expenseForm.description||null,reference:expenseForm.reference||null,receiptUrl:expenseForm.receiptUrl||null,staffId:expenseForm.staffId||null,orderId:expenseForm.orderId||null});if(result.errors.length||!result.expense){setModuleError(result.errors.join("; ")||"Failed to create expense");return;}setExpenseOpen(false);setModuleError(null);setExpenseForm({date:todayLocal(),categoryId:"",amount:"",paymentMethod:"cash",description:"",reference:"",receiptUrl:"",staffId:"",orderId:""});void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
   function handleReverseExpense(expense:import("@minarvabiz/types").Expense,reason:string){try{const result=phase5Store.reverseExpense(expense.id,reason);if(result.errors.length||!result.expense){setModuleError(result.errors.join("; ")||"Unable to reverse expense");return;}setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
   function handleCreatePurchase(){try{const result=phase5Store.createPurchase({date:purchaseForm.date||undefined,supplierId:purchaseForm.supplierId||null,description:purchaseForm.description,amount:parseDesktopPurchaseMoney(purchaseForm.amount,"Purchase amount"),paymentMethod:purchaseForm.paymentMethod,paidAmount:parseDesktopPurchaseMoney(purchaseForm.paidAmount,"Paid amount",true),kind:purchaseForm.kind,orderId:purchaseForm.orderId||null,notes:purchaseForm.notes||null});if(result.errors.length||!result.purchase){setModuleError(result.errors.join("; ")||"Failed to create purchase");return;}setPurchaseOpen(false);setModuleError(null);setPurchaseForm({date:todayLocal(),supplierId:"",description:"",amount:"",paidAmount:"",paymentMethod:"cash",kind:"general",orderId:"",notes:""});void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
   function resetStaffForm(){setEditingStaffId(null);setStaffForm({name:"",phone:"",email:"",role:"staff",salary:"",joiningDate:todayLocal(),status:"active",notes:""});}
