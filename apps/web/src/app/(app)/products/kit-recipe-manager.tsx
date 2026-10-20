@@ -5,6 +5,7 @@ import { Button, FormField, Modal, inputClass, selectClass } from "@minarvabiz/u
 import {
   can, store, listCommerceKitRecipes, createCommerceKitRecipe,
   updateCommerceKitRecipe, deleteCommerceKitRecipe, previewCommerceKitRecipe,
+  exportCommerceKitEstimateCsv,
   parseCommerceKitRecipeRows, previewUnsavedCommerceKit, getShopProfile,
 } from "@minarvabiz/business-logic";
 
@@ -139,6 +140,30 @@ export function KitRecipeManager() {
     }
   }
 
+  function downloadKitEstimate(id: string, version: number) {
+    try {
+      if (!/^[1-9]\d*$/.test(kitCount.trim()) ||
+          !Number.isSafeInteger(Number(kitCount.trim()))) {
+        throw new Error("Kit count must be a positive whole number");
+      }
+      const csv = exportCommerceKitEstimateCsv(id, version, Number(kitCount.trim()));
+      const url = URL.createObjectURL(new Blob(["\uFEFF" + csv], {
+        type: "text/csv;charset=utf-8",
+      }));
+      try {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "minarvabiz-kit-estimate-draft.csv";
+        link.click();
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+      setError(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Unable to export kit estimate");
+    }
+  }
+
   function previewRecipe(id: string) {
     try {
       if (!/^[1-9]\d*$/.test(kitCount.trim()) ||
@@ -219,6 +244,7 @@ export function KitRecipeManager() {
                 <span className="text-sm">{recipe.name} — {recipe.components.length} SKU(s), revision {recipe.version}</span>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={() => previewRecipe(recipe.id)}>Preview current price</Button>
+                  <Button variant="outline" onClick={() => downloadKitEstimate(recipe.id, recipe.version)}>Download estimate CSV</Button>
                   {can("products.manage") && <>
                     <Button variant="outline" onClick={() => editRecipe(recipe.id, recipe.version)}>Edit recipe</Button>
                     <Button variant="outline" onClick={() => removeRecipe(recipe.id, recipe.version)}>Delete recipe</Button>

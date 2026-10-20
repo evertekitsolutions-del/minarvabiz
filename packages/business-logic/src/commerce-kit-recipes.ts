@@ -207,6 +207,45 @@ export function previewCommerceKitRecipe(id: string, kitCount: number): Commerce
     }),
   });
 }
+function estimateCsvCell(value: string | number): string {
+  const text = String(value);
+  // Excel/LibreOffice formulas must not execute from merchant product names.
+  const safe = /^[\s\uFEFF]*[=+\-@]/u.test(text) ? "'" + text : text;
+  return /[",\r\n]/.test(safe) ? '"' + safe.replace(/"/g, '""') + '"' : safe;
+}
+
+/**
+ * Explicit seller-initiated CSV estimate for a saved kit composition.
+ * No discount/checkout authority, invoice number or tax calculation.
+ * Retail amounts are recalculated from current active catalog products.
+ */
+export function exportCommerceKitEstimateCsv(
+  recipeId: string,
+  expectedVersion: number,
+  kitCount: number,
+): string {
+  assertPermission("products.manage");
+  const recipe = recipes.find((r) => r.id === recipeId);
+  if (!recipe) throw new Error("Kit recipe no longer exists");
+  if (!Number.isSafeInteger(expectedVersion) || recipe.version !== expectedVersion) {
+    throw new Error("Kit recipe changed; reload before exporting estimate");
+  }
+  const preview = previewCommerceKitRecipe(recipeId, kitCount);
+  const currency = preview.currency;
+  const row = (...fields: (string | number)[]) => fields.map(estimateCsvCell).join(",");
+  return [
+    "record,description,product_id,unit,quantity,unit_price,line_total,currency",
+    row("seller", getShopProfile().shopName, "", "", "", "", "", currency),
+    row("draft_kit_estimate", recipe.name, "", "", kitCount, "", "", currency),
+    ...preview.lines.map((line) => row(
+      "component", line.productName, line.productId, line.unit,
+      line.quantity, line.unitPrice, line.lineTotal, currency,
+    )),
+    row("estimate_total", "NONBINDING - NOT AN INVOICE", "", "", kitCount, "", preview.total, currency),
+    row("exact_per_kit", "Blank unless the total divides exactly into cents", "", "", "", "", preview.kitTotal, currency),
+  ].join("\n") + "\n";
+}
+
 export function exportCommerceKitRecipes(): CommerceKitRecipeDraft[] {
   return recipes.map(cloned);
 }
