@@ -15,6 +15,7 @@ export function CustomerList({
   onEdit,
   onArchive,
   onCollect,
+  onSetOpeningBalance,
 }: {
   customers: Customer[];
   onAdd?: () => void;
@@ -23,6 +24,7 @@ export function CustomerList({
   onEdit?: (c: Customer) => void;
   onArchive?: (c: Customer) => void;
   onCollect?: (c: Customer) => void;
+  onSetOpeningBalance?: (c: Customer) => void;
 }) {
   const [q, setQ] = React.useState("");
   const [withDuesOnly, setWithDuesOnly] = React.useState(false);
@@ -37,6 +39,7 @@ export function CustomerList({
       render: (r) => (
         <div className="flex flex-wrap gap-1" onClick={(event) => event.stopPropagation()}>
           {onCollect && hasOutstandingCustomerBalance(r) && <Button size="sm" variant="outline" onClick={() => onCollect(r)}>Collect Payment</Button>}
+          {onSetOpeningBalance && <Button size="sm" variant="outline" onClick={() => onSetOpeningBalance(r)}>Opening balance</Button>}
           {onEdit && <Button size="sm" variant="outline" onClick={() => onEdit(r)}>Edit</Button>}
           {onArchive && <Button size="sm" variant="outline" onClick={() => onArchive(r)}>Delete / Archive</Button>}
         </div>
