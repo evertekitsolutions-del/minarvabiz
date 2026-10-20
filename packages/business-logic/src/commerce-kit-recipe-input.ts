@@ -4,6 +4,7 @@
  */
 import { toQuantityMilli } from "@minarvabiz/utils";
 import type { CommerceKitRecipeComponent } from "./commerce-kit-recipes";
+import { quoteCommerceBundle, type CommerceKitProduct, type CommerceKitQuote } from "./commerce-bundle-quote";
 
 export interface CommerceKitRecipeInputRow {
   readonly productId: string;
@@ -45,5 +46,40 @@ export function parseCommerceKitRecipeRows(
       throw new Error("Kit component " + (index + 1) + " quantity exceeds safe range");
     }
     return { productId: row.productId, quantityMilliPerKit: milli };
+  });
+}
+
+/**
+ * Explicit nonbinding preview of an unsaved kit. Catalog data is projected to
+ * public sale fields only; the source objects never escape to the result.
+ */
+export function previewUnsavedCommerceKit(input: {
+  currency: string;
+  kitCount: string;
+  rows: readonly CommerceKitRecipeInputRow[];
+  products: readonly (Omit<CommerceKitProduct, "deletedAt"> & { deletedAt?: string | null })[];
+}): CommerceKitQuote {
+  if (!input || typeof input.kitCount !== "string" ||
+      !/^[1-9]\\d*$/.test(input.kitCount.trim()) ||
+      !Number.isSafeInteger(Number(input.kitCount.trim()))) {
+    throw new Error("Kit count must be a positive whole number");
+  }
+  const components = parseCommerceKitRecipeRows(input.rows);
+  return quoteCommerceBundle({
+    currency: input.currency,
+    kitCount: Number(input.kitCount.trim()),
+    components: components.map(({ productId, quantityMilliPerKit }) => ({
+      productId, quantityMilliPerKit,
+    })),
+    products: input.products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      unit: p.unit,
+      sellingPrice: p.sellingPrice,
+      isActive: p.isActive,
+      deletedAt: p.deletedAt ?? null,
+      branchId: p.branchId ?? null,
+      hasVariants: p.hasVariants ?? false,
+    })),
   });
 }
