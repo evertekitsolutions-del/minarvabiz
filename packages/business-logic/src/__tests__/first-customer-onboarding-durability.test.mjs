@@ -118,8 +118,7 @@ test("opening customer balances are permission-gated in Web and Windows UI and u
 });
 
 test("opening balance modal snapshots the customer and refuses stale outstanding totals", () => {
-  for (const source of [customerPage = fs.readFileSync("apps/web/src/app/(app)/customers/page.tsx", "utf8"),
-                       fs.readFileSync("apps/desktop/src/components/DesktopCustomerMasterPanel.tsx", "utf8")]) {
+  for (const source of [customerPage, desktopCustomerPanel]) {
     assert.match(source, /setOpeningBalanceTarget\(\{ \.\.\.customer \}\)/);
     assert.match(source, /openedCents !== liveCents/);
     assert.match(source, /Customer balance changed\. Close and reopen/);
