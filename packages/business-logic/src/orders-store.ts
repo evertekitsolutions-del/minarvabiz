@@ -418,7 +418,7 @@ export function addOrderExpense(
   const amountCents = Math.round(amount * 100);
   if (!Number.isFinite(amount) || amountCents <= 0 || !Number.isSafeInteger(amountCents)
     || Math.abs(amount - amountCents / 100) > Math.min(1e-9, 4 * Number.EPSILON * Math.max(1, Math.abs(amount)))) {
-    return { order: null, error: "Order expense amount must be positive with valid cent precision" };
+    return { order: null, error: "Order expense amount must be positive and finite with valid cent precision" };
   }
   const oldCents = Math.round(order.orderExpensesTotal * 100);
   const nextCents = oldCents + amountCents;
