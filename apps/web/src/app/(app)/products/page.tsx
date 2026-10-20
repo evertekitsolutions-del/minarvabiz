@@ -193,6 +193,22 @@ export default function ProductsPage() {
         }}>Download customer catalog HTML</Button>
         <Button variant="outline" onClick={() => {
           try {
+            const shop = getShopProfile();
+            downloadCsv(
+              exportShareableCatalogHtml(
+                store.listProducts(), store.listCategories(), shop.currency, shop.shopName,
+                { template: "compact" },
+              ),
+              "minarvabiz-customer-catalog-compact.html",
+              "text/html;charset=utf-8",
+            );
+            setCsvMessage(null);
+          } catch (err) {
+            setCsvMessage(err instanceof Error ? err.message : "Unable to export compact catalog");
+          }
+        }}>Download compact catalog HTML</Button>
+        <Button variant="outline" onClick={() => {
+          try {
             downloadCsv(
               exportShareableCatalogJson(store.listProducts(), store.listCategories(), getShopProfile().currency),
               "minarvabiz-headless-catalog.json",
