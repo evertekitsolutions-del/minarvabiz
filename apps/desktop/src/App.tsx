@@ -118,7 +118,7 @@ export function App() {
     try {
       if (!await persistDomainToSqlite()) throw new Error("The native SQLite write was rejected");
     } catch (error) {
-      // Require durable SQLite; browser fallback would conceal lost writes.
+      // Require SQLite; no browser fallback.
       setModuleError(`SQLite save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
       console.error("[minarvabiz] SQLite save failed", error);
     }
