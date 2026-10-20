@@ -11,7 +11,7 @@ require.extensions[".ts"] = (mod, filename) => mod._compile(
   }).outputText, filename,
 );
 
-const { parseCommerceKitRecipeRows } = require("../commerce-kit-recipe-input.ts");
+const { parseCommerceKitRecipeRows, previewUnsavedCommerceKit } = require("../commerce-kit-recipe-input.ts");
 const kitRecipes = require("../commerce-kit-recipes.ts");
 const products = require("../store.ts");
 const permissions = require("../permissions.ts");
@@ -99,4 +99,56 @@ test("product removal is rechecked by the domain rather than trusted from select
   assert.throws(() => kitRecipes.updateCommerceKitRecipe(recipe.id, 1, {
     name: "Edited", components: parseCommerceKitRecipeRows([row("2")]),
   }), /active company-wide saleable/);
+});
+
+test("unsaved kit preview is nonbinding and excludes purchase/private catalog fields", () => {
+  const request = {
+    kitCount: "2",
+    currency: "INR",
+    rows: [row("1.5", "sku-1"), row("0.5", "sku-2")],
+    products: [
+      { id: "sku-1", name: "Blue kit", sellingPrice: 5, unit: "pcs", isActive: true,
+        costPrice: 2, stockQuantity: 77777, supplierId: "private-source", branchId: null },
+      { id: "sku-2", name: "Power kit", sellingPrice: 10, unit: "pcs", isActive: true,
+        costPrice: 4, notes: "hidden-note", branchId: null },
+    ],
+  };
+  const before = JSON.stringify(request);
+  const result = previewUnsavedCommerceKit(request);
+  assert.equal(result.kind, "nonbinding_bundle_price_preview");
+  assert.equal(result.total, "25.00");
+  assert.equal(result.kitTotal, "12.50");
+  assert.equal(JSON.stringify(request), before);
+  for (const privateValue of ["private-source", "hidden-note", "stockQuantity", "supplierId", "costPrice", "77777"]) {
+    assert.equal(JSON.stringify(result).includes(privateValue), false);
+  }
+});
+
+test("unsaved kit preview denies malformed kit counts and unrelated branch products", () => {
+  const base = {
+    currency: "INR", kitCount: "2",
+    rows: [row("1")],
+    products: [{
+      id: "sku-1", name: "Stock", sellingPrice: 5, unit: "pcs", isActive: true,
+      deletedAt: undefined, branchId: null,
+    }],
+  };
+  for (const kitCount of ["", "0", "-1", "1.2", "1e3", "Infinity", "9007199254740999"]) {
+    assert.throws(() => previewUnsavedCommerceKit({ ...base, kitCount }), /Kit count/);
+  }
+  assert.equal(previewUnsavedCommerceKit(base).total, "10.00");
+  assert.throws(() => previewUnsavedCommerceKit({ ...base,
+    products: [{ ...base.products[0], branchId: "foreign-branch" }],
+  }), /unavailable or outside/);
+  assert.throws(() => previewUnsavedCommerceKit({ ...base,
+    rows: [row("1.0001")],
+  }), /at most three decimal places/);
+});
+
+test("Products manager offers current unsaved preview without saving any kit recipe", () => {
+  const ui = fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/products/kit-recipe-manager.tsx", import.meta.url), "utf8");
+  assert.match(ui, /Preview unsaved kit/);
+  assert.match(ui, /previewUnsavedCommerceKit\(/);
+  assert.match(ui, /rows: rows\.map/);
+  assert.match(ui, /products: store\.listProducts\(\)/);
 });
