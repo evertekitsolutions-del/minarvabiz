@@ -38,8 +38,10 @@ export interface KitLotCasPatch {
   readonly next: VersionedBundleLot;
 }
 export interface KitReservationCreateRequest
-  extends Omit<CommerceBundlePreflightInput, "lots"> {
+  extends Omit<CommerceBundlePreflightInput, "lots" | "bundleCount"> {
   readonly reservationId: string;
+  /** Requested number of completed kits (whole units only). */
+  readonly kitCount: number;
   /** Stock-lot rows from a trusted repository, including CAS versions. */
   readonly lots: readonly VersionedBundleLot[];
   /** Already persisted row from trusted repository, if idempotency ID exists. */
