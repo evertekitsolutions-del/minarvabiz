@@ -31,8 +31,10 @@ for (const workflow of requiredWorkflows) {
     assert.match(source, /workflow_run:/);
     assert.match(source, /workflows:\s*\["Release Windows"\]/);
     assert.match(source, /workflow_run\.conclusion == 'success'/);
-    assert.match(source, /workflow_run\.event == 'push'/);
+    assert.match(source, /workflow_run\.event == 'workflow_dispatch'/);
     assert.match(source, /workflow_run\.head_branch == 'main'/);
+    assert.match(source, /workflow_run\.repository\.full_name == github\.repository/);
+    assert.doesNotMatch(source, /workflow_run\.event == 'push'/);
     assert.match(source, /gh release create/);
     assert.doesNotMatch(source, /pull_request_target/);
     assert.doesNotMatch(source, /permissions:\s*write-all/);
