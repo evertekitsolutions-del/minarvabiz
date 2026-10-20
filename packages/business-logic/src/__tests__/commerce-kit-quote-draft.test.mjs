@@ -111,3 +111,10 @@ test("optional deletedAt from real Product rows normalizes without exposing priv
     assert.equal(publicResult.includes(internal), false, internal + " leaked into preview");
   }
 });
+
+test("new kit component defaults to an unused SKU while retaining deliberate duplicate support", () => {
+  const page = fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/products/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /const selected = new Set\(kitComponents\.map\(\(item\) => item\.productId\)\)/);
+  assert.match(page, /available\.find\(\(product\) => !selected\.has\(product\.id\)\) \?\? available\[0\]/);
+  assert.match(page, /quote engine correctly aggregates their quantities/);
+});
