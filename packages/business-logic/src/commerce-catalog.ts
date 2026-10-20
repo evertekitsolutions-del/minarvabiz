@@ -24,6 +24,7 @@ export interface ShareableCatalogOptions {
 }
 
 type VisibleCatalogRow = {
+  productId: string;
   name: string;
   sku: string;
   barcode: string;
@@ -88,6 +89,7 @@ function visibleCatalogRows(
     .map((p) => {
       if (!p.name.trim()) throw new Error("Product " + p.id + " has no catalog name");
       return {
+        productId: p.id,
         name: p.name,
         sku: p.sku ?? "",
         barcode: p.barcode ?? "",
@@ -116,6 +118,47 @@ export function exportShareableCatalogCsv(
       r.fabric, r.unit, r.price, r.currency,
     ].map(csvCell).join(","));
   return [HEADER, ...lines].join("\n") + "\n";
+}
+
+/**
+ * Stable, manually exported read-only JSON catalog snapshot for a future
+ * seller-operated headless storefront. No API endpoint, checkout, price-list
+ * authority, stock reservation, or network publication is enabled here.
+ *
+ * Public fields are allowlisted explicitly, not spread from Product.
+ * A branch ID must come from a verified branch-scoped caller, never URL input.
+ */
+export function exportShareableCatalogJson(
+  products: readonly ShareableCatalogProduct[],
+  categories: readonly Pick<Category, "id" | "name" | "isActive" | "deletedAt">[],
+  currencyCode: string,
+  options: ShareableCatalogOptions = {},
+): string {
+  const rows = visibleCatalogRows(products, categories, currencyCode, options);
+  const snapshot = {
+    schemaVersion: 1 as const,
+    kind: "minarvabiz.public_catalog" as const,
+    currency: currencyCode,
+    products: rows.map((r) => ({
+      id: r.productId,
+      name: r.name,
+      sku: r.sku,
+      barcode: r.barcode,
+      category: r.category,
+      brand: r.brand,
+      size: r.size,
+      color: r.color,
+      fabric: r.fabric,
+      unit: r.unit,
+      unitPrice: r.price,
+    })),
+  };
+  // Remain safe even if downstream consumers later embed this JSON into HTML.
+  // JSON.parse will restore the original characters.
+  return JSON.stringify(snapshot, null, 2)
+    .replace(/[<>&\u2028\u2029]/g, (char) =>
+      "\\u" + char.charCodeAt(0).toString(16).padStart(4, "0"))
+    + "\n";
 }
 
 /**
