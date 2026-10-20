@@ -57,9 +57,10 @@ export function setOpeningCustomerBalance(customerId: UUID, amount: number): { o
     ],
   });
   if (posting.errors.length) return { ok: false, error: posting.errors.join("; ") };
+  // Never publish the receivable or cloud master until its balancing journal exists.
+  if (!posting.commit()) return { ok: false, error: "Customer opening journal posting did not complete" };
   c.outstandingBalance = next;
   c.updatedAt = nowISO();
-  posting.commit();
   void remoteUpsertCustomer({ ...c });
   auditAction("opening.customer_balance", "customers", customerId, { outstandingBalance: previous }, { outstandingBalance: next });
   touchPersistence();
@@ -96,9 +97,10 @@ export function setOpeningSupplierBalance(supplierId: UUID, amount: number): { o
     ],
   });
   if (posting.errors.length) return { ok: false, error: posting.errors.join("; ") };
+  // Never publish the payable or cloud master until its balancing journal exists.
+  if (!posting.commit()) return { ok: false, error: "Supplier opening journal posting did not complete" };
   s.outstandingBalance = next;
   s.updatedAt = nowISO();
-  posting.commit();
   void remoteUpsertSupplier({ ...s });
   auditAction("opening.supplier_balance", "suppliers", supplierId, { outstandingBalance: previous }, { outstandingBalance: next });
   touchPersistence();
