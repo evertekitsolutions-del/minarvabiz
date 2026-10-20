@@ -80,3 +80,16 @@ test("non-saleable products and invalid catalog unit prices fail closed", () => 
     })), /catalog|price/i);
   }
 });
+
+test("seller Products page exposes a genuine read-only kit pricing workflow", () => {
+  const page = fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/products/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /Kit price preview/);
+  assert.match(page, /parseCommerceKitQuoteDraft\(/);
+  assert.match(page, /kitCount: kitCountText/);
+  assert.match(page, /products: store\.listProducts\(\)/);
+  assert.match(page, /quantityPerKit/);
+  assert.match(page, /Add kit component/);
+  assert.match(page, /Calculate kit price/);
+  assert.match(page, /No stock availability check/);
+  assert.match(page, /Exact per-kit cents are unavailable/);
+});
