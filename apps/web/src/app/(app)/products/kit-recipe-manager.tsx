@@ -5,7 +5,7 @@ import { Button, FormField, Modal, inputClass, selectClass } from "@minarvabiz/u
 import {
   can, store, listCommerceKitRecipes, createCommerceKitRecipe,
   updateCommerceKitRecipe, deleteCommerceKitRecipe, previewCommerceKitRecipe,
-  parseCommerceKitRecipeRows,
+  parseCommerceKitRecipeRows, previewUnsavedCommerceKit, getShopProfile,
 } from "@minarvabiz/business-logic";
 
 type KitRecipe = ReturnType<typeof listCommerceKitRecipes>[number];
@@ -123,6 +123,22 @@ export function KitRecipeManager() {
     }
   }
 
+  function previewCurrentDraft() {
+    try {
+      const result = previewUnsavedCommerceKit({
+        currency: getShopProfile().currency,
+        kitCount,
+        rows: rows.map(({ productId, quantityPerKit }) => ({ productId, quantityPerKit })),
+        products: store.listProducts(),
+      });
+      setPreview(result);
+      setError(null);
+    } catch (reason) {
+      setPreview(null);
+      setError(reason instanceof Error ? reason.message : "Unable to preview unsaved kit");
+    }
+  }
+
   function previewRecipe(id: string) {
     try {
       if (!/^[1-9]\d*$/.test(kitCount.trim()) ||
@@ -185,6 +201,8 @@ export function KitRecipeManager() {
           </div>)}
           <Button variant="outline" onClick={addComponent}
             disabled={!availableProducts.length || rows.length >= 100}>Add component</Button>
+          <Button variant="outline" onClick={previewCurrentDraft}
+            disabled={!availableProducts.length || rows.length === 0}>Preview unsaved kit</Button>
           {editing && <Button variant="outline" onClick={blankForm}>Cancel recipe edit</Button>}
         </div>
 
