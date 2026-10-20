@@ -23,8 +23,10 @@ transaction. T-shirt price and print detail now use the same validated draft.
 Existing domain authorization, accounting, persistence and sync are unchanged.
 No network call, extra database, runtime dependency or recurring charge is added.
 
-MIT copyright and full license are retained in the source and
-`THIRD_PARTY_NOTICES.md`; Windows packaging copies the notices into resources.
+MIT copyright and SPDX-style attribution are retained in the source; the
+complete MIT license is in `THIRD_PARTY_NOTICES.md`, which Windows packaging
+copies into release resources. Keeping the full notice in one canonical file
+avoids source-comment-only lines lowering executable-code coverage.
 The pure local adapter can be replaced without a data migration. Future updates
 must review the pinned upstream file and rerun the shared and renderer tests;
 no automatic upstream updates. No platform-wide security clearance is claimed.
@@ -56,3 +58,7 @@ UAT. Exact-head CI, Web/Desktop typechecks and packaged Windows acceptance remai
 separate evidence gates. No production migration, deployment or installer release.
 Rollback: revert this PR; no persisted schema changes. No completion percentage
 or whole-module acceptance is earned by this component reuse.
+
+## Coverage gate follow-up
+
+The first rebased exact-head run failed the changed-code 80% coverage gate (49.30%) even though behavior tests passed. The bundled complete MIT license remains intact in THIRD_PARTY_NOTICES, while the source retains copyright attribution. Direct tests now execute input-type, negative, unsafe-range, optional-empty, wholesale/uniform, overflow and amount-limit branches. No coverage exclusions or threshold reductions were made. Confirm the next exact-head CI before merge.
