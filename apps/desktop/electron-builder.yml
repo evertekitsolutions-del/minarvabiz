@@ -32,3 +32,7 @@ extraMetadata:
   main: electron/dist/bootstrap.js
 npmRebuild: false
 buildDependenciesFromSource: false
+
+extraResources:
+  - from: ../../THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md

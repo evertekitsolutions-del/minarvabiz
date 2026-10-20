@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { parseServiceOrderPriceDraft } from "../../../../apps/web/src/lib/service-order-price-draft.ts";
+import { parseServiceOrderPriceDraft } from "../service-order-price-draft.ts";
 
 const base = {
   serviceType: "ladies_tailoring",
