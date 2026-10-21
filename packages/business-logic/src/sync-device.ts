@@ -48,7 +48,7 @@ export type VerifyFinancialSyncSignedChallenge = (
  actor:FinancialSyncActorAuthority,
  enrolled:FinancialSyncEnrolledDevice,
 )=>true;
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DIGEST=/^[0-9a-f]{64}$/;
 const FIELDS=["organizationId","actorUserId","companyId","branchId","warehouseId"] as const;
 /** Guard never treats JavaScript caller shape as proof of host authority. */
