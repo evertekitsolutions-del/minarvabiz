@@ -56,6 +56,7 @@ function memoryDb() {
       }
     },
   };
+  db.exec("PRAGMA foreign_keys=ON");
   sqlite.initializeRecurringInvoicePilotSqlite(db);
   return db;
 }
@@ -435,4 +436,23 @@ test("schedule list returns only trusted branch records with revisions and fails
     SET payload_json='{}' WHERE id='monthly-maintenance-2'`);
   assert.throws(() => sqlite.listRecurringInvoiceSchedulesPilotSqlite(
     db, scope, authorize), /Corrupt/);
+});
+
+test("SQLite composite FK rejects a draft from another company/branch", () => {
+  const db = memoryDb();
+  sqlite.saveRecurringInvoicePilotSqlite(db, rule(), authorize);
+  for (const patch of [
+    { org: "foreign-org", company: scope.companyId, branch: scope.branchId },
+    { org: scope.organizationId, company: "foreign-company", branch: scope.branchId },
+    { org: scope.organizationId, company: scope.companyId, branch: "foreign-branch" },
+  ]) {
+    assert.throws(() => db.exec(`INSERT INTO recurring_invoice_draft_pilot_v1
+      (org_id,company_id,branch_id,id,schedule_id,sequence,due_date)
+      VALUES(?,?,?,?,?,?,?)`, [
+      patch.org, patch.company, patch.branch,
+      "foreign-draft-" + patch.org + patch.company + patch.branch,
+      "monthly-maintenance", 1, "2026-01-31",
+    ]), /FOREIGN KEY constraint/);
+  }
+  assert.deepEqual(readRows(db), []);
 });
