@@ -104,3 +104,6 @@ The pilot snapshot now contains **the full append-only order event history** (le
 
 ## Bounded offline upload planner (no network, default OFF)
 `prepareSalesOrderUploadBatchSqlite` reads the complete durable event history and stored host-verified cloud receipts in one SQLite transaction, enforcing no revision gaps, chronological per-order replay, a 1–100 event limit and 4KB–1MB payload cap. It returns the exact original events for an authenticated future cloud writer without posting, mutating local financial state, or ACKing anything. A server sender/RPC, company/device authority and conflict reconciliation are still not installed.
+
+### Native offline receipt durability regression
+The same SQL.js database binary adapter used by the Windows Electron renderer is tested across database close/reopen with a trusted cloud receipt, pending next revision, and an audited v2 backup-restore into a separate SQLite file. Wrong/missing backup receipt verification remains blocked; no upload or production device activation occurs.

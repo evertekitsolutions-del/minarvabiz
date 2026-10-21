@@ -10,6 +10,8 @@ require.extensions[".ts"]=(mod,path)=>mod._compile(ts.transpileModule(fs.readFil
  target:ts.ScriptTarget.ES2022}}).outputText,path);
 const {openSqliteDatabase}=dbRequire("./src/adapters/sqlite-browser.ts");
 const pilot=require("../sales-order-sqlite.ts");
+const sync=require("../sales-order-sync-receipt-sqlite.ts");
+const backup=require("../sales-order-backup-sqlite.ts");
 const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
 const auth={organizationId:uuid(1),companyId:uuid(2),branchId:uuid(3),
  warehouseId:uuid(4),canManageSalesOrders:true};
@@ -72,4 +74,37 @@ test("restarted file remains branch-isolated and permission-checked",async()=>{
  assert.throws(()=>pilot.listSalesOrdersSqlite(db,{...auth,canManageSalesOrders:false},true),/permission denied/);
  assert.throws(()=>pilot.listSalesOrdersSqlite(db,auth),/disabled/);
  db.close();
+});
+
+test("trusted cloud ACK survives physical desktop SQLite restart and v2 backup restore",async()=>{
+ const {io}=storage();
+ let db=await openSqliteDatabase("minarva-sync-restart-test.db",io);
+ pilot.initializeSalesOrderSqlite(db,true);
+ pilot.createSalesOrderSqlite(db,req(),auth,true,()=>true);
+ pilot.transitionSalesOrderSqlite(db,uuid(5),confirm,auth,true,undefined,()=>true);
+ const event=pilot.listSalesOrderEventHistorySqlite(db,auth,true)[0];
+ const receipt={...auth,serverReceiptId:uuid(95),orderId:event.orderId,
+   operationId:event.operationId,orderVersion:event.orderVersion,eventType:event.eventType,
+   receivedAt:"2026-10-21T05:03:00.000Z",event};
+ sync.acknowledgeSalesOrderCloudEventSqlite(db,receipt,auth,true,()=>true);
+ assert.deepEqual(pilot.listPendingSalesOrderEventsSqlite(db,auth,true).map(x=>x.orderVersion),[2]);
+ db.close();
+ db=await openSqliteDatabase("minarva-sync-restart-test.db",io);
+ assert.deepEqual(pilot.listPendingSalesOrderEventsSqlite(db,auth,true).map(x=>x.orderVersion),[2]);
+ const saved=backup.exportSalesOrderPilotBackupSqlite(db,auth,true);
+ assert.equal(saved.schemaVersion,2);
+ assert.equal(saved.cloudReceipts.length,1);
+ assert.equal(saved.pendingEvents.length,2);
+ const {io:targetIo}=storage();
+ let target=await openSqliteDatabase("minarva-restored-sync-test.db",targetIo);
+ pilot.initializeSalesOrderSqlite(target,true);
+ assert.throws(()=>backup.restoreSalesOrderPilotBackupSqlite(target,saved,auth,true),
+   /Trusted cloud receipt verification required/);
+ backup.restoreSalesOrderPilotBackupSqlite(target,saved,auth,true,()=>true);
+ target.close();
+ target=await openSqliteDatabase("minarva-restored-sync-test.db",targetIo);
+ assert.equal(pilot.listPendingSalesOrderEventsSqlite(target,auth,true).length,1);
+ assert.equal(sync.listSalesOrderCloudReceiptsSqlite(target,auth,true).length,1);
+ assert.deepEqual(backup.exportSalesOrderPilotBackupSqlite(target,auth,true),saved);
+ db.close();target.close();
 });
