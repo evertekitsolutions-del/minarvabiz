@@ -269,3 +269,124 @@ test("SQLite pending review rejects foreign-branch ids, tampered due dates and p
   assert.throws(() => sqlite.previewRecurringInvoiceDraftPilotSqlite(
     db, scope, draft.id, "2026-01-31", authorize, trustedCatalogReaders()), /Only active/);
 });
+
+function seededPostingDb() {
+  const db = memoryDb();
+  db.exec(`CREATE TABLE authorised_financial_sale_fixture (
+    id TEXT PRIMARY KEY,
+    org_id TEXT NOT NULL, company_id TEXT NOT NULL, branch_id TEXT NOT NULL,
+    recurrence_key TEXT NOT NULL UNIQUE, total INTEGER NOT NULL CHECK(total > 0)
+  )`);
+  sqlite.saveRecurringInvoicePilotSqlite(db, rule(), authorize);
+  sqlite.stageRecurringInvoiceDraftsPilotSqlite(
+    db, scope, "monthly-maintenance", "2026-03-31", authorize);
+  return db;
+}
+function postingInput(db, draftId = "monthly-maintenance:1", patch = {}) {
+  return {
+    ...scope, draftId, businessDate: "2026-03-31",
+    authorizeApproval: authorize, live: trustedCatalogReaders(),
+    getAuthenticatedApproverId: () => "cashier-manager-id",
+    postFinancialInvoice(tx, preview, key) {
+      const invoiceId = `invoice-${preview.sequence ?? preview.occurrenceId}`;
+      tx.exec(`INSERT INTO authorised_financial_sale_fixture
+        (id,org_id,company_id,branch_id,recurrence_key,total)
+        VALUES (?,?,?,?,?,?)`,
+      [invoiceId, preview.organizationId, preview.companyId,
+        preview.branchId, key, preview.totals.grandTotal * 100]);
+      return { invoiceId };
+    },
+    verifyPostedInvoice(tx, invoiceId, preview, key) {
+      const records = tx.query(`SELECT id FROM authorised_financial_sale_fixture
+        WHERE id=? AND org_id=? AND company_id=? AND branch_id=?
+          AND recurrence_key=? AND total=?`,
+      [invoiceId, preview.organizationId, preview.companyId,
+        preview.branchId, key, preview.totals.grandTotal * 100]);
+      return records.length === 1;
+    },
+    ...patch,
+  };
+}
+function postedFixtures(db) {
+  return db.query("SELECT * FROM authorised_financial_sale_fixture ORDER BY id");
+}
+
+test("reviewed recurring invoice post commits one financial fixture and acknowledgment atomically", () => {
+  const db = seededPostingDb();
+  const first = sqlite.postRecurringInvoiceDraftPilotSqlite(db, postingInput(db));
+  assert.equal(first.disposition, "posted");
+  assert.equal(first.invoiceId, "invoice-monthly-maintenance:1");
+  assert.equal(postedFixtures(db).length, 1);
+  assert.equal(postedFixtures(db)[0].total, 20000);
+  const stored = readRows(db).find(x => x.id === "monthly-maintenance:1");
+  assert.equal(stored.status, "posted");
+  assert.equal(stored.posted_invoice_id, first.invoiceId);
+  assert.equal(stored.approved_by, "cashier-manager-id");
+  assert.equal(sqlite.listRecurringInvoiceDraftsPilotSqlite(db, scope, authorize).length, 2);
+  const replay = sqlite.postRecurringInvoiceDraftPilotSqlite(db, postingInput(db, first.draftId, {
+    postFinancialInvoice() { throw Error("writer must not run on already posted draft"); },
+  }));
+  assert.deepEqual(replay, { disposition: "already_posted",
+    draftId: first.draftId, invoiceId: first.invoiceId });
+  assert.equal(postedFixtures(db).length, 1);
+});
+
+test("denied reviewer, zero-write financial callback, unverified invoice and failures all rollback", () => {
+  const db = seededPostingDb();
+  const initial = JSON.stringify(readRows(db));
+  const invalidCases = [
+    postingInput(db, undefined, {
+      authorizeApproval() { throw Error("not approved"); },
+    }),
+    postingInput(db, undefined, {
+      getAuthenticatedApproverId() { return ""; },
+    }),
+    postingInput(db, undefined, {
+      postFinancialInvoice() { return { invoiceId: "ghost" }; },
+    }),
+    postingInput(db, undefined, {
+      verifyPostedInvoice() { return false; },
+    }),
+    postingInput(db, undefined, {
+      postFinancialInvoice(tx, preview, key) {
+        tx.exec(`INSERT INTO authorised_financial_sale_fixture
+          (id,org_id,company_id,branch_id,recurrence_key,total)
+          VALUES (?,?,?,?,?,?)`,
+        ["invoice-disk-fail", preview.organizationId, preview.companyId,
+          preview.branchId, key, 20000]);
+        throw new Error("simulated invoice transaction crash");
+      },
+    }),
+  ];
+  for (const input of invalidCases) {
+    assert.throws(() => sqlite.postRecurringInvoiceDraftPilotSqlite(db, input));
+    assert.equal(JSON.stringify(readRows(db)), initial);
+    assert.deepEqual(postedFixtures(db), []);
+  }
+});
+
+test("posting is single-use across drafts and refuses wrong-branch or altered persisted day", () => {
+  const db = seededPostingDb();
+  const first = sqlite.postRecurringInvoiceDraftPilotSqlite(db, postingInput(db));
+  assert.equal(first.disposition, "posted");
+  assert.throws(() => sqlite.postRecurringInvoiceDraftPilotSqlite(db, postingInput(
+    db, "monthly-maintenance:2", { postFinancialInvoice(tx, preview, key) {
+      tx.exec(`INSERT INTO authorised_financial_sale_fixture
+        (id,org_id,company_id,branch_id,recurrence_key,total)
+        VALUES (?,?,?,?,?,?)`,
+      [first.invoiceId, preview.organizationId, preview.companyId,
+        preview.branchId, key, 20000]);
+      return { invoiceId: first.invoiceId };
+    } },
+  )), /UNIQUE constraint/);
+  assert.equal(postedFixtures(db).length, 1);
+  assert.throws(() => sqlite.postRecurringInvoiceDraftPilotSqlite(db, {
+    ...postingInput(db, "monthly-maintenance:2"),
+    branchId: "foreign-branch",
+    authorizeApproval() {},
+  }), /out of branch/);
+  db.exec("UPDATE recurring_invoice_draft_pilot_v1 SET due_date='2026-02-01' WHERE sequence=2");
+  assert.throws(() => sqlite.postRecurringInvoiceDraftPilotSqlite(
+    db, postingInput(db, "monthly-maintenance:2")), /not an authorised/);
+  assert.equal(postedFixtures(db).length, 1);
+});
