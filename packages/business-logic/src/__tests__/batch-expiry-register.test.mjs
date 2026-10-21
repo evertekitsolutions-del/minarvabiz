@@ -7,7 +7,7 @@ const ts=require("typescript");
 
 function loadTs(file,mocks={}){
   const code=ts.transpileModule(fs.readFileSync(file,"utf8"),{
-    fileName:file,
+    fileName: typeof file === "string" ? file : file.pathname,
     compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true},
   }).outputText;
   const module={exports:{}};
