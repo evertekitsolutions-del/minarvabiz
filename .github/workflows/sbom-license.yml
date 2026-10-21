@@ -28,6 +28,9 @@ jobs:
       - name: Verify SBOM and license-policy workflow contract
         run: node scripts/sbom-license-workflow-smoke.mjs
 
+      - name: Test fail-closed dependency-license classifications
+        run: node --test scripts/dependency-license-policy.test.mjs
+
       - name: Install locked dependency graph
         run: pnpm install --frozen-lockfile --ignore-scripts
 
