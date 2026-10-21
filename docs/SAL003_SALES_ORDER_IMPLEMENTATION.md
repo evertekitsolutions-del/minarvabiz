@@ -59,3 +59,6 @@ SQLite read now rechecks all order and line totals in exact BigInt minor units, 
 
 ## Pending-event integrity
 The isolated durable offline event reader now independently validates the embedded order's exact line/order minor-unit totals, immutable scope, revision and original request baseline. A tampered event stays pending and causes an explicit error; it is never silently acknowledged or forwarded as a verified financial event. This is a staged local queue, not active hybrid delivery.
+
+## Isolated SQLite pilot backup and restore
+`sales-order-backup-sqlite.ts` exports tenant/company/branch/warehouse-scoped order records plus EVERY pending local mutation event (never cloud ACK). On restore, validates exact BigInt totals, original-create identity, contiguous event revision history and final order snapshot. The destination must be empty in that scope; all writes occur in one SQLite transaction and failed inserts roll back orders/events together. Direct real SQLite tests cover healthy round-trip, tampering, cross-tenant mismatch and injected mid-restore failures. This is **NOT yet wired into the shipping domain backup**; pilot limits: 1000 orders, 10000 events, 10MB per backup. No financial/stock/sync acknowledgements happen.
