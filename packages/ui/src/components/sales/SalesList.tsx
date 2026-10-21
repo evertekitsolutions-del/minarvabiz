@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import type { Sale, Customer } from "@minarvabiz/types";
-import { exportSalesHistoryCsv } from "@minarvabiz/business-logic";
+import type { InvoiceGrossProfit } from "@minarvabiz/business-logic";
+import { exportSalesHistoryCsv, can, readAuthorizedInvoiceGrossProfit } from "@minarvabiz/business-logic";
 import { DataTable, type Column } from "../data/DataTable";
 import { formatMoney } from "../customers/format";
 import { isUnpaidSale, canCollectCustomerDueFromSale } from "./unpaid-sale-filter";
@@ -33,6 +34,7 @@ export function SalesList({
   onPrintThermal,
   onCreateReturn,
   onCollectCustomerDue,
+  onShowProfit,
   buildPreviewHtml,
 }: {
   sales: Sale[];
@@ -42,11 +44,24 @@ export function SalesList({
   onPrintThermal?: (sale: Sale) => void;
   onCreateReturn?: (sale: Sale) => void;
   onCollectCustomerDue?: (sale: Sale) => void;
+  onShowProfit?: (sale: Sale) => InvoiceGrossProfit;
   buildPreviewHtml?: SalePreviewBuilder;
 }) {
   const [previewSale, setPreviewSale] = React.useState<Sale | null>(null);
   const [previewPaper, setPreviewPaper] = React.useState<"a4" | "thermal">("a4");
   const [detailSale, setDetailSale] = React.useState<Sale | null>(null);
+  const [profit, setProfit] = React.useState<InvoiceGrossProfit | null>(null);
+  const [profitError, setProfitError] = React.useState<string | null>(null);
+  const defaultProfitReader = React.useCallback((sale: Sale) => readAuthorizedInvoiceGrossProfit(sale.id), []);
+  const showProfit = onShowProfit ?? (can("accounting.view") ? defaultProfitReader : undefined);
+  React.useEffect(() => { if (!showProfit) { setProfit(null); setProfitError(null); } }, [showProfit]);
+  function requestProfit(sale: Sale) {
+    setProfit(null);
+    setProfitError(null);
+    if (!showProfit) return;
+    try { setProfit(showProfit(sale)); }
+    catch (error) { setProfitError(error instanceof Error ? error.message : "Invoice profit is unavailable"); }
+  }
   const [query, setQuery] = React.useState("");
   const [customerId, setCustomerId] = React.useState("");
   const [status, setStatus] = React.useState("");
@@ -117,6 +132,7 @@ export function SalesList({
           <Button size="sm" variant="outline" onClick={() => setDetailSale(row)}>Details</Button>
           {onCollectCustomerDue && canCollectCustomerDueFromSale(row) && <Button size="sm" variant="outline" onClick={() => onCollectCustomerDue(row)}>Collect customer due</Button>}
           {buildPreviewHtml && <Button size="sm" variant="outline" onClick={() => { setPreviewPaper("a4"); setPreviewSale(row); }}>Preview</Button>}
+          {showProfit && ["completed", "partial"].includes(row.status) && <Button size="sm" variant="outline" onClick={() => requestProfit(row)}>Gross profit</Button>}
           {onPrintA4 && <Button size="sm" variant="outline" onClick={() => onPrintA4(row)}>A4</Button>}
           {onPrintThermal && <Button size="sm" variant="outline" onClick={() => onPrintThermal(row)}>Thermal</Button>}
           {onCreateReturn && ["completed", "partial"].includes(row.status) && (
@@ -152,6 +168,7 @@ export function SalesList({
           </div>
         </div>
 
+        {profitError && <p role="alert" className="text-sm text-rose-700">{profitError}</p>}
         {exportNotice && <p role={exportNotice.error ? "alert" : "status"} className={`text-sm ${exportNotice.error ? "text-rose-700" : "text-slate-600"}`}>{exportNotice.text}</p>}
         <p className="text-xs text-slate-500">CSV exports exactly the displayed invoice selection, including any cancelled or returned bills. For net revenue and tax totals, use Reports.</p>
         {onCollectCustomerDue && <p className="text-xs text-slate-500">Collect customer due opens Payments. Payments settle the customer’s oldest unpaid receivables first; the collection is not reserved for this particular invoice. Walk-in invoices without a customer account cannot use this action.</p>}
@@ -239,6 +256,22 @@ export function SalesList({
             {detailSale.notes && <div><div className="text-xs text-slate-500">Notes</div><div className="mt-1 whitespace-pre-wrap text-slate-700">{detailSale.notes}</div></div>}
           </div>
         )}
+      </Modal>
+
+      <Modal open={Boolean(profit && showProfit)}
+        title={profit ? `Invoice ${profit.invoiceNumber} — Gross profit` : "Invoice gross profit"}
+        onClose={() => setProfit(null)}
+        footer={<Button variant="outline" onClick={() => setProfit(null)}>Close</Button>}
+      >
+        {profit && showProfit && <div className="space-y-3 text-sm">
+          <div className="grid grid-cols-2 gap-2">
+            <span>Revenue excluding tax</span><strong className="text-right">{formatMoney(profit.revenueExcludingTax)}</strong>
+            <span>Historical cost of goods</span><strong className="text-right">{formatMoney(profit.historicalCostOfGoods)}</strong>
+            <span>Original invoice gross profit</span><strong className="text-right">{formatMoney(profit.grossProfit)}</strong>
+            <span>Gross margin</span><strong className="text-right">{profit.grossMarginPercent.toFixed(2)}%</strong>
+          </div>
+          <p className="text-xs text-slate-600">Internal management estimate for the original invoice only. Tax is excluded. Subsequent returns/refunds, operating costs and net profit are not included. Historical sale-line costs are used, not current catalogue costs.</p>
+        </div>}
       </Modal>
 
       <PrintPreviewModal

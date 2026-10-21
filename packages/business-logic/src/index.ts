@@ -155,3 +155,6 @@ export * from "./recurring-invoice-sqlite-pilot";
 // Nonbinding recurrence checkout review, resolved against current host-owned master data.
 export * from "./recurring-invoice-checkout-preview";
 export * from "./recurring-invoice-source";
+// SAL-026: restricted original posted-invoice gross profit review.
+export * from "./invoice-gross-profit";
+export * from "./invoice-profit-authorized";
