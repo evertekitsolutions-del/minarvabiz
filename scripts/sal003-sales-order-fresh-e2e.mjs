@@ -37,6 +37,7 @@ DECLARE
   operation1 uuid := gen_random_uuid();
   operation2 uuid := gen_random_uuid();
   invoice1 uuid := gen_random_uuid();
+  duplicate_request uuid := gen_random_uuid();
   payload1 jsonb;
   payload2 jsonb;
   row_count integer;
@@ -132,8 +133,9 @@ BEGIN
     INSERT INTO public.retail_sales_order_intents_v1
       (id,org_id,company_id,branch_id,warehouse_id,operation_id,
        order_number,customer_id,status,version,record_json)
-      VALUES (gen_random_uuid(),org1,company1,branch1,warehouse1,operation1,
-        'SAL003-003',customer1,'draft',1,payload1);
+      VALUES (duplicate_request,org1,company1,branch1,warehouse1,operation1,
+        'SAL003-003',customer1,'draft',1,
+        jsonb_set(payload1,'{id}',to_jsonb(duplicate_request)));
     RAISE EXCEPTION 'Repeated operation key unexpectedly accepted';
   EXCEPTION WHEN unique_violation THEN NULL; END;
 
