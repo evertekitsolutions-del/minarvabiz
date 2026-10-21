@@ -4,6 +4,7 @@
  * component display gate alone does not authorize access or downloads.
  */
 import type { SalesOrderAuthorizedScope, SalesOrderIntent } from "./sales-order-intent";
+import { verifySalesOrderRecordIntegrity } from "./sales-order-record-integrity";
 
 const HEADERS = [
   "order_number","status","created_at","due_date","customer_id","currency",
@@ -37,13 +38,18 @@ export function exportSalesOrdersCsv(
   }
   if (!Array.isArray(orders)) throw new Error("Invalid sales-order export selection");
   const rows: string[] = [];
+  const seenOrderIds = new Set<string>();
   for (const order of orders) {
     for (const key of ["organizationId", "companyId", "branchId", "warehouseId"] as const) {
       if (order?.[key] !== auth[key]) throw new Error("Cross-scope sales-order export denied");
     }
-    if (!order || !Array.isArray(order.lines) || order.lines.length < 1) {
-      throw new Error("Malformed sales-order export record");
+    // The export is a financial representation: reject forged/stale/corrupt
+    // totals, line identities and creation baselines before emitting any CSV.
+    verifySalesOrderRecordIntegrity(order);
+    if (seenOrderIds.has(order.id)) {
+      throw new Error("Duplicate sales-order export record");
     }
+    seenOrderIds.add(order.id);
     for (const line of order.lines) {
       const fields = [
         order.orderNumber,order.status,order.createdAt,order.dueDate,order.customerId,
