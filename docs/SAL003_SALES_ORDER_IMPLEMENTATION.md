@@ -83,3 +83,6 @@ New `renderSalesOrderPrintHtml` renders tenant-scoped, input-escaped A4 or 80mm 
 
 ## Real desktop SQLite file restart regression
 The actual `packages/database/src/adapters/sqlite-browser.ts` is now exercised with the isolated SAL-003 writer under Node/sql.js: an order and its staged pending events survive binary export/close/reopen, identical create+confirmation retries do not duplicate events, a simulated failed transaction leaves the earlier durable status unchanged, and branch/RBAC checks persist after restart. This is CI test coverage only; production desktop activation and IPC authority remain unimplemented.
+
+## Recoverable nonfinancial Sales Orders Trash
+New pure `planSalesOrderArchive` provides versioned, scoped archive/restore for draft or cancelled orders only. Confirmation/invoicing is deliberately disallowed: hiding financial obligations is not a valid substitute for credit-note reversal. Retains original line/currency/amount data and idempotency key; refuses wrong role, scope, stale version, bad clock, reused operation. The SQLite persistence, local event staging and UI Trash controls are separate follow-up steps.
