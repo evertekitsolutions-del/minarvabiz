@@ -27,6 +27,7 @@ export interface SalesOrderSqliteDb {
 }
 const table = "retail_sales_order_intents_v1";
 const eventTable = "retail_sales_order_pending_events_v1";
+const receiptTable = "retail_sales_order_sync_receipts_v1";
 export type SalesOrderPilotEventType = "created" | "amended" | "confirmed" | "cancelled" | "invoiced" | "archived" | "restored";
 export interface SalesOrderPilotEvent {
   readonly operationId: string;
@@ -101,6 +102,19 @@ export function initializeSalesOrderSqlite(db: SalesOrderSqliteDb, enabled = fal
   )`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_sales_order_pending_by_scope
     ON ${eventTable}(org_id,company_id,branch_id,warehouse_id,order_id,version)`);
+  // Receipts are stored separately: never destroy local revision history.
+  // Only a trusted, explicitly-authorized host can create them.
+  db.exec(`CREATE TABLE IF NOT EXISTS ${receiptTable} (
+    org_id TEXT NOT NULL, company_id TEXT NOT NULL, branch_id TEXT NOT NULL,
+    warehouse_id TEXT NOT NULL, order_id TEXT NOT NULL,
+    operation_id TEXT NOT NULL, version INTEGER NOT NULL CHECK(version > 0),
+    receipt_json TEXT NOT NULL CHECK(json_valid(receipt_json)
+      AND length(CAST(receipt_json AS BLOB)) <= 262144),
+    PRIMARY KEY(org_id,operation_id),
+    UNIQUE(org_id,order_id,version)
+  )`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_sales_order_sync_receipts_scope
+    ON ${receiptTable}(org_id,company_id,branch_id,warehouse_id,order_id,version)`);
 }
 /** Fail closed if record JSON and indexed authority columns ever disagree. */
 function parse(row: Record<string, unknown>): SalesOrderIntent {
@@ -263,13 +277,19 @@ export function listPendingSalesOrderEventsSqlite(
   db: SalesOrderSqliteDb,
   auth: SalesOrderAuthorizedScope,
   enabled = false,
+  includeAcknowledged = false,
 ): SalesOrderPilotEvent[] {
   allowed(auth, enabled);
-  const rows = db.query(`SELECT * FROM ${eventTable}
-    WHERE org_id = ? AND company_id = ? AND branch_id = ? AND warehouse_id = ?
-      AND status = 'pending'
-    ORDER BY order_id, version`,
-    [auth.organizationId, auth.companyId, auth.branchId, auth.warehouseId]);
+  const rows = db.query(`SELECT e.* FROM ${eventTable} e
+    WHERE e.org_id = ? AND e.company_id = ? AND e.branch_id = ? AND e.warehouse_id = ?
+      AND e.status = 'pending'
+      AND (? = 1 OR NOT EXISTS (
+        SELECT 1 FROM ${receiptTable} r
+        WHERE r.org_id=e.org_id AND r.operation_id=e.operation_id
+      ))
+    ORDER BY e.order_id, e.version`,
+    [auth.organizationId, auth.companyId, auth.branchId, auth.warehouseId,
+     includeAcknowledged ? 1 : 0]);
   return rows.map((row) => {
     let event: SalesOrderPilotEvent;
     try { event = JSON.parse(String(row.payload_json)); }
@@ -499,4 +519,11 @@ export function archiveSalesOrderSqlite(
   stagePilotEvent(db,next,request.action==="archive"?"archived":"restored");
   return plan;
  });
+}
+
+/** Full append-only local event history, including server-acknowledged revisions. */
+export function listSalesOrderEventHistorySqlite(
+  db: SalesOrderSqliteDb, auth: SalesOrderAuthorizedScope, enabled = false,
+): SalesOrderPilotEvent[] {
+  return listPendingSalesOrderEventsSqlite(db, auth, enabled, true);
 }
