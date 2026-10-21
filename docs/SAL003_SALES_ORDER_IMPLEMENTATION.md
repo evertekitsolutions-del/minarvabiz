@@ -53,3 +53,6 @@ The isolated SQLite pilot now creates an append-only `retail_sales_order_pending
 
 ## SQLite authoritative reference resolver (explicit host wiring only)
 `createSalesOrderSqliteReferenceVerifier` now checks actual customer and product master rows from SQLite, with org/branch association, active status and nondeleted records. A separate trusted warehouse+company resolution callback must explicitly return true; missing/false/truthy-object proof denies the write. Shared-org product selection is OFF unless a trusted host expressly opts in. Tests use real SQL.js SQLite including stale references before confirmation. No shipping app mounts this resolver or accepts renderer authority.
+
+## Persisted-record integrity
+SQLite read now rechecks all order and line totals in exact BigInt minor units, baseline immutable create identity, canonical IDs/timestamps, line uniqueness, version and invoice/status consistency before returning stored data. Corrupt JSON is not trusted for checkout, export or sync replay. Negative regression tests cover tampered money, identity, invoice and revision. This is not a cryptographic signature and does not replace server authorization.

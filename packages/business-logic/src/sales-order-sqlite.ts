@@ -13,6 +13,7 @@ import {
   type SalesOrderIntent,
   type SalesOrderTransitionRequest,
 } from "./sales-order-intent";
+import { verifySalesOrderRecordIntegrity } from "./sales-order-record-integrity";
 
 /** Trusted host callback: must confirm customer, product and warehouse masters. */
 export type VerifySalesOrderReferences = (db: SalesOrderSqliteDb, order: SalesOrderIntent) => true;
@@ -113,6 +114,7 @@ function parse(row: Record<string, unknown>): SalesOrderIntent {
     record.invoiceId !== row.invoice_id || !Array.isArray(record.lines)) {
     throw new Error("Retail sales-order stored identity or revision mismatch");
   }
+  verifySalesOrderRecordIntegrity(record);
   return record;
 }
 function loadForKey(
