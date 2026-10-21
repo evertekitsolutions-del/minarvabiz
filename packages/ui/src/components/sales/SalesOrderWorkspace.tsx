@@ -20,14 +20,19 @@ export interface SalesOrderWorkspaceProduct {
   readonly unitPriceMinor: number;
 }
 export interface SalesOrderWorkspaceDraftLine {
+  /** Preserves persisted line identity when amending an existing draft. */
+  readonly id?: string;
   readonly productId: string;
   readonly quantityMilli: number;
   readonly unitPriceMinor: number;
+  readonly discountMinor?: number;
+  readonly taxMinor?: number;
 }
 export interface SalesOrderWorkspaceDraft {
   readonly customerId: string;
   readonly lines: readonly SalesOrderWorkspaceDraftLine[];
   readonly note: string | null;
+  readonly dueDate: string | null;
 }
 export interface SalesOrderWorkspaceProps {
   /** Presentation gate only; authoritative permission belongs in trusted host. */
@@ -36,6 +41,12 @@ export interface SalesOrderWorkspaceProps {
   readonly customers: readonly SalesOrderWorkspaceCustomer[];
   readonly products: readonly SalesOrderWorkspaceProduct[];
   readonly onCreateDraft?: (draft: SalesOrderWorkspaceDraft) => Promise<void> | void;
+  /** Host must enforce draft status and persisted expectedVersion CAS. */
+  readonly onAmendDraft?: (
+    order: SalesOrderIntent, draft: SalesOrderWorkspaceDraft,
+  ) => Promise<void> | void;
+  /** Host must reauthorize all displayed rows before exporting. */
+  readonly onExportOrders?: (orders: readonly SalesOrderIntent[]) => Promise<void> | void;
   readonly onTransition?: (
     order: SalesOrderIntent, action: "confirm" | "cancel",
   ) => Promise<void> | void;
@@ -57,7 +68,8 @@ function quantityText(milli: number): string {
 }
 
 export function SalesOrderWorkspace({
-  enabled = false, orders, customers, products, onCreateDraft, onTransition,
+  enabled = false, orders, customers, products, onCreateDraft,
+  onAmendDraft, onExportOrders, onTransition,
 }: SalesOrderWorkspaceProps) {
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState("");
@@ -66,10 +78,17 @@ export function SalesOrderWorkspace({
   const [quantity, setQuantity] = React.useState("1");
   const [draftLines, setDraftLines] = React.useState<SalesOrderWorkspaceDraftLine[]>([]);
   const [note, setNote] = React.useState("");
+  const [dueDate, setDueDate] = React.useState("");
+  const [editingOrderId, setEditingOrderId] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
   const active = enabled === true;
   const canCreate = active && typeof onCreateDraft === "function";
+  const editingOrder = editingOrderId
+    ? orders.find((order) => order.id === editingOrderId && order.status === "draft")
+    : null;
+  const canEdit = active && typeof onAmendDraft === "function";
+  const canSubmit = editingOrderId ? Boolean(editingOrder && canEdit) : canCreate;
   const visibleOrders = React.useMemo(() => {
     const query = search.trim().toLowerCase();
     return orders.filter((order) => {
@@ -82,8 +101,32 @@ export function SalesOrderWorkspace({
     });
   }, [orders, customers, search, status]);
 
+  function resetEditor() {
+    setEditingOrderId(null);
+    setCustomerId("");
+    setProductId("");
+    setQuantity("1");
+    setNote("");
+    setDueDate("");
+    setDraftLines([]);
+  }
+  function startEdit(order: SalesOrderIntent) {
+    if (!canEdit || busy || order.status !== "draft") return;
+    setEditingOrderId(order.id);
+    setCustomerId(order.customerId);
+    setProductId("");
+    setQuantity("1");
+    setNote(order.note ?? "");
+    setDueDate(order.dueDate ?? "");
+    setDraftLines(order.lines.map((line) => ({
+      id: line.id, productId: line.productId,
+      quantityMilli: line.quantityMilli, unitPriceMinor: line.unitPriceMinor,
+      discountMinor: line.discountMinor, taxMinor: line.taxMinor,
+    })));
+    setNotice(null);
+  }
   function addLine() {
-    if (!canCreate || busy) return;
+    if (!canSubmit || busy) return;
     const product = products.find((row) => row.id === productId);
     const qty = Number(quantity);
     const quantityMilli = qty * 1000;
@@ -106,19 +149,31 @@ export function SalesOrderWorkspace({
   }
   async function createDraft(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canCreate || busy) return;
+    if (!canSubmit || busy) return;
     if (!customerId || draftLines.length === 0) {
       setNotice("Select a customer and add at least one product to the order.");
       return;
     }
+    if (draftLines.some((line) =>
+      !Number.isSafeInteger(line.quantityMilli) || line.quantityMilli <= 0 ||
+      !Number.isSafeInteger(line.unitPriceMinor) || line.unitPriceMinor < 0)) {
+      setNotice("Each draft line must have a valid positive quantity and nonnegative price.");
+      return;
+    }
     setBusy(true); setNotice(null);
     try {
-      await onCreateDraft!({
+      const draft: SalesOrderWorkspaceDraft = {
         customerId, lines: draftLines.map((line) => ({ ...line })),
-        note: note.trim() || null,
-      });
-      setDraftLines([]); setQuantity("1"); setNote("");
-      setNotice("Draft submitted. Confirm it appears in the order list before continuing.");
+        note: note.trim() || null, dueDate: dueDate || null,
+      };
+      if (editingOrderId) {
+        if (!editingOrder || !onAmendDraft) throw new Error("Draft changed; refresh before amending");
+        await onAmendDraft(editingOrder, draft);
+      } else {
+        await onCreateDraft!(draft);
+      }
+      resetEditor();
+      setNotice("Draft submitted. Refresh the order list to verify the persisted revision.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Sales-order creation was rejected");
     } finally {
@@ -158,11 +213,12 @@ export function SalesOrderWorkspace({
         <div className="text-sm text-slate-500">{visibleOrders.length} orders</div>
       </header>
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-      <form aria-label="Create sales-order draft" onSubmit={(event) => void createDraft(event)}
-        className="grid gap-3 md:grid-cols-5">
+      <form aria-label={editingOrderId ? "Amend sales-order draft" : "Create sales-order draft"}
+        onSubmit={(event) => void createDraft(event)}
+        className="grid gap-3 md:grid-cols-6">
         <label className="block text-sm font-medium text-slate-700">
           Customer
-          <select aria-label="Customer" required disabled={!canCreate || busy}
+          <select aria-label="Customer" required disabled={!canSubmit || busy || Boolean(editingOrderId)}
             value={customerId} onChange={(event) => setCustomerId(event.target.value)}
             className="mt-1 w-full rounded-md border border-slate-300 p-2">
             <option value="">Select customer</option>
@@ -172,7 +228,7 @@ export function SalesOrderWorkspace({
         </label>
         <label className="block text-sm font-medium text-slate-700">
           Product
-          <select aria-label="Product" required disabled={!canCreate || busy}
+          <select aria-label="Product" disabled={!canSubmit || busy}
             value={productId} onChange={(event) => setProductId(event.target.value)}
             className="mt-1 w-full rounded-md border border-slate-300 p-2">
             <option value="">Select product</option>
@@ -185,34 +241,55 @@ export function SalesOrderWorkspace({
         <label className="block text-sm font-medium text-slate-700">
           Quantity
           <input aria-label="Quantity" required type="number" min="0.001" step="0.001"
-            disabled={!canCreate || busy} value={quantity}
+            disabled={!canSubmit || busy} value={quantity}
             onChange={(event) => setQuantity(event.target.value)}
             className="mt-1 w-full rounded-md border border-slate-300 p-2"/>
         </label>
         <label className="block text-sm font-medium text-slate-700">
           Note
           <input aria-label="Note" maxLength={2000}
-            disabled={!canCreate || busy} value={note}
+            disabled={!canSubmit || busy} value={note}
             onChange={(event) => setNote(event.target.value)}
             className="mt-1 w-full rounded-md border border-slate-300 p-2"/>
         </label>
+        <label className="block text-sm font-medium text-slate-700">
+          Due date
+          <input aria-label="Sales-order due date" type="date"
+            disabled={!canSubmit || busy} value={dueDate}
+            onChange={(event) => setDueDate(event.target.value)}
+            className="mt-1 w-full rounded-md border border-slate-300 p-2"/>
+        </label>
         <div className="flex flex-wrap items-end gap-2">
-          <Button type="button" variant="outline" disabled={!canCreate || busy || draftLines.length >= 100}
+          <Button type="button" variant="outline" disabled={!canSubmit || busy || draftLines.length >= 100}
             onClick={addLine}>Add item</Button>
-          <Button type="submit" disabled={!canCreate || busy || draftLines.length === 0}>Create draft</Button>
+          <Button type="submit" disabled={!canSubmit || busy || draftLines.length === 0}>
+            {editingOrderId ? "Save draft" : "Create draft"}
+          </Button>
+          {editingOrderId && <Button type="button" variant="ghost" disabled={busy}
+            onClick={resetEditor}>Cancel editing</Button>}
         </div>
       </form>
       {draftLines.length > 0 && (
         <div aria-label="Staged sales-order lines" className="space-y-2 border-t border-slate-100 pt-3">
           <p className="text-sm font-medium text-slate-700">
-            {draftLines.length} staged line{draftLines.length === 1 ? "" : "s"}
+            {draftLines.length} {editingOrderId ? "editable" : "staged"} line{draftLines.length === 1 ? "" : "s"}
           </p>
           {draftLines.map((line, index) => {
             const product = products.find((p) => p.id === line.productId);
             return (
               <div key={index} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                <span>{product?.name ?? line.productId} × {quantityText(line.quantityMilli)}</span>
+                <span>{product?.name ?? line.productId}</span>
                 <div className="flex items-center gap-2">
+                  {editingOrderId && <input aria-label={`Quantity for ${product?.name ?? line.productId}`}
+                    type="number" min="0.001" step="0.001"
+                    className="w-24 rounded border border-slate-300 p-1"
+                    disabled={busy} value={line.quantityMilli / 1000}
+                    onChange={(event) => {
+                      const qty = Number(event.target.value) * 1000;
+                      setDraftLines((lines) => lines.map((item, i) =>
+                        i === index ? {...item, quantityMilli: qty} : item));
+                    }}/>}
+                  {!editingOrderId && <span>× {quantityText(line.quantityMilli)}</span>}
                   <span className="tabular-nums">
                     {(line.quantityMilli * line.unitPriceMinor / 1000 / 100).toFixed(2)}
                   </span>
@@ -242,6 +319,16 @@ export function SalesOrderWorkspace({
           <option value="draft">Draft</option><option value="confirmed">Confirmed</option>
           <option value="cancelled">Cancelled</option><option value="invoiced">Invoiced</option>
         </select>
+        {onExportOrders && <Button type="button" variant="outline"
+          disabled={busy || visibleOrders.length === 0}
+          onClick={() => {
+            if (busy || !active) return;
+            setBusy(true); setNotice(null);
+            void Promise.resolve().then(() => onExportOrders(visibleOrders)).then(() =>
+              setNotice("Export submitted to the authorized host."))
+              .catch((error: unknown) => setNotice(error instanceof Error ? error.message : "Export rejected"))
+              .finally(() => setBusy(false));
+          }}>Export selected</Button>}
       </div>
       <div className="space-y-3">
         {visibleOrders.length === 0 && <p className="rounded-md border border-slate-200 p-5 text-sm text-slate-600">
@@ -267,6 +354,8 @@ export function SalesOrderWorkspace({
             </ul>
             {(order.status === "draft" || order.status === "confirmed") && (
               <div className="mt-3 flex justify-end gap-2">
+                {order.status === "draft" && onAmendDraft && <Button variant="outline" size="sm"
+                  disabled={busy} onClick={() => startEdit(order)}>Edit draft</Button>}
                 {order.status === "draft" && <Button variant="outline" size="sm"
                   disabled={!onTransition || busy} onClick={() => void transition(order, "confirm")}>Confirm</Button>}
                 <Button variant="danger" size="sm" disabled={!onTransition || busy}

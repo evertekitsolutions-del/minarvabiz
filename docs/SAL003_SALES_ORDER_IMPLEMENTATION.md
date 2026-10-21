@@ -71,3 +71,6 @@ Backup export now reads both order rows and pending local events inside the **sa
 
 ## Scalable scoped order list
 `listSalesOrdersPageSqlite` adds stable `(orderNumber,id)` cursor-based listing, optional status filter and 1–100 records per page. All filters are SQL parameters, and the authorized organization/company/branch/warehouse scope is mandatory. Host UI wiring remains disabled until membership authority and synced cloud pagination exist. Real SQLite pagination, branch isolation and malicious cursor tests included.
+
+## Shared draft-edit and scoped export presentation
+The reusable SalesOrderWorkspace now permits host-gated edit of **draft-only** line quantities/rows, note and due date with immutable customer ID; the edit callback receives the persisted order including its CAS revision, and the trusted host must reconcile line IDs/prices/tax and authorize the edit before committing. An optional Export selected callback passes visible rows to a host that must reauthorize scope and produce the downloadable CSV. No untrusted browser/renderer direct financial writes or automatic exports are enabled; all callbacks remain optional and no shipping app is mounted yet.
