@@ -206,3 +206,6 @@ export * from "./account-budget-variance";
 
 // INV-023 read-only goods receipt landed cost allocation proposal.
 export * from "./landed-cost-preview";
+
+// HR-006 staff leave calendar draft; no attendance or payroll writes.
+export * from "./staff-leave-preview";
