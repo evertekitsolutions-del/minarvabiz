@@ -5,6 +5,7 @@ import { warehouseStore, store } from "@minarvabiz/business-logic";
 import type { WarehouseLocationType } from "@minarvabiz/types";
 import { Button } from "../Button";
 import { WarehouseBatchExpiryPanel } from "./WarehouseBatchExpiryPanel";
+import { WarehouseLotCountPanel } from "./WarehouseLotCountPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 
@@ -184,6 +185,7 @@ export function WarehousePanel() {
         </CardContent>
       </Card>
       <WarehouseBatchExpiryPanel products={products} warehouses={warehouses} />
+      <WarehouseLotCountPanel products={products} warehouses={warehouses} />
 
     </div>
   );
