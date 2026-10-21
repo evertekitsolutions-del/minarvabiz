@@ -3,7 +3,7 @@
 import * as React from "react";
 import type { Sale, Customer } from "@minarvabiz/types";
 import type { InvoiceGrossProfit } from "@minarvabiz/business-logic";
-import { exportSalesHistoryCsv } from "@minarvabiz/business-logic";
+import { exportSalesHistoryCsv, can, readAuthorizedInvoiceGrossProfit } from "@minarvabiz/business-logic";
 import { DataTable, type Column } from "../data/DataTable";
 import { formatMoney } from "../customers/format";
 import { isUnpaidSale, canCollectCustomerDueFromSale } from "./unpaid-sale-filter";
@@ -52,12 +52,14 @@ export function SalesList({
   const [detailSale, setDetailSale] = React.useState<Sale | null>(null);
   const [profit, setProfit] = React.useState<InvoiceGrossProfit | null>(null);
   const [profitError, setProfitError] = React.useState<string | null>(null);
-  React.useEffect(() => { if (!onShowProfit) { setProfit(null); setProfitError(null); } }, [onShowProfit]);
+  const defaultProfitReader = React.useCallback((sale: Sale) => readAuthorizedInvoiceGrossProfit(sale.id), []);
+  const showProfit = onShowProfit ?? (can("accounting.view") ? defaultProfitReader : undefined);
+  React.useEffect(() => { if (!showProfit) { setProfit(null); setProfitError(null); } }, [showProfit]);
   function requestProfit(sale: Sale) {
     setProfit(null);
     setProfitError(null);
-    if (!onShowProfit) return;
-    try { setProfit(onShowProfit(sale)); }
+    if (!showProfit) return;
+    try { setProfit(showProfit(sale)); }
     catch (error) { setProfitError(error instanceof Error ? error.message : "Invoice profit is unavailable"); }
   }
   const [query, setQuery] = React.useState("");
@@ -130,7 +132,7 @@ export function SalesList({
           <Button size="sm" variant="outline" onClick={() => setDetailSale(row)}>Details</Button>
           {onCollectCustomerDue && canCollectCustomerDueFromSale(row) && <Button size="sm" variant="outline" onClick={() => onCollectCustomerDue(row)}>Collect customer due</Button>}
           {buildPreviewHtml && <Button size="sm" variant="outline" onClick={() => { setPreviewPaper("a4"); setPreviewSale(row); }}>Preview</Button>}
-          {onShowProfit && ["completed", "partial"].includes(row.status) && <Button size="sm" variant="outline" onClick={() => requestProfit(row)}>Gross profit</Button>}
+          {showProfit && ["completed", "partial"].includes(row.status) && <Button size="sm" variant="outline" onClick={() => requestProfit(row)}>Gross profit</Button>}
           {onPrintA4 && <Button size="sm" variant="outline" onClick={() => onPrintA4(row)}>A4</Button>}
           {onPrintThermal && <Button size="sm" variant="outline" onClick={() => onPrintThermal(row)}>Thermal</Button>}
           {onCreateReturn && ["completed", "partial"].includes(row.status) && (
@@ -256,12 +258,12 @@ export function SalesList({
         )}
       </Modal>
 
-      <Modal open={Boolean(profit && onShowProfit)}
+      <Modal open={Boolean(profit && showProfit)}
         title={profit ? `Invoice ${profit.invoiceNumber} — Gross profit` : "Invoice gross profit"}
         onClose={() => setProfit(null)}
         footer={<Button variant="outline" onClick={() => setProfit(null)}>Close</Button>}
       >
-        {profit && onShowProfit && <div className="space-y-3 text-sm">
+        {profit && showProfit && <div className="space-y-3 text-sm">
           <div className="grid grid-cols-2 gap-2">
             <span>Revenue excluding tax</span><strong className="text-right">{formatMoney(profit.revenueExcludingTax)}</strong>
             <span>Historical cost of goods</span><strong className="text-right">{formatMoney(profit.historicalCostOfGoods)}</strong>
