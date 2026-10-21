@@ -87,3 +87,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Open Mercato — adapted MIT GS1 GTIN validator
+
+Adapted Open Mercato Core catalog GTIN source at upstream commit `eb3193df03b9ce0b196be417fe265c1dc47c0868`:
+https://github.com/open-mercato/open-mercato/blob/eb3193df03b9ce0b196be417fe265c1dc47c0868/packages/core/src/modules/catalog/lib/gtin.ts
+
+Local copy: `packages/business-logic/src/vendor/open-mercato/gtin.ts` (only the upstream type import changed to a self-contained `CatalogGtinType` union). Copyright (c) 2025-2026 Open Mercato contributors. Original code and its adaptations remain covered by the upstream MIT license; the complete MIT grant and disclaimer are printed in the preceding Open Mercato section. This assistant makes no claims of GS1 number ownership or registered allocation and performs no product writes.
