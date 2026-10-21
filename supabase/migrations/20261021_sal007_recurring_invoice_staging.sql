@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS public.recurring_invoice_schedule_staging (
   version bigint NOT NULL CHECK (version > 0),
   schedule_json jsonb NOT NULL CHECK (jsonb_typeof(schedule_json) = 'object'),
   created_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (org_id, id)
+  PRIMARY KEY (org_id, id),
+  UNIQUE (org_id, company_id, branch_id, id)
 );
 CREATE INDEX IF NOT EXISTS recurring_invoice_schedule_staging_scope
   ON public.recurring_invoice_schedule_staging(org_id, company_id, branch_id, status);
@@ -38,8 +39,8 @@ CREATE TABLE IF NOT EXISTS public.recurring_invoice_draft_staging (
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (org_id, id),
   UNIQUE(org_id, schedule_id, sequence),
-  FOREIGN KEY (org_id, schedule_id)
-    REFERENCES public.recurring_invoice_schedule_staging(org_id, id)
+  FOREIGN KEY (org_id, company_id, branch_id, schedule_id)
+    REFERENCES public.recurring_invoice_schedule_staging(org_id, company_id, branch_id, id)
     ON DELETE RESTRICT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS recurring_invoice_draft_staging_posted_unique
