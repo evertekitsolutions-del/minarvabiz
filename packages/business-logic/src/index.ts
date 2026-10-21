@@ -160,3 +160,5 @@ export * from "./invoice-gross-profit";
 export * from "./invoice-profit-authorized";
 // FIN-025 — manager-only customer original gross-margin report.
 export * from "./customer-original-gross-margin";
+// SAL-015 manual inclusive-MRP conversion into the existing exclusive-tax checkout.
+export * from "./inclusive-mrp";

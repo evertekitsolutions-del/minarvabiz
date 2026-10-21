@@ -6,9 +6,11 @@ import type { CartLine, Customer, PaymentMethod, Product } from "@minarvabiz/typ
 import {
   calculateCartTotals, isAreaBillableProduct, attachNormalAreaMeasurement,
   appendNormalBillingLine, updateNormalBillingLine, removeNormalBillingLine,
+  quoteInclusiveMrpUnitPrice,
   type DimensionRowDraft, type DimensionMeasurement,
 } from "@minarvabiz/business-logic";
 import { DimensionRowEditor } from "./DimensionRowEditor";
+import { InclusiveMrpEditor } from "./InclusiveMrpEditor";
 import { generateId } from "@minarvabiz/utils";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
@@ -43,6 +45,8 @@ export function NormalBilling({
   const [areaDraft, setAreaDraft] = React.useState<DimensionRowDraft>(emptyAreaDraft());
   const [areaApplied, setAreaApplied] = React.useState<DimensionMeasurement | null>(null);
   const [unitPrice, setUnitPrice] = React.useState("");
+  const [mrpLineId, setMrpLineId] = React.useState<string | null>(null);
+  const [appliedMrp, setAppliedMrp] = React.useState<Record<string, number>>({});
   const [lines, setLines] = React.useState<CartLine[]>([]);
   const [paidAmount, setPaidAmount] = React.useState("");
   const [method, setMethod] = React.useState<PaymentMethod>("cash");
@@ -105,8 +109,21 @@ export function NormalBilling({
 
   function updateLine(cartLineId: string, patch: Partial<CartLine>) {
     try {
-      const next = updateNormalBillingLine(lines, cartLineId, patch);
+      const row = lines.find((line) => (line.cartLineId ?? line.productId) === cartLineId);
+      const converted = row && patch.quantity !== undefined && appliedMrp[cartLineId] !== undefined
+        ? { ...patch, unitPrice: quoteInclusiveMrpUnitPrice(
+          appliedMrp[cartLineId], row.taxRate ?? 0, patch.quantity,
+        ).exclusiveUnitPrice }
+        : patch;
+      const next = updateNormalBillingLine(lines, cartLineId, converted);
       setLines(next);
+      if (patch.unitPrice !== undefined && patch.quantity === undefined) {
+        setAppliedMrp((previous) => {
+          const updated = { ...previous };
+          delete updated[cartLineId];
+          return updated;
+        });
+      }
       setMessage(null);
     } catch (error) {
       setMessage({ type: "err", text: error instanceof Error ? error.message : String(error) });
@@ -138,7 +155,7 @@ export function NormalBilling({
       }
       setMessage({ type: "ok", text: `Invoice ${result.invoiceNumber || ""} saved.` });
       setLastSale(result.saleId && result.invoiceNumber ? { id: result.saleId, invoice: result.invoiceNumber } : null);
-      setLines([]); setPaidAmount(""); setNotes(""); setCustomerId("");
+      setLines([]); setAppliedMrp({}); setPaidAmount(""); setNotes(""); setCustomerId("");
     } catch (error) {
       checkoutSubmitGate.current.release();
       setMessage({ type: "err", text: error instanceof Error ? error.message : String(error) });
@@ -213,11 +230,32 @@ export function NormalBilling({
                     disabled={Boolean(line.dimensionMetadata)} value={line.quantity} onChange={(e) => updateLine(line.cartLineId ?? line.productId, { quantity: Number(e.target.value) })} /></td>
                   <td className="px-3 py-2"><input className="h-8 w-28 rounded border border-slate-200 px-2" type="number" min="0" step="0.01" value={line.unitPrice} onChange={(e) => updateLine(line.cartLineId ?? line.productId, { unitPrice: Number(e.target.value) })} /></td>
                   <td className="px-3 py-2 text-right font-semibold">{formatMoney(line.quantity * line.unitPrice)}</td>
-                  <td className="px-3 py-2 text-right"><Button size="sm" variant="outline" onClick={() => setLines((prev) => removeNormalBillingLine(prev, line.cartLineId ?? line.productId))}>Remove</Button></td>
+                  <td className="px-3 py-2 text-right"><div className="flex justify-end gap-1">
+                    <Button size="sm" variant="outline" onClick={() => setMrpLineId(line.cartLineId ?? line.productId)}>MRP incl. tax</Button>
+                    <Button size="sm" variant="outline" onClick={() => {
+                      const id = line.cartLineId ?? line.productId;
+                      setLines((prev) => removeNormalBillingLine(prev, id));
+                      setAppliedMrp((previous) => { const updated = { ...previous }; delete updated[id]; return updated; });
+                    }}>Remove</Button>
+                  </div></td>
                 </tr>
               ))}</tbody>
             </table>
           </div>
+
+          {mrpLineId && lines.find((line) => (line.cartLineId ?? line.productId) === mrpLineId) && (
+            <InclusiveMrpEditor
+              key={mrpLineId}
+              line={lines.find((line) => (line.cartLineId ?? line.productId) === mrpLineId)!}
+              onCancel={() => setMrpLineId(null)}
+              onApply={(quote) => {
+                updateLine(mrpLineId, { unitPrice: quote.exclusiveUnitPrice });
+                setAppliedMrp((previous) => ({ ...previous, [mrpLineId]: quote.enteredInclusiveMrp }));
+                setMrpLineId(null);
+                setMessage({ type: "ok", text: `MRP ${formatMoney(quote.enteredInclusiveMrp)} applied. Effective inclusive unit before discount: ${formatMoney(quote.effectiveInclusiveUnitPrice)}; line total before discount: ${formatMoney(quote.effectiveInclusiveLineTotal)}; exclusive rate: ${formatMoney(quote.exclusiveUnitPrice)}.` });
+              }}
+            />
+          )}
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <textarea className="min-h-24 rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Bill notes" value={notes} onChange={(e) => setNotes(e.target.value)} />

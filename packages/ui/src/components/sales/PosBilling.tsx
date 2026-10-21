@@ -8,12 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
 import {
   calculateCartTotals, validateTender, isAreaBillableProduct,
+  quoteInclusiveMrpUnitPrice,
   appendPosMeasuredCut, removePosCartRow, updatePosCartDiscount,
   updatePosCartQuantity, posCartRowKey,
   type DimensionRowDraft,
 } from "@minarvabiz/business-logic";
 import { generateId } from "@minarvabiz/utils";
 import { DimensionRowEditor } from "./DimensionRowEditor";
+import { InclusiveMrpEditor } from "./InclusiveMrpEditor";
 
 export interface PosPaymentSplit {
   method: PaymentMethod;
@@ -92,6 +94,8 @@ export function PosBilling({
 }: PosBillingProps) {
   const [cart, setCart] = React.useState<CartLine[]>([]);
   const [areaProductId, setAreaProductId] = React.useState<string | null>(null);
+  const [mrpCartRowId, setMrpCartRowId] = React.useState<string | null>(null);
+  const [appliedMrp, setAppliedMrp] = React.useState<Record<string, number>>({});
   const [areaDraft, setAreaDraft] = React.useState<DimensionRowDraft>(newAreaDraft("sqft"));
   const [search, setSearch] = React.useState("");
   const [barcode, setBarcode] = React.useState("");
@@ -164,7 +168,23 @@ export function PosBilling({
       // Validate synchronously: React may execute setState updater later,
       // outside this click handler's error boundary.
       const next = updatePosCartQuantity(cart, cartLineId, quantity);
-      setCart(next);
+      const original = cart.find((line) => posCartRowKey(line) === cartLineId);
+      const mrp = appliedMrp[cartLineId];
+      if (mrp !== undefined && original && quantity > 0) {
+        // Quantity-adjusted tax must still remain at/below the entered MRP.
+        const quote = quoteInclusiveMrpUnitPrice(mrp, original.taxRate ?? 0, quantity);
+        setCart(next.map((line) => posCartRowKey(line) === cartLineId
+          ? { ...line, unitPrice: quote.exclusiveUnitPrice } : line));
+      } else {
+        setCart(next);
+        if (quantity <= 0 && mrp !== undefined) {
+          setAppliedMrp((previous) => {
+            const updated = { ...previous };
+            delete updated[cartLineId];
+            return updated;
+          });
+        }
+      }
       setMessage(null);
     } catch (error) {
       setMessage({type:"err",text:error instanceof Error ? error.message : String(error)});
@@ -229,6 +249,7 @@ export function PosBilling({
 
   function resetCheckout() {
     setCart([]);
+    setAppliedMrp({}); setMrpCartRowId(null);
     setCustomerId("");
     setNotes("");
     setPayments([{ method: "cash", amount: "", reference: "" }]);
@@ -317,6 +338,7 @@ export function PosBilling({
       return;
     }
     setCart(held.lines.map((line) => ({ ...line })));
+    setAppliedMrp({}); setMrpCartRowId(null);
     setAreaProductId(null);
     setCustomerId(held.customerId || "");
     setNotes(held.notes || "");
@@ -479,14 +501,40 @@ export function PosBilling({
                   <div className="w-20 text-right text-sm font-semibold">
                     {formatMoney(calculateCartTotals([line]).grandTotal)}
                   </div>
+                  <button type="button" className="text-xs text-indigo-700"
+                    aria-label={`Set tax-inclusive MRP for ${line.productName}`}
+                    onClick={() => setMrpCartRowId(posCartRowKey(line))}>
+                    MRP
+                  </button>
                   <button type="button" className="text-xs text-rose-700"
                     aria-label={`Remove ${line.productName} cut`}
-                    onClick={() => setCart(prev => removePosCartRow(prev, posCartRowKey(line)))}>
+                    onClick={() => {
+                      const key = posCartRowKey(line);
+                      setCart((prev) => removePosCartRow(prev, key));
+                      setAppliedMrp((previous) => { const updated = { ...previous }; delete updated[key]; return updated; });
+                    }}>
                     Remove
                   </button>
                 </div>
               ))}
             </div>
+
+            {mrpCartRowId && cart.find((line) => posCartRowKey(line) === mrpCartRowId) && (
+              <InclusiveMrpEditor
+                key={mrpCartRowId}
+                line={cart.find((line) => posCartRowKey(line) === mrpCartRowId)!}
+                onCancel={() => setMrpCartRowId(null)}
+                onApply={(quote) => {
+                  setCart((prev) => prev.map((line) =>
+                    posCartRowKey(line) === mrpCartRowId
+                      ? { ...line, unitPrice: quote.exclusiveUnitPrice } : line,
+                  ));
+                  setMrpCartRowId(null);
+                  setAppliedMrp((previous) => ({ ...previous, [mrpCartRowId]: quote.enteredInclusiveMrp }));
+                  setMessage({ type: "ok", text: `MRP ${formatMoney(quote.enteredInclusiveMrp)} applied. Effective inclusive unit before discount: ${formatMoney(quote.effectiveInclusiveUnitPrice)}; line total before discount: ${formatMoney(quote.effectiveInclusiveLineTotal)}.` });
+                }}
+              />
+            )}
 
             <input
               type="text"
