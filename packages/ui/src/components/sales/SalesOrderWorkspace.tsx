@@ -396,7 +396,7 @@ export function SalesOrderWorkspace({
                     onClick={() => void transition(order, "cancel")}>Cancel</Button>}
                 {onArchive && (order.status === "draft" || order.status === "cancelled") &&
                   <Button type="button" variant="outline" size="sm" disabled={busy}
-                    onClick={() => void changeTrash(order,"archive")}>Move to Trash</Button>
+                    onClick={() => void changeTrash(order,"archive")}>Move to Trash</Button>}
               </div>
             )}
             {!showTrash && !order.deletedAt && onPrintOrder &&
