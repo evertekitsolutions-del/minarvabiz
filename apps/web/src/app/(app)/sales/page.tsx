@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { PosBilling, NormalBilling, SalesList, Button, Modal, FormField, inputClass } from "@minarvabiz/ui";
-import { store, requestSaleInvoicePrint, buildSaleInvoiceHtml, assertLimit } from "@minarvabiz/business-logic";
+import { store, requestSaleInvoicePrint, buildSaleInvoiceHtml, assertLimit, can, readAuthorizedInvoiceGrossProfit } from "@minarvabiz/business-logic";
 import type { Product, Customer, Sale, CartLine, PaymentMethod } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
@@ -177,7 +177,7 @@ export default function SalesPage() {
         />
       )}
       {tab === "normal" && <NormalBilling products={products} customers={customers} onCompleteSale={handleComplete} onAddCustomer={openCustomerQuickAdd} onPrintSale={printExistingInvoice} />}
-      {tab === "history" && <SalesList sales={sales} customers={customers} buildPreviewHtml={(sale, paper) => buildSaleInvoiceHtml(sale, { paper, autoPrint: false })} onPrintA4={(sale) => printExistingInvoice(sale.id, "a4")} onPrintThermal={(sale) => printExistingInvoice(sale.id, "thermal")} onCreateReturn={(sale) => router.push(`/returns?saleId=${encodeURIComponent(sale.id)}`)} onCollectCustomerDue={(sale) => { if (sale.customerId) router.push(`/payments?customerId=${encodeURIComponent(sale.customerId)}`); }} />}
+      {tab === "history" && <SalesList sales={sales} customers={customers} onShowProfit={can("accounting.view") ? (sale) => readAuthorizedInvoiceGrossProfit(sale.id) : undefined} buildPreviewHtml={(sale, paper) => buildSaleInvoiceHtml(sale, { paper, autoPrint: false })} onPrintA4={(sale) => printExistingInvoice(sale.id, "a4")} onPrintThermal={(sale) => printExistingInvoice(sale.id, "thermal")} onCreateReturn={(sale) => router.push(`/returns?saleId=${encodeURIComponent(sale.id)}`)} onCollectCustomerDue={(sale) => { if (sale.customerId) router.push(`/payments?customerId=${encodeURIComponent(sale.customerId)}`); }} />}
 
       <Modal
         open={customerOpen}
