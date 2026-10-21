@@ -176,3 +176,5 @@ export * from "./inventory-dormancy";
 export * from "./accounting-day-book";
 // SAL-004 nonfinancial invoice-linked delivery note, no dispatch event.
 export * from "./sale-delivery-note";
+// FIN-026 bill-wise original posted invoice gross-margin report.
+export * from "./bill-original-gross-profit";
