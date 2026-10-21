@@ -103,3 +103,9 @@ Adapted Open Mercato Core catalog GTIN source at upstream commit `eb3193df03b9ce
 https://github.com/open-mercato/open-mercato/blob/eb3193df03b9ce0b196be417fe265c1dc47c0868/packages/core/src/modules/catalog/lib/gtin.ts
 
 Local copy: `packages/business-logic/src/vendor/open-mercato/gtin.ts` (only the upstream type import changed to a self-contained `CatalogGtinType` union). Copyright (c) 2025-2026 Open Mercato contributors. Original code and its adaptations remain covered by the upstream MIT license; the complete MIT grant and disclaimer are printed in the preceding Open Mercato section. This assistant makes no claims of GS1 number ownership or registered allocation and performs no product writes.
+
+## Open Mercato — MIT WMS expiry-date calculation
+
+Open Mercato upstream MIT Core: https://github.com/open-mercato/open-mercato/blob/eb3193df03b9ce0b196be417fe265c1dc47c0868/packages/core/src/modules/wms/lib/expiry.ts
+
+Copied verbatim with an attribution header into `packages/business-logic/src/vendor/open-mercato/expiry.ts`. Copyright (c) 2025-2026 Open Mercato contributors. Full MIT copyright notice, permission grant and disclaimer are reproduced above in the Open Mercato license text section of this file. The proprietary Minarva offline batch-expiry register uses the upstream `startOfUtcDay`, `addUtcDays`, and `EXPIRING_SOON_DAYS` helpers. It does not import upstream cloud framework, Enterprise code, or bundled database/stock modules.
