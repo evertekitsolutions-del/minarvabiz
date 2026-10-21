@@ -16,13 +16,14 @@ const webImporter = lock.match(/^  apps\/web:\n([\s\S]*?)(?=^  [^ ]|^packages:|^
 const version = webImporter.match(/^      next:\n        specifier: [^\n]+\n        version: (\d+)\.(\d+)\.(\d+)/m);
 if (!version) throw new Error("Cannot verify locked Next.js version for apps/web");
 const [major, minor, patch] = version.slice(1).map(Number);
-const supported = (major === 15 && (minor > 5 || (minor === 5 && patch >= 28))) ||
-  (major === 16 && (minor > 4 || (minor === 4 && patch >= 1)));
+// OpenNext 1.20.12 checks the Next.js team support window; 15.x has
+// passed that window even if a late patch meets the old vulnerability floor.
+const supported = major === 16 && (minor > 4 || (minor === 4 && patch >= 1));
 const buildOnly = process.argv.includes("--build-only");
 const deployOnly = process.argv.includes("--deploy-only");
 if (buildOnly && deployOnly) throw new Error("Select --build-only or --deploy-only, not both");
 if (!supported) {
-  console.error(`Cloudflare adapter deployment blocked: locked Next.js ${major}.${minor}.${patch} is below the current security-supported OpenNext floor (15.5.28 / 16.4.1).`);
+  console.error(`Cloudflare adapter deployment blocked: locked Next.js ${major}.${minor}.${patch} is not an approved supported Next.js release (minimum: 16.4.1).`);
   process.exit(2);
 }
 const pkg = JSON.parse(readFileSync(path.join(app, "package.json"), "utf8"));

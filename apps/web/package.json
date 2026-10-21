@@ -19,7 +19,7 @@
     "@minarvabiz/utils": "workspace:*",
     "@minarvabiz/validation": "workspace:*",
     "@supabase/supabase-js": "^2.47.10",
-    "next": "15.5.28",
+    "next": "16.4.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "@minarvabiz/database": "workspace:*"
