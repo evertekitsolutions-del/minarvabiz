@@ -93,6 +93,9 @@ function primitiveClassification(expression) {
 
 function classify(expression) {
   const value = stripOuterParens(expression);
+  // Fail closed on a forbidden component even within a dual-license expression.
+  // LGPL is review-required and only passes via an exact reviewed package entry.
+  if (deniedPatterns.some((pattern) => pattern.test(value))) return "denied";
 
   const orParts = splitTopLevel(value, "OR");
   if (orParts.length) {

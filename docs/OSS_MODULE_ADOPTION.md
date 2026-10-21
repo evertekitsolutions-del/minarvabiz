@@ -37,7 +37,7 @@ no automatic upstream updates. No platform-wide security clearance is claimed.
 | --- | --- | --- |
 | Open Mercato core | Catalog pricing, customers/CRM, sales, workflows, warranty claims | Best technical candidate for selective MIT reuse. Its ORM, generated registries and module runtime are not drop-in Minarva dependencies. Inspect missing journeys first; do not duplicate existing billing, auth or sync. |
 | Aimeos core | B-COMMERCE catalog, cart, checkout and commerce API | PHP and LGPLv3; retain as a possible separately hosted adapter. Adding PHP/server operations now would not accelerate the Windows offline acceptance path. No Aimeos code imported. |
-| “Uniqqer” | Identity unresolved; possibly QUIQQER ERP/CMS/invoice modules | Do not silently identify this as QUIQQER. QUIQQER core is PHP, GPL-3.0+; no code imported. Confirm the intended upstream URL before adoption. |
+| QUIQQER (owner-confirmed; formerly typed “Uniqqer”) | Products, tax groups, customers, currencies, ERP/order/payments/shipping/invoices/discounts | **Behaviour reference only**: https://github.com/QUIQQER/core is GPL-3.0-or-later; modules also use custom QEL or proprietary licenses. Never copy or translate code, identifiers, templates or distinctive text. Clean-room native TypeScript specification; no code imported. |
 
 References inspected:
 - https://github.com/open-mercato/open-mercato (core MIT; enterprise code not adopted)
@@ -48,6 +48,13 @@ Open Mercato CRM/catalog modules remain candidates, not accepted or installed
 features. Commerce still depends on the existing sync/stock reconciliation
 acceptance gates. Importing a complete second business framework would create
 two ownership models for customers, invoices and stock.
+
+## Owner-confirmed source boundaries (2026-10-20)
+
+- **Open Mercato** `v0.9.0` / `4374c48def1654927805c4b760f0e7f8648280f2`: MIT TypeScript only; pure functions/calculators/state machines/validators and independent interfaces may be adapted after rechecking pin, per-package LICENSE, CHANGELOG and BACKWARD_COMPATIBILITY. **Never import** its MikroORM, tenant authority, DI/runtime, `@open-mercato/enterprise`, `.ai/specs/enterprise` or unlicensed `@open-mercato/eslint-plugin-ds`. MIT copyright/notice and exact path required.
+- **Aimeos** `https://github.com/aimeos/aimeos-core`: PHP LGPL-3.0-or-later; behaviour reference only. The hypothetical standalone hosted adapter requires explicit owner approval, PHP hosting and license compliance. Do not copy code into web/desktop.
+- **QUIQQER** `https://github.com/QUIQQER/core`: PHP GPL-3.0-or-later; package-specific GPL, QEL and proprietary modules. Owner confirmed this is the third source, **not Uniqqer**. Clean-room behaviour study only; zero code/template/identifier copying.
+- Record direct adoption and reference-only review in `docs/DEPENDENCY_REUSE_LOG.md`; do not add a second customer, invoice, stock or ledger authority. Implementation and acceptance queue is `docs/OWNER_DIRECTIVE_2026-10-20.md`.
 
 ## Verification and remaining acceptance
 

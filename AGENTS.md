@@ -6,10 +6,11 @@
 - Read and honor `PROJECT_CONTINUATION.md`, `docs/MASTER_PRODUCT_PLAN.md`, `docs/CAPABILITY_REGISTRY.md`, `docs/AI_CAPABILITY_REGISTRY.md`, `docs/PRODUCT_DELIVERY_BACKLOG.json`, `docs/DELIVERY_ACCELERATION_POLICY.md`, `docs/ENGINEERING_REUSE_POLICY.md` and `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md`.
 - The project-wide historical ~51% estimate is **provisional**. Only record customer-accepted outcomes with documented CI, UAT, deployment/release and review evidence. Source-only changes and an active PR are not commercial acceptance.
 
-## Priorities and sequencing
-1. Finish/review existing relevant open PRs before duplicating their code. Prioritize `A-FIRST-CUSTOMER` (onboarding, opening balances, inventory, sale/return, print, backup/restore, update, support, customer-usable release).
-2. Next prioritize `A-SYNC-V2` (authorized cross-device offline replay, idempotency, branches/warehouses, conflict reconciliation and recoverability), then `A-LICENSE-CUTOVER` (licensed, provider-neutral commercial operation without mandatory Render). Follow `docs/PRODUCT_DELIVERY_BACKLOG.json` for later outcomes.
-3. Use one coherent, independently testable business-journey milestone per PR. Preserve earlier behavior; diagnose root cause and add regression coverage. Do not repeatedly audit instead of shipping fixes.
+## Priorities and sequencing — owner override effective 2026-10-20
+1. Follow `docs/OWNER_DIRECTIVE_2026-10-20.md`: **complete missing/partial Master Vision capabilities first**. Start Q1 core billing/finance/inventory/procurement, then Q2 global core/tax, Q3 entitlements, Q4 AI, Q5 growth, Q6 commerce/BI, Q7 verticals, Q8 integrations. Verify every candidate against live main before writing code. Keep original scope and safety gates.
+2. **Defer optional A-FIRST-CUSTOMER and A-SYNC-V2 hardening to Phase H**, without reverting prior fixes. Only interrupt for documented active-customer security/data-loss blockers, new-work regressions, or existing bugs directly blocking the current feature. Log all other findings in `docs/HARDENING_DEFERRED.md`, then continue shipping capabilities. A draft PR is not a reason to duplicate code.
+3. Inspect Minarva shared code first; prefer selectively adapted, pinned MIT TypeScript pure functions from Open Mercato next. Aimeos LGPL and QUIQQER GPL/custom modules are **behaviour references only**. Follow `docs/OSS_MODULE_ADOPTION.md` and `docs/DEPENDENCY_REUSE_LOG.md`; require exact upstream license review.
+4. One full-scope, independently testable vertical slice per PR, existing feature flag OFF for customer builds, changed-code coverage >=80%, exact-head green checks before merge. No audits or docs-only progress chains in place of features.
 
 ## Engineering boundaries
 - Existing monorepo uses pnpm 9, TypeScript, Next.js web, Electron + SQLite desktop, shared business logic, sync package and Supabase PostgreSQL. Respect package boundaries and the existing offline-first outbox and authoritative permission model.

@@ -22,7 +22,7 @@
     {
       "id": "A-FIRST-CUSTOMER",
       "phase": "A",
-      "priority": 1,
+      "priority": 22,
       "title": "First paying-customer onboarding and released Windows/Online/Hybrid acceptance",
       "registryGroups": [
         "Billing / sales / POS",
@@ -33,12 +33,13 @@
       "acceptanceEvidence": [],
       "dependsOn": [],
       "owner": "unassigned",
-      "nextAction": "Verify linked purchase/sale/refund/recovery source PR and postmerge CI (docs/COMMERCIAL_JOURNEY_ACCEPTANCE.md). Then complete authorized Web/Hybrid customer and physical licensed Windows UAT for the mapped first-customer packets, including printer, native backup/restore and updater. Record release evidence before accepting the outcome. Do not treat six engineering evidence mappings or PR counts as accepted packets or an extra global 1%; an audited weighted baseline is still absent."
+      "nextAction": "PHASE H DEFERRED: no more optional opening-balance, validation, backup/restore or release-gate hardening. Preserve merged protections and customer release/UAT obligations. Resume only after feature queue or proven blocking exception.",
+      "developmentSequencing": "deferred_phase_h"
     },
     {
       "id": "A-SYNC-V2",
       "phase": "A",
-      "priority": 2,
+      "priority": 23,
       "title": "Local-first Sync v2 and multi-branch correctness",
       "registryGroups": [
         "Local-first sync",
@@ -48,12 +49,14 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "PHASE H DEFERRED: no more optional outbox/financial fence/reconciliation/branch-edge hardening. Preserve shared authority and existing sync; new-feature blockers may be fixed minimally in same PR.",
+      "developmentSequencing": "deferred_phase_h"
     },
     {
       "id": "A-LICENSE-CUTOVER",
       "phase": "A",
-      "priority": 3,
+      "priority": 6,
       "title": "Provider-neutral License Admin and Render removal",
       "registryGroups": [
         "Control plane / SaaS business model"
@@ -62,12 +65,13 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q3: Complete remaining entitlement/license control-plane features without renewing optional release-gate hardening or adding mandatory Vercel/Render."
     },
     {
       "id": "A-ENTITLEMENTS",
       "phase": "A",
-      "priority": 4,
+      "priority": 5,
       "title": "Self-service subscription, device and entitlement lifecycle",
       "registryGroups": [
         "Control plane / SaaS business model"
@@ -76,12 +80,13 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q3: Build coupons, provider-neutral payment gateway abstraction, billing webhooks, revenue recovery and customer/device portals."
     },
     {
       "id": "A-GLOBAL-CORE",
       "phase": "A",
-      "priority": 5,
+      "priority": 3,
       "title": "Country-neutral shared core and first India country pack",
       "registryGroups": [
         "Tax / compliance",
@@ -91,12 +96,13 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q2: Implement missing PLT-002 multiple companies, PLT-008 approvals, PLT-014 currencies and PLT-015 consolidation with OM pure adapters where appropriate."
     },
     {
       "id": "A-CORE-PARITY",
       "phase": "A",
-      "priority": 6,
+      "priority": 1,
       "title": "Vyapar-parity accepted billing/inventory/finance purchasing flows",
       "registryGroups": [
         "Accounting / finance",
@@ -108,24 +114,26 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q1: Verify SAL-003 sales-order implementation against live main and build missing Online/Offline/Hybrid sales-order vertical slice, then SAL-007 recurring invoice and remaining Q1 billing IDs."
     },
     {
       "id": "A-AI-FOUNDATION",
       "phase": "A",
-      "priority": 7,
+      "priority": 8,
       "title": "Provider-neutral consent-controlled AI gateway foundation",
       "registryGroups": [],
       "criticalOutcome": "AI assists existing modules through replaceable provider interface with cost caps, human approval and no obligatory paid inference",
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q4: First ship provider-neutral tenant-scoped consent/audit/budget/approval AiGateway, then all general AI-001–012 and AI registry groups with no paid inference by default."
     },
     {
       "id": "A-SUPPORT-UPDATER",
       "phase": "A",
-      "priority": 8,
+      "priority": 13,
       "title": "Onboarding support, privacy, diagnostics and secure updater",
       "registryGroups": [
         "Documents / support / workflow"
@@ -134,12 +142,13 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q6: Deliver missing document repository/forms/knowledge base and partial support approval/log export, not repeated installer gate polish."
     },
     {
       "id": "B-ACCOUNTING-INVENTORY",
       "phase": "B",
-      "priority": 9,
+      "priority": 2,
       "title": "Deep accounting, finance, inventory and procurement",
       "registryGroups": [
         "Accounting / finance",
@@ -150,12 +159,13 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q1: Complete missing FIN-007 bank accounts, FIN-008 feeds, inventory landed cost and procurement RFQ/vendor flows after live gap verification; follow full owner Q1 queue."
     },
     {
       "id": "B-CRM-GROWTH",
       "phase": "B",
-      "priority": 10,
+      "priority": 9,
       "title": "CRM, loyalty and customer automation",
       "registryGroups": [
         "CRM / customer growth"
@@ -164,12 +174,13 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q5: Deliver CRM notes/calls, credit limits, referrals, customer portal and telecalling, complete partial pipeline/follow-up/consent/workflows."
     },
     {
       "id": "B-HR-PAYROLL",
       "phase": "B",
-      "priority": 11,
+      "priority": 10,
       "title": "Attendance Grid, HR roster/holidays, payroll and self-service",
       "registryGroups": [
         "HR / Attendance Grid / payroll"
@@ -181,7 +192,8 @@
         "A-SYNC-V2",
         "A-GLOBAL-CORE"
       ],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q5: Deliver attendance rules/devices, salary structures, advances, payslips, employee portal and timesheets; country payroll pack and full cross-mode acceptance."
     },
     {
       "id": "B-COMMERCE",
@@ -198,12 +210,13 @@
         "A-SYNC-V2",
         "A-CORE-PARITY"
       ],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q6: Add catalog sync, shipping, click-and-collect, order-to-invoice, content/forms/SEO/domains and correct price/availability/publication/financial authority."
     },
     {
       "id": "B-MARKETING",
       "phase": "B",
-      "priority": 13,
+      "priority": 11,
       "title": "Campaigns, segmentation and marketing analytics",
       "registryGroups": [
         "Marketing"
@@ -214,7 +227,8 @@
       "dependsOn": [
         "B-CRM-GROWTH"
       ],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q5: Implement consent-safe campaign scheduling, WhatsApp provider adapters, social/ads integrations, attribution and analytics; no real messages without approval."
     },
     {
       "id": "B-REPORTING",
@@ -228,12 +242,13 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q6: Deliver custom dashboards/reports, scheduling/drill-down, marketing analytics and executive brief with shared cross-mode data."
     },
     {
       "id": "C-MANUFACTURING",
       "phase": "C",
-      "priority": 15,
+      "priority": 16,
       "title": "Manufacturing pack",
       "registryGroups": [
         "Manufacturing"
@@ -242,12 +257,13 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q7: Implement native raw materials/production orders/finished goods/WIP/cost/planning/reports and complete manufacturing partials."
     },
     {
       "id": "C-SERVICE-FIELD",
       "phase": "C",
-      "priority": 16,
+      "priority": 15,
       "title": "Service, field service and AMC packs",
       "registryGroups": [
         "Service / field service / AMC"
@@ -256,7 +272,8 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q7: Implement AMC/contracts, field routes/job profitability and complete site visit/spares/evidence/warranty/SLA."
     },
     {
       "id": "C-PROJECTS",
@@ -270,7 +287,8 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q7: Implement project tasks/timesheets/resourcing/estimates/billing/retainers/profitability/client portal and finish milestones."
     },
     {
       "id": "C-INDUSTRY-PACKS",
@@ -282,12 +300,13 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q7: Verify and complete all industry packs against UNIVERSAL_BUSINESS_100_TYPES_ARCHITECTURE.md without creating separate product cores."
     },
     {
       "id": "D-GLOBAL-PACKS",
       "phase": "D",
-      "priority": 19,
+      "priority": 4,
       "title": "Global country packs and multi-currency localization",
       "registryGroups": [
         "Tax / compliance"
@@ -296,7 +315,8 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q2: Build native versioned tax country packs; only sandbox with official schemas, legal review and owner approval before production enablement."
     },
     {
       "id": "D-RESIDENCY",
@@ -311,12 +331,13 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q8: Implement portable region/data residency controls according to scoped outcome, after live gap verification."
     },
     {
       "id": "E-INTEGRATIONS",
       "phase": "E",
-      "priority": 21,
+      "priority": 19,
       "title": "Integrations, developer APIs and hardware ecosystem",
       "registryGroups": [
         "Integrations / hardware / developer ecosystem"
@@ -325,12 +346,13 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q8: Build REST API, webhooks, OAuth, marketplace, device/logistics/messaging adapters and SYN-014 offline branch status."
     },
     {
       "id": "E-MARKETPLACE",
       "phase": "E",
-      "priority": 22,
+      "priority": 7,
       "title": "Marketplace, partners, white-label and autonomous workflows",
       "registryGroups": [
         "Control plane / SaaS business model"
@@ -339,12 +361,13 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q3: Complete permissioned partner marketplace and reseller/control-plane features from registry, feature OFF until customer acceptance."
     },
     {
       "id": "F-OWNED-INFRA",
       "phase": "F",
-      "priority": 23,
+      "priority": 21,
       "title": "Minarva-controlled provider-neutral infrastructure",
       "registryGroups": [
         "Local-first sync",
@@ -354,7 +377,10 @@
       "status": "acceptance_not_verified",
       "acceptanceEvidence": [],
       "dependsOn": [],
-      "owner": "unassigned"
+      "owner": "unassigned",
+      "nextAction": "Q8: Complete provider-neutral self-host PostgreSQL, S3-compatible storage, API/queues/monitoring/DR infrastructure using approved no-paid defaults."
     }
-  ]
+  ],
+  "developmentSequenceDirective": "docs/OWNER_DIRECTIVE_2026-10-20.md",
+  "developmentSequenceNote": "Owner feature-first Q1→Q8 then Phase H sequencing overrides earlier priority order. Dependencies remain acceptance constraints, not a direction to restart optional pre-existing sync hardening. Nothing removed or accepted without evidence."
 }
