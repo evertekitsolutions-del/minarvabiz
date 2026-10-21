@@ -148,3 +148,6 @@ export * from "./commerce-tier-drafts";
 export * from "./commerce-tier-quote-draft";
 
 export { parseServiceOrderPriceDraft, validateMoneyAmountInput } from "./service-order-price-draft";
+// SAL-026: restricted internal historical invoice gross-profit review.
+export * from "./invoice-gross-profit";
+export * from "./invoice-profit-authorized";
