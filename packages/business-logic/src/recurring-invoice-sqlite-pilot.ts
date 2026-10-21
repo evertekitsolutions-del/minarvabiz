@@ -59,13 +59,24 @@ export function initializeRecurringInvoicePilotSqlite(db: RecurringInvoiceSqlite
     id TEXT NOT NULL, schedule_id TEXT NOT NULL,
     sequence INTEGER NOT NULL CHECK(sequence > 0),
     due_date TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending_review'
-      CHECK(status = 'pending_review'),
+      CHECK(status IN ('pending_review','posted')),
+    posted_invoice_id TEXT, posted_at_utc TEXT, approved_by TEXT,
+    CHECK(
+      (status = 'pending_review' AND posted_invoice_id IS NULL
+       AND posted_at_utc IS NULL AND approved_by IS NULL)
+      OR
+      (status = 'posted' AND posted_invoice_id IS NOT NULL
+       AND posted_at_utc IS NOT NULL AND approved_by IS NOT NULL)
+    ),
     PRIMARY KEY(org_id, id),
     UNIQUE(org_id, schedule_id, sequence),
     FOREIGN KEY(org_id, schedule_id) REFERENCES recurring_invoice_schedule_pilot_v1(org_id, id)
   )`);
   db.exec(`CREATE INDEX IF NOT EXISTS recurring_invoice_draft_pilot_due_v1
     ON recurring_invoice_draft_pilot_v1(org_id, company_id, branch_id, due_date)`);
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS recurring_invoice_draft_pilot_posted_v1
+    ON recurring_invoice_draft_pilot_v1(org_id, posted_invoice_id)
+    WHERE posted_invoice_id IS NOT NULL`);
 }
 
 function loadSchedule(
@@ -226,5 +237,108 @@ export function previewRecurringInvoiceDraftPilotSqlite(
       sequence: Number(row.sequence), dueDate: String(row.due_date),
       kind: "invoice_draft_pending_review",
     }, businessDate, { ...live, authorize });
+  });
+}
+
+export interface RecurringInvoicePostPilotInput extends RecurringInvoiceScope {
+  readonly draftId: string;
+  readonly businessDate: string;
+  /** Trusted host permission must include invoice creation/approval. */
+  readonly authorizeApproval: AuthorizeRecurringInvoiceScope;
+  readonly live: Omit<RecurringInvoiceVerifiedReaders, "authorize">;
+  /** Current authenticated reviewer identity; NEVER from a form field. */
+  readonly getAuthenticatedApproverId: () => string;
+  /**
+   * Host-owned synchronous financial writer. Must atomically insert the
+   * existing authoritative sale + stock + ledger + outbox rows in this
+   * transaction. Do not use network, promise or unrelated SQLite databases.
+   */
+  readonly postFinancialInvoice: (
+    db: RecurringInvoiceSqliteDb,
+    preview: RecurringInvoiceCartPreview,
+    idempotencyKey: string,
+  ) => { invoiceId: string };
+  /** Independent host-owned SELECT on the authoritative invoice/ledger rows. */
+  readonly verifyPostedInvoice: (
+    db: RecurringInvoiceSqliteDb,
+    invoiceId: string,
+    preview: RecurringInvoiceCartPreview,
+    idempotencyKey: string,
+  ) => boolean;
+}
+export interface RecurringInvoicePostPilotResult {
+  readonly disposition: "posted" | "already_posted";
+  readonly draftId: string;
+  readonly invoiceId: string;
+}
+
+/**
+ * Production host integration point, NOT an enabled financial implementation.
+ * All callbacks must be trusted host-owned synchronously executable SQL.
+ * A callback passing a mock/no-op must never mark a recurring draft posted.
+ */
+export function postRecurringInvoiceDraftPilotSqlite(
+  db: RecurringInvoiceSqliteDb,
+  input: RecurringInvoicePostPilotInput,
+): RecurringInvoicePostPilotResult {
+  if (!input || typeof input.getAuthenticatedApproverId !== "function" ||
+      typeof input.postFinancialInvoice !== "function" ||
+      typeof input.verifyPostedInvoice !== "function" ||
+      !validId(input.draftId)) {
+    throw new Error("Recurring invoice posting requires trusted checkout authority");
+  }
+  authorized(input, input.authorizeApproval);
+  const approverId = input.getAuthenticatedApproverId();
+  if (!validId(approverId)) throw new Error("Missing authenticated invoice approver");
+  return db.transaction(() => {
+    const rows = db.query(`SELECT id,schedule_id,sequence,due_date,status,
+      posted_invoice_id FROM recurring_invoice_draft_pilot_v1
+      WHERE org_id=? AND company_id=? AND branch_id=? AND id=?`,
+    [input.organizationId, input.companyId, input.branchId, input.draftId]);
+    if (rows.length !== 1) throw new Error("Recurring invoice draft is absent or out of branch scope");
+    const row = rows[0];
+    if (row.status === "posted") {
+      if (!validId(row.posted_invoice_id)) throw new Error("Corrupt posted recurring invoice");
+      return {
+        disposition: "already_posted" as const,
+        draftId: input.draftId, invoiceId: row.posted_invoice_id,
+      };
+    }
+    if (row.status !== "pending_review") throw new Error("Recurring invoice draft is not pending review");
+    const schedule = loadSchedule(db, input, String(row.schedule_id));
+    if (!schedule) throw new Error("Recurring invoice source schedule no longer exists");
+    const preview = prepareRecurringInvoiceCartPreview(schedule, {
+      id: String(row.id), organizationId: input.organizationId,
+      companyId: input.companyId, branchId: input.branchId,
+      scheduleId: String(row.schedule_id), sequence: Number(row.sequence),
+      dueDate: String(row.due_date), kind: "invoice_draft_pending_review",
+    }, input.businessDate, { ...input.live, authorize: input.authorizeApproval });
+    const key = [input.organizationId, input.companyId, input.branchId,
+      input.draftId].join(":");
+    const before = Number(db.query("SELECT total_changes() AS count")[0]?.count);
+    const proof = input.postFinancialInvoice(db, preview, key);
+    if (!proof || typeof proof !== "object" || "then" in proof ||
+        !validId(proof.invoiceId)) {
+      throw new Error("Financial writer must return a synchronous persisted invoice identity");
+    }
+    const after = Number(db.query("SELECT total_changes() AS count")[0]?.count);
+    if (!Number.isSafeInteger(before) || !Number.isSafeInteger(after) || after <= before) {
+      throw new Error("Financial writer did not persist an invoice transaction");
+    }
+    if (input.verifyPostedInvoice(db, proof.invoiceId, preview, key) !== true) {
+      throw new Error("Financial invoice was not independently verified in the transaction");
+    }
+    const utc = new Date().toISOString();
+    db.exec(`UPDATE recurring_invoice_draft_pilot_v1
+      SET status='posted',posted_invoice_id=?,posted_at_utc=?,approved_by=?
+      WHERE org_id=? AND company_id=? AND branch_id=? AND id=?
+        AND schedule_id=? AND sequence=? AND status='pending_review'
+        AND posted_invoice_id IS NULL`,
+    [proof.invoiceId, utc, approverId,
+      input.organizationId, input.companyId, input.branchId, input.draftId,
+      String(row.schedule_id), Number(row.sequence)]);
+    if (changed(db) !== 1) throw new Error("Recurring invoice final CAS conflict");
+    return { disposition: "posted" as const,
+      draftId: input.draftId, invoiceId: proof.invoiceId };
   });
 }
