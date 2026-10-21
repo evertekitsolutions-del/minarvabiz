@@ -393,3 +393,57 @@ export function checkoutSalesOrderSqlite(
     return plan;
   });
 }
+
+/** Tenant/branch-scoped, stable cursor pagination for future host UI. */
+export interface SalesOrderCursor {
+  readonly orderNumber: string;
+  readonly id: string;
+}
+export interface SalesOrderPageOptions {
+  readonly limit?: number;
+  readonly status?: "draft" | "confirmed" | "cancelled" | "invoiced";
+  readonly after?: SalesOrderCursor | null;
+}
+export function listSalesOrdersPageSqlite(
+  db: SalesOrderSqliteDb,
+  auth: SalesOrderAuthorizedScope,
+  options: SalesOrderPageOptions = {},
+  enabled = false,
+): { orders: SalesOrderIntent[]; nextCursor: SalesOrderCursor | null } {
+  allowed(auth, enabled);
+  const limit = options.limit ?? 50;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new Error("Invalid sales-order page size (1 to 100)");
+  }
+  const valid = ["draft","confirmed","cancelled","invoiced"];
+  if (options.status != null && !valid.includes(options.status)) {
+    throw new Error("Invalid sales-order page status");
+  }
+  const after = options.after;
+  if (after != null && (typeof after.orderNumber !== "string" ||
+    !/^[A-Za-z0-9/_-]{1,48}$/.test(after.orderNumber) ||
+    typeof after.id !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(after.id))) {
+    throw new Error("Invalid sales-order page cursor");
+  }
+  const params: unknown[] = [
+    auth.organizationId, auth.companyId, auth.branchId, auth.warehouseId,
+  ];
+  let query = `SELECT * FROM ${table} WHERE org_id = ? AND company_id = ?
+    AND branch_id = ? AND warehouse_id = ?`;
+  if (options.status != null) {
+    query += " AND status = ?";
+    params.push(options.status);
+  }
+  if (after != null) {
+    query += " AND (order_number > ? OR (order_number = ? AND id > ?))";
+    params.push(after.orderNumber, after.orderNumber, after.id);
+  }
+  query += " ORDER BY order_number ASC, id ASC LIMIT ?";
+  params.push(limit + 1);
+  const rows = db.query(query, params);
+  const hasMore = rows.length > limit;
+  const page = rows.slice(0, limit).map(parse);
+  const last = hasMore ? page[page.length - 1] : undefined;
+  return { orders: page, nextCursor: last ? {orderNumber:last.orderNumber,id:last.id} : null };
+}
