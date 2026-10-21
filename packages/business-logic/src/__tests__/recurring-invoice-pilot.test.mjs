@@ -213,3 +213,59 @@ test("corrupt persisted schedule JSON is never silently accepted", () => {
     db, scope, "monthly-maintenance", "2026-12-31", authorize), /Corrupt/);
   assert.deepEqual(readRows(db), []);
 });
+
+const trustedCatalogReaders = () => ({
+  getSourceSale(saleId) {
+    assert.equal(saleId, "issued-invoice-1");
+    return {
+      id: saleId, branchId: scope.branchId, customerId: "customer-1",
+      status: "completed", items: [{ productId: "annual-service" }],
+    };
+  },
+  getCustomer(customerId) {
+    return { id: customerId, branchId: scope.branchId, name: "Customer" };
+  },
+  getProduct(productId) {
+    return {
+      id: productId, branchId: scope.branchId, name: "Annual service",
+      sellingPrice: 200, costPrice: 40, stockQuantity: 20,
+      discount: 0, taxRate: 0, isActive: true,
+    };
+  },
+});
+
+test("persisted staged invoice draft gives current-price checkout preview without sale posting", () => {
+  const db = memoryDb();
+  sqlite.saveRecurringInvoicePilotSqlite(db, rule(), authorize);
+  const [draft] = sqlite.stageRecurringInvoiceDraftsPilotSqlite(
+    db, scope, "monthly-maintenance", "2026-01-31", authorize);
+  const before = JSON.stringify(readRows(db));
+  const checked = sqlite.previewRecurringInvoiceDraftPilotSqlite(
+    db, scope, draft.id, "2026-01-31", authorize, trustedCatalogReaders());
+  assert.equal(checked.kind, "nonbinding_recurring_invoice_checkout_preview");
+  assert.equal(checked.occurrenceId, draft.id);
+  assert.equal(checked.totals.grandTotal, 200);
+  assert.equal(checked.requiresManualApproval, true);
+  assert.equal(JSON.stringify(readRows(db)), before, "preview may not mutate staged data");
+});
+
+test("SQLite pending review rejects foreign-branch ids, tampered due dates and pauses", () => {
+  const db = memoryDb();
+  sqlite.saveRecurringInvoicePilotSqlite(db, rule(), authorize);
+  const [draft] = sqlite.stageRecurringInvoiceDraftsPilotSqlite(
+    db, scope, "monthly-maintenance", "2026-01-31", authorize);
+  assert.throws(() => sqlite.previewRecurringInvoiceDraftPilotSqlite(
+    db, { ...scope, branchId: "branch-other" }, draft.id,
+    "2026-01-31", () => {}, trustedCatalogReaders()), /not found/);
+  assert.throws(() => sqlite.previewRecurringInvoiceDraftPilotSqlite(
+    db, scope, draft.id, "2026-01-31",
+    () => { throw Error("staff cannot review"); }, trustedCatalogReaders()), /cannot review/);
+  db.exec("UPDATE recurring_invoice_draft_pilot_v1 SET due_date='2026-01-30'");
+  assert.throws(() => sqlite.previewRecurringInvoiceDraftPilotSqlite(
+    db, scope, draft.id, "2026-01-31", authorize, trustedCatalogReaders()), /not an authorised/);
+  db.exec("UPDATE recurring_invoice_draft_pilot_v1 SET due_date='2026-01-31'");
+  sqlite.changeRecurringInvoicePilotStatusSqlite(
+    db, scope, "monthly-maintenance", 1, "paused", authorize);
+  assert.throws(() => sqlite.previewRecurringInvoiceDraftPilotSqlite(
+    db, scope, draft.id, "2026-01-31", authorize, trustedCatalogReaders()), /Only active/);
+});
