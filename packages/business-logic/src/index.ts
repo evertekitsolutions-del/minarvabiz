@@ -194,3 +194,6 @@ export * from "./amc-visit-planner";
 
 // PUR-009 posted invoice supplier unit cost comparison (read-only).
 export * from "./supplier-posted-cost-comparison";
+
+// PUR-002 supplier RFQ draft preview, no dispatch or postings.
+export * from "./rfq-draft-preview";
