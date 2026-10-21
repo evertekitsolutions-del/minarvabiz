@@ -1,0 +1,185 @@
+/**
+ * SAL-007 opt-in SQLite recurrence pilot. Source-only, OFF in customer builds.
+ * Owns draft schedules and pending-review queue, NOT an invoice/ledger writer.
+ * Host must supply trusted tenant/branch authorisation, never a UI boolean.
+ */
+import {
+  createRecurringInvoiceSchedule, planRecurringInvoiceDue,
+  changeRecurringInvoiceStatus, type RecurringInvoiceInput,
+  type RecurringInvoiceSchedule, type RecurringInvoiceOccurrence,
+  type RecurringInvoiceStatus,
+} from "./recurring-invoice";
+
+export interface RecurringInvoiceSqliteDb {
+  exec(sql: string, params?: unknown[]): void;
+  query(sql: string, params?: unknown[]): Record<string, unknown>[];
+  transaction<T>(fn: () => T): T;
+}
+export type AuthorizeRecurringInvoiceScope =
+  (organizationId: string, companyId: string, branchId: string) => void;
+export interface RecurringInvoiceScope {
+  organizationId: string;
+  companyId: string;
+  branchId: string;
+}
+const validId = (x: unknown): x is string =>
+  typeof x === "string" && x.length > 0 && x.length <= 128 &&
+  x === x.trim() && !/[\u0000-\u001f]/.test(x);
+
+function authorized(
+  scope: RecurringInvoiceScope, authorize: AuthorizeRecurringInvoiceScope,
+): void {
+  if (!scope || !validId(scope.organizationId) ||
+      !validId(scope.companyId) || !validId(scope.branchId) ||
+      typeof authorize !== "function") {
+    throw new Error("Trusted recurring invoice tenant/branch authorization is required");
+  }
+  authorize(scope.organizationId, scope.companyId, scope.branchId);
+}
+const changed = (db: RecurringInvoiceSqliteDb): number =>
+  Number(db.query("SELECT changes() AS count")[0]?.count ?? -1);
+
+/** Only invoked by an explicitly enabled trusted adapter; never from startup. */
+export function initializeRecurringInvoicePilotSqlite(db: RecurringInvoiceSqliteDb): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS recurring_invoice_schedule_pilot_v1 (
+    org_id TEXT NOT NULL, company_id TEXT NOT NULL, branch_id TEXT NOT NULL,
+    id TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('active','paused','cancelled')),
+    version INTEGER NOT NULL CHECK(version > 0),
+    payload_json TEXT NOT NULL CHECK(length(payload_json) BETWEEN 2 AND 32768),
+    PRIMARY KEY(org_id, id)
+  )`);
+  db.exec(`CREATE INDEX IF NOT EXISTS recurring_invoice_schedule_pilot_scope_v1
+    ON recurring_invoice_schedule_pilot_v1(org_id, company_id, branch_id, status)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS recurring_invoice_draft_pilot_v1 (
+    org_id TEXT NOT NULL, company_id TEXT NOT NULL, branch_id TEXT NOT NULL,
+    id TEXT NOT NULL, schedule_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL CHECK(sequence > 0),
+    due_date TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending_review'
+      CHECK(status = 'pending_review'),
+    PRIMARY KEY(org_id, id),
+    UNIQUE(org_id, schedule_id, sequence),
+    FOREIGN KEY(org_id, schedule_id) REFERENCES recurring_invoice_schedule_pilot_v1(org_id, id)
+  )`);
+  db.exec(`CREATE INDEX IF NOT EXISTS recurring_invoice_draft_pilot_due_v1
+    ON recurring_invoice_draft_pilot_v1(org_id, company_id, branch_id, due_date)`);
+}
+
+function loadSchedule(
+  db: RecurringInvoiceSqliteDb, scope: RecurringInvoiceScope, scheduleId: string,
+): RecurringInvoiceSchedule | null {
+  if (!validId(scheduleId)) throw new Error("Invalid recurring invoice schedule ID");
+  const rows = db.query(`SELECT payload_json, status, version
+    FROM recurring_invoice_schedule_pilot_v1
+    WHERE org_id=? AND company_id=? AND branch_id=? AND id=?`,
+  [scope.organizationId, scope.companyId, scope.branchId, scheduleId]);
+  if (!rows.length) return null;
+  if (rows.length !== 1) throw new Error("Duplicated schedule storage row");
+  let data: RecurringInvoiceSchedule;
+  try { data = JSON.parse(String(rows[0].payload_json)) as RecurringInvoiceSchedule; }
+  catch { throw new Error("Corrupt recurring invoice schedule JSON"); }
+  if (!data || data.id !== scheduleId ||
+      data.organizationId !== scope.organizationId ||
+      data.companyId !== scope.companyId || data.branchId !== scope.branchId ||
+      data.status !== rows[0].status || data.version !== rows[0].version) {
+    throw new Error("Corrupt recurring invoice scope or schedule revision");
+  }
+  // This validates all persisted fields, not just the row's composite key.
+  planRecurringInvoiceDue(data, data.firstDueDate, [], 1);
+  return data;
+}
+
+export function saveRecurringInvoicePilotSqlite(
+  db: RecurringInvoiceSqliteDb,
+  input: RecurringInvoiceInput,
+  authorize: AuthorizeRecurringInvoiceScope,
+): { disposition: "created" | "existing"; schedule: RecurringInvoiceSchedule } {
+  const schedule = createRecurringInvoiceSchedule(input);
+  authorized(schedule, authorize);
+  const payload = JSON.stringify(schedule);
+  if (payload.length > 32768) throw new Error("Recurring invoice schedule too large");
+  return db.transaction(() => {
+    const existing = loadSchedule(db, schedule, schedule.id);
+    if (existing) {
+      if (JSON.stringify(existing) !== payload) {
+        throw new Error("Recurring invoice ID already belongs to a different schedule");
+      }
+      return { disposition: "existing" as const, schedule: existing };
+    }
+    // Even a foreign branch reusing an organisation-level ID is rejected by PK.
+    db.exec(`INSERT INTO recurring_invoice_schedule_pilot_v1
+      (org_id,company_id,branch_id,id,status,version,payload_json)
+      VALUES (?,?,?,?,?,?,?)`,
+    [schedule.organizationId, schedule.companyId, schedule.branchId,
+      schedule.id, schedule.status, schedule.version, payload]);
+    if (changed(db) !== 1) throw new Error("Recurring invoice insert failed");
+    return { disposition: "created" as const, schedule };
+  });
+}
+
+export function changeRecurringInvoicePilotStatusSqlite(
+  db: RecurringInvoiceSqliteDb, scope: RecurringInvoiceScope,
+  scheduleId: string, version: number, next: RecurringInvoiceStatus,
+  authorize: AuthorizeRecurringInvoiceScope,
+): RecurringInvoiceSchedule {
+  authorized(scope, authorize);
+  return db.transaction(() => {
+    const current = loadSchedule(db, scope, scheduleId);
+    if (!current) throw new Error("Recurring invoice schedule does not exist");
+    const updated = changeRecurringInvoiceStatus(current, version, next);
+    if (updated === current) return current;
+    db.exec(`UPDATE recurring_invoice_schedule_pilot_v1
+      SET status=?, version=?, payload_json=?
+      WHERE org_id=? AND company_id=? AND branch_id=? AND id=?
+      AND status=? AND version=?`,
+    [updated.status, updated.version, JSON.stringify(updated),
+      scope.organizationId, scope.companyId, scope.branchId, scheduleId,
+      current.status, current.version]);
+    if (changed(db) !== 1) throw new Error("Recurring invoice schedule CAS conflict");
+    return updated;
+  });
+}
+
+/** Atomic manual-review staging; no sale, financial event or auto-send side effect. */
+export function stageRecurringInvoiceDraftsPilotSqlite(
+  db: RecurringInvoiceSqliteDb, scope: RecurringInvoiceScope,
+  scheduleId: string, asOfDate: string,
+  authorize: AuthorizeRecurringInvoiceScope,
+): RecurringInvoiceOccurrence[] {
+  authorized(scope, authorize);
+  return db.transaction(() => {
+    const current = loadSchedule(db, scope, scheduleId);
+    if (!current) throw new Error("Recurring invoice schedule does not exist");
+    const existingRows = db.query(`SELECT sequence FROM recurring_invoice_draft_pilot_v1
+      WHERE org_id=? AND company_id=? AND branch_id=? AND schedule_id=?
+      ORDER BY sequence`, [scope.organizationId, scope.companyId, scope.branchId, scheduleId]);
+    const plans = planRecurringInvoiceDue(current, asOfDate,
+      existingRows.map((row) => Number(row.sequence)));
+    for (const item of plans) {
+      db.exec(`INSERT INTO recurring_invoice_draft_pilot_v1
+        (org_id,company_id,branch_id,id,schedule_id,sequence,due_date,status)
+        VALUES (?,?,?,?,?,?,?,'pending_review')`,
+      [item.organizationId, item.companyId, item.branchId, item.id,
+        item.scheduleId, item.sequence, item.dueDate]);
+      if (changed(db) !== 1) throw new Error("Recurring invoice draft staging conflict");
+    }
+    return plans;
+  });
+}
+
+export function listRecurringInvoiceDraftsPilotSqlite(
+  db: RecurringInvoiceSqliteDb, scope: RecurringInvoiceScope,
+  authorize: AuthorizeRecurringInvoiceScope,
+): RecurringInvoiceOccurrence[] {
+  authorized(scope, authorize);
+  return db.query(`SELECT id,schedule_id,sequence,due_date
+    FROM recurring_invoice_draft_pilot_v1
+    WHERE org_id=? AND company_id=? AND branch_id=? AND status='pending_review'
+    ORDER BY due_date,schedule_id,sequence LIMIT 500`,
+  [scope.organizationId, scope.companyId, scope.branchId]).map((row) => ({
+    id: String(row.id), organizationId: scope.organizationId,
+    companyId: scope.companyId, branchId: scope.branchId,
+    scheduleId: String(row.schedule_id),
+    sequence: Number(row.sequence), dueDate: String(row.due_date),
+    kind: "invoice_draft_pending_review" as const,
+  }));
+}
