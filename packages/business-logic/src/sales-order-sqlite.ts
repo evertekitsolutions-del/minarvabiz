@@ -291,3 +291,105 @@ export function listPendingSalesOrderEventsSqlite(
     return event;
   });
 }
+
+/**
+ * SAL-003 isolated atomic order -> invoice coordinator.
+ *
+ * HOST TRUST BOUNDARY: callbacks MUST be created in a privileged trusted host,
+ * NEVER passed from renderer/HTTP payload. commitFinancialSale must synchronously
+ * write the invoice, stock movement, payment/journal and every side effect
+ * through the supplied SQLite connection in this SAME transaction. The receipt
+ * reader must query that committed invoice from the same connection.
+ *
+ * This deliberately is NOT mounted in the shipping POS. It neither implements
+ * nor pretends to be an authoritative financial writer by itself.
+ */
+export interface SalesOrderFinancialReceipt {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly companyId: string;
+  readonly branchId: string;
+  readonly customerId: string;
+  readonly currency: string;
+  readonly totalMinor: number;
+}
+export interface SalesOrderCheckoutHost {
+  readonly commitFinancialSale: (
+    db: SalesOrderSqliteDb, order: SalesOrderIntent, operationId: string,
+  ) => void;
+  readonly readCommittedInvoice: (
+    db: SalesOrderSqliteDb, operationId: string,
+  ) => SalesOrderFinancialReceipt | null;
+}
+export interface SalesOrderCheckoutRequest {
+  readonly operationId: string;
+  readonly expectedVersion: number;
+  readonly occurredAt: string;
+}
+export function checkoutSalesOrderSqlite(
+  db: SalesOrderSqliteDb,
+  orderId: string,
+  request: SalesOrderCheckoutRequest,
+  auth: SalesOrderAuthorizedScope,
+  enabled = false,
+  host?: SalesOrderCheckoutHost,
+): { disposition: "update" | "replay"; order: SalesOrderIntent } {
+  allowed(auth, enabled);
+  if (typeof host?.commitFinancialSale !== "function" ||
+    typeof host?.readCommittedInvoice !== "function") {
+    throw new Error("Trusted transactional financial writer and receipt reader required");
+  }
+  return db.transaction(() => {
+    const rows = db.query(`SELECT * FROM ${table} WHERE org_id = ? AND id = ?`,
+      [auth.organizationId, orderId]);
+    if (rows.length !== 1) throw new Error("Retail sales order not found or not authorized");
+    const current = parse(rows[0]);
+    // Scope must come from host-verified authority before reading/writing money.
+    for (const field of ["organizationId", "companyId", "branchId", "warehouseId"] as const) {
+      if (auth[field] !== current[field]) throw new Error("Sales-order checkout scope mismatch");
+    }
+    const key = request?.operationId;
+    const replay = current.status === "invoiced" && current.lastOperationId === key;
+    if (!replay) {
+      // Preflight validates CAS, allowed transition and timestamp BEFORE running
+      // the privileged financial writer. No side effects on a rejected request.
+      const temporaryId = current.id === "00000000-0000-4000-8000-000000000001"
+        ? "00000000-0000-4000-8000-000000000002"
+        : "00000000-0000-4000-8000-000000000001";
+      planSalesOrderTransition(current, {
+        ...request, action: "link-invoice",
+        committedInvoice: {
+          id: temporaryId,
+          organizationId: current.organizationId, companyId: current.companyId,
+          branchId: current.branchId, customerId: current.customerId,
+          currency: current.currency, totalMinor: current.totalMinor,
+        },
+      }, auth, enabled);
+      const callbackResult: unknown = host.commitFinancialSale(db, current, key);
+      if (callbackResult !== undefined) {
+        throw new Error("Financial writer must be synchronous and return no value");
+      }
+    }
+    // A caller-provided invoice descriptor never proves an actual financial
+    // commit. Always read the saved receipt using the trusted host's reader.
+    const receipt = host.readCommittedInvoice(db, key);
+    if (!receipt) throw new Error("No authoritative committed invoice for sales order");
+    const plan = planSalesOrderTransition(current, {
+      ...request, action: "link-invoice", committedInvoice: receipt,
+    }, auth, enabled);
+    if (plan.disposition === "replay") return plan;
+    const next = plan.order;
+    db.exec(`UPDATE ${table}
+      SET status = ?, version = ?, invoice_id = ?, record_json = ?
+      WHERE org_id = ? AND id = ? AND company_id = ? AND branch_id = ?
+        AND warehouse_id = ? AND version = ? AND status = 'confirmed'`,
+      [next.status, next.version, next.invoiceId, JSON.stringify(next),
+        next.organizationId, next.id, next.companyId, next.branchId,
+        next.warehouseId, current.version]);
+    if (updatedRowCount(db) !== 1) {
+      throw new Error("Sales-order checkout CAS failed: financial transaction rolled back");
+    }
+    stagePilotEvent(db, next, "invoiced");
+    return plan;
+  });
+}

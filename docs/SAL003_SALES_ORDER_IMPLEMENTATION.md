@@ -65,3 +65,6 @@ The isolated durable offline event reader now independently validates the embedd
 
 ### Consistent backup snapshot
 Backup export now reads both order rows and pending local events inside the **same SQLite transaction**, so concurrent order mutations cannot split a backup across two revisions. An invalid pending-event total prevents export and leaves all events pending; tests verify transaction use and fail-closed export.
+
+## Atomic confirmed order -> invoice coordinator (not shipped)
+`checkoutSalesOrderSqlite` is now a synchronous **one-transaction** coordinator. Its host-owned callbacks must post the actual invoice, stock debit and financial journal on the supplied SQLite connection, and independently reread the persisted invoice. The adapter checks host/branch permissions, expected order version, timestamp and invoice identity/amount before linking and staging the local event. Same-key retries do **not** post a second financial sale. A failed stock write, missing/mismatching invoice proof, or order compare-and-set rolls back the entire transaction. Real SQL.js tests exercise invoice+stock+journal writes and failures. The test tables are fixtures only; a production authoritative writer/ledger and cross-device sync are **not yet wired**. Never pass host callback functions from user/renderer inputs.
