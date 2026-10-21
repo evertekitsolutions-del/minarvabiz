@@ -4,6 +4,7 @@ import * as React from "react";
 import { warehouseStore, store } from "@minarvabiz/business-logic";
 import type { WarehouseLocationType } from "@minarvabiz/types";
 import { Button } from "../Button";
+import { WarehouseBatchExpiryPanel } from "./WarehouseBatchExpiryPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 
@@ -78,6 +79,8 @@ export function WarehousePanel() {
         <Card><CardContent className="p-4"><div className="text-xs text-slate-500">Allocated units</div><div className="mt-1 text-2xl font-bold">{qty(positions.reduce((s, p) => s + p.onHand, 0))}</div></CardContent></Card>
         <Card><CardContent className="p-4"><div className="text-xs text-slate-500">Open transfers</div><div className="mt-1 text-2xl font-bold">{transfers.filter((t) => !["received", "cancelled"].includes(t.status)).length}</div></CardContent></Card>
       </div>
+
+      <WarehouseBatchExpiryPanel products={products} warehouses={warehouses} />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
