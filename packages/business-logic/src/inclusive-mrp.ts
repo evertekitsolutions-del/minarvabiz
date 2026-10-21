@@ -61,7 +61,11 @@ export function quoteInclusiveMrpUnitPrice(
       quantity, unitPrice: fromMinorUnits(mid),
       taxRate: taxRatePercent, discountPercent: 0,
     }).total);
-    if (total <= maximumLineMinor) low = mid;
+    const unitTotal = toMinorUnits(calculateLineItem({
+      quantity: 1, unitPrice: fromMinorUnits(mid),
+      taxRate: taxRatePercent, discountPercent: 0,
+    }).total);
+    if (total <= maximumLineMinor && unitTotal <= mrpMinor) low = mid;
     else high = mid - 1;
   }
   if (mrpMinor > 0 && low === 0) {
