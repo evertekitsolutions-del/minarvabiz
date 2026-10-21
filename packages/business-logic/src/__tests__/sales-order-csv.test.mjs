@@ -33,7 +33,7 @@ test("scoped CSV exports verified line totals and inert formula descriptions",()
   const result=exportSalesOrdersCsv([source],scope,true);
   assert.equal(JSON.stringify(source),before);
   assert.match(result,/^order_number,status,created_at,due_date,customer_id,currency,line_id/);
-  assert.equal(result.trim().split("\\n").length,3);
+  assert.equal(result.trim().split("\n").length,3);
   assert.ok(result.includes('"Notebook ""Premium"""'));
   assert.ok(result.includes("'=HYPERLINK("));
   assert.ok(result.includes(",2000,1500,100,50,2950,3850,"));
