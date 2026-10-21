@@ -170,3 +170,5 @@ export * from "./service-original-gross-margin";
 export * from "./customer-segments-report";
 // FIN-013 posted journal liquidity movements.
 export * from "./ledger-cash-bank-flow";
+// FIN-017 read-only posted accounting Day Book.
+export * from "./accounting-day-book";

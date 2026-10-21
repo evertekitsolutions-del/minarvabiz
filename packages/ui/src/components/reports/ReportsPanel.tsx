@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import type { SalesReportRow } from "@minarvabiz/types";
-import { can, listAuthorizedCustomerOriginalGrossMargins, listAuthorizedProductOriginalGrossMargins, listAuthorizedServiceOriginalGrossMargins, buildAuthorizedCashBankFlow } from "@minarvabiz/business-logic";
-import type { CustomerOriginalGrossMarginRow, ProductOriginalGrossMarginRow, ServiceOriginalGrossMarginRow, CashBankFlowReport } from "@minarvabiz/business-logic";
+import { can, listAuthorizedCustomerOriginalGrossMargins, listAuthorizedProductOriginalGrossMargins, listAuthorizedServiceOriginalGrossMargins, buildAuthorizedCashBankFlow, buildAuthorizedAccountingDayBook } from "@minarvabiz/business-logic";
+import type { CustomerOriginalGrossMarginRow, ProductOriginalGrossMarginRow, ServiceOriginalGrossMarginRow, CashBankFlowReport, AccountingDayBookReport } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
@@ -32,7 +32,7 @@ export interface TaxReconciliationView {
   from:string|null; to:string|null; periodOutputTax:number; periodInputTax:number; periodPurchaseTaxPending:number;
   outputTaxPayable:number; inputTaxCredit:number; purchaseTaxPending:number; netTaxPosition:number; reviewRequired:boolean;
 }
-type ReportTab = "sales" | "dayend" | "stock" | "receivables" | "payables" | "financial" | "tax" | "customer-profit" | "product-profit" | "service-profit" | "cash-bank-flow";
+type ReportTab = "sales" | "dayend" | "stock" | "receivables" | "payables" | "financial" | "tax" | "customer-profit" | "product-profit" | "service-profit" | "cash-bank-flow" | "day-book";
 
 function csvCell(value: unknown) { return `"${String(value ?? "").replace(/"/g, '""')}"`; }
 function downloadFile(name: string, text: string, type: string) {
@@ -120,7 +120,24 @@ export function ReportsPanel({
     catch(error) { cashFlowError=error instanceof Error ? error.message : "Unable to read cash flow"; }
   }
 
+  const mayReadDayBook = can("accounting.view");
+  let dayBook: AccountingDayBookReport | null = null;
+  let dayBookError: string | null = null;
+  if (mayReadDayBook) {
+    try { dayBook = buildAuthorizedAccountingDayBook(from,to); }
+    catch(error) { dayBookError = error instanceof Error ? error.message : "Unable to read Day Book"; }
+  }
+
   const exportData = React.useMemo(() => {
+    if(tab==="day-book"){
+      return mayReadDayBook && !dayBookError && dayBook
+        ? {name:"Accounting Day Book",
+          headers:["Date","Journal","Description","Status","Debits","Credits","Accounts"],
+          rows:dayBook.journals.map(row=>[row.entryDate,row.journalNumber,
+            row.description,row.status,row.totalDebit,row.totalCredit,
+            row.accountBreakdown] as Array<string|number>)}
+        : {name:"Restricted Day Book",headers:["Status"],rows:[] as Array<Array<string|number>>};
+    }
     if(tab==="cash-bank-flow") {
       return mayReadCashFlow && cashFlow && !cashFlowError
         ? {name:"Posted Cash and Bank Flow",
@@ -180,12 +197,12 @@ export function ReportsPanel({
       moneyRow("Total sales",dayEnd.totalSales),moneyRow("Service revenue",dayEnd.serviceRevenue),moneyRow("Cost of goods",dayEnd.costOfGoods),moneyRow("Gross profit",dayEnd.grossProfit),
       moneyRow("Total expenses",dayEnd.totalExpenses),moneyRow("Net profit",dayEnd.netProfit),moneyRow("Cash received",dayEnd.cashReceived),moneyRow("Card / UPI",dayEnd.cardPayments),moneyRow("Other payments",dayEnd.otherPayments),moneyRow("Outstanding",dayEnd.outstandingAmount),
     ]};
-  },[tab,rows,stock,outstanding,payables,financial,taxReport,dayEnd,mayReadCustomerMargins,customerMargins,customerMarginError,mayReadProductMargins,productMargins,productMarginError,mayReadServiceMargins,serviceMargins,serviceMarginError,mayReadCashFlow,cashFlow,cashFlowError]);
+  },[tab,rows,stock,outstanding,payables,financial,taxReport,dayEnd,mayReadCustomerMargins,customerMargins,customerMarginError,mayReadProductMargins,productMargins,productMarginError,mayReadServiceMargins,serviceMargins,serviceMarginError,mayReadCashFlow,cashFlow,cashFlowError,mayReadDayBook,dayBook,dayBookError]);
 
   const exportCsv=()=>downloadFile(`minarva-${tab}-report.csv`,[exportData.headers.map(csvCell).join(","),...exportData.rows.map(r=>r.map(csvCell).join(","))].join("\n"),"text/csv;charset=utf-8");
   const exportExcel=()=>downloadFile(`minarva-${tab}-report.xls`,spreadsheetXml(exportData.name,exportData.headers,exportData.rows),"application/vnd.ms-excel;charset=utf-8");
   const pdfLines=exportData.rows.map(r=>r.map(String).join(" | "));
-  const tabs: Array<[ReportTab,string]> = [["sales","Sales"],...(mayReadCustomerMargins ? [["customer-profit","Customer Margin"] as [ReportTab,string]] : []),...(mayReadProductMargins ? [["product-profit","Product Margin"] as [ReportTab,string]] : []),...(mayReadServiceMargins ? [["service-profit","Service Margin"] as [ReportTab,string]] : []),...(mayReadCashFlow ? [["cash-bank-flow","Cash / Bank Flow"] as [ReportTab,string]] : []),["dayend","Day-end"],["stock","Stock Valuation"],["receivables","Receivables"],["payables","Payables Aging"],["financial","Financial Statements"],["tax","GST / Tax"]];
+  const tabs: Array<[ReportTab,string]> = [["sales","Sales"],...(mayReadCustomerMargins ? [["customer-profit","Customer Margin"] as [ReportTab,string]] : []),...(mayReadProductMargins ? [["product-profit","Product Margin"] as [ReportTab,string]] : []),...(mayReadServiceMargins ? [["service-profit","Service Margin"] as [ReportTab,string]] : []),...(mayReadCashFlow ? [["cash-bank-flow","Cash / Bank Flow"] as [ReportTab,string]] : []),...(mayReadDayBook ? [["day-book","Day Book"] as [ReportTab,string]] : []),["dayend","Day-end"],["stock","Stock Valuation"],["receivables","Receivables"],["payables","Payables Aging"],["financial","Financial Statements"],["tax","GST / Tax"]];
 
   return <div className="space-y-4">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -207,6 +224,33 @@ export function ReportsPanel({
 
     <div className="flex flex-wrap gap-2 print:hidden">{tabs.map(([id,label])=><Button key={id} size="sm" variant={tab===id?"primary":"outline"} onClick={()=>setTab(id)}>{label}</Button>)}</div>
     {reportError&&<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{reportError}</div>}
+
+    {tab==="day-book"&&mayReadDayBook&&<Card>
+      <CardHeader><CardTitle className="text-sm font-semibold">Accounting Day Book</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-slate-500">Posted and reversed journals by entry date, inclusive of the selected report period. Voided originals and reversal entries are separate audit events, not duplicate revenue.</p>
+        {dayBookError&&<p role="alert" className="text-sm text-rose-700">{dayBookError}</p>}
+        {dayBook&&<div className="grid gap-2 sm:grid-cols-3">
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-600">Journal entries</div><div className="font-semibold">{dayBook.journalCount}</div></div>
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-600">Total debit</div><div className="font-semibold">{formatMoney(dayBook.totalDebit)}</div></div>
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-600">Total credit</div><div className="font-semibold">{formatMoney(dayBook.totalCredit)}</div></div>
+        </div>}
+        <div className="overflow-x-auto"><table className="w-full text-sm">
+          <thead><tr className="border-b text-left text-xs uppercase text-slate-500">
+            <th className="px-2 py-2">Date</th><th className="px-2 py-2">Journal</th>
+            <th className="px-2 py-2">Description</th><th className="px-2 py-2">Status</th>
+            <th className="px-2 py-2 text-right">Debit</th><th className="px-2 py-2 text-right">Credit</th>
+          </tr></thead><tbody>
+            {dayBook?.journals.map(row=><tr key={row.journalEntryId} className="border-b border-slate-100" title={row.accountBreakdown}>
+              <td className="px-2 py-2">{row.entryDate}</td><td className="px-2 py-2">{row.journalNumber}</td>
+              <td className="px-2 py-2">{row.description}</td><td className="px-2 py-2">{row.status}</td>
+              <td className="px-2 py-2 text-right">{formatMoney(row.totalDebit)}</td>
+              <td className="px-2 py-2 text-right">{formatMoney(row.totalCredit)}</td>
+            </tr>)}
+            {!dayBook?.journals.length&&<tr><td colSpan={6} className="px-2 py-5 text-center text-slate-500">No posted journal entries in this period</td></tr>}
+          </tbody></table></div>
+      </CardContent>
+    </Card>}
 
     {tab==="cash-bank-flow"&&mayReadCashFlow&&<Card>
       <CardHeader><CardTitle className="text-sm font-semibold">Posted journal Cash &amp; Bank Flow</CardTitle></CardHeader>
