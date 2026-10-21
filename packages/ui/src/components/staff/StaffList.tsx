@@ -6,6 +6,7 @@ import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { Modal } from "../forms/Modal";
+import { StaffLeavePlanner } from "./StaffLeavePlanner";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 
 export function StaffList({
@@ -60,6 +61,7 @@ export function StaffList({
         <label className="text-xs font-medium text-slate-600">Role<select className={selectClass + " mt-1"} value={role} onChange={(e) => setRole(e.target.value)}><option value="">All roles</option>{["staff","tailor","cashier","manager","admin"].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
         <label className="text-xs font-medium text-slate-600">Status<select className={selectClass + " mt-1"} value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="on_leave">On leave</option></select></label>
       </div>
+      <StaffLeavePlanner staff={staff} />
       <DataTable columns={columns} rows={filtered} onRowClick={onSelect} emptyMessage="No staff match the selected filters" />
       <Modal
         open={Boolean(archiveTarget)}
