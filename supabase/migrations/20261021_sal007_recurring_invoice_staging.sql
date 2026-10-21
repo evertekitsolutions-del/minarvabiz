@@ -1,0 +1,44 @@
+-- SAL-007: SOURCE-ONLY staging primitives, NOT a production deployment approval.
+-- No authenticated/anon SQL access or RPC is granted. Commercial activation
+-- requires authenticated host ownership, immutable invoice writer, RLS review.
+CREATE TABLE IF NOT EXISTS public.recurring_invoice_schedule_staging (
+  org_id uuid NOT NULL,
+  company_id uuid NOT NULL,
+  branch_id uuid NOT NULL,
+  id uuid NOT NULL,
+  customer_id uuid NOT NULL,
+  source_sale_id uuid NOT NULL,
+  status text NOT NULL CHECK (status IN ('active','paused','cancelled')),
+  version bigint NOT NULL CHECK (version > 0),
+  schedule_json jsonb NOT NULL CHECK (jsonb_typeof(schedule_json) = 'object'),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (org_id, id)
+);
+CREATE INDEX IF NOT EXISTS recurring_invoice_schedule_staging_scope
+  ON public.recurring_invoice_schedule_staging(org_id, company_id, branch_id, status);
+CREATE TABLE IF NOT EXISTS public.recurring_invoice_draft_staging (
+  org_id uuid NOT NULL,
+  company_id uuid NOT NULL,
+  branch_id uuid NOT NULL,
+  id uuid NOT NULL,
+  schedule_id uuid NOT NULL,
+  sequence integer NOT NULL CHECK (sequence > 0),
+  due_date date NOT NULL,
+  status text NOT NULL DEFAULT 'pending_review'
+    CHECK (status = 'pending_review'),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (org_id, id),
+  UNIQUE(org_id, schedule_id, sequence),
+  FOREIGN KEY (org_id, schedule_id)
+    REFERENCES public.recurring_invoice_schedule_staging(org_id, id)
+    ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS recurring_invoice_draft_staging_due
+  ON public.recurring_invoice_draft_staging(org_id, company_id, branch_id, due_date);
+ALTER TABLE public.recurring_invoice_schedule_staging ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.recurring_invoice_schedule_staging FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.recurring_invoice_draft_staging ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.recurring_invoice_draft_staging FORCE ROW LEVEL SECURITY;
+-- Default-deny: no user-visible policies or routines are added.
+REVOKE ALL ON public.recurring_invoice_schedule_staging FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON public.recurring_invoice_draft_staging FROM PUBLIC, anon, authenticated;
