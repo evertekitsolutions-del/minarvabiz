@@ -93,6 +93,13 @@ export function createRecurringInvoiceWorkspaceHostAdapter(
     // Inner SQLite functions invoke this again during the same DB transaction.
     host.authorize(required, scope);
   }
+  // Do not rely on object spread: the source contract calls its resolver
+  // getSale, while the review contract requires getSourceSale.
+  const liveReaders = {
+    getSourceSale: (saleId: string) => host.source.getSale(saleId),
+    getCustomer: (customerId: string) => host.source.getCustomer(customerId),
+    getProduct: (productId: string) => host.source.getProduct(productId),
+  };
   const adapter: RecurringInvoiceWorkspaceHostAdapter = {
     async refresh() {
       const scope = permit("read");
@@ -149,7 +156,7 @@ export function createRecurringInvoiceWorkspaceHostAdapter(
         host.db, scope, pendingDraftId, host.getBusinessDate(),
         (org, company, branch) => checkScope("read", {
           organizationId: org, companyId: company, branchId: branch,
-        }), host.source);
+        }), liveReaders);
     },
   };
   if (host.posting) {
@@ -162,7 +169,7 @@ export function createRecurringInvoiceWorkspaceHostAdapter(
       const scope = permit("approve");
       const result = postRecurringInvoiceDraftPilotSqlite(host.db, {
         ...scope, draftId, businessDate: host.getBusinessDate(),
-        live: host.source,
+        live: liveReaders,
         authorizeApproval: (org, company, branch) => checkScope("approve", {
           organizationId: org, companyId: company, branchId: branch,
         }),
