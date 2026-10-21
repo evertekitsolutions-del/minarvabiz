@@ -28,6 +28,7 @@ const verifyReferences = (_conn, intent) => {
     intent.lines.some((line) => line.productId !== uuid(9))) {
     throw new Error("Authoritative customer or product reference not found");
   }
+  return true;
 };
 const create = (conn,req,a,enabled) =>
   adapter.createSalesOrderSqlite(conn,req,a,enabled,verifyReferences);
@@ -159,6 +160,8 @@ test("unverified and unknown customer/SKU references reject before SQLite commit
   const conn=db();
   assert.throws(()=>adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true),
     /Trusted customer\/product\/warehouse reference verification required/);
+  assert.throws(()=>adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true,()=>false),
+    /verification denied/);
   assert.throws(()=>create(conn,orderRequest({customerId:uuid(55)}),auth,true),
     /reference not found/);
   assert.throws(()=>create(conn,orderRequest({lines:[
@@ -171,5 +174,8 @@ test("unverified and unknown customer/SKU references reject before SQLite commit
   assert.throws(()=>amend(conn,uuid(5),{
     operationId:uuid(64),expectedVersion:1,occurredAt:"2026-10-21T08:01:00.000Z",
     lines:[{...orderRequest().lines[0],productId:uuid(22)}]},auth,true),/reference not found/);
+  assert.throws(()=>adapter.amendSalesOrderSqlite(conn,uuid(5),{
+    operationId:uuid(65),expectedVersion:1,occurredAt:"2026-10-21T08:01:00.000Z",
+    lines:orderRequest().lines},auth,true,()=>false),/verification denied/);
   assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true)[0].version,1);
 });

@@ -15,7 +15,7 @@ import {
 } from "./sales-order-intent";
 
 /** Trusted host callback: must confirm customer, product and warehouse masters. */
-export type VerifySalesOrderReferences = (db: SalesOrderSqliteDb, order: SalesOrderIntent) => void;
+export type VerifySalesOrderReferences = (db: SalesOrderSqliteDb, order: SalesOrderIntent) => true;
 
 export interface SalesOrderSqliteDb {
   exec(sql: string, params?: unknown[]): void;
@@ -94,7 +94,9 @@ export function createSalesOrderSqlite(
     const plan = planSalesOrderCreate(request, auth, candidates, enabled);
     if (plan.disposition === "replay") return plan;
     const order = plan.order;
-    verifyReferences!(db, order);
+    if (verifyReferences!(db, order) !== true) {
+      throw new Error("Trusted customer/product/warehouse reference verification denied");
+    }
     db.exec(`INSERT INTO ${table} (id, org_id, company_id, branch_id, warehouse_id,
       operation_id, order_number, customer_id, status, version, invoice_id, record_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -179,7 +181,9 @@ export function amendSalesOrderSqlite(
     const plan = planSalesOrderDraftAmend(current, request, auth, enabled);
     if (plan.disposition === "replay") return plan;
     const next = plan.order;
-    verifyReferences!(db, next);
+    if (verifyReferences!(db, next) !== true) {
+      throw new Error("Trusted customer/product/warehouse reference verification denied");
+    }
     db.exec(`UPDATE ${table} SET version = ?, record_json = ?
       WHERE org_id = ? AND id = ? AND company_id = ? AND branch_id = ?
       AND warehouse_id = ? AND version = ? AND status = 'draft'`,
