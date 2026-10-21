@@ -185,3 +185,6 @@ export * from "./inventory-count-worksheet";
 
 // INV-018 counted CSV variance review (preview only, no posting).
 export * from "./inventory-count-review";
+
+// SVC-010 read-only customer AMC visit planning and schedule CSV.
+export * from "./amc-visit-planner";
