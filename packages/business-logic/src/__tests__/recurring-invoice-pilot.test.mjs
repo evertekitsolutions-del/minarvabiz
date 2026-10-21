@@ -409,3 +409,30 @@ test("daily and yearly schedules preserve anchors at month and leap-year boundar
     "2028-02-29", "2029-02-28", "2030-02-28", "2031-02-28", "2032-02-29",
   ]);
 });
+
+test("schedule list returns only trusted branch records with revisions and fails on corrupt JSON", () => {
+  const db = memoryDb();
+  const baseline = sqlite.saveRecurringInvoicePilotSqlite(db, rule(), authorize);
+  assert.equal(baseline.schedule.status, "active");
+  sqlite.saveRecurringInvoicePilotSqlite(db, rule({
+    id: "monthly-maintenance-2", customerId: "customer-2",
+  }), authorize);
+  assert.deepEqual(sqlite.listRecurringInvoiceSchedulesPilotSqlite(
+    db, scope, authorize).map(x => [x.id, x.status, x.version]), [
+    ["monthly-maintenance", "active", 1],
+    ["monthly-maintenance-2", "active", 1],
+  ]);
+  sqlite.changeRecurringInvoicePilotStatusSqlite(
+    db, scope, "monthly-maintenance", 1, "paused", authorize);
+  const view = sqlite.listRecurringInvoiceSchedulesPilotSqlite(db, scope, authorize);
+  assert.equal(view[0].status, "paused");
+  assert.equal(view[0].version, 2);
+  assert.deepEqual(sqlite.listRecurringInvoiceSchedulesPilotSqlite(
+    db, { ...scope, branchId: "foreign-branch" }, () => {}), []);
+  assert.throws(() => sqlite.listRecurringInvoiceSchedulesPilotSqlite(
+    db, scope, () => { throw Error("read denied"); }), /read denied/);
+  db.exec(`UPDATE recurring_invoice_schedule_pilot_v1
+    SET payload_json='{}' WHERE id='monthly-maintenance-2'`);
+  assert.throws(() => sqlite.listRecurringInvoiceSchedulesPilotSqlite(
+    db, scope, authorize), /Corrupt/);
+});
