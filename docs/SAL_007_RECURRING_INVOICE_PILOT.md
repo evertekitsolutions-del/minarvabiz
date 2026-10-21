@@ -11,6 +11,7 @@ Status: **IN PROGRESS**, not commercially enabled, not accepted.
 - Explicit, isolated SQLite tables with unique (schedule, sequence) and transaction rollback. Repeated staging does not create duplicate draft rows.
 - Source-only PostgreSQL staging with FORCE RLS and **no authenticated/anon privileges or policy**. Merely adding this SQL file grants no online feature.
 - Shared nonbinding checkout preview resolves current product selling price, discount, tax, stock and cost through a trusted host reader; rejects changed customer/branch/invalid source invoices and measured lines. It never calls `createSale`, computes no irreversible posting, and the commercial checkout must revalidate everything.
+- The opt-in SQLite pilot now also has a **host-only manual post contract**: a trusted approver, a synchronous authoritative financial writer, a separate transaction-local invoice verifier, SQL write proof, a unique posted-invoice reference and CAS draft acknowledgement. Real SQLite tests exercise its all-or-nothing commit and rollback against an **isolated financial fixture**; this is not proof of production ledger integration.
 - Node tests cover date boundaries, scope, CAS, replay, corrupt storage and actual SQLite rollback.
 
 ## What remains before SAL-007 can be considered complete
