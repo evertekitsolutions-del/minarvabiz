@@ -6,7 +6,7 @@
  * host must recompute current prices/tax/stock and commit a real invoice once.
  * No third-party code copied; all calendar arithmetic is native UTC.
  */
-export type RecurringInvoiceFrequency = "weekly" | "monthly";
+export type RecurringInvoiceFrequency = "daily" | "weekly" | "monthly" | "yearly";
 export type RecurringInvoiceStatus = "active" | "paused" | "cancelled";
 
 export interface RecurringInvoiceLine {
@@ -93,7 +93,7 @@ export function createRecurringInvoiceSchedule(input: RecurringInvoiceInput): Re
     if (!id(value)) throw new Error("Invalid recurring invoice tenant or document identity");
   }
   if (!/^[A-Z]{3}$/.test(input.currency)) throw new Error("Currency must be ISO 4217 code");
-  if (input.frequency !== "weekly" && input.frequency !== "monthly") {
+  if (!["daily", "weekly", "monthly", "yearly"].includes(input.frequency)) {
     throw new Error("Unsupported recurring invoice frequency");
   }
   const interval = input.interval ?? 1;
@@ -129,14 +129,18 @@ export function recurringInvoiceDueDate(
   }
   const start = parseDate(schedule.firstDueDate);
   const offset = (sequence - 1) * schedule.interval;
-  if (schedule.frequency === "weekly") {
-    const due = new Date(start.getTime() + offset * 7 * 86_400_000);
+  if (schedule.frequency === "daily" || schedule.frequency === "weekly") {
+    const dayCount = offset * (schedule.frequency === "weekly" ? 7 : 1);
+    const due = new Date(start.getTime() + dayCount * 86_400_000);
     if (due.getUTCFullYear() > 2099) throw new Error("Recurring invoice date overflows");
     return isoDate(due);
   }
-  if (schedule.frequency !== "monthly") throw new Error("Invalid recurring invoice frequency");
+  if (schedule.frequency !== "monthly" && schedule.frequency !== "yearly") {
+    throw new Error("Invalid recurring invoice frequency");
+  }
+  const monthOffset = offset * (schedule.frequency === "yearly" ? 12 : 1);
   const monthStart = new Date(Date.UTC(
-    start.getUTCFullYear(), start.getUTCMonth() + offset, 1,
+    start.getUTCFullYear(), start.getUTCMonth() + monthOffset, 1,
   ));
   if (monthStart.getUTCFullYear() > 2099) throw new Error("Recurring invoice date overflows");
   const monthEnd = new Date(Date.UTC(
