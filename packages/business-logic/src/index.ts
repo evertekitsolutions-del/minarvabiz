@@ -182,3 +182,6 @@ export * from "./customer-dues-reminder";
 export * from "./bill-original-gross-profit";
 // INV-018 authorized inventory count worksheet CSV.
 export * from "./inventory-count-worksheet";
+
+// INV-018 counted CSV variance review (preview only, no posting).
+export * from "./inventory-count-review";
