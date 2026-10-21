@@ -91,3 +91,4 @@
 20261018_ubp05c_dimensional_sale_line_storage.sql
 20261018_ubp05e_atomic_sale_dimension_rpc.sql
 20261018_ubp05g_dimension_sale_capability.sql
+20261021_sal007_recurring_invoice_staging.sql
