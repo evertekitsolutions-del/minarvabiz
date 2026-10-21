@@ -48,6 +48,9 @@ export interface SalesOrderWorkspaceProps {
   /** Host must reauthorize all displayed rows before exporting. */
   readonly onExportOrders?: (orders: readonly SalesOrderIntent[]) => Promise<void> | void;
   readonly onPrintOrder?: (order: SalesOrderIntent, paper: "a4" | "thermal") => Promise<void> | void;
+  /** Callbacks must authorize the CAS action on the host; UI flags are not authority. */
+  readonly onArchive?: (order: SalesOrderIntent) => Promise<void> | void;
+  readonly onRestore?: (order: SalesOrderIntent) => Promise<void> | void;
   readonly onTransition?: (
     order: SalesOrderIntent, action: "confirm" | "cancel",
   ) => Promise<void> | void;
@@ -70,10 +73,11 @@ function quantityText(milli: number): string {
 
 export function SalesOrderWorkspace({
   enabled = false, orders, customers, products, onCreateDraft,
-  onAmendDraft, onExportOrders, onPrintOrder, onTransition,
+  onAmendDraft, onExportOrders, onPrintOrder, onArchive, onRestore, onTransition,
 }: SalesOrderWorkspaceProps) {
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState("");
+  const [showTrash, setShowTrash] = React.useState(false);
   const [customerId, setCustomerId] = React.useState("");
   const [productId, setProductId] = React.useState("");
   const [quantity, setQuantity] = React.useState("1");
@@ -93,6 +97,7 @@ export function SalesOrderWorkspace({
   const visibleOrders = React.useMemo(() => {
     const query = search.trim().toLowerCase();
     return orders.filter((order) => {
+      if (showTrash ? !order.deletedAt : Boolean(order.deletedAt)) return false;
       if (status && order.status !== status) return false;
       if (!query) return true;
       const customer = customers.find((row) => row.id === order.customerId);
@@ -100,7 +105,7 @@ export function SalesOrderWorkspace({
         ...order.lines.map((line) => line.description)].some((part) =>
         part.toLowerCase().includes(query));
     });
-  }, [orders, customers, search, status]);
+  }, [orders, customers, search, status, showTrash]);
 
   function resetEditor() {
     setEditingOrderId(null);
@@ -177,6 +182,22 @@ export function SalesOrderWorkspace({
       setNotice("Draft submitted. Refresh the order list to verify the persisted revision.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Sales-order creation was rejected");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function changeTrash(order: SalesOrderIntent, action: "archive" | "restore") {
+    const callback = action === "archive" ? onArchive : onRestore;
+    if (!active || busy || !callback) return;
+    if (action === "archive" && (order.deletedAt || !["draft", "cancelled"].includes(order.status))) return;
+    if (action === "restore" && (!order.deletedAt || !["draft", "cancelled"].includes(order.status))) return;
+    setBusy(true); setNotice(null);
+    try {
+      await callback(order);
+      if (editingOrderId === order.id) resetEditor();
+      setNotice("Order " + action + " requested. Refresh to verify the persisted revision.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Order Trash operation rejected");
     } finally {
       setBusy(false);
     }
@@ -320,7 +341,13 @@ export function SalesOrderWorkspace({
           <option value="draft">Draft</option><option value="confirmed">Confirmed</option>
           <option value="cancelled">Cancelled</option><option value="invoiced">Invoiced</option>
         </select>
-        {onExportOrders && <Button type="button" variant="outline"
+        {(onArchive || onRestore) && <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" aria-label="Show archived sales orders"
+            checked={showTrash} disabled={busy}
+            onChange={(event) => setShowTrash(event.target.checked)}/>
+          Show Trash
+        </label>}
+        {onExportOrders && !showTrash && <Button type="button" variant="outline"
           disabled={busy || visibleOrders.length === 0}
           onClick={() => {
             if (busy || !active) return;
@@ -353,17 +380,27 @@ export function SalesOrderWorkspace({
                 <span className="shrink-0 tabular-nums text-slate-900">{money(order.currency, line.totalMinor)}</span>
               </li>)}
             </ul>
-            {(order.status === "draft" || order.status === "confirmed") && (
+            {showTrash && order.deletedAt && onRestore &&
+              <div className="mt-3 flex justify-end">
+                <Button type="button" size="sm" variant="outline" disabled={busy}
+                  onClick={() => void changeTrash(order,"restore")}>Restore draft</Button>
+              </div>}
+            {!showTrash && !order.deletedAt && (order.status === "draft" || order.status === "confirmed" || order.status === "cancelled") && (
               <div className="mt-3 flex justify-end gap-2">
                 {order.status === "draft" && onAmendDraft && <Button variant="outline" size="sm"
                   disabled={busy} onClick={() => startEdit(order)}>Edit draft</Button>}
                 {order.status === "draft" && <Button variant="outline" size="sm"
                   disabled={!onTransition || busy} onClick={() => void transition(order, "confirm")}>Confirm</Button>}
-                <Button variant="danger" size="sm" disabled={!onTransition || busy}
-                  onClick={() => void transition(order, "cancel")}>Cancel</Button>
+                {(order.status === "draft" || order.status === "confirmed") &&
+                  <Button variant="danger" size="sm" disabled={!onTransition || busy}
+                    onClick={() => void transition(order, "cancel")}>Cancel</Button>}
+                {onArchive && (order.status === "draft" || order.status === "cancelled") &&
+                  <Button type="button" variant="outline" size="sm" disabled={busy}
+                    onClick={() => void changeTrash(order,"archive")}>Move to Trash</Button>
               </div>
             )}
-            {onPrintOrder && <div className="mt-2 flex flex-wrap justify-end gap-2">
+            {!showTrash && !order.deletedAt && onPrintOrder &&
+              <div className="mt-2 flex flex-wrap justify-end gap-2">
               {(["a4", "thermal"] as const).map((paper) => (
                 <Button key={paper} type="button" variant="outline" size="sm" disabled={busy}
                   onClick={() => {

@@ -89,3 +89,6 @@ New pure `planSalesOrderArchive` provides versioned, scoped archive/restore for 
 
 ## SQLite Trash persistence
 `archiveSalesOrderSqlite` now atomically archives/restores draft and cancelled orders using existing immutable record JSON and the CAS revision, adds pending `archived`/`restored` events, and isolates Trash from regular list/pagination. The isolated backup includes archived records and every pending event, so restore never loses Trash. Confirmed/invoiced orders remain non-archivable without authoritative reversal. Real SQL.js tests cover archive, restore, backup, tenant isolation, and financial-state restrictions. Legacy desktop POS is not yet wired.
+
+## Shared Trash and recovery controls
+The shared SalesOrderWorkspace now optionally shows a **Show Trash** switch, Move to Trash buttons for draft/cancelled orders and Restore controls for archived orders. Financially confirmed or invoiced records have no Trash action. UI callbacks are disabled unless an authoritative host supplies them and validates organization/branch, revision and status before writing SQLite/cloud state. Normal customer print/export controls hide archived orders. No production frontend host mounts these controls yet.
