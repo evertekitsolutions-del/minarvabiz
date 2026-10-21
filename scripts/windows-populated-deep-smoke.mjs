@@ -460,9 +460,9 @@ async function main() {
     await click(ws, "PO_ADD_LINE", ["add line"]);
     await click(ws, "PO_CREATE", ["create purchase order"]);
     await assertMain(ws, "PO_CREATED", ["PO-", "draft"]);
-    await click(ws, "PO_APPROVE", ["approve"]);
+    await clickButton(ws, "PO_APPROVE", ["approve"]);
     await assertMain(ws, "PO_APPROVED", ["PO-", "approved"]);
-    await click(ws, "PO_RECEIVE", ["receive goods"]);
+    await clickButton(ws, "PO_RECEIVE", ["receive goods"]);
     await setField(ws, "Receive goods", "received quantity", "2");
     await selectDialogFieldByText(ws, "Receive goods", "Receive into warehouse / bin", "RCV-01");
     await click(ws, "POST_GRN", ["post goods receipt"]);
