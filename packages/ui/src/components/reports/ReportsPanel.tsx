@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import type { SalesReportRow } from "@minarvabiz/types";
-import { can, listAuthorizedCustomerOriginalGrossMargins, listAuthorizedProductOriginalGrossMargins, listAuthorizedServiceOriginalGrossMargins } from "@minarvabiz/business-logic";
-import type { CustomerOriginalGrossMarginRow, ProductOriginalGrossMarginRow, ServiceOriginalGrossMarginRow } from "@minarvabiz/business-logic";
+import { can, listAuthorizedCustomerOriginalGrossMargins, listAuthorizedProductOriginalGrossMargins, listAuthorizedServiceOriginalGrossMargins, buildAuthorizedCashBankFlow } from "@minarvabiz/business-logic";
+import type { CustomerOriginalGrossMarginRow, ProductOriginalGrossMarginRow, ServiceOriginalGrossMarginRow, CashBankFlowReport } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
@@ -32,7 +32,7 @@ export interface TaxReconciliationView {
   from:string|null; to:string|null; periodOutputTax:number; periodInputTax:number; periodPurchaseTaxPending:number;
   outputTaxPayable:number; inputTaxCredit:number; purchaseTaxPending:number; netTaxPosition:number; reviewRequired:boolean;
 }
-type ReportTab = "sales" | "dayend" | "stock" | "receivables" | "payables" | "financial" | "tax" | "customer-profit" | "product-profit" | "service-profit";
+type ReportTab = "sales" | "dayend" | "stock" | "receivables" | "payables" | "financial" | "tax" | "customer-profit" | "product-profit" | "service-profit" | "cash-bank-flow";
 
 function csvCell(value: unknown) { return `"${String(value ?? "").replace(/"/g, '""')}"`; }
 function downloadFile(name: string, text: string, type: string) {
@@ -112,7 +112,29 @@ export function ReportsPanel({
     catch(error) { serviceMarginError = error instanceof Error ? error.message : "Unable to read service margins"; }
   }
 
+  const mayReadCashFlow = can("accounting.view");
+  let cashFlow: CashBankFlowReport | null = null;
+  let cashFlowError: string | null = null;
+  if(mayReadCashFlow) {
+    try { cashFlow=buildAuthorizedCashBankFlow(from,to); }
+    catch(error) { cashFlowError=error instanceof Error ? error.message : "Unable to read cash flow"; }
+  }
+
   const exportData = React.useMemo(() => {
+    if(tab==="cash-bank-flow") {
+      return mayReadCashFlow && cashFlow && !cashFlowError
+        ? {name:"Posted Cash and Bank Flow",
+          headers:["Date / Metric","Reference","Cash movement","Bank movement","Consolidated net"],
+          rows:[
+            ["Opening balance","",cashFlow.openingCash,cashFlow.openingBank,cashFlow.openingTotal],
+            ["Period inflows","",0,0,cashFlow.cashInflows],
+            ["Period outflows","",0,0,cashFlow.cashOutflows],
+            ["Closing balance","",cashFlow.closingCash,cashFlow.closingBank,cashFlow.closingTotal],
+            ...cashFlow.movements.map(row=>[row.date,row.journalNumber,row.cashChange,
+              row.bankChange,row.netCashFlow] as Array<string|number>),
+          ] as Array<Array<string|number>>}
+        : {name:"Restricted Cash Flow",headers:["Status"],rows:[] as Array<Array<string|number>>};
+    }
     if (tab==="service-profit") {
       return mayReadServiceMargins && !serviceMarginError
         ? {name:"Service Direct-cost Margin",
@@ -158,12 +180,12 @@ export function ReportsPanel({
       moneyRow("Total sales",dayEnd.totalSales),moneyRow("Service revenue",dayEnd.serviceRevenue),moneyRow("Cost of goods",dayEnd.costOfGoods),moneyRow("Gross profit",dayEnd.grossProfit),
       moneyRow("Total expenses",dayEnd.totalExpenses),moneyRow("Net profit",dayEnd.netProfit),moneyRow("Cash received",dayEnd.cashReceived),moneyRow("Card / UPI",dayEnd.cardPayments),moneyRow("Other payments",dayEnd.otherPayments),moneyRow("Outstanding",dayEnd.outstandingAmount),
     ]};
-  },[tab,rows,stock,outstanding,payables,financial,taxReport,dayEnd,mayReadCustomerMargins,customerMargins,customerMarginError,mayReadProductMargins,productMargins,productMarginError,mayReadServiceMargins,serviceMargins,serviceMarginError]);
+  },[tab,rows,stock,outstanding,payables,financial,taxReport,dayEnd,mayReadCustomerMargins,customerMargins,customerMarginError,mayReadProductMargins,productMargins,productMarginError,mayReadServiceMargins,serviceMargins,serviceMarginError,mayReadCashFlow,cashFlow,cashFlowError]);
 
   const exportCsv=()=>downloadFile(`minarva-${tab}-report.csv`,[exportData.headers.map(csvCell).join(","),...exportData.rows.map(r=>r.map(csvCell).join(","))].join("\n"),"text/csv;charset=utf-8");
   const exportExcel=()=>downloadFile(`minarva-${tab}-report.xls`,spreadsheetXml(exportData.name,exportData.headers,exportData.rows),"application/vnd.ms-excel;charset=utf-8");
   const pdfLines=exportData.rows.map(r=>r.map(String).join(" | "));
-  const tabs: Array<[ReportTab,string]> = [["sales","Sales"],...(mayReadCustomerMargins ? [["customer-profit","Customer Margin"] as [ReportTab,string]] : []),...(mayReadProductMargins ? [["product-profit","Product Margin"] as [ReportTab,string]] : []),...(mayReadServiceMargins ? [["service-profit","Service Margin"] as [ReportTab,string]] : []),["dayend","Day-end"],["stock","Stock Valuation"],["receivables","Receivables"],["payables","Payables Aging"],["financial","Financial Statements"],["tax","GST / Tax"]];
+  const tabs: Array<[ReportTab,string]> = [["sales","Sales"],...(mayReadCustomerMargins ? [["customer-profit","Customer Margin"] as [ReportTab,string]] : []),...(mayReadProductMargins ? [["product-profit","Product Margin"] as [ReportTab,string]] : []),...(mayReadServiceMargins ? [["service-profit","Service Margin"] as [ReportTab,string]] : []),...(mayReadCashFlow ? [["cash-bank-flow","Cash / Bank Flow"] as [ReportTab,string]] : []),["dayend","Day-end"],["stock","Stock Valuation"],["receivables","Receivables"],["payables","Payables Aging"],["financial","Financial Statements"],["tax","GST / Tax"]];
 
   return <div className="space-y-4">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -186,6 +208,32 @@ export function ReportsPanel({
     <div className="flex flex-wrap gap-2 print:hidden">{tabs.map(([id,label])=><Button key={id} size="sm" variant={tab===id?"primary":"outline"} onClick={()=>setTab(id)}>{label}</Button>)}</div>
     {reportError&&<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{reportError}</div>}
 
+    {tab==="cash-bank-flow"&&mayReadCashFlow&&<Card>
+      <CardHeader><CardTitle className="text-sm font-semibold">Posted journal Cash &amp; Bank Flow</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-slate-500">Actual posted ledger movements for the standard cash and bank accounts. Internal transfers are excluded from consolidated inflows and outflows. Not yet a classified operating/investing/financing statutory statement.</p>
+        {cashFlowError&&<p role="alert" className="text-sm text-rose-700">{cashFlowError}</p>}
+        {cashFlow&&<div className="grid gap-2 sm:grid-cols-3">
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-600">Opening</div><div className="font-semibold">{formatMoney(cashFlow.openingTotal)}</div></div>
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-600">Net flow</div><div className="font-semibold">{formatMoney(cashFlow.netFlow)}</div></div>
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-600">Closing</div><div className="font-semibold">{formatMoney(cashFlow.closingTotal)}</div></div>
+        </div>}
+        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-slate-500">
+          <th className="px-2 py-2">Date</th><th className="px-2 py-2">Journal</th>
+          <th className="px-2 py-2 text-right">Cash</th><th className="px-2 py-2 text-right">Bank</th>
+          <th className="px-2 py-2 text-right">Net</th>
+        </tr></thead><tbody>
+          {cashFlow?.movements.map(row=><tr key={row.journalEntryId} className="border-b border-slate-100">
+            <td className="px-2 py-2">{row.date}</td><td className="px-2 py-2" title={row.description}>{row.journalNumber}</td>
+            <td className="px-2 py-2 text-right">{formatMoney(row.cashChange)}</td>
+            <td className="px-2 py-2 text-right">{formatMoney(row.bankChange)}</td>
+            <td className="px-2 py-2 text-right">{formatMoney(row.netCashFlow)}</td>
+          </tr>)}
+          {!cashFlow?.movements.length&&<tr><td colSpan={5} className="px-2 py-5 text-center text-slate-500">No posted cash or bank movements in this period</td></tr>}
+        </tbody></table></div>
+      </CardContent>
+    </Card>}
+    
     {tab==="service-profit"&&mayReadServiceMargins&&<Card>
       <CardHeader><CardTitle className="text-sm font-semibold">Delivered service direct-cost margin</CardTitle></CardHeader>
       <CardContent className="space-y-3">
