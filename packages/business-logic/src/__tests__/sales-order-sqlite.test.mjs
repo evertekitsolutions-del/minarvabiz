@@ -34,6 +34,8 @@ const create = (conn,req,a,enabled) =>
   adapter.createSalesOrderSqlite(conn,req,a,enabled,verifyReferences);
 const amend = (conn,id,req,a,enabled) =>
   adapter.amendSalesOrderSqlite(conn,id,req,a,enabled,verifyReferences);
+const transition = (conn,id,req,a,enabled,invoiceVerifier) =>
+  adapter.transitionSalesOrderSqlite(conn,id,req,a,enabled,invoiceVerifier,verifyReferences);
 function db() {
   const raw=new SQL.Database();
   const conn={
@@ -64,20 +66,20 @@ test("actual SQLite atomic create/replay and scope/list isolation",()=>{
 });
 test("version compare-and-set and exact replay preserve one stored order",()=>{
   const conn=db();create(conn,orderRequest(),auth,true);
-  const next=adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(11,"confirm",1),auth,true);
+  const next=transition(conn,uuid(5),txn(11,"confirm",1),auth,true);
   assert.equal(next.order.version,2);
   assert.equal(next.order.status,"confirmed");
-  assert.equal(adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(11,"confirm",1),auth,true).disposition,"replay");
-  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(12,"cancel",1),auth,true),/Stale/);
+  assert.equal(transition(conn,uuid(5),txn(11,"confirm",1),auth,true).disposition,"replay");
+  assert.throws(()=>transition(conn,uuid(5),txn(12,"cancel",1),auth,true),/Stale/);
   assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true)[0].version,2);
-  const cancelled=adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(12,"cancel",2),auth,true);
+  const cancelled=transition(conn,uuid(5),txn(12,"cancel",2),auth,true);
   assert.equal(cancelled.order.status,"cancelled");
   assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true)[0].version,3);
 });
 test("SQL transaction rollback on invalid input, corrupt rows and unauthorized role",()=>{
   const conn=db();create(conn,orderRequest(),auth,true);
   const before=JSON.stringify(adapter.listSalesOrdersSqlite(conn,auth,true));
-  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(11,"confirm",1),
+  assert.throws(()=>transition(conn,uuid(5),txn(11,"confirm",1),
     {...auth,canManageSalesOrders:false},true),/permission denied/);
   assert.throws(()=>create(conn,orderRequest({operationId:uuid(20),
     id:uuid(22),lines:[{...orderRequest().lines[0],quantityMilli:0}]}),auth,true),/positive/);
@@ -87,18 +89,18 @@ test("SQL transaction rollback on invalid input, corrupt rows and unauthorized r
 });
 test("committed invoice link is only accepted from matching recorded identity",()=>{
   const conn=db();create(conn,orderRequest(),auth,true);
-  adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(11,"confirm",1),auth,true);
+  transition(conn,uuid(5),txn(11,"confirm",1),auth,true);
   const sale={id:uuid(60),organizationId:auth.organizationId,companyId:auth.companyId,
     branchId:auth.branchId,customerId:uuid(7),currency:"INR",totalMinor:1000};
-  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(12,"link-invoice",2,
+  assert.throws(()=>transition(conn,uuid(5),txn(12,"link-invoice",2,
     {committedInvoice:sale}),auth,true),/Trusted invoice verification required/);
   const verify = (invoiceId, order) => invoiceId === sale.id &&
     order.customerId === sale.customerId && order.totalMinor === sale.totalMinor;
-  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(12,"link-invoice",2,
+  assert.throws(()=>transition(conn,uuid(5),txn(12,"link-invoice",2,
     {committedInvoice:sale}),auth,true,()=>false),/verification failed/);
-  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(12,"link-invoice",2,
+  assert.throws(()=>transition(conn,uuid(5),txn(12,"link-invoice",2,
     {committedInvoice:{...sale,branchId:uuid(20)}}),auth,true,verify),/does not match/);
-  const result=adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(12,"link-invoice",2,
+  const result=transition(conn,uuid(5),txn(12,"link-invoice",2,
     {committedInvoice:sale}),auth,true,verify);
   assert.equal(result.order.invoiceId,uuid(60));
   assert.equal(result.order.status,"invoiced");
@@ -111,29 +113,29 @@ test("one committed invoice cannot be linked to two orders within an org",()=>{
   const second=orderRequest({id:uuid(30),operationId:uuid(31),orderNumber:"SO-002",
     lines:[{...orderRequest().lines[0],id:uuid(32)}]});
   create(conn,second,auth,true);
-  const a=adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(40,"confirm",1),auth,true).order;
-  const b=adapter.transitionSalesOrderSqlite(conn,uuid(30),txn(41,"confirm",1),auth,true).order;
+  const a=transition(conn,uuid(5),txn(40,"confirm",1),auth,true).order;
+  const b=transition(conn,uuid(30),txn(41,"confirm",1),auth,true).order;
   assert.equal(a.status,"confirmed"); assert.equal(b.status,"confirmed");
   const inv={id:uuid(50),organizationId:auth.organizationId,companyId:auth.companyId,
     branchId:auth.branchId,customerId:uuid(7),currency:"INR",totalMinor:1000};
   const verifier=()=>true;
-  adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(42,"link-invoice",2,
+  transition(conn,uuid(5),txn(42,"link-invoice",2,
     {committedInvoice:inv}),auth,true,verifier);
-  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(30),txn(43,"link-invoice",2,
+  assert.throws(()=>transition(conn,uuid(30),txn(43,"link-invoice",2,
     {committedInvoice:inv}),auth,true,verifier),/UNIQUE constraint failed/);
   const saved=adapter.listSalesOrdersSqlite(conn,auth,true);
   assert.deepEqual(saved.map(x=>x.status).sort(),["confirmed","invoiced"]);
 });
 test("an invoice-linked retry still requires trusted verifier and cannot bypass scope",()=>{
   const conn=db();create(conn,orderRequest(),auth,true);
-  adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(61,"confirm",1),auth,true);
+  transition(conn,uuid(5),txn(61,"confirm",1),auth,true);
   const inv={id:uuid(60),organizationId:auth.organizationId,companyId:auth.companyId,
     branchId:auth.branchId,customerId:uuid(7),currency:"INR",totalMinor:1000};
   const t=txn(62,"link-invoice",2,{committedInvoice:inv});
-  adapter.transitionSalesOrderSqlite(conn,uuid(5),t,auth,true,()=>true);
-  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),t,auth,true),/verification required/);
-  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),t,auth,true,()=>false),/verification failed/);
-  assert.equal(adapter.transitionSalesOrderSqlite(conn,uuid(5),t,auth,true,()=>true).disposition,"replay");
+  transition(conn,uuid(5),t,auth,true,()=>true);
+  assert.throws(()=>transition(conn,uuid(5),t,auth,true),/verification required/);
+  assert.throws(()=>transition(conn,uuid(5),t,auth,true,()=>false),/verification failed/);
+  assert.equal(transition(conn,uuid(5),t,auth,true,()=>true).disposition,"replay");
 });
 
 test("SQLite draft amendment CAS persists replacement totals and survives retry",()=>{
@@ -151,7 +153,7 @@ test("SQLite draft amendment CAS persists replacement totals and survives retry"
   assert.throws(()=>amend(conn,uuid(5),{...input,operationId:uuid(74),
     expectedVersion:2,lines:[{...orderRequest().lines[0],quantityMilli:0}]},auth,true),/positive/);
   assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true)[0].totalMinor,1500);
-  adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(75,"confirm",2),auth,true);
+  transition(conn,uuid(5),txn(75,"confirm",2),auth,true);
   assert.throws(()=>amend(conn,uuid(5),{...input,
     operationId:uuid(76),expectedVersion:3},auth,true),/Only an active draft/);
 });
@@ -196,4 +198,19 @@ test("SQLite original create replay after a draft amendment returns its current 
   assert.throws(()=>create(conn,orderRequest({
     lines:[{...orderRequest().lines[0],quantityMilli:4000}]
   }),auth,true),/payload conflict/);
+});
+
+test("confirmation requires current verified master references, including on replay",()=>{
+  const conn=db();create(conn,orderRequest(),auth,true);
+  const confirm=txn(98,"confirm",1);
+  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),confirm,auth,true),
+    /reference verification required/);
+  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),confirm,auth,true,
+    undefined,()=>false),/verification denied confirmation/);
+  assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true)[0].status,"draft");
+  const result=transition(conn,uuid(5),confirm,auth,true);
+  assert.equal(result.order.status,"confirmed");
+  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),confirm,auth,true),
+    /reference verification required/);
+  assert.equal(transition(conn,uuid(5),confirm,auth,true).disposition,"replay");
 });

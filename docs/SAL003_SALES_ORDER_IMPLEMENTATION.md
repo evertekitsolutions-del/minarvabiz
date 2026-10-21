@@ -44,3 +44,6 @@ The shared UI now stages up to 100 independent product rows per draft, allows re
 
 ## Idempotent create retries after draft updates
 The canonical original create request is stored immutably alongside mutable draft lines and notes. Repeating the original operation key and unchanged original request returns the current order even after draft amendments. Changed original input with the same key is rejected. This is original Minarva TypeScript, not a cryptographic signature.
+
+## Confirmation must recheck trusted references
+A sales order can become stale between draft creation and confirmation. The isolated SQLite confirmation path now requires the same trusted live customer/product/warehouse verifier, including on identical retries; a missing or negative response leaves order state unchanged. Cancellation and post-commit invoice linkage keep their separate authorization rules. This does not activate customer checkout.

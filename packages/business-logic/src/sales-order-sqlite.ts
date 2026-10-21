@@ -115,10 +115,15 @@ export function transitionSalesOrderSqlite(
   enabled = false,
   /** Host-only callback must look up a previously committed authoritative invoice. */
   verifyCommittedInvoice?: (invoiceId: string, order: SalesOrderIntent) => boolean,
+  /** Host-owned verification, including product availability, required for confirmation. */
+  verifyReferences?: VerifySalesOrderReferences,
 ): { disposition: "update" | "replay"; order: SalesOrderIntent } {
   allowed(auth, enabled);
   if (request.action === "link-invoice" && typeof verifyCommittedInvoice !== "function") {
     throw new Error("Trusted invoice verification required before linking a sales order");
+  }
+  if (request.action === "confirm" && typeof verifyReferences !== "function") {
+    throw new Error("Trusted sales-order reference verification required before confirmation");
   }
   return db.transaction(() => {
     const rows = db.query(`SELECT * FROM ${table} WHERE org_id = ? AND id = ?`,
@@ -126,6 +131,9 @@ export function transitionSalesOrderSqlite(
     if (rows.length !== 1) throw new Error("Retail sales order not found or not authorized");
     const current = parse(rows[0]);
     const plan = planSalesOrderTransition(current, request, auth, enabled);
+    if (request.action === "confirm" && verifyReferences!(db, plan.order) !== true) {
+      throw new Error("Trusted sales-order reference verification denied confirmation");
+    }
     if (request.action === "link-invoice") {
       const invoiceId = plan.order.invoiceId;
       if (!invoiceId || !verifyCommittedInvoice!(invoiceId, current)) {
