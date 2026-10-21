@@ -17,6 +17,7 @@ import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { Modal } from "../forms/Modal";
 import { formatMoney } from "../customers/format";
 import { RfqDraftPanel } from "./RfqDraftPanel";
+import { LandedCostPanel } from "./LandedCostPanel";
 import { buildSupplierDeliveryScores, buildPostedSupplierCostComparison, phase9Store } from "@minarvabiz/business-logic";
 
 type DraftLine = {
@@ -430,6 +431,7 @@ export function ProcurementPanel({
   return (
     <div className="space-y-4">
       <RfqDraftPanel suppliers={suppliers} products={products} />
+      <LandedCostPanel goodsReceipts={goodsReceipts} />
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">Supplier performance</CardTitle>
