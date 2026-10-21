@@ -232,7 +232,7 @@ export function NormalBilling({
               onApply={(quote) => {
                 updateLine(mrpLineId, { unitPrice: quote.exclusiveUnitPrice });
                 setMrpLineId(null);
-                setMessage({ type: "ok", text: `MRP ${formatMoney(quote.enteredInclusiveMrp)} applied. Effective inclusive unit before discount: ${formatMoney(quote.effectiveInclusiveUnitPrice)}; tax-exclusive rate: ${formatMoney(quote.exclusiveUnitPrice)}.` });
+                setMessage({ type: "ok", text: `MRP ${formatMoney(quote.enteredInclusiveMrp)} applied. Effective inclusive unit before discount: ${formatMoney(quote.effectiveInclusiveUnitPrice)}; line total before discount: ${formatMoney(quote.effectiveInclusiveLineTotal)}; exclusive rate: ${formatMoney(quote.exclusiveUnitPrice)}.` });
               }}
             />
           )}
