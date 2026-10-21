@@ -10,6 +10,7 @@ Status: **IN PROGRESS**, not commercially enabled, not accepted.
 - Trusted tenant/company/branch callback required for SQLite pilot create, update, stage and list.
 - Explicit, isolated SQLite tables with unique (schedule, sequence) and transaction rollback. Repeated staging does not create duplicate draft rows.
 - Source-only PostgreSQL staging with FORCE RLS and **no authenticated/anon privileges or policy**. Merely adding this SQL file grants no online feature.
+- Shared nonbinding checkout preview resolves current product selling price, discount, tax, stock and cost through a trusted host reader; rejects changed customer/branch/invalid source invoices and measured lines. It never calls `createSale`, computes no irreversible posting, and the commercial checkout must revalidate everything.
 - Node tests cover date boundaries, scope, CAS, replay, corrupt storage and actual SQLite rollback.
 
 ## What remains before SAL-007 can be considered complete
