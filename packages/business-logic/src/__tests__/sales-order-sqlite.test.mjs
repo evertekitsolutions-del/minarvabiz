@@ -80,10 +80,47 @@ test("committed invoice link is only accepted from matching recorded identity",(
   const sale={id:uuid(60),organizationId:auth.organizationId,companyId:auth.companyId,
     branchId:auth.branchId,customerId:uuid(7),currency:"INR",totalMinor:1000};
   assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(12,"link-invoice",2,
-    {committedInvoice:{...sale,branchId:uuid(20)}}),auth,true),/does not match/);
+    {committedInvoice:sale}),auth,true),/Trusted invoice verification required/);
+  const verify = (invoiceId, order) => invoiceId === sale.id &&
+    order.customerId === sale.customerId && order.totalMinor === sale.totalMinor;
+  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(12,"link-invoice",2,
+    {committedInvoice:sale}),auth,true,()=>false),/verification failed/);
+  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(12,"link-invoice",2,
+    {committedInvoice:{...sale,branchId:uuid(20)}}),auth,true,verify),/does not match/);
   const result=adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(12,"link-invoice",2,
-    {committedInvoice:sale}),auth,true);
+    {committedInvoice:sale}),auth,true,verify);
   assert.equal(result.order.invoiceId,uuid(60));
   assert.equal(result.order.status,"invoiced");
   assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true)[0].status,"invoiced");
+});
+
+test("one committed invoice cannot be linked to two orders within an org",()=>{
+  const conn=db();
+  adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true);
+  const second=orderRequest({id:uuid(30),operationId:uuid(31),orderNumber:"SO-002",
+    lines:[{...orderRequest().lines[0],id:uuid(32)}]});
+  adapter.createSalesOrderSqlite(conn,second,auth,true);
+  const a=adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(40,"confirm",1),auth,true).order;
+  const b=adapter.transitionSalesOrderSqlite(conn,uuid(30),txn(41,"confirm",1),auth,true).order;
+  assert.equal(a.status,"confirmed"); assert.equal(b.status,"confirmed");
+  const inv={id:uuid(50),organizationId:auth.organizationId,companyId:auth.companyId,
+    branchId:auth.branchId,customerId:uuid(7),currency:"INR",totalMinor:1000};
+  const verifier=()=>true;
+  adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(42,"link-invoice",2,
+    {committedInvoice:inv}),auth,true,verifier);
+  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(30),txn(43,"link-invoice",2,
+    {committedInvoice:inv}),auth,true,verifier),/UNIQUE constraint failed/);
+  const saved=adapter.listSalesOrdersSqlite(conn,auth,true);
+  assert.deepEqual(saved.map(x=>x.status).sort(),["confirmed","invoiced"]);
+});
+test("an invoice-linked retry still requires trusted verifier and cannot bypass scope",()=>{
+  const conn=db();adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true);
+  adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(61,"confirm",1),auth,true);
+  const inv={id:uuid(60),organizationId:auth.organizationId,companyId:auth.companyId,
+    branchId:auth.branchId,customerId:uuid(7),currency:"INR",totalMinor:1000};
+  const t=txn(62,"link-invoice",2,{committedInvoice:inv});
+  adapter.transitionSalesOrderSqlite(conn,uuid(5),t,auth,true,()=>true);
+  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),t,auth,true),/verification required/);
+  assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),t,auth,true,()=>false),/verification failed/);
+  assert.equal(adapter.transitionSalesOrderSqlite(conn,uuid(5),t,auth,true,()=>true).disposition,"replay");
 });

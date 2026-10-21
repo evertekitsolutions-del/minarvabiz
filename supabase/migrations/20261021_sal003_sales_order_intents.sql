@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS public.retail_sales_order_intents_v1 (
   status text NOT NULL DEFAULT 'draft'
     CHECK (status IN ('draft','confirmed','cancelled','invoiced')),
   version integer NOT NULL DEFAULT 1 CHECK (version > 0),
+  invoice_id uuid,
+  CONSTRAINT retail_sales_order_invoice_status_v1
+    CHECK ((status = 'invoiced' AND invoice_id IS NOT NULL)
+      OR (status <> 'invoiced' AND invoice_id IS NULL)),
   record_json jsonb NOT NULL CHECK (
     jsonb_typeof(record_json) = 'object' AND
     octet_length(record_json::text) <= 131072
@@ -27,7 +31,8 @@ CREATE TABLE IF NOT EXISTS public.retail_sales_order_intents_v1 (
   deleted_at timestamptz,
   PRIMARY KEY (org_id, id),
   UNIQUE (org_id, operation_id),
-  UNIQUE (org_id, company_id, order_number)
+  UNIQUE (org_id, company_id, order_number),
+  UNIQUE (org_id, invoice_id)
 );
 CREATE INDEX IF NOT EXISTS idx_retail_sales_order_intents_scoped
   ON public.retail_sales_order_intents_v1
@@ -66,6 +71,7 @@ BEGIN
      NEW.id IS DISTINCT FROM (NEW.record_json->>'id')::uuid OR
      NEW.operation_id IS DISTINCT FROM (NEW.record_json->>'operationId')::uuid OR
      NEW.status IS DISTINCT FROM NEW.record_json->>'status' OR
+     NEW.invoice_id IS DISTINCT FROM NULLIF(NEW.record_json->>'invoiceId', '')::uuid OR
      NEW.version IS DISTINCT FROM (NEW.record_json->>'version')::integer THEN
     RAISE EXCEPTION 'Retail sales-order identity/version payload mismatch'
       USING ERRCODE = '23514';

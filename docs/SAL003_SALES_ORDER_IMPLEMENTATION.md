@@ -18,3 +18,8 @@ The existing `orders.ts` and `orders-store.ts` implement tailoring/services; pro
 - SQLite pilot: `sales-order-sqlite.ts` initializes a dedicated table only on explicit opt-in, checks stored org/company/branch/warehouse identity, commits one row or CAS update atomically, and refuses stale/unauthorized replay. Actual SQL.js tests exercise rollback and corruption refusal.
 - PostgreSQL source: `supabase/migrations/20261021_sal003_sales_order_intents.sql` declares the matching versioned/order-number/idempotency-key record with branch/warehouse/customer tenant integrity trigger, enables FORCE RLS and revokes ALL direct public/anon/authenticated access. **Do not apply it to production or treat it as a complete cloud writer**. Approved server-side transactional RPC, testable grants and sync adapters still need to be implemented.
 - In particular, `company_id` is an opaque UUID pending PLT-002 authority; **no direct client write, read or business acceptance** is permitted until company identity and permissions are implemented. No second customer or invoice owner is created.
+
+## Invoice linkage hardening
+
+- Offline schema and staged PostgreSQL schema reserve one unique (organization, invoice_id) binding. Even if two callers submit the same committed invoice concurrently, one link is rejected transactionally.
+- The SQLite adapter requires a **host-owned verification callback** for any invoice-link transition, including retries; a renderer can never substitute an arbitrary sale description for a committed invoice proof. The callback must query the authoritative local sale record and confirm matching amount/party/scope before returning true. The current draft does not yet supply this callback or activate conversion.

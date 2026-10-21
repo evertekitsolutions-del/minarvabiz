@@ -37,10 +37,14 @@ export function initializeSalesOrderSqlite(db: SalesOrderSqliteDb, enabled = fal
     order_number TEXT NOT NULL, customer_id TEXT NOT NULL,
     status TEXT NOT NULL CHECK(status IN ('draft','confirmed','cancelled','invoiced')),
     version INTEGER NOT NULL CHECK(version > 0),
+    invoice_id TEXT,
     record_json TEXT NOT NULL CHECK(json_valid(record_json)),
+    CHECK ((status = 'invoiced' AND invoice_id IS NOT NULL)
+       OR (status <> 'invoiced' AND invoice_id IS NULL)),
     PRIMARY KEY (org_id, id),
     UNIQUE (org_id, operation_id),
-    UNIQUE (org_id, company_id, order_number)
+    UNIQUE (org_id, company_id, order_number),
+    UNIQUE (org_id, invoice_id)
   )`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_sales_order_intents_branch
     ON ${table}(org_id, company_id, branch_id, status)`);
@@ -56,7 +60,7 @@ function parse(row: Record<string, unknown>): SalesOrderIntent {
     record.warehouseId !== row.warehouse_id || record.operationId !== row.operation_id ||
     record.customerId !== row.customer_id || record.orderNumber !== row.order_number ||
     record.version !== row.version || record.status !== row.status ||
-    !Array.isArray(record.lines)) {
+    record.invoiceId !== row.invoice_id || !Array.isArray(record.lines)) {
     throw new Error("Retail sales-order stored identity or revision mismatch");
   }
   return record;
@@ -81,11 +85,11 @@ export function createSalesOrderSqlite(
     if (plan.disposition === "replay") return plan;
     const order = plan.order;
     db.exec(`INSERT INTO ${table} (id, org_id, company_id, branch_id, warehouse_id,
-      operation_id, order_number, customer_id, status, version, record_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      operation_id, order_number, customer_id, status, version, invoice_id, record_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [order.id, order.organizationId, order.companyId, order.branchId, order.warehouseId,
         order.operationId, order.orderNumber, order.customerId, order.status,
-        order.version, JSON.stringify(order)]);
+        order.version, order.invoiceId, JSON.stringify(order)]);
     if (updatedRowCount(db) !== 1) throw new Error("Retail sales-order creation was not atomic");
     return plan;
   });
@@ -96,21 +100,32 @@ export function transitionSalesOrderSqlite(
   request: SalesOrderTransitionRequest,
   auth: SalesOrderAuthorizedScope,
   enabled = false,
+  /** Host-only callback must look up a previously committed authoritative invoice. */
+  verifyCommittedInvoice?: (invoiceId: string, order: SalesOrderIntent) => boolean,
 ): { disposition: "update" | "replay"; order: SalesOrderIntent } {
   allowed(auth, enabled);
+  if (request.action === "link-invoice" && typeof verifyCommittedInvoice !== "function") {
+    throw new Error("Trusted invoice verification required before linking a sales order");
+  }
   return db.transaction(() => {
     const rows = db.query(`SELECT * FROM ${table} WHERE org_id = ? AND id = ?`,
       [auth.organizationId, orderId]);
     if (rows.length !== 1) throw new Error("Retail sales order not found or not authorized");
     const current = parse(rows[0]);
     const plan = planSalesOrderTransition(current, request, auth, enabled);
+    if (request.action === "link-invoice") {
+      const invoiceId = plan.order.invoiceId;
+      if (!invoiceId || !verifyCommittedInvoice!(invoiceId, current)) {
+        throw new Error("Trusted committed invoice verification failed");
+      }
+    }
     if (plan.disposition === "replay") return plan;
     const next = plan.order;
     db.exec(`UPDATE ${table}
-      SET status = ?, version = ?, record_json = ?
+      SET status = ?, version = ?, invoice_id = ?, record_json = ?
       WHERE org_id = ? AND id = ? AND company_id = ? AND branch_id = ?
       AND warehouse_id = ? AND version = ?`,
-    [next.status, next.version, JSON.stringify(next),
+    [next.status, next.version, next.invoiceId, JSON.stringify(next),
       next.organizationId, next.id, next.companyId, next.branchId,
       next.warehouseId, current.version]);
     if (updatedRowCount(db) !== 1) throw new Error("Retail sales-order optimistic revision conflict");

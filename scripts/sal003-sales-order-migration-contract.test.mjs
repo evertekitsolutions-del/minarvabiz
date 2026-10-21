@@ -8,7 +8,7 @@ test("unactivated SAL-003 migration is ordered, tenant/branch constrained and de
   assert.equal(migrations.split("\n").filter(l=>l.trim()===path.split("/").at(-1)).length,1);
   for(const fragment of ["CREATE TABLE IF NOT EXISTS public.retail_sales_order_intents_v1",
     "organization", "company_id", "branch_id", "warehouse_id", "customer_id",
-    "operation_id", "order_number", "record_json", "FORCE ROW LEVEL SECURITY",
+    "operation_id", "order_number", "record_json", "invoice_id", "UNIQUE (org_id, invoice_id)", "FORCE ROW LEVEL SECURITY",
     "ENABLE ROW LEVEL SECURITY", "REVOKE ALL ON public.retail_sales_order_intents_v1",
     "retail_sales_order_intents_scope_v1", "BEFORE INSERT OR UPDATE",
     "w.branch_id = NEW.branch_id", "c.org_id = NEW.org_id", "w.org_id = NEW.org_id",
