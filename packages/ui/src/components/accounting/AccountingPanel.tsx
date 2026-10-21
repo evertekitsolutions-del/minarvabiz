@@ -7,6 +7,7 @@ import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { formatMoney } from "../customers/format";
+import { AccountBudgetVariancePanel } from "./AccountBudgetVariancePanel";
 import { FixedAssetDepreciationPanel } from "./FixedAssetDepreciationPanel";
 
 type DraftJournalLine = { accountId: string; debit: string; credit: string; memo: string };
@@ -23,7 +24,7 @@ function emptyLine(): DraftJournalLine {
 
 export function AccountingPanel() {
   const [tick, setTick] = React.useState(0);
-  const [tab, setTab] = React.useState<"accounts" | "journal" | "trial" | "ledger" | "statements" | "assets">("accounts");
+  const [tab, setTab] = React.useState<"accounts" | "journal" | "trial" | "ledger" | "statements" | "assets" | "budgets">("accounts");
   const [message, setMessage] = React.useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [accountForm, setAccountForm] = React.useState({ code: "", name: "", type: "expense" as AccountingAccountType });
   const [openingBankAmount, setOpeningBankAmount] = React.useState("");
@@ -150,6 +151,7 @@ export function AccountingPanel() {
         {tabButton("ledger", "General Ledger")}
         {tabButton("statements", "Financial Statements")}
         {tabButton("assets", "Fixed Assets")}
+        {tabButton("budgets", "Budgets")}
       </div>
 
       {message && (
@@ -161,6 +163,7 @@ export function AccountingPanel() {
       )}
 
       {tab === "assets" && <FixedAssetDepreciationPanel />}
+      {tab === "budgets" && <AccountBudgetVariancePanel />}
 
       {tab === "accounts" && (
         <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
