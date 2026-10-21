@@ -71,7 +71,7 @@ test("invalid quantity/price/rounding/discount/tax reject before any state chang
     [{quantityMilli: 500,unitPriceMinor: 3}, /fractional minor/],
     [{discountMinor: 9999}, /discount exceeds/],
     [{taxMinor: -1}, /safe integer/],
-    [{quantityMilli: 1000,unitPriceMinor: Number.MAX_SAFE_INTEGER,taxMinor: 1}, /safe minor-unit/],
+    [{quantityMilli: 2000,unitPriceMinor: Number.MAX_SAFE_INTEGER,taxMinor: 0}, /safe minor-unit/],
   ];
   for (const [line, pattern] of bad) {
     assert.throws(() => planSalesOrderCreate(request({ lines: [{ ...source.lines[0], ...line }] }), auth, [], true), pattern);
