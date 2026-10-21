@@ -185,3 +185,6 @@ export * from "./inventory-count-worksheet";
 
 // INV-018 counted CSV variance review (preview only, no posting).
 export * from "./inventory-count-review";
+
+// PUR-011 read-only supplier delivery scorecard from PO and GRN evidence.
+export * from "./supplier-delivery-scorecard";
