@@ -61,18 +61,22 @@ export function exportSalesOrderPilotBackupSqlite(
   enabled = false,
 ): SalesOrderPilotBackup {
   authorized(auth, enabled);
-  const orders = listSalesOrdersSqlite(db, auth, enabled);
-  const pendingEvents = listPendingSalesOrderEventsSqlite(db, auth, enabled);
-  for (const order of orders) verifySalesOrderRecordIntegrity(order);
-  for (const event of pendingEvents) checkedEvent(event, auth);
-  return {
-    schemaVersion: 1,
-    organizationId: auth.organizationId,
-    companyId: auth.companyId,
-    branchId: auth.branchId,
-    warehouseId: auth.warehouseId,
-    orders, pendingEvents,
-  };
+  // Orders and their pending event history must come from ONE read snapshot.
+  // A same-connection SQLite transaction also blocks concurrent writers.
+  return db.transaction(() => {
+    const orders = listSalesOrdersSqlite(db, auth, enabled);
+    const pendingEvents = listPendingSalesOrderEventsSqlite(db, auth, enabled);
+    for (const order of orders) verifySalesOrderRecordIntegrity(order);
+    for (const event of pendingEvents) checkedEvent(event, auth);
+    return {
+      schemaVersion: 1,
+      organizationId: auth.organizationId,
+      companyId: auth.companyId,
+      branchId: auth.branchId,
+      warehouseId: auth.warehouseId,
+      orders, pendingEvents,
+    };
+  });
 }
 
 /**
@@ -92,7 +96,7 @@ export function restoreSalesOrderPilotBackupSqlite(
   }
   const input = snapshot as Partial<SalesOrderPilotBackup>;
   if (input.schemaVersion !== 1) throw new Error("Unsupported sales-order backup version");
-  sameScope(input as Record<string, unknown>, auth);
+  sameScope(input as unknown as Record<string, unknown>, auth);
   if (!Array.isArray(input.orders) || !Array.isArray(input.pendingEvents) ||
     input.orders.length > 1000 || input.pendingEvents.length > 10000) {
     throw new Error("Invalid sales-order backup record count");

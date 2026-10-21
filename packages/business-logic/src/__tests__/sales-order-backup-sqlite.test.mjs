@@ -102,3 +102,23 @@ test("empty scoped snapshot restores as no-op and stays scoped",()=>{
     {restoredOrders:0,restoredPendingEvents:0});
   assert.deepEqual(backup.exportSalesOrderPilotBackupSqlite(dest,auth,true),saved);
 });
+
+test("export reads orders and pending history in one SQLite transaction",()=>{
+  const source=seeded();
+  const original=source.transaction.bind(source);
+  let transactions=0;
+  source.transaction=(fn)=>{transactions++;return original(fn)};
+  const saved=backup.exportSalesOrderPilotBackupSqlite(source,auth,true);
+  assert.equal(transactions,1);
+  assert.equal(saved.orders[0].version,saved.pendingEvents.at(-1).orderVersion);
+});
+test("export rejects corrupted local pending history, rather than producing a bad backup",()=>{
+  const source=seeded();
+  const original=backup.exportSalesOrderPilotBackupSqlite(source,auth,true);
+  const broken=structuredClone(original.pendingEvents[1]);
+  broken.order.totalMinor++;
+  source.exec("UPDATE retail_sales_order_pending_events_v1 SET payload_json=? WHERE operation_id=?",
+    [JSON.stringify(broken),broken.operationId]);
+  assert.throws(()=>backup.exportSalesOrderPilotBackupSqlite(source,auth,true),/Corrupt retail sales-order record/);
+  assert.equal(source.query("SELECT count(*) AS count FROM retail_sales_order_pending_events_v1 WHERE status='pending'")[0].count,3);
+});

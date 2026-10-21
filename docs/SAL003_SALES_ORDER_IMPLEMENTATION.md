@@ -62,3 +62,6 @@ The isolated durable offline event reader now independently validates the embedd
 
 ## Isolated SQLite pilot backup and restore
 `sales-order-backup-sqlite.ts` exports tenant/company/branch/warehouse-scoped order records plus EVERY pending local mutation event (never cloud ACK). On restore, validates exact BigInt totals, original-create identity, contiguous event revision history and final order snapshot. The destination must be empty in that scope; all writes occur in one SQLite transaction and failed inserts roll back orders/events together. Direct real SQLite tests cover healthy round-trip, tampering, cross-tenant mismatch and injected mid-restore failures. This is **NOT yet wired into the shipping domain backup**; pilot limits: 1000 orders, 10000 events, 10MB per backup. No financial/stock/sync acknowledgements happen.
+
+### Consistent backup snapshot
+Backup export now reads both order rows and pending local events inside the **same SQLite transaction**, so concurrent order mutations cannot split a backup across two revisions. An invalid pending-event total prevents export and leaves all events pending; tests verify transaction use and fail-closed export.
