@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { Product, Supplier } from "@minarvabiz/types";
-import { buildRfqDraftPreview, phase9Store, type RfqDraftPreview } from "@minarvabiz/business-logic";
+import { buildRfqDraftPreview, normalizeLocalizedRfqQuantity, phase9Store, type RfqDraftPreview, type SupportedInputLocale } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
 import { inputClass, selectClass } from "../forms/FormField";
 
@@ -13,6 +13,7 @@ export function RfqDraftPanel({ products, suppliers }: {
   suppliers: readonly Supplier[];
 }) {
   const [reference, setReference] = React.useState("");
+  const [quantityLocale, setQuantityLocale] = React.useState<SupportedInputLocale>("en-IN");
   const [requiredBy, setRequiredBy] = React.useState("");
   const [notes, setNotes] = React.useState("");
   const [supplierIds, setSupplierIds] = React.useState<string[]>([]);
@@ -37,7 +38,8 @@ export function RfqDraftPanel({ products, suppliers }: {
     setPreview(null);
     try {
       setPreview(buildRfqDraftPreview({
-        reference, requiredBy, notes, supplierIds, lines,
+        reference, requiredBy, notes, supplierIds,
+        lines: lines.map(line => ({...line, quantity: normalizeLocalizedRfqQuantity(line.quantity, quantityLocale)})),
       }, products, suppliers, phase9Store.getActiveBranch()?.id ?? null));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Cannot preview RFQ");
@@ -106,7 +108,19 @@ export function RfqDraftPanel({ products, suppliers }: {
         </div>
       </fieldset>
       <div className="mt-4 space-y-2">
-        <p className="text-xs font-semibold text-slate-700">Requested products and quantities (max 50)</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-slate-700">Requested products and quantities (max 50)</p>
+          <label className="text-xs font-medium text-slate-600">Quantity input locale
+            <select aria-label="RFQ quantity input locale" className={selectClass + " ml-2"} value={quantityLocale}
+              onChange={e => {setQuantityLocale(e.target.value as SupportedInputLocale);setPreview(null);setError(null);}}>
+              <option value="en-IN">English (India)</option>
+              <option value="en-US">English (US)</option>
+              <option value="de-DE">German</option>
+              <option value="fr-FR">French</option>
+            </select>
+          </label>
+        </div>
+        <p className="text-xs text-slate-500">International quantity entry: 1,25 or 1.25 means 1.25. A single separator always means a decimal, not a thousands separator; 1,234 means 1.234. The maximum precision is 0.001 units. No financial posting.</p>
         {lines.map((line, i) => (
           <div className="flex flex-wrap gap-2" key={i}>
             <select aria-label={"RFQ product " + (i+1)} className={selectClass + " min-w-48 flex-1"}
