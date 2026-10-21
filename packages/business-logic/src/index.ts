@@ -192,5 +192,8 @@ export * from "./supplier-delivery-scorecard";
 // SVC-010 read-only customer AMC visit planning and schedule CSV.
 export * from "./amc-visit-planner";
 
-// PUR-002 multi-supplier RFQ enquiry preview; no dispatch, accounting or stock writes.
+// PUR-009 posted invoice supplier unit cost comparison (read-only).
+export * from "./supplier-posted-cost-comparison";
+
+// PUR-002 supplier RFQ draft preview, no dispatch or postings.
 export * from "./rfq-draft-preview";
