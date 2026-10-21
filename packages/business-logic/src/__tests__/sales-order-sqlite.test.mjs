@@ -214,3 +214,51 @@ test("confirmation requires current verified master references, including on rep
     /reference verification required/);
   assert.equal(transition(conn,uuid(5),confirm,auth,true).disposition,"replay");
 });
+
+test("transactional offline event staging records exactly one event per accepted order revision",()=>{
+  const conn=db();
+  assert.equal(adapter.listPendingSalesOrderEventsSqlite(conn,auth,true).length,0);
+  create(conn,orderRequest(),auth,true);
+  create(conn,orderRequest(),auth,true);
+  let events=adapter.listPendingSalesOrderEventsSqlite(conn,auth,true);
+  assert.deepEqual(events.map(x=>[x.eventType,x.orderVersion]),[["created",1]]);
+  amend(conn,uuid(5),{operationId:uuid(107),expectedVersion:1,
+    occurredAt:"2026-10-21T08:02:00.000Z",
+    lines:[{...orderRequest().lines[0],quantityMilli:3000}]},auth,true);
+  const confirmed=transition(conn,uuid(5),
+    txn(108,"confirm",2,{occurredAt:"2026-10-21T08:03:00.000Z"}),auth,true);
+  assert.equal(confirmed.order.version,3);
+  transition(conn,uuid(5),txn(109,"cancel",3,
+    {occurredAt:"2026-10-21T08:04:00.000Z"}),auth,true);
+  events=adapter.listPendingSalesOrderEventsSqlite(conn,auth,true);
+  assert.deepEqual(events.map(x=>[x.eventType,x.orderVersion]),[
+    ["created",1],["amended",2],["confirmed",3],["cancelled",4]]);
+  assert.equal(events[0].order.totalMinor,1000);
+  assert.equal(events[1].order.totalMinor,1500);
+  assert.equal(events[3].order.status,"cancelled");
+  assert.equal(adapter.listPendingSalesOrderEventsSqlite(conn,{...auth,branchId:uuid(98)},true).length,0);
+  assert.throws(()=>adapter.listPendingSalesOrderEventsSqlite(conn,
+    {...auth,canManageSalesOrders:false},true),/permission denied/);
+});
+test("offline event write failure rolls back sales-order creation and amendments",()=>{
+  const conn=db();
+  conn.exec("DROP TABLE retail_sales_order_pending_events_v1");
+  assert.throws(()=>create(conn,orderRequest(),auth,true),/no such table/);
+  assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true).length,0);
+  adapter.initializeSalesOrderSqlite(conn,true);
+  create(conn,orderRequest(),auth,true);
+  const saved=JSON.stringify(adapter.listSalesOrdersSqlite(conn,auth,true));
+  conn.exec("DROP TABLE retail_sales_order_pending_events_v1");
+  assert.throws(()=>amend(conn,uuid(5),{
+    operationId:uuid(115),expectedVersion:1,occurredAt:"2026-10-21T08:02:00.000Z",
+    lines:[{...orderRequest().lines[0],quantityMilli:4000}],
+  },auth,true),/no such table/);
+  assert.equal(JSON.stringify(adapter.listSalesOrdersSqlite(conn,auth,true)),saved);
+});
+test("offline event payload corruption is rejected without acknowledging anything",()=>{
+  const conn=db();create(conn,orderRequest(),auth,true);
+  conn.exec("UPDATE retail_sales_order_pending_events_v1 SET version=99 WHERE org_id = ?",
+    [auth.organizationId]);
+  assert.throws(()=>adapter.listPendingSalesOrderEventsSqlite(conn,auth,true),
+    /event identity\/revision mismatch/);
+});

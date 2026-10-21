@@ -47,3 +47,6 @@ The canonical original create request is stored immutably alongside mutable draf
 
 ## Confirmation must recheck trusted references
 A sales order can become stale between draft creation and confirmation. The isolated SQLite confirmation path now requires the same trusted live customer/product/warehouse verifier, including on identical retries; a missing or negative response leaves order state unchanged. Cancellation and post-commit invoice linkage keep their separate authorization rules. This does not activate customer checkout.
+
+## Durable offline event staging (not cloud sync)
+The isolated SQLite pilot now creates an append-only `retail_sales_order_pending_events_v1` row in the SAME transaction as every successful create/amend/confirm/cancel/invoice-link operation. No event is added on idempotent retries; a failed event insert rolls back the business-order mutation. Event records keep tenant/company/branch/warehouse, operation and revision identity, and a bounded immutable order snapshot. The read-only list is tenant scoped and rejects corrupted payloads. There is deliberately NO network sender or acknowledge/delete API until signed host-owned tenant/device sync authority, server-side idempotent RPC, conflict policy, and finance reconciliation are implemented and tested.

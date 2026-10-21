@@ -23,6 +23,35 @@ export interface SalesOrderSqliteDb {
   transaction<T>(fn: () => T): T;
 }
 const table = "retail_sales_order_intents_v1";
+const eventTable = "retail_sales_order_pending_events_v1";
+export type SalesOrderPilotEventType = "created" | "amended" | "confirmed" | "cancelled" | "invoiced";
+export interface SalesOrderPilotEvent {
+  readonly operationId: string;
+  readonly organizationId: string;
+  readonly companyId: string;
+  readonly branchId: string;
+  readonly warehouseId: string;
+  readonly orderId: string;
+  readonly orderVersion: number;
+  readonly eventType: SalesOrderPilotEventType;
+  readonly order: SalesOrderIntent;
+}
+/** Durable local staging only, NOT a cloud-sync acknowledgement or financial envelope. */
+function stagePilotEvent(db: SalesOrderSqliteDb, order: SalesOrderIntent, kind: SalesOrderPilotEventType): void {
+  const record: SalesOrderPilotEvent = {
+    operationId: order.lastOperationId, organizationId: order.organizationId,
+    companyId: order.companyId, branchId: order.branchId, warehouseId: order.warehouseId,
+    orderId: order.id, orderVersion: order.version, eventType: kind, order,
+  };
+  db.exec(`INSERT INTO ${eventTable}
+    (org_id, company_id, branch_id, warehouse_id, order_id,
+     operation_id, version, event_type, payload_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [record.organizationId, record.companyId, record.branchId, record.warehouseId,
+      record.orderId, record.operationId, record.orderVersion, kind, JSON.stringify(record)]);
+  if (updatedRowCount(db) !== 1) throw new Error("Sales-order event was not stored with its local mutation");
+}
+
 function allowed(auth: SalesOrderAuthorizedScope, enabled: boolean): void {
   if (enabled !== true) throw new Error("SAL-003 feature is disabled");
   if (!auth?.canManageSalesOrders) throw new Error("Sales-order permission denied");
@@ -54,6 +83,21 @@ export function initializeSalesOrderSqlite(db: SalesOrderSqliteDb, enabled = fal
   )`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_sales_order_intents_branch
     ON ${table}(org_id, company_id, branch_id, status)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS ${eventTable} (
+    org_id TEXT NOT NULL, company_id TEXT NOT NULL,
+    branch_id TEXT NOT NULL, warehouse_id TEXT NOT NULL,
+    order_id TEXT NOT NULL, operation_id TEXT NOT NULL,
+    version INTEGER NOT NULL CHECK(version > 0),
+    event_type TEXT NOT NULL
+      CHECK(event_type IN ('created','amended','confirmed','cancelled','invoiced')),
+    payload_json TEXT NOT NULL CHECK(
+      json_valid(payload_json) AND length(CAST(payload_json AS BLOB)) <= 262144),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK(status = 'pending'),
+    PRIMARY KEY (org_id, operation_id),
+    UNIQUE (org_id, order_id, version)
+  )`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_sales_order_pending_by_scope
+    ON ${eventTable}(org_id,company_id,branch_id,warehouse_id,order_id,version)`);
 }
 /** Fail closed if record JSON and indexed authority columns ever disagree. */
 function parse(row: Record<string, unknown>): SalesOrderIntent {
@@ -104,6 +148,7 @@ export function createSalesOrderSqlite(
         order.operationId, order.orderNumber, order.customerId, order.status,
         order.version, order.invoiceId, JSON.stringify(order)]);
     if (updatedRowCount(db) !== 1) throw new Error("Retail sales-order creation was not atomic");
+    stagePilotEvent(db, order, "created");
     return plan;
   });
 }
@@ -150,6 +195,8 @@ export function transitionSalesOrderSqlite(
       next.organizationId, next.id, next.companyId, next.branchId,
       next.warehouseId, current.version]);
     if (updatedRowCount(db) !== 1) throw new Error("Retail sales-order optimistic revision conflict");
+    stagePilotEvent(db, next, next.status === "invoiced" ? "invoiced" :
+      next.status === "cancelled" ? "cancelled" : "confirmed");
     return plan;
   });
 }
@@ -198,6 +245,44 @@ export function amendSalesOrderSqlite(
       [next.version, JSON.stringify(next), next.organizationId, next.id,
         next.companyId, next.branchId, next.warehouseId, current.version]);
     if (updatedRowCount(db) !== 1) throw new Error("Retail sales-order optimistic revision conflict");
+    stagePilotEvent(db, next, "amended");
     return plan;
+  });
+}
+
+/**
+ * Scope-restricted, read-only local event staging.
+ * No ack/send/discard methods exist: future trusted sync needs signed replay
+ * proof and a separate authoritative cloud writer.
+ */
+export function listPendingSalesOrderEventsSqlite(
+  db: SalesOrderSqliteDb,
+  auth: SalesOrderAuthorizedScope,
+  enabled = false,
+): SalesOrderPilotEvent[] {
+  allowed(auth, enabled);
+  const rows = db.query(`SELECT * FROM ${eventTable}
+    WHERE org_id = ? AND company_id = ? AND branch_id = ? AND warehouse_id = ?
+      AND status = 'pending'
+    ORDER BY order_id, version`,
+    [auth.organizationId, auth.companyId, auth.branchId, auth.warehouseId]);
+  return rows.map((row) => {
+    let event: SalesOrderPilotEvent;
+    try { event = JSON.parse(String(row.payload_json)); }
+    catch { throw new Error("Corrupt sales-order pending event JSON"); }
+    if (!event || event.organizationId !== row.org_id ||
+      event.companyId !== row.company_id || event.branchId !== row.branch_id ||
+      event.warehouseId !== row.warehouse_id || event.orderId !== row.order_id ||
+      event.operationId !== row.operation_id || event.orderVersion !== row.version ||
+      event.eventType !== row.event_type ||
+      event.order?.id !== event.orderId || event.order?.version !== event.orderVersion ||
+      event.order?.organizationId !== event.organizationId ||
+      event.order?.companyId !== event.companyId ||
+      event.order?.branchId !== event.branchId ||
+      event.order?.warehouseId !== event.warehouseId ||
+      event.order?.lastOperationId !== event.operationId) {
+      throw new Error("Sales-order pending event identity/revision mismatch");
+    }
+    return event;
   });
 }
