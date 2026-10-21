@@ -32,3 +32,6 @@ The isolated SQLite create/amend adapters now fail closed without a trusted host
 
 ## Sales order numbering (shared provider-neutral logic)
 `suggestSalesOrderNumber` uses the same `SO-BIZ-2026-27-00001` financial-year/branch-neutral company-code format as invoices and quotations. It rejects cross-company/tenant lists, invalid trust context and invalid codes; archived orders retain their number. Numbering suggestions do **not** reserve a sequence; the authoritative SQLite/PG unique `(org, company, orderNumber)` index still catches concurrent conflicts. No new counter/service is introduced.
+
+## Shared UI component (inactive scaffold)
+`SalesOrderWorkspace` is a responsive, accessible controlled visual component for Web/Desktop. It includes a customer/product/quantity draft form, search and status filter, line totals, confirm/cancel callbacks and explicit note that stock/payments are untouched. It is exported from `@minarvabiz/ui` but **no shipping app mounts it**: `enabled` defaults to false and host callbacks must enforce real RBAC, branch and license authorization. Until company authority and real SQLite/Cloud writers are connected, this component is an integration scaffold, not an accepted feature.
