@@ -6,7 +6,7 @@
  * and sync. NEVER treat this component's enabled prop as server authority.
  */
 import * as React from "react";
-import type { SalesOrderIntent } from "@minarvabiz/business-logic/src/sales-order-intent";
+import type { SalesOrderIntent } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
 
 export interface SalesOrderWorkspaceCustomer {

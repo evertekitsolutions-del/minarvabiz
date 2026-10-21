@@ -148,3 +148,5 @@ export * from "./commerce-tier-drafts";
 export * from "./commerce-tier-quote-draft";
 
 export { parseServiceOrderPriceDraft, validateMoneyAmountInput } from "./service-order-price-draft";
+
+export type { SalesOrderIntent } from "./sales-order-intent";
