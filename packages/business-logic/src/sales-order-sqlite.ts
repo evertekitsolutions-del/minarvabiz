@@ -377,6 +377,18 @@ export function checkoutSalesOrderSqlite(
     // commit. Always read the saved receipt using the trusted host's reader.
     const receipt = host.readCommittedInvoice(db, key);
     if (!receipt) throw new Error("No authoritative committed invoice for sales order");
+    // Replay must re-verify ALL attributes, not just the invoice ID.
+    // The pure transition planner intentionally short-circuits same-key
+    // replays, so the trusted writer boundary must detect stale/mutated money.
+    if (replay && (receipt.id?.toLowerCase() !== current.invoiceId ||
+      receipt.organizationId !== current.organizationId ||
+      receipt.companyId !== current.companyId ||
+      receipt.branchId !== current.branchId ||
+      receipt.customerId !== current.customerId ||
+      receipt.currency !== current.currency ||
+      receipt.totalMinor !== current.totalMinor)) {
+      throw new Error("Committed invoice replay proof does not match the sales order");
+    }
     const plan = planSalesOrderTransition(current, {
       ...request, action: "link-invoice", committedInvoice: receipt,
     }, auth, enabled);

@@ -130,3 +130,17 @@ test("missing receipt always blocks paid checkout and rolls back",()=>{
     checkoutReq,auth,true,writer),/No authoritative committed invoice/);
   assert.equal(count(db,"committed_invoice_pilot"),0);
 });
+
+test("same-key checkout replay refuses mutated authoritative invoice proof",()=>{
+  const db=database(),writer=host();
+  api.checkoutSalesOrderSqlite(db,uuid(5),checkoutReq,auth,true,writer);
+  const forged=host({readCommittedInvoice(conn,op){
+    const actual=writer.readCommittedInvoice(conn,op);
+    return {...actual,totalMinor:actual.totalMinor+1};
+  }});
+  assert.throws(()=>api.checkoutSalesOrderSqlite(db,uuid(5),checkoutReq,auth,true,forged),
+    /replay proof does not match/);
+  assert.equal(count(db,"stock_debits_pilot"),1);
+  assert.equal(count(db,"journal_pilot"),1);
+  assert.equal(api.listPendingSalesOrderEventsSqlite(db,auth,true).length,3);
+});
