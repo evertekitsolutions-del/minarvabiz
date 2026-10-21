@@ -221,3 +221,5 @@ export * from "./gs1-barcode-assistant";
 
 // INV-006 local-first batch expiry metadata and date alert register; no live WMS stock write.
 export * from "./batch-expiry-register";
+// INV-005 local counted lots and advisory FEFO pick worksheet.
+export * from "./local-lot-counts";
