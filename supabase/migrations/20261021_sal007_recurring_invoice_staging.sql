@@ -25,7 +25,16 @@ CREATE TABLE IF NOT EXISTS public.recurring_invoice_draft_staging (
   sequence integer NOT NULL CHECK (sequence > 0),
   due_date date NOT NULL,
   status text NOT NULL DEFAULT 'pending_review'
-    CHECK (status = 'pending_review'),
+    CHECK (status IN ('pending_review','posted')),
+  posted_invoice_id uuid,
+  posted_at timestamptz,
+  approved_by uuid,
+  CHECK (
+    (status = 'pending_review' AND posted_invoice_id IS NULL
+     AND posted_at IS NULL AND approved_by IS NULL)
+    OR (status = 'posted' AND posted_invoice_id IS NOT NULL
+     AND posted_at IS NOT NULL AND approved_by IS NOT NULL)
+  ),
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (org_id, id),
   UNIQUE(org_id, schedule_id, sequence),
@@ -33,6 +42,9 @@ CREATE TABLE IF NOT EXISTS public.recurring_invoice_draft_staging (
     REFERENCES public.recurring_invoice_schedule_staging(org_id, id)
     ON DELETE RESTRICT
 );
+CREATE UNIQUE INDEX IF NOT EXISTS recurring_invoice_draft_staging_posted_unique
+  ON public.recurring_invoice_draft_staging(org_id, posted_invoice_id)
+  WHERE posted_invoice_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS recurring_invoice_draft_staging_due
   ON public.recurring_invoice_draft_staging(org_id, company_id, branch_id, due_date);
 ALTER TABLE public.recurring_invoice_schedule_staging ENABLE ROW LEVEL SECURITY;
