@@ -78,7 +78,7 @@ test("missing, swapped and corrupted event revisions reject without any restore"
       ? {...e,organizationId:uuid(23)}:e)},
     {...saved,orders:saved.orders.map(x=>({...x,totalMinor:999}))},
     {...saved,orders:[]},
-    {...saved,schemaVersion:2},
+    {...saved,schemaVersion:3},
   ];
   for(const corrupted of mutations){
     const dest=db();

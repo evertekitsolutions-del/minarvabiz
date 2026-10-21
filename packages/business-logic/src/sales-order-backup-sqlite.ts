@@ -7,20 +7,25 @@
  */
 import type { SalesOrderAuthorizedScope, SalesOrderIntent } from "./sales-order-intent";
 import type { SalesOrderSqliteDb, SalesOrderPilotEvent } from "./sales-order-sqlite";
-import { listSalesOrdersSqlite, listArchivedSalesOrdersSqlite, listPendingSalesOrderEventsSqlite } from "./sales-order-sqlite";
+import { listSalesOrdersSqlite, listArchivedSalesOrdersSqlite, listSalesOrderEventHistorySqlite } from "./sales-order-sqlite";
+import { listSalesOrderCloudReceiptsSqlite, verifySalesOrderCloudReceiptAgainstLocal, type SalesOrderCloudReceipt, type VerifyAuthoritativeSalesOrderReceipt } from "./sales-order-sync-receipt-sqlite";
 import { verifySalesOrderRecordIntegrity } from "./sales-order-record-integrity";
 
 export interface SalesOrderPilotBackup {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 1 | 2;
   readonly organizationId: string;
   readonly companyId: string;
   readonly branchId: string;
   readonly warehouseId: string;
   readonly orders: readonly SalesOrderIntent[];
+  /** Full append-only event lineage despite legacy pendingEvents field name. */
   readonly pendingEvents: readonly SalesOrderPilotEvent[];
+  /** Present in v2; v1 snapshots had no cloud receipts. */
+  readonly cloudReceipts?: readonly SalesOrderCloudReceipt[];
 }
 const ORDER_TABLE = "retail_sales_order_intents_v1";
 const EVENT_TABLE = "retail_sales_order_pending_events_v1";
+const RECEIPT_TABLE = "retail_sales_order_sync_receipts_v1";
 const scopeFields = ["organizationId", "companyId", "branchId", "warehouseId"] as const;
 
 function authorized(auth: SalesOrderAuthorizedScope, enabled: boolean): void {
@@ -76,16 +81,19 @@ export function exportSalesOrderPilotBackupSqlite(
       ...listSalesOrdersSqlite(db, auth, enabled),
       ...listArchivedSalesOrdersSqlite(db, auth, enabled),
     ];
-    const pendingEvents = listPendingSalesOrderEventsSqlite(db, auth, enabled);
+    // Must retain every revision including acknowledged events; otherwise
+    // restore would silently drop cloud receipts or lose the event chain.
+    const pendingEvents = listSalesOrderEventHistorySqlite(db, auth, enabled);
+    const cloudReceipts = listSalesOrderCloudReceiptsSqlite(db, auth, enabled);
     for (const order of orders) verifySalesOrderRecordIntegrity(order);
     for (const event of pendingEvents) checkedEvent(event, auth);
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       organizationId: auth.organizationId,
       companyId: auth.companyId,
       branchId: auth.branchId,
       warehouseId: auth.warehouseId,
-      orders, pendingEvents,
+      orders, pendingEvents, cloudReceipts,
     };
   });
 }
@@ -100,16 +108,21 @@ export function restoreSalesOrderPilotBackupSqlite(
   snapshot: unknown,
   auth: SalesOrderAuthorizedScope,
   enabled = false,
+  verifyRestoredReceipt?: VerifyAuthoritativeSalesOrderReceipt,
 ): { restoredOrders: number; restoredPendingEvents: number } {
   authorized(auth, enabled);
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
     throw new Error("Invalid sales-order backup envelope");
   }
   const input = snapshot as Partial<SalesOrderPilotBackup>;
-  if (input.schemaVersion !== 1) throw new Error("Unsupported sales-order backup version");
+  if (input.schemaVersion !== 1 && input.schemaVersion !== 2)
+    throw new Error("Unsupported sales-order backup version");
   sameScope(input as unknown as Record<string, unknown>, auth);
+  const cloudReceipts = input.schemaVersion === 2 ? input.cloudReceipts : [];
   if (!Array.isArray(input.orders) || !Array.isArray(input.pendingEvents) ||
-    input.orders.length > 1000 || input.pendingEvents.length > 10000) {
+    !Array.isArray(cloudReceipts) ||
+    input.orders.length > 1000 || input.pendingEvents.length > 10000 ||
+    cloudReceipts.length > 10000) {
     throw new Error("Invalid sales-order backup record count");
   }
   // Bounds apply before any SQL write and cap untrusted backup parsing work.
@@ -118,6 +131,9 @@ export function restoreSalesOrderPilotBackupSqlite(
   }
   const orders = input.orders;
   const events = input.pendingEvents;
+  if (cloudReceipts.length > 0 && typeof verifyRestoredReceipt !== "function") {
+    throw new Error("Trusted cloud receipt verification required for backup restore");
+  }
   const orderIds = new Set<string>(), operationIds = new Set<string>();
   const eventCount = new Map<string, number>();
   const lastEvents = new Map<string, SalesOrderPilotEvent>();
@@ -147,6 +163,21 @@ export function restoreSalesOrderPilotBackupSqlite(
       throw new Error("Sales-order backup does not match latest pending event");
     }
   }
+  const byOperation = new Map(events.map(event => [event.operationId,event]));
+  const seenReceipts = new Set<string>();
+  const ackRevision = new Map<string, number>();
+  for (const receipt of cloudReceipts) {
+    const event = byOperation.get(receipt?.operationId);
+    if (!event) throw new Error("Cloud receipt references a missing backup event");
+    verifySalesOrderCloudReceiptAgainstLocal(receipt,event,auth);
+    if (seenReceipts.has(receipt.operationId)) throw new Error("Duplicate backup cloud receipt");
+    seenReceipts.add(receipt.operationId);
+    const expected = (ackRevision.get(event.orderId) ?? 0) + 1;
+    if (event.orderVersion !== expected) {
+      throw new Error("Out-of-order acknowledged backup revisions");
+    }
+    ackRevision.set(event.orderId,expected);
+  }
   return db.transaction(() => {
     const scoped = [
       auth.organizationId, auth.companyId, auth.branchId, auth.warehouseId,
@@ -155,7 +186,9 @@ export function restoreSalesOrderPilotBackupSqlite(
       WHERE org_id=? AND company_id=? AND branch_id=? AND warehouse_id=? LIMIT 1`, scoped);
     const targetEvents = db.query(`SELECT operation_id FROM ${EVENT_TABLE}
       WHERE org_id=? AND company_id=? AND branch_id=? AND warehouse_id=? LIMIT 1`, scoped);
-    if (targetOrders.length !== 0 || targetEvents.length !== 0) {
+    const targetReceipts = db.query(`SELECT operation_id FROM ${RECEIPT_TABLE}
+      WHERE org_id=? AND company_id=? AND branch_id=? AND warehouse_id=? LIMIT 1`, scoped);
+    if (targetOrders.length !== 0 || targetEvents.length !== 0 || targetReceipts.length !== 0) {
       throw new Error("Sales-order backup restore requires an empty scoped destination");
     }
     for (const order of orders) {
@@ -176,6 +209,20 @@ export function restoreSalesOrderPilotBackupSqlite(
         event.orderId,event.operationId,event.orderVersion,event.eventType,
         JSON.stringify(event),
       ]);
+    }
+    // Cloud receipts cannot be restored from untrusted backup JSON alone.
+    // Re-verify each one with the host's own cloud authenticity mechanism.
+    for (const receipt of cloudReceipts) {
+      const event = byOperation.get(receipt.operationId)!;
+      if (verifyRestoredReceipt!(db,receipt,event) !== true) {
+        throw new Error("Trusted restored cloud receipt verification denied");
+      }
+      db.exec(`INSERT INTO ${RECEIPT_TABLE}
+        (org_id,company_id,branch_id,warehouse_id,order_id,operation_id,version,receipt_json)
+        VALUES (?,?,?,?,?,?,?,?)`, [
+          receipt.organizationId,receipt.companyId,receipt.branchId,receipt.warehouseId,
+          receipt.orderId,receipt.operationId,receipt.orderVersion,JSON.stringify(receipt),
+        ]);
     }
     return { restoredOrders: orders.length, restoredPendingEvents: events.length };
   });

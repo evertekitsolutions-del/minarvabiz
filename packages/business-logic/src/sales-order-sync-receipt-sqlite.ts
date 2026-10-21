@@ -60,6 +60,15 @@ function matches(receipt: SalesOrderCloudReceipt, event: SalesOrderPilotEvent,
   }
   verifySalesOrderRecordIntegrity(event.order);
 }
+/** Pure structural and content check, NOT verification of server authenticity. */
+export function verifySalesOrderCloudReceiptAgainstLocal(
+  receipt: SalesOrderCloudReceipt, event: SalesOrderPilotEvent,
+  auth: SalesOrderAuthorizedScope,
+): true {
+  matches(receipt,event,auth);
+  return true;
+}
+
 /** Host-validates receipts for newly accepted and duplicate deliveries alike. */
 export function acknowledgeSalesOrderCloudEventSqlite(
   db: SalesOrderSqliteDb,
