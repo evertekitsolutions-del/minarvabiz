@@ -189,7 +189,10 @@ const counts = { allowed: 0, reviewed: 0, denied: 0, unknown: 0 };
 for (const pkg of inventory) {
   const outcome = classify(pkg.license);
   const reviewKey = `${pkg.name}@${pkg.version}`;
-  const review = reviewedPackages[reviewKey] ?? reviewedPackages[pkg.name];
+  // Exact package@version only: a review of v1 must not approve a future version.
+  const review = Object.hasOwn(reviewedPackages, reviewKey)
+    ? reviewedPackages[reviewKey]
+    : undefined;
 
   if (outcome === "allowed") {
     counts.allowed += 1;

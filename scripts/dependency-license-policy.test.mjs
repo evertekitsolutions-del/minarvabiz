@@ -96,6 +96,15 @@ test("LGPL fails without a package/version/license-matched reviewed entry", () =
     } },
   }));
   assert.equal(wrongLicense.status, 1, wrongLicense.stdout);
+  // An approval keyed only by package name must never authorize every version.
+  const unversioned = invoke([pkg], (p) => ({
+    ...p,
+    reviewedPackages: { "example-lgpl": {
+      approved: true, license: "LGPL-3.0-or-later",
+      rationale: "Must be tied to exact version and license for review.",
+    } },
+  }));
+  assert.equal(unversioned.status, 1, unversioned.stdout);
 });
 
 test("no packages or missing pnpm store must fail closed", () => {
