@@ -56,3 +56,6 @@ The isolated SQLite pilot now creates an append-only `retail_sales_order_pending
 
 ## Persisted-record integrity
 SQLite read now rechecks all order and line totals in exact BigInt minor units, baseline immutable create identity, canonical IDs/timestamps, line uniqueness, version and invoice/status consistency before returning stored data. Corrupt JSON is not trusted for checkout, export or sync replay. Negative regression tests cover tampered money, identity, invoice and revision. This is not a cryptographic signature and does not replace server authorization.
+
+## Pending-event integrity
+The isolated durable offline event reader now independently validates the embedded order's exact line/order minor-unit totals, immutable scope, revision and original request baseline. A tampered event stays pending and causes an explicit error; it is never silently acknowledged or forwarded as a verified financial event. This is a staged local queue, not active hybrid delivery.

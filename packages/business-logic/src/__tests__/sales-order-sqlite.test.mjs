@@ -262,3 +262,18 @@ test("offline event payload corruption is rejected without acknowledging anythin
   assert.throws(()=>adapter.listPendingSalesOrderEventsSqlite(conn,auth,true),
     /event identity\/revision mismatch/);
 });
+
+test("pending event read refuses tampered money even with matching event scope",()=>{
+  const conn=db();
+  create(conn,orderRequest(),auth,true);
+  const before=adapter.listPendingSalesOrderEventsSqlite(conn,auth,true);
+  assert.equal(before.length,1);
+  const ev=structuredClone(before[0]);
+  ev.order.totalMinor+=100;
+  conn.exec("UPDATE retail_sales_order_pending_events_v1 SET payload_json=? WHERE operation_id=?",
+    [JSON.stringify(ev),ev.operationId]);
+  assert.throws(()=>adapter.listPendingSalesOrderEventsSqlite(conn,auth,true),
+    /Corrupt retail sales-order record: order total mismatch/);
+  // An invalid pending event is not quietly marked synced or discarded.
+  assert.equal(conn.query("SELECT status FROM retail_sales_order_pending_events_v1")[0].status,"pending");
+});

@@ -285,6 +285,9 @@ export function listPendingSalesOrderEventsSqlite(
       event.order?.lastOperationId !== event.operationId) {
       throw new Error("Sales-order pending event identity/revision mismatch");
     }
+    // The pending event will eventually become a financial sync source.
+    // Refuse tampered line totals even if its indexed scope/version still match.
+    verifySalesOrderRecordIntegrity(event.order);
     return event;
   });
 }
