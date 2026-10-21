@@ -109,3 +109,16 @@ test("whole-line tax rounding also never exceeds inclusive MRP for quantity", ()
     assert.throws(() => quoteInclusiveMrpUnitPrice(118, 18, quantity));
   }
 });
+
+test("POS and Normal Billing re-quote applied MRP on quantity edits, and clear on reset", () => {
+  const root = new URL("../../../../", import.meta.url);
+  const read = (path) => fs.readFileSync(new URL(path, root), "utf8");
+  const normal = read("packages/ui/src/components/sales/NormalBilling.tsx");
+  const pos = read("packages/ui/src/components/sales/PosBilling.tsx");
+  assert.match(normal, /appliedMrp\[cartLineId\]/);
+  assert.match(normal, /quoteInclusiveMrpUnitPrice\(\s*appliedMrp\[cartLineId\], row\.taxRate \?\? 0, patch\.quantity/);
+  assert.match(normal, /setAppliedMrp\(\{\}\);/);
+  assert.match(pos, /const mrp = appliedMrp\[cartLineId\]/);
+  assert.match(pos, /quoteInclusiveMrpUnitPrice\(mrp, original\.taxRate \?\? 0, quantity\)/);
+  assert.match(pos, /setAppliedMrp\(\{\}\); setMrpCartRowId\(null\);/);
+});
