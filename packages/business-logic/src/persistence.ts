@@ -17,6 +17,7 @@ import * as phase7Store from "./phase7-store";
 import * as phase9Store from "./phase9-store";
 import * as phase10Store from "./phase10-operations-store";
 import * as warehouseStore from "./warehouse-store";
+import * as batchExpiry from "./batch-expiry-register";
 import * as procurementStore from "./procurement-store";
 import * as accountingStore from "./accounting-store";
 import * as commerceTierDrafts from "./commerce-tier-drafts";
@@ -81,6 +82,8 @@ export interface DomainSnapshot {
   purchaseReturns?: ReturnType<typeof purchaseReturnsMod.exportPurchaseReturnsState>["returns"];
   phase10?: ReturnType<typeof phase10Store.exportPhase10State>;
   warehouse?: ReturnType<typeof warehouseStore.exportWarehouseState>;
+  /** Offline-only lot expiry metadata; not authoritative warehouse stock. */
+  batchExpiryReminders?: ReturnType<typeof batchExpiry.exportBatchExpiryReminders>;
   procurement?: ReturnType<typeof procurementStore.exportProcurementState>;
   accounting?: ReturnType<typeof accountingStore.exportAccountingState>;
   /** Offline-only seller pricebook drafts. Never an authoritative checkout tariff. */
@@ -136,6 +139,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     purchaseReturns: purchaseReturnsMod.exportPurchaseReturnsState().returns,
     phase10: phase10Store.exportPhase10State(),
     warehouse: warehouseStore.exportWarehouseState(),
+    batchExpiryReminders: batchExpiry.exportBatchExpiryReminders(),
     procurement: procurementStore.exportProcurementState(),
     accounting: accountingStore.exportAccountingState(),
     commerceTierDrafts: commerceTierDrafts.exportCommerceTierDrafts(),
@@ -242,6 +246,7 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     dayEndCloses: input.dayEndCloses == null ? undefined : collection(input.dayEndCloses, "dayEndCloses"),
     commerceTierDrafts: commerceTierDrafts.validateCommerceTierDrafts(input.commerceTierDrafts ?? []),
     commerceKitRecipes: commerceKitRecipes.validateCommerceKitRecipes(input.commerceKitRecipes ?? []),
+    batchExpiryReminders: batchExpiry.validateBatchExpiryReminders(input.batchExpiryReminders ?? []),
   };
 }
 
@@ -286,6 +291,7 @@ function applyDomainSnapshot(snap: DomainSnapshot): void {
   }
   if (snap.phase10) phase10Store.hydratePhase10(snap.phase10);
   if (snap.warehouse) warehouseStore.hydrateWarehouseState(snap.warehouse);
+  batchExpiry.hydrateBatchExpiryReminders(snap.batchExpiryReminders ?? []);
   if (snap.procurement) procurementStore.hydrateProcurementState(snap.procurement);
   if (snap.accounting) accountingStore.hydrateAccountingState(snap.accounting);
   commerceTierDrafts.hydrateCommerceTierDrafts(snap.commerceTierDrafts ?? []);
@@ -343,6 +349,7 @@ export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error
       materialRolls: incoming.phase10?.materialRolls?.length ?? 0,
       warehouses: incoming.warehouse?.warehouses?.length ?? 0,
       warehouseLocations: incoming.warehouse?.locations?.length ?? 0,
+      batchExpiryReminders: incoming.batchExpiryReminders?.length ?? 0,
       accounts: incoming.accounting?.accounts?.length ?? 0,
       journals: incoming.accounting?.journals?.length ?? 0,
       localCommerceTierDrafts: incoming.commerceTierDrafts?.length ?? 0,
