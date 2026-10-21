@@ -9,6 +9,10 @@ import {
   type RecurringInvoiceSchedule, type RecurringInvoiceOccurrence,
   type RecurringInvoiceStatus,
 } from "./recurring-invoice";
+import {
+  prepareRecurringInvoiceCartPreview,
+  type RecurringInvoiceCartPreview, type RecurringInvoiceVerifiedReaders,
+} from "./recurring-invoice-checkout-preview";
 
 export interface RecurringInvoiceSqliteDb {
   exec(sql: string, params?: unknown[]): void;
@@ -182,4 +186,45 @@ export function listRecurringInvoiceDraftsPilotSqlite(
     sequence: Number(row.sequence), dueDate: String(row.due_date),
     kind: "invoice_draft_pending_review" as const,
   }));
+}
+
+/**
+ * Pulls the review candidate directly from scoped, persisted pending drafts.
+ * Renderer data cannot substitute a different occurrence or a different
+ * schedule. Trusted host readers MUST resolve only authorised live records;
+ * no asynchronous/network callbacks or ledger mutation are permitted here.
+ */
+export function previewRecurringInvoiceDraftPilotSqlite(
+  db: RecurringInvoiceSqliteDb,
+  scope: RecurringInvoiceScope,
+  draftId: string,
+  businessDate: string,
+  authorize: AuthorizeRecurringInvoiceScope,
+  live: Omit<RecurringInvoiceVerifiedReaders, "authorize">,
+): RecurringInvoiceCartPreview {
+  authorized(scope, authorize);
+  if (!validId(draftId) || !live ||
+      typeof live.getSourceSale !== "function" ||
+      typeof live.getCustomer !== "function" ||
+      typeof live.getProduct !== "function") {
+    throw new Error("Trusted pending recurring draft and host readers are required");
+  }
+  return db.transaction(() => {
+    const drafts = db.query(`SELECT id, schedule_id, sequence, due_date
+      FROM recurring_invoice_draft_pilot_v1
+      WHERE org_id=? AND company_id=? AND branch_id=? AND id=?
+        AND status='pending_review'`,
+    [scope.organizationId, scope.companyId, scope.branchId, draftId]);
+    if (drafts.length !== 1) throw new Error("Pending recurring invoice draft not found in this branch");
+    const row = drafts[0];
+    const schedule = loadSchedule(db, scope, String(row.schedule_id));
+    if (!schedule) throw new Error("Recurring invoice schedule missing for draft");
+    return prepareRecurringInvoiceCartPreview(schedule, {
+      id: String(row.id), scheduleId: String(row.schedule_id),
+      organizationId: scope.organizationId,
+      companyId: scope.companyId, branchId: scope.branchId,
+      sequence: Number(row.sequence), dueDate: String(row.due_date),
+      kind: "invoice_draft_pending_review",
+    }, businessDate, { ...live, authorize });
+  });
 }
