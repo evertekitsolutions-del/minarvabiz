@@ -197,3 +197,6 @@ export * from "./supplier-posted-cost-comparison";
 
 // PUR-002 supplier RFQ draft preview, no dispatch or postings.
 export * from "./rfq-draft-preview";
+
+// FIN-018 straight-line fixed asset depreciation schedule preview; no journals.
+export * from "./fixed-asset-depreciation";
