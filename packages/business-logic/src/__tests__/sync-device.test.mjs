@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";import {createRequire} from "node:module";
 const require=createRequire(import.meta.url),ts=require("typescript");
 require.extensions[".ts"]=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,"utf8"),
- {fileName:f,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,\n  inlineSourceMap:true,inlineSources:true}}).outputText,f);
+ {fileName:f,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
+  inlineSourceMap:true,inlineSources:true}}).outputText,f);
 const {requireVerifiedFinancialSyncDevice:verify}=require("../sync-device.ts");
 const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,"0")}`;
 const actor={organizationId:uuid(1),actorUserId:uuid(2),companyId:uuid(3),
