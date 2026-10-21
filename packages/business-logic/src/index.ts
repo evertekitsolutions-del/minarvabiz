@@ -162,3 +162,5 @@ export * from "./invoice-profit-authorized";
 export * from "./customer-original-gross-margin";
 // SAL-015 manual inclusive-MRP conversion into the existing exclusive-tax checkout.
 export * from "./inclusive-mrp";
+// FIN-027 product-wise original posted invoice gross margin (not full service P&L).
+export * from "./product-original-gross-margin";
