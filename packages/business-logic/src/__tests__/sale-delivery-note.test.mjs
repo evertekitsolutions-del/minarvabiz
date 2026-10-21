@@ -46,13 +46,18 @@ test("draft/returned/cancelled/archived/empty and fractional invalid lines canno
 test("print request refuses without authenticated role; no financial mutation on failed attempt",async()=>{
  const s=fixture();
  store.hydrateCore({sales:[s]});
+ const previousWindow=global.window;
+ global.window={};
  try{
    setCurrentRole("staff");
    const r=await requestSaleDeliveryNotePrint(s.id);
    assert.equal(r.ok,false);
+   assert.match(r.error,/Permission denied/);
    assert.equal(store.getSale(s.id)?.total,118);
  }finally{
    setCurrentRole(null);
+   if(previousWindow===undefined)delete global.window;
+   else global.window=previousWindow;
    store.hydrateCore({sales:[]});
  }
 });
