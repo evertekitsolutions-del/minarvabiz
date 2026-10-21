@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import {
-  can, phase9Store, buildBatchExpiryReport, createBatchExpiryReminder,
+  can, phase9Store, isProductionMode, buildBatchExpiryReport, createBatchExpiryReminder,
   removeBatchExpiryReminder, listBatchExpiryReminders,
   type BatchExpiryReport,
 } from "@minarvabiz/business-logic";
@@ -33,8 +33,13 @@ export function WarehouseBatchExpiryPanel({products,warehouses}:{
   const [message,setMessage]=React.useState<string|null>(null);
   const [report,setReport]=React.useState<BatchExpiryReport|null>(null);
   const [revision,setRevision]=React.useState(0);
+  const [localWritable,setLocalWritable]=React.useState(false);
+  React.useEffect(()=>{
+    const desktop=Boolean((window as unknown as {minarvaDesktop?:unknown}).minarvaDesktop);
+    setLocalWritable(desktop || !isProductionMode());
+  },[]);
   const branchId=phase9Store.getActiveBranch()?.id??null;
-  const canEdit=can("inventory.adjust");
+  const canEdit=localWritable&&can("inventory.adjust");
   const canRead=can("reports.view");
   const visibleProducts=products.filter(p=>!p.deletedAt&&p.isActive &&
     (p.branchId==null||p.branchId===branchId));
@@ -89,6 +94,7 @@ export function WarehouseBatchExpiryPanel({products,warehouses}:{
         NOT live batch stock, automatic FIFO/FEFO, cloud sync, or a stock-sale blocking control.
         Recheck physical quantities before action.
       </p>
+      {!localWritable&&<p className="mt-2 text-xs text-amber-700">Editing requires installed Windows offline/SQLite edition. Production Web is read-only until tenant-safe cloud persistence is implemented.</p>}
       {canEdit&&(
         <div className="mt-4 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
