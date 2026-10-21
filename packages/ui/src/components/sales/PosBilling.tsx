@@ -506,7 +506,7 @@ export function PosBilling({
                       ? { ...line, unitPrice: quote.exclusiveUnitPrice } : line,
                   ));
                   setMrpCartRowId(null);
-                  setMessage({ type: "ok", text: `MRP ${formatMoney(quote.enteredInclusiveMrp)} applied. Effective inclusive unit before discount: ${formatMoney(quote.effectiveInclusiveUnitPrice)}.` });
+                  setMessage({ type: "ok", text: `MRP ${formatMoney(quote.enteredInclusiveMrp)} applied. Effective inclusive unit before discount: ${formatMoney(quote.effectiveInclusiveUnitPrice)}; line total before discount: ${formatMoney(quote.effectiveInclusiveLineTotal)}.` });
                 }}
               />
             )}
