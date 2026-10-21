@@ -8,7 +8,7 @@
  */
 import type { SalesOrderAuthorizedScope } from "./sales-order-intent";
 import type { SalesOrderPilotEvent, SalesOrderSqliteDb } from "./sales-order-sqlite";
-import { listSalesOrderEventHistorySqlite } from "./sales-order-sqlite";
+import { listSalesOrderEventHistorySqlite, listSalesOrdersSqlite, listArchivedSalesOrdersSqlite } from "./sales-order-sqlite";
 import { listSalesOrderCloudReceiptsSqlite } from "./sales-order-sync-receipt-sqlite";
 
 export interface SalesOrderUploadBatch {
@@ -47,12 +47,32 @@ export function prepareSalesOrderUploadBatchSqlite(
     const expected=new Map<string,number>();
     const selected:SalesOrderPilotEvent[]=[];
     let totalBytes=0;
+    const orders = [
+      ...listSalesOrdersSqlite(db,auth,true),
+      ...listArchivedSalesOrdersSqlite(db,auth,true),
+    ];
+    const byOrder=new Map(orders.map(order=>[order.id,order]));
+    const lastEvent=new Map<string,SalesOrderPilotEvent>();
     for (const event of events) {
       const next=(expected.get(event.orderId)??0)+1;
       if(event.orderVersion!==next){
         throw new Error("Missing or out-of-order offline sales-order revision");
       }
+      if(!byOrder.has(event.orderId)) {
+        throw new Error("Orphan offline sales-order event without a current order");
+      }
       expected.set(event.orderId,next);
+      lastEvent.set(event.orderId,event);
+    }
+    // A missing final event MUST NOT make a locally committed order disappear
+    // from the upload plan. Compare the latest event with the durable order.
+    for(const order of orders){
+      const latest=lastEvent.get(order.id);
+      if(!latest || latest.orderVersion!==order.version ||
+        latest.operationId!==order.lastOperationId ||
+        JSON.stringify(latest.order)!==JSON.stringify(order)){
+        throw new Error("Offline sales-order event lineage does not match latest durable order");
+      }
     }
     const ackRevisions=new Map<string,number>();
     for(const event of events){

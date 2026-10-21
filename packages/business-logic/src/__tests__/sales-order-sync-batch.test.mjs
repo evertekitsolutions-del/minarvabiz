@@ -75,3 +75,36 @@ test("deleted event revision cannot jump to later cloud event",()=>{
  conn.exec("DELETE FROM retail_sales_order_pending_events_v1 WHERE operation_id=?",[events[0].operationId]);
  assert.throws(()=>prepareSalesOrderUploadBatchSqlite(conn,auth,{},true),/Missing or out-of-order/);
 });
+
+test("missing final event cannot falsely report committed order fully synced",()=>{
+ const conn=seed(),history=api.listSalesOrderEventHistorySqlite(conn,auth,true);
+ conn.exec("DELETE FROM retail_sales_order_pending_events_v1 WHERE operation_id=?",
+   [history[1].operationId]);
+ assert.throws(()=>prepareSalesOrderUploadBatchSqlite(conn,auth,{},true),
+   /event lineage does not match/);
+ assert.equal(conn.query("SELECT count(*) AS n FROM retail_sales_order_sync_receipts_v1")[0].n,0);
+});
+test("missing all local events fails closed even though order record still exists",()=>{
+ const conn=seed();
+ conn.exec("DELETE FROM retail_sales_order_pending_events_v1");
+ assert.throws(()=>prepareSalesOrderUploadBatchSqlite(conn,auth,{},true),
+   /event lineage does not match/);
+ assert.equal(api.listSalesOrdersSqlite(conn,auth,true)[0].status,"confirmed");
+});
+test("orphan local event cannot be uploaded after its order record disappears",()=>{
+ const conn=seed();
+ conn.exec("DELETE FROM retail_sales_order_intents_v1");
+ assert.throws(()=>prepareSalesOrderUploadBatchSqlite(conn,auth,{},true),
+   /Orphan offline sales-order event/);
+ assert.equal(conn.query("SELECT count(*) AS n FROM retail_sales_order_pending_events_v1")[0].n,2);
+});
+test("valid but divergent last event snapshot cannot overwrite durable local order",()=>{
+ const conn=seed(),history=api.listSalesOrderEventHistorySqlite(conn,auth,true);
+ const last=history.at(-1);
+ const altered={...last,order:{...last.order,note:"Forged prior server text"}};
+ conn.exec("UPDATE retail_sales_order_pending_events_v1 SET payload_json=? WHERE operation_id=?",
+   [JSON.stringify(altered),last.operationId]);
+ assert.throws(()=>prepareSalesOrderUploadBatchSqlite(conn,auth,{},true),
+   /event lineage does not match/);
+ assert.equal(api.listSalesOrdersSqlite(conn,auth,true)[0].note,null);
+});
