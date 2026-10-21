@@ -46,6 +46,11 @@ export function quoteInclusiveMrpUnitPrice(
     throw new Error("Inclusive MRP must have at most two decimal places");
   }
   const maximumLineMinor = multiplyMinorByQuantity(mrpMinor, quantity);
+  // A positive unit MRP on a tiny fractional quantity may round to a
+  // zero-cent whole-line ceiling. Do not silently create a free invoice.
+  if (mrpMinor > 0 && maximumLineMinor === 0) {
+    throw new Error("Inclusive MRP cannot produce a positive rounded line total at this quantity");
+  }
   const rateBps = toPercentBasisPoints(taxRatePercent);
   if (Math.abs(rateBps / 100 - taxRatePercent) > 1e-8) {
     throw new Error("Tax rate must have at most two decimal places");
@@ -76,6 +81,12 @@ export function quoteInclusiveMrpUnitPrice(
     quantity: 1, unitPrice: base, taxRate: taxRatePercent,
     discountPercent: 0,
   }).total;
+  const lineCharged = calculateLineItem({
+    quantity, unitPrice: base, taxRate: taxRatePercent, discountPercent: 0,
+  }).total;
+  if (mrpMinor > 0 && toMinorUnits(lineCharged) === 0) {
+    throw new Error("Inclusive MRP results in a zero-value line after rounding");
+  }
   return {
     enteredInclusiveMrp: enteredMrp,
     exclusiveUnitPrice: base,
@@ -84,8 +95,6 @@ export function quoteInclusiveMrpUnitPrice(
     taxRatePercent,
     quantity,
     maxInclusiveLineTotal: fromMinorUnits(maximumLineMinor),
-    effectiveInclusiveLineTotal: calculateLineItem({
-      quantity, unitPrice: base, taxRate: taxRatePercent, discountPercent: 0,
-    }).total,
+    effectiveInclusiveLineTotal: lineCharged,
   };
 }
