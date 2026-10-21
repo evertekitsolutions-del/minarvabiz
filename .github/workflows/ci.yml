@@ -565,6 +565,10 @@ jobs:
           node packages/sync/src/__tests__/supabase-pull-cursors.test.mjs
           node packages/sync/src/__tests__/attendance-transport.test.mjs
           node packages/sync/src/__tests__/attendance-ack-retry.test.mjs
+      - name: Verify SAL-003 default-deny PostgreSQL migration contract
+        run: node --test scripts/sal003-sales-order-migration-contract.test.mjs
+      - name: Verify SAL-003 inactive shared UI contract
+        run: node --test scripts/sal003-order-ui-contract.test.mjs
       - name: Run complete business logic test suite
         shell: bash
         run: |

@@ -17,6 +17,7 @@ on:
       - "apps/license-admin/package.json"
       - "scripts/replay-supabase-migrations-fresh.mjs"
       - "scripts/ubp02-profile-schema-e2e.mjs"
+      - "scripts/sal003-sales-order-fresh-e2e.mjs"
       - "scripts/attendance-authority-e2e.*"
       - "scripts/hr-roster-authority-e2e.*"
       - "scripts/hr-roster-events-e2e.*"
@@ -65,6 +66,8 @@ jobs:
           set -euo pipefail
           command -v psql
           node scripts/replay-supabase-migrations-fresh.mjs
+      - name: Verify SAL-003 default-deny sales-order schema in isolated Postgres
+        run: node scripts/sal003-sales-order-fresh-e2e.mjs
       - name: Verify UBP-02a organization and product schema in isolated Postgres
         run: node scripts/ubp02-profile-schema-e2e.mjs
       - name: Verify UBP-05e dimensional atomic sale RPC in isolated Postgres

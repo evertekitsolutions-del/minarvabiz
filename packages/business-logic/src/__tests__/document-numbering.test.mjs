@@ -20,6 +20,8 @@ const existing = [
   "INV-MT-2026-27-00009",
   "INV-MT-2025-26-99999",
   "QT-MT-2026-27-00012",
+  "SO-MT-2026-27-00019",
+  "SO-MT-2025-26-04099",
 ];
 assert.equal(nextBusinessDocumentNumber({
   kind: "INV", existingNumbers: existing, businessCode: "MT", date: new Date("2026-09-26T00:00:00Z"),
@@ -27,5 +29,10 @@ assert.equal(nextBusinessDocumentNumber({
 assert.equal(nextBusinessDocumentNumber({
   kind: "QT", existingNumbers: existing, businessName: "Minarva Technologies", date: new Date("2026-09-26T00:00:00Z"),
 }), "QT-MT-2026-27-00013");
+
+assert.equal(nextBusinessDocumentNumber({
+  kind: "SO", existingNumbers: existing, businessCode: "MT",
+  date: new Date("2026-09-26T00:00:00Z"),
+}), "SO-MT-2026-27-00020");
 
 console.log("Document numbering: company code + Indian financial year + persisted sequence PASS");

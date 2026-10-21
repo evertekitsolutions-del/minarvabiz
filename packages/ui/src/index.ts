@@ -33,6 +33,7 @@ export * from "./components/accounting/AccountingPanel";
 export * from "./components/sales/PosBilling";
 export * from "./components/sales/NormalBilling";
 export * from "./components/sales/SalesList";
+export * from "./components/sales/SalesOrderWorkspace";
 export * from "./components/orders/OrderList";
 export * from "./components/orders/OrderForm";
 export * from "./components/orders/OrderDetail";
