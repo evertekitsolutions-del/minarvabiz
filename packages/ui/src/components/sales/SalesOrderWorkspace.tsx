@@ -47,6 +47,7 @@ export interface SalesOrderWorkspaceProps {
   ) => Promise<void> | void;
   /** Host must reauthorize all displayed rows before exporting. */
   readonly onExportOrders?: (orders: readonly SalesOrderIntent[]) => Promise<void> | void;
+  readonly onPrintOrder?: (order: SalesOrderIntent, paper: "a4" | "thermal") => Promise<void> | void;
   readonly onTransition?: (
     order: SalesOrderIntent, action: "confirm" | "cancel",
   ) => Promise<void> | void;
@@ -69,7 +70,7 @@ function quantityText(milli: number): string {
 
 export function SalesOrderWorkspace({
   enabled = false, orders, customers, products, onCreateDraft,
-  onAmendDraft, onExportOrders, onTransition,
+  onAmendDraft, onExportOrders, onPrintOrder, onTransition,
 }: SalesOrderWorkspaceProps) {
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState("");
@@ -362,6 +363,18 @@ export function SalesOrderWorkspace({
                   onClick={() => void transition(order, "cancel")}>Cancel</Button>
               </div>
             )}
+            {onPrintOrder && <div className="mt-2 flex flex-wrap justify-end gap-2">
+              {(["a4", "thermal"] as const).map((paper) => (
+                <Button key={paper} type="button" variant="outline" size="sm" disabled={busy}
+                  onClick={() => {
+                    if (!active || busy) return;
+                    setBusy(true); setNotice(null);
+                    void Promise.resolve().then(() => onPrintOrder(order, paper))
+                      .catch((error: unknown) => setNotice(error instanceof Error ? error.message : "Print denied"))
+                      .finally(() => setBusy(false));
+                  }}>Print {paper === "a4" ? "A4" : "thermal"}</Button>
+              ))}
+            </div>}
             {order.status === "invoiced" && order.invoiceId && (
               <p className="mt-2 text-xs text-slate-500">Linked invoice: {order.invoiceId}</p>
             )}

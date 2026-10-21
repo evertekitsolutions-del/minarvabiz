@@ -77,3 +77,6 @@ The reusable SalesOrderWorkspace now permits host-gated edit of **draft-only** l
 
 ## Exact checkout stock-debit plan
 `buildSalesOrderCheckoutCommand` is a pure immutable command created immediately before privileged invoice commit. Repeated product IDs (including multiple dimensional cuts) are aggregated into ONE per-product stock debit in milli units, with overflow rejection. Financial lines retain their individual discounts/tax and audit identities. This plan is passed into the same-transaction trusted host writer but is **not itself** an inventory debit or journal posting. New regression tests cover multi-line shared SKU, mutation, stale/corrupt totals and overflow.
+
+## A4 / thermal customer sales-order print
+New `renderSalesOrderPrintHtml` renders tenant-scoped, input-escaped A4 or 80mm thermal order documents with exact minor-unit total, tax, discount and customer lines. Clearly marked **NOT A TAX INVOICE** even after invoicing. Shared UI accepts an optional host printing callback and exposes Print A4/Thermal controls, but no shipping app mounts them or calls browser printing without authoritative scope. Unit tests cover XSS, scope denial and totals.
