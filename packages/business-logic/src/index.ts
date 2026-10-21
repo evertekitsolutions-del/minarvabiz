@@ -206,3 +206,6 @@ export * from "./account-budget-variance";
 
 // INV-023 read-only goods receipt landed cost allocation proposal.
 export * from "./landed-cost-preview";
+
+// FIN-019 fixed-rate loan amortization and EMI preview without postings.
+export * from "./loan-repayment-plan";
