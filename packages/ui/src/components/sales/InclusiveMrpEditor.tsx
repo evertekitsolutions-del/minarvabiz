@@ -37,14 +37,14 @@ export function InclusiveMrpEditor({
     </label>
     <p className="text-xs text-slate-600">
       MRP is per unit before item discount. The converted rate is tax-exclusive;
-      rounding may make the final inclusive unit price a little lower than MRP.
+      rounding may make the final inclusive unit price or line amount lower than MRP.
     </p>
     {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
     <div className="flex flex-wrap gap-2">
       <Button type="button" size="sm" onClick={() => {
         try {
           if (!input.trim()) throw new Error("Enter an inclusive MRP");
-          onApply(quoteInclusiveMrpUnitPrice(Number(input), taxRate));
+          onApply(quoteInclusiveMrpUnitPrice(Number(input), taxRate, line.quantity));
         } catch (e) {
           setError(e instanceof Error ? e.message : "Invalid MRP");
         }
