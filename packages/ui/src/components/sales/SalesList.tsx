@@ -3,7 +3,7 @@
 import * as React from "react";
 import type { Sale, Customer } from "@minarvabiz/types";
 import type { InvoiceGrossProfit } from "@minarvabiz/business-logic";
-import { exportSalesHistoryCsv, can, readAuthorizedInvoiceGrossProfit } from "@minarvabiz/business-logic";
+import { exportSalesHistoryCsv, can, readAuthorizedInvoiceGrossProfit, requestSaleDeliveryNotePrint } from "@minarvabiz/business-logic";
 import { DataTable, type Column } from "../data/DataTable";
 import { formatMoney } from "../customers/format";
 import { isUnpaidSale, canCollectCustomerDueFromSale } from "./unpaid-sale-filter";
@@ -133,6 +133,14 @@ export function SalesList({
           {onCollectCustomerDue && canCollectCustomerDueFromSale(row) && <Button size="sm" variant="outline" onClick={() => onCollectCustomerDue(row)}>Collect customer due</Button>}
           {buildPreviewHtml && <Button size="sm" variant="outline" onClick={() => { setPreviewPaper("a4"); setPreviewSale(row); }}>Preview</Button>}
           {showProfit && ["completed", "partial"].includes(row.status) && <Button size="sm" variant="outline" onClick={() => requestProfit(row)}>Gross profit</Button>}
+          {onPrintA4 && can("sales.create") && ["completed", "partial"].includes(row.status) &&
+            <Button size="sm" variant="outline" onClick={() => {
+              // Invoke synchronously in the click to keep browser print popups allowed.
+              void requestSaleDeliveryNotePrint(row.id).then(result => {
+                if(!result.ok) setExportNotice({error:true,text:result.error});
+                else setExportNotice({error:false,text:"Delivery note print requested. This does not record delivery."});
+              });
+            }}>Delivery note</Button>}
           {onPrintA4 && <Button size="sm" variant="outline" onClick={() => onPrintA4(row)}>A4</Button>}
           {onPrintThermal && <Button size="sm" variant="outline" onClick={() => onPrintThermal(row)}>Thermal</Button>}
           {onCreateReturn && ["completed", "partial"].includes(row.status) && (

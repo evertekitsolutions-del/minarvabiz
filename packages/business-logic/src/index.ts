@@ -174,3 +174,5 @@ export * from "./ledger-cash-bank-flow";
 export * from "./inventory-dormancy";
 // FIN-017 read-only posted accounting Day Book.
 export * from "./accounting-day-book";
+// SAL-004 nonfinancial invoice-linked delivery note, no dispatch event.
+export * from "./sale-delivery-note";
