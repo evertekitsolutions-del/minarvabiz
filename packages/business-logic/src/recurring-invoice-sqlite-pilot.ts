@@ -50,7 +50,8 @@ export function initializeRecurringInvoicePilotSqlite(db: RecurringInvoiceSqlite
     id TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('active','paused','cancelled')),
     version INTEGER NOT NULL CHECK(version > 0),
     payload_json TEXT NOT NULL CHECK(length(payload_json) BETWEEN 2 AND 32768),
-    PRIMARY KEY(org_id, id)
+    PRIMARY KEY(org_id, id),
+    UNIQUE(org_id, company_id, branch_id, id)
   )`);
   db.exec(`CREATE INDEX IF NOT EXISTS recurring_invoice_schedule_pilot_scope_v1
     ON recurring_invoice_schedule_pilot_v1(org_id, company_id, branch_id, status)`);
@@ -70,7 +71,8 @@ export function initializeRecurringInvoicePilotSqlite(db: RecurringInvoiceSqlite
     ),
     PRIMARY KEY(org_id, id),
     UNIQUE(org_id, schedule_id, sequence),
-    FOREIGN KEY(org_id, schedule_id) REFERENCES recurring_invoice_schedule_pilot_v1(org_id, id)
+    FOREIGN KEY(org_id, company_id, branch_id, schedule_id)
+      REFERENCES recurring_invoice_schedule_pilot_v1(org_id, company_id, branch_id, id)
   )`);
   db.exec(`CREATE INDEX IF NOT EXISTS recurring_invoice_draft_pilot_due_v1
     ON recurring_invoice_draft_pilot_v1(org_id, company_id, branch_id, due_date)`);
