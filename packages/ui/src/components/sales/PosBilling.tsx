@@ -170,13 +170,20 @@ export function PosBilling({
       const next = updatePosCartQuantity(cart, cartLineId, quantity);
       const original = cart.find((line) => posCartRowKey(line) === cartLineId);
       const mrp = appliedMrp[cartLineId];
-      if (mrp !== undefined && original) {
+      if (mrp !== undefined && original && quantity > 0) {
         // Quantity-adjusted tax must still remain at/below the entered MRP.
         const quote = quoteInclusiveMrpUnitPrice(mrp, original.taxRate ?? 0, quantity);
         setCart(next.map((line) => posCartRowKey(line) === cartLineId
           ? { ...line, unitPrice: quote.exclusiveUnitPrice } : line));
       } else {
         setCart(next);
+        if (quantity <= 0 && mrp !== undefined) {
+          setAppliedMrp((previous) => {
+            const updated = { ...previous };
+            delete updated[cartLineId];
+            return updated;
+          });
+        }
       }
       setMessage(null);
     } catch (error) {
