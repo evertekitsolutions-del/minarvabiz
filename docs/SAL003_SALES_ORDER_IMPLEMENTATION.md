@@ -35,3 +35,6 @@ The isolated SQLite create/amend adapters now fail closed without a trusted host
 
 ## Shared UI component (inactive scaffold)
 `SalesOrderWorkspace` is a responsive, accessible controlled visual component for Web/Desktop. It includes a customer/product/quantity draft form, search and status filter, line totals, confirm/cancel callbacks and explicit note that stock/payments are untouched. It is exported from `@minarvabiz/ui` but **no shipping app mounts it**: `enabled` defaults to false and host callbacks must enforce real RBAC, branch and license authorization. Until company authority and real SQLite/Cloud writers are connected, this component is an integration scaffold, not an accepted feature.
+
+## Scoped CSV export
+The pure `exportSalesOrdersCsv` generates line-level CSV for authorized Sales Orders, preserving integer minor currency units and milli quantities and neutralizing spreadsheet formula payloads. Mixed-tenant/company/branch/warehouse selections fail closed. This is exported from the shared business package, but no shipping download flow is mounted until a trusted host supplies scoped rows and permissions.
