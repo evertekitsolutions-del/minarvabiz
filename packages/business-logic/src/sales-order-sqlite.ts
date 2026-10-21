@@ -14,6 +14,9 @@ import {
   type SalesOrderTransitionRequest,
 } from "./sales-order-intent";
 
+/** Trusted host callback: must confirm customer, product and warehouse masters. */
+export type VerifySalesOrderReferences = (db: SalesOrderSqliteDb, order: SalesOrderIntent) => void;
+
 export interface SalesOrderSqliteDb {
   exec(sql: string, params?: unknown[]): void;
   query(sql: string, params?: unknown[]): Record<string, unknown>[];
@@ -40,7 +43,8 @@ export function initializeSalesOrderSqlite(db: SalesOrderSqliteDb, enabled = fal
     status TEXT NOT NULL CHECK(status IN ('draft','confirmed','cancelled','invoiced')),
     version INTEGER NOT NULL CHECK(version > 0),
     invoice_id TEXT,
-    record_json TEXT NOT NULL CHECK(json_valid(record_json)),
+    record_json TEXT NOT NULL CHECK(json_valid(record_json)
+      AND length(CAST(record_json AS BLOB)) <= 131072),
     CHECK ((status = 'invoiced' AND invoice_id IS NOT NULL)
        OR (status <> 'invoiced' AND invoice_id IS NULL)),
     PRIMARY KEY (org_id, id),
@@ -79,13 +83,18 @@ export function createSalesOrderSqlite(
   request: SalesOrderCreateRequest,
   auth: SalesOrderAuthorizedScope,
   enabled = false,
+  verifyReferences?: VerifySalesOrderReferences,
 ): { disposition: "new" | "replay"; order: SalesOrderIntent } {
   allowed(auth, enabled);
+  if (typeof verifyReferences !== "function") {
+    throw new Error("Trusted customer/product/warehouse reference verification required");
+  }
   return db.transaction(() => {
     const candidates = loadForKey(db, auth.organizationId, request);
     const plan = planSalesOrderCreate(request, auth, candidates, enabled);
     if (plan.disposition === "replay") return plan;
     const order = plan.order;
+    verifyReferences!(db, order);
     db.exec(`INSERT INTO ${table} (id, org_id, company_id, branch_id, warehouse_id,
       operation_id, order_number, customer_id, status, version, invoice_id, record_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -156,8 +165,12 @@ export function amendSalesOrderSqlite(
   request: SalesOrderDraftAmendRequest,
   auth: SalesOrderAuthorizedScope,
   enabled = false,
+  verifyReferences?: VerifySalesOrderReferences,
 ): { disposition: "update" | "replay"; order: SalesOrderIntent } {
   allowed(auth, enabled);
+  if (typeof verifyReferences !== "function") {
+    throw new Error("Trusted customer/product/warehouse reference verification required");
+  }
   return db.transaction(() => {
     const rows = db.query(`SELECT * FROM ${table} WHERE org_id = ? AND id = ?`,
       [auth.organizationId, orderId]);
@@ -166,6 +179,7 @@ export function amendSalesOrderSqlite(
     const plan = planSalesOrderDraftAmend(current, request, auth, enabled);
     if (plan.disposition === "replay") return plan;
     const next = plan.order;
+    verifyReferences!(db, next);
     db.exec(`UPDATE ${table} SET version = ?, record_json = ?
       WHERE org_id = ? AND id = ? AND company_id = ? AND branch_id = ?
       AND warehouse_id = ? AND version = ? AND status = 'draft'`,

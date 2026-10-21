@@ -26,3 +26,6 @@ The existing `orders.ts` and `orders-store.ts` implement tailoring/services; pro
 
 ## Draft correction (SAL-003)
 `planSalesOrderDraftAmend` and `amendSalesOrderSqlite` support safe replacement of line quantities/prices/tax/discount, note and due date **only while draft**. Arithmetic is fully recalculated and persisted by one SQLite CAS. Wrong scope, stale versions, invalid quantities, altered idempotency-key payloads and confirmed-order edits fail closed. No issued sale or journal row is modified.
+
+## Reference-authority boundary
+The isolated SQLite create/amend adapters now fail closed without a trusted host callback that verifies real active customer, product and warehouse records in the **same** SQLite transaction. This is a mandatory dependency before future wiring, not a renderer-provided proof. Direct tests assert missing verifier, inactive/unknown customer and product, and rollback. The actual platform-specific resolver remains unimplemented and no shipping UI invokes the pilot.

@@ -23,6 +23,16 @@ const orderRequest = (extra={}) => ({
     quantityMilli:2000,unitPriceMinor:500,discountMinor:0,taxMinor:0}],
   ...extra,
 });
+const verifyReferences = (_conn, intent) => {
+  if (intent.customerId !== uuid(7) ||
+    intent.lines.some((line) => line.productId !== uuid(9))) {
+    throw new Error("Authoritative customer or product reference not found");
+  }
+};
+const create = (conn,req,a,enabled) =>
+  adapter.createSalesOrderSqlite(conn,req,a,enabled,verifyReferences);
+const amend = (conn,id,req,a,enabled) =>
+  adapter.amendSalesOrderSqlite(conn,id,req,a,enabled,verifyReferences);
 function db() {
   const raw=new SQL.Database();
   const conn={
@@ -42,17 +52,17 @@ test("SQL schema is opt-in and no table is created while feature disabled",()=>{
   assert.equal(raw.exec("SELECT name FROM sqlite_master WHERE type='table'").length,0);
 });
 test("actual SQLite atomic create/replay and scope/list isolation",()=>{
-  const conn=db();const first=adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true);
+  const conn=db();const first=create(conn,orderRequest(),auth,true);
   assert.equal(first.disposition,"new");
-  assert.equal(adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true).disposition,"replay");
+  assert.equal(create(conn,orderRequest(),auth,true).disposition,"replay");
   assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true).length,1);
   assert.equal(adapter.listSalesOrdersSqlite(conn,{...auth,branchId:uuid(80)},true).length,0);
-  assert.throws(()=>adapter.createSalesOrderSqlite(conn,orderRequest({id:uuid(10),operationId:uuid(11)}),auth,true),/number already exists/);
-  assert.throws(()=>adapter.createSalesOrderSqlite(conn,orderRequest({branchId:uuid(55)}),auth,true),/scope mismatch/);
+  assert.throws(()=>create(conn,orderRequest({id:uuid(10),operationId:uuid(11)}),auth,true),/number already exists/);
+  assert.throws(()=>create(conn,orderRequest({branchId:uuid(55)}),auth,true),/scope mismatch/);
   assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true).length,1);
 });
 test("version compare-and-set and exact replay preserve one stored order",()=>{
-  const conn=db();adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true);
+  const conn=db();create(conn,orderRequest(),auth,true);
   const next=adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(11,"confirm",1),auth,true);
   assert.equal(next.order.version,2);
   assert.equal(next.order.status,"confirmed");
@@ -64,18 +74,18 @@ test("version compare-and-set and exact replay preserve one stored order",()=>{
   assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true)[0].version,3);
 });
 test("SQL transaction rollback on invalid input, corrupt rows and unauthorized role",()=>{
-  const conn=db();adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true);
+  const conn=db();create(conn,orderRequest(),auth,true);
   const before=JSON.stringify(adapter.listSalesOrdersSqlite(conn,auth,true));
   assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(11,"confirm",1),
     {...auth,canManageSalesOrders:false},true),/permission denied/);
-  assert.throws(()=>adapter.createSalesOrderSqlite(conn,orderRequest({operationId:uuid(20),
+  assert.throws(()=>create(conn,orderRequest({operationId:uuid(20),
     id:uuid(22),lines:[{...orderRequest().lines[0],quantityMilli:0}]}),auth,true),/positive/);
   assert.equal(JSON.stringify(adapter.listSalesOrdersSqlite(conn,auth,true)),before);
   conn.exec("UPDATE retail_sales_order_intents_v1 SET version = 5 WHERE id = ?",[uuid(5)]);
   assert.throws(()=>adapter.listSalesOrdersSqlite(conn,auth,true),/identity or revision mismatch/);
 });
 test("committed invoice link is only accepted from matching recorded identity",()=>{
-  const conn=db();adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true);
+  const conn=db();create(conn,orderRequest(),auth,true);
   adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(11,"confirm",1),auth,true);
   const sale={id:uuid(60),organizationId:auth.organizationId,companyId:auth.companyId,
     branchId:auth.branchId,customerId:uuid(7),currency:"INR",totalMinor:1000};
@@ -96,10 +106,10 @@ test("committed invoice link is only accepted from matching recorded identity",(
 
 test("one committed invoice cannot be linked to two orders within an org",()=>{
   const conn=db();
-  adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true);
+  create(conn,orderRequest(),auth,true);
   const second=orderRequest({id:uuid(30),operationId:uuid(31),orderNumber:"SO-002",
     lines:[{...orderRequest().lines[0],id:uuid(32)}]});
-  adapter.createSalesOrderSqlite(conn,second,auth,true);
+  create(conn,second,auth,true);
   const a=adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(40,"confirm",1),auth,true).order;
   const b=adapter.transitionSalesOrderSqlite(conn,uuid(30),txn(41,"confirm",1),auth,true).order;
   assert.equal(a.status,"confirmed"); assert.equal(b.status,"confirmed");
@@ -114,7 +124,7 @@ test("one committed invoice cannot be linked to two orders within an org",()=>{
   assert.deepEqual(saved.map(x=>x.status).sort(),["confirmed","invoiced"]);
 });
 test("an invoice-linked retry still requires trusted verifier and cannot bypass scope",()=>{
-  const conn=db();adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true);
+  const conn=db();create(conn,orderRequest(),auth,true);
   adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(61,"confirm",1),auth,true);
   const inv={id:uuid(60),organizationId:auth.organizationId,companyId:auth.companyId,
     branchId:auth.branchId,customerId:uuid(7),currency:"INR",totalMinor:1000};
@@ -126,21 +136,40 @@ test("an invoice-linked retry still requires trusted verifier and cannot bypass 
 });
 
 test("SQLite draft amendment CAS persists replacement totals and survives retry",()=>{
-  const conn=db();adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true);
+  const conn=db();create(conn,orderRequest(),auth,true);
   const original=adapter.listSalesOrdersSqlite(conn,auth,true)[0];
   const input={operationId:uuid(73),expectedVersion:1,occurredAt:"2026-10-21T08:01:00.000Z",
     lines:[{...orderRequest().lines[0],quantityMilli:3000}],note:"Restock",
     dueDate:"2026-11-06"};
-  const changed=adapter.amendSalesOrderSqlite(conn,uuid(5),input,auth,true);
+  const changed=amend(conn,uuid(5),input,auth,true);
   assert.equal(changed.disposition,"update");
   assert.equal(changed.order.totalMinor,1500);
   assert.equal(original.totalMinor,1000);
-  assert.equal(adapter.amendSalesOrderSqlite(conn,uuid(5),input,auth,true).disposition,"replay");
-  assert.throws(()=>adapter.amendSalesOrderSqlite(conn,uuid(5),{...input,operationId:uuid(74)},auth,true),/Stale/);
-  assert.throws(()=>adapter.amendSalesOrderSqlite(conn,uuid(5),{...input,operationId:uuid(74),
+  assert.equal(amend(conn,uuid(5),input,auth,true).disposition,"replay");
+  assert.throws(()=>amend(conn,uuid(5),{...input,operationId:uuid(74)},auth,true),/Stale/);
+  assert.throws(()=>amend(conn,uuid(5),{...input,operationId:uuid(74),
     expectedVersion:2,lines:[{...orderRequest().lines[0],quantityMilli:0}]},auth,true),/positive/);
   assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true)[0].totalMinor,1500);
   adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(75,"confirm",2),auth,true);
-  assert.throws(()=>adapter.amendSalesOrderSqlite(conn,uuid(5),{...input,
+  assert.throws(()=>amend(conn,uuid(5),{...input,
     operationId:uuid(76),expectedVersion:3},auth,true),/Only an active draft/);
+});
+
+test("unverified and unknown customer/SKU references reject before SQLite commit",()=>{
+  const conn=db();
+  assert.throws(()=>adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true),
+    /Trusted customer\/product\/warehouse reference verification required/);
+  assert.throws(()=>create(conn,orderRequest({customerId:uuid(55)}),auth,true),
+    /reference not found/);
+  assert.throws(()=>create(conn,orderRequest({lines:[
+    {...orderRequest().lines[0],productId:uuid(55)}]}),auth,true),/reference not found/);
+  assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true).length,0);
+  create(conn,orderRequest(),auth,true);
+  assert.throws(()=>adapter.amendSalesOrderSqlite(conn,uuid(5),{
+    operationId:uuid(63),expectedVersion:1,occurredAt:"2026-10-21T08:01:00.000Z",
+    lines:orderRequest().lines},auth,true),/Trusted customer\/product\/warehouse reference verification required/);
+  assert.throws(()=>amend(conn,uuid(5),{
+    operationId:uuid(64),expectedVersion:1,occurredAt:"2026-10-21T08:01:00.000Z",
+    lines:[{...orderRequest().lines[0],productId:uuid(22)}]},auth,true),/reference not found/);
+  assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true)[0].version,1);
 });
