@@ -188,3 +188,6 @@ export * from "./inventory-count-review";
 
 // PUR-011 read-only supplier delivery scorecard from PO and GRN evidence.
 export * from "./supplier-delivery-scorecard";
+
+// SVC-010 read-only customer AMC visit planning and schedule CSV.
+export * from "./amc-visit-planner";

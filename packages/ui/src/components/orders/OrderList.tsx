@@ -6,7 +6,7 @@ import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { inputClass, selectClass } from "../forms/FormField";
-import { SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, exportServiceOrdersCsv } from "@minarvabiz/business-logic";
+import { SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, exportServiceOrdersCsv, planAmcVisits, type AmcVisitPlan } from "@minarvabiz/business-logic";
 import { isOverdueServiceOrder, localBusinessDate } from "./order-overdue-filter";
 import { filterServiceOrdersByAssignedStaff, assignedStaffNamesForOrder } from "./order-assignment-filter";
 
@@ -62,6 +62,14 @@ export function OrderList({
   const [overdueOnly, setOverdueOnly] = React.useState(false);
   const [assignedStaffFilter, setAssignedStaffFilter] = React.useState("");
   const [exportFeedback, setExportFeedback] = React.useState<{ error: boolean; text: string } | null>(null);
+  const [amcCustomerId, setAmcCustomerId] = React.useState("");
+  const [amcReference, setAmcReference] = React.useState("");
+  const [amcStartDate, setAmcStartDate] = React.useState("");
+  const [amcEndDate, setAmcEndDate] = React.useState("");
+  const [amcInterval, setAmcInterval] = React.useState<1 | 2 | 3 | 6 | 12>(3);
+  const [amcNotes, setAmcNotes] = React.useState("");
+  const [amcPlan, setAmcPlan] = React.useState<AmcVisitPlan | null>(null);
+  const [amcError, setAmcError] = React.useState<string | null>(null);
   const businessDay = localBusinessDate();
   const visibleOrders = React.useMemo(() => {
     const dateFiltered = overdueOnly ? orders.filter((order) => isOverdueServiceOrder(order, businessDay)) : orders;
@@ -122,6 +130,44 @@ export function OrderList({
     }
   }
 
+  function previewAmcPlan() {
+    setAmcError(null);
+    setAmcPlan(null);
+    try {
+      const selected = customers.find(customer => customer.id === amcCustomerId && !customer.deletedAt);
+      if (!selected) throw new Error("Select a customer before planning AMC visits");
+      setAmcPlan(planAmcVisits({
+        customerId: selected.id,
+        customerName: selected.name,
+        contractReference: amcReference,
+        startDate: amcStartDate,
+        endDate: amcEndDate,
+        intervalMonths: amcInterval,
+        notes: amcNotes,
+      }));
+    } catch (error) {
+      setAmcError(error instanceof Error ? error.message : "Unable to plan AMC visits");
+    }
+  }
+
+  function downloadAmcPlan() {
+    if (!amcPlan) return;
+    try {
+      const url = URL.createObjectURL(new Blob(["\uFEFF", amcPlan.csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "minarvabiz-amc-visits-" + amcPlan.startDate + ".csv";
+      document.body.appendChild(link);
+      try { link.click(); }
+      finally {
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (error) {
+      setAmcError(error instanceof Error ? error.message : "AMC CSV export failed");
+    }
+  }
+
   const columns: Column<ServiceOrder>[] = [
     { key: "actions", header: "Actions", render: (order) => onSelect ? (
       <Button size="sm" variant="outline" onClick={(event) => { event.stopPropagation(); onSelect(order); }}>
@@ -154,6 +200,55 @@ export function OrderList({
       </div>
 
       {exportFeedback && <p role={exportFeedback.error ? "alert" : "status"} className={`text-sm ${exportFeedback.error ? "text-rose-700" : "text-slate-600"}`}>{exportFeedback.text}</p>}
+      <details className="rounded-xl border border-slate-200 bg-white p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-900">Plan AMC visits</summary>
+        <p className="mt-2 text-xs text-slate-600">Schedule-only preview for an annual maintenance contract. No contract, job, notification or customer record is saved.</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="text-xs font-medium text-slate-600">Contract customer
+            <select aria-label="AMC customer" className={selectClass + " mt-1"} value={amcCustomerId} onChange={e => { setAmcCustomerId(e.target.value); setAmcPlan(null); }}>
+              <option value="">Select customer</option>
+              {customers.filter(c => !c.deletedAt).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-medium text-slate-600">Contract reference
+            <input aria-label="AMC contract reference" className={inputClass + " mt-1"} value={amcReference} maxLength={128}
+              onChange={e => { setAmcReference(e.target.value); setAmcPlan(null); }} placeholder="AMC-2026-001" />
+          </label>
+          <label className="text-xs font-medium text-slate-600">Start date
+            <input aria-label="AMC start date" type="date" className={inputClass + " mt-1"} value={amcStartDate}
+              onChange={e => { setAmcStartDate(e.target.value); setAmcPlan(null); }} />
+          </label>
+          <label className="text-xs font-medium text-slate-600">End date
+            <input aria-label="AMC end date" type="date" className={inputClass + " mt-1"} value={amcEndDate}
+              onChange={e => { setAmcEndDate(e.target.value); setAmcPlan(null); }} />
+          </label>
+          <label className="text-xs font-medium text-slate-600">Visit interval
+            <select aria-label="AMC visit interval" className={selectClass + " mt-1"} value={amcInterval}
+              onChange={e => { setAmcInterval(Number(e.target.value) as 1 | 2 | 3 | 6 | 12); setAmcPlan(null); }}>
+              {[1, 2, 3, 6, 12].map(months => <option key={months} value={months}>{months} month{months === 1 ? "" : "s"}</option>)}
+            </select>
+          </label>
+          <label className="text-xs font-medium text-slate-600 sm:col-span-2 lg:col-span-3">Visit checklist / notes
+            <input aria-label="AMC visit notes" className={inputClass + " mt-1"} maxLength={2000} value={amcNotes}
+              onChange={e => { setAmcNotes(e.target.value); setAmcPlan(null); }} placeholder="Inspect cameras, cabling, NVR and UPS" />
+          </label>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={previewAmcPlan}>Preview AMC schedule</Button>
+          {amcPlan && <Button variant="outline" size="sm" onClick={downloadAmcPlan}>Export AMC schedule CSV</Button>}
+        </div>
+        {amcError && <p className="mt-2 text-sm text-rose-700" role="alert">{amcError}</p>}
+        {amcPlan && (
+          <div className="mt-3">
+            <p role="status" className="text-sm font-medium text-slate-800">
+              {amcPlan.visits.length} planned visits for {amcPlan.customerName}; first {amcPlan.visits[0]?.visitDate}, last {amcPlan.visits[amcPlan.visits.length - 1]?.visitDate}
+            </p>
+            <ol className="mt-2 grid list-decimal gap-x-6 gap-y-1 pl-6 text-xs text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
+              {amcPlan.visits.map(visit => <li key={visit.sequence}>{visit.visitDate}</li>)}
+            </ol>
+          </div>
+        )}
+      </details>
       <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" className="size-4 accent-indigo-600" checked={overdueOnly} onChange={(event) => setOverdueOnly(event.target.checked)} />Overdue deliveries only</label>
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-6">
         <label className="text-xs font-medium text-slate-600 lg:col-span-2">
