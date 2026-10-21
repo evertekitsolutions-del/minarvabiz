@@ -155,6 +155,8 @@ test("shared UI and desktop snapshot/restore are actually wired",()=>{
   assert.match(ui,/Show expiry alerts/);
   assert.match(ui,/Export expiry CSV/);
   assert.match(host,/<WarehouseBatchExpiryPanel products=\{products\} warehouses=\{warehouses\} \/>/);
+  assert.ok(host.indexOf("<WarehouseBatchExpiryPanel") > host.indexOf("Create location / bin"),
+    "Existing warehouse selectors must precede expiry selectors for browser smoke");
   assert.match(snap,/batchExpiry\.exportBatchExpiryReminders\(\)/);
   assert.match(snap,/batchExpiry\.validateBatchExpiryReminders\(/);
   assert.match(snap,/batchExpiry\.hydrateBatchExpiryReminders\(/);
