@@ -203,3 +203,6 @@ export * from "./fixed-asset-depreciation";
 
 // FIN-020 manual budget vs actual from posted account journals; preview only.
 export * from "./account-budget-variance";
+
+// FIN-019 fixed-rate loan EMI and repayment schedule; bookkeeping preview only.
+export * from "./loan-repayment-plan";
