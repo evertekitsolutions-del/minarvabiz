@@ -49,11 +49,20 @@ BEGIN
   RAISE EXCEPTION 'Identical enrollment retry changed result';
  END IF;
  BEGIN
+  PERFORM public.enroll_financial_sync_device(
+    'dc000000-0000-4000-8000-000000000009',E'Unsafe\\nlabel',repeat('c',64));
+  RAISE EXCEPTION 'Control character in admin device label accepted';
+ EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+ BEGIN
   PERFORM public.enroll_financial_sync_device(device,'Forged label',repeat('b',64));
   RAISE EXCEPTION 'Conflicting device rekey was accepted';
  EXCEPTION WHEN unique_violation THEN NULL; END;
  IF NOT public.set_financial_sync_branch_grant(device,branch,true) THEN
   RAISE EXCEPTION 'Authorized branch grant rejected'; END IF;
+ IF public.set_financial_sync_branch_grant(device,branch,false) THEN
+  RAISE EXCEPTION 'Branch grant disable reported enabled'; END IF;
+ IF NOT public.set_financial_sync_branch_grant(device,branch,true) THEN
+  RAISE EXCEPTION 'Revoked grant could not be explicitly re-enabled by admin'; END IF;
  BEGIN
   PERFORM public.set_financial_sync_branch_grant(device,
    'db000000-0000-4000-8000-000000000002',true);

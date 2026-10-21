@@ -53,6 +53,7 @@ BEGIN
  v_org := private.financial_sync_admin_org();
  IF p_device_id IS NULL OR p_label IS NULL OR p_label<>btrim(p_label)
    OR char_length(p_label) NOT BETWEEN 1 AND 80
+   OR p_label ~ '[[:cntrl:]]'
    OR p_public_key_sha256 IS NULL OR p_public_key_sha256 !~ '^[a-f0-9]{64}$' THEN
    RAISE EXCEPTION 'Invalid financial device enrollment' USING ERRCODE='22023';
  END IF;
@@ -81,9 +82,12 @@ BEGIN
  IF p_device_id IS NULL OR p_branch_id IS NULL OR p_enabled IS NULL THEN
    RAISE EXCEPTION 'Device, branch and explicit grant required' USING ERRCODE='22023';
  END IF;
- IF NOT EXISTS(SELECT 1 FROM public.financial_sync_devices d
-   WHERE d.org_id=v_org AND d.device_id=p_device_id AND d.revoked_at IS NULL)
- OR NOT EXISTS(SELECT 1 FROM public.branches b
+ -- Serialize grant updates with device revocation. Without this row lock,
+ -- a concurrent revoked device could regain an active grant after revocation.
+ PERFORM 1 FROM public.financial_sync_devices d
+   WHERE d.org_id=v_org AND d.device_id=p_device_id AND d.revoked_at IS NULL
+   FOR UPDATE;
+ IF NOT FOUND OR NOT EXISTS(SELECT 1 FROM public.branches b
    WHERE b.org_id=v_org AND b.id=p_branch_id AND b.is_active=true AND b.deleted_at IS NULL) THEN
    RAISE EXCEPTION 'Inactive or foreign financial sync device/branch'
      USING ERRCODE='42501';

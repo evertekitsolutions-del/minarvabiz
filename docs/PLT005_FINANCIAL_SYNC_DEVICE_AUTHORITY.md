@@ -10,3 +10,5 @@ See issue #325 and SAL-003 draft PR #568.
 
 ## Host-side signed device challenge guard
 `packages/business-logic/src/sync-device.ts` adds a strict default-OFF boundary requiring host-derived actor membership/finance role, company and warehouse grants, an active enrolled device and branch grant, matching digest/device/actor/operation, a 5-minute challenge window and a privileged cryptographic/one-use-nonce callback that must return literal `true`. This guard does not implement signature verification, nonce storage or upload RPC itself, and must not be called with renderer-supplied callbacks. Negative tests reject revoked devices, cross-tenant or company scope, malformed signatures and stale time windows. Actual cryptographic verifier and company authority remain blocking prerequisites.
+
+**Concurrent revocation safety:** device grants now acquire a database row lock on the active device before mutation, serialized with the revocation UPDATE. Grant-on then revoke cannot leave an active grant; revoke then grant fails closed. Enrollment labels reject control characters. Isolated PostgreSQL tests cover disable/re-enable and malformed labels.
