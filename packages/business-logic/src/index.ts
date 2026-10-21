@@ -176,5 +176,7 @@ export * from "./inventory-dormancy";
 export * from "./accounting-day-book";
 // SAL-004 nonfinancial invoice-linked delivery note, no dispatch event.
 export * from "./sale-delivery-note";
-// FIN-026 bill-wise original posted invoice gross-margin report.
+// CRM-014 consent-aware manual payment reminder composer; never auto-sends.
+export * from "./customer-dues-reminder";
+// FIN-026 bill-wise original posted gross profit.
 export * from "./bill-original-gross-profit";
