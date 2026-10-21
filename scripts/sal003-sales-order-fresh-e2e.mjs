@@ -195,7 +195,7 @@ BEGIN
     INSERT INTO public.retail_sales_order_sync_inbox_v1
       (org_id,company_id,branch_id,warehouse_id,order_id,operation_id,
         order_version,event_type,payload_json)
-      VALUES (org1,company1,branch2,warehouse1,order2,gen_random_uuid(),2,
+      VALUES (org1,company1,branch2,warehouse1,order2,gen_random_uuid(),1,
         'amended','{}'::jsonb);
     RAISE EXCEPTION 'Cloud inbox accepted cross-branch replay';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
