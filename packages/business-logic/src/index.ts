@@ -155,3 +155,5 @@ export * from "./recurring-invoice-sqlite-pilot";
 // Nonbinding recurrence checkout review, resolved against current host-owned master data.
 export * from "./recurring-invoice-checkout-preview";
 export * from "./recurring-invoice-source";
+// Trusted-process coordinator. Do not construct from renderer-owned authority.
+export * from "./recurring-invoice-workspace-host";
