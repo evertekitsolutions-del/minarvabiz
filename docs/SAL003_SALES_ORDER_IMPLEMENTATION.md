@@ -29,3 +29,6 @@ The existing `orders.ts` and `orders-store.ts` implement tailoring/services; pro
 
 ## Reference-authority boundary
 The isolated SQLite create/amend adapters now fail closed without a trusted host callback that verifies real active customer, product and warehouse records in the **same** SQLite transaction. This is a mandatory dependency before future wiring, not a renderer-provided proof. Direct tests assert missing verifier, inactive/unknown customer and product, and rollback. The actual platform-specific resolver remains unimplemented and no shipping UI invokes the pilot.
+
+## Sales order numbering (shared provider-neutral logic)
+`suggestSalesOrderNumber` uses the same `SO-BIZ-2026-27-00001` financial-year/branch-neutral company-code format as invoices and quotations. It rejects cross-company/tenant lists, invalid trust context and invalid codes; archived orders retain their number. Numbering suggestions do **not** reserve a sequence; the authoritative SQLite/PG unique `(org, company, orderNumber)` index still catches concurrent conflicts. No new counter/service is introduced.

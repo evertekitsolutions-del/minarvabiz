@@ -8,6 +8,8 @@
  * Original Minarva code. Open Mercato sales is a behavioural reference only.
  */
 
+import { nextBusinessDocumentNumber } from "./document-numbering";
+
 export interface SalesOrderScope {
   readonly organizationId: string;
   readonly companyId: string;
@@ -353,4 +355,44 @@ export function planSalesOrderDraftAmend(
     ...order, ...totals, note, dueDate,
     version: order.version + 1, updatedAt: occurredAt, lastOperationId: operationId,
   } };
+}
+
+/**
+ * SAL-003 numbering suggestion, not a reservation. A cloud/SQLite writer MUST
+ * allocate and enforce (organization, company, orderNumber) atomically.
+ *
+ * Only accepts a trusted/scope-filtered current-order list; any cross-scope
+ * input is rejected instead of silently leaking competitor/tenant numbering.
+ */
+export function suggestSalesOrderNumber(
+  existing: readonly SalesOrderIntent[],
+  auth: SalesOrderAuthorizedScope,
+  businessCode: string,
+  at: Date,
+  enabled = false,
+): string {
+  gate(enabled);
+  if (!auth?.canManageSalesOrders) throw new Error("Sales-order permission denied");
+  if (!(at instanceof Date) || !Number.isFinite(at.getTime())) {
+    throw new Error("Invalid sales-order numbering date");
+  }
+  const trusted = scope(auth, auth);
+  if (!Array.isArray(existing)) throw new Error("Invalid sales-order number source");
+  const numbers: string[] = [];
+  for (const order of existing) {
+    scope(order, auth);
+    // Existing orders with a legal tombstone retain their number forever.
+    // Never reissue a document number used before archival.
+    numbers.push(order.orderNumber);
+  }
+  const prefix = businessCode.trim();
+  if (!prefix || prefix.length > 8 || !/^[A-Za-z0-9]+$/.test(prefix)) {
+    throw new Error("Invalid sales-order company document code");
+  }
+  // Deliberately no company or branch mutation; the DB uniqueness constraint
+  // decides authoritative allocation when simultaneous devices propose alike.
+  void trusted;
+  return nextBusinessDocumentNumber({
+    kind: "SO", existingNumbers: numbers, businessCode: prefix, date: at,
+  });
 }

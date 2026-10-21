@@ -4,7 +4,7 @@
  * Financial year follows the Indian Apr-Mar convention.
  */
 
-export type BusinessDocumentKind = "INV" | "QT";
+export type BusinessDocumentKind = "INV" | "QT" | "SO";
 
 export function financialYearLabel(date = new Date()): string {
   const year = date.getFullYear();

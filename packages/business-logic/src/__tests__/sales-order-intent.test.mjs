@@ -9,7 +9,7 @@ require.extensions[".ts"] = (mod, filename) => mod._compile(
     fileName: filename, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText, filename,
 );
-const { planSalesOrderCreate, planSalesOrderTransition, planSalesOrderDraftAmend } = require("../sales-order-intent.ts");
+const { planSalesOrderCreate, planSalesOrderTransition, planSalesOrderDraftAmend, suggestSalesOrderNumber } = require("../sales-order-intent.ts");
 const uuid = (i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`;
 const auth = { organizationId: uuid(1), companyId: uuid(2), branchId: uuid(3), warehouseId: uuid(4), canManageSalesOrders: true };
 const request = (extra = {}) => ({
@@ -156,4 +156,19 @@ test("draft edits cannot change authorization or mutate confirmed orders",()=>{
   assert.throws(()=>planSalesOrderDraftAmend({...source,deletedAt:source.createdAt},input,auth,true),/Only an active draft/);
   assert.throws(()=>planSalesOrderDraftAmend({...source,status:"confirmed"},input,auth,true),/Only an active draft/);
   assert.throws(()=>planSalesOrderDraftAmend(source,{...input,occurredAt:"2026-10-21T06:00:00.000Z"},auth,true),/backwards/);
+});
+
+test("sales-order numbering reuses the company financial-year generator",()=>{
+  const origin=draft();
+  const now=new Date("2026-10-21T00:00:00.000Z");
+  assert.throws(()=>suggestSalesOrderNumber([],auth,"MT",now),/disabled/);
+  assert.equal(suggestSalesOrderNumber([],auth,"MT",now,true),"SO-MT-2026-27-00001");
+  const old={...origin,orderNumber:"SO-MT-2026-27-00021",deletedAt:origin.createdAt};
+  assert.equal(suggestSalesOrderNumber([old],auth,"MT",now,true),"SO-MT-2026-27-00022");
+  assert.equal(suggestSalesOrderNumber([{...old,orderNumber:"SO-MT-2025-26-00333"}],auth,"MT",now,true),
+    "SO-MT-2026-27-00001");
+  assert.throws(()=>suggestSalesOrderNumber([origin],{...auth,companyId:uuid(55)},"MT",now,true),/scope mismatch/);
+  assert.throws(()=>suggestSalesOrderNumber([origin],{...auth,canManageSalesOrders:false},"MT",now,true),/permission denied/);
+  assert.throws(()=>suggestSalesOrderNumber([],auth,"bad code",now,true),/company document code/);
+  assert.throws(()=>suggestSalesOrderNumber([],auth,"MT",new Date("invalid"),true),/numbering date/);
 });
