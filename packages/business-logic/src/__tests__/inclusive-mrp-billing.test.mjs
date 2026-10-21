@@ -92,6 +92,13 @@ test("whole-line tax rounding also never exceeds inclusive MRP for quantity", ()
   for (const quantity of [0.001, 0.25, 1.001, 2.5, 5, 10, 25]) {
     for (const rate of [0, 5, 12, 18, 28]) {
       for (const mrp of [1, 10, 99.99, 118]) {
+        // 0.001 of a 1.00 unit has no payable cent. Fail closed rather
+        // than silently stage a zero-value sale while promising MRP safety.
+        if (mrp * quantity < 0.005) {
+          assert.throws(() => quoteInclusiveMrpUnitPrice(mrp, rate, quantity),
+            /positive rounded line total/);
+          continue;
+        }
         const q = quoteInclusiveMrpUnitPrice(mrp, rate, quantity);
         const totals = calculateCartTotals([{
           productId: "product", quantity,
@@ -121,4 +128,14 @@ test("POS and Normal Billing re-quote applied MRP on quantity edits, and clear o
   assert.match(pos, /const mrp = appliedMrp\[cartLineId\]/);
   assert.match(pos, /quoteInclusiveMrpUnitPrice\(mrp, original\.taxRate \?\? 0, quantity\)/);
   assert.match(pos, /setAppliedMrp\(\{\}\); setMrpCartRowId\(null\);/);
+});
+
+test("zero-cent rounded MRP on milli-quantity must fail rather than sell for free", () => {
+  assert.throws(() => quoteInclusiveMrpUnitPrice(1, 18, 0.001),
+    /positive rounded line total/);
+  assert.throws(() => quoteInclusiveMrpUnitPrice(0.01, 5, 0.25),
+    /positive rounded line total/);
+  const valid = quoteInclusiveMrpUnitPrice(118, 18, 0.001);
+  assert.ok(valid.effectiveInclusiveLineTotal > 0);
+  assert.ok(valid.effectiveInclusiveLineTotal <= valid.maxInclusiveLineTotal);
 });
