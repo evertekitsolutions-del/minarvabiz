@@ -81,3 +81,5 @@ export * from "./components/quotations/QuotationsPanel";
 export * from "./components/support/SupportCenter";
 
 export * from "./components/sales/DimensionRowEditor";
+// Host-bound, disabled-by-default recurring invoice review surface (SAL-007).
+export * from "./components/sales/RecurringInvoiceWorkspace";
