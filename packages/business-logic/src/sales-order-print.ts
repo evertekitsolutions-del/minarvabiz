@@ -17,7 +17,7 @@ function label(value: unknown, field: string): string {
 function currency(value: number, code: string, locale: string): string {
  if (!Number.isSafeInteger(value) || value < 0) throw new Error("Invalid sales-order minor amount");
  const places=new Intl.NumberFormat(locale,{style:"currency",currency:code})
-   .resolvedOptions().maximumFractionDigits;
+   .resolvedOptions().maximumFractionDigits ?? 2;
  return escapeHtml(new Intl.NumberFormat(locale,{style:"currency",currency:code,
    minimumFractionDigits:places,maximumFractionDigits:places}).format(value/10**places));
 }
