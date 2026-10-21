@@ -172,3 +172,19 @@ test("sales-order numbering reuses the company financial-year generator",()=>{
   assert.throws(()=>suggestSalesOrderNumber([],auth,"bad code",now,true),/company document code/);
   assert.throws(()=>suggestSalesOrderNumber([],auth,"MT",new Date("invalid"),true),/numbering date/);
 });
+
+test("original create replay survives draft amendments but rejects altered payload",()=>{
+  const original=draft();
+  const edited=planSalesOrderDraftAmend(original,{
+    operationId:uuid(91),expectedVersion:1,occurredAt:"2026-10-21T07:04:00.000Z",
+    lines:[{...request().lines[0],quantityMilli:2000}],
+    note:"Amended dispatch",dueDate:"2026-11-17",
+  },auth,true).order;
+  assert.equal(edited.version,2);
+  assert.equal(edited.originalCreatePayload,original.originalCreatePayload);
+  const replay=planSalesOrderCreate(request(),auth,[edited],true);
+  assert.equal(replay.disposition,"replay");
+  assert.equal(replay.order,edited);
+  assert.throws(()=>planSalesOrderCreate(request({note:"Altered original note"}),auth,[edited],true),/payload conflict/);
+  assert.throws(()=>planSalesOrderCreate(request({lines:[{...request().lines[0],quantityMilli:2000}]}),auth,[edited],true),/payload conflict/);
+});

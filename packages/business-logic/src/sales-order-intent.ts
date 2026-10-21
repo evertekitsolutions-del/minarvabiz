@@ -39,6 +39,8 @@ export type SalesOrderStatus = "draft" | "confirmed" | "cancelled" | "invoiced";
 export interface SalesOrderIntent extends SalesOrderScope {
   readonly id: string;
   readonly operationId: string;
+  /** Immutable normalized original request; not a cryptographic signature. */
+  readonly originalCreatePayload: string;
   readonly orderNumber: string;
   readonly customerId: string;
   readonly currency: string;
@@ -204,13 +206,20 @@ function normalizeLines(lines: readonly SalesOrderLineInput[]): {
   };
 }
 
+function originalCreatePayload(order: Omit<SalesOrderIntent, "originalCreatePayload">): string {
+  return JSON.stringify({
+    id: order.id, operationId: order.operationId, organizationId: order.organizationId,
+    companyId: order.companyId, branchId: order.branchId, warehouseId: order.warehouseId,
+    orderNumber: order.orderNumber, customerId: order.customerId, currency: order.currency,
+    createdAt: order.createdAt, note: order.note, dueDate: order.dueDate, lines: order.lines,
+  });
+}
+
 function equivalent(a: SalesOrderIntent, b: SalesOrderIntent): boolean {
+  // Live draft lines may be amended; replay must compare original creation intent.
   return a.id === b.id && a.operationId === b.operationId &&
-    a.organizationId === b.organizationId && a.companyId === b.companyId &&
-    a.branchId === b.branchId && a.warehouseId === b.warehouseId &&
-    a.orderNumber === b.orderNumber && a.customerId === b.customerId &&
-    a.currency === b.currency && a.note === b.note && a.dueDate === b.dueDate &&
-    a.createdAt === b.createdAt && JSON.stringify(a.lines) === JSON.stringify(b.lines);
+    typeof a.originalCreatePayload === "string" &&
+    a.originalCreatePayload === b.originalCreatePayload;
 }
 
 /** Deterministic, side-effect-free create/retry plan. Atomic persistence is a later slice. */
@@ -231,11 +240,14 @@ export function planSalesOrderCreate(
   if (!/^[A-Z]{3}$/.test(currency)) throw new Error("Invalid ISO currency");
   const createdAt = iso(request.createdAt, "creation");
   const totals = normalizeLines(request.lines);
-  const order: SalesOrderIntent = {
+  const initial: Omit<SalesOrderIntent, "originalCreatePayload"> = {
     ...verified, id, operationId, customerId, orderNumber, currency,
     ...totals, note: nullableNote(request.note), dueDate: date(request.dueDate),
     status: "draft", invoiceId: null, version: 1, lastOperationId: operationId,
     createdAt, updatedAt: createdAt, deletedAt: null,
+  };
+  const order: SalesOrderIntent = {
+    ...initial, originalCreatePayload: originalCreatePayload(initial),
   };
   for (const item of existingOrders) {
     if (!item) throw new Error("Invalid existing sales order");

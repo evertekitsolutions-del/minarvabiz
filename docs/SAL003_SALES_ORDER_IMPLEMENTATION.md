@@ -41,3 +41,6 @@ The pure `exportSalesOrdersCsv` generates line-level CSV for authorized Sales Or
 
 ## Multi-line sales-order draft composer
 The shared UI now stages up to 100 independent product rows per draft, allows removing individual rows, and submits one complete intent rather than one product at a time. The staged-money estimate is explicitly non-authoritative; backend must resolve product versions, discounts/tax and customer/warehouse rights before accepting any draft. No app mounts or enables the component yet.
+
+## Idempotent create retries after draft updates
+The canonical original create request is stored immutably alongside mutable draft lines and notes. Repeating the original operation key and unchanged original request returns the current order even after draft amendments. Changed original input with the same key is rejected. This is original Minarva TypeScript, not a cryptographic signature.

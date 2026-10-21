@@ -179,3 +179,21 @@ test("unverified and unknown customer/SKU references reject before SQLite commit
     lines:orderRequest().lines},auth,true,()=>false),/verification denied/);
   assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true)[0].version,1);
 });
+
+test("SQLite original create replay after a draft amendment returns its current revision",()=>{
+  const conn=db();
+  create(conn,orderRequest(),auth,true);
+  amend(conn,uuid(5),{
+    operationId:uuid(92),expectedVersion:1,occurredAt:"2026-10-21T08:03:00.000Z",
+    lines:[{...orderRequest().lines[0],quantityMilli:4000}],
+    note:"Amended delivery",dueDate:"2026-11-18",
+  },auth,true);
+  const retry=create(conn,orderRequest(),auth,true);
+  assert.equal(retry.disposition,"replay");
+  assert.equal(retry.order.version,2);
+  assert.equal(retry.order.totalMinor,2000);
+  assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true).length,1);
+  assert.throws(()=>create(conn,orderRequest({
+    lines:[{...orderRequest().lines[0],quantityMilli:4000}]
+  }),auth,true),/payload conflict/);
+});
