@@ -63,9 +63,13 @@ test("customer segments require customers.manage and do not leak across branches
  ]});
  orders.hydrateOrders({orders:[]});
  try {
-   for(const role of ["staff","tailor"]){
-      setCurrentRole(role);
-      assert.throws(()=>listAuthorizedCustomerSegments(now),/Permission denied/);
+   setCurrentRole("staff");
+   assert.throws(()=>listAuthorizedCustomerSegments(now),/Permission denied/);
+   // Tailors and cashiers already have customers.manage in the approved
+   // role policy, so segmentation is allowed for those roles.
+   for(const role of ["tailor","cashier","manager"]){
+     setCurrentRole(role);
+     assert.equal(listAuthorizedCustomerSegments(now)[0].customerId,"c-1");
    }
    setCurrentRole("manager");
    assert.equal(listAuthorizedCustomerSegments(now)[0].customerId,"c-1");
