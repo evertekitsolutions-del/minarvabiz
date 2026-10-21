@@ -166,5 +166,7 @@ export * from "./inclusive-mrp";
 export * from "./product-original-gross-margin";
 // FIN-027 service-type delivered direct-cost margin (not statutory P&L).
 export * from "./service-original-gross-margin";
-// FIN-013 posted ledger Cash & Bank flow; not classified statutory cash flow.
+// CRM-007 scoped customer RFM segment list.
+export * from "./customer-segments-report";
+// FIN-013 posted journal liquidity movements.
 export * from "./ledger-cash-bank-flow";
