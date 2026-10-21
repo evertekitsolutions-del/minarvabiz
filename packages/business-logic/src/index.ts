@@ -191,3 +191,6 @@ export * from "./supplier-delivery-scorecard";
 
 // SVC-010 read-only customer AMC visit planning and schedule CSV.
 export * from "./amc-visit-planner";
+
+// PUR-009 posted invoice supplier unit cost comparison (read-only).
+export * from "./supplier-posted-cost-comparison";
