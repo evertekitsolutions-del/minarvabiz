@@ -188,3 +188,6 @@ export * from "./inventory-count-review";
 
 // PUR-011 read-only supplier delivery scorecard from PO and GRN evidence.
 export * from "./supplier-delivery-scorecard";
+
+// PUR-009 historical posted supplier invoice unit cost comparison (read-only).
+export * from "./supplier-posted-cost-comparison";
