@@ -390,3 +390,22 @@ test("posting is single-use across drafts and refuses wrong-branch or altered pe
     db, postingInput(db, "monthly-maintenance:2")), /not an authorised/);
   assert.equal(postedFixtures(db).length, 1);
 });
+
+test("daily and yearly schedules preserve anchors at month and leap-year boundaries", () => {
+  const daily = logic.createRecurringInvoiceSchedule(rule({
+    frequency: "daily", interval: 2, maxOccurrences: 4,
+    firstDueDate: "2026-02-27",
+  }));
+  assert.deepEqual(logic.planRecurringInvoiceDue(daily, "2026-03-06", [])
+    .map(x => x.dueDate), [
+    "2026-02-27", "2026-03-01", "2026-03-03", "2026-03-05",
+  ]);
+  const annual = logic.createRecurringInvoiceSchedule(rule({
+    frequency: "yearly", firstDueDate: "2028-02-29",
+    maxOccurrences: 5,
+  }));
+  assert.deepEqual(logic.planRecurringInvoiceDue(annual, "2032-03-01", [])
+    .map(x => x.dueDate), [
+    "2028-02-29", "2029-02-28", "2030-02-28", "2031-02-28", "2032-02-29",
+  ]);
+});
