@@ -21,6 +21,7 @@ function loadTs(file,mocks={}){
 const expiry=loadTs(new URL("../vendor/open-mercato/expiry.ts",import.meta.url));
 const active={id:"b1",isActive:true};
 let generated=0,saves=0;
+let production=false;
 const audits=[];
 const permissions=new Set(["inventory.adjust","reports.view"]);
 let products=[{id:"p1",name:"CCTV battery",isActive:true,branchId:"b1"}];
@@ -28,6 +29,7 @@ let warehouses=[{id:"w1",name:"Main warehouse",isActive:true,branchId:"b1"}];
 const fixture=loadTs(new URL("../batch-expiry-register.ts",import.meta.url),{
   "@minarvabiz/utils":{generateId:()=>String(++generated),nowISO:()=>"2026-10-21T10:30:00.000Z"},
   "./permissions":{assertPermission:code=>{if(!permissions.has(code))throw new Error("Permission denied: "+code);}},
+  "./runtime-mode":{isProductionMode:()=>production},
   "./autosave":{touchPersistence:()=>{saves++;}},
   "./audit-actions":{auditAction:(...args)=>audits.push(args)},
   "./store":{getProduct:id=>products.find(p=>p.id===id),listProducts:()=>products},
@@ -46,7 +48,7 @@ const reset=()=>{
   fixture.hydrateBatchExpiryReminders([]);
   products=[{id:"p1",name:"CCTV battery",isActive:true,branchId:"b1"}];
   warehouses=[{id:"w1",name:"Main warehouse",isActive:true,branchId:"b1"}];
-  active.id="b1";active.isActive=true;
+  active.id="b1";active.isActive=true;production=false;
   permissions.add("inventory.adjust");permissions.add("reports.view");
 };
 
@@ -115,6 +117,12 @@ test("active-branch switch hides records and prevents removal across branch",()=
   assert.equal(fixture.removeBatchExpiryReminder(x.id),false);
   active.id="b1";
   assert.equal(fixture.removeBatchExpiryReminder(x.id),true);
+  assert.equal(fixture.exportBatchExpiryReminders().length,0);
+});
+
+test("production Web cannot silently save expiry data only to volatile memory",()=>{
+  reset();production=true;
+  assert.throws(()=>record(),/installed Windows local SQLite/);
   assert.equal(fixture.exportBatchExpiryReminders().length,0);
 });
 
