@@ -50,7 +50,7 @@ BEGIN
  END IF;
  BEGIN
   PERFORM public.enroll_financial_sync_device(
-    'dc000000-0000-4000-8000-000000000009',E'Unsafe\\nlabel',repeat('c',64));
+    'dc000000-0000-4000-8000-000000000009','Unsafe'||chr(10)||'label',repeat('c',64));
   RAISE EXCEPTION 'Control character in admin device label accepted';
  EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
  BEGIN
