@@ -151,3 +151,7 @@ export { parseServiceOrderPriceDraft, validateMoneyAmountInput } from "./service
 
 export type { SalesOrderIntent } from "./sales-order-intent";
 export { exportSalesOrdersCsv } from "./sales-order-csv";
+
+// SAL-003 host-facing pure order print generator (default disabled).
+export { renderSalesOrderPrintHtml } from "./sales-order-print";
+export type { SalesOrderPrintDetails } from "./sales-order-print";
