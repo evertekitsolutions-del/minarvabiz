@@ -180,3 +180,5 @@ export * from "./sale-delivery-note";
 export * from "./customer-dues-reminder";
 // FIN-026 bill-wise original posted gross profit.
 export * from "./bill-original-gross-profit";
+// INV-018 authorized inventory count worksheet CSV.
+export * from "./inventory-count-worksheet";
