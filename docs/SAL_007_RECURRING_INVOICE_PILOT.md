@@ -1,0 +1,26 @@
+# SAL-007 — Recurring invoices (source-only pilot)
+
+Status: **IN PROGRESS**, not commercially enabled, not accepted.
+
+## This commit
+
+- Original deterministic weekly/monthly invoice-draft scheduler in shared business logic.
+- Anchor-day semantics (31st → February end → 31st), leap years, bounded intervals, cancellation and pause, optimistic revision check.
+- Strict positive milli-unit product quantities; source invoice and customer references only. No cached invoice amounts or implicit taxation.
+- Trusted tenant/company/branch callback required for SQLite pilot create, update, stage and list.
+- Explicit, isolated SQLite tables with unique (schedule, sequence) and transaction rollback. Repeated staging does not create duplicate draft rows.
+- Source-only PostgreSQL staging with FORCE RLS and **no authenticated/anon privileges or policy**. Merely adding this SQL file grants no online feature.
+- Node tests cover date boundaries, scope, CAS, replay, corrupt storage and actual SQLite rollback.
+
+## What remains before SAL-007 can be considered complete
+
+1. Verify original source sale and customer/product/branch permissions in a trusted production host. Schedule IDs and all cloud scope identifiers must be real UUIDs; pilot test IDs are non-production fixtures.
+2. Wire production SQLite snapshots / backup / restore / sync with an idempotent cross-device occurrence writer and audited CAS. The pilot is deliberately *not* in commercial POS or sales source of truth.
+3. Implement audited PostgreSQL RPCs with membership-RLS, tenant/company/branch foreign keys, persisted idempotency and conflict recovery. Staging tables currently have **no** client privileges.
+4. Resolve current prices/taxes/discounts, quantities/stock, credit terms and invoice numbering on each occurrence using the existing **single** authorized sale+ledger+outbox transaction; require human approval before posting and sending. Never turn staged drafts into posted invoices implicitly.
+5. Build shared web and Windows customer UI for create/pause/resume/cancel, due queue, approve/post, retry and audit. Add explicit feature gate **OFF** by default, backup/restore and cross-device UAT.
+6. Exact-head CI and changed-code >=80% coverage; approve license gate and migrations; owner-authorised production deployment/release and customer UAT.
+
+No new dependency. Original Minarva code only; Open Mercato v0.9.0 (`4374c48def1654927805c4b760f0e7f8648280f2`) was considered as MIT donor but no source was copied. No Aimeos/QUIQQER code.
+
+Rollback: drop the isolated pilot/staging tables after a data retention review and revert the feature branch. Existing invoices, accounting and POS are unchanged.
