@@ -91,12 +91,14 @@ export function previewSalesOrderPeerReconciliationSqlite(
         throw new Error("Invalid peer snapshot/cursor");
       }
       const remote=snapshot.order;
-      verifySalesOrderRecordIntegrity(remote);
+      // Establish tenant scope first: never evaluate foreign financial
+      // payloads against local integrity or expose their details to a client.
       for(const field of SCOPE) {
         if(remote[field]!==auth[field]) {
           throw new Error("Cross-scope remote sales-order snapshot denied");
         }
       }
+      verifySalesOrderRecordIntegrity(remote);
       if(seen.has(remote.id)) {
         throw new Error("Duplicate remote sales-order in peer batch");
       }
