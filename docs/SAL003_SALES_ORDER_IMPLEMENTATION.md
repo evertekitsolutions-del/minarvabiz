@@ -92,3 +92,6 @@ New pure `planSalesOrderArchive` provides versioned, scoped archive/restore for 
 
 ## Shared Trash and recovery controls
 The shared SalesOrderWorkspace now optionally shows a **Show Trash** switch, Move to Trash buttons for draft/cancelled orders and Restore controls for archived orders. Financially confirmed or invoiced records have no Trash action. UI callbacks are disabled unless an authoritative host supplies them and validates organization/branch, revision and status before writing SQLite/cloud state. Normal customer print/export controls hide archived orders. No production frontend host mounts these controls yet.
+
+## Default-deny PostgreSQL sync inbox (schema only)
+The source-only SAL-003 migration now also defines a tenant/company/branch/warehouse-scoped `retail_sales_order_sync_inbox_v1` with unique org+operation and org+order+revision keys, nested JSON identity trigger, indexed ordered replay, FORCE RLS and revoked direct anon/authenticated grants. The local-only Supabase fresh-instance test probes default-deny, duplicate delivery and cross-branch rejection. This is **NOT a cloud sender or RPC and has NOT been deployed**; PLT-002 authoritative company permission, device enrollment, transactional order+inbox writer, conflict receipts and finance reconciliation remain mandatory.

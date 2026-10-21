@@ -157,6 +157,49 @@ BEGIN
     RAISE EXCEPTION 'Duplicate invoice link unexpectedly accepted';
   EXCEPTION WHEN unique_violation THEN NULL; END;
 
+
+  -- The dormant cloud inbox must remain default-deny, even for signed-in users.
+  IF NOT (SELECT relrowsecurity AND relforcerowsecurity FROM pg_class
+    WHERE oid='public.retail_sales_order_sync_inbox_v1'::regclass) OR
+     has_table_privilege('authenticated',
+       'public.retail_sales_order_sync_inbox_v1','SELECT') OR
+     has_table_privilege('authenticated',
+       'public.retail_sales_order_sync_inbox_v1','INSERT') OR
+     EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public'
+       AND tablename='retail_sales_order_sync_inbox_v1') THEN
+    RAISE EXCEPTION 'SAL-003 inbox cannot permit client write/read before auth RPC';
+  END IF;
+
+  INSERT INTO public.retail_sales_order_sync_inbox_v1
+    (org_id,company_id,branch_id,warehouse_id,order_id,operation_id,
+      order_version,event_type,payload_json)
+    VALUES (org1,company1,branch1,warehouse1,order2,operation2,1,'created',
+      jsonb_build_object(
+        'organizationId',org1,'companyId',company1,
+        'branchId',branch1,'warehouseId',warehouse1,'orderId',order2,
+        'operationId',operation2,'orderVersion',1,'eventType','created',
+        'order',jsonb_set(payload2,'{lastOperationId}',to_jsonb(operation2))
+      ));
+  BEGIN
+    INSERT INTO public.retail_sales_order_sync_inbox_v1
+      (org_id,company_id,branch_id,warehouse_id,order_id,operation_id,
+       order_version,event_type,payload_json)
+      SELECT org_id,company_id,branch_id,warehouse_id,order_id,operation_id,
+        order_version,event_type,payload_json
+      FROM public.retail_sales_order_sync_inbox_v1
+      WHERE org_id=org1 AND operation_id=operation2;
+    RAISE EXCEPTION 'Cloud inbox accepted duplicate operation receipt';
+  EXCEPTION WHEN unique_violation THEN NULL; END;
+
+  BEGIN
+    INSERT INTO public.retail_sales_order_sync_inbox_v1
+      (org_id,company_id,branch_id,warehouse_id,order_id,operation_id,
+        order_version,event_type,payload_json)
+      VALUES (org1,company1,branch2,warehouse1,order2,gen_random_uuid(),2,
+        'amended','{}'::jsonb);
+    RAISE EXCEPTION 'Cloud inbox accepted cross-branch replay';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+
   SELECT count(*) INTO row_count FROM public.retail_sales_order_intents_v1
     WHERE org_id=org1 AND invoice_id=invoice1;
   IF row_count <> 1 THEN RAISE EXCEPTION 'Duplicate invoice guard did not retain exactly one link'; END IF;

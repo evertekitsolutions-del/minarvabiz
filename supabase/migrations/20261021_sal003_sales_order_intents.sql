@@ -94,3 +94,86 @@ ALTER TABLE public.retail_sales_order_intents_v1 FORCE ROW LEVEL SECURITY;
 -- verifies membership, company/branch/warehouse scope, roles and revision.
 REVOKE ALL ON public.retail_sales_order_intents_v1 FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.guard_retail_sales_order_intent_scope_v1() FROM PUBLIC, anon, authenticated;
+
+-- SAL-003 durable cloud receiver *schema only*: NO RPC, policy or public write
+-- permission. Future authenticated transactional RPC must atomically persist
+-- each authoritative order revision plus its immutable inbox event.
+CREATE TABLE IF NOT EXISTS public.retail_sales_order_sync_inbox_v1 (
+  org_id uuid NOT NULL,
+  company_id uuid NOT NULL,
+  branch_id uuid NOT NULL,
+  warehouse_id uuid NOT NULL,
+  order_id uuid NOT NULL,
+  operation_id uuid NOT NULL,
+  order_version integer NOT NULL CHECK (order_version > 0),
+  event_type text NOT NULL CHECK (
+    event_type IN ('created','amended','confirmed','cancelled','invoiced','archived','restored')
+  ),
+  payload_json jsonb NOT NULL CHECK (
+    jsonb_typeof(payload_json) = 'object' AND
+    octet_length(payload_json::text) <= 262144
+  ),
+  received_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (org_id, operation_id),
+  UNIQUE (org_id, order_id, order_version),
+  FOREIGN KEY (org_id, order_id)
+    REFERENCES public.retail_sales_order_intents_v1(org_id, id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_retail_sales_order_sync_inbox_v1_scope
+  ON public.retail_sales_order_sync_inbox_v1
+  (org_id, company_id, branch_id, warehouse_id, order_id, order_version);
+
+CREATE OR REPLACE FUNCTION public.guard_retail_sales_order_sync_inbox_v1()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = pg_catalog
+AS $guard$
+BEGIN
+  -- Inbox event and nested immutable order identity must agree with
+  -- authoritative order scope, revision and the recorded operation key.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.retail_sales_order_intents_v1 so
+    WHERE so.org_id = NEW.org_id AND so.id = NEW.order_id
+      AND so.company_id = NEW.company_id
+      AND so.branch_id = NEW.branch_id
+      AND so.warehouse_id = NEW.warehouse_id
+      AND so.version >= NEW.order_version
+  ) THEN
+    RAISE EXCEPTION 'SAL-003 inbox tenant or order revision mismatch'
+      USING ERRCODE = '42501';
+  END IF;
+  IF NEW.operation_id IS DISTINCT FROM (NEW.payload_json->>'operationId')::uuid OR
+     NEW.org_id IS DISTINCT FROM (NEW.payload_json->>'organizationId')::uuid OR
+     NEW.company_id IS DISTINCT FROM (NEW.payload_json->>'companyId')::uuid OR
+     NEW.branch_id IS DISTINCT FROM (NEW.payload_json->>'branchId')::uuid OR
+     NEW.warehouse_id IS DISTINCT FROM (NEW.payload_json->>'warehouseId')::uuid OR
+     NEW.order_id IS DISTINCT FROM (NEW.payload_json->>'orderId')::uuid OR
+     NEW.order_version IS DISTINCT FROM (NEW.payload_json->>'orderVersion')::integer OR
+     NEW.event_type IS DISTINCT FROM NEW.payload_json->>'eventType' OR
+     NEW.order_id IS DISTINCT FROM (NEW.payload_json->'order'->>'id')::uuid OR
+     NEW.org_id IS DISTINCT FROM (NEW.payload_json->'order'->>'organizationId')::uuid OR
+     NEW.company_id IS DISTINCT FROM (NEW.payload_json->'order'->>'companyId')::uuid OR
+     NEW.branch_id IS DISTINCT FROM (NEW.payload_json->'order'->>'branchId')::uuid OR
+     NEW.warehouse_id IS DISTINCT FROM (NEW.payload_json->'order'->>'warehouseId')::uuid OR
+     NEW.order_version IS DISTINCT FROM (NEW.payload_json->'order'->>'version')::integer OR
+     NEW.operation_id IS DISTINCT FROM (NEW.payload_json->'order'->>'lastOperationId')::uuid
+  THEN
+    RAISE EXCEPTION 'SAL-003 inbox JSON event identity mismatch'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$guard$;
+
+DROP TRIGGER IF EXISTS retail_sales_order_sync_inbox_scope_v1
+  ON public.retail_sales_order_sync_inbox_v1;
+CREATE TRIGGER retail_sales_order_sync_inbox_scope_v1
+BEFORE INSERT OR UPDATE ON public.retail_sales_order_sync_inbox_v1
+FOR EACH ROW EXECUTE FUNCTION public.guard_retail_sales_order_sync_inbox_v1();
+
+ALTER TABLE public.retail_sales_order_sync_inbox_v1 ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.retail_sales_order_sync_inbox_v1 FORCE ROW LEVEL SECURITY;
+REVOKE ALL ON public.retail_sales_order_sync_inbox_v1 FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.guard_retail_sales_order_sync_inbox_v1() FROM PUBLIC, anon, authenticated;

@@ -12,7 +12,13 @@ test("unactivated SAL-003 migration is ordered, tenant/branch constrained and de
     "ENABLE ROW LEVEL SECURITY", "REVOKE ALL ON public.retail_sales_order_intents_v1",
     "retail_sales_order_intents_scope_v1", "BEFORE INSERT OR UPDATE",
     "w.branch_id = NEW.branch_id", "c.org_id = NEW.org_id", "w.org_id = NEW.org_id",
-    "UNIQUE (org_id, operation_id)", "UNIQUE (org_id, company_id, order_number)"]) {
+    "UNIQUE (org_id, operation_id)", "UNIQUE (org_id, company_id, order_number)",
+    "CREATE TABLE IF NOT EXISTS public.retail_sales_order_sync_inbox_v1",
+    "UNIQUE (org_id, order_id, order_version)",
+    "FOREIGN KEY (org_id, order_id)",
+    "guard_retail_sales_order_sync_inbox_v1",
+    "retail_sales_order_sync_inbox_scope_v1",
+    "REVOKE ALL ON public.retail_sales_order_sync_inbox_v1"]) {
     assert.ok(sql.includes(fragment),fragment);
   }
   assert.doesNotMatch(sql,/CREATE POLICY|GRANT\s+(?:INSERT|UPDATE|DELETE|SELECT)\s+ON/i);
