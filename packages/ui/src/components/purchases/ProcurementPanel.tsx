@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { Modal } from "../forms/Modal";
 import { formatMoney } from "../customers/format";
+import { buildSupplierDeliveryScores } from "@minarvabiz/business-logic";
 
 type DraftLine = {
   productId: string;
@@ -105,6 +106,22 @@ export function ProcurementPanel({
   }) => { success: boolean; error?: string };
   onCancelInvoice: (id: string, reason: string) => { success: boolean; error?: string };
 }) {
+  const supplierScorecard = React.useMemo(() => {
+    try {
+      return {
+        rows: buildSupplierDeliveryScores(
+          suppliers, purchaseOrders, goodsReceipts, new Date().toISOString().slice(0, 10)
+        ),
+        error: null as string | null,
+      };
+    } catch (error) {
+      return {
+        rows: [],
+        error: error instanceof Error ? error.message : "Unable to calculate supplier performance",
+      };
+    }
+  }, [suppliers, purchaseOrders, goodsReceipts]);
+
   const [supplierId, setSupplierId] = React.useState("");
   const [expectedDate, setExpectedDate] = React.useState("");
   const [notes, setNotes] = React.useState("");
@@ -392,6 +409,62 @@ export function ProcurementPanel({
 
   return (
     <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Supplier performance</CardTitle>
+          <p className="text-xs text-slate-500">
+            Approved purchase orders and actual goods receipts, as of today's UTC date.
+            Draft/cancelled orders are excluded. This report does not change stock or supplier accounts.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {supplierScorecard.error ? (
+            <p role="alert" className="text-sm text-rose-700">{supplierScorecard.error}</p>
+          ) : supplierScorecard.rows.length === 0 ? (
+            <p className="text-sm text-slate-500">No suppliers to evaluate.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-600">
+                    <th className="p-2">Supplier</th>
+                    <th className="p-2">Approved POs</th>
+                    <th className="p-2">Received POs</th>
+                    <th className="p-2">Line fill</th>
+                    <th className="p-2">On-time delivered</th>
+                    <th className="p-2">Overdue open</th>
+                    <th className="p-2">Ordered value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {supplierScorecard.rows.slice(0, 30).map((row) => (
+                    <tr key={row.supplierId} className="border-b border-slate-100">
+                      <td className="p-2 font-medium">{row.supplierName}</td>
+                      <td className="p-2">{row.approvedOrders}</td>
+                      <td className="p-2">{row.receivedOrders}</td>
+                      <td className="p-2">{row.receiptFillPercent == null ? "—" : row.receiptFillPercent + "%"}</td>
+                      <td className="p-2">{row.onTimePercent == null
+                        ? "—"
+                        : row.onTimePercent + "% (" + row.deadlineDeliveries + ")"}</td>
+                      <td className="p-2">{row.overdueOpenOrders}</td>
+                      <td className="p-2">{formatMoney(row.orderedValue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {supplierScorecard.rows.length > 30 && (
+                <p className="p-2 text-xs text-slate-500">
+                  Showing first 30 suppliers of {supplierScorecard.rows.length}.
+                </p>
+              )}
+              <p className="p-2 text-xs text-slate-500">
+                Line fill is the average received fraction per purchase-order line (not mixed item units).
+                On-time % includes only fully received orders with recorded expected dates.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">Purchase Order</CardTitle>
