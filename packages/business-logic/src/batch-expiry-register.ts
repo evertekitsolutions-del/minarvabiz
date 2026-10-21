@@ -161,7 +161,7 @@ export function buildBatchExpiryReport(asOfDate:string):BatchExpiryReport {
   const rows=eligible.map(row=>{
     const at=civil(row.expiresOn);
     const daysRemaining=Math.round((at.getTime()-today.getTime())/86400000);
-    const status:BatchExpiryStatus=at<today?"expired":at<=deadline?"expiring_soon":"later";
+    const status:BatchExpiryStatus=at.getTime()<today.getTime()?"expired":at.getTime()<=deadline.getTime()?"expiring_soon":"later";
     return {
       ...row,status,daysRemaining,
       productName:products.get(row.productId)?.name??"[Removed product]",
