@@ -198,5 +198,8 @@ export * from "./supplier-posted-cost-comparison";
 // PUR-002 supplier RFQ draft preview, no dispatch or postings.
 export * from "./rfq-draft-preview";
 
-// FIN-020 manual budget vs actual comparison of posted/void accounting journals.
+// FIN-018 straight-line fixed asset depreciation schedule preview; no journals.
+export * from "./fixed-asset-depreciation";
+
+// FIN-020 manual budget vs actual from posted account journals; preview only.
 export * from "./account-budget-variance";
