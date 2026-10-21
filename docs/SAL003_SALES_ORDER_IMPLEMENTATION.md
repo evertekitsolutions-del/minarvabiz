@@ -86,3 +86,6 @@ The actual `packages/database/src/adapters/sqlite-browser.ts` is now exercised w
 
 ## Recoverable nonfinancial Sales Orders Trash
 New pure `planSalesOrderArchive` provides versioned, scoped archive/restore for draft or cancelled orders only. Confirmation/invoicing is deliberately disallowed: hiding financial obligations is not a valid substitute for credit-note reversal. Retains original line/currency/amount data and idempotency key; refuses wrong role, scope, stale version, bad clock, reused operation. The SQLite persistence, local event staging and UI Trash controls are separate follow-up steps.
+
+## SQLite Trash persistence
+`archiveSalesOrderSqlite` now atomically archives/restores draft and cancelled orders using existing immutable record JSON and the CAS revision, adds pending `archived`/`restored` events, and isolates Trash from regular list/pagination. The isolated backup includes archived records and every pending event, so restore never loses Trash. Confirmed/invoiced orders remain non-archivable without authoritative reversal. Real SQL.js tests cover archive, restore, backup, tenant isolation, and financial-state restrictions. Legacy desktop POS is not yet wired.

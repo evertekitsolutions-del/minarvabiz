@@ -7,7 +7,7 @@
  */
 import type { SalesOrderAuthorizedScope, SalesOrderIntent } from "./sales-order-intent";
 import type { SalesOrderSqliteDb, SalesOrderPilotEvent } from "./sales-order-sqlite";
-import { listSalesOrdersSqlite, listPendingSalesOrderEventsSqlite } from "./sales-order-sqlite";
+import { listSalesOrdersSqlite, listArchivedSalesOrdersSqlite, listPendingSalesOrderEventsSqlite } from "./sales-order-sqlite";
 import { verifySalesOrderRecordIntegrity } from "./sales-order-record-integrity";
 
 export interface SalesOrderPilotBackup {
@@ -48,9 +48,17 @@ function checkedEvent(e: SalesOrderPilotEvent, auth: SalesOrderAuthorizedScope):
     created: "draft", amended: "draft", confirmed: "confirmed",
     cancelled: "cancelled", invoiced: "invoiced",
   } as Record<string, string>)[e.eventType];
-  if (!expectedStatus || e.order.status !== expectedStatus ||
+  const trashEvent = e.eventType === "archived" || e.eventType === "restored";
+  if (trashEvent ? (
+    !["draft","cancelled"].includes(e.order.status) ||
+    (e.eventType === "archived" && !e.order.deletedAt) ||
+    (e.eventType === "restored" && e.order.deletedAt !== null) ||
+    e.orderVersion === 1
+  ) : (
+    !expectedStatus || e.order.status !== expectedStatus ||
     (e.eventType === "created" && e.orderVersion !== 1) ||
-    (e.eventType !== "created" && e.orderVersion === 1)) {
+    (e.eventType !== "created" && e.orderVersion === 1)
+  )) {
     throw new Error("Sales-order backup event transition mismatch");
   }
 }
@@ -64,7 +72,10 @@ export function exportSalesOrderPilotBackupSqlite(
   // Orders and their pending event history must come from ONE read snapshot.
   // A same-connection SQLite transaction also blocks concurrent writers.
   return db.transaction(() => {
-    const orders = listSalesOrdersSqlite(db, auth, enabled);
+    const orders = [
+      ...listSalesOrdersSqlite(db, auth, enabled),
+      ...listArchivedSalesOrdersSqlite(db, auth, enabled),
+    ];
     const pendingEvents = listPendingSalesOrderEventsSqlite(db, auth, enabled);
     for (const order of orders) verifySalesOrderRecordIntegrity(order);
     for (const event of pendingEvents) checkedEvent(event, auth);

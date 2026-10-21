@@ -15,6 +15,7 @@ import {
 } from "./sales-order-intent";
 import { verifySalesOrderRecordIntegrity } from "./sales-order-record-integrity";
 import { buildSalesOrderCheckoutCommand, type SalesOrderCheckoutCommand } from "./sales-order-checkout-plan";
+import { planSalesOrderArchive, type SalesOrderArchiveRequest } from "./sales-order-archive";
 
 /** Trusted host callback: must confirm customer, product and warehouse masters. */
 export type VerifySalesOrderReferences = (db: SalesOrderSqliteDb, order: SalesOrderIntent) => true;
@@ -26,7 +27,7 @@ export interface SalesOrderSqliteDb {
 }
 const table = "retail_sales_order_intents_v1";
 const eventTable = "retail_sales_order_pending_events_v1";
-export type SalesOrderPilotEventType = "created" | "amended" | "confirmed" | "cancelled" | "invoiced";
+export type SalesOrderPilotEventType = "created" | "amended" | "confirmed" | "cancelled" | "invoiced" | "archived" | "restored";
 export interface SalesOrderPilotEvent {
   readonly operationId: string;
   readonly organizationId: string;
@@ -91,7 +92,7 @@ export function initializeSalesOrderSqlite(db: SalesOrderSqliteDb, enabled = fal
     order_id TEXT NOT NULL, operation_id TEXT NOT NULL,
     version INTEGER NOT NULL CHECK(version > 0),
     event_type TEXT NOT NULL
-      CHECK(event_type IN ('created','amended','confirmed','cancelled','invoiced')),
+      CHECK(event_type IN ('created','amended','confirmed','cancelled','invoiced','archived','restored')),
     payload_json TEXT NOT NULL CHECK(
       json_valid(payload_json) AND length(CAST(payload_json AS BLOB)) <= 262144),
     status TEXT NOT NULL DEFAULT 'pending' CHECK(status = 'pending'),
@@ -211,7 +212,7 @@ export function listSalesOrdersSqlite(
 ): SalesOrderIntent[] {
   allowed(auth, enabled);
   return db.query(`SELECT * FROM ${table} WHERE org_id = ? AND company_id = ?
-    AND branch_id = ? AND warehouse_id = ? ORDER BY order_number, id`,
+    AND branch_id = ? AND warehouse_id = ? AND json_extract(record_json,'$.deletedAt') IS NULL ORDER BY order_number, id`,
     [auth.organizationId, auth.companyId, auth.branchId, auth.warehouseId]).map(parse);
 }
 
@@ -445,7 +446,8 @@ export function listSalesOrdersPageSqlite(
     auth.organizationId, auth.companyId, auth.branchId, auth.warehouseId,
   ];
   let query = `SELECT * FROM ${table} WHERE org_id = ? AND company_id = ?
-    AND branch_id = ? AND warehouse_id = ?`;
+    AND branch_id = ? AND warehouse_id = ?
+    AND json_extract(record_json,'$.deletedAt') IS NULL`;
   if (options.status != null) {
     query += " AND status = ?";
     params.push(options.status);
@@ -461,4 +463,40 @@ export function listSalesOrdersPageSqlite(
   const page = rows.slice(0, limit).map(parse);
   const last = hasMore ? page[page.length - 1] : undefined;
   return { orders: page, nextCursor: last ? {orderNumber:last.orderNumber,id:last.id} : null };
+}
+
+/** Visible only to an authorized host Trash screen, never regular order search. */
+export function listArchivedSalesOrdersSqlite(
+ db: SalesOrderSqliteDb, auth: SalesOrderAuthorizedScope, enabled=false,
+): SalesOrderIntent[] {
+ allowed(auth,enabled);
+ return db.query(`SELECT * FROM ${table} WHERE org_id=? AND company_id=?
+   AND branch_id=? AND warehouse_id=?
+   AND json_extract(record_json,'$.deletedAt') IS NOT NULL
+   ORDER BY order_number,id`,
+   [auth.organizationId,auth.companyId,auth.branchId,auth.warehouseId]).map(parse);
+}
+/** Atomic CAS archiving and restoring; no sale, stock or payment reversal. */
+export function archiveSalesOrderSqlite(
+ db: SalesOrderSqliteDb, orderId: string, request: SalesOrderArchiveRequest,
+ auth: SalesOrderAuthorizedScope, enabled=false,
+): {disposition:"update"|"replay";order:SalesOrderIntent} {
+ allowed(auth,enabled);
+ return db.transaction(()=>{
+  const rows=db.query(`SELECT * FROM ${table} WHERE org_id=? AND id=?`,
+    [auth.organizationId,orderId]);
+  if(rows.length!==1) throw Error("Sales order not found for archive or restore");
+  const current=parse(rows[0]);
+  const plan=planSalesOrderArchive(current,request,auth,enabled);
+  if(plan.disposition==="replay") return plan;
+  const next=plan.order;
+  db.exec(`UPDATE ${table} SET version=?,record_json=?
+    WHERE org_id=? AND id=? AND company_id=? AND branch_id=? AND warehouse_id=?
+     AND version=? AND status IN ('draft','cancelled')`,
+   [next.version,JSON.stringify(next),next.organizationId,next.id,next.companyId,
+    next.branchId,next.warehouseId,current.version]);
+  if(updatedRowCount(db)!==1) throw Error("Sales-order archive CAS conflict");
+  stagePilotEvent(db,next,request.action==="archive"?"archived":"restored");
+  return plan;
+ });
 }
