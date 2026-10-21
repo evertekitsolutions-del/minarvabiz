@@ -212,3 +212,6 @@ export * from "./loan-repayment-plan";
 
 // HR-006 staff leave calendar/CSV request draft (read-only).
 export * from "./staff-leave-preview";
+
+// MIT Open Mercato localization adapter for international RFQ input; no posting.
+export * from "./localized-rfq-input";

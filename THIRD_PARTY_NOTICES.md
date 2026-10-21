@@ -87,3 +87,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Open Mercato — verbatim MIT locale-number and unit-code helpers
+
+Two self-contained TypeScript helpers from Open Mercato (commit `eb3193df03b9ce0b196be417fe265c1dc47c0868`) are included verbatim (with an attribution comment) under `packages/business-logic/src/vendor/open-mercato/`:
+
+- https://github.com/open-mercato/open-mercato/blob/eb3193df03b9ce0b196be417fe265c1dc47c0868/packages/shared/src/lib/number.ts
+- https://github.com/open-mercato/open-mercato/blob/eb3193df03b9ce0b196be417fe265c1dc47c0868/packages/shared/src/lib/units/unitCodes.ts
+
+Copyright (c) 2025-2026 Open Mercato contributors. Licensed under MIT; the full MIT license text and granted rights are reproduced in the preceding Open Mercato section of this notices file. No Open Mercato runtime, SaaS or enterprise packages are used. The Minarva adapter enforces domain-specific restrictions before RFQ preview. Licensed original code remains MIT rather than Minarva proprietary.
