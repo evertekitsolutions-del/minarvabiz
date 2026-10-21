@@ -28,9 +28,9 @@ try {
     "@opennextjs/cloudflare": "1.20.12", wrangler: "4.151.0",
   } }));
   for (const [version, expected] of [
-    ["15.5.24", /below the current security-supported/],
-    ["15.5.28", /Missing real public deployment configuration/],
-    ["16.4.0", /below the current security-supported/],
+    ["15.5.24", /not an approved supported Next.js release/],
+    ["15.5.28", /not an approved supported Next.js release/],
+    ["16.4.0", /not an approved supported Next.js release/],
     ["16.4.1", /Missing real public deployment configuration/],
   ]) {
     writeFileSync(join(fixture, "pnpm-lock.yaml"), `lockfileVersion: '9.0'\nimporters:\n  apps/web:\n    dependencies:\n      next:\n        specifier: ${version}\n        version: ${version}(react@19.0.0)\npackages:\n`);
