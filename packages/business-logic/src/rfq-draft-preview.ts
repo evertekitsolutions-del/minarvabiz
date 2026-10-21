@@ -4,6 +4,7 @@
  * No GPL/LGPL source or runtime dependency is incorporated.
  */
 import type { Product, Supplier } from "@minarvabiz/types";
+import { canonicalizeUnitCode } from "./vendor/open-mercato/unitCodes";
 
 export interface RfqDraftLineInput {
   readonly productId: string;
@@ -118,7 +119,7 @@ export function buildRfqDraftPreview(
       rows.push({
         supplierId: supplier.id, supplierName: supplier.name, supplierEmail: supplier.email ?? "",
         productId: product.id, sku: product.sku ?? "", productName: product.name,
-        unit: product.unit, quantity: count,
+        unit: canonicalizeUnitCode(product.unit) ?? product.unit, quantity: count,
       });
     }
   }

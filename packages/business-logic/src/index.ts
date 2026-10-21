@@ -213,5 +213,8 @@ export * from "./loan-repayment-plan";
 // HR-006 staff leave calendar/CSV request draft (read-only).
 export * from "./staff-leave-preview";
 
-// Open Mercato MIT GTIN checksum reuse and nonmutating barcode checker.
+// MIT Open Mercato localization adapter for international RFQ input; no posting.
+export * from "./localized-rfq-input";
+
+// Open Mercato MIT GS1 barcode checker and generator; non-mutating.
 export * from "./gs1-barcode-assistant";
