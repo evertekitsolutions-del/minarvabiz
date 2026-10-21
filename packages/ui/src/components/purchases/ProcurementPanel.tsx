@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { Modal } from "../forms/Modal";
 import { formatMoney } from "../customers/format";
-import { buildSupplierDeliveryScores } from "@minarvabiz/business-logic";
+import { buildSupplierDeliveryScores, buildPostedSupplierCostComparison, phase9Store } from "@minarvabiz/business-logic";
 
 type DraftLine = {
   productId: string;
@@ -121,6 +121,25 @@ export function ProcurementPanel({
       };
     }
   }, [suppliers, purchaseOrders, goodsReceipts]);
+
+  const [priceHistoryProductId, setPriceHistoryProductId] = React.useState("");
+  const priceHistory = React.useMemo(() => {
+    if (!priceHistoryProductId) return { rows: [], error: null as string | null };
+    try {
+      const product = products.find(p => p.id === priceHistoryProductId && !p.deletedAt);
+      if (!product) throw new Error("Selected product is no longer available");
+      const branchId = phase9Store.getActiveBranch()?.id ?? null;
+      return {
+        rows: buildPostedSupplierCostComparison(product, suppliers, purchaseInvoices, branchId),
+        error: null as string | null,
+      };
+    } catch (error) {
+      return {
+        rows: [],
+        error: error instanceof Error ? error.message : "Unable to compare supplier costs",
+      };
+    }
+  }, [priceHistoryProductId, products, suppliers, purchaseInvoices]);
 
   const [supplierId, setSupplierId] = React.useState("");
   const [expectedDate, setExpectedDate] = React.useState("");
@@ -462,6 +481,54 @@ export function ProcurementPanel({
                 On-time % includes only fully received orders with recorded expected dates.
               </p>
             </div>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Supplier purchase price history</CardTitle>
+          <p className="text-xs text-slate-500">Only posted supplier invoice costs, excluding tax. Historical prices are not a live quote, contractual rate or purchase order.</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <label className="block max-w-lg text-xs font-medium text-slate-600">
+            Product to compare
+            <select aria-label="Supplier purchase price history product" className={selectClass + " mt-1"} value={priceHistoryProductId}
+              onChange={event => setPriceHistoryProductId(event.target.value)}>
+              <option value="">Select a product</option>
+              {products.filter(p => !p.deletedAt && p.isActive).map(product => (
+                <option key={product.id} value={product.id}>{product.name}{product.sku ? " · " + product.sku : ""}</option>
+              ))}
+            </select>
+          </label>
+          {priceHistory.error && <p role="alert" className="text-sm text-rose-700">{priceHistory.error}</p>}
+          {priceHistoryProductId && !priceHistory.error && (
+            priceHistory.rows.length === 0
+              ? <p className="text-sm text-slate-500">No posted supplier invoice prices for this product.</p>
+              : <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead><tr className="border-b border-slate-200 text-slate-600">
+                      <th className="p-2">Supplier</th>
+                      <th className="p-2">Last unit cost (ex-tax)</th>
+                      <th className="p-2">Range</th>
+                      <th className="p-2">Vs cheapest recent</th>
+                      <th className="p-2">Recorded lines</th>
+                      <th className="p-2">Last posted invoice</th>
+                    </tr></thead>
+                    <tbody>{priceHistory.rows.slice(0, 30).map(row => (
+                      <tr key={row.supplierId} className="border-b border-slate-100">
+                        <td className="p-2 font-medium">{row.supplierName}</td>
+                        <td className="p-2">{formatMoney(row.latestUnitCost)} / {row.unit}</td>
+                        <td className="p-2">{formatMoney(row.lowestUnitCost)} – {formatMoney(row.highestUnitCost)}</td>
+                        <td className="p-2">{row.premiumToLowestPercent == null ? "Not comparable" : "+" + row.premiumToLowestPercent + "%"}</td>
+                        <td className="p-2">{row.observedLines}</td>
+                        <td className="p-2">{row.lastInvoiceNumber} · {row.lastInvoiceDate}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                  {priceHistory.rows.length > 30 && (
+                    <p className="p-2 text-xs text-slate-600">First 30 of {priceHistory.rows.length} suppliers shown.</p>
+                  )}
+                </div>
           )}
         </CardContent>
       </Card>
