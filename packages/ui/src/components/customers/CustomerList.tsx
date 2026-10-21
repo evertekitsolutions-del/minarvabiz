@@ -40,13 +40,12 @@ export function CustomerList({
   const segmentOptions: CustomerSegment[] = [
     "champion","loyal","promising","new","at_risk","lost","hibernating",
   ];
-  const visibleCustomers = React.useMemo(
-    () => customers.filter(customer =>
-      (!withDuesOnly || hasOutstandingCustomerBalance(customer)) &&
-      (segmentFilter === "all" ||
-        segments.get(customer.id)?.segment === segmentFilter)),
-    [customers, withDuesOnly, segmentFilter, segments],
-  );
+  const visibleCustomers = React.useMemo(() => {
+    const byDues = withDuesOnly
+      ? customers.filter(hasOutstandingCustomerBalance) : customers;
+    return segmentFilter === "all" ? byDues : byDues.filter(customer =>
+      segments.get(customer.id)?.segment === segmentFilter);
+  }, [customers, withDuesOnly, segmentFilter, segments]);
   const columns: Column<Customer>[] = [
     {
       key: "id",
