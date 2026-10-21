@@ -14,6 +14,7 @@ require.extensions[".ts"] = (mod, filename) => mod._compile(
 );
 const logic = require("../recurring-invoice.ts");
 const sqlite = require("../recurring-invoice-sqlite-pilot.ts");
+const { createRecurringInvoiceWorkspaceHostAdapter } = require("../recurring-invoice-workspace-host.ts");
 const initSqlJs = databaseRequire("sql.js/dist/sql-asm.js");
 const SQL = await initSqlJs();
 
@@ -455,4 +456,127 @@ test("SQLite composite FK rejects a draft from another company/branch", () => {
     ]), /FOREIGN KEY constraint/);
   }
   assert.deepEqual(readRows(db), []);
+});
+
+function authorizedHost(db, patch = {}) {
+  let enabled = true;
+  const actions = [];
+  const host = {
+    db,
+    isFeatureEnabled: () => enabled,
+    getAuthorizedScope: () => scope,
+    authorize: (action, requestedScope) => {
+      assert.deepEqual(requestedScope, scope);
+      if (!["read", "create", "manage", "stage", "approve"].includes(action))
+        throw new Error("Unsupported action");
+      actions.push(action);
+    },
+    getBusinessDate: () => "2026-02-28",
+    getCurrency: () => "INR",
+    createScheduleId: () => "trusted-host-created-id",
+    source: {
+      getSale: () => ({
+        id: "issued-invoice-1", branchId: scope.branchId,
+        customerId: "customer-1", status: "completed",
+        items: [{ productId: "annual-service", quantity: 1 }],
+      }),
+      getCustomer: (customerId) => ({ id: customerId, branchId: scope.branchId }),
+      getProduct: (productId) => ({
+        id: productId, name: "Monthly Maintenance",
+        branchId: scope.branchId, isActive: true,
+        sellingPrice: 200, costPrice: 40, stockQuantity: 20,
+        discount: 0, taxRate: 0,
+      }),
+    },
+    ...patch,
+  };
+  return { host, actions, setEnabled: (next) => { enabled = next; } };
+}
+
+test("host-only workflow creates authorised source schedule, stages and reviews due draft", async () => {
+  const db = memoryDb();
+  const h = authorizedHost(db);
+  const bridge = createRecurringInvoiceWorkspaceHostAdapter(h.host);
+  assert.equal(bridge.approveAndPost, undefined, "no invoice posting without financial adapter");
+  h.setEnabled(false);
+  await assert.rejects(bridge.refresh(), /disabled/);
+  h.setEnabled(true);
+  await bridge.create({ sourceSaleId: "issued-invoice-1",
+    firstDueDate: "2026-01-31", frequency: "monthly", interval: 1 });
+  const initial = await bridge.refresh();
+  assert.equal(initial.schedules.length, 1);
+  assert.equal(initial.schedules[0].customerId, "customer-1");
+  assert.equal(initial.schedules[0].lines[0].quantityMilli, 1000);
+  await bridge.stageDue("trusted-host-created-id", "2099-12-31");
+  const view = await bridge.refresh();
+  assert.deepEqual(view.pending.map(x => x.dueDate), [
+    "2026-01-31", "2026-02-28",
+  ], "browser-supplied future dates cannot override the trusted business date");
+  const checked = await bridge.preview(view.pending[0].id, "2099-12-31");
+  assert.equal(checked.totals.grandTotal, 200);
+  assert.equal(checked.requiresFinalCheckoutRevalidation, true);
+  assert.ok(h.actions.includes("create") && h.actions.includes("stage") &&
+    h.actions.includes("read"));
+  await bridge.setStatus("trusted-host-created-id", 1, "paused");
+  assert.equal((await bridge.refresh()).schedules[0].status, "paused");
+  await assert.rejects(bridge.preview(view.pending[0].id, "2099-12-31"), /Only active/);
+  await bridge.setStatus("trusted-host-created-id", 2, "active");
+  assert.equal((await bridge.refresh()).schedules[0].status, "active");
+  h.setEnabled(false);
+  await assert.rejects(bridge.stageDue("trusted-host-created-id", "2026-02-28"), /disabled/);
+});
+
+test("host workspace prevents action privilege escalation and unsafe partial writer configuration", async () => {
+  const db = memoryDb();
+  const h = authorizedHost(db, {
+    authorize(action) {
+      if (action === "create") throw Error("staff cannot create recurrence");
+    },
+  });
+  const bridge = createRecurringInvoiceWorkspaceHostAdapter(h.host);
+  await assert.rejects(bridge.create({ sourceSaleId: "issued-invoice-1",
+    firstDueDate: "2026-01-31", frequency: "monthly", interval: 1 }), /cannot create/);
+  assert.deepEqual(await bridge.refresh(), { schedules: [], pending: [] });
+  assert.throws(() => createRecurringInvoiceWorkspaceHostAdapter(
+    authorizedHost(db, { posting: { postFinancialInvoice: () => ({ invoiceId: "fake" }) } }).host),
+  /Partial/);
+});
+
+test("optional verified financial posting adapter invokes host approver once", async () => {
+  const db = memoryDb();
+  db.exec(`CREATE TABLE authorised_financial_sale_fixture(
+    id TEXT PRIMARY KEY,
+    org_id TEXT,company_id TEXT,branch_id TEXT,
+    recurrence_key TEXT UNIQUE,total INTEGER
+  )`);
+  let postedCount = 0;
+  const posting = {
+    getAuthenticatedApproverId: () => "trusted-supervisor",
+    postFinancialInvoice(tx, preview, key) {
+      ++postedCount;
+      const invoiceId = "genuine-invoice-1";
+      tx.exec(`INSERT INTO authorised_financial_sale_fixture
+        (id,org_id,company_id,branch_id,recurrence_key,total)
+        VALUES (?,?,?,?,?,?)`, [invoiceId, preview.organizationId,
+        preview.companyId, preview.branchId, key, preview.totals.grandTotal * 100]);
+      return { invoiceId };
+    },
+    verifyPostedInvoice(tx, invoiceId, preview, key) {
+      return tx.query(`SELECT id FROM authorised_financial_sale_fixture
+        WHERE id=? AND org_id=? AND company_id=? AND branch_id=? AND recurrence_key=?`,
+      [invoiceId, preview.organizationId, preview.companyId, preview.branchId, key]).length === 1;
+    },
+  };
+  const h = authorizedHost(db, { posting });
+  const bridge = createRecurringInvoiceWorkspaceHostAdapter(h.host);
+  await bridge.create({ sourceSaleId: "issued-invoice-1", firstDueDate: "2026-01-31",
+    frequency: "monthly", interval: 1 });
+  await bridge.stageDue("trusted-host-created-id", "2026-02-28");
+  const draft = (await bridge.refresh()).pending[0];
+  assert.deepEqual(await bridge.approveAndPost(draft.id, "2099-01-01"),
+    { invoiceId: "genuine-invoice-1" });
+  assert.deepEqual(await bridge.approveAndPost(draft.id, "2099-01-01"),
+    { invoiceId: "genuine-invoice-1" });
+  assert.equal(postedCount, 1);
+  assert.equal((await bridge.refresh()).pending.length, 1);
 });
