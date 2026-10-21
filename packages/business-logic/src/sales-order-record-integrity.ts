@@ -84,7 +84,7 @@ export function verifySalesOrderRecordIntegrity(order: SalesOrderIntent): true {
   catch { return invalid("invalid creation baseline"); }
   if (!initial || typeof initial !== "object" || Array.isArray(initial)) invalid("invalid baseline shape");
   for (const key of props) if (initial[key] !== order[key]) invalid("creation baseline scope mismatch");
-  for (const key of ["orderNumber","currency","createdAt"]) {
+  for (const key of ["orderNumber","currency","createdAt"] as const) {
     if (initial[key] !== order[key]) invalid("creation baseline identity mismatch");
   }
   if (!Array.isArray(initial.lines) || initial.lines.length < 1 ||
