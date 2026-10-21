@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import type { SalesReportRow } from "@minarvabiz/types";
-import { can, listAuthorizedCustomerOriginalGrossMargins, listAuthorizedProductOriginalGrossMargins, listAuthorizedServiceOriginalGrossMargins, buildAuthorizedCashBankFlow, buildAuthorizedAccountingDayBook, listAuthorizedInactiveStock, INVENTORY_DORMANCY_LABELS } from "@minarvabiz/business-logic";
-import type { CustomerOriginalGrossMarginRow, ProductOriginalGrossMarginRow, ServiceOriginalGrossMarginRow, CashBankFlowReport, AccountingDayBookReport, InventoryDormancyRow } from "@minarvabiz/business-logic";
+import { can, listAuthorizedCustomerOriginalGrossMargins, listAuthorizedProductOriginalGrossMargins, listAuthorizedServiceOriginalGrossMargins, buildAuthorizedCashBankFlow, buildAuthorizedAccountingDayBook, listAuthorizedInactiveStock, INVENTORY_DORMANCY_LABELS, listAuthorizedBillOriginalGrossProfit } from "@minarvabiz/business-logic";
+import type { CustomerOriginalGrossMarginRow, ProductOriginalGrossMarginRow, ServiceOriginalGrossMarginRow, CashBankFlowReport, AccountingDayBookReport, InventoryDormancyRow, BillOriginalGrossProfitReport } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
@@ -32,7 +32,7 @@ export interface TaxReconciliationView {
   from:string|null; to:string|null; periodOutputTax:number; periodInputTax:number; periodPurchaseTaxPending:number;
   outputTaxPayable:number; inputTaxCredit:number; purchaseTaxPending:number; netTaxPosition:number; reviewRequired:boolean;
 }
-type ReportTab = "sales" | "dayend" | "stock" | "receivables" | "payables" | "financial" | "tax" | "customer-profit" | "product-profit" | "service-profit" | "cash-bank-flow" | "day-book" | "dead-stock";
+type ReportTab = "sales" | "dayend" | "stock" | "receivables" | "payables" | "financial" | "tax" | "customer-profit" | "product-profit" | "service-profit" | "cash-bank-flow" | "day-book" | "dead-stock" | "bill-profit";
 
 function csvCell(value: unknown) { return `"${String(value ?? "").replace(/"/g, '""')}"`; }
 function downloadFile(name: string, text: string, type: string) {
@@ -137,7 +137,24 @@ export function ReportsPanel({
     catch (error) { dormancyError = error instanceof Error ? error.message : "Unable to read inventory inactivity"; }
   }
 
+  const mayReadBillProfits = can("accounting.view");
+  let billProfits: BillOriginalGrossProfitReport | null = null;
+  let billProfitError: string | null = null;
+  if(mayReadBillProfits){
+    try { billProfits=listAuthorizedBillOriginalGrossProfit(from,to); }
+    catch(error) { billProfitError=error instanceof Error ? error.message : "Unable to read bill-wise profit"; }
+  }
+
   const exportData = React.useMemo(() => {
+    if(tab==="bill-profit"){
+      return mayReadBillProfits && billProfits && !billProfitError
+        ? {name:"Bill Original Gross Profit",
+          headers:["Date","Invoice","Customer","Status","Revenue ex tax","Historical COGS","Original gross profit","Margin %"],
+          rows:billProfits.rows.map(row=>[row.invoiceDate,row.invoiceNumber,row.customerName,
+            row.status,row.revenueExcludingTax,row.historicalCost,
+            row.originalGrossProfit,row.marginPercent] as Array<string|number>)}
+        : {name:"Restricted Bill Profit",headers:["Status"],rows:[] as Array<Array<string|number>>};
+    }
     if (tab==="dead-stock") {
       return mayReadDormancy && !dormancyError
         ? {name:"Stock Inactivity",
@@ -215,12 +232,12 @@ export function ReportsPanel({
       moneyRow("Total sales",dayEnd.totalSales),moneyRow("Service revenue",dayEnd.serviceRevenue),moneyRow("Cost of goods",dayEnd.costOfGoods),moneyRow("Gross profit",dayEnd.grossProfit),
       moneyRow("Total expenses",dayEnd.totalExpenses),moneyRow("Net profit",dayEnd.netProfit),moneyRow("Cash received",dayEnd.cashReceived),moneyRow("Card / UPI",dayEnd.cardPayments),moneyRow("Other payments",dayEnd.otherPayments),moneyRow("Outstanding",dayEnd.outstandingAmount),
     ]};
-  },[tab,rows,stock,outstanding,payables,financial,taxReport,dayEnd,mayReadCustomerMargins,customerMargins,customerMarginError,mayReadProductMargins,productMargins,productMarginError,mayReadServiceMargins,serviceMargins,serviceMarginError,mayReadCashFlow,cashFlow,cashFlowError,mayReadDayBook,dayBook,dayBookError,mayReadDormancy,dormancyRows,dormancyError]);
+  },[tab,rows,stock,outstanding,payables,financial,taxReport,dayEnd,mayReadCustomerMargins,customerMargins,customerMarginError,mayReadProductMargins,productMargins,productMarginError,mayReadServiceMargins,serviceMargins,serviceMarginError,mayReadCashFlow,cashFlow,cashFlowError,mayReadDayBook,dayBook,dayBookError,mayReadDormancy,dormancyRows,dormancyError,mayReadBillProfits,billProfits,billProfitError]);
 
   const exportCsv=()=>downloadFile(`minarva-${tab}-report.csv`,[exportData.headers.map(csvCell).join(","),...exportData.rows.map(r=>r.map(csvCell).join(","))].join("\n"),"text/csv;charset=utf-8");
   const exportExcel=()=>downloadFile(`minarva-${tab}-report.xls`,spreadsheetXml(exportData.name,exportData.headers,exportData.rows),"application/vnd.ms-excel;charset=utf-8");
   const pdfLines=exportData.rows.map(r=>r.map(String).join(" | "));
-  const tabs: Array<[ReportTab,string]> = [["sales","Sales"],...(mayReadCustomerMargins ? [["customer-profit","Customer Margin"] as [ReportTab,string]] : []),...(mayReadProductMargins ? [["product-profit","Product Margin"] as [ReportTab,string]] : []),...(mayReadServiceMargins ? [["service-profit","Service Margin"] as [ReportTab,string]] : []),...(mayReadCashFlow ? [["cash-bank-flow","Cash / Bank Flow"] as [ReportTab,string]] : []),...(mayReadDayBook ? [["day-book","Day Book"] as [ReportTab,string]] : []),...(mayReadDormancy ? [["dead-stock","Slow / Dead Stock"] as [ReportTab,string]] : []),["dayend","Day-end"],["stock","Stock Valuation"],["receivables","Receivables"],["payables","Payables Aging"],["financial","Financial Statements"],["tax","GST / Tax"]];
+  const tabs: Array<[ReportTab,string]> = [["sales","Sales"],...(mayReadCustomerMargins ? [["customer-profit","Customer Margin"] as [ReportTab,string]] : []),...(mayReadProductMargins ? [["product-profit","Product Margin"] as [ReportTab,string]] : []),...(mayReadServiceMargins ? [["service-profit","Service Margin"] as [ReportTab,string]] : []),...(mayReadCashFlow ? [["cash-bank-flow","Cash / Bank Flow"] as [ReportTab,string]] : []),...(mayReadDayBook ? [["day-book","Day Book"] as [ReportTab,string]] : []),...(mayReadDormancy ? [["dead-stock","Slow / Dead Stock"] as [ReportTab,string]] : []),...(mayReadBillProfits ? [["bill-profit","Bill Profit"] as [ReportTab,string]] : []),["dayend","Day-end"],["stock","Stock Valuation"],["receivables","Receivables"],["payables","Payables Aging"],["financial","Financial Statements"],["tax","GST / Tax"]];
 
   return <div className="space-y-4">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -266,6 +283,37 @@ export function ReportsPanel({
               <td className="px-2 py-2 text-right">{formatMoney(row.totalCredit)}</td>
             </tr>)}
             {!dayBook?.journals.length&&<tr><td colSpan={6} className="px-2 py-5 text-center text-slate-500">No posted journal entries in this period</td></tr>}
+          </tbody></table></div>
+      </CardContent>
+    </Card>}
+
+    {tab==="bill-profit"&&mayReadBillProfits&&<Card>
+      <CardHeader><CardTitle className="text-sm font-semibold">Bill-wise original invoice gross profit</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-slate-500">Original invoice gross profit based on historical sale-line cost, tax excluded. Later returns, refunds and operating expenses are not deducted. This is not final bill-wise net profit.</p>
+        {billProfitError&&<p role="alert" className="text-sm text-rose-700">{billProfitError}</p>}
+        {billProfits&&<div className="grid gap-2 sm:grid-cols-4">
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-600">Invoices</div><div className="font-semibold">{billProfits.invoiceCount}</div></div>
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-600">Sales ex tax</div><div className="font-semibold">{formatMoney(billProfits.revenueExcludingTax)}</div></div>
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-600">Historical cost</div><div className="font-semibold">{formatMoney(billProfits.historicalCost)}</div></div>
+          <div className="rounded-lg bg-slate-50 p-3"><div className="text-xs text-slate-600">Original profit</div><div className="font-semibold">{formatMoney(billProfits.originalGrossProfit)}</div></div>
+        </div>}
+        <div className="overflow-x-auto"><table className="w-full text-sm">
+          <thead><tr className="border-b text-left text-xs uppercase text-slate-500">
+            <th className="px-2 py-2">Date</th><th className="px-2 py-2">Invoice</th>
+            <th className="px-2 py-2">Customer</th><th className="px-2 py-2 text-right">Sales ex tax</th>
+            <th className="px-2 py-2 text-right">Cost</th><th className="px-2 py-2 text-right">Gross profit</th>
+            <th className="px-2 py-2 text-right">Margin</th>
+          </tr></thead><tbody>{billProfits?.rows.map(row=><tr key={row.saleId} className="border-b border-slate-100">
+            <td className="px-2 py-2">{row.invoiceDate}</td>
+            <td className="px-2 py-2">{row.invoiceNumber}</td>
+            <td className="px-2 py-2">{row.customerName}</td>
+            <td className="px-2 py-2 text-right">{formatMoney(row.revenueExcludingTax)}</td>
+            <td className="px-2 py-2 text-right">{formatMoney(row.historicalCost)}</td>
+            <td className="px-2 py-2 text-right font-semibold">{formatMoney(row.originalGrossProfit)}</td>
+            <td className="px-2 py-2 text-right">{row.marginPercent.toFixed(2)}%</td>
+          </tr>)}
+          {!billProfits?.rows.length&&<tr><td colSpan={7} className="px-2 py-5 text-center text-slate-500">No posted invoices in this date range</td></tr>}
           </tbody></table></div>
       </CardContent>
     </Card>}

@@ -178,3 +178,5 @@ export * from "./accounting-day-book";
 export * from "./sale-delivery-note";
 // CRM-014 consent-aware manual payment reminder composer; never auto-sends.
 export * from "./customer-dues-reminder";
+// FIN-026 bill-wise original posted gross profit.
+export * from "./bill-original-gross-profit";
