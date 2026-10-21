@@ -212,3 +212,6 @@ export * from "./loan-repayment-plan";
 
 // HR-006 staff leave calendar/CSV request draft (read-only).
 export * from "./staff-leave-preview";
+
+// Open Mercato MIT GTIN checksum reuse and nonmutating barcode checker.
+export * from "./gs1-barcode-assistant";
