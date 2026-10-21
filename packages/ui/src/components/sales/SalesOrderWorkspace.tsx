@@ -19,11 +19,14 @@ export interface SalesOrderWorkspaceProduct {
   readonly sku?: string | null;
   readonly unitPriceMinor: number;
 }
-export interface SalesOrderWorkspaceDraft {
-  readonly customerId: string;
+export interface SalesOrderWorkspaceDraftLine {
   readonly productId: string;
   readonly quantityMilli: number;
   readonly unitPriceMinor: number;
+}
+export interface SalesOrderWorkspaceDraft {
+  readonly customerId: string;
+  readonly lines: readonly SalesOrderWorkspaceDraftLine[];
   readonly note: string | null;
 }
 export interface SalesOrderWorkspaceProps {
@@ -61,6 +64,7 @@ export function SalesOrderWorkspace({
   const [customerId, setCustomerId] = React.useState("");
   const [productId, setProductId] = React.useState("");
   const [quantity, setQuantity] = React.useState("1");
+  const [draftLines, setDraftLines] = React.useState<SalesOrderWorkspaceDraftLine[]>([]);
   const [note, setNote] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
@@ -78,25 +82,42 @@ export function SalesOrderWorkspace({
     });
   }, [orders, customers, search, status]);
 
-  async function createDraft(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function addLine() {
     if (!canCreate || busy) return;
     const product = products.find((row) => row.id === productId);
     const qty = Number(quantity);
     const quantityMilli = qty * 1000;
-    if (!customerId || !product || !Number.isSafeInteger(quantityMilli) ||
+    if (!product || !Number.isSafeInteger(quantityMilli) ||
       quantityMilli <= 0 || !Number.isSafeInteger(product.unitPriceMinor) ||
       product.unitPriceMinor < 0) {
-      setNotice("Select a customer and product with a valid price and positive quantity (up to 3 decimals).");
+      setNotice("Select a product with a valid price and positive quantity (up to 3 decimals).");
+      return;
+    }
+    if (draftLines.length >= 100) {
+      setNotice("A sales order cannot contain more than 100 lines.");
+      return;
+    }
+    // The authorized host recalculates exact order totals and validates
+    // identity/provenance. UI rows are only a draft request.
+    setDraftLines((lines) => [...lines, {
+      productId: product.id, quantityMilli, unitPriceMinor: product.unitPriceMinor,
+    }]);
+    setQuantity("1"); setProductId(""); setNotice(null);
+  }
+  async function createDraft(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canCreate || busy) return;
+    if (!customerId || draftLines.length === 0) {
+      setNotice("Select a customer and add at least one product to the order.");
       return;
     }
     setBusy(true); setNotice(null);
     try {
       await onCreateDraft!({
-        customerId, productId: product.id, quantityMilli,
-        unitPriceMinor: product.unitPriceMinor, note: note.trim() || null,
+        customerId, lines: draftLines.map((line) => ({ ...line })),
+        note: note.trim() || null,
       });
-      setQuantity("1"); setNote("");
+      setDraftLines([]); setQuantity("1"); setNote("");
       setNotice("Draft submitted. Confirm it appears in the order list before continuing.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Sales-order creation was rejected");
@@ -136,8 +157,9 @@ export function SalesOrderWorkspace({
         </div>
         <div className="text-sm text-slate-500">{visibleOrders.length} orders</div>
       </header>
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
       <form aria-label="Create sales-order draft" onSubmit={(event) => void createDraft(event)}
-        className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-5">
+        className="grid gap-3 md:grid-cols-5">
         <label className="block text-sm font-medium text-slate-700">
           Customer
           <select aria-label="Customer" required disabled={!canCreate || busy}
@@ -174,10 +196,40 @@ export function SalesOrderWorkspace({
             onChange={(event) => setNote(event.target.value)}
             className="mt-1 w-full rounded-md border border-slate-300 p-2"/>
         </label>
-        <div className="flex items-end">
-          <Button type="submit" disabled={!canCreate || busy}>Create draft</Button>
+        <div className="flex flex-wrap items-end gap-2">
+          <Button type="button" variant="outline" disabled={!canCreate || busy || draftLines.length >= 100}
+            onClick={addLine}>Add item</Button>
+          <Button type="submit" disabled={!canCreate || busy || draftLines.length === 0}>Create draft</Button>
         </div>
       </form>
+      {draftLines.length > 0 && (
+        <div aria-label="Staged sales-order lines" className="space-y-2 border-t border-slate-100 pt-3">
+          <p className="text-sm font-medium text-slate-700">
+            {draftLines.length} staged line{draftLines.length === 1 ? "" : "s"}
+          </p>
+          {draftLines.map((line, index) => {
+            const product = products.find((p) => p.id === line.productId);
+            return (
+              <div key={index} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span>{product?.name ?? line.productId} × {quantityText(line.quantityMilli)}</span>
+                <div className="flex items-center gap-2">
+                  <span className="tabular-nums">
+                    {(line.quantityMilli * line.unitPriceMinor / 1000 / 100).toFixed(2)}
+                  </span>
+                  <Button type="button" size="sm" variant="ghost" disabled={busy}
+                    onClick={() => setDraftLines((lines) => lines.filter((_, i) => i !== index))}>
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+          <p className="text-xs text-slate-500">
+            Preview excludes tax and discounts; the verified domain writer calculates final totals.
+          </p>
+        </div>
+      )}
+      </div>
       {notice && <p role="status" className="rounded-md bg-slate-100 p-3 text-sm text-slate-700">{notice}</p>}
       <div className="flex flex-wrap gap-3">
         <input aria-label="Search sales orders" placeholder="Order, customer or item" value={search}

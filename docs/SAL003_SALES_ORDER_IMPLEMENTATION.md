@@ -38,3 +38,6 @@ The isolated SQLite create/amend adapters now fail closed without a trusted host
 
 ## Scoped CSV export
 The pure `exportSalesOrdersCsv` generates line-level CSV for authorized Sales Orders, preserving integer minor currency units and milli quantities and neutralizing spreadsheet formula payloads. Mixed-tenant/company/branch/warehouse selections fail closed. This is exported from the shared business package, but no shipping download flow is mounted until a trusted host supplies scoped rows and permissions.
+
+## Multi-line sales-order draft composer
+The shared UI now stages up to 100 independent product rows per draft, allows removing individual rows, and submits one complete intent rather than one product at a time. The staged-money estimate is explicitly non-authoritative; backend must resolve product versions, discounts/tax and customer/warehouse rights before accepting any draft. No app mounts or enables the component yet.
