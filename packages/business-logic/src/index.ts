@@ -203,3 +203,6 @@ export * from "./fixed-asset-depreciation";
 
 // FIN-020 manual budget vs actual from posted account journals; preview only.
 export * from "./account-budget-variance";
+
+// INV-023 read-only goods receipt landed cost allocation proposal.
+export * from "./landed-cost-preview";
