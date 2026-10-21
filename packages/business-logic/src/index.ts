@@ -218,3 +218,6 @@ export * from "./localized-rfq-input";
 
 // Open Mercato MIT GS1 barcode checker and generator; non-mutating.
 export * from "./gs1-barcode-assistant";
+
+// INV-006 local-first batch expiry metadata and date alert register; no live WMS stock write.
+export * from "./batch-expiry-register";
