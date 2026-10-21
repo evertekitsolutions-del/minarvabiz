@@ -23,3 +23,6 @@ The existing `orders.ts` and `orders-store.ts` implement tailoring/services; pro
 
 - Offline schema and staged PostgreSQL schema reserve one unique (organization, invoice_id) binding. Even if two callers submit the same committed invoice concurrently, one link is rejected transactionally.
 - The SQLite adapter requires a **host-owned verification callback** for any invoice-link transition, including retries; a renderer can never substitute an arbitrary sale description for a committed invoice proof. The callback must query the authoritative local sale record and confirm matching amount/party/scope before returning true. The current draft does not yet supply this callback or activate conversion.
+
+## Draft correction (SAL-003)
+`planSalesOrderDraftAmend` and `amendSalesOrderSqlite` support safe replacement of line quantities/prices/tax/discount, note and due date **only while draft**. Arithmetic is fully recalculated and persisted by one SQLite CAS. Wrong scope, stale versions, invalid quantities, altered idempotency-key payloads and confirmed-order edits fail closed. No issued sale or journal row is modified.

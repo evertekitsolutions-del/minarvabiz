@@ -9,7 +9,7 @@ require.extensions[".ts"] = (mod, filename) => mod._compile(
     fileName: filename, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText, filename,
 );
-const { planSalesOrderCreate, planSalesOrderTransition } = require("../sales-order-intent.ts");
+const { planSalesOrderCreate, planSalesOrderTransition, planSalesOrderDraftAmend } = require("../sales-order-intent.ts");
 const uuid = (i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`;
 const auth = { organizationId: uuid(1), companyId: uuid(2), branchId: uuid(3), warehouseId: uuid(4), canManageSalesOrders: true };
 const request = (extra = {}) => ({
@@ -127,4 +127,33 @@ test("archived orders, backward timestamps, exhausted revisions and malformed id
   assert.throws(() => planSalesOrderTransition({ ...a, version: Number.MAX_SAFE_INTEGER },
     action("confirm", 10, Number.MAX_SAFE_INTEGER), auth, true), /exhausted/);
   assert.throws(() => planSalesOrderCreate(request({ operationId: "" }), auth, [], true), /UUID/);
+});
+
+test("draft amendment recomputes money and is strictly idempotent",()=>{
+  const source=draft();
+  const input={operationId:uuid(70),expectedVersion:1,
+    occurredAt:"2026-10-21T07:02:00.000Z",
+    lines:[{...request().lines[0], quantityMilli:3000}],
+    note:"Delivery after payment", dueDate:"2026-11-01"};
+  assert.throws(()=>planSalesOrderDraftAmend(source,input,auth),/disabled/);
+  const edited=planSalesOrderDraftAmend(source,input,auth,true);
+  assert.equal(edited.disposition,"update");
+  assert.equal(source.version,1);
+  assert.equal(edited.order.version,2);
+  assert.equal(edited.order.totalMinor,3680);
+  assert.equal(edited.order.dueDate,"2026-11-01");
+  assert.equal(planSalesOrderDraftAmend(edited.order,input,auth,true).disposition,"replay");
+  assert.throws(()=>planSalesOrderDraftAmend(edited.order,{...input,note:"Changed"},auth,true),/payload conflict/);
+  assert.throws(()=>planSalesOrderDraftAmend(edited.order,{...input,operationId:uuid(71)},auth,true),/Stale/);
+  assert.throws(()=>planSalesOrderDraftAmend(edited.order,{...input,operationId:uuid(71),expectedVersion:2,
+    lines:[{...input.lines[0],quantityMilli:0}]},auth,true),/positive/);
+});
+test("draft edits cannot change authorization or mutate confirmed orders",()=>{
+  const source=draft();
+  const input={operationId:uuid(73),expectedVersion:1,occurredAt:"2026-10-21T07:02:00.000Z",
+    lines:[{...request().lines[0]}]};
+  assert.throws(()=>planSalesOrderDraftAmend(source,input,{...auth,warehouseId:uuid(30)},true),/scope mismatch/);
+  assert.throws(()=>planSalesOrderDraftAmend({...source,deletedAt:source.createdAt},input,auth,true),/Only an active draft/);
+  assert.throws(()=>planSalesOrderDraftAmend({...source,status:"confirmed"},input,auth,true),/Only an active draft/);
+  assert.throws(()=>planSalesOrderDraftAmend(source,{...input,occurredAt:"2026-10-21T06:00:00.000Z"},auth,true),/backwards/);
 });

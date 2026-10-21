@@ -71,6 +71,17 @@ export interface SalesOrderCreateRequest extends SalesOrderScope {
   readonly dueDate?: string | null;
   readonly createdAt: string;
 }
+
+/** Draft-only, version-checked edit. Customer and inventory scope are immutable. */
+export interface SalesOrderDraftAmendRequest {
+  readonly operationId: string;
+  readonly expectedVersion: number;
+  readonly occurredAt: string;
+  readonly lines: readonly SalesOrderLineInput[];
+  readonly note?: string | null;
+  readonly dueDate?: string | null;
+}
+
 export interface SalesOrderTransitionRequest {
   readonly operationId: string;
   readonly expectedVersion: number;
@@ -298,5 +309,48 @@ export function planSalesOrderTransition(
   return { disposition: "update", order: {
     ...order, status, invoiceId, version: order.version + 1,
     updatedAt: occurredAt, lastOperationId: operationId,
+  } };
+}
+
+/**
+ * Recalculate an existing draft from a replacement line set (never a delta).
+ * Pure and scoped; the trusted SQLite/cloud adapter must commit the CAS.
+ */
+export function planSalesOrderDraftAmend(
+  order: SalesOrderIntent,
+  request: SalesOrderDraftAmendRequest,
+  auth: SalesOrderAuthorizedScope,
+  enabled = false,
+): { disposition: "update" | "replay"; order: SalesOrderIntent } {
+  gate(enabled);
+  scope(order, auth);
+  if (order.deletedAt || order.status !== "draft") {
+    throw new Error("Only an active draft sales order can be edited");
+  }
+  const operationId = uuid(request.operationId, "operation");
+  const occurredAt = iso(request.occurredAt, "amendment");
+  const totals = normalizeLines(request.lines);
+  const note = nullableNote(request.note);
+  const dueDate = date(request.dueDate);
+  if (operationId === order.lastOperationId) {
+    if (order.updatedAt === occurredAt && order.note === note &&
+      order.dueDate === dueDate && JSON.stringify(order.lines) === JSON.stringify(totals.lines) &&
+      order.subtotalMinor === totals.subtotalMinor && order.discountMinor === totals.discountMinor &&
+      order.taxMinor === totals.taxMinor && order.totalMinor === totals.totalMinor) {
+      return { disposition: "replay", order };
+    }
+    throw new Error("Sales-order amendment idempotency-key payload conflict");
+  }
+  if (!Number.isSafeInteger(request.expectedVersion) ||
+    request.expectedVersion !== order.version) {
+    throw new Error("Stale sales-order version");
+  }
+  if (occurredAt < order.updatedAt) {
+    throw new Error("Sales-order amendment timestamp moved backwards");
+  }
+  if (order.version >= Number.MAX_SAFE_INTEGER) throw new Error("Sales-order version exhausted");
+  return { disposition: "update", order: {
+    ...order, ...totals, note, dueDate,
+    version: order.version + 1, updatedAt: occurredAt, lastOperationId: operationId,
   } };
 }

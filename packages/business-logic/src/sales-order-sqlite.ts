@@ -6,8 +6,10 @@
 import {
   planSalesOrderCreate,
   planSalesOrderTransition,
+  planSalesOrderDraftAmend,
   type SalesOrderAuthorizedScope,
   type SalesOrderCreateRequest,
+  type SalesOrderDraftAmendRequest,
   type SalesOrderIntent,
   type SalesOrderTransitionRequest,
 } from "./sales-order-intent";
@@ -142,4 +144,34 @@ export function listSalesOrdersSqlite(
   return db.query(`SELECT * FROM ${table} WHERE org_id = ? AND company_id = ?
     AND branch_id = ? AND warehouse_id = ? ORDER BY order_number, id`,
     [auth.organizationId, auth.companyId, auth.branchId, auth.warehouseId]).map(parse);
+}
+
+/**
+ * Atomic replacement of draft lines and totals. Invoiced/confirmed orders
+ * are immutable: correction must go through approved downstream workflows.
+ */
+export function amendSalesOrderSqlite(
+  db: SalesOrderSqliteDb,
+  orderId: string,
+  request: SalesOrderDraftAmendRequest,
+  auth: SalesOrderAuthorizedScope,
+  enabled = false,
+): { disposition: "update" | "replay"; order: SalesOrderIntent } {
+  allowed(auth, enabled);
+  return db.transaction(() => {
+    const rows = db.query(`SELECT * FROM ${table} WHERE org_id = ? AND id = ?`,
+      [auth.organizationId, orderId]);
+    if (rows.length !== 1) throw new Error("Retail sales order not found or not authorized");
+    const current = parse(rows[0]);
+    const plan = planSalesOrderDraftAmend(current, request, auth, enabled);
+    if (plan.disposition === "replay") return plan;
+    const next = plan.order;
+    db.exec(`UPDATE ${table} SET version = ?, record_json = ?
+      WHERE org_id = ? AND id = ? AND company_id = ? AND branch_id = ?
+      AND warehouse_id = ? AND version = ? AND status = 'draft'`,
+      [next.version, JSON.stringify(next), next.organizationId, next.id,
+        next.companyId, next.branchId, next.warehouseId, current.version]);
+    if (updatedRowCount(db) !== 1) throw new Error("Retail sales-order optimistic revision conflict");
+    return plan;
+  });
 }

@@ -124,3 +124,23 @@ test("an invoice-linked retry still requires trusted verifier and cannot bypass 
   assert.throws(()=>adapter.transitionSalesOrderSqlite(conn,uuid(5),t,auth,true,()=>false),/verification failed/);
   assert.equal(adapter.transitionSalesOrderSqlite(conn,uuid(5),t,auth,true,()=>true).disposition,"replay");
 });
+
+test("SQLite draft amendment CAS persists replacement totals and survives retry",()=>{
+  const conn=db();adapter.createSalesOrderSqlite(conn,orderRequest(),auth,true);
+  const original=adapter.listSalesOrdersSqlite(conn,auth,true)[0];
+  const input={operationId:uuid(73),expectedVersion:1,occurredAt:"2026-10-21T08:01:00.000Z",
+    lines:[{...orderRequest().lines[0],quantityMilli:3000}],note:"Restock",
+    dueDate:"2026-11-06"};
+  const changed=adapter.amendSalesOrderSqlite(conn,uuid(5),input,auth,true);
+  assert.equal(changed.disposition,"update");
+  assert.equal(changed.order.totalMinor,1500);
+  assert.equal(original.totalMinor,1000);
+  assert.equal(adapter.amendSalesOrderSqlite(conn,uuid(5),input,auth,true).disposition,"replay");
+  assert.throws(()=>adapter.amendSalesOrderSqlite(conn,uuid(5),{...input,operationId:uuid(74)},auth,true),/Stale/);
+  assert.throws(()=>adapter.amendSalesOrderSqlite(conn,uuid(5),{...input,operationId:uuid(74),
+    expectedVersion:2,lines:[{...orderRequest().lines[0],quantityMilli:0}]},auth,true),/positive/);
+  assert.equal(adapter.listSalesOrdersSqlite(conn,auth,true)[0].totalMinor,1500);
+  adapter.transitionSalesOrderSqlite(conn,uuid(5),txn(75,"confirm",2),auth,true);
+  assert.throws(()=>adapter.amendSalesOrderSqlite(conn,uuid(5),{...input,
+    operationId:uuid(76),expectedVersion:3},auth,true),/Only an active draft/);
+});
