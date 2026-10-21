@@ -52,6 +52,9 @@ export function quoteInclusiveMrpUnitPrice(
     if (total <= mrpMinor) low = mid;
     else high = mid - 1;
   }
+  if (mrpMinor > 0 && low === 0) {
+    throw new Error("Inclusive MRP is too small to represent a positive exclusive unit price");
+  }
   const base = fromMinorUnits(low);
   const charged = calculateLineItem({
     quantity: 1, unitPrice: base, taxRate: taxRatePercent,
