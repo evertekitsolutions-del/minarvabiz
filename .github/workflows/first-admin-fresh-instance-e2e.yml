@@ -17,6 +17,8 @@ on:
       - "apps/license-admin/package.json"
       - "scripts/replay-supabase-migrations-fresh.mjs"
       - "scripts/ubp02-profile-schema-e2e.mjs"
+      - "scripts/plt005-financial-device-authority-e2e.mjs"
+      - "scripts/plt005-financial-device-authority-e2e.sql"
       - "scripts/attendance-authority-e2e.*"
       - "scripts/hr-roster-authority-e2e.*"
       - "scripts/hr-roster-events-e2e.*"
@@ -67,6 +69,8 @@ jobs:
           node scripts/replay-supabase-migrations-fresh.mjs
       - name: Verify UBP-02a organization and product schema in isolated Postgres
         run: node scripts/ubp02-profile-schema-e2e.mjs
+      - name: Verify PLT-005 financial device and branch admin security
+        run: node scripts/plt005-financial-device-authority-e2e.mjs
       - name: Verify UBP-05e dimensional atomic sale RPC in isolated Postgres
         run: node scripts/ubp05e-dimension-rpc-fresh-e2e.mjs
       - name: Verify attendance authority, replay, conflicts and tenant RBAC
