@@ -197,3 +197,6 @@ export * from "./supplier-posted-cost-comparison";
 
 // PUR-002 supplier RFQ draft preview, no dispatch or postings.
 export * from "./rfq-draft-preview";
+
+// FIN-020 manual budget vs actual comparison of posted/void accounting journals.
+export * from "./account-budget-variance";
