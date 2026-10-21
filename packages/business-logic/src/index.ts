@@ -148,3 +148,7 @@ export * from "./commerce-tier-drafts";
 export * from "./commerce-tier-quote-draft";
 
 export { parseServiceOrderPriceDraft, validateMoneyAmountInput } from "./service-order-price-draft";
+
+// SAL-007: draft-only recurrence planner and gated, isolated SQLite staging.
+export * from "./recurring-invoice";
+export * from "./recurring-invoice-sqlite-pilot";
