@@ -209,3 +209,6 @@ export * from "./landed-cost-preview";
 
 // FIN-019 fixed-rate loan amortization and EMI preview without postings.
 export * from "./loan-repayment-plan";
+
+// HR-006 staff leave calendar/CSV request draft (read-only).
+export * from "./staff-leave-preview";
