@@ -6,6 +6,7 @@ import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "./format";
 import { hasOutstandingCustomerBalance } from "./customer-dues-filter";
+import { listAuthorizedCustomerSegments, CUSTOMER_SEGMENT_LABELS, type CustomerSegment } from "@minarvabiz/business-logic";
 
 export function CustomerList({
   customers,
@@ -28,10 +29,23 @@ export function CustomerList({
 }) {
   const [q, setQ] = React.useState("");
   const [withDuesOnly, setWithDuesOnly] = React.useState(false);
-  const visibleCustomers = React.useMemo(
-    () => withDuesOnly ? customers.filter(hasOutstandingCustomerBalance) : customers,
-    [customers, withDuesOnly],
-  );
+  const [segmentFilter, setSegmentFilter] = React.useState<CustomerSegment | "all">("all");
+  const segments = React.useMemo(() => {
+    try {
+      return new Map(listAuthorizedCustomerSegments().map(row => [row.customerId, row] as const));
+    } catch {
+      return new Map<string, ReturnType<typeof listAuthorizedCustomerSegments>[number]>();
+    }
+  }, [customers]);
+  const segmentOptions: CustomerSegment[] = [
+    "champion","loyal","promising","new","at_risk","lost","hibernating",
+  ];
+  const visibleCustomers = React.useMemo(() => {
+    const byDues = withDuesOnly
+      ? customers.filter(hasOutstandingCustomerBalance) : customers;
+    return segmentFilter === "all" ? byDues : byDues.filter(customer =>
+      segments.get(customer.id)?.segment === segmentFilter);
+  }, [customers, withDuesOnly, segmentFilter, segments]);
   const columns: Column<Customer>[] = [
     {
       key: "id",
@@ -54,6 +68,17 @@ export function CustomerList({
           {r.phone && <div className="text-xs text-slate-500">{r.phone}</div>}
         </div>
       ),
+    },
+    {
+      key: "segment",
+      header: "Segment",
+      render: (r) => {
+        const segment = segments.get(r.id);
+        if (!segment) return "—";
+        return <span className="text-xs font-medium text-slate-700" title={segment.churnRisk + " churn risk"}>
+          {CUSTOMER_SEGMENT_LABELS[segment.segment]}
+        </span>;
+      },
     },
     { key: "email", header: "Email", render: (r) => r.email || "—" },
     {
@@ -99,7 +124,21 @@ export function CustomerList({
           <input type="checkbox" className="size-4 accent-indigo-600" checked={withDuesOnly} onChange={(event) => setWithDuesOnly(event.target.checked)} />
           Outstanding balance only
         </label>
-        <Button size="sm" variant="outline" onClick={() => { setQ(""); setWithDuesOnly(false); onSearch?.(""); }}>Clear filters</Button>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          Customer segment
+          <select
+            className="h-9 rounded border border-slate-200 bg-white px-2 text-sm"
+            aria-label="Customer segment"
+            value={segmentFilter}
+            onChange={(event) => setSegmentFilter(event.target.value as CustomerSegment | "all")}
+          >
+            <option value="all">All segments</option>
+            {segmentOptions.map(segment => (
+              <option key={segment} value={segment}>{CUSTOMER_SEGMENT_LABELS[segment]}</option>
+            ))}
+          </select>
+        </label>
+        <Button size="sm" variant="outline" onClick={() => { setQ(""); setWithDuesOnly(false); setSegmentFilter("all"); onSearch?.(""); }}>Clear filters</Button>
       </div>
       <DataTable columns={columns} rows={visibleCustomers} onRowClick={onSelect} emptyMessage={withDuesOnly ? "No customers with outstanding balances match this search" : "No customers match this search"} />
     </div>

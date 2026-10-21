@@ -166,3 +166,5 @@ export * from "./inclusive-mrp";
 export * from "./product-original-gross-margin";
 // FIN-027 service-type delivered direct-cost margin (not statutory P&L).
 export * from "./service-original-gross-margin";
+// CRM-007 scoped customer RFM segment list.
+export * from "./customer-segments-report";
