@@ -1,11 +1,17 @@
 -- SAL-007: SOURCE-ONLY staging primitives, NOT a production deployment approval.
 -- No authenticated/anon SQL access or RPC is granted. Commercial activation
 -- requires authenticated host ownership, immutable invoice writer, RLS review.
+-- Planner keys are opaque, stable `scheduleId:sequence` strings (max 132+).
+-- A draft's posted_invoice_id remains UUID to reference a real financial sale.
+-- Source and schedule identity constraints are validated by a future trusted RPC.
 CREATE TABLE IF NOT EXISTS public.recurring_invoice_schedule_staging (
   org_id uuid NOT NULL,
   company_id uuid NOT NULL,
   branch_id uuid NOT NULL,
-  id uuid NOT NULL,
+  id text NOT NULL CHECK (
+    length(id) BETWEEN 1 AND 128 AND id = btrim(id)
+    AND id !~ '[[:cntrl:]]'
+  ),
   customer_id uuid NOT NULL,
   source_sale_id uuid NOT NULL,
   status text NOT NULL CHECK (status IN ('active','paused','cancelled')),
@@ -21,8 +27,11 @@ CREATE TABLE IF NOT EXISTS public.recurring_invoice_draft_staging (
   org_id uuid NOT NULL,
   company_id uuid NOT NULL,
   branch_id uuid NOT NULL,
-  id uuid NOT NULL,
-  schedule_id uuid NOT NULL,
+  id text NOT NULL CHECK (
+    length(id) BETWEEN 1 AND 261 AND id = btrim(id)
+    AND id !~ '[[:cntrl:]]'
+  ),
+  schedule_id text NOT NULL,
   sequence integer NOT NULL CHECK (sequence > 0),
   due_date date NOT NULL,
   status text NOT NULL DEFAULT 'pending_review'
