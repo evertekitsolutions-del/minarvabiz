@@ -84,6 +84,28 @@ test("both billing surfaces invoke manual MRP editor; no separate posting path",
   assert.match(pos, /<InclusiveMrpEditor/);
   assert.match(normal, /unitPrice: quote\.exclusiveUnitPrice/);
   assert.match(pos, /unitPrice: quote\.exclusiveUnitPrice/);
-  assert.match(editor, /quoteInclusiveMrpUnitPrice\(Number\(input\), taxRate\)/);
+  assert.match(editor, /quoteInclusiveMrpUnitPrice\(Number\(input\), taxRate, line\.quantity\)/);
   assert.doesNotMatch(editor, /createSale|remoteCreateSale|postFinancialInvoice/);
+});
+
+test("whole-line tax rounding also never exceeds inclusive MRP for quantity", () => {
+  for (const quantity of [0.001, 0.25, 1.001, 2.5, 5, 10, 25]) {
+    for (const rate of [0, 5, 12, 18, 28]) {
+      for (const mrp of [1, 10, 99.99, 118]) {
+        const q = quoteInclusiveMrpUnitPrice(mrp, rate, quantity);
+        const totals = calculateCartTotals([{
+          productId: "product", quantity,
+          unitPrice: q.exclusiveUnitPrice,
+          taxRate: rate, discountPercent: 0,
+        }]);
+        assert.ok(totals.grandTotal <= q.maxInclusiveLineTotal,
+          `overcharge: qty=${quantity}, tax=${rate}, mrp=${mrp}, actual=${totals.grandTotal}`);
+        assert.equal(totals.grandTotal, q.effectiveInclusiveLineTotal);
+        assert.ok(q.effectiveInclusiveUnitPrice <= mrp);
+      }
+    }
+  }
+  for (const quantity of [0, -1, NaN, Infinity, 1.0001]) {
+    assert.throws(() => quoteInclusiveMrpUnitPrice(118, 18, quantity));
+  }
 });
