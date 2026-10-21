@@ -17,6 +17,7 @@ function invoke(packages, mutatePolicy = (value) => value) {
     const policyPath = path.join(root, "security", "dependency-license-policy.json");
     mkdirSync(path.dirname(policyPath), { recursive: true });
     writeFileSync(policyPath, JSON.stringify(mutatePolicy(structuredClone(policy))));
+    mkdirSync(path.join(root, "node_modules", ".pnpm"), { recursive: true });
     for (let i = 0; i < packages.length; i += 1) {
       const item = packages[i];
       const packagePath = path.join(
