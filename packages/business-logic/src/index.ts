@@ -178,3 +178,5 @@ export * from "./accounting-day-book";
 export * from "./sale-delivery-note";
 // CRM-014 consent-aware manual payment reminder composer; never auto-sends.
 export * from "./customer-dues-reminder";
+// INV-018 physical count CSV worksheet (read-only stock snapshot).
+export * from "./inventory-count-worksheet";

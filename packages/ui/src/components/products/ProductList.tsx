@@ -7,6 +7,7 @@ import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
+import { can, buildAuthorizedStockCountWorksheet } from "@minarvabiz/business-logic";
 
 export function ProductList({
   products,
@@ -46,6 +47,27 @@ export function ProductList({
   const [archiveTarget, setArchiveTarget] = React.useState<Product | null>(null);
   const [archiveReason, setArchiveReason] = React.useState("");
   const [archiveError, setArchiveError] = React.useState<string | null>(null);
+  const [countSheetError, setCountSheetError] = React.useState<string | null>(null);
+
+  function exportCountSheet() {
+    setCountSheetError(null);
+    try {
+      const report = buildAuthorizedStockCountWorksheet();
+      const blob = new Blob(["\uFEFF", report.csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "minarvabiz-stock-count-" + report.snapshotAt.slice(0,10) + ".csv";
+      document.body.appendChild(anchor);
+      try { anchor.click(); }
+      finally {
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (error) {
+      setCountSheetError(error instanceof Error ? error.message : "Unable to export stock count sheet");
+    }
+  }
   const catMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
 
   const columns: Column<Product>[] = [
@@ -155,10 +177,13 @@ export function ProductList({
           <Button variant={lowStockOnly ? "primary" : "outline"} onClick={toggleLowStock}>
             Low stock
           </Button>
+          {can("inventory.adjust") && <Button variant="outline" onClick={exportCountSheet}>Export count sheet</Button>}
           {onAddCategory && <Button variant="outline" onClick={onAddCategory}>+ Category</Button>}
           <Button onClick={onAdd}>+ Add Product</Button>
         </div>
       </div>
+      {countSheetError && <p role="alert" className="text-sm text-rose-700">{countSheetError}</p>}
+      <p className="text-xs text-slate-500">Count sheet CSV is a read-only stock snapshot. Fill in the actual count on site; use Stock adjustment to reconcile differences after approval.</p>
       <DataTable columns={columns} rows={products.filter((product) => !status || (status === "active" ? product.isActive : !product.isActive))} onRowClick={onSelect} emptyMessage="No products found" />
       <Modal
         open={Boolean(archiveTarget)}
