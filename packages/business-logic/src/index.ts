@@ -162,3 +162,5 @@ export * from "./invoice-profit-authorized";
 export * from "./customer-original-gross-margin";
 // SAL-015 manual inclusive-MRP conversion into the existing exclusive-tax checkout.
 export * from "./inclusive-mrp";
+// CRM-007 existing RFM segmentation across scoped POS and delivered service orders.
+export * from "./customer-segments-report";
