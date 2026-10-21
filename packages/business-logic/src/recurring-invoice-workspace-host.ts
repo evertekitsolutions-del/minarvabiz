@@ -58,7 +58,7 @@ export interface RecurringInvoiceWorkspaceHostAdapter {
   readonly preview: (
     pendingDraftId: string, asOfDate: string,
   ) => Promise<RecurringInvoiceCartPreview>;
-  readonly approveAndPost?: (
+  approveAndPost?: (
     pendingDraftId: string, asOfDate: string,
   ) => Promise<{ invoiceId: string }>;
 }
