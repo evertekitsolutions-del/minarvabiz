@@ -14,6 +14,7 @@ import {
   type SalesOrderTransitionRequest,
 } from "./sales-order-intent";
 import { verifySalesOrderRecordIntegrity } from "./sales-order-record-integrity";
+import { buildSalesOrderCheckoutCommand, type SalesOrderCheckoutCommand } from "./sales-order-checkout-plan";
 
 /** Trusted host callback: must confirm customer, product and warehouse masters. */
 export type VerifySalesOrderReferences = (db: SalesOrderSqliteDb, order: SalesOrderIntent) => true;
@@ -316,6 +317,7 @@ export interface SalesOrderFinancialReceipt {
 export interface SalesOrderCheckoutHost {
   readonly commitFinancialSale: (
     db: SalesOrderSqliteDb, order: SalesOrderIntent, operationId: string,
+    command: SalesOrderCheckoutCommand,
   ) => void;
   readonly readCommittedInvoice: (
     db: SalesOrderSqliteDb, operationId: string,
@@ -365,7 +367,8 @@ export function checkoutSalesOrderSqlite(
           currency: current.currency, totalMinor: current.totalMinor,
         },
       }, auth, enabled);
-      const callbackResult: unknown = host.commitFinancialSale(db, current, key);
+      const command = buildSalesOrderCheckoutCommand(current, key);
+      const callbackResult: unknown = host.commitFinancialSale(db, current, key, command);
       if (callbackResult !== undefined) {
         throw new Error("Financial writer must be synchronous and return no value");
       }

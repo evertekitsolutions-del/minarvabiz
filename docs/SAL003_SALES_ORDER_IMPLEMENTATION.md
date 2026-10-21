@@ -74,3 +74,6 @@ Backup export now reads both order rows and pending local events inside the **sa
 
 ## Shared draft-edit and scoped export presentation
 The reusable SalesOrderWorkspace now permits host-gated edit of **draft-only** line quantities/rows, note and due date with immutable customer ID; the edit callback receives the persisted order including its CAS revision, and the trusted host must reconcile line IDs/prices/tax and authorize the edit before committing. An optional Export selected callback passes visible rows to a host that must reauthorize scope and produce the downloadable CSV. No untrusted browser/renderer direct financial writes or automatic exports are enabled; all callbacks remain optional and no shipping app is mounted yet.
+
+## Exact checkout stock-debit plan
+`buildSalesOrderCheckoutCommand` is a pure immutable command created immediately before privileged invoice commit. Repeated product IDs (including multiple dimensional cuts) are aggregated into ONE per-product stock debit in milli units, with overflow rejection. Financial lines retain their individual discounts/tax and audit identities. This plan is passed into the same-transaction trusted host writer but is **not itself** an inventory debit or journal posting. New regression tests cover multi-line shared SKU, mutation, stale/corrupt totals and overflow.
