@@ -6,6 +6,7 @@ import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { Modal } from "../forms/Modal";
+import { ProductGs1BarcodeAssistant } from "./ProductGs1BarcodeAssistant";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { can, buildAuthorizedStockCountWorksheet, buildAuthorizedStockCountReview, type StockCountReview } from "@minarvabiz/business-logic";
 
@@ -258,6 +259,7 @@ export function ProductList({
           </p>
         </section>
       )}
+      <ProductGs1BarcodeAssistant />
       <DataTable columns={columns} rows={products.filter((product) => !status || (status === "active" ? product.isActive : !product.isActive))} onRowClick={onSelect} emptyMessage="No products found" />
       <Modal
         open={Boolean(archiveTarget)}
