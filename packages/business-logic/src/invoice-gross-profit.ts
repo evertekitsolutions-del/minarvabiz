@@ -8,7 +8,7 @@
 import type { Sale } from "@minarvabiz/types";
 import {
   addMinorUnits, subtractMinorUnits, toMinorUnits, fromMinorUnits,
-  multiplyMinorByQuantity,
+  multiplyMinorByQuantity, toQuantityMilli, QUANTITY_MILLI_FACTOR,
 } from "@minarvabiz/utils";
 
 export interface InvoiceGrossProfit {
@@ -44,6 +44,12 @@ export function calculateOriginalInvoiceGrossProfit(sale: Sale): InvoiceGrossPro
         !Number.isFinite(item.quantity) || item.quantity <= 0 ||
         !Number.isFinite(item.costPrice) || item.costPrice < 0) {
       throw new Error("Missing or invalid historical sale cost/quantity");
+    }
+    // The money utility rounds fractional quantities to 0.001 by default.
+    // For a historical profit audit, excess precision is ambiguous and must fail.
+    const exactMilli = toQuantityMilli(item.quantity);
+    if (Math.abs(exactMilli / QUANTITY_MILLI_FACTOR - item.quantity) > 1e-9) {
+      throw new Error("Historical sale quantity exceeds 0.001 precision");
     }
     return multiplyMinorByQuantity(toMinorUnits(item.costPrice), item.quantity);
   }));
