@@ -17,7 +17,7 @@ export interface SupplierCostHistoryRow {
   readonly latestUnitCost: number;
   readonly lowestUnitCost: number;
   readonly highestUnitCost: number;
-  readonly premiumToLowestPercent: number;
+  readonly premiumToLowestPercent: number | null;
   readonly observedLines: number;
   readonly lastInvoiceNumber: string;
   readonly lastInvoiceDate: string;
@@ -117,7 +117,7 @@ export function buildPostedSupplierCostComparison(
     highestUnitCost: fromMinorUnits(row.highest),
     premiumToLowestPercent: best > 0
       ? Math.round(((row.latestCost - best) / best) * 1000) / 10
-      : row.latestCost === 0 ? 0 : 100,
+      : row.latestCost === 0 ? 0 : null,
     observedLines: row.count,
     lastInvoiceNumber: row.invoiceNumber,
     lastInvoiceDate: row.latestDate,
