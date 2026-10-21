@@ -13,6 +13,7 @@ import { auditAction } from "./audit-actions";
 import * as store from "./store";
 import * as warehouseStore from "./warehouse-store";
 import { getActiveBranch } from "./phase9-store";
+import { isProductionMode } from "./runtime-mode";
 import { startOfUtcDay, addUtcDays, EXPIRING_SOON_DAYS } from "./vendor/open-mercato/expiry";
 
 export interface BatchExpiryReminder {
@@ -103,11 +104,18 @@ export function listBatchExpiryReminders():BatchExpiryReminder[]{
   return reminders.filter(r=>r.branchId===branchId).map(r=>({...r}))
     .sort((a,b)=>a.expiresOn.localeCompare(b.expiresOn)||a.batchCode.localeCompare(b.batchCode));
 }
+function assertLocalWriteAvailable():void {
+  const desktop=typeof window!=="undefined" && Boolean((window as unknown as {minarvaDesktop?:unknown}).minarvaDesktop);
+  if(isProductionMode() && !desktop) {
+    throw new Error("Batch expiry registration requires installed Windows local SQLite storage; Web cloud sync is not available");
+  }
+}
 export function createBatchExpiryReminder(input:{
   readonly warehouseId:string;readonly productId:string;readonly batchCode:string;
   readonly expiresOn:string;readonly notes?:string;
 }):BatchExpiryReminder {
   assertPermission("inventory.adjust");
+  assertLocalWriteAvailable();
   const branchId=branchScope();
   const warehouseId=nonempty(input.warehouseId,"warehouse id",128);
   const productId=nonempty(input.productId,"product id",128);
@@ -136,6 +144,7 @@ export function createBatchExpiryReminder(input:{
 /** Removes metadata only; never deletes a real stock lot or its transactions. */
 export function removeBatchExpiryReminder(id:string):boolean{
   assertPermission("inventory.adjust");
+  assertLocalWriteAvailable();
   const branchId=branchScope();
   const index=reminders.findIndex(r=>r.id===id&&r.branchId===branchId);
   if(index<0)return false;
