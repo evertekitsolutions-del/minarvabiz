@@ -14,6 +14,7 @@ import {
 } from "@minarvabiz/business-logic";
 import { generateId } from "@minarvabiz/utils";
 import { DimensionRowEditor } from "./DimensionRowEditor";
+import { InclusiveMrpEditor } from "./InclusiveMrpEditor";
 
 export interface PosPaymentSplit {
   method: PaymentMethod;
@@ -92,6 +93,7 @@ export function PosBilling({
 }: PosBillingProps) {
   const [cart, setCart] = React.useState<CartLine[]>([]);
   const [areaProductId, setAreaProductId] = React.useState<string | null>(null);
+  const [mrpCartRowId, setMrpCartRowId] = React.useState<string | null>(null);
   const [areaDraft, setAreaDraft] = React.useState<DimensionRowDraft>(newAreaDraft("sqft"));
   const [search, setSearch] = React.useState("");
   const [barcode, setBarcode] = React.useState("");
@@ -479,6 +481,11 @@ export function PosBilling({
                   <div className="w-20 text-right text-sm font-semibold">
                     {formatMoney(calculateCartTotals([line]).grandTotal)}
                   </div>
+                  <button type="button" className="text-xs text-indigo-700"
+                    aria-label={`Set tax-inclusive MRP for ${line.productName}`}
+                    onClick={() => setMrpCartRowId(posCartRowKey(line))}>
+                    MRP
+                  </button>
                   <button type="button" className="text-xs text-rose-700"
                     aria-label={`Remove ${line.productName} cut`}
                     onClick={() => setCart(prev => removePosCartRow(prev, posCartRowKey(line)))}>
@@ -487,6 +494,22 @@ export function PosBilling({
                 </div>
               ))}
             </div>
+
+            {mrpCartRowId && cart.find((line) => posCartRowKey(line) === mrpCartRowId) && (
+              <InclusiveMrpEditor
+                key={mrpCartRowId}
+                line={cart.find((line) => posCartRowKey(line) === mrpCartRowId)!}
+                onCancel={() => setMrpCartRowId(null)}
+                onApply={(quote) => {
+                  setCart((prev) => prev.map((line) =>
+                    posCartRowKey(line) === mrpCartRowId
+                      ? { ...line, unitPrice: quote.exclusiveUnitPrice } : line,
+                  ));
+                  setMrpCartRowId(null);
+                  setMessage({ type: "ok", text: `MRP ${formatMoney(quote.enteredInclusiveMrp)} applied. Effective inclusive unit before discount: ${formatMoney(quote.effectiveInclusiveUnitPrice)}.` });
+                }}
+              />
+            )}
 
             <input
               type="text"
