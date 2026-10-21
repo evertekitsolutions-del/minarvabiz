@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import type { SalesReportRow } from "@minarvabiz/types";
+import { can, listAuthorizedCustomerOriginalGrossMargins } from "@minarvabiz/business-logic";
+import type { CustomerOriginalGrossMarginRow } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
@@ -30,7 +32,7 @@ export interface TaxReconciliationView {
   from:string|null; to:string|null; periodOutputTax:number; periodInputTax:number; periodPurchaseTaxPending:number;
   outputTaxPayable:number; inputTaxCredit:number; purchaseTaxPending:number; netTaxPosition:number; reviewRequired:boolean;
 }
-type ReportTab = "sales" | "dayend" | "stock" | "receivables" | "payables" | "financial" | "tax";
+type ReportTab = "sales" | "dayend" | "stock" | "receivables" | "payables" | "financial" | "tax" | "customer-profit";
 
 function csvCell(value: unknown) { return `"${String(value ?? "").replace(/"/g, '""')}"`; }
 function downloadFile(name: string, text: string, type: string) {
@@ -86,8 +88,23 @@ export function ReportsPanel({
 }) {
   const [tab,setTab]=React.useState<ReportTab>("sales");
   const rows=salesRows??sales??[];
+  const mayReadCustomerMargins = can("accounting.view");
+  let customerMargins: CustomerOriginalGrossMarginRow[] = [];
+  let customerMarginError: string | null = null;
+  if (mayReadCustomerMargins) {
+    try { customerMargins = listAuthorizedCustomerOriginalGrossMargins(from, to); }
+    catch (e) { customerMarginError = e instanceof Error ? e.message : "Unable to read customer gross margins"; }
+  }
 
   const exportData = React.useMemo(() => {
+    if(tab==="customer-profit") {
+      return mayReadCustomerMargins && !customerMarginError
+        ? {name:"Customer Original Gross Margin",
+          headers:["Customer","Posted invoices","Revenue ex tax","Historic cost","Original gross profit","Margin %"],
+          rows:customerMargins.map(r=>[r.customerName,r.invoiceCount,r.revenueExcludingTax,
+            r.historicalCost,r.originalGrossProfit,r.originalGrossMarginPercent] as Array<string|number>)}
+        : {name:"Restricted Customer Margin",headers:["Status"],rows:[] as Array<Array<string|number>>};
+    }
     if(tab==="sales") return {name:"Sales",headers:["Period","Products","Services","Laundry","Revenue","Expenses","Net Profit"],rows:rows.map(r=>[r.label,r.productSales,r.serviceRevenue,r.laundryRevenue,r.totalRevenue,r.expenses,r.netProfit] as Array<string|number>)};
     if(tab==="stock") return {name:"Inventory",headers:["Product","SKU","Stock","Minimum","Value","Low Stock"],rows:stock.map(r=>[r.name,r.sku||"",r.stock,r.min,r.value,r.low?"Yes":"No"] as Array<string|number>)};
     if(tab==="receivables") return {name:"Receivables",headers:["Customer","Phone","Outstanding"],rows:outstanding.map(r=>[r.name,r.phone||"",r.outstanding] as Array<string|number>)};
@@ -107,12 +124,12 @@ export function ReportsPanel({
       moneyRow("Total sales",dayEnd.totalSales),moneyRow("Service revenue",dayEnd.serviceRevenue),moneyRow("Cost of goods",dayEnd.costOfGoods),moneyRow("Gross profit",dayEnd.grossProfit),
       moneyRow("Total expenses",dayEnd.totalExpenses),moneyRow("Net profit",dayEnd.netProfit),moneyRow("Cash received",dayEnd.cashReceived),moneyRow("Card / UPI",dayEnd.cardPayments),moneyRow("Other payments",dayEnd.otherPayments),moneyRow("Outstanding",dayEnd.outstandingAmount),
     ]};
-  },[tab,rows,stock,outstanding,payables,financial,taxReport,dayEnd]);
+  },[tab,rows,stock,outstanding,payables,financial,taxReport,dayEnd,mayReadCustomerMargins,customerMargins,customerMarginError]);
 
   const exportCsv=()=>downloadFile(`minarva-${tab}-report.csv`,[exportData.headers.map(csvCell).join(","),...exportData.rows.map(r=>r.map(csvCell).join(","))].join("\n"),"text/csv;charset=utf-8");
   const exportExcel=()=>downloadFile(`minarva-${tab}-report.xls`,spreadsheetXml(exportData.name,exportData.headers,exportData.rows),"application/vnd.ms-excel;charset=utf-8");
   const pdfLines=exportData.rows.map(r=>r.map(String).join(" | "));
-  const tabs: Array<[ReportTab,string]> = [["sales","Sales"],["dayend","Day-end"],["stock","Stock Valuation"],["receivables","Receivables"],["payables","Payables Aging"],["financial","Financial Statements"],["tax","GST / Tax"]];
+  const tabs: Array<[ReportTab,string]> = [["sales","Sales"],...(mayReadCustomerMargins ? [["customer-profit","Customer Margin"] as [ReportTab,string]] : []),["dayend","Day-end"],["stock","Stock Valuation"],["receivables","Receivables"],["payables","Payables Aging"],["financial","Financial Statements"],["tax","GST / Tax"]];
 
   return <div className="space-y-4">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -134,6 +151,28 @@ export function ReportsPanel({
 
     <div className="flex flex-wrap gap-2 print:hidden">{tabs.map(([id,label])=><Button key={id} size="sm" variant={tab===id?"primary":"outline"} onClick={()=>setTab(id)}>{label}</Button>)}</div>
     {reportError&&<div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{reportError}</div>}
+
+    {tab==="customer-profit"&&mayReadCustomerMargins&&<Card>
+      <CardHeader><CardTitle className="text-sm font-semibold">Customer-wise original posted invoice gross margin</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-slate-500">Original posted invoice gross margin only. Excludes later returns/refunds, service costs, and overhead. Not party-wise net profit.</p>
+        {customerMarginError&&<p role="alert" className="text-sm text-rose-700">{customerMarginError}</p>}
+        <div className="overflow-x-auto"><table className="w-full text-sm">
+          <thead><tr className="border-b text-left text-xs uppercase text-slate-500">
+            <th className="px-2 py-2">Customer</th><th className="px-2 py-2 text-right">Invoices</th>
+            <th className="px-2 py-2 text-right">Sales ex tax</th><th className="px-2 py-2 text-right">Historical cost</th>
+            <th className="px-2 py-2 text-right">Original gross profit</th><th className="px-2 py-2 text-right">Margin</th>
+          </tr></thead><tbody>{customerMargins.map(r=><tr key={r.customerId} className="border-b border-slate-100">
+            <td className="px-2 py-2">{r.customerName}</td><td className="px-2 py-2 text-right">{r.invoiceCount}</td>
+            <td className="px-2 py-2 text-right">{formatMoney(r.revenueExcludingTax)}</td>
+            <td className="px-2 py-2 text-right">{formatMoney(r.historicalCost)}</td>
+            <td className="px-2 py-2 text-right font-semibold">{formatMoney(r.originalGrossProfit)}</td>
+            <td className="px-2 py-2 text-right">{r.originalGrossMarginPercent.toFixed(2)}%</td>
+          </tr>)}
+          {customerMargins.length===0&&<tr><td colSpan={6} className="px-2 py-5 text-center text-slate-500">No posted customer invoices in this date range</td></tr>}
+          </tbody></table></div>
+      </CardContent>
+    </Card>}
 
     {tab==="sales"&&<Card><CardHeader><CardTitle className="text-sm font-semibold">Sales summary</CardTitle></CardHeader><CardContent className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-xs uppercase text-slate-400"><th>Period</th><th>Products</th><th>Services</th><th>Laundry</th><th>Revenue</th><th>Expenses</th><th>Net profit</th></tr></thead><tbody>{rows.map(r=><tr key={r.label} className="border-b border-slate-50"><td className="py-2 font-medium">{r.label}</td><td>{formatMoney(r.productSales)}</td><td>{formatMoney(r.serviceRevenue)}</td><td>{formatMoney(r.laundryRevenue)}</td><td>{formatMoney(r.totalRevenue)}</td><td>{formatMoney(r.expenses)}</td><td className="font-semibold">{formatMoney(r.netProfit)}</td></tr>)}</tbody></table></CardContent></Card>}
 

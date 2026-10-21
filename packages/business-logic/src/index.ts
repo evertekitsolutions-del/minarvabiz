@@ -158,3 +158,5 @@ export * from "./recurring-invoice-source";
 // SAL-026: restricted original posted-invoice gross profit review.
 export * from "./invoice-gross-profit";
 export * from "./invoice-profit-authorized";
+// FIN-025 — manager-only customer original gross-margin report.
+export * from "./customer-original-gross-margin";
