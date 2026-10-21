@@ -80,3 +80,6 @@ The reusable SalesOrderWorkspace now permits host-gated edit of **draft-only** l
 
 ## A4 / thermal customer sales-order print
 New `renderSalesOrderPrintHtml` renders tenant-scoped, input-escaped A4 or 80mm thermal order documents with exact minor-unit total, tax, discount and customer lines. Clearly marked **NOT A TAX INVOICE** even after invoicing. Shared UI accepts an optional host printing callback and exposes Print A4/Thermal controls, but no shipping app mounts them or calls browser printing without authoritative scope. Unit tests cover XSS, scope denial and totals.
+
+## Real desktop SQLite file restart regression
+The actual `packages/database/src/adapters/sqlite-browser.ts` is now exercised with the isolated SAL-003 writer under Node/sql.js: an order and its staged pending events survive binary export/close/reopen, identical create+confirmation retries do not duplicate events, a simulated failed transaction leaves the earlier durable status unchanged, and branch/RBAC checks persist after restart. This is CI test coverage only; production desktop activation and IPC authority remain unimplemented.
