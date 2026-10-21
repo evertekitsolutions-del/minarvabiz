@@ -223,3 +223,6 @@ export * from "./gs1-barcode-assistant";
 export * from "./batch-expiry-register";
 // INV-005 local counted lots and advisory FEFO pick worksheet.
 export * from "./local-lot-counts";
+
+// INV-005 isolated SQLite GRN→FEFO sale transaction pilot; never production POS authority.
+export * from "./lot-stock-sqlite-pilot";
