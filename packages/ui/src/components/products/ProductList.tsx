@@ -7,7 +7,7 @@ import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
-import { can, buildAuthorizedStockCountWorksheet } from "@minarvabiz/business-logic";
+import { can, buildAuthorizedStockCountWorksheet, buildAuthorizedStockCountReview, type StockCountReview } from "@minarvabiz/business-logic";
 
 export function ProductList({
   products,
@@ -48,6 +48,8 @@ export function ProductList({
   const [archiveReason, setArchiveReason] = React.useState("");
   const [archiveError, setArchiveError] = React.useState<string | null>(null);
   const [countSheetError, setCountSheetError] = React.useState<string | null>(null);
+  const [countReview, setCountReview] = React.useState<StockCountReview | null>(null);
+  const countFileInput = React.useRef<HTMLInputElement>(null);
 
   function exportCountSheet() {
     setCountSheetError(null);
@@ -68,6 +70,22 @@ export function ProductList({
       setCountSheetError(error instanceof Error ? error.message : "Unable to export stock count sheet");
     }
   }
+
+  async function importCountSheet(file: File | undefined) {
+    if (!file) return;
+    setCountSheetError(null);
+    setCountReview(null);
+    try {
+      if (file.size > 5_000_000) throw new Error("Count CSV must be 5 MB or smaller");
+      // Parsing, tenant/branch scoping and stock-staleness checks are shared
+      // by Windows and Web. This preview does not post adjustments.
+      const result = buildAuthorizedStockCountReview(await file.text());
+      setCountReview(result);
+    } catch (error) {
+      setCountSheetError(error instanceof Error ? error.message : "Unable to review stock count");
+    }
+  }
+
   const catMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
 
   const columns: Column<Product>[] = [
@@ -177,13 +195,69 @@ export function ProductList({
           <Button variant={lowStockOnly ? "primary" : "outline"} onClick={toggleLowStock}>
             Low stock
           </Button>
-          {can("inventory.adjust") && <Button variant="outline" onClick={exportCountSheet}>Export count sheet</Button>}
+          {can("inventory.adjust") && <>
+            <Button variant="outline" onClick={exportCountSheet}>Export count sheet</Button>
+            <Button variant="outline" onClick={() => countFileInput.current?.click()}>Review counted CSV</Button>
+            <input
+              ref={countFileInput}
+              type="file"
+              accept=".csv,text/csv"
+              aria-label="Select counted stock CSV"
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                event.currentTarget.value = "";
+                void importCountSheet(file);
+              }}
+            />
+          </>}
           {onAddCategory && <Button variant="outline" onClick={onAddCategory}>+ Category</Button>}
           <Button onClick={onAdd}>+ Add Product</Button>
         </div>
       </div>
       {countSheetError && <p role="alert" className="text-sm text-rose-700">{countSheetError}</p>}
-      <p className="text-xs text-slate-500">Count sheet CSV is a read-only stock snapshot. Fill in the actual count on site; use Stock adjustment to reconcile differences after approval.</p>
+      <p className="text-xs text-slate-500">Export the stock sheet, fill its Counted quantity column, then import it to preview physical variances. This review cannot post stock adjustments.</p>
+      {countReview && (
+        <section aria-label="Physical count variance review" className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+          <h3 className="text-base font-semibold text-slate-900">Physical count variance review</h3>
+          <p className="text-sm text-slate-600">
+            Snapshot: {countReview.snapshotAt} · Counted: {countReview.countedCount} / {countReview.productCount}
+            {" · "}Not counted: {countReview.uncountedCount}
+            {" · "}Differences: {countReview.discrepancies.length}
+          </p>
+          {countReview.discrepancies.length === 0 ? (
+            <p className="text-sm text-slate-600">No variances in counted rows. Uncounted products have not been checked.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead><tr className="border-b border-slate-200 text-slate-600">
+                  <th className="p-2">Product</th><th className="p-2">System</th>
+                  <th className="p-2">Counted</th><th className="p-2">Variance</th>
+                  <th className="p-2">Notes</th>
+                </tr></thead>
+                <tbody>
+                  {countReview.discrepancies.slice(0, 30).map((entry) => (
+                    <tr key={entry.productId} className="border-b border-slate-100">
+                      <td className="p-2">{entry.name} <span className="text-slate-500">({entry.sku})</span></td>
+                      <td className="p-2">{entry.bookQuantity} {entry.unit}</td>
+                      <td className="p-2">{entry.countedQuantity} {entry.unit}</td>
+                      <td className="p-2 font-medium">{entry.varianceQuantity > 0 ? "+" : ""}{entry.varianceQuantity} {entry.unit}</td>
+                      <td className="p-2">{entry.notes || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {countReview.discrepancies.length > 30 && (
+                <p className="p-2 text-xs text-slate-600">Showing first 30 differences of {countReview.discrepancies.length}.</p>
+              )}
+            </div>
+          )}
+          <p className="text-xs text-amber-800">
+            Review only. Recheck discrepancies and use the separately authorized Stock adjustment action to post them.
+            No quantity, ledger, stock journal or sync record has been changed.
+          </p>
+        </section>
+      )}
       <DataTable columns={columns} rows={products.filter((product) => !status || (status === "active" ? product.isActive : !product.isActive))} onRowClick={onSelect} emptyMessage="No products found" />
       <Modal
         open={Boolean(archiveTarget)}
