@@ -170,5 +170,7 @@ export * from "./service-original-gross-margin";
 export * from "./customer-segments-report";
 // FIN-013 posted journal liquidity movements.
 export * from "./ledger-cash-bank-flow";
+// INV-021 current-stock no-sale inactivity (not batch physical-age report).
+export * from "./inventory-dormancy";
 // FIN-017 read-only posted accounting Day Book.
 export * from "./accounting-day-book";

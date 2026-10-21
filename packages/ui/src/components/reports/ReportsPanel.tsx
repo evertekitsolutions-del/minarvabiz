@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import type { SalesReportRow } from "@minarvabiz/types";
-import { can, listAuthorizedCustomerOriginalGrossMargins, listAuthorizedProductOriginalGrossMargins, listAuthorizedServiceOriginalGrossMargins, buildAuthorizedCashBankFlow, buildAuthorizedAccountingDayBook } from "@minarvabiz/business-logic";
-import type { CustomerOriginalGrossMarginRow, ProductOriginalGrossMarginRow, ServiceOriginalGrossMarginRow, CashBankFlowReport, AccountingDayBookReport } from "@minarvabiz/business-logic";
+import { can, listAuthorizedCustomerOriginalGrossMargins, listAuthorizedProductOriginalGrossMargins, listAuthorizedServiceOriginalGrossMargins, buildAuthorizedCashBankFlow, buildAuthorizedAccountingDayBook, listAuthorizedInactiveStock, INVENTORY_DORMANCY_LABELS } from "@minarvabiz/business-logic";
+import type { CustomerOriginalGrossMarginRow, ProductOriginalGrossMarginRow, ServiceOriginalGrossMarginRow, CashBankFlowReport, AccountingDayBookReport, InventoryDormancyRow } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
@@ -32,7 +32,7 @@ export interface TaxReconciliationView {
   from:string|null; to:string|null; periodOutputTax:number; periodInputTax:number; periodPurchaseTaxPending:number;
   outputTaxPayable:number; inputTaxCredit:number; purchaseTaxPending:number; netTaxPosition:number; reviewRequired:boolean;
 }
-type ReportTab = "sales" | "dayend" | "stock" | "receivables" | "payables" | "financial" | "tax" | "customer-profit" | "product-profit" | "service-profit" | "cash-bank-flow" | "day-book";
+type ReportTab = "sales" | "dayend" | "stock" | "receivables" | "payables" | "financial" | "tax" | "customer-profit" | "product-profit" | "service-profit" | "cash-bank-flow" | "day-book" | "dead-stock";
 
 function csvCell(value: unknown) { return `"${String(value ?? "").replace(/"/g, '""')}"`; }
 function downloadFile(name: string, text: string, type: string) {
@@ -128,7 +128,25 @@ export function ReportsPanel({
     catch(error) { dayBookError = error instanceof Error ? error.message : "Unable to read Day Book"; }
   }
 
+  const mayReadDormancy = can("reports.view");
+  const [inactiveDays, setInactiveDays] = React.useState<90|180|365>(180);
+  let dormancyRows: InventoryDormancyRow[] = [];
+  let dormancyError: string | null = null;
+  if (mayReadDormancy) {
+    try { dormancyRows = listAuthorizedInactiveStock(inactiveDays); }
+    catch (error) { dormancyError = error instanceof Error ? error.message : "Unable to read inventory inactivity"; }
+  }
+
   const exportData = React.useMemo(() => {
+    if (tab==="dead-stock") {
+      return mayReadDormancy && !dormancyError
+        ? {name:"Stock Inactivity",
+          headers:["Product","SKU","On hand","Current estimated cost value","Last sale","Inactive days","Bucket"],
+          rows:dormancyRows.map(r=>[r.productName,r.sku??"",r.currentStock,
+            r.historicalCostValue,r.lastSaleDate??"Never sold",r.daysWithoutSale,
+            INVENTORY_DORMANCY_LABELS[r.band]] as Array<string|number>)}
+        : {name:"Restricted Inventory Inactivity",headers:["Status"],rows:[] as Array<Array<string|number>>};
+    }
     if(tab==="day-book"){
       return mayReadDayBook && !dayBookError && dayBook
         ? {name:"Accounting Day Book",
@@ -197,12 +215,12 @@ export function ReportsPanel({
       moneyRow("Total sales",dayEnd.totalSales),moneyRow("Service revenue",dayEnd.serviceRevenue),moneyRow("Cost of goods",dayEnd.costOfGoods),moneyRow("Gross profit",dayEnd.grossProfit),
       moneyRow("Total expenses",dayEnd.totalExpenses),moneyRow("Net profit",dayEnd.netProfit),moneyRow("Cash received",dayEnd.cashReceived),moneyRow("Card / UPI",dayEnd.cardPayments),moneyRow("Other payments",dayEnd.otherPayments),moneyRow("Outstanding",dayEnd.outstandingAmount),
     ]};
-  },[tab,rows,stock,outstanding,payables,financial,taxReport,dayEnd,mayReadCustomerMargins,customerMargins,customerMarginError,mayReadProductMargins,productMargins,productMarginError,mayReadServiceMargins,serviceMargins,serviceMarginError,mayReadCashFlow,cashFlow,cashFlowError,mayReadDayBook,dayBook,dayBookError]);
+  },[tab,rows,stock,outstanding,payables,financial,taxReport,dayEnd,mayReadCustomerMargins,customerMargins,customerMarginError,mayReadProductMargins,productMargins,productMarginError,mayReadServiceMargins,serviceMargins,serviceMarginError,mayReadCashFlow,cashFlow,cashFlowError,mayReadDayBook,dayBook,dayBookError,mayReadDormancy,dormancyRows,dormancyError]);
 
   const exportCsv=()=>downloadFile(`minarva-${tab}-report.csv`,[exportData.headers.map(csvCell).join(","),...exportData.rows.map(r=>r.map(csvCell).join(","))].join("\n"),"text/csv;charset=utf-8");
   const exportExcel=()=>downloadFile(`minarva-${tab}-report.xls`,spreadsheetXml(exportData.name,exportData.headers,exportData.rows),"application/vnd.ms-excel;charset=utf-8");
   const pdfLines=exportData.rows.map(r=>r.map(String).join(" | "));
-  const tabs: Array<[ReportTab,string]> = [["sales","Sales"],...(mayReadCustomerMargins ? [["customer-profit","Customer Margin"] as [ReportTab,string]] : []),...(mayReadProductMargins ? [["product-profit","Product Margin"] as [ReportTab,string]] : []),...(mayReadServiceMargins ? [["service-profit","Service Margin"] as [ReportTab,string]] : []),...(mayReadCashFlow ? [["cash-bank-flow","Cash / Bank Flow"] as [ReportTab,string]] : []),...(mayReadDayBook ? [["day-book","Day Book"] as [ReportTab,string]] : []),["dayend","Day-end"],["stock","Stock Valuation"],["receivables","Receivables"],["payables","Payables Aging"],["financial","Financial Statements"],["tax","GST / Tax"]];
+  const tabs: Array<[ReportTab,string]> = [["sales","Sales"],...(mayReadCustomerMargins ? [["customer-profit","Customer Margin"] as [ReportTab,string]] : []),...(mayReadProductMargins ? [["product-profit","Product Margin"] as [ReportTab,string]] : []),...(mayReadServiceMargins ? [["service-profit","Service Margin"] as [ReportTab,string]] : []),...(mayReadCashFlow ? [["cash-bank-flow","Cash / Bank Flow"] as [ReportTab,string]] : []),...(mayReadDayBook ? [["day-book","Day Book"] as [ReportTab,string]] : []),...(mayReadDormancy ? [["dead-stock","Slow / Dead Stock"] as [ReportTab,string]] : []),["dayend","Day-end"],["stock","Stock Valuation"],["receivables","Receivables"],["payables","Payables Aging"],["financial","Financial Statements"],["tax","GST / Tax"]];
 
   return <div className="space-y-4">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -248,6 +266,38 @@ export function ReportsPanel({
               <td className="px-2 py-2 text-right">{formatMoney(row.totalCredit)}</td>
             </tr>)}
             {!dayBook?.journals.length&&<tr><td colSpan={6} className="px-2 py-5 text-center text-slate-500">No posted journal entries in this period</td></tr>}
+          </tbody></table></div>
+      </CardContent>
+    </Card>}
+
+    {tab==="dead-stock"&&mayReadDormancy&&<Card>
+      <CardHeader><CardTitle className="text-sm font-semibold">Stock inactivity — current inventory</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-slate-500">Products with no recorded posted sale in the selected period. Not physical receipt-age or FIFO stock ageing; stock and cost are current snapshots. The standard sales date-range filter does not apply to this as-of-today report.</p>
+        <label className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
+          Stock inactivity threshold
+          <select aria-label="Stock inactivity threshold" value={inactiveDays}
+            onChange={e=>setInactiveDays(Number(e.target.value) as 90|180|365)}
+            className="rounded border border-slate-200 bg-white px-2 py-1.5 text-sm">
+            <option value={90}>90+ days</option><option value={180}>180+ days</option>
+            <option value={365}>365+ days</option>
+          </select>
+        </label>
+        {dormancyError&&<p role="alert" className="text-sm text-rose-700">{dormancyError}</p>}
+        <div className="overflow-x-auto"><table className="w-full text-sm">
+          <thead><tr className="border-b text-left text-xs uppercase text-slate-500">
+            <th className="px-2 py-2">Product</th><th className="px-2 py-2">SKU</th>
+            <th className="px-2 py-2 text-right">Stock</th><th className="px-2 py-2 text-right">Est. cost value</th>
+            <th className="px-2 py-2">Last sale</th><th className="px-2 py-2 text-right">Inactive days</th>
+          </tr></thead><tbody>
+            {dormancyRows.map(row=><tr key={row.productId} className="border-b border-slate-100">
+              <td className="px-2 py-2">{row.productName}</td><td className="px-2 py-2">{row.sku??"—"}</td>
+              <td className="px-2 py-2 text-right">{row.currentStock}</td>
+              <td className="px-2 py-2 text-right">{formatMoney(row.historicalCostValue)}</td>
+              <td className="px-2 py-2">{row.lastSaleDate??"Never sold"}</td>
+              <td className="px-2 py-2 text-right">{row.daysWithoutSale}</td>
+            </tr>)}
+            {dormancyRows.length===0&&<tr><td colSpan={6} className="px-2 py-5 text-center text-slate-500">No slow-moving items at this threshold</td></tr>}
           </tbody></table></div>
       </CardContent>
     </Card>}
