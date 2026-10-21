@@ -342,3 +342,28 @@ export function postRecurringInvoiceDraftPilotSqlite(
       draftId: input.draftId, invoiceId: proof.invoiceId };
   });
 }
+
+/**
+ * Lists schedules by trusted tenant/company/branch scope only. Invalid backing
+ * JSON fails the ENTIRE list (never silently hides a damaged subscription).
+ * A client may use this to render a workflow only after the host enables it.
+ */
+export function listRecurringInvoiceSchedulesPilotSqlite(
+  db: RecurringInvoiceSqliteDb,
+  scope: RecurringInvoiceScope,
+  authorize: AuthorizeRecurringInvoiceScope,
+): RecurringInvoiceSchedule[] {
+  authorized(scope, authorize);
+  return db.transaction(() => {
+    const ids = db.query(`SELECT id FROM recurring_invoice_schedule_pilot_v1
+      WHERE org_id=? AND company_id=? AND branch_id=?
+      ORDER BY id LIMIT 501`,
+    [scope.organizationId, scope.companyId, scope.branchId]);
+    if (ids.length > 500) throw new Error("Recurring invoice schedule display limit exceeded");
+    return ids.map((item) => {
+      const record = loadSchedule(db, scope, String(item.id));
+      if (!record) throw new Error("Recurring invoice schedule disappeared during read");
+      return record;
+    });
+  });
+}
