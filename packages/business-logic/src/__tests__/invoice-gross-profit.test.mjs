@@ -100,8 +100,9 @@ test("SAL-026 UI is reached only through allowed financial role; no profit in pr
   const desktop = read("apps/desktop/src/App.tsx");
   const ui = read("packages/ui/src/components/sales/SalesList.tsx");
   assert.match(web, /onShowProfit=\{can\("accounting\.view"\)/);
-  assert.match(desktop, /onShowProfit=\{can\("accounting\.view"\)/);
-  assert.match(ui, /onShowProfit && \["completed", "partial"\]\.includes\(row\.status\)/);
+  assert.match(desktop, /<SalesList sales=\{sales\} customers=\{customers\}/);
+  assert.match(ui, /showProfit = onShowProfit \?\? \(can\("accounting\.view"\)/);
+  assert.match(ui, /showProfit && \["completed", "partial"\]\.includes\(row\.status\)/);
   assert.match(ui, /gross profit/i);
   assert.doesNotMatch(read("packages/business-logic/src/sales-history-csv.ts"), /InvoiceGrossProfit|grossMarginPercent/);
   assert.doesNotMatch(read("packages/business-logic/src/invoice.ts"), /InvoiceGrossProfit|grossMarginPercent/);
