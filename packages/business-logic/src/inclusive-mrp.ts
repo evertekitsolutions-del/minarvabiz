@@ -12,6 +12,7 @@
 import { calculateLineItem } from "@minarvabiz/billing";
 import {
   fromMinorUnits, toMinorUnits, toPercentBasisPoints,
+  toQuantityMilli, QUANTITY_MILLI_FACTOR, multiplyMinorByQuantity,
 } from "@minarvabiz/utils";
 
 export interface InclusiveMrpUnitQuote {
@@ -20,20 +21,31 @@ export interface InclusiveMrpUnitQuote {
   readonly effectiveInclusiveUnitPrice: number;
   readonly perUnitRoundingDifference: number;
   readonly taxRatePercent: number;
+  readonly quantity: number;
+  readonly maxInclusiveLineTotal: number;
+  readonly effectiveInclusiveLineTotal: number;
 }
 
 export function quoteInclusiveMrpUnitPrice(
-  enteredMrp: number, taxRatePercent: number,
+  enteredMrp: number, taxRatePercent: number, quantity = 1,
 ): InclusiveMrpUnitQuote {
   if (!Number.isFinite(enteredMrp) || enteredMrp < 0 ||
       !Number.isFinite(taxRatePercent) || taxRatePercent < 0 ||
       taxRatePercent > 100) {
     throw new Error("MRP and tax rate must be finite, non-negative, and within limits");
   }
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new Error("Inclusive MRP quantity must be finite and positive");
+  }
+  const quantityMilli = toQuantityMilli(quantity);
+  if (Math.abs(quantityMilli / QUANTITY_MILLI_FACTOR - quantity) > 1e-9) {
+    throw new Error("Inclusive MRP quantity exceeds 0.001 precision");
+  }
   const mrpMinor = toMinorUnits(enteredMrp);
   if (Math.abs(mrpMinor / 100 - enteredMrp) > 1e-8) {
     throw new Error("Inclusive MRP must have at most two decimal places");
   }
+  const maximumLineMinor = multiplyMinorByQuantity(mrpMinor, quantity);
   const rateBps = toPercentBasisPoints(taxRatePercent);
   if (Math.abs(rateBps / 100 - taxRatePercent) > 1e-8) {
     throw new Error("Tax rate must have at most two decimal places");
@@ -46,10 +58,10 @@ export function quoteInclusiveMrpUnitPrice(
   while (low < high) {
     const mid = low + Math.ceil((high - low) / 2);
     const total = toMinorUnits(calculateLineItem({
-      quantity: 1, unitPrice: fromMinorUnits(mid),
+      quantity, unitPrice: fromMinorUnits(mid),
       taxRate: taxRatePercent, discountPercent: 0,
     }).total);
-    if (total <= mrpMinor) low = mid;
+    if (total <= maximumLineMinor) low = mid;
     else high = mid - 1;
   }
   if (mrpMinor > 0 && low === 0) {
@@ -66,5 +78,10 @@ export function quoteInclusiveMrpUnitPrice(
     effectiveInclusiveUnitPrice: charged,
     perUnitRoundingDifference: fromMinorUnits(mrpMinor - toMinorUnits(charged)),
     taxRatePercent,
+    quantity,
+    maxInclusiveLineTotal: fromMinorUnits(maximumLineMinor),
+    effectiveInclusiveLineTotal: calculateLineItem({
+      quantity, unitPrice: base, taxRate: taxRatePercent, discountPercent: 0,
+    }).total,
   };
 }
