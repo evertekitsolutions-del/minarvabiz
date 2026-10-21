@@ -9,6 +9,7 @@ import {
   type DimensionRowDraft, type DimensionMeasurement,
 } from "@minarvabiz/business-logic";
 import { DimensionRowEditor } from "./DimensionRowEditor";
+import { InclusiveMrpEditor } from "./InclusiveMrpEditor";
 import { generateId } from "@minarvabiz/utils";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
@@ -43,6 +44,7 @@ export function NormalBilling({
   const [areaDraft, setAreaDraft] = React.useState<DimensionRowDraft>(emptyAreaDraft());
   const [areaApplied, setAreaApplied] = React.useState<DimensionMeasurement | null>(null);
   const [unitPrice, setUnitPrice] = React.useState("");
+  const [mrpLineId, setMrpLineId] = React.useState<string | null>(null);
   const [lines, setLines] = React.useState<CartLine[]>([]);
   const [paidAmount, setPaidAmount] = React.useState("");
   const [method, setMethod] = React.useState<PaymentMethod>("cash");
@@ -213,11 +215,27 @@ export function NormalBilling({
                     disabled={Boolean(line.dimensionMetadata)} value={line.quantity} onChange={(e) => updateLine(line.cartLineId ?? line.productId, { quantity: Number(e.target.value) })} /></td>
                   <td className="px-3 py-2"><input className="h-8 w-28 rounded border border-slate-200 px-2" type="number" min="0" step="0.01" value={line.unitPrice} onChange={(e) => updateLine(line.cartLineId ?? line.productId, { unitPrice: Number(e.target.value) })} /></td>
                   <td className="px-3 py-2 text-right font-semibold">{formatMoney(line.quantity * line.unitPrice)}</td>
-                  <td className="px-3 py-2 text-right"><Button size="sm" variant="outline" onClick={() => setLines((prev) => removeNormalBillingLine(prev, line.cartLineId ?? line.productId))}>Remove</Button></td>
+                  <td className="px-3 py-2 text-right"><div className="flex justify-end gap-1">
+                    <Button size="sm" variant="outline" onClick={() => setMrpLineId(line.cartLineId ?? line.productId)}>MRP incl. tax</Button>
+                    <Button size="sm" variant="outline" onClick={() => setLines((prev) => removeNormalBillingLine(prev, line.cartLineId ?? line.productId))}>Remove</Button>
+                  </div></td>
                 </tr>
               ))}</tbody>
             </table>
           </div>
+
+          {mrpLineId && lines.find((line) => (line.cartLineId ?? line.productId) === mrpLineId) && (
+            <InclusiveMrpEditor
+              key={mrpLineId}
+              line={lines.find((line) => (line.cartLineId ?? line.productId) === mrpLineId)!}
+              onCancel={() => setMrpLineId(null)}
+              onApply={(quote) => {
+                updateLine(mrpLineId, { unitPrice: quote.exclusiveUnitPrice });
+                setMrpLineId(null);
+                setMessage({ type: "ok", text: `MRP ${formatMoney(quote.enteredInclusiveMrp)} applied. Effective inclusive unit before discount: ${formatMoney(quote.effectiveInclusiveUnitPrice)}; tax-exclusive rate: ${formatMoney(quote.exclusiveUnitPrice)}.` });
+              }}
+            />
+          )}
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <textarea className="min-h-24 rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Bill notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
