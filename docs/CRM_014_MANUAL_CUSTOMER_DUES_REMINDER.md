@@ -1,0 +1,7 @@
+# CRM-014 — Manual Customer Outstanding Payment Reminders
+
+A **Review reminder** button appears next to Customers with a current positive outstanding balance and a configured WhatsApp/phone number, when the current role has payments.collect. Works in both shared Web and Windows customer screens.
+
+The preview shows the current customer, account-level balance and a prewritten polite WhatsApp payment reminder. The **Open WhatsApp composer** button re-fetches the current customer, balance, branch, and permission. If anything changed since preview, the message is refreshed and the operator must review again. No messages are automatically sent, scheduled, or marked delivered. The existing \`buildManualServiceWhatsAppLink\` supplies validated international number handling and encoded wa.me links. No WhatsApp API subscription or bulk messaging.
+
+This is a **manual account-level reminder**, not an invoice-specific ageing/due-date notice. It must not assert late fees or overdue status without verified due dates. Current two-decimal outstanding balances come from the local first-party Customer store, not an independent payment assertion. Customer consent/opt-out preferences, notification history, automated reminders, authoritative hosted role enforcement and cross-device delivery receipts remain to complete (CRM-014/CRM-017). No database migration, new provider, financial writer, or production deployment.
