@@ -61,6 +61,15 @@ export function buildSupplierDeliveryScores(
   const eligible = orders.filter(o => !o.deletedAt && o.status !== "cancelled" && o.status !== "draft");
   const eligibleById = new Map(eligible.map(o => [o.id, o]));
   if (eligibleById.size !== eligible.length) throw new Error("Duplicate purchase order IDs");
+  const ordersBySupplier = new Map<string, PurchaseOrder[]>();
+  const orderLineIds = new Map<string, Set<string>>();
+  for (const order of eligible) {
+    orderLineIds.set(order.id, new Set(order.lines.map(line => line.id)));
+    if (!supplierById.has(order.supplierId)) continue;
+    const group = ordersBySupplier.get(order.supplierId) ?? [];
+    group.push(order);
+    ordersBySupplier.set(order.supplierId, group);
+  }
   const received = new Map<string, Map<string, number>>();
   const lastReceipts = new Map<string, string>();
   const receiptIds = new Set<string>();
@@ -73,7 +82,7 @@ export function buildSupplierDeliveryScores(
         (order.branchId != null && receipt.branchId != null && order.branchId !== receipt.branchId)) {
       continue;
     }
-    const allowedLines = new Set(order.lines.map(l => l.id));
+    const allowedLines = orderLineIds.get(order.id)!;
     const quantities = received.get(order.id) ?? new Map<string, number>();
     for (const line of receipt.lines) {
       if (!allowedLines.has(line.purchaseOrderLineId)) continue;
@@ -89,7 +98,7 @@ export function buildSupplierDeliveryScores(
 
   const scores: SupplierDeliveryScore[] = [];
   for (const supplier of activeSuppliers) {
-    const supplierOrders = eligible.filter(o => o.supplierId === supplier.id);
+    const supplierOrders = ordersBySupplier.get(supplier.id) ?? [];
     let approvedOrders = 0, receivedOrders = 0, deadlineDeliveries = 0;
     let deliveredOnTime = 0, overdueOpenOrders = 0;
     let totalLineCompletion = 0, trackedLines = 0, orderValueMinor = 0;
