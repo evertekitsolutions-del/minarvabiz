@@ -172,3 +172,5 @@ export * from "./customer-segments-report";
 export * from "./ledger-cash-bank-flow";
 // INV-021 current-stock no-sale inactivity (not batch physical-age report).
 export * from "./inventory-dormancy";
+// SAL-004 invoice-linked nonfinancial A4 delivery note (no dispatch posting).
+export * from "./sale-delivery-note";
