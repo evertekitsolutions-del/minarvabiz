@@ -67,7 +67,7 @@ test("new remote order is a preview, not an import; archived and normal scope st
  const db=seeded(),current=api.listSalesOrdersSqlite(db,auth,true)[0];
  const imported={...current,id:uuid(31),operationId:uuid(32),lastOperationId:uuid(32),
  originalCreatePayload:JSON.stringify({...JSON.parse(current.originalCreatePayload),
-  id:uuid(31),operationId:uuid(32)}),
+  id:uuid(31),operationId:uuid(32),orderNumber:"SO-PEER-2"}),
  orderNumber:"SO-PEER-2"};
  assert.equal(preview(db,[peer(imported)],auth,true,verified).decisions[0].state,"remote-new");
  assert.equal(api.listSalesOrdersSqlite(db,auth,true).length,1);
