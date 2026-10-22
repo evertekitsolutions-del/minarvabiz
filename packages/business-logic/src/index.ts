@@ -223,6 +223,8 @@ export * from "./gs1-barcode-assistant";
 export * from "./batch-expiry-register";
 // INV-005 local counted lots and advisory FEFO pick worksheet.
 export * from "./local-lot-counts";
+// INV-007 offline serial custody; not a posted sale/GRN serial ledger.
+export * from "./serial-custody-register";
 
 // INV-005 isolated SQLite GRN→FEFO sale transaction pilot; never production POS authority.
 export * from "./lot-stock-sqlite-pilot";
@@ -232,5 +234,12 @@ export * from "./lot-return-sqlite-pilot";
 
 // INV-005 isolated SQLite quarantine QC release/reject; never renderer or live POS authority.
 export * from "./lot-quarantine-qc-sqlite-pilot";
-// PUR-004 durable offline GRN batch provenance; not authoritative stock.
+
+// INV-005 opt-in SQLite FEFO reservation & settlement; NOT live POS authority.
+export * from "./lot-reservation-sqlite-pilot";
+
+// PUR-004 posted Goods Receipt batch provenance; no stock lot posting.
+export * from "./goods-receipt-batch-metadata";
+
+// PUR-004 durable offline GRN batch attribution; no stock re-credit.
 export * from "./grn-batch-attribution";
