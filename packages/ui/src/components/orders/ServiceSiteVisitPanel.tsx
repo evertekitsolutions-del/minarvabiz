@@ -14,6 +14,7 @@ import {ServiceVisitSignaturePanel} from "./ServiceVisitSignaturePanel";
 import {ServiceVisitSlaPanel} from "./ServiceVisitSlaPanel";
 import {ServiceVisitPartsPanel} from "./ServiceVisitPartsPanel";
 import {ServiceJobCostPanel} from "./ServiceJobCostPanel";
+import {ServiceVisitRoutePanel} from "./ServiceVisitRoutePanel";
 import {inputClass, selectClass} from "../forms/FormField";
 
 function localDate():string{
@@ -147,6 +148,7 @@ export function ServiceSiteVisitPanel({
         },"Site visit saved to Windows offline register")}>Schedule site visit</Button>
     </div>}
     <ServiceVisitSlaPanel visits={visits}/>
+    <ServiceVisitRoutePanel visits={visits} canWrite={canWrite} mutate={mutate}/>
     <ServiceJobCostPanel orders={orders} visits={visits}/>
     <div className="mt-4 max-h-96 overflow-auto rounded-lg border border-slate-200">
       <table className="min-w-[780px] w-full text-left text-xs">
