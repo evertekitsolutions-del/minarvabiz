@@ -102,11 +102,31 @@ export function initializeLotStockPilotSqlite(db:LotPilotDatabase):void {
   )`);
   db.exec(`CREATE TABLE IF NOT EXISTS inv_lot_event_pilot_v1 (
     org_id TEXT NOT NULL, event_id TEXT NOT NULL,
-    event_type TEXT NOT NULL CHECK(event_type IN ('receipt','sale')),
+    event_type TEXT NOT NULL CHECK(event_type IN ('receipt','sale','return')),
     warehouse_id TEXT NOT NULL, payload_json TEXT NOT NULL,
     allocations_json TEXT NOT NULL,
     PRIMARY KEY(org_id,event_id)
   )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS inv_lot_return_pilot_v1 (
+    org_id TEXT NOT NULL, return_event_id TEXT NOT NULL,
+    sale_event_id TEXT NOT NULL, warehouse_id TEXT NOT NULL,
+    product_id TEXT NOT NULL, quantity_milli INTEGER NOT NULL CHECK(quantity_milli > 0),
+    allocations_json TEXT NOT NULL,
+    PRIMARY KEY(org_id,return_event_id),
+    FOREIGN KEY(org_id,return_event_id) REFERENCES inv_lot_event_pilot_v1(org_id,event_id)
+  )`);
+  db.exec(`CREATE INDEX IF NOT EXISTS inv_lot_return_sale_pilot_idx
+    ON inv_lot_return_pilot_v1(org_id,sale_event_id)`);
+  db.exec(`CREATE TABLE IF NOT EXISTS inv_lot_quarantine_pilot_v1 (
+    org_id TEXT NOT NULL, return_event_id TEXT NOT NULL,
+    warehouse_id TEXT NOT NULL, product_id TEXT NOT NULL,
+    lot_id TEXT NOT NULL, batch_code TEXT NOT NULL,
+    quantity_milli INTEGER NOT NULL CHECK(quantity_milli > 0),
+    status TEXT NOT NULL DEFAULT 'quarantined' CHECK(status='quarantined'),
+    PRIMARY KEY(org_id,return_event_id,lot_id),
+    FOREIGN KEY(org_id,return_event_id) REFERENCES inv_lot_return_pilot_v1(org_id,return_event_id)
+  )`);
+
 }
 function snapshot(db:LotPilotDatabase,orgId:string,warehouseId:string,productId:string):VersionedLot[]{
   return db.query(`SELECT id,org_id,warehouse_id,product_id,batch_code,expires_on,
