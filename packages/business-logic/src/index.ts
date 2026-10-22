@@ -234,3 +234,6 @@ export * from "./lot-return-sqlite-pilot";
 
 // INV-005 isolated SQLite quarantine QC release/reject; never renderer or live POS authority.
 export * from "./lot-quarantine-qc-sqlite-pilot";
+
+// SVC-011 offline service warranties and claims; no hosted Web writes.
+export * from "./service-warranty-register";
