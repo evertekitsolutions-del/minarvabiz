@@ -64,7 +64,7 @@ test("CSV is branch-scoped input only, escaped, and formula-safe", () => {
   assert.ok(!csv.includes("phone"));
 });
 test("shared UI mounts permitted expiry follow-up without automatic outbound messaging",()=>{
-  const ui=fs.readFileSync(new URL("../../../../ui/src/components/orders/ServiceWarrantyPanel.tsx", import.meta.url),"utf8");
+  const ui=fs.readFileSync(new URL("../../../ui/src/components/orders/ServiceWarrantyPanel.tsx", import.meta.url),"utf8");
   assert.match(ui,/buildServiceWarrantyExpiryReport\(data\.warranties/);
   assert.match(ui,/exportServiceWarrantyExpiryCsv\(expiryReport\.rows\)/);
   assert.match(ui,/Warranty expiry follow-up/);
