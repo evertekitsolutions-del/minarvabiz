@@ -265,3 +265,6 @@ export * from "./service-visit-sla";
 
 // SVC-007 offline parts-used annotations; no live WMS or GL posting.
 export * from "./service-visit-parts";
+
+// SVC-013 operational job margin estimate; parts overlap remains unverified.
+export * from "./service-job-cost-report";
