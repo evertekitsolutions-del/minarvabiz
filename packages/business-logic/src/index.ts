@@ -232,5 +232,5 @@ export * from "./lot-return-sqlite-pilot";
 
 // INV-005 isolated SQLite quarantine QC release/reject; never renderer or live POS authority.
 export * from "./lot-quarantine-qc-sqlite-pilot";
-// PUR-008 durable offline GRN batch provenance; not authoritative stock.
+// PUR-004 durable offline GRN batch provenance; not authoritative stock.
 export * from "./grn-batch-attribution";
