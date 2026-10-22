@@ -19,6 +19,7 @@ import * as phase10Store from "./phase10-operations-store";
 import * as warehouseStore from "./warehouse-store";
 import * as batchExpiry from "./batch-expiry-register";
 import * as lotCounts from "./local-lot-counts";
+import * as serialCustody from "./serial-custody-register";
 import * as procurementStore from "./procurement-store";
 import * as accountingStore from "./accounting-store";
 import * as commerceTierDrafts from "./commerce-tier-drafts";
@@ -87,6 +88,8 @@ export interface DomainSnapshot {
   batchExpiryReminders?: ReturnType<typeof batchExpiry.exportBatchExpiryReminders>;
   /** Offline counted lot metadata; never an authorized live inventory ledger. */
   localLotCounts?: ReturnType<typeof lotCounts.exportLocalLotCounts>;
+  /** Offline-only serial custody records; no automatic sale/GRN posting. */
+  serialCustody?: ReturnType<typeof serialCustody.exportSerialCustodyRecords>;
   procurement?: ReturnType<typeof procurementStore.exportProcurementState>;
   accounting?: ReturnType<typeof accountingStore.exportAccountingState>;
   /** Offline-only seller pricebook drafts. Never an authoritative checkout tariff. */
@@ -144,6 +147,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     warehouse: warehouseStore.exportWarehouseState(),
     batchExpiryReminders: batchExpiry.exportBatchExpiryReminders(),
     localLotCounts: lotCounts.exportLocalLotCounts(),
+    serialCustody: serialCustody.exportSerialCustodyRecords(),
     procurement: procurementStore.exportProcurementState(),
     accounting: accountingStore.exportAccountingState(),
     commerceTierDrafts: commerceTierDrafts.exportCommerceTierDrafts(),
@@ -252,6 +256,7 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     commerceKitRecipes: commerceKitRecipes.validateCommerceKitRecipes(input.commerceKitRecipes ?? []),
     batchExpiryReminders: batchExpiry.validateBatchExpiryReminders(input.batchExpiryReminders ?? []),
     localLotCounts: lotCounts.validateLocalLotCounts(input.localLotCounts ?? []),
+    serialCustody: serialCustody.validateSerialCustodyRecords(input.serialCustody ?? []),
   };
 }
 
@@ -298,6 +303,7 @@ function applyDomainSnapshot(snap: DomainSnapshot): void {
   if (snap.warehouse) warehouseStore.hydrateWarehouseState(snap.warehouse);
   batchExpiry.hydrateBatchExpiryReminders(snap.batchExpiryReminders ?? []);
   lotCounts.hydrateLocalLotCounts(snap.localLotCounts ?? []);
+  serialCustody.hydrateSerialCustodyRecords(snap.serialCustody ?? []);
   if (snap.procurement) procurementStore.hydrateProcurementState(snap.procurement);
   if (snap.accounting) accountingStore.hydrateAccountingState(snap.accounting);
   commerceTierDrafts.hydrateCommerceTierDrafts(snap.commerceTierDrafts ?? []);
@@ -357,6 +363,7 @@ export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error
       warehouseLocations: incoming.warehouse?.locations?.length ?? 0,
       batchExpiryReminders: incoming.batchExpiryReminders?.length ?? 0,
       localLotCounts: incoming.localLotCounts?.length ?? 0,
+      serialCustody: incoming.serialCustody?.length ?? 0,
       accounts: incoming.accounting?.accounts?.length ?? 0,
       journals: incoming.accounting?.journals?.length ?? 0,
       localCommerceTierDrafts: incoming.commerceTierDrafts?.length ?? 0,
