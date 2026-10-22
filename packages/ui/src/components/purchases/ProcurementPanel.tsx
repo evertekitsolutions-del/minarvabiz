@@ -19,6 +19,7 @@ import { formatMoney } from "../customers/format";
 import { RfqDraftPanel } from "./RfqDraftPanel";
 import { LandedCostPanel } from "./LandedCostPanel";
 import { GrnBatchLineFields } from "./GrnBatchLineFields";
+import { GrnBatchAttributionPanel } from "./GrnBatchAttributionPanel";
 import { buildSupplierDeliveryScores, buildPostedSupplierCostComparison, phase9Store } from "@minarvabiz/business-logic";
 
 type DraftLine = {
@@ -156,7 +157,7 @@ export function ProcurementPanel({
   const [receiveLocation, setReceiveLocation] = React.useState<Record<string, string>>({});
   const [receiveBatch, setReceiveBatch] = React.useState<Record<string, string>>({});
   const [receiveExpiry, setReceiveExpiry] = React.useState<Record<string, string>>({});
-  // Current cloud GRN schema has no batch columns; never imply cloud persistence.
+  // Cloud GRN has no batch persistence.
   const [canSaveLocalBatch, setCanSaveLocalBatch] = React.useState(false);
   React.useEffect(() => {
     setCanSaveLocalBatch(Boolean((window as unknown as { minarvaDesktop?: unknown }).minarvaDesktop));
@@ -1017,6 +1018,7 @@ export function ProcurementPanel({
           </div>
         )}
       </Modal>
+      <GrnBatchAttributionPanel receipts={goodsReceipts} products={products} />
     </div>
   );
 }

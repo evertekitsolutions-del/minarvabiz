@@ -246,5 +246,7 @@ export * from "./goods-receipt-batch-metadata";
 // SVC-011 offline service warranty and claim lifecycle; hosted Web is read-only.
 export * from "./service-warranty-register";
 
+// PUR-004 durable offline GRN batch attribution; no stock re-credit.
+export * from "./grn-batch-attribution";
 // SVC-011 permission-scoped, read-only warranty expiry worksheet / CSV.
 export * from "./service-warranty-expiry";
