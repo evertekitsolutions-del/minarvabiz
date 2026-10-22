@@ -664,3 +664,68 @@ test("SVC-009 customer signature canvas, consent, refusal and safe audit wiring"
   assert.match(domainSrc,/signature or reasoned refusal/);
   assert.match(snapshot,/siteVisits\.hydrateServiceSiteVisits/);
 });
+
+
+test("SVC-012 stores visit SLA targets only when explicitly provided and roundtrips offline backup",()=>{
+  reset();
+  const deadlines={arrivalDueAt:"2026-10-23T10:00:00.000Z",
+    completionDueAt:"2026-10-23T18:00:00.000Z"};
+  const visit=schedule({sla:deadlines});
+  assert.deepEqual(visit.sla,deadlines);
+  const exported=domain.exportServiceSiteVisits();
+  exported[0].sla.arrivalDueAt="tampered";
+  assert.equal(domain.exportServiceSiteVisits()[0].sla.arrivalDueAt,deadlines.arrivalDueAt);
+  const safe=domain.exportServiceSiteVisits();
+  domain.hydrateServiceSiteVisits([]);
+  domain.hydrateServiceSiteVisits(safe);
+  assert.deepEqual(domain.exportServiceSiteVisits(),safe);
+  let current=domain.markServiceSiteArrival(visit.id,visit.version);
+  assert.deepEqual(current.sla,deadlines);
+  for(const item of current.checklist){
+    current=domain.setServiceSiteVisitCheck({visitId:current.id,expectedVersion:current.version,
+      itemId:item.id,result:"passed",notes:"Checked"});
+  }
+  current=domain.recordServiceVisitSignatureDecline({visitId:current.id,
+    expectedVersion:current.version,reason:"Customer left location"});
+  const completed=domain.completeServiceSiteVisit(current.id,current.version);
+  assert.deepEqual(completed.sla,deadlines);
+  assert.equal(events.at(-1)[0],"service_site_visit.complete");
+});
+test("SVC-012 invalid scheduled deadlines fail without mutation and tampered backups reject atomically",()=>{
+  reset();const baseline=domain.exportServiceSiteVisits(),startAudit=events.length;
+  const bad=[
+    {arrivalDueAt:null,completionDueAt:null},
+    {arrivalDueAt:"2026-10-20T10:00:00.000Z",completionDueAt:null},
+    {arrivalDueAt:"2026-10-23T18:00:00.000Z",
+      completionDueAt:"2026-10-23T09:00:00.000Z"},
+    {arrivalDueAt:"tomorrow",completionDueAt:null},
+    {arrivalDueAt:"2026-10-23T10:00:00.000Z",
+      completionDueAt:null,tenantId:"spoof"},
+  ];
+  for(const sla of bad)assert.throws(()=>schedule({sla}),undefined,JSON.stringify(sla));
+  assert.deepEqual(domain.exportServiceSiteVisits(),baseline);
+  assert.equal(events.length,startAudit);
+  const visit=schedule({sla:{
+    arrivalDueAt:"2026-10-23T10:00:00.000Z",
+    completionDueAt:"2026-10-23T18:00:00.000Z",
+  }});
+  const state=domain.exportServiceSiteVisits();
+  for(const sla of bad){
+    assert.throws(()=>domain.hydrateServiceSiteVisits([{...visit,sla}]));
+    assert.deepEqual(domain.exportServiceSiteVisits(),state);
+  }
+  const older={...visit};
+  delete older.sla;
+  domain.hydrateServiceSiteVisits([older]);
+  assert.deepEqual(domain.exportServiceSiteVisits(),[older]);
+});
+test("SVC-012 authorized branch is the only source for shared SLA worksheet",()=>{
+  reset();const v=schedule({sla:{arrivalDueAt:"2026-10-23T10:00:00.000Z",completionDueAt:null}});
+  assert.equal(domain.listServiceSiteVisits().length,1);
+  branch.id="other";
+  assert.deepEqual(domain.listServiceSiteVisits(),[]);
+  permissions.delete("reports.view");
+  assert.throws(()=>domain.listServiceSiteVisits(),/Denied/);
+  branch.id="b1";permissions.add("reports.view");
+  assert.equal(domain.listServiceSiteVisits()[0].id,v.id);
+});
