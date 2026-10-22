@@ -12,6 +12,7 @@ import {ServiceSiteVisitChecklist} from "./ServiceSiteVisitChecklist";
 import {ServiceSiteVisitEvidencePanel} from "./ServiceSiteVisitEvidencePanel";
 import {ServiceVisitSignaturePanel} from "./ServiceVisitSignaturePanel";
 import {ServiceVisitSlaPanel} from "./ServiceVisitSlaPanel";
+import {ServiceVisitPartsPanel} from "./ServiceVisitPartsPanel";
 import {inputClass, selectClass} from "../forms/FormField";
 
 function localDate():string{
@@ -166,6 +167,7 @@ export function ServiceSiteVisitPanel({
             <ServiceSiteVisitChecklist visit={v} canWrite={canWrite} mutate={mutate}/>
             <ServiceSiteVisitEvidencePanel visit={v} canWrite={canWrite} mutate={mutate}/>
             <ServiceVisitSignaturePanel visit={v} canWrite={canWrite} mutate={mutate}/>
+            <ServiceVisitPartsPanel visit={v} canWrite={canWrite} mutate={mutate}/>
           </td>
           <td className="p-2">
             {canWrite&&v.status==="scheduled"&&<>
