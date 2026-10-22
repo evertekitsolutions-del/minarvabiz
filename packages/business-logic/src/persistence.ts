@@ -18,6 +18,7 @@ import * as phase9Store from "./phase9-store";
 import * as phase10Store from "./phase10-operations-store";
 import * as warehouseStore from "./warehouse-store";
 import * as batchExpiry from "./batch-expiry-register";
+import * as grnBatches from "./grn-batch-attribution";
 import * as lotCounts from "./local-lot-counts";
 import * as procurementStore from "./procurement-store";
 import * as accountingStore from "./accounting-store";
@@ -85,6 +86,8 @@ export interface DomainSnapshot {
   warehouse?: ReturnType<typeof warehouseStore.exportWarehouseState>;
   /** Offline-only lot expiry metadata; not authoritative warehouse stock. */
   batchExpiryReminders?: ReturnType<typeof batchExpiry.exportBatchExpiryReminders>;
+  /** Posted GRN batch provenance metadata (offline only, no stock movement). */
+  grnBatchAttributions?: ReturnType<typeof grnBatches.exportGrnBatchAttributions>;
   /** Offline counted lot metadata; never an authorized live inventory ledger. */
   localLotCounts?: ReturnType<typeof lotCounts.exportLocalLotCounts>;
   procurement?: ReturnType<typeof procurementStore.exportProcurementState>;
@@ -143,6 +146,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     phase10: phase10Store.exportPhase10State(),
     warehouse: warehouseStore.exportWarehouseState(),
     batchExpiryReminders: batchExpiry.exportBatchExpiryReminders(),
+    grnBatchAttributions: grnBatches.exportGrnBatchAttributions(),
     localLotCounts: lotCounts.exportLocalLotCounts(),
     procurement: procurementStore.exportProcurementState(),
     accounting: accountingStore.exportAccountingState(),
@@ -251,6 +255,7 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     commerceTierDrafts: commerceTierDrafts.validateCommerceTierDrafts(input.commerceTierDrafts ?? []),
     commerceKitRecipes: commerceKitRecipes.validateCommerceKitRecipes(input.commerceKitRecipes ?? []),
     batchExpiryReminders: batchExpiry.validateBatchExpiryReminders(input.batchExpiryReminders ?? []),
+    grnBatchAttributions: grnBatches.validateGrnBatchAttributions(input.grnBatchAttributions ?? []),
     localLotCounts: lotCounts.validateLocalLotCounts(input.localLotCounts ?? []),
   };
 }
@@ -297,6 +302,7 @@ function applyDomainSnapshot(snap: DomainSnapshot): void {
   if (snap.phase10) phase10Store.hydratePhase10(snap.phase10);
   if (snap.warehouse) warehouseStore.hydrateWarehouseState(snap.warehouse);
   batchExpiry.hydrateBatchExpiryReminders(snap.batchExpiryReminders ?? []);
+  grnBatches.hydrateGrnBatchAttributions(snap.grnBatchAttributions ?? []);
   lotCounts.hydrateLocalLotCounts(snap.localLotCounts ?? []);
   if (snap.procurement) procurementStore.hydrateProcurementState(snap.procurement);
   if (snap.accounting) accountingStore.hydrateAccountingState(snap.accounting);
@@ -356,6 +362,7 @@ export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error
       warehouses: incoming.warehouse?.warehouses?.length ?? 0,
       warehouseLocations: incoming.warehouse?.locations?.length ?? 0,
       batchExpiryReminders: incoming.batchExpiryReminders?.length ?? 0,
+      grnBatchAttributions: incoming.grnBatchAttributions?.length ?? 0,
       localLotCounts: incoming.localLotCounts?.length ?? 0,
       accounts: incoming.accounting?.accounts?.length ?? 0,
       journals: incoming.accounting?.journals?.length ?? 0,
