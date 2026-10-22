@@ -18,6 +18,7 @@ import * as phase9Store from "./phase9-store";
 import * as phase10Store from "./phase10-operations-store";
 import * as warehouseStore from "./warehouse-store";
 import * as batchExpiry from "./batch-expiry-register";
+import * as grnBatches from "./grn-batch-attribution";
 import * as lotCounts from "./local-lot-counts";
 import * as serialCustody from "./serial-custody-register";
 import * as serviceWarranty from "./service-warranty-register";
@@ -87,6 +88,8 @@ export interface DomainSnapshot {
   warehouse?: ReturnType<typeof warehouseStore.exportWarehouseState>;
   /** Offline-only lot expiry metadata; not authoritative warehouse stock. */
   batchExpiryReminders?: ReturnType<typeof batchExpiry.exportBatchExpiryReminders>;
+  /** Posted GRN batch trace metadata, Windows local only. */
+  grnBatchAttributions?: ReturnType<typeof grnBatches.exportGrnBatchAttributions>;
   /** Offline counted lot metadata; never an authorized live inventory ledger. */
   localLotCounts?: ReturnType<typeof lotCounts.exportLocalLotCounts>;
   /** Offline-only serial custody records; no automatic sale/GRN posting. */
@@ -148,6 +151,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     phase10: phase10Store.exportPhase10State(),
     warehouse: warehouseStore.exportWarehouseState(),
     batchExpiryReminders: batchExpiry.exportBatchExpiryReminders(),
+    grnBatchAttributions: grnBatches.exportGrnBatchAttributions(),
     localLotCounts: lotCounts.exportLocalLotCounts(),
     serialCustody: serialCustody.exportSerialCustodyRecords(),
     serviceWarranty: serviceWarranty.exportServiceWarrantyState(),
@@ -258,6 +262,7 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     commerceTierDrafts: commerceTierDrafts.validateCommerceTierDrafts(input.commerceTierDrafts ?? []),
     commerceKitRecipes: commerceKitRecipes.validateCommerceKitRecipes(input.commerceKitRecipes ?? []),
     batchExpiryReminders: batchExpiry.validateBatchExpiryReminders(input.batchExpiryReminders ?? []),
+    grnBatchAttributions: grnBatches.validateGrnBatchAttributions(input.grnBatchAttributions ?? []),
     localLotCounts: lotCounts.validateLocalLotCounts(input.localLotCounts ?? []),
     serialCustody: serialCustody.validateSerialCustodyRecords(input.serialCustody ?? []),
     serviceWarranty: serviceWarranty.validateServiceWarrantyState(input.serviceWarranty ?? {warranties:[],claims:[]}),
@@ -306,6 +311,7 @@ function applyDomainSnapshot(snap: DomainSnapshot): void {
   if (snap.phase10) phase10Store.hydratePhase10(snap.phase10);
   if (snap.warehouse) warehouseStore.hydrateWarehouseState(snap.warehouse);
   batchExpiry.hydrateBatchExpiryReminders(snap.batchExpiryReminders ?? []);
+  grnBatches.hydrateGrnBatchAttributions(snap.grnBatchAttributions ?? []);
   lotCounts.hydrateLocalLotCounts(snap.localLotCounts ?? []);
   serialCustody.hydrateSerialCustodyRecords(snap.serialCustody ?? []);
   serviceWarranty.hydrateServiceWarrantyState(snap.serviceWarranty ?? {warranties:[],claims:[]});
@@ -367,6 +373,7 @@ export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error
       warehouses: incoming.warehouse?.warehouses?.length ?? 0,
       warehouseLocations: incoming.warehouse?.locations?.length ?? 0,
       batchExpiryReminders: incoming.batchExpiryReminders?.length ?? 0,
+      grnBatchAttributions: incoming.grnBatchAttributions?.length ?? 0,
       localLotCounts: incoming.localLotCounts?.length ?? 0,
       serialCustody: incoming.serialCustody?.length ?? 0,
       serviceWarranties: incoming.serviceWarranty?.warranties.length ?? 0,
