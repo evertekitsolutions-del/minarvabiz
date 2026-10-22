@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { ServiceOrder, ServiceType, OrderStatus, Customer, StaffMember, StaffAssignment } from "@minarvabiz/types";
 import { DataTable, type Column } from "../data/DataTable";
+import { ServiceWarrantyPanel } from "./ServiceWarrantyPanel";
 import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { inputClass, selectClass } from "../forms/FormField";
@@ -316,6 +317,7 @@ export function OrderList({
       </div>
 
       <DataTable columns={columns} rows={visibleOrders} onRowClick={onSelect} emptyMessage={overdueOnly ? "No overdue orders match the selected filters" : assignedStaffFilter ? "No orders match the assigned staff filter" : "No orders match the selected filters"} />
+      <ServiceWarrantyPanel orders={orders} />
     </div>
   );
 }
