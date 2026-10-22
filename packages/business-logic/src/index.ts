@@ -245,3 +245,6 @@ export * from "./goods-receipt-batch-metadata";
 
 // SVC-011 offline service warranty and claim lifecycle; hosted Web is read-only.
 export * from "./service-warranty-register";
+
+// SVC-011 permission-scoped, read-only warranty expiry worksheet / CSV.
+export * from "./service-warranty-expiry";
