@@ -775,7 +775,7 @@ test("SVC-007 refuses duplicate stock effects, stale revisions, out of branch pr
   ])assert.throws(()=>domain.recordServiceVisitPart(usedInput(arrived,wrong)),
     undefined,JSON.stringify(wrong));
   product.branchId="b2";
-  assert.throws(()=>domain.recordServiceVisitPart(usedInput(arrived)),/same branch/);
+  assert.throws(()=>domain.recordServiceVisitPart(usedInput(arrived)),/shared catalog/);
   product.branchId="b1";product.isActive=false;
   assert.throws(()=>domain.recordServiceVisitPart(usedInput(arrived)),/active product/);
   product.isActive=true;product.costPrice=12.345;

@@ -1,7 +1,7 @@
 # SVC-007 — Service Visit Spare Parts Used Register (Windows Offline)
 
 Field technician workflow: after **Site Arrived**, an authorized manager may
-select a product linked to the active branch, record quantity (3-decimal
+select a product linked to the active branch or a global/shared catalog item, record quantity (3-decimal
 precision), and note what part was physically used. The record captures
 product name, SKU, unit, quantity, unit cost in integer cents and extended
 original cost. It is preserved on site visit completion and in the existing

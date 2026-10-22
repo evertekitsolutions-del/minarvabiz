@@ -466,8 +466,8 @@ export function recordServiceVisitPart(input:{
     throw new Error("Maximum service part entries reached");
   const productId=id(input.productId,"service part product id");
   const product=productsStore.getProduct(productId);
-  if(!product||!product.isActive||product.branchId!==active)
-    throw new Error("Select an active product from the same branch");
+  if(!product||!product.isActive||(product.branchId!=null&&product.branchId!==active))
+    throw new Error("Select an active product from this branch or the shared catalog");
   const quantityMilli=parseServicePartQuantity(input.quantity);
   const cost=Math.round(product.costPrice*100);
   if(!Number.isSafeInteger(cost)||cost<0||

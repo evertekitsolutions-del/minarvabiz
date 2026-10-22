@@ -22,7 +22,7 @@ export function ServiceVisitPartsPanel({visit,canWrite,mutate}:{
   const [reason,setReason]=React.useState("");
   const editable=canWrite&&visit.status==="arrived";
   const products=store.listProducts().filter(p=>
-    p.isActive&&p.branchId===visit.branchId);
+    p.isActive&&(p.branchId==null||p.branchId===visit.branchId));
   const parts=visit.parts??[];
   const totals=summarizeServiceVisitParts(parts);
   const selected=products.find(p=>p.id===productId);
@@ -36,7 +36,7 @@ export function ServiceVisitPartsPanel({visit,canWrite,mutate}:{
       consumption separately using the authorized inventory workflow.
     </p>
     {editable&&<div className="mt-2 grid gap-2 sm:grid-cols-2">
-      <label className="text-xs font-medium">Active same-branch part
+      <label className="text-xs font-medium">Active branch or shared-catalog part
         <select aria-label={"Service part product "+visit.id}
           className={selectClass+" mt-1"} value={productId}
           onChange={e=>setProductId(e.target.value)}>
