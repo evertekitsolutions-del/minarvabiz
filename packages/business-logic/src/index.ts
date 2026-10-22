@@ -262,3 +262,6 @@ export * from "./service-site-visit-signature";
 
 // SVC-012 immutable visit-specific arrival/completion targets and deadline worksheet.
 export * from "./service-visit-sla";
+
+// SVC-007 offline parts-used annotations; no live WMS or GL posting.
+export * from "./service-visit-parts";

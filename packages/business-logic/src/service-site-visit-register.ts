@@ -11,6 +11,11 @@ import {auditAction} from "./audit-actions";
 import {touchPersistence} from "./autosave";
 import * as ordersStore from "./orders-store";
 import * as staffStore from "./phase6-store";
+import * as productsStore from "./store";
+import {
+  costPartMinor, parseServicePartQuantity, validateServiceVisitPart, validateServiceVisitParts,
+  SERVICE_VISIT_MAX_PARTS, type ServiceVisitPart,
+} from "./service-visit-parts";
 import {
   validateServiceVisitEvidence, validateServiceVisitEvidenceList,
   serviceVisitEvidenceBytes, SITE_EVIDENCE_MAX_VISIT_FILES,
@@ -68,12 +73,14 @@ export interface ServiceSiteVisit {
   readonly handover?:SiteVisitHandover|null;
   /** Optional immutable visit-level arrival/completion target, never a contract-level SLA. */
   readonly sla?:ServiceVisitSlaTargets;
+  /** Staff-recorded parts; no stock movement, COGS or invoice posting. */
+  readonly parts?:ServiceVisitPart[];
 }
 const records:ServiceSiteVisit[]=[];
 const CAPACITY=10_000;
 const FIELDS=["id","branchId","orderId","customerId","assignmentId","staffId",
  "scheduledOn","siteAddress","notes","status","arrivedAt","completedAt",
- "cancellationReason","version","createdAt","updatedAt","checklist","evidence","handover","sla"];
+ "cancellationReason","version","createdAt","updatedAt","checklist","evidence","handover","sla","parts"];
 function id(value:unknown,label:string):string{
   if(typeof value!=="string"||value.length<1||value.length>128||
     value.trim()!==value||/[\r\n]/.test(value))throw new Error("Invalid "+label);
@@ -138,7 +145,7 @@ function cloneVisit(v:ServiceSiteVisit):ServiceSiteVisit{
   return {...v,...(v.checklist?{checklist:v.checklist.map(c=>({...c}))}:{}),
     ...(v.evidence?{evidence:v.evidence.map(e=>({...e}))}:{}),
     ...(Object.hasOwn(v,"handover")?{handover:v.handover?{...v.handover}:null}:{}),
-    ...(v.sla?{sla:{...v.sla}}:{})};
+    ...(v.sla?{sla:{...v.sla}}:{}),...(v.parts?{parts:v.parts.map(p=>({...p}))}:{})};
 }
 /** All visit audit paths must exclude both attachments and signature image bytes. */
 function auditVisit(v:ServiceSiteVisit){
@@ -188,8 +195,11 @@ function record(value:unknown):ServiceSiteVisit{
   const withHandover=Object.hasOwn(o,"handover")
     ? {...withEvidence,handover:validateSiteVisitHandover(
         o.handover,v.arrivedAt,v.updatedAt,v.status)} : withEvidence;
-  return Object.hasOwn(o,"sla")
+  const withSla=Object.hasOwn(o,"sla")
     ? {...withHandover,sla:validateServiceVisitSla(o.sla,v.createdAt)} : withHandover;
+  return Object.hasOwn(o,"parts")
+    ? {...withSla,parts:validateServiceVisitParts(o.parts,v.arrivedAt,v.updatedAt,v.status)}
+    : withSla;
 }
 /** Pure validation precedes snapshot mutation; older backups have no visit key. */
 export function validateServiceSiteVisits(input:unknown):ServiceSiteVisit[]{
@@ -270,7 +280,7 @@ export function scheduleServiceSiteVisit(input:{
     assignmentId,staffId:assignment.staffId,scheduledOn,siteAddress,notes,
     status:"scheduled",arrivedAt:null,completedAt:null,cancellationReason:null,
     version:1,createdAt:now,updatedAt:now,checklist:newSiteVisitChecklist(),evidence:[],handover:null,
-    ...(input.sla?{sla:validateServiceVisitSla(input.sla,now)}:{})});
+    ...(input.sla?{sla:validateServiceVisitSla(input.sla,now)}:{}),parts:[]});
   records.push(v);
   auditAction("service_site_visit.schedule","service_site_visit",v.id,null,auditVisit(v));
   touchPersistence();
@@ -433,6 +443,79 @@ export function recordServiceVisitSignatureDecline(input:{
   return setHandover({visitId:input.visitId,expectedVersion:input.expectedVersion,
     handover:{status:"declined",signerName:null,signaturePngBase64:null,
       reason:input.reason,notice:SITE_VISIT_HANDOVER_NOTICE}});
+}
+/**
+ * Manual offline evidence of parts installed/used, deliberately NOT a stock debit.
+ * Store cost snapshot in integer minor units, so future posting can reconcile
+ * using a separate authorized idempotent financial/stock transaction.
+ */
+export function recordServiceVisitPart(input:{
+  readonly visitId:string;readonly expectedVersion:number;readonly productId:string;
+  readonly quantity:string;readonly notes?:string;
+}):ServiceSiteVisit{
+  assertPermission("orders.assign");writable();
+  const active=branch();
+  const idx=records.findIndex(v=>v.id===input.visitId&&v.branchId===active);
+  if(idx<0)throw new Error("Visit part record not found in active branch");
+  const old=records[idx];
+  if(old.version!==input.expectedVersion)throw new Error("Site visit changed; refresh first");
+  if(old.status!=="arrived")throw new Error("Parts can only be recorded during an arrived visit");
+  linkedOrder(old.orderId,active);
+  linkedAssignment(old.assignmentId,old.orderId,active);
+  if((old.parts?.length??0)>=SERVICE_VISIT_MAX_PARTS)
+    throw new Error("Maximum service part entries reached");
+  const productId=id(input.productId,"service part product id");
+  const product=productsStore.getProduct(productId);
+  if(!product||!product.isActive||(product.branchId!=null&&product.branchId!==active))
+    throw new Error("Select an active product from this branch or the shared catalog");
+  const quantityMilli=parseServicePartQuantity(input.quantity);
+  const cost=Math.round(product.costPrice*100);
+  if(!Number.isSafeInteger(cost)||cost<0||
+     Math.abs(cost/100-product.costPrice)>0.000001)
+    throw new Error("Product has invalid precise cost");
+  const notes=memo(input.notes??"","part usage notes",500);
+  const now=nowISO();
+  const item=validateServiceVisitPart({
+    id:generateId(),productId:product.id,productName:product.name,
+    sku:product.sku??null,unit:product.unit,quantityMilli,
+    unitCostMinor:cost,totalCostMinor:costPartMinor(quantityMilli,cost),
+    notes,recordedAt:now,status:"used",voidedAt:null,voidReason:null,
+  },old.arrivedAt,now,old.status);
+  const next=record({...old,parts:[...(old.parts??[]),item],
+    version:old.version+1,updatedAt:now});
+  records.splice(idx,1,next);
+  auditAction("service_site_visit.part_record","service_site_visit",next.id,
+    {version:old.version},{version:next.version,part:{...item},stockPosted:false});
+  touchPersistence();
+  return cloneVisit(next);
+}
+export function voidServiceVisitPart(input:{
+  readonly visitId:string;readonly expectedVersion:number;readonly partId:string;
+  readonly reason:string;
+}):ServiceSiteVisit{
+  assertPermission("orders.assign");writable();
+  const active=branch();
+  const idx=records.findIndex(v=>v.id===input.visitId&&v.branchId===active);
+  if(idx<0)throw new Error("Visit part record not found in active branch");
+  const old=records[idx];
+  if(old.version!==input.expectedVersion)throw new Error("Site visit changed; refresh first");
+  if(old.status!=="arrived")throw new Error("Parts can only be corrected before completion");
+  linkedOrder(old.orderId,active);
+  linkedAssignment(old.assignmentId,old.orderId,active);
+  const part=old.parts?.find(x=>x.id===input.partId);
+  if(!part||part.status!=="used")throw new Error("Active service part entry not found");
+  const reason=memo(input.reason,"part correction reason",500,true);
+  if(reason.length<3)throw new Error("Service part correction reason required");
+  const now=nowISO();
+  const corrected=validateServiceVisitPart({...part,status:"voided",
+    voidedAt:now,voidReason:reason},old.arrivedAt,now,old.status);
+  const next=record({...old,parts:old.parts?.map(x=>x.id===part.id?corrected:x),
+    version:old.version+1,updatedAt:now});
+  records.splice(idx,1,next);
+  auditAction("service_site_visit.part_void","service_site_visit",next.id,
+    {version:old.version},{version:next.version,partId:part.id,reason,stockPosted:false});
+  touchPersistence();
+  return cloneVisit(next);
 }
 function transition(input:{
   visitId:string;expectedVersion:number;action:"arrive"|"complete"|"cancel";reason?:string;
