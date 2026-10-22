@@ -21,6 +21,7 @@ import {
   SITE_VISIT_HANDOVER_NOTICE, handoverImageBytes, safeHandoverAudit,
   validateHandoverPng, validateSiteVisitHandover, type SiteVisitHandover,
 } from "./service-site-visit-signature";
+import {validateServiceVisitSla,type ServiceVisitSlaTargets} from "./service-visit-sla";
 
 export type SiteVisitStatus = "scheduled" | "arrived" | "completed" | "cancelled";
 export type SiteVisitCheckResult = "pending" | "passed" | "failed" | "not_applicable";
@@ -65,12 +66,14 @@ export interface ServiceSiteVisit {
   readonly evidence?:ServiceSiteVisitEvidence[];
   /** Optional on historic visits; new site visits require handover acknowledgment/decline. */
   readonly handover?:SiteVisitHandover|null;
+  /** Optional immutable visit-level arrival/completion target, never a contract-level SLA. */
+  readonly sla?:ServiceVisitSlaTargets;
 }
 const records:ServiceSiteVisit[]=[];
 const CAPACITY=10_000;
 const FIELDS=["id","branchId","orderId","customerId","assignmentId","staffId",
  "scheduledOn","siteAddress","notes","status","arrivedAt","completedAt",
- "cancellationReason","version","createdAt","updatedAt","checklist","evidence","handover"];
+ "cancellationReason","version","createdAt","updatedAt","checklist","evidence","handover","sla"];
 function id(value:unknown,label:string):string{
   if(typeof value!=="string"||value.length<1||value.length>128||
     value.trim()!==value||/[\r\n]/.test(value))throw new Error("Invalid "+label);
@@ -134,7 +137,8 @@ function validChecklist(input:unknown,arrivedAt:string|null,updatedAt:string,sta
 function cloneVisit(v:ServiceSiteVisit):ServiceSiteVisit{
   return {...v,...(v.checklist?{checklist:v.checklist.map(c=>({...c}))}:{}),
     ...(v.evidence?{evidence:v.evidence.map(e=>({...e}))}:{}),
-    ...(Object.hasOwn(v,"handover")?{handover:v.handover?{...v.handover}:null}:{})};
+    ...(Object.hasOwn(v,"handover")?{handover:v.handover?{...v.handover}:null}:{}),
+    ...(v.sla?{sla:{...v.sla}}:{})};
 }
 /** All visit audit paths must exclude both attachments and signature image bytes. */
 function auditVisit(v:ServiceSiteVisit){
@@ -181,9 +185,11 @@ function record(value:unknown):ServiceSiteVisit{
   const withEvidence=Object.hasOwn(o,"evidence")
     ? {...validated,evidence:validateServiceVisitEvidenceList(
         o.evidence,v.arrivedAt,v.updatedAt,v.status)} : validated;
-  return Object.hasOwn(o,"handover")
+  const withHandover=Object.hasOwn(o,"handover")
     ? {...withEvidence,handover:validateSiteVisitHandover(
         o.handover,v.arrivedAt,v.updatedAt,v.status)} : withEvidence;
+  return Object.hasOwn(o,"sla")
+    ? {...withHandover,sla:validateServiceVisitSla(o.sla,v.createdAt)} : withHandover;
 }
 /** Pure validation precedes snapshot mutation; older backups have no visit key. */
 export function validateServiceSiteVisits(input:unknown):ServiceSiteVisit[]{
@@ -243,6 +249,7 @@ export function listServiceSiteVisits():ServiceSiteVisit[]{
 }
 export function scheduleServiceSiteVisit(input:{
   orderId:string;assignmentId:string;scheduledOn:string;siteAddress:string;notes?:string;
+  sla?:ServiceVisitSlaTargets;
 }):ServiceSiteVisit{
   assertPermission("orders.assign");writable();
   const branchId=branch(),orderId=id(input.orderId,"order id");
@@ -262,7 +269,8 @@ export function scheduleServiceSiteVisit(input:{
   const v=record({id:generateId(),branchId,orderId,customerId:order.customerId,
     assignmentId,staffId:assignment.staffId,scheduledOn,siteAddress,notes,
     status:"scheduled",arrivedAt:null,completedAt:null,cancellationReason:null,
-    version:1,createdAt:now,updatedAt:now,checklist:newSiteVisitChecklist(),evidence:[],handover:null});
+    version:1,createdAt:now,updatedAt:now,checklist:newSiteVisitChecklist(),evidence:[],handover:null,
+    ...(input.sla?{sla:validateServiceVisitSla(input.sla,now)}:{})});
   records.push(v);
   auditAction("service_site_visit.schedule","service_site_visit",v.id,null,auditVisit(v));
   touchPersistence();
