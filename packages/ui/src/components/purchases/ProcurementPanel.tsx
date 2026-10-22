@@ -18,6 +18,7 @@ import { Modal } from "../forms/Modal";
 import { formatMoney } from "../customers/format";
 import { RfqDraftPanel } from "./RfqDraftPanel";
 import { LandedCostPanel } from "./LandedCostPanel";
+import { GrnBatchLineFields } from "./GrnBatchLineFields";
 import { buildSupplierDeliveryScores, buildPostedSupplierCostComparison, phase9Store } from "@minarvabiz/business-logic";
 
 type DraftLine = {
@@ -949,21 +950,14 @@ export function ProcurementPanel({
                       </select>
                     </FormField>
                     {canSaveLocalBatch && (
-                      <>
-                        <FormField label="Supplier batch / lot code (optional)">
-                          <input aria-label={`GRN batch code ${line.id}`} className={inputClass}
-                            maxLength={64} value={receiveBatch[line.id] || ""}
-                            placeholder="Batch printed on goods"
-                            disabled={!line.productId || remaining <= 0}
-                            onChange={(e) => setReceiveBatch((old) => ({ ...old, [line.id]: e.target.value }))} />
-                        </FormField>
-                        <FormField label="Batch expiry date (paired with code)">
-                          <input aria-label={`GRN batch expiry ${line.id}`}
-                            className={inputClass} type="date" value={receiveExpiry[line.id] || ""}
-                            disabled={!line.productId || remaining <= 0}
-                            onChange={(e) => setReceiveExpiry((old) => ({ ...old, [line.id]: e.target.value }))} />
-                        </FormField>
-                      </>
+                      <GrnBatchLineFields
+                        lineId={line.id}
+                        batch={receiveBatch[line.id] || ""}
+                        expiresOn={receiveExpiry[line.id] || ""}
+                        disabled={!line.productId || remaining <= 0}
+                        onBatchChange={value=>setReceiveBatch(old=>({...old,[line.id]:value}))}
+                        onExpiryChange={value=>setReceiveExpiry(old=>({...old,[line.id]:value}))}
+                      />
                     )}
                   </div>
                 );
