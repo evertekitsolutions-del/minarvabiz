@@ -306,7 +306,7 @@ function evidenceAudit(e:ServiceSiteVisitEvidence){
   return meta;
 }
 function editEvidence(visitId:string,expectedVersion:number,
-  update:(v:ServiceSiteVisit,now:string)=>{next:ServiceSiteVisit;evidence:ServiceSiteVisitEvidence;kind:"add"|"remove"}):ServiceSiteVisit{
+  update:(v:ServiceSiteVisit,now:string)=>{next:ServiceSiteVisit;evidence:ServiceSiteVisitEvidence;kind:"add"|"remove";reason?:string}):ServiceSiteVisit{
   assertPermission("orders.assign");writable();
   const active=branch();
   const i=records.findIndex(v=>v.id===visitId&&v.branchId===active);
@@ -316,7 +316,7 @@ function editEvidence(visitId:string,expectedVersion:number,
   if(previous.status!=="arrived")throw new Error("Site evidence can only change after arrival, before completion");
   linkedOrder(previous.orderId,active);
   linkedAssignment(previous.assignmentId,previous.orderId,active);
-  const {next,evidence,kind}=update(previous,nowISO());
+  const {next,evidence,kind,reason}=update(previous,nowISO());
   const checked=record(next);
   const total=records.reduce((sum,v)=>sum+
     (v.id===previous.id&&v.branchId===previous.branchId?0:serviceVisitEvidenceBytes(v.evidence??[])),0)+
@@ -325,7 +325,7 @@ function editEvidence(visitId:string,expectedVersion:number,
     throw new Error("Total offline site evidence exceeds snapshot capacity");
   records.splice(i,1,checked);
   auditAction("service_site_visit.evidence_"+kind,"service_site_visit",checked.id,
-    {version:previous.version},{version:checked.version,evidence:evidenceAudit(evidence)});
+    {version:previous.version},{version:checked.version,evidence:evidenceAudit(evidence),...(reason?{reason}:{})});
   touchPersistence();
   return cloneVisit(checked);
 }
@@ -354,7 +354,7 @@ export function removeServiceSiteVisitEvidence(input:{
     if(!existing)throw new Error("Evidence attachment not found");
     const reason=memo(input.reason,"evidence removal reason",500,true);
     if(reason.length<3)throw new Error("Evidence removal reason required");
-    return {kind:"remove" as const,evidence:existing,
+    return {kind:"remove" as const,evidence:existing,reason,
       next:{...v,version:v.version+1,updatedAt:now,
         evidence:(v.evidence??[]).filter(e=>e.id!==existing.id)}};
   });
