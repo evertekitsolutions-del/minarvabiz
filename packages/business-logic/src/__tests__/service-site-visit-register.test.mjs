@@ -91,6 +91,9 @@ test("arrival and completion form durable, one-way versioned lifecycle",()=>{
       itemId:item.id,result:"passed",notes:"Verified"});
     version=updated.version;
   }
+  const ack=domain.recordServiceVisitSignatureDecline({visitId:v.id,
+    expectedVersion:version,reason:"Customer declined handover signature"});
+  version=ack.version;
   const completed=domain.completeServiceSiteVisit(v.id,version);
   assert.equal(completed.status,"completed");
   assert.equal(completed.version,version+1);
@@ -215,7 +218,9 @@ test("required checklist blocks premature completion; failed item must be correc
     domain.setServiceSiteVisitCheck({visitId:v.id,expectedVersion:version++,
       itemId:check.id,result:"passed",notes:"Checked"});
   }
-  const done=domain.completeServiceSiteVisit(v.id,version);
+  const ack=domain.recordServiceVisitSignatureDecline({visitId:v.id,
+    expectedVersion:version,reason:"Customer was unavailable at handover"});
+  const done=domain.completeServiceSiteVisit(v.id,ack.version);
   assert.equal(done.status,"completed");
   assert.deepEqual(done.checklist.map(x=>x.result),
     ["not_applicable","passed","passed","passed"]);
@@ -415,7 +420,9 @@ test("SVC-008 permission, tenant and lifecycle boundaries protect evidence write
       itemId:check.id,result:"passed",notes:"Verified"});
   }
   const final=domain.listServiceSiteVisits()[0];
-  const completed=domain.completeServiceSiteVisit(final.id,final.version);
+  const ack=domain.recordServiceVisitSignatureDecline({visitId:final.id,
+    expectedVersion:final.version,reason:"Customer unable to sign at handover"});
+  const completed=domain.completeServiceSiteVisit(final.id,ack.version);
   assert.equal(completed.evidence.length,1);
   assert.throws(()=>domain.addServiceSiteVisitEvidence(fileInput(completed)),/after arrival/);
   assert.throws(()=>domain.removeServiceSiteVisitEvidence({
@@ -470,4 +477,190 @@ test("SVC-008 upload/download controls, existing snapshot path and raw-evidence 
   assert.match(service,/validateServiceVisitEvidenceList\(/);
   assert.match(service,/serviceVisitEvidenceBytes\(/);
   assert.match(service,/const \{dataBase64:ignored/);
+});
+
+
+
+function handoverPng(width=64,height=64){
+  // Real 64x64 RGBA PNG with deflated scanlines and valid PNG CRC chunks.
+  const zlib=require("node:zlib");
+  const crc32=buf=>{
+    let c=0xffffffff;
+    for(const b of buf){
+      c^=b;
+      for(let i=0;i<8;i++)c=(c>>>1)^((c&1)?0xedb88320:0);
+    }
+    return (c^0xffffffff)>>>0;
+  };
+  const chunk=(name,body)=>{
+    const nameBuf=Buffer.from(name,"ascii"),len=Buffer.alloc(4),crc=Buffer.alloc(4);
+    len.writeUInt32BE(body.length);
+    crc.writeUInt32BE(crc32(Buffer.concat([nameBuf,body])));
+    return Buffer.concat([len,nameBuf,body,crc]);
+  };
+  const ihdr=Buffer.alloc(13);
+  ihdr.writeUInt32BE(width,0);ihdr.writeUInt32BE(height,4);
+  ihdr[8]=8;ihdr[9]=2;
+  const scanline=Buffer.concat([Buffer.from([0]),Buffer.alloc(width*3,255)]);
+  const signature=Buffer.from([137,80,78,71,13,10,26,10]);
+  const bytes=Buffer.concat([signature,chunk("IHDR",ihdr),chunk("IDAT",
+    zlib.deflateSync(Buffer.concat(Array.from({length:height},()=>scanline)))),
+    chunk("IEND",Buffer.alloc(0))]);
+  return bytes.toString("base64");
+}
+function readyVisit(){
+  let visit=domain.markServiceSiteArrival(schedule().id,1);
+  for(const item of visit.checklist){
+    visit=domain.setServiceSiteVisitCheck({visitId:visit.id,expectedVersion:visit.version,
+      itemId:item.id,result:"passed",notes:"Pass"});
+  }
+  return visit;
+}
+test("SVC-009 signing records user consent, protects original image and permits visit completion",()=>{
+  reset();
+  const visit=readyVisit();
+  assert.equal(visit.handover,null);
+  assert.throws(()=>domain.completeServiceSiteVisit(visit.id,visit.version),/signature or reasoned refusal/);
+  const png=handoverPng();
+  const before=persist;
+  const signed=domain.captureServiceVisitSignature({
+    visitId:visit.id,expectedVersion:visit.version,
+    signerName:"Customer Representative",signaturePngBase64:png,
+  });
+  assert.equal(signed.handover.status,"signed");
+  assert.equal(signed.handover.signerName,"Customer Representative");
+  assert.equal(signed.handover.signaturePngBase64,png);
+  assert.equal(signed.version,visit.version+1);
+  assert.equal(persist,before+1);
+  assert.equal(events.at(-1)[0],"service_site_visit.handover");
+  assert.ok(!JSON.stringify(events.at(-1)).includes(png));
+  assert.equal(events.at(-1)[4].handover.signatureCaptured,true);
+  const completed=domain.completeServiceSiteVisit(signed.id,signed.version);
+  assert.equal(completed.status,"completed");
+  assert.equal(completed.handover.status,"signed");
+  assert.ok(!JSON.stringify(events.at(-1)).includes(png));
+  assert.throws(()=>domain.captureServiceVisitSignature({
+    visitId:signed.id,expectedVersion:completed.version,
+    signerName:"Customer Representative",signaturePngBase64:png,
+  }),/only be recorded once/);
+  const cloned=domain.listServiceSiteVisits()[0];
+  cloned.handover.signaturePngBase64="tampered";
+  assert.equal(domain.exportServiceSiteVisits()[0].handover.signaturePngBase64,png);
+  const snapshot=domain.exportServiceSiteVisits();
+  domain.hydrateServiceSiteVisits([]);
+  domain.hydrateServiceSiteVisits(snapshot);
+  assert.deepEqual(domain.exportServiceSiteVisits(),snapshot);
+});
+test("SVC-009 refusal is explicit, reasoned and accepted instead of forcing signature",()=>{
+  reset();
+  const visit=readyVisit();
+  assert.throws(()=>domain.recordServiceVisitSignatureDecline({
+    visitId:visit.id,expectedVersion:visit.version,reason:"no",
+  }),/reason/);
+  const declined=domain.recordServiceVisitSignatureDecline({
+    visitId:visit.id,expectedVersion:visit.version,
+    reason:"Customer does not wish to sign the handover",
+  });
+  assert.equal(declined.handover.status,"declined");
+  assert.equal(declined.handover.signerName,null);
+  assert.equal(declined.handover.signaturePngBase64,null);
+  assert.equal(declined.handover.notice,require("../service-site-visit-signature.ts").SITE_VISIT_HANDOVER_NOTICE);
+  assert.equal(domain.completeServiceSiteVisit(visit.id,declined.version).status,"completed");
+  assert.ok(!JSON.stringify(events.at(-1)).includes("data:image/png"));
+});
+test("SVC-009 permission, branch, order, assignment and installed-Web safeguards",()=>{
+  reset();
+  const scheduled=schedule();
+  assert.throws(()=>domain.recordServiceVisitSignatureDecline({
+    visitId:scheduled.id,expectedVersion:1,reason:"Customer not available",
+  }),/after site arrival/);
+  const arrived=domain.markServiceSiteArrival(scheduled.id,1);
+  const input={visitId:arrived.id,expectedVersion:arrived.version,reason:"Customer refused signature"};
+  branch.id="branch-b";
+  assert.throws(()=>domain.recordServiceVisitSignatureDecline(input),/active branch/);
+  branch.id="b1";
+  permissions.delete("orders.assign");
+  assert.throws(()=>domain.recordServiceVisitSignatureDecline(input),/Denied/);
+  permissions.add("orders.assign");
+  isProd=true;
+  assert.throws(()=>domain.recordServiceVisitSignatureDecline(input),/installed Windows SQLite/);
+  isProd=false;
+  assignment.status="cancelled";
+  assert.throws(()=>domain.recordServiceVisitSignatureDecline(input),/assignment/);
+  assignment.status="assigned";
+  order.status="delivered";
+  assert.throws(()=>domain.recordServiceVisitSignatureDecline(input),/active order/);
+  order.status="processing";
+  const declined=domain.recordServiceVisitSignatureDecline(input);
+  assert.throws(()=>domain.recordServiceVisitSignatureDecline({
+    ...input,expectedVersion:declined.version,
+  }),/only be recorded once/);
+});
+test("SVC-009 rejects fake/tampered signatures and forged snapshot acknowledgments without partial hydration",()=>{
+  reset();const v=readyVisit();
+  const png=handoverPng();
+  for(const signaturePngBase64 of [
+    "", "%%%%", "eGVj",Buffer.alloc(200000,33).toString("base64"),
+    Buffer.from("<svg onload=alert(1)>","utf8").toString("base64"),
+    handoverPng(1,1),
+  ]){
+    assert.throws(()=>domain.captureServiceVisitSignature({
+      visitId:v.id,expectedVersion:v.version,
+      signerName:"Person",signaturePngBase64,
+    }),undefined,signaturePngBase64.slice(0,20));
+  }
+  assert.equal(domain.exportServiceSiteVisits()[0].handover,null);
+  const s=domain.captureServiceVisitSignature({
+    visitId:v.id,expectedVersion:v.version,
+    signerName:"Person",signaturePngBase64:png,
+  });
+  const original=domain.exportServiceSiteVisits();
+  const bad=[
+    [{...s,handover:{...s.handover,notice:"All warranty rights waived"}}],
+    [{...s,handover:{...s.handover,status:"declined"}}],
+    [{...s,handover:{...s.handover,signaturePngBase64:"tampered"}}],
+    [{...s,handover:{...s.handover,signerName:""}}],
+    [{...s,handover:{...s.handover,confirmedAt:"2024-01-01T00:00:00.000Z"}}],
+    [{...s,handover:{...s.handover,bogus:true}}],
+    [{...s,status:"scheduled",arrivedAt:null,handover:s.handover}],
+  ];
+  for(const snapshot of bad){
+    assert.throws(()=>domain.hydrateServiceSiteVisits(snapshot));
+    assert.deepEqual(domain.exportServiceSiteVisits(),original);
+  }
+  const legacy=structuredClone(s);
+  delete legacy.handover;
+  domain.hydrateServiceSiteVisits([legacy]);
+  assert.deepEqual(domain.exportServiceSiteVisits(),[legacy]);
+  domain.hydrateServiceSiteVisits(original);
+});
+test("SVC-009 existing photo evidence bytes remain absent from all visit/checklist/complete audits",()=>{
+  reset();let visit=domain.markServiceSiteArrival(schedule().id,1);
+  visit=domain.addServiceSiteVisitEvidence(fileInput(visit));
+  for(const item of visit.checklist){
+    visit=domain.setServiceSiteVisitCheck({visitId:visit.id,expectedVersion:visit.version,
+      itemId:item.id,result:"passed",notes:"Checked"});
+    assert.ok(!JSON.stringify(events.at(-1)).includes(PNG_BASE64));
+  }
+  const signed=domain.recordServiceVisitSignatureDecline({
+    visitId:visit.id,expectedVersion:visit.version,reason:"Customer unavailable for signing",
+  });
+  assert.ok(!JSON.stringify(events.at(-1)).includes(PNG_BASE64));
+  domain.completeServiceSiteVisit(signed.id,signed.version);
+  assert.ok(!JSON.stringify(events.at(-1)).includes(PNG_BASE64));
+});
+test("SVC-009 customer signature canvas, consent, refusal and safe audit wiring",()=>{
+  const root=new URL("../../../",import.meta.url);
+  const ui=fs.readFileSync(new URL("ui/src/components/orders/ServiceVisitSignaturePanel.tsx",root),"utf8");
+  const panel=fs.readFileSync(new URL("ui/src/components/orders/ServiceSiteVisitPanel.tsx",root),"utf8");
+  const snapshot=fs.readFileSync(new URL("business-logic/src/persistence.ts",root),"utf8");
+  const domainSrc=fs.readFileSync(new URL("business-logic/src/service-site-visit-register.ts",root),"utf8");
+  assert.match(ui,/onPointerDown=\{down\}/);
+  assert.match(ui,/toDataURL\("image\/png"\)/);
+  assert.match(ui,/recordServiceVisitSignatureDecline\(/);
+  assert.match(ui,/SITE_VISIT_HANDOVER_NOTICE/);
+  assert.match(panel,/<ServiceVisitSignaturePanel visit=\{v\}/);
+  assert.match(domainSrc,/auditVisit\(before\),auditVisit\(next\)/);
+  assert.match(domainSrc,/signature or reasoned refusal/);
+  assert.match(snapshot,/siteVisits\.hydrateServiceSiteVisits/);
 });
