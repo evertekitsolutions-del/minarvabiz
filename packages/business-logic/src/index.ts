@@ -229,3 +229,6 @@ export * from "./lot-stock-sqlite-pilot";
 
 // INV-005 opt-in SQLite sale return quarantine; NOT production checkout authority.
 export * from "./lot-return-sqlite-pilot";
+
+// INV-005 isolated SQLite quarantine QC release/reject; never renderer or live POS authority.
+export * from "./lot-quarantine-qc-sqlite-pilot";

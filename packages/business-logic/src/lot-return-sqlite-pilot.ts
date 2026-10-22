@@ -117,7 +117,7 @@ function checkedReturnRecord(
   const byId=new Map(quarantine.map(x=>[x.lot_id,x]));
   for(const a of stored){
     const x=byId.get(a.lotId);
-    if(!x||x.status!=="quarantined"||x.batch_code!==a.batchCode||
+    if(!x||!["quarantined","released","rejected"].includes(String(x.status))||x.batch_code!==a.batchCode||
        Number(x.quantity_milli)!==a.quantityMilli){
       throw new Error("Quarantine custody record does not match original return");
     }
