@@ -14,6 +14,8 @@ let order={id:"o1",customerId:"c1",branchId:"b1",orderDate:"2026-10-01",
   status:"processing",deletedAt:null};
 let member={id:"s1",status:"active"};
 let assignment={id:"a1",staffId:"s1",orderId:"o1",status:"assigned"};
+let product={id:"p1",name:"CCTV Power Supply",sku:"SMPS-12V",unit:"pcs",
+  branchId:"b1",isActive:true,costPrice:120.25,stockQuantity:10};
 const mocked={
   "@minarvabiz/utils":{generateId:()=>String(++seq),
     nowISO:()=>"2026-10-22T08:00:00.000Z"},
@@ -23,6 +25,7 @@ const mocked={
   "./audit-actions":{auditAction:(...args)=>events.push(args)},
   "./autosave":{touchPersistence:()=>persist++},
   "./orders-store":{getOrder:id=>id===order.id?order:null},
+  "./store":{getProduct:id=>id===product.id?product:undefined},
   "./phase6-store":{listAssignments:({orderId})=>assignment.orderId===orderId?[assignment]:[],
     getStaff:id=>id===member.id?member:null},
 };
@@ -54,6 +57,8 @@ function reset(){
     status:"processing",deletedAt:null};
   member={id:"s1",status:"active"};
   assignment={id:"a1",staffId:"s1",orderId:"o1",status:"assigned"};
+  product={id:"p1",name:"CCTV Power Supply",sku:"SMPS-12V",unit:"pcs",
+    branchId:"b1",isActive:true,costPrice:120.25,stockQuantity:10};
   permissions.add("orders.assign");permissions.add("reports.view");isProd=false;
 }
 function schedule(override={}){
@@ -728,4 +733,145 @@ test("SVC-012 authorized branch is the only source for shared SLA worksheet",()=
   assert.throws(()=>domain.listServiceSiteVisits(),/Denied/);
   branch.id="b1";permissions.add("reports.view");
   assert.equal(domain.listServiceSiteVisits()[0].id,v.id);
+});
+
+
+function usedInput(visit,overrides={}){
+  return {visitId:visit.id,expectedVersion:visit.version,productId:"p1",
+    quantity:"2.125",notes:"Replaced faulty supply",...overrides};
+}
+test("SVC-007 records branch-linked part usage cost snapshots, without stock debits",()=>{
+  reset();
+  const arrived=domain.markServiceSiteArrival(schedule().id,1);
+  const oldStock=product.stockQuantity,oldPersist=persist;
+  const current=domain.recordServiceVisitPart(usedInput(arrived));
+  assert.equal(current.version,3);
+  assert.equal(current.parts.length,1);
+  const part=current.parts[0];
+  assert.equal(part.quantityMilli,2125);
+  assert.equal(part.unitCostMinor,12025);
+  assert.equal(part.totalCostMinor,25553);
+  assert.equal(part.productId,"p1");
+  assert.equal(part.productName,"CCTV Power Supply");
+  assert.equal(part.status,"used");
+  assert.equal(product.stockQuantity,oldStock,"No automatic inventory debit");
+  assert.equal(events.at(-1)[0],"service_site_visit.part_record");
+  assert.equal(events.at(-1)[4].stockPosted,false);
+  assert.equal(persist,oldPersist+1);
+  const copy=domain.listServiceSiteVisits();copy[0].parts[0].notes="modified";
+  assert.equal(domain.listServiceSiteVisits()[0].parts[0].notes,"Replaced faulty supply");
+  const snap=domain.exportServiceSiteVisits();
+  domain.hydrateServiceSiteVisits([]);
+  domain.hydrateServiceSiteVisits(snap);
+  assert.deepEqual(domain.exportServiceSiteVisits(),snap);
+});
+test("SVC-007 refuses duplicate stock effects, stale revisions, out of branch products and deleted SKU",()=>{
+  reset();const arrived=domain.markServiceSiteArrival(schedule().id,1);
+  const count=events.length,oldPersist=persist;
+  for(const wrong of [
+    {productId:"other"},{quantity:"0"},{quantity:"-2"},{quantity:"1.0001"},
+    {quantity:"Infinity"},{quantity:"1e3"},{quantity:""},
+    {notes:"x".repeat(501)},
+  ])assert.throws(()=>domain.recordServiceVisitPart(usedInput(arrived,wrong)),
+    undefined,JSON.stringify(wrong));
+  product.branchId="b2";
+  assert.throws(()=>domain.recordServiceVisitPart(usedInput(arrived)),/same branch/);
+  product.branchId="b1";product.isActive=false;
+  assert.throws(()=>domain.recordServiceVisitPart(usedInput(arrived)),/active product/);
+  product.isActive=true;product.costPrice=12.345;
+  assert.throws(()=>domain.recordServiceVisitPart(usedInput(arrived)),/precise cost/);
+  product.costPrice=120.25;
+  branch.id="b2";
+  assert.throws(()=>domain.recordServiceVisitPart(usedInput(arrived)),/active branch/);
+  branch.id="b1";permissions.delete("orders.assign");
+  assert.throws(()=>domain.recordServiceVisitPart(usedInput(arrived)),/Denied/);
+  permissions.add("orders.assign");isProd=true;
+  assert.throws(()=>domain.recordServiceVisitPart(usedInput(arrived)),/installed Windows SQLite/);
+  isProd=false;
+  assignment.status="cancelled";
+  assert.throws(()=>domain.recordServiceVisitPart(usedInput(arrived)),/assignment/);
+  assignment.status="assigned";
+  assert.deepEqual(domain.exportServiceSiteVisits()[0].parts,[]);
+  assert.equal(events.length,count);
+  assert.equal(persist,oldPersist);
+  const recorded=domain.recordServiceVisitPart(usedInput(arrived));
+  assert.throws(()=>domain.recordServiceVisitPart(usedInput(arrived)),/changed/);
+  assert.equal(recorded.parts.length,1);
+});
+test("SVC-007 corrections preserve immutable usage entries and exclude voided costs",()=>{
+  reset();let current=domain.markServiceSiteArrival(schedule().id,1);
+  current=domain.recordServiceVisitPart(usedInput(current));
+  assert.throws(()=>domain.voidServiceVisitPart({visitId:current.id,
+    expectedVersion:current.version,partId:current.parts[0].id,reason:"x"}),/reason/);
+  const active=current.parts[0];
+  const voided=domain.voidServiceVisitPart({
+    visitId:current.id,expectedVersion:current.version,partId:active.id,
+    reason:"Incorrect part quantity, reentered separately",
+  });
+  assert.equal(voided.parts.length,1);
+  assert.equal(voided.parts[0].status,"voided");
+  assert.equal(voided.parts[0].voidReason,"Incorrect part quantity, reentered separately");
+  assert.equal(events.at(-1)[0],"service_site_visit.part_void");
+  assert.equal(events.at(-1)[4].stockPosted,false);
+  assert.throws(()=>domain.voidServiceVisitPart({
+    visitId:voided.id,expectedVersion:voided.version,partId:active.id,reason:"Again"}),/not found/);
+  assert.equal(product.stockQuantity,10);
+});
+test("SVC-007 part usage is immutable after visit completion and available in backup",()=>{
+  reset();let current=domain.markServiceSiteArrival(schedule().id,1);
+  current=domain.recordServiceVisitPart(usedInput(current,{quantity:"0.5"}));
+  for(const check of current.checklist)current=domain.setServiceSiteVisitCheck({
+    visitId:current.id,expectedVersion:current.version,itemId:check.id,
+    result:"passed",notes:"Confirmed"});
+  current=domain.recordServiceVisitSignatureDecline({
+    visitId:current.id,expectedVersion:current.version,reason:"Customer unavailable"});
+  const completed=domain.completeServiceSiteVisit(current.id,current.version);
+  assert.equal(completed.parts[0].quantityMilli,500);
+  assert.throws(()=>domain.recordServiceVisitPart(usedInput(completed)),/during an arrived visit/);
+  assert.throws(()=>domain.voidServiceVisitPart({visitId:completed.id,
+    expectedVersion:completed.version,partId:completed.parts[0].id,reason:"Correct error"}),
+    /before completion/);
+  const previous=domain.exportServiceSiteVisits();
+  domain.hydrateServiceSiteVisits(previous);
+  assert.deepEqual(domain.exportServiceSiteVisits(),previous);
+});
+test("SVC-007 rejects corrupted cost, timestamps, identity and side-load state atomically",()=>{
+  reset();let current=domain.markServiceSiteArrival(schedule().id,1);
+  current=domain.recordServiceVisitPart(usedInput(current));
+  const snapshot=domain.exportServiceSiteVisits();
+  const part=current.parts[0];
+  for(const entry of [
+    {...part,totalCostMinor:1},
+    {...part,quantityMilli:0},
+    {...part,quantityMilli:1.5},
+    {...part,unitCostMinor:-1},
+    {...part,id:""},
+    {...part,recordedAt:"2024-01-01T00:00:00.000Z"},
+    {...part,status:"voided"},
+    {...part,notes:"bad\ninput"},
+    {...part,other:"data"},
+  ]){
+    assert.throws(()=>domain.hydrateServiceSiteVisits([{...current,parts:[entry]}]),
+      undefined,JSON.stringify(entry));
+    assert.deepEqual(domain.exportServiceSiteVisits(),snapshot);
+  }
+  assert.throws(()=>domain.hydrateServiceSiteVisits([{...current,parts:[part,part]}]),
+    /Duplicate service part/);
+  assert.deepEqual(domain.exportServiceSiteVisits(),snapshot);
+  const legacy={...current};delete legacy.parts;
+  domain.hydrateServiceSiteVisits([legacy]);
+  assert.deepEqual(domain.exportServiceSiteVisits(),[legacy]);
+  domain.hydrateServiceSiteVisits(snapshot);
+});
+test("SVC-007 runtime wiring presents product-linked usage and local ledger warning",()=>{
+  const root=new URL("../../../",import.meta.url);
+  const src=fs.readFileSync(new URL("ui/src/components/orders/ServiceVisitPartsPanel.tsx",root),"utf8");
+  const panel=fs.readFileSync(new URL("ui/src/components/orders/ServiceSiteVisitPanel.tsx",root),"utf8");
+  const domainSrc=fs.readFileSync(new URL("business-logic/src/service-site-visit-register.ts",root),"utf8");
+  assert.match(src,/recordServiceVisitPart\(/);
+  assert.match(src,/voidServiceVisitPart\(/);
+  assert.match(src,/does not reduce product stock/);
+  assert.match(panel,/<ServiceVisitPartsPanel visit=\{v\}/);
+  assert.match(domainSrc,/productsStore\.getProduct\(productId\)/);
+  assert.doesNotMatch(domainSrc,/remoteAdjustStock\(/);
 });
