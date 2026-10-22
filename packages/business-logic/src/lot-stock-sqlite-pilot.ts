@@ -102,7 +102,7 @@ export function initializeLotStockPilotSqlite(db:LotPilotDatabase):void {
   )`);
   db.exec(`CREATE TABLE IF NOT EXISTS inv_lot_event_pilot_v1 (
     org_id TEXT NOT NULL, event_id TEXT NOT NULL,
-    event_type TEXT NOT NULL CHECK(event_type IN ('receipt','sale','return','qc')),
+    event_type TEXT NOT NULL CHECK(event_type IN ('receipt','sale','return','qc','reserve','reserve_cancel')),
     warehouse_id TEXT NOT NULL, payload_json TEXT NOT NULL,
     allocations_json TEXT NOT NULL,
     PRIMARY KEY(org_id,event_id)
@@ -126,6 +126,20 @@ export function initializeLotStockPilotSqlite(db:LotPilotDatabase):void {
     PRIMARY KEY(org_id,return_event_id,lot_id),
     FOREIGN KEY(org_id,return_event_id) REFERENCES inv_lot_return_pilot_v1(org_id,return_event_id)
   )`);
+
+  db.exec(`CREATE TABLE IF NOT EXISTS inv_lot_reservation_pilot_v1 (
+    org_id TEXT NOT NULL, reservation_id TEXT NOT NULL,
+    warehouse_id TEXT NOT NULL, product_id TEXT NOT NULL,
+    business_date TEXT NOT NULL,
+    quantity_milli INTEGER NOT NULL CHECK(quantity_milli > 0),
+    allocations_json TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('active','cancelled','committed')),
+    terminal_event_id TEXT,
+    PRIMARY KEY(org_id,reservation_id)
+  )`);
+  db.exec(`CREATE INDEX IF NOT EXISTS inv_lot_reservation_product_pilot_idx
+    ON inv_lot_reservation_pilot_v1(org_id,warehouse_id,product_id,status)`);
 
 }
 function snapshot(db:LotPilotDatabase,orgId:string,warehouseId:string,productId:string):VersionedLot[]{
