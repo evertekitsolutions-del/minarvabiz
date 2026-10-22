@@ -232,3 +232,6 @@ export * from "./lot-return-sqlite-pilot";
 
 // INV-005 isolated SQLite quarantine QC release/reject; never renderer or live POS authority.
 export * from "./lot-quarantine-qc-sqlite-pilot";
+
+// Actual Goods Receipt batch provenance validator (no sale-time FEFO authority).
+export * from "./goods-receipt-batch-metadata";
