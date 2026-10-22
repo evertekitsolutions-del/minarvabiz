@@ -225,6 +225,8 @@ export * from "./batch-expiry-register";
 export * from "./local-lot-counts";
 // INV-007 offline serial custody; not a posted sale/GRN serial ledger.
 export * from "./serial-custody-register";
+// Non-mutating serialized-product to posted-invoice reference consistency check.
+export * from "./serial-invoice-reference";
 
 // INV-005 isolated SQLite GRN→FEFO sale transaction pilot; never production POS authority.
 export * from "./lot-stock-sqlite-pilot";
