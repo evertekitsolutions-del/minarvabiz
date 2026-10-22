@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import {fileURLToPath} from "node:url";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url),ts=require("typescript");
+const NodeModule=require("node:module");
 const active={id:"b1",isActive:true};
 const permissions=new Set(["reports.view"]);
 const rec={id:"serial1",branchId:"b1",productId:"p1",
@@ -15,15 +17,29 @@ const posted={
 };
 let sales=[posted];
 function loadTs(file,mocks){
- const js=ts.transpileModule(fs.readFileSync(file,"utf8"),{
-   fileName:typeof file==="string"?file:file.pathname,
-   compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true},
- }).outputText;
- const mod={exports:{}};
- new Function("require","module","exports",js)(id=>{
-   if(Object.hasOwn(mocks,id))return mocks[id];throw new Error("Unexpected import "+id);
- },mod,mod.exports);
- return mod.exports;
+ const filename=fileURLToPath(file);
+ const previousExtension=require.extensions[".ts"];
+ const previousLoad=NodeModule._load;
+ require.extensions[".ts"]=(mod,name)=>{
+   const js=ts.transpileModule(fs.readFileSync(name,"utf8"),{
+     fileName:name,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true},
+   }).outputText;
+   mod._compile(js,name);
+ };
+ NodeModule._load=function(request,parent,isMain){
+   if(parent?.filename===filename && Object.hasOwn(mocks,request))return mocks[request];
+   return previousLoad.apply(this,arguments);
+ };
+ try {
+   delete require.cache[filename];
+   // Loading under the real file path makes V8 coverage instrument the
+   // source module; new Function() hid the implementation from the ratchet.
+   return require(filename);
+ } finally {
+   NodeModule._load=previousLoad;
+   if(previousExtension)require.extensions[".ts"]=previousExtension;
+   else delete require.extensions[".ts"];
+ }
 }
 const module=loadTs(new URL("../serial-invoice-reference.ts",import.meta.url),{
  "./permissions":{assertPermission:p=>{
