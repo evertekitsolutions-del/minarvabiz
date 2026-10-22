@@ -241,5 +241,8 @@ export * from "./lot-reservation-sqlite-pilot";
 // PUR-004 posted Goods Receipt batch provenance; no stock lot posting.
 export * from "./goods-receipt-batch-metadata";
 
+// SVC-011 offline service warranty and claim lifecycle; hosted Web is read-only.
+export * from "./service-warranty-register";
+
 // PUR-004 durable offline GRN batch attribution; no stock re-credit.
 export * from "./grn-batch-attribution";

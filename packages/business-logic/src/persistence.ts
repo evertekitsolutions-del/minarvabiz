@@ -21,6 +21,7 @@ import * as batchExpiry from "./batch-expiry-register";
 import * as grnBatches from "./grn-batch-attribution";
 import * as lotCounts from "./local-lot-counts";
 import * as serialCustody from "./serial-custody-register";
+import * as serviceWarranty from "./service-warranty-register";
 import * as procurementStore from "./procurement-store";
 import * as accountingStore from "./accounting-store";
 import * as commerceTierDrafts from "./commerce-tier-drafts";
@@ -93,6 +94,7 @@ export interface DomainSnapshot {
   localLotCounts?: ReturnType<typeof lotCounts.exportLocalLotCounts>;
   /** Offline-only serial custody records; no automatic sale/GRN posting. */
   serialCustody?: ReturnType<typeof serialCustody.exportSerialCustodyRecords>;
+  serviceWarranty?: ReturnType<typeof serviceWarranty.exportServiceWarrantyState>;
   procurement?: ReturnType<typeof procurementStore.exportProcurementState>;
   accounting?: ReturnType<typeof accountingStore.exportAccountingState>;
   /** Offline-only seller pricebook drafts. Never an authoritative checkout tariff. */
@@ -152,6 +154,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     grnBatchAttributions: grnBatches.exportGrnBatchAttributions(),
     localLotCounts: lotCounts.exportLocalLotCounts(),
     serialCustody: serialCustody.exportSerialCustodyRecords(),
+    serviceWarranty: serviceWarranty.exportServiceWarrantyState(),
     procurement: procurementStore.exportProcurementState(),
     accounting: accountingStore.exportAccountingState(),
     commerceTierDrafts: commerceTierDrafts.exportCommerceTierDrafts(),
@@ -262,6 +265,7 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     grnBatchAttributions: grnBatches.validateGrnBatchAttributions(input.grnBatchAttributions ?? []),
     localLotCounts: lotCounts.validateLocalLotCounts(input.localLotCounts ?? []),
     serialCustody: serialCustody.validateSerialCustodyRecords(input.serialCustody ?? []),
+    serviceWarranty: serviceWarranty.validateServiceWarrantyState(input.serviceWarranty ?? {warranties:[],claims:[]}),
   };
 }
 
@@ -310,6 +314,7 @@ function applyDomainSnapshot(snap: DomainSnapshot): void {
   grnBatches.hydrateGrnBatchAttributions(snap.grnBatchAttributions ?? []);
   lotCounts.hydrateLocalLotCounts(snap.localLotCounts ?? []);
   serialCustody.hydrateSerialCustodyRecords(snap.serialCustody ?? []);
+  serviceWarranty.hydrateServiceWarrantyState(snap.serviceWarranty ?? {warranties:[],claims:[]});
   if (snap.procurement) procurementStore.hydrateProcurementState(snap.procurement);
   if (snap.accounting) accountingStore.hydrateAccountingState(snap.accounting);
   commerceTierDrafts.hydrateCommerceTierDrafts(snap.commerceTierDrafts ?? []);
@@ -371,6 +376,8 @@ export function importDomainSnapshot(snap: DomainSnapshot): { ok: boolean; error
       grnBatchAttributions: incoming.grnBatchAttributions?.length ?? 0,
       localLotCounts: incoming.localLotCounts?.length ?? 0,
       serialCustody: incoming.serialCustody?.length ?? 0,
+      serviceWarranties: incoming.serviceWarranty?.warranties.length ?? 0,
+      serviceWarrantyClaims: incoming.serviceWarranty?.claims.length ?? 0,
       accounts: incoming.accounting?.accounts?.length ?? 0,
       journals: incoming.accounting?.journals?.length ?? 0,
       localCommerceTierDrafts: incoming.commerceTierDrafts?.length ?? 0,
