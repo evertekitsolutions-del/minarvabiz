@@ -535,6 +535,10 @@ export interface PurchaseOrder {
 
 export interface GoodsReceiptLine {
   id: UUID;
+  /** Optional supplier lot reference captured at GRN posting; local/offline metadata only. */
+  batchCode?: string | null;
+  /** Date-only lot expiry supplied by the vendor; does not authorize sale. */
+  expiresOn?: ISODateString | null;
   goodsReceiptId: UUID;
   purchaseOrderLineId: UUID;
   productId?: UUID | null;
