@@ -6,6 +6,7 @@ import type { WarehouseLocationType } from "@minarvabiz/types";
 import { Button } from "../Button";
 import { WarehouseBatchExpiryPanel } from "./WarehouseBatchExpiryPanel";
 import { WarehouseLotCountPanel } from "./WarehouseLotCountPanel";
+import { WarehouseSerialCustodyPanel } from "./WarehouseSerialCustodyPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 
@@ -186,6 +187,7 @@ export function WarehousePanel() {
       </Card>
       <WarehouseBatchExpiryPanel products={products} warehouses={warehouses} />
       <WarehouseLotCountPanel products={products} warehouses={warehouses} />
+      <WarehouseSerialCustodyPanel />
 
     </div>
   );
