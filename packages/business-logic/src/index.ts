@@ -226,3 +226,6 @@ export * from "./local-lot-counts";
 
 // INV-005 isolated SQLite GRN→FEFO sale transaction pilot; never production POS authority.
 export * from "./lot-stock-sqlite-pilot";
+
+// INV-005 opt-in SQLite sale return quarantine; NOT production checkout authority.
+export * from "./lot-return-sqlite-pilot";
