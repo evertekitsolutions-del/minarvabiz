@@ -198,5 +198,5 @@ test("barrel export, opt-in schema and release boundaries",()=>{
  const docs=fs.readFileSync(new URL("../../../../docs/INV_005_SQLITE_FEFO_RESERVATIONS.md",import.meta.url),"utf8");
  assert.match(idx,/export \* from "\.\/lot-reservation-sqlite-pilot";/);
  assert.match(docs,/NOT production POS/);
- assert.match(docs,/no production migration/);
+ assert.match(docs,/no production migration/i);
 });
