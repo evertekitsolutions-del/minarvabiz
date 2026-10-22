@@ -54,8 +54,10 @@ test("Web/Windows common GRN component captures batch only on installed desktop 
   const desktop=fs.readFileSync(new URL("../../../../apps/desktop/src/components/DesktopProcurementPanel.tsx",import.meta.url),"utf8");
   const web=fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/purchases/page.tsx",import.meta.url),"utf8");
   assert.match(ui,/Boolean\(\(window as unknown as \{ minarvaDesktop\?: unknown \}\)\.minarvaDesktop\)/);
-  assert.match(ui,/Supplier batch \/ lot code/);
-  assert.match(ui,/Batch expiry date \(paired with code\)/);
+  const fields=fs.readFileSync(new URL("../../../ui/src/components/purchases/GrnBatchLineFields.tsx",import.meta.url),"utf8");
+  assert.match(ui,/<GrnBatchLineFields/);
+  assert.match(fields,/Supplier batch \\/ lot code/);
+  assert.match(fields,/Batch expiry date \\(paired with code\\)/);
   assert.match(ui,/batchCode: receiveBatch\[line\.id\]/);
   assert.match(ui,/expiresOn: receiveExpiry\[line\.id\]/);
   assert.match(ui,/receipt\.lines\.filter\(line => line\.batchCode\)/);
