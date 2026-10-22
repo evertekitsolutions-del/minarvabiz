@@ -84,12 +84,19 @@ test("arrival and completion form durable, one-way versioned lifecycle",()=>{
   assert.ok(arrived.arrivedAt);
   assert.throws(()=>domain.markServiceSiteArrival(v.id,2),/transition/);
   assert.throws(()=>domain.completeServiceSiteVisit(v.id,1),/changed/);
-  const completed=domain.completeServiceSiteVisit(v.id,2);
+  assert.throws(()=>domain.completeServiceSiteVisit(v.id,2),/checklist/);
+  let version=arrived.version;
+  for(const item of arrived.checklist){
+    const updated=domain.setServiceSiteVisitCheck({visitId:v.id,expectedVersion:version,
+      itemId:item.id,result:"passed",notes:"Verified"});
+    version=updated.version;
+  }
+  const completed=domain.completeServiceSiteVisit(v.id,version);
   assert.equal(completed.status,"completed");
-  assert.equal(completed.version,3);
+  assert.equal(completed.version,version+1);
   assert.ok(completed.completedAt);
   assert.equal(domain.exportServiceSiteVisits()[0].status,"completed");
-  assert.throws(()=>domain.cancelServiceSiteVisit(v.id,3,"changed plans"),/transition/);
+  assert.throws(()=>domain.cancelServiceSiteVisit(v.id,completed.version,"changed plans"),/transition/);
 });
 test("cancellation needs reason, stays audit-only, cannot be restarted",()=>{
   reset();const v=schedule();
@@ -173,10 +180,106 @@ test("UI, domain export and atomic snapshot roundtrip wiring is present",()=>{
   const index=fs.readFileSync(new URL("business-logic/src/index.ts",root),"utf8");
   assert.match(ui,/markServiceSiteArrival\(v\.id,v\.version\)/);
   assert.match(ui,/completeServiceSiteVisit\(v\.id,v\.version\)/);
+  const checklistUi=fs.readFileSync(new URL("ui/src/components/orders/ServiceSiteVisitChecklist.tsx",root),"utf8");
+  assert.match(ui,/ServiceSiteVisitChecklist visit=\{v\}/);
+  assert.match(checklistUi,/setServiceSiteVisitCheck\(/);
   assert.match(ui,/cancelServiceSiteVisit\(v\.id,v\.version,cancelReason\)/);
   assert.match(list,/<ServiceSiteVisitPanel orders=\{orders\} assignments=\{staffAssignments\} \/>/);
   assert.match(index,/export \* from "\.\/service-site-visit-register"/);
   assert.match(snapshot,/siteVisits\.validateServiceSiteVisits\(input\.serviceSiteVisits/);
   assert.match(snapshot,/siteVisits\.hydrateServiceSiteVisits\(snap\.serviceSiteVisits/);
   assert.match(snapshot,/siteVisits\.exportServiceSiteVisits\(\)/);
+});
+
+
+test("required checklist blocks premature completion; failed item must be corrected or justified",()=>{
+  reset();const v=schedule();
+  const arrived=domain.markServiceSiteArrival(v.id,1);
+  const checks=arrived.checklist;
+  assert.equal(checks.length,4);
+  assert.throws(()=>domain.completeServiceSiteVisit(v.id,2),/checklist/);
+  assert.throws(()=>domain.setServiceSiteVisitCheck({visitId:v.id,
+    expectedVersion:2,itemId:checks[0].id,result:"failed",notes:""}),/reason/);
+  assert.throws(()=>domain.setServiceSiteVisitCheck({visitId:v.id,
+    expectedVersion:2,itemId:checks[0].id,result:"not_applicable",notes:"no"}),/reason/);
+  const failed=domain.setServiceSiteVisitCheck({visitId:v.id,
+    expectedVersion:2,itemId:checks[0].id,result:"failed",notes:"Device short circuit"});
+  assert.equal(failed.checklist[0].result,"failed");
+  assert.equal(failed.version,3);
+  assert.throws(()=>domain.completeServiceSiteVisit(v.id,3),/checklist/);
+  let version=3;
+  const waived=domain.setServiceSiteVisitCheck({visitId:v.id,expectedVersion:version++,
+    itemId:checks[0].id,result:"not_applicable",notes:"Power isolated by site electrician"});
+  assert.equal(waived.checklist[0].result,"not_applicable");
+  for(const check of checks.slice(1)){
+    domain.setServiceSiteVisitCheck({visitId:v.id,expectedVersion:version++,
+      itemId:check.id,result:"passed",notes:"Checked"});
+  }
+  const done=domain.completeServiceSiteVisit(v.id,version);
+  assert.equal(done.status,"completed");
+  assert.deepEqual(done.checklist.map(x=>x.result),
+    ["not_applicable","passed","passed","passed"]);
+  assert.throws(()=>domain.setServiceSiteVisitCheck({visitId:v.id,expectedVersion:done.version,
+    itemId:checks[0].id,result:"passed"}),/after site arrival/);
+});
+
+test("checklist CAS, unknown item and branch or permission denials never partially persist",()=>{
+  reset();const created=schedule();
+  assert.throws(()=>domain.setServiceSiteVisitCheck({visitId:created.id,expectedVersion:1,
+    itemId:"safety",result:"passed"}),/after site arrival/);
+  const arrived=domain.markServiceSiteArrival(created.id,1);
+  const before=domain.exportServiceSiteVisits();
+  const old=persist,eventsBefore=events.length;
+  const base={visitId:created.id,expectedVersion:2,itemId:"safety",result:"passed"};
+  assert.throws(()=>domain.setServiceSiteVisitCheck({...base,itemId:"unknown"}),/Unknown/);
+  assert.throws(()=>domain.setServiceSiteVisitCheck({...base,result:"bogus"}),/Invalid/);
+  assert.throws(()=>domain.setServiceSiteVisitCheck({...base,expectedVersion:1}),/changed/);
+  assert.equal(persist,old);assert.equal(events.length,eventsBefore);
+  assert.deepEqual(domain.exportServiceSiteVisits(),before);
+  branch.id="branch2";
+  assert.throws(()=>domain.setServiceSiteVisitCheck(base),/active branch/);
+  branch.id="b1";
+  permissions.delete("orders.assign");
+  assert.throws(()=>domain.setServiceSiteVisitCheck(base),/Denied/);
+  permissions.add("orders.assign");
+  isProd=true;
+  assert.throws(()=>domain.setServiceSiteVisitCheck(base),/installed Windows SQLite/);
+  isProd=false;
+  const saved=domain.setServiceSiteVisitCheck(base);
+  assert.equal(saved.version,3);
+  assert.equal(events.at(-1)[0],"service_site_visit.checklist_update");
+  assert.throws(()=>domain.setServiceSiteVisitCheck(base),/changed/);
+  saved.checklist[0].notes="tampered";
+  assert.notEqual(domain.exportServiceSiteVisits()[0].checklist[0].notes,"tampered");
+  const leaked=domain.listServiceSiteVisits();
+  leaked[0].checklist[0].notes="changed";
+  assert.notEqual(domain.listServiceSiteVisits()[0].checklist[0].notes,"changed");
+});
+
+test("checklist backup validation rejects malformed or tampered completions atomically",()=>{
+  reset();const created=schedule();
+  const snapshot=domain.exportServiceSiteVisits();
+  const examples=[
+    [{...created,checklist:[]}],
+    [{...created,checklist:[...created.checklist,...created.checklist]}],
+    [{...created,checklist:[{...created.checklist[0],result:"passed"}]}],
+    [{...created,checklist:[{...created.checklist[0],bogus:true}]}],
+    [{...created,checklist:[{...created.checklist[0],id:"UPPER"}]}],
+    [{...created,checklist:[{...created.checklist[0],required:"yes"}]}],
+    [{...created,checklist:[{...created.checklist[0],notes:"Injected"}]}],
+    [{...created,status:"completed",arrivedAt:created.createdAt,
+       completedAt:created.createdAt,checklist:created.checklist}],
+  ];
+  for(const invalid of examples){
+    assert.throws(()=>domain.hydrateServiceSiteVisits(invalid),undefined,JSON.stringify(invalid));
+    assert.deepEqual(domain.exportServiceSiteVisits(),snapshot);
+  }
+  const legacy=structuredClone(created);delete legacy.checklist;
+  domain.hydrateServiceSiteVisits([legacy]);
+  assert.deepEqual(domain.exportServiceSiteVisits(),[legacy]);
+  const arrivedLegacy=domain.markServiceSiteArrival(legacy.id,legacy.version);
+  const started=domain.startLegacySiteVisitChecklist(legacy.id,arrivedLegacy.version);
+  assert.equal(started.checklist.length,4);
+  assert.throws(()=>domain.startLegacySiteVisitChecklist(legacy.id,started.version),/legacy arrived/);
+  assert.throws(()=>domain.completeServiceSiteVisit(legacy.id,started.version),/checklist/);
 });
