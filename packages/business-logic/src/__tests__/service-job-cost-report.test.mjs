@@ -14,7 +14,11 @@ require.extensions[".ts"]=(mod,file)=>mod._compile(
   }).outputText,file);
 Module._load=function(request,parent,isMain){
   if(parent?.filename===filename&&request==="@minarvabiz/utils")
-    return {toMinorUnits:n=>Math.round(n*100),
+    return {toMinorUnits:n=>{
+        const minor=Math.round(n*100);
+        if(!Number.isSafeInteger(minor))throw new Error("Money exceeds safe integer range");
+        return minor;
+      },
       addMinorUnits:(...vals)=>vals.reduce((s,n)=>s+n,0),
       subtractMinorUnits:(a,b)=>a-b};
   return oldLoad.apply(this,arguments);
