@@ -250,3 +250,6 @@ export * from "./service-warranty-register";
 export * from "./grn-batch-attribution";
 // SVC-011 permission-scoped, read-only warranty expiry worksheet / CSV.
 export * from "./service-warranty-expiry";
+
+// SVC-005 offline site visit lifecycle; cloud production editing unavailable.
+export * from "./service-site-visit-register";
