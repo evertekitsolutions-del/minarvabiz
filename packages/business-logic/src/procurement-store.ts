@@ -38,6 +38,7 @@ import { remoteUpsertGoodsReceipt, remoteUpsertPurchaseInvoice, remoteUpsertPurc
 import * as phase5Store from "./phase5-store";
 import * as mainStore from "./store";
 import * as warehouseStore from "./warehouse-store";
+import { validateGoodsReceiptBatchMetadata } from "./goods-receipt-batch-metadata";
 
 const purchaseOrders: PurchaseOrder[] = [];
 const goodsReceipts: GoodsReceipt[] = [];
@@ -298,7 +299,7 @@ export function approvePurchaseOrder(id: UUID, approvedBy?: UUID | null): { purc
 
 export function receivePurchaseOrder(input: {
   purchaseOrderId: UUID;
-  lines: Array<{ purchaseOrderLineId: UUID; quantity: number; warehouseLocationId?: UUID | null }>;
+  lines: Array<{ purchaseOrderLineId: UUID; quantity: number; warehouseLocationId?: UUID | null; batchCode?: string | null; expiresOn?: string | null }>;
   receiptDate?: string;
   notes?: string | null;
   createdBy?: UUID | null;
@@ -342,6 +343,20 @@ export function receivePurchaseOrder(input: {
       errors.push(`${poLine.description}: linked product no longer exists`);
       continue;
     }
+    // Validate optional supplier batch provenance BEFORE any stock/PO mutation.
+    // Legacy GRNs without batch fields still work unchanged.
+    let batchMetadata: ReturnType<typeof validateGoodsReceiptBatchMetadata> = null;
+    try {
+      batchMetadata = validateGoodsReceiptBatchMetadata({
+        batchCode: item.batchCode,
+        expiresOn: item.expiresOn,
+        receiptDate: input.receiptDate || new Date().toISOString().slice(0, 10),
+        productId: poLine.productId,
+      });
+    } catch (error) {
+      errors.push(`${poLine.description}: ${error instanceof Error ? error.message : "Invalid batch metadata"}`);
+      continue;
+    }
     const warehouseLocationId = item.warehouseLocationId ?? null;
     if (warehouseLocationId) {
       if (!poLine.productId) {
@@ -378,6 +393,7 @@ export function receivePurchaseOrder(input: {
       purchaseOrderLineId: poLine.id,
       productId: poLine.productId ?? null,
       warehouseLocationId,
+      ...(batchMetadata ? { batchCode: batchMetadata.batchCode, expiresOn: batchMetadata.expiresOn } : {}),
       description: poLine.description,
       receivedQuantity: quantity,
       unitCost: poLine.unitCost,

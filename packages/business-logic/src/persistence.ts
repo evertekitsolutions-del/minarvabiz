@@ -91,7 +91,6 @@ export interface DomainSnapshot {
   localLotCounts?: ReturnType<typeof lotCounts.exportLocalLotCounts>;
   /** Offline-only serial custody records; no automatic sale/GRN posting. */
   serialCustody?: ReturnType<typeof serialCustody.exportSerialCustodyRecords>;
-  /** Local Windows service warranty and claim records; no cloud sync. */
   serviceWarranty?: ReturnType<typeof serviceWarranty.exportServiceWarrantyState>;
   procurement?: ReturnType<typeof procurementStore.exportProcurementState>;
   accounting?: ReturnType<typeof accountingStore.exportAccountingState>;
