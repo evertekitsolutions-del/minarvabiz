@@ -4,17 +4,26 @@ import fs from "node:fs";
 import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
-const filename = new URL("../service-warranty-expiry.ts", import.meta.url);
-const source = fs.readFileSync(filename, "utf8");
-const js = ts.transpileModule(source, {
-  fileName: filename.pathname,
-  compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022},
-}).outputText;
-const mod = {exports: {}};
-new Function("require", "module", "exports", js)(() => {
-  throw new Error("Unexpected runtime dependency");
-}, mod, mod.exports);
-const {buildServiceWarrantyExpiryReport: build, exportServiceWarrantyExpiryCsv: toCsv} = mod.exports;
+// Load through the actual module pathname so Node V8 coverage can attribute
+// executed statements to the changed TypeScript source (not eval/new Function).
+const filename = require.resolve("../service-warranty-expiry.ts");
+const previousExtension = require.extensions[".ts"];
+require.extensions[".ts"] = (mod, file) => mod._compile(
+  ts.transpileModule(fs.readFileSync(file, "utf8"), {
+    fileName: file,
+    compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022},
+  }).outputText,
+  file,
+);
+let subject;
+try {
+  delete require.cache[filename];
+  subject = require(filename);
+} finally {
+  if (previousExtension) require.extensions[".ts"] = previousExtension;
+  else delete require.extensions[".ts"];
+}
+const {buildServiceWarrantyExpiryReport: build, exportServiceWarrantyExpiryCsv: toCsv} = subject;
 function warranty(id, endsOn, assetReference = "NVR-01") {
   return {id, branchId:"branch1", orderId:"order1", customerId:"customer1",
     assetReference, startsOn:"2026-01-01", endsOn, coverageTerms:"",
