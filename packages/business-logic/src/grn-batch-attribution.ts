@@ -1,5 +1,5 @@
 /**
- * PUR-008/INV-005: durable offline Goods Receipt batch attribution.
+ * PUR-004/INV-005: durable offline Goods Receipt batch attribution.
  *
  * Physical goods receipt and Product stock were already posted by Procurement.
  * This is a separate evidence/trace register, never a second stock receipt,
