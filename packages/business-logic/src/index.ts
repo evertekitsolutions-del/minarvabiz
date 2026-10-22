@@ -253,3 +253,6 @@ export * from "./service-warranty-expiry";
 
 // SVC-005 offline site visit lifecycle; cloud production editing unavailable.
 export * from "./service-site-visit-register";
+
+// SVC-008 bounded field photo/document attachments stored with offline site visits.
+export * from "./service-site-visit-evidence";

@@ -11,6 +11,12 @@ import {auditAction} from "./audit-actions";
 import {touchPersistence} from "./autosave";
 import * as ordersStore from "./orders-store";
 import * as staffStore from "./phase6-store";
+import {
+  validateServiceVisitEvidence, validateServiceVisitEvidenceList,
+  serviceVisitEvidenceBytes, SITE_EVIDENCE_MAX_VISIT_FILES,
+  SITE_EVIDENCE_MAX_SNAPSHOT_BYTES, type ServiceSiteVisitEvidence,
+  type SiteEvidenceMime, type SiteEvidencePurpose,
+} from "./service-site-visit-evidence";
 
 export type SiteVisitStatus = "scheduled" | "arrived" | "completed" | "cancelled";
 export type SiteVisitCheckResult = "pending" | "passed" | "failed" | "not_applicable";
@@ -51,12 +57,14 @@ export interface ServiceSiteVisit {
   readonly updatedAt:string;
   /** Optional for existing pre-SVC-006 snapshots; present on new visits. */
   readonly checklist?:ServiceSiteVisitCheck[];
+  /** Optional for older snapshots; bounded file data stored in Windows SQLite snapshot. */
+  readonly evidence?:ServiceSiteVisitEvidence[];
 }
 const records:ServiceSiteVisit[]=[];
 const CAPACITY=10_000;
 const FIELDS=["id","branchId","orderId","customerId","assignmentId","staffId",
  "scheduledOn","siteAddress","notes","status","arrivedAt","completedAt",
- "cancellationReason","version","createdAt","updatedAt","checklist"];
+ "cancellationReason","version","createdAt","updatedAt","checklist","evidence"];
 function id(value:unknown,label:string):string{
   if(typeof value!=="string"||value.length<1||value.length>128||
     value.trim()!==value||/[\r\n]/.test(value))throw new Error("Invalid "+label);
@@ -118,7 +126,8 @@ function validChecklist(input:unknown,arrivedAt:string|null,updatedAt:string,sta
   });
 }
 function cloneVisit(v:ServiceSiteVisit):ServiceSiteVisit{
-  return {...v,...(v.checklist?{checklist:v.checklist.map(c=>({...c}))}:{})};
+  return {...v,...(v.checklist?{checklist:v.checklist.map(c=>({...c}))}:{}),
+    ...(v.evidence?{evidence:v.evidence.map(e=>({...e}))}:{})};
 }
 function record(value:unknown):ServiceSiteVisit{
   if(value===null||typeof value!=="object"||Array.isArray(value))throw new Error("Invalid site visit record");
@@ -152,17 +161,24 @@ function record(value:unknown):ServiceSiteVisit{
     (v.completedAt!==null&&(v.arrivedAt===null||v.completedAt<v.arrivedAt))){
     throw new Error("Invalid site visit lifecycle chronology");
   }
-  return Object.hasOwn(o,"checklist")
+  const validated=Object.hasOwn(o,"checklist")
     ? {...v,checklist:validChecklist(o.checklist,v.arrivedAt,v.updatedAt,v.status)} : v;
+  return Object.hasOwn(o,"evidence")
+    ? {...validated,evidence:validateServiceVisitEvidenceList(
+        o.evidence,v.arrivedAt,v.updatedAt,v.status)} : validated;
 }
 /** Pure validation precedes snapshot mutation; older backups have no visit key. */
 export function validateServiceSiteVisits(input:unknown):ServiceSiteVisit[]{
   if(input==null)return [];
   if(!Array.isArray(input)||input.length>CAPACITY)throw new Error("Invalid site visit snapshot");
   const ids=new Set<string>(),scheduled=new Set<string>();
+  let totalBytes=0;
   return input.map(raw=>{
     const v=record(raw),key=JSON.stringify([v.branchId,v.orderId,v.assignmentId,v.scheduledOn]);
     if(ids.has(v.id)||scheduled.has(key))throw new Error("Duplicate service site visit");
+    totalBytes+=serviceVisitEvidenceBytes(v.evidence??[]);
+    if(totalBytes>SITE_EVIDENCE_MAX_SNAPSHOT_BYTES)
+      throw new Error("Total offline site evidence exceeds snapshot capacity");
     ids.add(v.id);scheduled.add(key);
     return v;
   });
@@ -228,7 +244,7 @@ export function scheduleServiceSiteVisit(input:{
   const v=record({id:generateId(),branchId,orderId,customerId:order.customerId,
     assignmentId,staffId:assignment.staffId,scheduledOn,siteAddress,notes,
     status:"scheduled",arrivedAt:null,completedAt:null,cancellationReason:null,
-    version:1,createdAt:now,updatedAt:now,checklist:newSiteVisitChecklist()});
+    version:1,createdAt:now,updatedAt:now,checklist:newSiteVisitChecklist(),evidence:[]});
   records.push(v);
   auditAction("service_site_visit.schedule","service_site_visit",v.id,null,v);
   touchPersistence();
@@ -282,6 +298,66 @@ export function setServiceSiteVisitCheck(input:{
   auditAction("service_site_visit.checklist_update","service_site_visit",next.id,before,next);
   touchPersistence();
   return cloneVisit(next);
+}
+function evidenceAudit(e:ServiceSiteVisitEvidence){
+  // Never copy photo/document content into audit events or telemetry.
+  const {dataBase64:ignored,...meta}=e;
+  void ignored;
+  return meta;
+}
+function editEvidence(visitId:string,expectedVersion:number,
+  update:(v:ServiceSiteVisit,now:string)=>{next:ServiceSiteVisit;evidence:ServiceSiteVisitEvidence;kind:"add"|"remove"}):ServiceSiteVisit{
+  assertPermission("orders.assign");writable();
+  const active=branch();
+  const i=records.findIndex(v=>v.id===visitId&&v.branchId===active);
+  if(i<0)throw new Error("Site evidence not found in active branch");
+  const previous=records[i];
+  if(previous.version!==expectedVersion)throw new Error("Site visit changed; refresh first");
+  if(previous.status!=="arrived")throw new Error("Site evidence can only change after arrival, before completion");
+  linkedOrder(previous.orderId,active);
+  linkedAssignment(previous.assignmentId,previous.orderId,active);
+  const {next,evidence,kind}=update(previous,nowISO());
+  const checked=record(next);
+  const total=records.reduce((sum,v)=>sum+
+    (v.id===previous.id&&v.branchId===previous.branchId?0:serviceVisitEvidenceBytes(v.evidence??[])),0)+
+    serviceVisitEvidenceBytes(checked.evidence??[]);
+  if(total>SITE_EVIDENCE_MAX_SNAPSHOT_BYTES)
+    throw new Error("Total offline site evidence exceeds snapshot capacity");
+  records.splice(i,1,checked);
+  auditAction("service_site_visit.evidence_"+kind,"service_site_visit",checked.id,
+    {version:previous.version},{version:checked.version,evidence:evidenceAudit(evidence)});
+  touchPersistence();
+  return cloneVisit(checked);
+}
+export function addServiceSiteVisitEvidence(input:{
+  readonly visitId:string;readonly expectedVersion:number;readonly fileName:string;
+  readonly mimeType:SiteEvidenceMime;readonly purpose:SiteEvidencePurpose;
+  readonly notes?:string;readonly byteLength:number;readonly dataBase64:string;
+}):ServiceSiteVisit{
+  return editEvidence(input.visitId,input.expectedVersion,(v,now)=>{
+    if((v.evidence?.length??0)>=SITE_EVIDENCE_MAX_VISIT_FILES)
+      throw new Error("This visit already has the maximum evidence attachments");
+    const evidence=validateServiceVisitEvidence({id:generateId(),fileName:input.fileName,
+      mimeType:input.mimeType,purpose:input.purpose,notes:input.notes??"",
+      byteLength:input.byteLength,dataBase64:input.dataBase64,uploadedAt:now});
+    return {kind:"add" as const,evidence,
+      next:{...v,version:v.version+1,updatedAt:now,
+        evidence:[...(v.evidence??[]),evidence]}};
+  });
+}
+export function removeServiceSiteVisitEvidence(input:{
+  readonly visitId:string;readonly expectedVersion:number;readonly evidenceId:string;
+  readonly reason:string;
+}):ServiceSiteVisit{
+  return editEvidence(input.visitId,input.expectedVersion,(v,now)=>{
+    const existing=v.evidence?.find(e=>e.id===input.evidenceId);
+    if(!existing)throw new Error("Evidence attachment not found");
+    const reason=memo(input.reason,"evidence removal reason",500,true);
+    if(reason.length<3)throw new Error("Evidence removal reason required");
+    return {kind:"remove" as const,evidence:existing,
+      next:{...v,version:v.version+1,updatedAt:now,
+        evidence:(v.evidence??[]).filter(e=>e.id!==existing.id)}};
+  });
 }
 function transition(input:{
   visitId:string;expectedVersion:number;action:"arrive"|"complete"|"cancel";reason?:string;
