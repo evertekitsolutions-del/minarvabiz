@@ -259,3 +259,6 @@ export * from "./service-site-visit-evidence";
 
 // SVC-009 customer-acknowledged service handover, local-only signature.
 export * from "./service-site-visit-signature";
+
+// SVC-012 immutable visit-specific arrival/completion targets and deadline worksheet.
+export * from "./service-visit-sla";

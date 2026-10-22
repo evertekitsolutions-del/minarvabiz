@@ -11,6 +11,7 @@ import {Button} from "../Button";
 import {ServiceSiteVisitChecklist} from "./ServiceSiteVisitChecklist";
 import {ServiceSiteVisitEvidencePanel} from "./ServiceSiteVisitEvidencePanel";
 import {ServiceVisitSignaturePanel} from "./ServiceVisitSignaturePanel";
+import {ServiceVisitSlaPanel} from "./ServiceVisitSlaPanel";
 import {inputClass, selectClass} from "../forms/FormField";
 
 function localDate():string{
@@ -34,6 +35,8 @@ export function ServiceSiteVisitPanel({
   const [scheduledOn,setScheduledOn]=React.useState(localDate);
   const [siteAddress,setSiteAddress]=React.useState("");
   const [notes,setNotes]=React.useState("");
+  const [arrivalDueLocal,setArrivalDueLocal]=React.useState("");
+  const [completionDueLocal,setCompletionDueLocal]=React.useState("");
   const [cancelId,setCancelId]=React.useState<string|null>(null);
   const [cancelReason,setCancelReason]=React.useState("");
   const [revision,setRevision]=React.useState(0);
@@ -115,13 +118,33 @@ export function ServiceSiteVisitPanel({
             className={inputClass+" mt-1"} onChange={e=>setNotes(e.target.value)}
             placeholder="Inspect wiring, NVR, switch and power" />
         </label>
+        <label className="text-xs font-medium text-slate-700 sm:col-span-2">
+          Arrival SLA deadline (optional, local time)
+          <input aria-label="Visit arrival deadline" type="datetime-local"
+            className={inputClass+" mt-1"} value={arrivalDueLocal}
+            onChange={e=>setArrivalDueLocal(e.target.value)} />
+        </label>
+        <label className="text-xs font-medium text-slate-700 sm:col-span-2">
+          Completion SLA deadline (optional, local time)
+          <input aria-label="Visit completion deadline" type="datetime-local"
+            className={inputClass+" mt-1"} value={completionDueLocal}
+            onChange={e=>setCompletionDueLocal(e.target.value)} />
+        </label>
       </div>
+      <p className="text-xs text-slate-500">These optional visit targets are fixed at scheduling.
+        Times use this device’s local timezone and are stored as UTC.</p>
       <Button variant="outline" size="sm" disabled={!orderId||!assignmentId||!siteAddress.trim()||
         !scheduledOn} onClick={()=>mutate(()=>{
-          scheduleServiceSiteVisit({orderId,assignmentId,scheduledOn,siteAddress,notes});
+          const deadline=(value:string):string|null=>value?new Date(value).toISOString():null;
+          const arrivalDueAt=deadline(arrivalDueLocal);
+          const completionDueAt=deadline(completionDueLocal);
+          scheduleServiceSiteVisit({orderId,assignmentId,scheduledOn,siteAddress,notes,
+            ...(arrivalDueAt||completionDueAt?{sla:{arrivalDueAt,completionDueAt}}:{})});
           setSiteAddress("");setNotes("");
+          setArrivalDueLocal("");setCompletionDueLocal("");
         },"Site visit saved to Windows offline register")}>Schedule site visit</Button>
     </div>}
+    <ServiceVisitSlaPanel visits={visits}/>
     <div className="mt-4 max-h-96 overflow-auto rounded-lg border border-slate-200">
       <table className="min-w-[780px] w-full text-left text-xs">
         <thead className="bg-slate-50"><tr>
