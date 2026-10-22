@@ -102,7 +102,7 @@ export function initializeLotStockPilotSqlite(db:LotPilotDatabase):void {
   )`);
   db.exec(`CREATE TABLE IF NOT EXISTS inv_lot_event_pilot_v1 (
     org_id TEXT NOT NULL, event_id TEXT NOT NULL,
-    event_type TEXT NOT NULL CHECK(event_type IN ('receipt','sale','return')),
+    event_type TEXT NOT NULL CHECK(event_type IN ('receipt','sale','return','qc')),
     warehouse_id TEXT NOT NULL, payload_json TEXT NOT NULL,
     allocations_json TEXT NOT NULL,
     PRIMARY KEY(org_id,event_id)
@@ -122,7 +122,7 @@ export function initializeLotStockPilotSqlite(db:LotPilotDatabase):void {
     warehouse_id TEXT NOT NULL, product_id TEXT NOT NULL,
     lot_id TEXT NOT NULL, batch_code TEXT NOT NULL,
     quantity_milli INTEGER NOT NULL CHECK(quantity_milli > 0),
-    status TEXT NOT NULL DEFAULT 'quarantined' CHECK(status='quarantined'),
+    status TEXT NOT NULL DEFAULT 'quarantined' CHECK(status IN ('quarantined','released','rejected')),
     PRIMARY KEY(org_id,return_event_id,lot_id),
     FOREIGN KEY(org_id,return_event_id) REFERENCES inv_lot_return_pilot_v1(org_id,return_event_id)
   )`);
