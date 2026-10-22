@@ -152,7 +152,8 @@ test("foreign org/warehouse/sale/product, invalid day and mismatched return refu
     [{returnDate:"2026-02-30"},/Invalid batch sale return/],
     [{quantityMilli:-1},/Invalid batch sale return/],
     [{quantityMilli:3501},/exceeds quantity sold/],
-    [{returnEventId:"sale1"},/idempotency key/],
+    [{returnEventId:"sale1"},/Invalid batch sale return/],
+    [{returnEventId:"grn1"},/idempotency key/],
     [{authorizeWarehouse:undefined},/authorization is required/],
     [{commitFinancialReturn:undefined},/financial refund writer/],
   ]){
