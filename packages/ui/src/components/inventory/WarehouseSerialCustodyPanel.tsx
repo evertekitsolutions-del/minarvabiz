@@ -4,7 +4,8 @@ import * as React from "react";
 import {
   can, isProductionMode, phase9Store, warehouseStore, store,
   createSerialCustodyRecord, updateSerialCustodyRecord,
-  buildSerialCustodyReport, type SerialCustodyStatus, type SerialCustodyRecord,
+  buildSerialCustodyReport, verifySerialInvoiceProductMatch,
+  type SerialInvoiceCheck, type SerialCustodyStatus, type SerialCustodyRecord,
 } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
 import { inputClass, selectClass } from "../forms/FormField";
@@ -31,6 +32,7 @@ export function WarehouseSerialCustodyPanel() {
   const [message,setMessage]=React.useState<string|null>(null);
   const [error,setError]=React.useState<string|null>(null);
   const [revision,setRevision]=React.useState(0);
+  const [invoiceCheck,setInvoiceCheck]=React.useState<SerialInvoiceCheck|null>(null);
   const canRead=can("reports.view");
   const canEdit=can("inventory.adjust")&&localWritable;
   const branchId=phase9Store.getActiveBranch()?.id;
@@ -43,7 +45,7 @@ export function WarehouseSerialCustodyPanel() {
   let report:ReturnType<typeof buildSerialCustodyReport>|null=null;
   try{report=buildSerialCustodyReport(search);}catch{report=null;}
   function refresh(text:string){
-    setMessage(text);setError(null);setRevision(n=>n+1);
+    setMessage(text);setError(null);setInvoiceCheck(null);setRevision(n=>n+1);
   }
   function create(){
     setMessage(null);setError(null);
@@ -62,6 +64,11 @@ export function WarehouseSerialCustodyPanel() {
       setEdited(null);setReference("");setNotes("");setStatus("in_stock");
       refresh("Serial custody updated; live stock and invoices unchanged");
     }catch(e){setError(e instanceof Error?e.message:"Custody update failed");}
+  }
+  function checkInvoice(id:string){
+    setInvoiceCheck(null);setError(null);
+    try{setInvoiceCheck(verifySerialInvoiceProductMatch(id));}
+    catch(e){setError(e instanceof Error?e.message:"Invoice reference check failed");}
   }
   function downloadCsv(){
     if(!report)return;
@@ -184,10 +191,23 @@ export function WarehouseSerialCustodyPanel() {
                 {canEdit&&<Button variant="outline" size="sm" onClick={()=>{
                   setEdited(row);setStatus(row.status);setReference(row.reference);setNotes(row.notes);
                 }}>Edit custody</Button>}
+                {row.status==="sold"&&<Button variant="outline" size="sm"
+                  onClick={()=>checkInvoice(row.id)}>Check invoice product</Button>}
               </td>
             </tr>)}</tbody>
           </table>
         </div>
+        {invoiceCheck&&<div role="status" className="rounded-lg border border-slate-200 p-3 text-sm">
+          <p className="font-semibold">{invoiceCheck.serialNumber} · {invoiceCheck.status.replaceAll("_"," ")}</p>
+          <p className="mt-1">{invoiceCheck.explanation}</p>
+          {invoiceCheck.invoiceNumber&&<p className="mt-1 text-xs text-slate-600">
+            Invoice: {invoiceCheck.invoiceNumber} · Date: {invoiceCheck.saleDate} ·
+            {" "}Product units: {invoiceCheck.productQuantity??"not matched"}
+          </p>}
+          <p className="mt-2 text-xs text-amber-700">
+            This checks invoice-product consistency only. Unique serial delivery and warranty eligibility are not verified.
+          </p>
+        </div>}
       </div>}
     </details>
   );
