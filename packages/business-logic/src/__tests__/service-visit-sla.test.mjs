@@ -118,7 +118,7 @@ test("CSV is readable and escapes cells that spreadsheet apps treat as formulas"
     ],T));
   assert.match(csv,/"'=cmd"/);
   assert.match(csv,/"'\+SUM\(1,2\)"/);
-  assert.match(csv,/"Completion deadline"/);
+  assert.match(csv,/"Completion due"/);
   assert.match(csv,/"on_track"/);
   assert.ok(csv.endsWith("\r\n"));
 });
