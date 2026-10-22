@@ -102,11 +102,12 @@ export function ServiceSiteVisitEvidencePanel({visit,canWrite,mutate}:{
       if(typeof reader.result!=="string"){
         setError("Selected file did not contain expected binary data");return;
       }
-      const prefix="data:"+mime+";base64,";
-      if(!reader.result.startsWith(prefix)){
-        setError("File reader MIME does not match the selected file");return;
+      // Some Windows file pickers return an empty MIME and FileReader emits
+      // application/octet-stream; inspect the binary signature in the domain.
+      if(!/^data:[^;,]*;base64,/.test(reader.result)){
+        setError("Selected file did not contain expected base64 data");return;
       }
-      const dataBase64=reader.result.slice(prefix.length);
+      const dataBase64=reader.result.slice(reader.result.indexOf(",")+1);
       mutate(()=>addServiceSiteVisitEvidence({
         visitId:visit.id,expectedVersion:visit.version,fileName:file.name,
         mimeType:mime,purpose,notes,byteLength:file.size,dataBase64,
