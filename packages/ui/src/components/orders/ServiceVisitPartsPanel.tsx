@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import {
-  listProducts, recordServiceVisitPart, voidServiceVisitPart,
+  store, recordServiceVisitPart, voidServiceVisitPart,
   summarizeServiceVisitParts, type ServiceSiteVisit,
 } from "@minarvabiz/business-logic";
 import {Button} from "../Button";
@@ -21,7 +21,7 @@ export function ServiceVisitPartsPanel({visit,canWrite,mutate}:{
   const [voidId,setVoidId]=React.useState<string|null>(null);
   const [reason,setReason]=React.useState("");
   const editable=canWrite&&visit.status==="arrived";
-  const products=listProducts().filter(p=>
+  const products=store.listProducts().filter(p=>
     p.isActive&&p.branchId===visit.branchId);
   const parts=visit.parts??[];
   const totals=summarizeServiceVisitParts(parts);
