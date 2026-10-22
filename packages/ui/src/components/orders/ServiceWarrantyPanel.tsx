@@ -4,7 +4,8 @@ import * as React from "react";
 import {
   can, isProductionMode, listServiceWarranties, registerServiceWarranty,
   openServiceWarrantyClaim, closeServiceWarrantyClaim,
-  type ServiceWarrantyClaim,
+  type ServiceWarrantyClaim, buildServiceWarrantyExpiryReport,
+  exportServiceWarrantyExpiryCsv, type WarrantyExpiryHorizon,
 } from "@minarvabiz/business-logic";
 import type { ServiceOrder } from "@minarvabiz/types";
 import { Button } from "../Button";
@@ -34,6 +35,7 @@ export function ServiceWarrantyPanel({orders}:{orders:readonly ServiceOrder[]}) 
   const [feedback,setFeedback]=React.useState<string|null>(null);
   const [error,setError]=React.useState<string|null>(null);
   const [revision,setRevision]=React.useState(0);
+  const [expiryHorizon,setExpiryHorizon]=React.useState<WarrantyExpiryHorizon>(30);
   const read=can("reports.view");
   const edit=can("orders.manage")&&localWritable;
   const delivered=orders.filter(o=>o.status==="delivered"&&!o.deletedAt);
@@ -42,10 +44,24 @@ export function ServiceWarrantyPanel({orders}:{orders:readonly ServiceOrder[]}) 
   const data=listServiceWarranties();
   const warrantyNames=new Map(data.warranties.map(w=>[w.id,w.assetReference]));
   const sourceNames=new Map(orders.map(o=>[o.id,o.orderNumber]));
+  const expiryReport=buildServiceWarrantyExpiryReport(data.warranties,todayLocal(),expiryHorizon);
   function mutate(fn:()=>void,success:string){
     setFeedback(null);setError(null);
     try{fn();setFeedback(success);setRevision(r=>r+1);}
     catch(e){setError(e instanceof Error?e.message:"Warranty operation failed");}
+  }
+  function downloadExpiryCsv(){
+    if(expiryReport.rows.length===0)return;
+    try{
+      const csv=exportServiceWarrantyExpiryCsv(expiryReport.rows);
+      const url=URL.createObjectURL(new Blob(["\uFEFF",csv],{type:"text/csv;charset=utf-8"}));
+      const link=document.createElement("a");
+      link.href=url;
+      link.download="minarvabiz-warranty-followups-"+todayLocal()+".csv";
+      document.body.appendChild(link);
+      try{link.click();setFeedback("Warranty expiry CSV export requested");setError(null);}
+      finally{link.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000);}
+    }catch(e){setError(e instanceof Error?e.message:"Warranty expiry CSV export failed");}
   }
   return (
     <details className="rounded-xl border border-slate-200 bg-white p-4">
@@ -61,6 +77,51 @@ export function ServiceWarrantyPanel({orders}:{orders:readonly ServiceOrder[]}) 
       {!localWritable&&<p className="mt-2 text-xs text-amber-700">
         Production Web is read-only. Editing requires installed Windows SQLite.
       </p>}
+      <section aria-label="Warranty expiry follow-up" className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Warranty expiry follow-up</h3>
+            <p className="mt-1 text-xs text-slate-600">
+              {expiryReport.expiredCount} expired · {expiryReport.dueSoonCount} ending within {expiryHorizon} days ·
+              {" "}{expiryReport.outsideHorizonCount} later
+            </p>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-xs font-medium text-slate-600">Follow-up horizon
+              <select aria-label="Warranty expiry horizon" className={selectClass+" mt-1"}
+                value={expiryHorizon}
+                onChange={e=>setExpiryHorizon(Number(e.target.value) as WarrantyExpiryHorizon)}>
+                <option value={30}>30 days</option>
+                <option value={60}>60 days</option>
+                <option value={90}>90 days</option>
+              </select>
+            </label>
+            <Button variant="outline" size="sm" disabled={expiryReport.rows.length===0}
+              onClick={downloadExpiryCsv}>Export expiry list CSV</Button>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-slate-500">Read-only follow-up worksheet. No notifications are sent automatically.</p>
+        {expiryReport.rows.length>0?(
+          <div className="mt-3 max-h-56 overflow-auto">
+            <table className="w-full min-w-[650px] text-left text-xs">
+              <thead><tr className="border-b border-slate-200">
+                <th className="p-2">Service order</th><th className="p-2">Asset</th>
+                <th className="p-2">Customer ID</th><th className="p-2">Expires</th>
+                <th className="p-2">Follow-up</th>
+              </tr></thead>
+              <tbody>{expiryReport.rows.map(row=><tr key={row.warrantyId} className="border-b border-slate-100">
+                <td className="p-2">{sourceNames.get(row.orderId)??row.orderId}</td>
+                <td className="p-2">{row.assetReference}</td>
+                <td className="p-2">{row.customerId}</td>
+                <td className="p-2">{row.coverageEndsOn}</td>
+                <td className="p-2">{row.status==="expired"
+                  ? "Expired "+Math.abs(row.daysRemaining)+" days ago"
+                  : row.status==="due_today"?"Expires today":"Due in "+row.daysRemaining+" days"}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>
+        ):<p className="mt-2 text-xs text-slate-500">No expired or soon-expiring warranties in this branch.</p>}
+      </section>
       {edit&&<div className="mt-3 space-y-3">
         <p className="text-sm font-semibold">Register warranty for delivered service</p>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
