@@ -38,7 +38,9 @@ function safeLineQuantity(sale:Sale,productId:string):number|null{
   if(rows.length===0)return null;
   let total=0;
   for(const item of rows){
-    if(!Number.isFinite(item.quantity)||item.quantity<=0||!Number.isSafeInteger(Math.round(item.quantity*1000))){
+    if(!Number.isFinite(item.quantity)||item.quantity<=0||
+       Math.abs(item.quantity*1000-Math.round(item.quantity*1000))>1e-7||
+       !Number.isSafeInteger(Math.round(item.quantity*1000))){
       return null;
     }
     total+=item.quantity;
