@@ -256,3 +256,6 @@ export * from "./service-site-visit-register";
 
 // SVC-008 bounded field photo/document attachments stored with offline site visits.
 export * from "./service-site-visit-evidence";
+
+// SVC-009 customer-acknowledged service handover, local-only signature.
+export * from "./service-site-visit-signature";

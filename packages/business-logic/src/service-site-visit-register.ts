@@ -17,6 +17,10 @@ import {
   SITE_EVIDENCE_MAX_SNAPSHOT_BYTES, type ServiceSiteVisitEvidence,
   type SiteEvidenceMime, type SiteEvidencePurpose,
 } from "./service-site-visit-evidence";
+import {
+  SITE_VISIT_HANDOVER_NOTICE, handoverImageBytes, safeHandoverAudit,
+  validateHandoverPng, validateSiteVisitHandover, type SiteVisitHandover,
+} from "./service-site-visit-signature";
 
 export type SiteVisitStatus = "scheduled" | "arrived" | "completed" | "cancelled";
 export type SiteVisitCheckResult = "pending" | "passed" | "failed" | "not_applicable";
@@ -59,12 +63,14 @@ export interface ServiceSiteVisit {
   readonly checklist?:ServiceSiteVisitCheck[];
   /** Optional for older snapshots; bounded file data stored in Windows SQLite snapshot. */
   readonly evidence?:ServiceSiteVisitEvidence[];
+  /** Optional on historic visits; new site visits require handover acknowledgment/decline. */
+  readonly handover?:SiteVisitHandover|null;
 }
 const records:ServiceSiteVisit[]=[];
 const CAPACITY=10_000;
 const FIELDS=["id","branchId","orderId","customerId","assignmentId","staffId",
  "scheduledOn","siteAddress","notes","status","arrivedAt","completedAt",
- "cancellationReason","version","createdAt","updatedAt","checklist","evidence"];
+ "cancellationReason","version","createdAt","updatedAt","checklist","evidence","handover"];
 function id(value:unknown,label:string):string{
   if(typeof value!=="string"||value.length<1||value.length>128||
     value.trim()!==value||/[\r\n]/.test(value))throw new Error("Invalid "+label);
@@ -127,7 +133,16 @@ function validChecklist(input:unknown,arrivedAt:string|null,updatedAt:string,sta
 }
 function cloneVisit(v:ServiceSiteVisit):ServiceSiteVisit{
   return {...v,...(v.checklist?{checklist:v.checklist.map(c=>({...c}))}:{}),
-    ...(v.evidence?{evidence:v.evidence.map(e=>({...e}))}:{})};
+    ...(v.evidence?{evidence:v.evidence.map(e=>({...e}))}:{}),
+    ...(Object.hasOwn(v,"handover")?{handover:v.handover?{...v.handover}:null}:{})};
+}
+/** All visit audit paths must exclude both attachments and signature image bytes. */
+function auditVisit(v:ServiceSiteVisit){
+  return {...v,
+    ...(v.evidence?{evidence:v.evidence.map(({dataBase64:unused,...meta})=>{
+      void unused;return meta;
+    })}:{}),
+    ...(Object.hasOwn(v,"handover")?{handover:safeHandoverAudit(v.handover)}:{})};
 }
 function record(value:unknown):ServiceSiteVisit{
   if(value===null||typeof value!=="object"||Array.isArray(value))throw new Error("Invalid site visit record");
@@ -163,9 +178,12 @@ function record(value:unknown):ServiceSiteVisit{
   }
   const validated=Object.hasOwn(o,"checklist")
     ? {...v,checklist:validChecklist(o.checklist,v.arrivedAt,v.updatedAt,v.status)} : v;
-  return Object.hasOwn(o,"evidence")
+  const withEvidence=Object.hasOwn(o,"evidence")
     ? {...validated,evidence:validateServiceVisitEvidenceList(
         o.evidence,v.arrivedAt,v.updatedAt,v.status)} : validated;
+  return Object.hasOwn(o,"handover")
+    ? {...withEvidence,handover:validateSiteVisitHandover(
+        o.handover,v.arrivedAt,v.updatedAt,v.status)} : withEvidence;
 }
 /** Pure validation precedes snapshot mutation; older backups have no visit key. */
 export function validateServiceSiteVisits(input:unknown):ServiceSiteVisit[]{
@@ -176,7 +194,7 @@ export function validateServiceSiteVisits(input:unknown):ServiceSiteVisit[]{
   return input.map(raw=>{
     const v=record(raw),key=JSON.stringify([v.branchId,v.orderId,v.assignmentId,v.scheduledOn]);
     if(ids.has(v.id)||scheduled.has(key))throw new Error("Duplicate service site visit");
-    totalBytes+=serviceVisitEvidenceBytes(v.evidence??[]);
+    totalBytes+=serviceVisitEvidenceBytes(v.evidence??[])+handoverImageBytes(v.handover);
     if(totalBytes>SITE_EVIDENCE_MAX_SNAPSHOT_BYTES)
       throw new Error("Total offline site evidence exceeds snapshot capacity");
     ids.add(v.id);scheduled.add(key);
@@ -244,9 +262,9 @@ export function scheduleServiceSiteVisit(input:{
   const v=record({id:generateId(),branchId,orderId,customerId:order.customerId,
     assignmentId,staffId:assignment.staffId,scheduledOn,siteAddress,notes,
     status:"scheduled",arrivedAt:null,completedAt:null,cancellationReason:null,
-    version:1,createdAt:now,updatedAt:now,checklist:newSiteVisitChecklist(),evidence:[]});
+    version:1,createdAt:now,updatedAt:now,checklist:newSiteVisitChecklist(),evidence:[],handover:null});
   records.push(v);
-  auditAction("service_site_visit.schedule","service_site_visit",v.id,null,v);
+  auditAction("service_site_visit.schedule","service_site_visit",v.id,null,auditVisit(v));
   touchPersistence();
   return cloneVisit(v);
 }
@@ -264,7 +282,7 @@ export function startLegacySiteVisitChecklist(visitId:string,expectedVersion:num
   const now=nowISO();
   const next=record({...before,checklist:newSiteVisitChecklist(),version:before.version+1,updatedAt:now});
   records.splice(i,1,next);
-  auditAction("service_site_visit.checklist_initialize","service_site_visit",next.id,before,next);
+  auditAction("service_site_visit.checklist_initialize","service_site_visit",next.id,auditVisit(before),auditVisit(next));
   touchPersistence();
   return cloneVisit(next);
 }
@@ -295,7 +313,7 @@ export function setServiceSiteVisitCheck(input:{
       ...c,result:input.result,notes,checkedAt:input.result==="pending"?null:now,
     }:c)});
   records.splice(i,1,next);
-  auditAction("service_site_visit.checklist_update","service_site_visit",next.id,before,next);
+  auditAction("service_site_visit.checklist_update","service_site_visit",next.id,auditVisit(before),auditVisit(next));
   touchPersistence();
   return cloneVisit(next);
 }
@@ -359,6 +377,55 @@ export function removeServiceSiteVisitEvidence(input:{
         evidence:(v.evidence??[]).filter(e=>e.id!==existing.id)}};
   });
 }
+/**
+ * Capture the customer's drawn acknowledgement or an explicit, reasoned refusal.
+ * One outcome per visit; no replacement after consent, and no network call.
+ */
+function setHandover(input:{
+  visitId:string;expectedVersion:number;
+  handover:Omit<SiteVisitHandover,"confirmedAt">;
+}):ServiceSiteVisit{
+  assertPermission("orders.assign");writable();
+  const active=branch();
+  const i=records.findIndex(v=>v.id===input.visitId&&v.branchId===active);
+  if(i<0)throw new Error("Site handover not found in active branch");
+  const before=records[i];
+  if(before.version!==input.expectedVersion)throw new Error("Site visit changed; refresh first");
+  if(before.status!=="arrived"||!Object.hasOwn(before,"handover")||before.handover!==null)
+    throw new Error("Customer handover can only be recorded once after site arrival");
+  linkedOrder(before.orderId,active);
+  linkedAssignment(before.assignmentId,before.orderId,active);
+  const now=nowISO();
+  const handover=validateSiteVisitHandover({...input.handover,confirmedAt:now},
+    before.arrivedAt,now,before.status);
+  if(!handover)throw new Error("Handover result is required");
+  const next=record({...before,handover,version:before.version+1,updatedAt:now});
+  const total=records.reduce((n,v)=>n+serviceVisitEvidenceBytes(v.evidence??[])+
+    (v.id===before.id&&v.branchId===before.branchId?0:handoverImageBytes(v.handover)),0)+
+    handoverImageBytes(handover);
+  if(total>SITE_EVIDENCE_MAX_SNAPSHOT_BYTES)
+    throw new Error("Total local field evidence exceeds snapshot capacity");
+  records.splice(i,1,next);
+  auditAction("service_site_visit.handover","service_site_visit",next.id,
+    {version:before.version},{version:next.version,handover:safeHandoverAudit(handover)});
+  touchPersistence();
+  return cloneVisit(next);
+}
+export function captureServiceVisitSignature(input:{
+  visitId:string;expectedVersion:number;signerName:string;signaturePngBase64:string;
+}):ServiceSiteVisit{
+  const signaturePngBase64=validateHandoverPng(input.signaturePngBase64);
+  return setHandover({visitId:input.visitId,expectedVersion:input.expectedVersion,
+    handover:{status:"signed",signerName:input.signerName,signaturePngBase64,
+      reason:null,notice:SITE_VISIT_HANDOVER_NOTICE}});
+}
+export function recordServiceVisitSignatureDecline(input:{
+  visitId:string;expectedVersion:number;reason:string;
+}):ServiceSiteVisit{
+  return setHandover({visitId:input.visitId,expectedVersion:input.expectedVersion,
+    handover:{status:"declined",signerName:null,signaturePngBase64:null,
+      reason:input.reason,notice:SITE_VISIT_HANDOVER_NOTICE}});
+}
 function transition(input:{
   visitId:string;expectedVersion:number;action:"arrive"|"complete"|"cancel";reason?:string;
 }):ServiceSiteVisit{
@@ -379,6 +446,8 @@ function transition(input:{
     c.required&&c.result!=="passed"&&c.result!=="not_applicable")){
     throw new Error("Resolve required site visit checklist before completion");
   }
+  if(input.action==="complete"&&Object.hasOwn(before,"handover")&&before.handover===null)
+    throw new Error("Record customer signature or reasoned refusal before completing visit");
   const now=nowISO();
   const reason=input.action==="cancel"?memo(input.reason??"","cancellation reason",500,true):null;
   if(input.action==="cancel"&&(reason?.length??0)<3)throw new Error("Cancellation reason required");
@@ -388,7 +457,7 @@ function transition(input:{
     completedAt:input.action==="complete"?now:null,
     cancellationReason:reason,version:before.version+1,updatedAt:now});
   records.splice(i,1,next);
-  auditAction("service_site_visit."+input.action,"service_site_visit",next.id,before,next);
+  auditAction("service_site_visit."+input.action,"service_site_visit",next.id,auditVisit(before),auditVisit(next));
   touchPersistence();
   return cloneVisit(next);
 }
