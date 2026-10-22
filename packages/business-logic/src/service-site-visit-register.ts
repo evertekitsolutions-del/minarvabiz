@@ -13,6 +13,25 @@ import * as ordersStore from "./orders-store";
 import * as staffStore from "./phase6-store";
 
 export type SiteVisitStatus = "scheduled" | "arrived" | "completed" | "cancelled";
+export type SiteVisitCheckResult = "pending" | "passed" | "failed" | "not_applicable";
+export interface ServiceSiteVisitCheck {
+  readonly id:string;
+  readonly label:string;
+  readonly required:boolean;
+  readonly result:SiteVisitCheckResult;
+  readonly notes:string;
+  readonly checkedAt:string|null;
+}
+/** Deliberately generic; does not claim equipment-specific certification. */
+export const DEFAULT_SITE_VISIT_CHECKS:readonly {id:string;label:string;required:boolean}[]=[
+  {id:"safety",label:"Inspect site power and safety",required:true},
+  {id:"equipment",label:"Inspect equipment and cabling",required:true},
+  {id:"function",label:"Verify service equipment operation",required:true},
+  {id:"handover",label:"Confirm site handover/check outcome",required:true},
+];
+function newSiteVisitChecklist():ServiceSiteVisitCheck[]{
+  return DEFAULT_SITE_VISIT_CHECKS.map(c=>({...c,result:"pending",notes:"",checkedAt:null}));
+}
 export interface ServiceSiteVisit {
   readonly id:string;
   readonly branchId:string;
@@ -30,12 +49,14 @@ export interface ServiceSiteVisit {
   readonly version:number;
   readonly createdAt:string;
   readonly updatedAt:string;
+  /** Optional for existing pre-SVC-006 snapshots; present on new visits. */
+  readonly checklist?:ServiceSiteVisitCheck[];
 }
 const records:ServiceSiteVisit[]=[];
 const CAPACITY=10_000;
 const FIELDS=["id","branchId","orderId","customerId","assignmentId","staffId",
  "scheduledOn","siteAddress","notes","status","arrivedAt","completedAt",
- "cancellationReason","version","createdAt","updatedAt"];
+ "cancellationReason","version","createdAt","updatedAt","checklist"];
 function id(value:unknown,label:string):string{
   if(typeof value!=="string"||value.length<1||value.length>128||
     value.trim()!==value||/[\r\n]/.test(value))throw new Error("Invalid "+label);
@@ -59,6 +80,45 @@ function instant(value:unknown,label:string):string{
 }
 function nullableInstant(value:unknown,label:string):string|null{
   return value===null?null:instant(value,label);
+}
+function validChecklist(input:unknown,arrivedAt:string|null,updatedAt:string,status:SiteVisitStatus):ServiceSiteVisitCheck[]{
+  if(!Array.isArray(input)||input.length===0||input.length>40)
+    throw new Error("Invalid site visit checklist collection");
+  const ids=new Set<string>();
+  return input.map(raw=>{
+    if(!raw||typeof raw!=="object"||Array.isArray(raw))
+      throw new Error("Invalid site visit checklist item");
+    const item=raw as Record<string,unknown>;
+    if(Object.keys(item).some(k=>!["id","label","required","result","notes","checkedAt"].includes(k)))
+      throw new Error("Unknown site visit checklist field");
+    const itemId=id(item.id,"checklist item id");
+    if(!/^[a-z][a-z0-9_-]{0,63}$/.test(itemId)||ids.has(itemId))
+      throw new Error("Duplicate or invalid site visit checklist item");
+    ids.add(itemId);
+    const label=memo(item.label,"checklist label",160,true);
+    if(typeof item.required!=="boolean")throw new Error("Invalid checklist requirement");
+    const result=item.result as SiteVisitCheckResult;
+    if(!["pending","passed","failed","not_applicable"].includes(result))
+      throw new Error("Invalid checklist result");
+    const notes=memo(item.notes,"checklist notes",500);
+    const checkedAt=nullableInstant(item.checkedAt,"checklist confirmation");
+    if(result==="pending"){
+      if(checkedAt!==null||notes)throw new Error("Pending checklist item cannot have response");
+    }else{
+      if(!arrivedAt||!checkedAt||checkedAt<arrivedAt||checkedAt>updatedAt)
+        throw new Error("Checklist confirmation must follow site arrival");
+      if((result==="failed"||result==="not_applicable")&&notes.length<3)
+        throw new Error("Failed or inapplicable checklist requires reason");
+    }
+    if((status==="scheduled"||status==="cancelled")&&result!=="pending")
+      throw new Error("Unarrived site visit cannot have checklist responses");
+    if(status==="completed"&&item.required&&result!=="passed"&&result!=="not_applicable")
+      throw new Error("Required checklist items must be resolved before completion");
+    return {id:itemId,label,required:item.required,result,notes,checkedAt};
+  });
+}
+function cloneVisit(v:ServiceSiteVisit):ServiceSiteVisit{
+  return {...v,...(v.checklist?{checklist:v.checklist.map(c=>({...c}))}:{})};
 }
 function record(value:unknown):ServiceSiteVisit{
   if(value===null||typeof value!=="object"||Array.isArray(value))throw new Error("Invalid site visit record");
@@ -92,7 +152,8 @@ function record(value:unknown):ServiceSiteVisit{
     (v.completedAt!==null&&(v.arrivedAt===null||v.completedAt<v.arrivedAt))){
     throw new Error("Invalid site visit lifecycle chronology");
   }
-  return v;
+  return Object.hasOwn(o,"checklist")
+    ? {...v,checklist:validChecklist(o.checklist,v.arrivedAt,v.updatedAt,v.status)} : v;
 }
 /** Pure validation precedes snapshot mutation; older backups have no visit key. */
 export function validateServiceSiteVisits(input:unknown):ServiceSiteVisit[]{
@@ -107,7 +168,7 @@ export function validateServiceSiteVisits(input:unknown):ServiceSiteVisit[]{
   });
 }
 export function exportServiceSiteVisits():ServiceSiteVisit[]{
-  return records.map(v=>({...v}));
+  return records.map(cloneVisit);
 }
 export function hydrateServiceSiteVisits(input:unknown):void{
   const verified=validateServiceSiteVisits(input);
@@ -143,7 +204,7 @@ function linkedAssignment(assignmentId:string,orderId:string,branchId:string){
 export function listServiceSiteVisits():ServiceSiteVisit[]{
   assertPermission("reports.view");
   const active=branch();
-  return records.filter(v=>v.branchId===active).map(v=>({...v}))
+  return records.filter(v=>v.branchId===active).map(cloneVisit)
     .sort((a,b)=>b.scheduledOn.localeCompare(a.scheduledOn)||a.id.localeCompare(b.id));
 }
 export function scheduleServiceSiteVisit(input:{
@@ -167,11 +228,60 @@ export function scheduleServiceSiteVisit(input:{
   const v=record({id:generateId(),branchId,orderId,customerId:order.customerId,
     assignmentId,staffId:assignment.staffId,scheduledOn,siteAddress,notes,
     status:"scheduled",arrivedAt:null,completedAt:null,cancellationReason:null,
-    version:1,createdAt:now,updatedAt:now});
+    version:1,createdAt:now,updatedAt:now,checklist:newSiteVisitChecklist()});
   records.push(v);
   auditAction("service_site_visit.schedule","service_site_visit",v.id,null,v);
   touchPersistence();
-  return {...v};
+  return cloneVisit(v);
+}
+export function startLegacySiteVisitChecklist(visitId:string,expectedVersion:number):ServiceSiteVisit{
+  assertPermission("orders.assign");writable();
+  const branchId=branch();
+  const i=records.findIndex(v=>v.id===visitId&&v.branchId===branchId);
+  if(i<0)throw new Error("Site visit not found in active branch");
+  const before=records[i];
+  if(before.version!==expectedVersion)throw new Error("Site visit changed; refresh first");
+  if(before.status!=="arrived"||before.checklist)
+    throw new Error("Checklist can only be initialized on a legacy arrived visit");
+  linkedOrder(before.orderId,branchId);
+  linkedAssignment(before.assignmentId,before.orderId,branchId);
+  const now=nowISO();
+  const next=record({...before,checklist:newSiteVisitChecklist(),version:before.version+1,updatedAt:now});
+  records.splice(i,1,next);
+  auditAction("service_site_visit.checklist_initialize","service_site_visit",next.id,before,next);
+  touchPersistence();
+  return cloneVisit(next);
+}
+export function setServiceSiteVisitCheck(input:{
+  visitId:string;expectedVersion:number;itemId:string;
+  result:SiteVisitCheckResult;notes?:string;
+}):ServiceSiteVisit{
+  assertPermission("orders.assign");writable();
+  const branchId=branch();
+  const i=records.findIndex(v=>v.id===input.visitId&&v.branchId===branchId);
+  if(i<0)throw new Error("Site visit not found in active branch");
+  const before=records[i];
+  if(before.version!==input.expectedVersion)throw new Error("Site visit changed; refresh first");
+  if(before.status!=="arrived"||!before.checklist)
+    throw new Error("Checklist can only be edited after site arrival");
+  linkedOrder(before.orderId,branchId);
+  linkedAssignment(before.assignmentId,before.orderId,branchId);
+  if(!["pending","passed","failed","not_applicable"].includes(input.result))
+    throw new Error("Invalid checklist result");
+  const notes=input.result==="pending"?"":memo(input.notes??"","checklist notes",500);
+  if((input.result==="failed"||input.result==="not_applicable")&&notes.length<3)
+    throw new Error("Failed or inapplicable checklist requires reason");
+  if(!before.checklist.some(c=>c.id===input.itemId))
+    throw new Error("Unknown checklist item");
+  const now=nowISO();
+  const next=record({...before,version:before.version+1,updatedAt:now,
+    checklist:before.checklist.map(c=>c.id===input.itemId?{
+      ...c,result:input.result,notes,checkedAt:input.result==="pending"?null:now,
+    }:c)});
+  records.splice(i,1,next);
+  auditAction("service_site_visit.checklist_update","service_site_visit",next.id,before,next);
+  touchPersistence();
+  return cloneVisit(next);
 }
 function transition(input:{
   visitId:string;expectedVersion:number;action:"arrive"|"complete"|"cancel";reason?:string;
@@ -189,6 +299,10 @@ function transition(input:{
     throw new Error("Invalid site visit status transition");
   }
   if(input.action==="arrive")linkedAssignment(before.assignmentId,before.orderId,branchId);
+  if(input.action==="complete"&&before.checklist?.some(c=>
+    c.required&&c.result!=="passed"&&c.result!=="not_applicable")){
+    throw new Error("Resolve required site visit checklist before completion");
+  }
   const now=nowISO();
   const reason=input.action==="cancel"?memo(input.reason??"","cancellation reason",500,true):null;
   if(input.action==="cancel"&&(reason?.length??0)<3)throw new Error("Cancellation reason required");
@@ -200,7 +314,7 @@ function transition(input:{
   records.splice(i,1,next);
   auditAction("service_site_visit."+input.action,"service_site_visit",next.id,before,next);
   touchPersistence();
-  return {...next};
+  return cloneVisit(next);
 }
 export function markServiceSiteArrival(visitId:string,expectedVersion:number):ServiceSiteVisit{
   return transition({visitId,expectedVersion,action:"arrive"});

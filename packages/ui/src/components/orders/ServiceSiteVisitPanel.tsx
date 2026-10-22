@@ -8,6 +8,7 @@ import {
   type ServiceSiteVisit,
 } from "@minarvabiz/business-logic";
 import {Button} from "../Button";
+import {ServiceSiteVisitChecklist} from "./ServiceSiteVisitChecklist";
 import {inputClass, selectClass} from "../forms/FormField";
 
 function localDate():string{
@@ -137,6 +138,7 @@ export function ServiceSiteVisitPanel({
             {v.arrivedAt&&<p className="text-slate-500">Arrived: {new Date(v.arrivedAt).toLocaleString()}</p>}
             {v.completedAt&&<p className="text-slate-500">Finished: {new Date(v.completedAt).toLocaleString()}</p>}
             {v.cancellationReason&&<p className="text-slate-500">{v.cancellationReason}</p>}
+            <ServiceSiteVisitChecklist visit={v} canWrite={canWrite} mutate={mutate}/>
           </td>
           <td className="p-2">
             {canWrite&&v.status==="scheduled"&&<>
