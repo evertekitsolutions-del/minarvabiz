@@ -82,7 +82,7 @@ export function ProcurementPanel({
   onCancel: (id: string, reason: string) => { success: boolean; error?: string };
   onReceive: (payload: {
     purchaseOrderId: string;
-    lines: Array<{ purchaseOrderLineId: string; quantity: number; warehouseLocationId?: string | null }>;
+    lines: Array<{ purchaseOrderLineId: string; quantity: number; warehouseLocationId?: string | null; batchCode?: string | null; expiresOn?: string | null }>;
     notes?: string | null;
   }) => { success: boolean; grnNumber?: string; status?: string; errors?: string[] };
   getInvoiceableLines: (purchaseOrderId: string, excludeInvoiceId?: string) => InvoiceableLine[];
@@ -153,6 +153,13 @@ export function ProcurementPanel({
   const [receiveOrderId, setReceiveOrderId] = React.useState("");
   const [receiveQty, setReceiveQty] = React.useState<Record<string, string>>({});
   const [receiveLocation, setReceiveLocation] = React.useState<Record<string, string>>({});
+  const [receiveBatch, setReceiveBatch] = React.useState<Record<string, string>>({});
+  const [receiveExpiry, setReceiveExpiry] = React.useState<Record<string, string>>({});
+  // Current cloud GRN schema has no batch columns; never imply cloud persistence.
+  const [canSaveLocalBatch, setCanSaveLocalBatch] = React.useState(false);
+  React.useEffect(() => {
+    setCanSaveLocalBatch(Boolean((window as unknown as { minarvaDesktop?: unknown }).minarvaDesktop));
+  }, []);
   const [receiveNotes, setReceiveNotes] = React.useState("");
 
   const [invoiceOrderId, setInvoiceOrderId] = React.useState("");
@@ -359,6 +366,8 @@ export function ProcurementPanel({
     setReceiveOrderId(po.id);
     setReceiveQty(quantities);
     setReceiveLocation({});
+    setReceiveBatch({});
+    setReceiveExpiry({});
     setReceiveNotes("");
     setMessage(null);
   }
@@ -370,6 +379,10 @@ export function ProcurementPanel({
         purchaseOrderLineId: line.id,
         quantity: Number(receiveQty[line.id] || 0),
         warehouseLocationId: receiveLocation[line.id] || null,
+        ...(canSaveLocalBatch ? {
+          batchCode: receiveBatch[line.id]?.trim() || null,
+          expiresOn: receiveExpiry[line.id] || null,
+        } : {}),
       }))
       .filter((line) => Number.isFinite(line.quantity) && line.quantity > 0);
     const result = onReceive({ purchaseOrderId: receiveOrder.id, lines: receiptLines, notes: receiveNotes.trim() || null });
@@ -378,7 +391,7 @@ export function ProcurementPanel({
       return;
     }
     setMessage({ type: "ok", text: `${result.grnNumber || "Goods receipt"} posted · ${result.status || "received"}.` });
-    setReceiveOrderId(""); setReceiveQty({}); setReceiveLocation({}); setReceiveNotes("");
+    setReceiveOrderId(""); setReceiveQty({}); setReceiveLocation({}); setReceiveBatch({}); setReceiveExpiry({}); setReceiveNotes("");
   }
 
   function openInvoice(po: PurchaseOrder) {
@@ -654,6 +667,14 @@ export function ProcurementPanel({
               <div>
                 <div className="font-semibold text-slate-900">{receipt.grnNumber} · {receipt.poNumber}</div>
                 <div className="text-xs text-slate-500">{receipt.supplierName || receipt.supplierId} · {receipt.receiptDate} · {receipt.lines.length} line(s)</div>
+                {receipt.lines.some(line => line.batchCode) && (
+                  <div className="mt-1 space-y-1 text-xs text-slate-600">
+                    {receipt.lines.filter(line => line.batchCode).map(line => (
+                      <p key={line.id}>{line.description}: batch {line.batchCode} · expiry {line.expiresOn || "unrecorded"} · received {line.receivedQuantity}</p>
+                    ))}
+                    <p className="text-amber-700">GRN provenance only; not live lot stock or expiry-safe checkout.</p>
+                  </div>
+                )}
               </div>
               <div className="font-semibold">{formatMoney(receipt.subtotal)}</div>
             </div>
@@ -894,9 +915,9 @@ export function ProcurementPanel({
       <Modal
         open={Boolean(receiveOrder)}
         title={receiveOrder ? `Receive goods — ${receiveOrder.poNumber}` : "Receive goods"}
-        onClose={() => { setReceiveOrderId(""); setReceiveQty({}); setReceiveLocation({}); setReceiveNotes(""); }}
+        onClose={() => { setReceiveOrderId(""); setReceiveQty({}); setReceiveLocation({}); setReceiveBatch({}); setReceiveExpiry({}); setReceiveNotes(""); }}
         className="max-w-2xl"
-        footer={<><Button variant="outline" onClick={() => { setReceiveOrderId(""); setReceiveQty({}); setReceiveLocation({}); setReceiveNotes(""); }}>Cancel</Button><Button onClick={submitReceipt}>Post Goods Receipt</Button></>}
+        footer={<><Button variant="outline" onClick={() => { setReceiveOrderId(""); setReceiveQty({}); setReceiveLocation({}); setReceiveBatch({}); setReceiveExpiry({}); setReceiveNotes(""); }}>Cancel</Button><Button onClick={submitReceipt}>Post Goods Receipt</Button></>}
       >
         {receiveOrder && (
           <div className="space-y-4">
@@ -927,10 +948,34 @@ export function ProcurementPanel({
                         ))}
                       </select>
                     </FormField>
+                    {canSaveLocalBatch && (
+                      <>
+                        <FormField label="Supplier batch / lot code (optional)">
+                          <input aria-label={`GRN batch code ${line.id}`} className={inputClass}
+                            maxLength={64} value={receiveBatch[line.id] || ""}
+                            placeholder="Batch printed on goods"
+                            disabled={!line.productId || remaining <= 0}
+                            onChange={(e) => setReceiveBatch((old) => ({ ...old, [line.id]: e.target.value }))} />
+                        </FormField>
+                        <FormField label="Batch expiry date (paired with code)">
+                          <input aria-label={`GRN batch expiry ${line.id}`}
+                            className={inputClass} type="date" value={receiveExpiry[line.id] || ""}
+                            disabled={!line.productId || remaining <= 0}
+                            onChange={(e) => setReceiveExpiry((old) => ({ ...old, [line.id]: e.target.value }))} />
+                        </FormField>
+                      </>
+                    )}
                   </div>
                 );
               })}
             </div>
+            {canSaveLocalBatch && (
+              <p className="text-xs text-amber-700">
+                Batch and expiry are stored as GRN references in the installed Windows offline snapshot.
+                Both are required together. They do not block POS sales or synchronize to cloud.
+                Record separate receipts if one PO line arrives in different batches.
+              </p>
+            )}
             <FormField label="Receipt notes"><input className={inputClass} value={receiveNotes} onChange={(e) => setReceiveNotes(e.target.value)} placeholder="Delivery note / inspection remarks" /></FormField>
           </div>
         )}
