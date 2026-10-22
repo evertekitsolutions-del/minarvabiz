@@ -283,3 +283,191 @@ test("checklist backup validation rejects malformed or tampered completions atom
   assert.throws(()=>domain.startLegacySiteVisitChecklist(legacy.id,started.version),/legacy arrived/);
   assert.throws(()=>domain.completeServiceSiteVisit(legacy.id,started.version),/checklist/);
 });
+
+
+
+const PNG_BASE64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==";
+function fileInput(visit,overrides={}){
+  return {visitId:visit.id,expectedVersion:visit.version,fileName:"camera-before.png",
+    mimeType:"image/png",purpose:"before",notes:"Camera mounting state",
+    byteLength:Buffer.from(PNG_BASE64,"base64").length,dataBase64:PNG_BASE64,
+    ...overrides};
+}
+test("SVC-008 stores actual image bytes with visit, branch and audit without logging payload",()=>{
+  reset();
+  const visit=domain.markServiceSiteArrival(schedule().id,1);
+  const oldPersist=persist;
+  const added=domain.addServiceSiteVisitEvidence(fileInput(visit));
+  assert.equal(added.version,3);
+  assert.equal(added.evidence.length,1);
+  assert.equal(added.evidence[0].fileName,"camera-before.png");
+  assert.equal(added.evidence[0].dataBase64,PNG_BASE64);
+  assert.equal(added.evidence[0].byteLength,Buffer.from(PNG_BASE64,"base64").length);
+  assert.equal(events.at(-1)[0],"service_site_visit.evidence_add");
+  assert.ok(!JSON.stringify(events.at(-1)).includes(PNG_BASE64));
+  assert.equal(persist,oldPersist+1);
+  const state=domain.exportServiceSiteVisits();
+  const copy=domain.listServiceSiteVisits();
+  copy[0].evidence[0].notes="tampered";
+  assert.equal(domain.listServiceSiteVisits()[0].evidence[0].notes,"Camera mounting state");
+  domain.hydrateServiceSiteVisits([]);
+  domain.hydrateServiceSiteVisits(state);
+  assert.deepEqual(domain.exportServiceSiteVisits(),state);
+});
+test("SVC-008 PDFs, JPEG and WebP attachments use allowlisted signatures, not filenames alone",()=>{
+  reset();
+  const visit=domain.markServiceSiteArrival(schedule().id,1);
+  const payloads=[
+    {fileName:"work-report.pdf",mimeType:"application/pdf",
+      dataBase64:Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF").toString("base64"),
+      purpose:"document"},
+    {fileName:"camera-after.jpg",mimeType:"image/jpeg",
+      dataBase64:Buffer.from([255,216,255,224,0,16,74,70,73,70,0,1,2,3,4,5]).toString("base64"),
+      purpose:"after"},
+    {fileName:"nvr.webp",mimeType:"image/webp",
+      dataBase64:Buffer.from("RIFF0000WEBPVP8 one-image").toString("base64"),
+      purpose:"diagnostic"},
+  ];
+  let current=visit;
+  for(const p of payloads){
+    current=domain.addServiceSiteVisitEvidence(fileInput(current,{
+      ...p,byteLength:Buffer.from(p.dataBase64,"base64").length,
+    }));
+  }
+  assert.equal(current.evidence.length,3);
+  assert.deepEqual(current.evidence.map(x=>x.purpose),["document","after","diagnostic"]);
+});
+test("SVC-008 enforces MIME magic bytes, content size, canonical base64 and safe filenames",()=>{
+  reset();
+  const visit=domain.markServiceSiteArrival(schedule().id,1);
+  const bad=[
+    {fileName:"danger.html"},
+    {fileName:"../danger.png"},
+    {fileName:"C:\\photo.png"},
+    {fileName:"malware.svg",mimeType:"image/svg+xml"},
+    {fileName:"photo.pdf",mimeType:"image/png"},
+    {mimeType:"application/pdf"},
+    {purpose:"system"},
+    {byteLength:1},
+    {byteLength:2*1024*1024+1},
+    {dataBase64:"%%%%"},
+    {dataBase64:"YWJj===="},
+    {dataBase64:Buffer.from("not a PNG at all").toString("base64"),byteLength:16},
+    {notes:"a".repeat(501)},
+    {fileName:"x".repeat(170)+".png"},
+  ];
+  for(const override of bad){
+    const p=fileInput(visit,override);
+    assert.throws(()=>domain.addServiceSiteVisitEvidence(p),undefined,
+      JSON.stringify({name:override.fileName,mime:override.mimeType,size:override.byteLength}));
+  }
+  assert.equal(domain.exportServiceSiteVisits()[0].version,2);
+  assert.equal(domain.exportServiceSiteVisits()[0].evidence.length,0);
+});
+test("SVC-008 removal requires reason and CAS; no binary data copied into audit events",()=>{
+  reset();let visit=domain.markServiceSiteArrival(schedule().id,1);
+  visit=domain.addServiceSiteVisitEvidence(fileInput(visit));
+  const itemId=visit.evidence[0].id;
+  const beforeAudit=events.length;
+  assert.throws(()=>domain.removeServiceSiteVisitEvidence({
+    visitId:visit.id,expectedVersion:visit.version,evidenceId:itemId,reason:"no",
+  }),/reason/);
+  assert.throws(()=>domain.removeServiceSiteVisitEvidence({
+    visitId:visit.id,expectedVersion:visit.version-1,evidenceId:itemId,
+    reason:"Wrong photo selected",
+  }),/changed/);
+  assert.equal(events.length,beforeAudit);
+  const gone=domain.removeServiceSiteVisitEvidence({
+    visitId:visit.id,expectedVersion:visit.version,evidenceId:itemId,
+    reason:"Wrong photo selected",
+  });
+  assert.equal(gone.evidence.length,0);
+  assert.equal(events.at(-1)[0],"service_site_visit.evidence_remove");
+  assert.equal(events.at(-1)[4].reason,"Wrong photo selected");
+  assert.ok(!JSON.stringify(events.at(-1)).includes(PNG_BASE64));
+  assert.throws(()=>domain.removeServiceSiteVisitEvidence({
+    visitId:visit.id,expectedVersion:gone.version,evidenceId:itemId,
+    reason:"Wrong photo selected",
+  }),/not found/);
+});
+test("SVC-008 permission, tenant and lifecycle boundaries protect evidence writes",()=>{
+  reset();
+  const scheduled=schedule();
+  assert.throws(()=>domain.addServiceSiteVisitEvidence(fileInput(scheduled)),/after arrival/);
+  const arrived=domain.markServiceSiteArrival(scheduled.id,1);
+  branch.id="foreign";
+  assert.throws(()=>domain.addServiceSiteVisitEvidence(fileInput(arrived)),/active branch/);
+  branch.id="b1";
+  permissions.delete("orders.assign");
+  assert.throws(()=>domain.addServiceSiteVisitEvidence(fileInput(arrived)),/Denied/);
+  permissions.add("orders.assign");
+  isProd=true;
+  assert.throws(()=>domain.addServiceSiteVisitEvidence(fileInput(arrived)),/installed Windows SQLite/);
+  isProd=false;
+  assignment.status="cancelled";
+  assert.throws(()=>domain.addServiceSiteVisitEvidence(fileInput(arrived)),/assignment/);
+  assignment.status="assigned";
+  const added=domain.addServiceSiteVisitEvidence(fileInput(arrived));
+  const id=added.evidence[0].id;
+  for(const check of added.checklist){
+    const current=domain.listServiceSiteVisits()[0];
+    domain.setServiceSiteVisitCheck({visitId:current.id,expectedVersion:current.version,
+      itemId:check.id,result:"passed",notes:"Verified"});
+  }
+  const final=domain.listServiceSiteVisits()[0];
+  const completed=domain.completeServiceSiteVisit(final.id,final.version);
+  assert.equal(completed.evidence.length,1);
+  assert.throws(()=>domain.addServiceSiteVisitEvidence(fileInput(completed)),/after arrival/);
+  assert.throws(()=>domain.removeServiceSiteVisitEvidence({
+    visitId:completed.id,expectedVersion:completed.version,evidenceId:id,
+    reason:"Too late to remove",
+  }),/after arrival/);
+});
+test("SVC-008 backup validation rejects tampering without partially applying any record",()=>{
+  reset();let visit=domain.markServiceSiteArrival(schedule().id,1);
+  visit=domain.addServiceSiteVisitEvidence(fileInput(visit));
+  const original=domain.exportServiceSiteVisits();
+  const evidence=visit.evidence[0];
+  const tampered=[
+    [{...visit,evidence:[{...evidence,dataBase64:"aa"}]}],
+    [{...visit,evidence:[{...evidence,byteLength:9999}]}],
+    [{...visit,evidence:[{...evidence,mimeType:"image/svg+xml"}]}],
+    [{...visit,evidence:[{...evidence,purpose:"unknown"}]}],
+    [{...visit,evidence:[{...evidence,uploadedAt:"2025-01-01T00:00:00.000Z"}]}],
+    [{...visit,evidence:[evidence,evidence]}],
+    [{...visit,evidence:[{...evidence,bogus:"extra"}]}],
+    [{...visit,status:"scheduled",arrivedAt:null,evidence:[evidence]}],
+    [{...visit,evidence:"wrong"}],
+    [{...visit,evidence:Array(7).fill(evidence)}],
+  ];
+  for(const state of tampered){
+    assert.throws(()=>domain.hydrateServiceSiteVisits(state));
+    assert.deepEqual(domain.exportServiceSiteVisits(),original);
+  }
+  const legacy=structuredClone(visit);
+  delete legacy.evidence;
+  domain.hydrateServiceSiteVisits([legacy]);
+  assert.deepEqual(domain.exportServiceSiteVisits(),[legacy]);
+  domain.hydrateServiceSiteVisits(original);
+  assert.deepEqual(domain.exportServiceSiteVisits(),original);
+});
+test("SVC-008 upload/download controls, existing snapshot path and raw-evidence audit isolation",()=>{
+  const root=new URL("../../../",import.meta.url);
+  const component=fs.readFileSync(new URL(
+    "ui/src/components/orders/ServiceSiteVisitEvidencePanel.tsx",root),"utf8");
+  const panel=fs.readFileSync(new URL(
+    "ui/src/components/orders/ServiceSiteVisitPanel.tsx",root),"utf8");
+  const service=fs.readFileSync(new URL(
+    "business-logic/src/service-site-visit-register.ts",root),"utf8");
+  const exports=fs.readFileSync(new URL(
+    "business-logic/src/index.ts",root),"utf8");
+  assert.match(panel,/ServiceSiteVisitEvidencePanel visit=\{v\}/);
+  assert.match(component,/addServiceSiteVisitEvidence\(/);
+  assert.match(component,/removeServiceSiteVisitEvidence\(/);
+  assert.match(component,/readAsDataURL\(file\)/);
+  assert.match(component,/URL\.createObjectURL\(blob\)/);
+  assert.match(exports,/export \* from "\.\/service-site-visit-evidence"/);
+  assert.match(service,/validateServiceVisitEvidenceList\(/);
+  assert.match(service,/serviceVisitEvidenceBytes\(/);
+  assert.match(service,/const \{dataBase64:ignored/);
+});
