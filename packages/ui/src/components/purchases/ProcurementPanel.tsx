@@ -18,6 +18,7 @@ import { Modal } from "../forms/Modal";
 import { formatMoney } from "../customers/format";
 import { RfqDraftPanel } from "./RfqDraftPanel";
 import { LandedCostPanel } from "./LandedCostPanel";
+import { GrnBatchAttributionPanel } from "./GrnBatchAttributionPanel";
 import { buildSupplierDeliveryScores, buildPostedSupplierCostComparison, phase9Store } from "@minarvabiz/business-logic";
 
 type DraftLine = {
@@ -978,6 +979,7 @@ export function ProcurementPanel({
           </div>
         )}
       </Modal>
+      <GrnBatchAttributionPanel receipts={goodsReceipts} products={products} />
     </div>
   );
 }
