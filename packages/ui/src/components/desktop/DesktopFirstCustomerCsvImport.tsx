@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   can, parseProductCsv, parseCustomerCsv, parseSupplierCsv,
   importProductsFromCsv, importCustomersFromCsv, importSuppliersFromCsv,
+  type Permission,
 } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
 import { createDurableCsvImport, type FirstCustomerCsvKind } from "./durable-csv-import";
@@ -16,7 +17,7 @@ const headers: Record<FirstCustomerCsvKind, string> = {
   customers: "name,phone,email,address,notes",
   suppliers: "name,company,phone,email,address,category,notes",
 };
-const permissions: Record<FirstCustomerCsvKind, string> = {
+const permissions: Record<FirstCustomerCsvKind, Permission> = {
   products: "products.manage", customers: "customers.manage", suppliers: "purchases.manage",
 };
 const importer = createDurableCsvImport({
