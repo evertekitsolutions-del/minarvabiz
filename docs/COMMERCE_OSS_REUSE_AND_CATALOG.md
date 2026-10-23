@@ -1,9 +1,9 @@
 # Minarva Commerce — native shareable product catalog (2026-10-20)
 
 ## Compatibility decision
-- **Open Mercato** ([upstream](https://github.com/open-mercato/open-mercato), MIT core): Next.js/TypeScript, multi-tenant extension and CRM design patterns can inform native modules. **Do not install a second MikroORM/DI/tenant authority** alongside Minarva's PostgreSQL/SQLite/sync.
-- **Aimeos** ([upstream](https://github.com/aimeos/aimeos), MIT/LGPLv3 packages): product catalog, variants, B2B pricing and marketplace workflows are useful; its PHP/Laravel runtime and LGPL components must **not** be copied into Electron/Next.js commercial bundles without package-specific license review.
-- **Uniqqer**: no verified canonical repository/release/license was identified; **not approved for dependency or source copying**. Reassess if a canonical URL is provided.
+- **Open Mercato** ([upstream](https://github.com/open-mercato/open-mercato), MIT TypeScript core): approved direct pure-code donor, pin `v0.9.0` / `4374c48def1654927805c4b760f0e7f8648280f2` pending revalidation for each new adoption. Exclude commercial enterprise, enterprise specs and unlicensed eslint-plugin-ds. Keep MIT notices and exact source provenance in `docs/DEPENDENCY_REUSE_LOG.md`. **Do not install a second MikroORM/DI/tenant authority** alongside Minarva's PostgreSQL/SQLite/sync.
+- **Aimeos** ([aimeos-core](https://github.com/aimeos/aimeos-core), LGPL-3.0-or-later): PHP/Laravel; behaviour reference only for catalog, variants, quantity/customer-group pricing, checkout, delivery, payments, B2B, marketplace, SEO, JSON:API. No copied source or bundled PHP. Separately hosted adapter requires owner approval.
+- **QUIQQER** ([owner-confirmed upstream](https://github.com/QUIQQER/core), GPL-3.0-or-later core; custom QEL/proprietary modules): this is the previously misspelled “Uniqqer”. Behaviour reference only for product/tax/currency/order/invoice/payment/shipping/discount workflows. Never copy code, identifiers, templates or text; implement independently in TypeScript.
 - **Imported third-party code:** none. This slice is original Minarva-native code; no new NPM/Composer dependencies or paid services.
 
 ## Implemented slice
@@ -21,3 +21,7 @@
 - Added self-contained **Download customer catalog HTML** with escaped text, strict CSP (no network, scripting, images or forms), print styles and honest availability disclaimer. Product page uses the current shop name/currency; no public URL or online publication.
 - Fixed implicit branch-data exposure in CSV: when branch authority is unavailable, the default exports **company-wide products only**. Explicit authorized branch filtering is available at the pure-function boundary for future verified session usage, not presented as a self-selecting permission bypass in the UI.
 - Both CSV/HTML use the same filtered projection and cent-safe selling prices. CSV export remains available. No migration, remote publishing or new library.
+
+## Feature-first acceptance order (owner decision 2026-10-20)
+
+Keep existing customer catalog CSV/HTML and fail-closed company-vs-branch export filters. Next B-COMMERCE slices must prove audited publication consent, tenant/company/branch authorization, price lists, images, ATP and reservations, order capture and immutable sale/financial sync. Implement with one Minarva customer/invoice/stock/ledger authority. The new queue is documented in `docs/OWNER_DIRECTIVE_2026-10-20.md`; no automatic hosted catalog, paid service or production change is approved. Candidate donors: pure MIT Open Mercato checkout/shipping/customer/accounts/forms; Aimeos and QUIQQER remain behaviour-only. Record exact provenance in `docs/DEPENDENCY_REUSE_LOG.md`.

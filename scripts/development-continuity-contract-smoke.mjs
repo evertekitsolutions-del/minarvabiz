@@ -89,7 +89,9 @@ try {
   assert.equal(issue.title,"Minarva Biz — Development Continuity Dashboard");
   assert.match(issue.body,/HR-004C-REVIEW-LIFECYCLE/);
   assert.match(issue.body,/## Next customer-visible delivery outcome/);
-  assert.match(issue.body,/A-FIRST-CUSTOMER/);
+  assert.match(issue.body,/A-CORE-PARITY/);
+  assert.match(issue.body,/docs\/OWNER_DIRECTIVE_2026-10-20\.md/);
+  assert.match(issue.body,/optional hardening belongs to Phase H/);
   assert.match(issue.body,/## Commercial delivery priorities/);
   assert.match(issue.body,/## Technical subqueue/);
   assert.match(issue.body,/916cdd4c1cf1ea799bb1f46a14ff5fc789e8bbde/);
