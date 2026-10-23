@@ -70,7 +70,9 @@ export function buildServiceFeedbackInsights(visits:readonly ServiceSiteVisit[],
   if(start&&end&&start>end)throw new Error("Feedback start date exceeds end date");
   if(!Array.isArray(visits)||visits.length>10000)
     throw new Error("Invalid feedback visit collection");
-  const keys=new Set<string>(),monthly=new Map<string,ServiceFeedbackMonth>();
+  // Accumulate in mutable local rows; the public report uses read-only views.
+  type MutableMonth={month:string;completed:number;rated:number;declined:number;lowRatings:number};
+  const keys=new Set<string>(),monthly=new Map<string,MutableMonth>();
   const actions:ServiceFeedbackAction[]=[];
   let branchId:string|null=null,completedVisits=0,responseEligibleVisits=0,
     legacyUntracked=0,awaitingFeedback=0,rated=0,declined=0,totalStars=0,
