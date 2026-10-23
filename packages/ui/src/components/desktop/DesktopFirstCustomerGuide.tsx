@@ -6,6 +6,7 @@ import {
   unmarkOnboardingDone, phase5Store, store,
 } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
+import { DesktopFirstCustomerCsvImport } from "./DesktopFirstCustomerCsvImport";
 import type { NavItemId } from "../../lib/nav";
 import {
   firstCustomerEvidence, firstCustomerReviewCounts, firstCustomerRoutes,
@@ -150,6 +151,7 @@ export function DesktopFirstCustomerGuide({ onNavigate }: {
             </div>
           </div>;
         })}
+        <DesktopFirstCustomerCsvImport onSaved={() => setRevision(n => n + 1)} />
         <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
           {([
             ["accounting", "Opening bank & accounts"], ["sales", "Create first invoice"],
