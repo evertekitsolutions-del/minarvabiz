@@ -1087,3 +1087,111 @@ test("SVC-FB01 rejects malformed backup response and preserves state without par
   assert.deepEqual(domain.exportServiceSiteVisits(),[legacy]);
   domain.hydrateServiceSiteVisits(backup);
 });
+
+
+function lowRatingRecoveryVisit(){
+  const finished=completedVisitForFeedback();
+  return domain.recordServiceVisitFeedback({
+    visitId:finished.id,expectedVersion:finished.version,
+    outcome:"rated",rating:1,comment:"Camera loses signal repeatedly",
+    source:"phone",customerResponseConfirmed:true,
+  });
+}
+test("SVC-FB02 low rating opens offline follow-up and requires actual contact before closure",()=>{
+  reset();
+  let v=lowRatingRecoveryVisit();
+  const startPersist=persist;
+  assert.equal(v.recovery,null);
+  assert.throws(()=>domain.closeServiceVisitRecovery({
+    visitId:v.id,expectedVersion:v.version,outcome:"resolved",
+    outcomeNotes:"Repaired and tested" }),/contact/);
+  v=domain.openServiceVisitRecovery({visitId:v.id,expectedVersion:v.version,
+    dueOn:"2026-10-23",plan:"Call to diagnose recurring signal loss"});
+  assert.equal(v.recovery.status,"open");
+  assert.equal(v.recovery.dueOn,"2026-10-23");
+  assert.equal(events.at(-1)[0],"service_site_visit.recovery_open");
+  assert.ok(!JSON.stringify(events.at(-1)).includes("signal loss"));
+  assert.throws(()=>domain.closeServiceVisitRecovery({
+    visitId:v.id,expectedVersion:v.version,
+    outcome:"resolved",outcomeNotes:"Repaired"}),/record contact/);
+  v=domain.confirmServiceVisitRecoveryContact({visitId:v.id,
+    expectedVersion:v.version,method:"phone",
+    notes:"Spoke to customer, they agreed to a follow-up call"});
+  assert.equal(v.recovery.status,"contacted");
+  assert.ok(!JSON.stringify(events.at(-1)).includes("Spoke to customer"));
+  v=domain.closeServiceVisitRecovery({visitId:v.id,expectedVersion:v.version,
+    outcome:"closed_unresolved",
+    outcomeNotes:"Customer still experiences issue, new service visit required"});
+  assert.equal(v.recovery.status,"closed_unresolved");
+  assert.equal(persist,startPersist+3);
+  const backup=domain.exportServiceSiteVisits();
+  backup[0].recovery.plan="tampered";
+  assert.notEqual(domain.exportServiceSiteVisits()[0].recovery.plan,"tampered");
+  const copy=domain.listServiceSiteVisits();
+  copy[0].recovery.contactNotes="tampered";
+  assert.notEqual(domain.listServiceSiteVisits()[0].recovery.contactNotes,"tampered");
+  assert.throws(()=>domain.closeServiceVisitRecovery({
+    visitId:v.id,expectedVersion:v.version,
+    outcome:"resolved",outcomeNotes:"Changed mind"}),/record contact/);
+  const persisted=domain.exportServiceSiteVisits();
+  domain.hydrateServiceSiteVisits([]);
+  domain.hydrateServiceSiteVisits(persisted);
+  assert.deepEqual(domain.exportServiceSiteVisits(),persisted);
+});
+test("SVC-FB02 permission, active branch, feedback and version boundaries are fail-closed",()=>{
+  reset();const v=lowRatingRecoveryVisit();
+  const cmd={visitId:v.id,expectedVersion:v.version,
+    dueOn:"2026-10-23",plan:"Call customer after recurring equipment fault"};
+  const startEvents=events.length,startPersist=persist;
+  assert.throws(()=>domain.openServiceVisitRecovery({...cmd,expectedVersion:1}),/changed/);
+  assert.throws(()=>domain.openServiceVisitRecovery({...cmd,plan:"no"}),/action plan/);
+  assert.throws(()=>domain.openServiceVisitRecovery({...cmd,dueOn:"2026-10-21"}),/chronology/);
+  branch.id="other";
+  assert.throws(()=>domain.openServiceVisitRecovery(cmd),/active branch/);
+  branch.id="b1";
+  permissions.delete("orders.assign");
+  assert.throws(()=>domain.openServiceVisitRecovery(cmd),/Denied/);
+  permissions.add("orders.assign");
+  isProd=true;
+  assert.throws(()=>domain.openServiceVisitRecovery(cmd),/installed Windows SQLite/);
+  isProd=false;
+  order.customerId="mismatch";
+  assert.throws(()=>domain.openServiceVisitRecovery(cmd),/order\/customer/);
+  order.customerId="c1";
+  assert.equal(domain.exportServiceSiteVisits()[0].recovery,null);
+  assert.equal(events.length,startEvents);
+  assert.equal(persist,startPersist);
+  const opened=domain.openServiceVisitRecovery(cmd);
+  assert.throws(()=>domain.openServiceVisitRecovery({...cmd,
+    expectedVersion:opened.version}),/already opened/);
+  assert.throws(()=>domain.confirmServiceVisitRecoveryContact({visitId:v.id,
+    expectedVersion:opened.version,method:"phone",notes:"no"}),/contact note/);
+  assert.throws(()=>domain.confirmServiceVisitRecoveryContact({visitId:v.id,
+    expectedVersion:opened.version,method:"email",notes:"Called"}),/contact evidence/);
+  assert.equal(domain.exportServiceSiteVisits()[0].recovery.status,"open");
+});
+test("SVC-FB02 all backup recovery data verified atomically; older visits remain valid",()=>{
+  reset();let v=lowRatingRecoveryVisit();
+  v=domain.openServiceVisitRecovery({visitId:v.id,expectedVersion:v.version,
+    dueOn:"2026-10-23",plan:"Call customer privately"});
+  const snapshot=domain.exportServiceSiteVisits();
+  for(const x of [
+    {...v.recovery,status:"resolved"},
+    {...v.recovery,dueOn:"2026-02-30"},
+    {...v.recovery,openedAt:"2026-10-24T09:00:00.000Z"},
+    {...v.recovery,contactedAt:"2026-10-22T08:00:00.000Z"},
+    {...v.recovery,plan:"A\nB"},
+    {...v.recovery,foreign:true},
+  ]){
+    assert.throws(()=>domain.hydrateServiceSiteVisits([{...v,recovery:x}]));
+    assert.deepEqual(domain.exportServiceSiteVisits(),snapshot);
+  }
+  const forged={...v,feedback:{...v.feedback,rating:5}};
+  assert.throws(()=>domain.hydrateServiceSiteVisits([forged]),/low|rating/);
+  assert.deepEqual(domain.exportServiceSiteVisits(),snapshot);
+  const legacy={...v};
+  delete legacy.recovery;
+  domain.hydrateServiceSiteVisits([legacy]);
+  assert.deepEqual(domain.exportServiceSiteVisits(),[legacy]);
+  domain.hydrateServiceSiteVisits(snapshot);
+});
