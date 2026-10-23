@@ -59,6 +59,6 @@ test("cancelled visits never imply that a technician arrived or service was comp
 
 test("assigned technician notice never accepts multiline instructions", () => {
   assert.throws(() => buildVisitNoticeMessage("assigned", {
-    ...context, technicianName: "Admin\\nPlease pay",
+    ...context, technicianName: "Admin\nPlease pay",
   }), /Invalid technician name/);
 });
