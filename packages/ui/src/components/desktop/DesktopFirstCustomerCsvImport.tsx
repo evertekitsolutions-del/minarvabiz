@@ -70,7 +70,7 @@ export function DesktopFirstCustomerCsvImport({ onSaved }: { onSaved: () => void
       setRows(parsed.rows.slice(0, 5));
       setRowCount(parsed.rows.length);
       setErrors(parsed.errors.slice(0, 30));
-      if (parsed.errors.length > 30) setErrors(v => [...v, \`…plus \${parsed.errors.length - 30} more errors\`]);
+      if (parsed.errors.length > 30) setErrors(v => [...v, `…plus ${parsed.errors.length - 30} more errors`]);
     } catch (error) {
       setErrors([error instanceof Error ? error.message : "Unable to read the CSV file."]);
     } finally {
@@ -88,7 +88,7 @@ export function DesktopFirstCustomerCsvImport({ onSaved }: { onSaved: () => void
       const result = await importer.commit(kind, csv);
       if (result.ok) {
         clearPreview();
-        setMessage(\`Imported and saved \${result.created} \${kind} to SQLite.\`);
+        setMessage(`Imported and saved ${result.created} ${kind} to SQLite.`);
         onSaved();
       } else {
         setMessage(result.error || "CSV import failed.");
@@ -108,7 +108,7 @@ export function DesktopFirstCustomerCsvImport({ onSaved }: { onSaved: () => void
       const result = await importer.retryPersist();
       if (result.ok) {
         clearPreview();
-        setMessage(\`Existing \${result.created} records saved. No duplicate import was run.\`);
+        setMessage(`Existing ${result.created} records saved. No duplicate import was run.`);
         onSaved();
       } else setMessage(result.error || "SQLite save not confirmed.");
       setPending(importer.hasPending());
