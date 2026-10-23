@@ -7,7 +7,7 @@ const ts = require("typescript");
 require.extensions[".ts"] = (mod, path) => mod._compile(ts.transpileModule(fs.readFileSync(path, "utf8"), {
   fileName: path, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText, path);
-const { createPortableSupportPacket, canUseSupportApi } = require("../portable-support-packet.ts");
+const { createPortableSupportPacket, canUseSupportApi, portableTechnicalTranscript } = require("../portable-support-packet.ts");
 const context = { appVersion: "1.0.15", edition: "offline", diagnostics: null };
 
 test("offline desktop never contacts an unconfigured or arbitrary support provider", () => {
@@ -28,6 +28,13 @@ test("portable support export does not add diagnostics, database contents or tok
   assert.deepEqual(data.transcript, []);
   assert.equal(data.createdAt, "2026-10-23T00:00:00.000Z");
   assert.equal("deviceId" in data.context, false);
+});
+
+test("offline technical support retains draft text even without a remote AI response", () => {
+  const transcript = portableTechnicalTranscript([], " Printer does not print ");
+  assert.deepEqual(transcript, [{ role: "user", content: "Printer does not print" }]);
+  const serialized = createPortableSupportPacket({ type: "technical_escalation", title: transcript[0].content, description: "Human review requested", transcript, context });
+  assert.equal(JSON.parse(serialized).transcript[0].content, "Printer does not print");
 });
 
 test("large screenshot and invalid content fail before export", () => {
