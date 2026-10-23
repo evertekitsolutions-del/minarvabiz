@@ -236,6 +236,8 @@ async function main() {
     await waitForDesktopWorkspace(async () => JSON.parse(await evalIn(ws, desktopWorkspaceSnapshot)));
     console.log("TRIAL_READY PASS");
     await assertMain(ws, "FIRST_CUSTOMER_GUIDE", ["First customer setup", "operator confirmations"]);
+    await click(ws, "OPEN_FIRST_CUSTOMER_SETUP", ["continue setup", "review setup"]);
+    await assertMainEventually(ws, "FIRST_CUSTOMER_CSV_IMPORT", ["Import opening data from CSV", "Download CSV template"]);
     await click(ws, "PORTABLE_SUPPORT_MENU", ["ai support center"]);
     await assertMainEventually(ws, "PORTABLE_SUPPORT_LANDING", ["Minarva Biz Support Center", "Ideas & Feature Requests"]);
     await click(ws, "PORTABLE_SUPPORT_REQUEST", ["ideas & feature requests"]);
