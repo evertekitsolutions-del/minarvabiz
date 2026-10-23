@@ -277,3 +277,6 @@ export * from "./service-visit-feedback";
 
 // SVC-FB02: offline customer low-rating recovery case lifecycle; no auto-outreach.
 export * from "./service-visit-recovery";
+
+// SVC-FB03 branch-scoped staff-recorded feedback insights; report-only.
+export * from "./service-feedback-insights";
