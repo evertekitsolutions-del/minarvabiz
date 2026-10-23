@@ -77,3 +77,54 @@ test("native exception retains pending records for exactly-once recovery", async
   assert.equal((await importer.retryPersist()).ok, true);
   assert.equal(applies, 1);
 });
+
+
+test("domain exception after partial mutation permanently blocks a second import in this session", async () => {
+  let applies = 0, writes = 0;
+  const engines = Object.fromEntries(kinds.map(kind => [kind, {
+    preview: () => ({ rows: [kind], errors: [] }),
+    apply: () => { applies++; throw new Error("partial mutation"); },
+  }]));
+  const importer = createDurableCsvImport(engines, async () => { writes++; return true; });
+  assert.match((await importer.commit("customers", csv)).error, /partial mutation/);
+  assert.equal(importer.requiresReview(), true);
+  assert.match((await importer.commit("customers", csv)).error, /reconcile existing records/i);
+  assert.match(importer.preview("products", csv).errors[0], /reconcile existing records/i);
+  assert.equal((await importer.retryPersist()).ok, false);
+  assert.equal(applies, 1);
+  assert.equal(writes, 0);
+});
+
+test("mixed partial successes/errors and failed rollback responses latch review state", async () => {
+  for (const result of [
+    { created: 1, errors: ["Row 3 failed"] },
+    { created: 0, errors: ["Rollback failed: disk error"] },
+    { created: 0, errors: ["Snapshot recovery also failed: corrupt state"] },
+  ]) {
+    let applies = 0, writes = 0;
+    const engines = Object.fromEntries(kinds.map(kind => [kind, {
+      preview: () => ({ rows: [kind], errors: [] }),
+      apply: () => { applies++; return result; },
+    }]));
+    const importer = createDurableCsvImport(engines, async () => { writes++; return true; });
+    assert.equal((await importer.commit("suppliers", csv)).ok, false);
+    assert.equal(importer.requiresReview(), true);
+    assert.equal((await importer.commit("products", csv)).ok, false);
+    assert.equal(applies, 1);
+    assert.equal(writes, 0);
+  }
+});
+
+test("valid operator correction after a fully rejected CSV remains allowed", async () => {
+  let applies = 0;
+  const engines = Object.fromEntries(kinds.map(kind => [kind, {
+    preview: () => ({ rows: [kind], errors: [] }),
+    apply: () => (++applies === 1
+      ? { created: 0, errors: ["Duplicate phone"] }
+      : { created: 1, errors: [] }),
+  }]));
+  const importer = createDurableCsvImport(engines, async () => true);
+  assert.equal((await importer.commit("customers", csv)).ok, false);
+  assert.equal(importer.requiresReview(), false);
+  assert.deepEqual(await importer.commit("customers", csv), { ok: true, created: 1 });
+});
