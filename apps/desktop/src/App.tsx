@@ -14,7 +14,8 @@ import { store, ordersStore, phase5Store, phase6Store, phase7Store, getShopProfi
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
-import { createDurableSaleCommit } from "./lib/durable-sale-commit";
+import { useDurableSaleCommit } from "./lib/use-durable-sale-commit";
+import { DesktopPendingInvoiceSaveBanner } from "./components/DesktopPendingInvoiceSaveBanner";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
 import { DesktopStaffEditorModal } from "./components/DesktopStaffEditorModal";
 import { DesktopCustomerMasterPanel } from "./components/DesktopCustomerMasterPanel";
@@ -95,12 +96,7 @@ export function App() {
   const [purchaseForm, setPurchaseForm] = React.useState({ date:todayLocal(), supplierId:"", description:"", amount:"", paidAmount:"", paymentMethod:"cash" as PaymentMethod, kind:"general" as "general"|"order_specific", orderId:"", notes:"" });
   const [staffForm, setStaffForm] = React.useState({ name:"", phone:"", email:"", role:"staff" as RoleName, salary:"", joiningDate:todayLocal(), status:"active" as "active"|"inactive"|"on_leave", notes:"" });
   const autoBackupInFlight = React.useRef(false);
-  // Persistent across renders: a rejected disk write must not create a second
-  // invoice/payment/stock movement when the cashier retries the same cart.
-  const durableSaleCommit = React.useRef(createDurableSaleCommit(
-    (payload: Parameters<typeof store.createSale>[0]) => store.createSale(payload),
-    persistDomainToSqlite,
-  ));
+  const durableSaleCommit = useDurableSaleCommit();
   const refreshAll = React.useCallback(() => {
     setCustomers(store.listCustomers());
     setProducts(store.listProducts({ query: productQuery || undefined, categoryId: productCategoryId || undefined, lowStockOnly }));
@@ -194,7 +190,7 @@ export function App() {
   if(licenseFeatures.sales) actions.push({id:"sale",label:"New Sale",description:"Create Invoice",icon:<span>🛒</span>,tone:"blue",onClick:()=>{setActiveNav("sales");setSalesTab("pos");}});
   if(licenseFeatures.orders) actions.push({id:"order",label:"New Order",description:"Tailoring Order",icon:<span>👗</span>,tone:"pink",onClick:()=>{setActiveNav("services");setCreateOpen(true);}});
   async function handleSale(payload:{customerId:string|null;lines:CartLine[];paidAmount:number;paymentMethod:PaymentMethod;paymentSplits?:Array<{method:PaymentMethod;amount:number;reference?:string|null}>}) {
-    const result = await durableSaleCommit.current.submit(payload);
+    const result = await durableSaleCommit.submit(payload);
     refreshAll();
     setModuleError(result.success ? null : (result.errors || ["Sale could not be saved"]).join("; "));
     return result;
@@ -240,10 +236,7 @@ export function App() {
   const professionalReports=buildProfessionalReportData(reportFrom||undefined,reportTo||undefined);
   return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} desktopModuleContext={{customerId:crmCustomerId,staffId:staffDetailId,returnSaleId,onReturnSaleHandled:()=>setReturnSaleId("")}} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png",navItems:allowedNav}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:listCustomerCommunicationQueue().filter(row=>row.status==="pending"||row.status==="failed").length,onMessagesClick:()=>navTo("messages"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("agenda"),onSearch:setGlobalSearchQuery}}>
     <DesktopEntitlementMonitor enabled={dbReady} onTrialStateChange={setTrialState} onLicenseStateChange={setCommercialLicense}/>
-    {durableSaleCommit.current.hasPending() && <div role="alert" className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950">
-      <p>An invoice exists in this session but the SQLite write was not confirmed. Do not close the app or create another sale until it is saved.</p>
-      <Button type="button" variant="outline" onClick={async()=>{const result=await durableSaleCommit.current.retryPending();refreshAll();setModuleError(result.success?null:(result.errors||["Could not retry SQLite save"]).join("; "));}}>Retry saving existing invoice</Button>
-    </div>}
+    {durableSaleCommit.hasPending() && <DesktopPendingInvoiceSaveBanner onRetry={async()=>{const r=await durableSaleCommit.retryPending();refreshAll();setModuleError(r.success?null:(r.errors||["SQLite save failed"]).join("; "));}}/>}
     {view==="dashboard"&&dash&&<div className="space-y-4"><DesktopLicenseExpiryBanner commercialActive={commercialActive} trialState={trialState} daysRemaining={licenseDaysForDashboard} onManage={()=>navTo("license")}/><Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/></div>}
     {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery("")} onNavigate={(_href,id)=>{setGlobalSearchQuery("");navTo(id);}}/>}
     {view==="customers"&&<DesktopCustomerMasterPanel onAdd={openCustomerCreator} onPersist={persistAndRefresh} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}
