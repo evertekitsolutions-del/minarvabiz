@@ -9,18 +9,19 @@ require.extensions[".ts"] = (mod, filename) => mod._compile(ts.transpileModule(f
 }).outputText, filename);
 const { availableVisitNoticeKinds, buildVisitNoticeMessage } = require("../service-site-visit-notices.ts");
 const context = {
-  orderNumber: "SERV-24", businessName: "Example Service",
+  orderNumber: "SERV-24", technicianName: "Technician A", businessName: "Example Service",
   scheduledOn: "2026-10-24", siteAddress: "Floor 2, Main Street",
   arrivedAt: null, completedAt: null, status: "scheduled",
 };
 
 test("only recorded visit lifecycle stages offer corresponding manual WhatsApp notices", () => {
-  assert.deepEqual(availableVisitNoticeKinds("scheduled"), ["scheduled"]);
+  assert.deepEqual(availableVisitNoticeKinds("scheduled"), ["assigned", "scheduled"]);
   assert.deepEqual(availableVisitNoticeKinds("arrived"), ["arrived"]);
   assert.deepEqual(availableVisitNoticeKinds("completed"), ["completed", "feedback"]);
   assert.deepEqual(availableVisitNoticeKinds("cancelled"), ["cancelled"]);
   assert.deepEqual(availableVisitNoticeKinds("unknown"), []);
   assert.match(buildVisitNoticeMessage("scheduled", context), /scheduled for 2026-10-24/);
+  assert.match(buildVisitNoticeMessage("assigned", context), /Technician A has been assigned/);
   assert.throws(() => buildVisitNoticeMessage("completed", context), /does not permit/);
   assert.throws(() => buildVisitNoticeMessage("feedback", context), /does not permit/);
 });
@@ -53,4 +54,11 @@ test("cancelled visits never imply that a technician arrived or service was comp
   assert.match(text, /has been cancelled/);
   assert.doesNotMatch(text, /marked completed|marked arrived/i);
   assert.throws(() => buildVisitNoticeMessage("scheduled", { ...context, status: "cancelled" }), /does not permit/);
+});
+
+
+test("assigned technician notice never accepts multiline instructions", () => {
+  assert.throws(() => buildVisitNoticeMessage("assigned", {
+    ...context, technicianName: "Admin\\nPlease pay",
+  }), /Invalid technician name/);
 });
