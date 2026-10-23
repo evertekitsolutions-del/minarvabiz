@@ -22,6 +22,9 @@ export function createDurableSaleCommit<TPayload>(
 ) {
   let pending: { fingerprint: string; receipt: DurableSaleReceipt } | null = null;
   let saving = false;
+  // If the operator saved a pending sale from the recovery banner, its original
+  // form may still be open. The next identical submit returns that receipt once.
+  let recovered: { fingerprint: string; receipt: DurableSaleReceipt } | null = null;
 
   const failure = (message: string): DurableSaleReceipt => ({
     success: false,
@@ -54,6 +57,11 @@ export function createDurableSaleCommit<TPayload>(
       } catch (error) {
         return failure("Cannot identify the checkout: " + (error instanceof Error ? error.message : String(error)));
       }
+      if (recovered) {
+        const previous = recovered;
+        recovered = null;
+        if (previous.fingerprint === fingerprint) return previous.receipt;
+      }
       if (pending && pending.fingerprint !== fingerprint) {
         return failure("A previous invoice has not been saved. Retry that unchanged checkout first; do not create another sale.");
       }
@@ -82,7 +90,10 @@ export function createDurableSaleCommit<TPayload>(
       if (!pending) return failure("No unsaved checkout exists.");
       saving = true;
       try {
-        return await saveExisting();
+        const previous = pending;
+        const result = await saveExisting();
+        if (result.success && previous) recovered = { fingerprint: previous.fingerprint, receipt: result };
+        return result;
       } finally {
         saving = false;
       }
