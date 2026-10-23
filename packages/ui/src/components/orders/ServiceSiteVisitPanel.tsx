@@ -16,6 +16,7 @@ import {ServiceVisitPartsPanel} from "./ServiceVisitPartsPanel";
 import {ServiceJobCostPanel} from "./ServiceJobCostPanel";
 import {ServiceVisitRoutePanel} from "./ServiceVisitRoutePanel";
 import {ServiceVisitFeedbackPanel} from "./ServiceVisitFeedbackPanel";
+import {ServiceRecoverySummary,ServiceVisitRecoveryPanel} from "./ServiceVisitRecoveryPanel";
 import {inputClass, selectClass} from "../forms/FormField";
 
 function localDate():string{
@@ -151,6 +152,7 @@ export function ServiceSiteVisitPanel({
         },"Site visit saved to Windows offline register")}>Schedule site visit</Button>
     </div>}
     <ServiceVisitSlaPanel visits={visits}/>
+    <ServiceRecoverySummary visits={visits}/>
     <ServiceVisitRoutePanel visits={visits} canWrite={canWrite} mutate={mutate}/>
     <ServiceJobCostPanel orders={orders} visits={visits}/>
     <div className="mt-4 max-h-96 overflow-auto rounded-lg border border-slate-200">
@@ -175,6 +177,7 @@ export function ServiceSiteVisitPanel({
             <ServiceSiteVisitEvidencePanel visit={v} canWrite={canWrite} mutate={mutate}/>
             <ServiceVisitSignaturePanel visit={v} canWrite={canWrite} mutate={mutate}/>
             <ServiceVisitPartsPanel visit={v} canWrite={canWrite} mutate={mutate}/>
+            <ServiceVisitRecoveryPanel visit={v} canWrite={canWrite} mutate={mutate}/>
             <ServiceVisitFeedbackPanel visit={v} canWrite={canWrite} mutate={mutate}
               customerPhone={(()=>{
                 const c=customersById.get(v.customerId);

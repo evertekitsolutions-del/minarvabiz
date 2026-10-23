@@ -274,3 +274,6 @@ export * from "./service-visit-route-planner";
 
 // SVC-FB01: staff-recorded post-visit feedback, not a public Google review.
 export * from "./service-visit-feedback";
+
+// SVC-FB02: offline customer low-rating recovery case lifecycle; no auto-outreach.
+export * from "./service-visit-recovery";
