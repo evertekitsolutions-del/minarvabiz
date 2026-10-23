@@ -63,7 +63,8 @@ export function ServiceSiteVisitPanel({
   try{visits=listServiceSiteVisits();}
   catch(e){listError=e instanceof Error?e.message:"Cannot load site visits";}
   const ordersById=new Map(orders.map(o=>[o.id,o]));
-  const businessName=getShopProfile().shopName||"our service team";
+  const shopProfile=getShopProfile();
+  const businessName=shopProfile.shopName||"our service team";
   const assignmentNames=new Map(assignments.map(a=>[a.id,a.staffName||a.staffId]));
   const customersById=new Map(customers.filter(c=>!c.deletedAt).map(c=>[c.id,c]));
   function mutate(fn:()=>unknown,success:string){
@@ -192,7 +193,8 @@ export function ServiceSiteVisitPanel({
           <td className="p-2">
             <ServiceSiteVisitNoticeLinks visit={v} customer={customersById.get(v.customerId)}
               orderNumber={ordersById.get(v.orderId)?.orderNumber??v.orderId}
-              businessName={businessName} canShare={canWrite} />
+              businessName={businessName} technicianName={assignmentNames.get(v.assignmentId)??v.staffId}
+              googleReviewUrl={shopProfile.googleReviewUrl??""} canShare={canWrite} />
             {canWrite&&v.status==="scheduled"&&<>
               <Button size="sm" variant="outline" onClick={()=>mutate(
                 ()=>markServiceSiteArrival(v.id,v.version),"Site arrival recorded")}>Mark arrived</Button>
