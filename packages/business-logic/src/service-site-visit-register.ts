@@ -28,6 +28,8 @@ import {
 } from "./service-site-visit-signature";
 import {validateServiceVisitSla,type ServiceVisitSlaTargets} from "./service-visit-sla";
 import {validateServiceRouteSequence} from "./service-visit-route-planner";
+import {validateServiceVisitFeedback,feedbackAuditMetadata,
+  type ServiceVisitFeedback,type ServiceVisitFeedbackSource} from "./service-visit-feedback";
 
 export type SiteVisitStatus = "scheduled" | "arrived" | "completed" | "cancelled";
 export type SiteVisitCheckResult = "pending" | "passed" | "failed" | "not_applicable";
@@ -78,12 +80,14 @@ export interface ServiceSiteVisit {
   readonly parts?:ServiceVisitPart[];
   /** Manual technician/day sequence. Null means unsequenced; no GPS/route optimization. */
   readonly routeSequence?:number|null;
+  /** Optional for historical snapshots. New visits begin with no response. */
+  readonly feedback?:ServiceVisitFeedback|null;
 }
 const records:ServiceSiteVisit[]=[];
 const CAPACITY=10_000;
 const FIELDS=["id","branchId","orderId","customerId","assignmentId","staffId",
  "scheduledOn","siteAddress","notes","status","arrivedAt","completedAt",
- "cancellationReason","version","createdAt","updatedAt","checklist","evidence","handover","sla","parts","routeSequence"];
+ "cancellationReason","version","createdAt","updatedAt","checklist","evidence","handover","sla","parts","routeSequence","feedback"];
 function id(value:unknown,label:string):string{
   if(typeof value!=="string"||value.length<1||value.length>128||
     value.trim()!==value||/[\r\n]/.test(value))throw new Error("Invalid "+label);
@@ -148,7 +152,8 @@ function cloneVisit(v:ServiceSiteVisit):ServiceSiteVisit{
   return {...v,...(v.checklist?{checklist:v.checklist.map(c=>({...c}))}:{}),
     ...(v.evidence?{evidence:v.evidence.map(e=>({...e}))}:{}),
     ...(Object.hasOwn(v,"handover")?{handover:v.handover?{...v.handover}:null}:{}),
-    ...(v.sla?{sla:{...v.sla}}:{}),...(v.parts?{parts:v.parts.map(p=>({...p}))}:{})};
+    ...(v.sla?{sla:{...v.sla}}:{}),...(v.parts?{parts:v.parts.map(p=>({...p}))}:{}),
+    ...(Object.hasOwn(v,"feedback")?{feedback:v.feedback?{...v.feedback}:null}:{})};
 }
 /** All visit audit paths must exclude both attachments and signature image bytes. */
 function auditVisit(v:ServiceSiteVisit){
@@ -156,7 +161,8 @@ function auditVisit(v:ServiceSiteVisit){
     ...(v.evidence?{evidence:v.evidence.map(({dataBase64:unused,...meta})=>{
       void unused;return meta;
     })}:{}),
-    ...(Object.hasOwn(v,"handover")?{handover:safeHandoverAudit(v.handover)}:{})};
+    ...(Object.hasOwn(v,"handover")?{handover:safeHandoverAudit(v.handover)}:{}),
+    ...(Object.hasOwn(v,"feedback")?{feedback:feedbackAuditMetadata(v.feedback)}:{})};
 }
 function record(value:unknown):ServiceSiteVisit{
   if(value===null||typeof value!=="object"||Array.isArray(value))throw new Error("Invalid site visit record");
@@ -203,9 +209,12 @@ function record(value:unknown):ServiceSiteVisit{
   const withParts=Object.hasOwn(o,"parts")
     ? {...withSla,parts:validateServiceVisitParts(o.parts,v.arrivedAt,v.updatedAt,v.status)}
     : withSla;
-  return Object.hasOwn(o,"routeSequence")
+  const withRoute=Object.hasOwn(o,"routeSequence")
     ? {...withParts,routeSequence:validateServiceRouteSequence(o.routeSequence)}
     : withParts;
+  return Object.hasOwn(o,"feedback")
+    ? {...withRoute,feedback:validateServiceVisitFeedback(
+        o.feedback,v.completedAt,v.updatedAt,v.status)} : withRoute;
 }
 /** Pure validation precedes snapshot mutation; older backups have no visit key. */
 export function validateServiceSiteVisits(input:unknown):ServiceSiteVisit[]{
@@ -291,7 +300,7 @@ export function scheduleServiceSiteVisit(input:{
     assignmentId,staffId:assignment.staffId,scheduledOn,siteAddress,notes,
     status:"scheduled",arrivedAt:null,completedAt:null,cancellationReason:null,
     version:1,createdAt:now,updatedAt:now,checklist:newSiteVisitChecklist(),evidence:[],handover:null,
-    ...(input.sla?{sla:validateServiceVisitSla(input.sla,now)}:{}),parts:[],routeSequence:null});
+    ...(input.sla?{sla:validateServiceVisitSla(input.sla,now)}:{}),parts:[],routeSequence:null,feedback:null});
   records.push(v);
   auditAction("service_site_visit.schedule","service_site_visit",v.id,null,auditVisit(v));
   touchPersistence();
@@ -557,6 +566,43 @@ export function voidServiceVisitPart(input:{
   records.splice(idx,1,next);
   auditAction("service_site_visit.part_void","service_site_visit",next.id,
     {version:old.version},{version:next.version,partId:part.id,reason,stockPosted:false});
+  touchPersistence();
+  return cloneVisit(next);
+}
+/** Staff-only, customer-confirmed response. Never send/review/route automatically. */
+export function recordServiceVisitFeedback(input:{
+  visitId:string;expectedVersion:number;outcome:"rated"|"declined";
+  rating:number|null;comment:string;source:ServiceVisitFeedbackSource;
+  customerResponseConfirmed:boolean;
+}):ServiceSiteVisit{
+  assertPermission("orders.assign");writable();
+  const active=branch();
+  const i=records.findIndex(v=>v.id===input.visitId&&v.branchId===active);
+  if(i<0)throw new Error("Feedback visit not found in active branch");
+  const before=records[i];
+  if(before.version!==input.expectedVersion)throw new Error("Site visit changed; refresh first");
+  if(before.status!=="completed"||
+    !Object.hasOwn(before,"feedback")||before.feedback!==null)
+    throw new Error("Post-visit feedback can only be captured once on completed visits");
+  if(input.customerResponseConfirmed!==true)
+    throw new Error("Confirm the customer actually supplied or declined the response");
+  // Delivered orders remain eligible after the technician visit closes; do not
+  // rely on linkedOrder(), which intentionally rejects delivered order states.
+  const order=ordersStore.getOrder(before.orderId);
+  if(!order||order.deletedAt||order.status==="cancelled"||
+    order.branchId!==active||order.customerId!==before.customerId)
+    throw new Error("Feedback order/customer no longer matches active branch");
+  const now=nowISO();
+  const feedback=validateServiceVisitFeedback({
+    outcome:input.outcome,rating:input.rating,comment:input.comment,
+    source:input.source,recordedAt:now,
+  },before.completedAt,now,before.status);
+  if(!feedback)throw new Error("Feedback response required");
+  const next=record({...before,feedback,version:before.version+1,updatedAt:now});
+  records.splice(i,1,next);
+  auditAction("service_site_visit.feedback","service_site_visit",next.id,
+    {version:before.version},{version:next.version,
+      feedback:feedbackAuditMetadata(feedback)});
   touchPersistence();
   return cloneVisit(next);
 }

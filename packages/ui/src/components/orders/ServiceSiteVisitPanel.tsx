@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type {ServiceOrder, StaffAssignment} from "@minarvabiz/types";
+import type {ServiceOrder, StaffAssignment, Customer} from "@minarvabiz/types";
 import {
   can, isProductionMode, listServiceSiteVisits, scheduleServiceSiteVisit,
   markServiceSiteArrival, completeServiceSiteVisit, cancelServiceSiteVisit,
@@ -15,6 +15,7 @@ import {ServiceVisitSlaPanel} from "./ServiceVisitSlaPanel";
 import {ServiceVisitPartsPanel} from "./ServiceVisitPartsPanel";
 import {ServiceJobCostPanel} from "./ServiceJobCostPanel";
 import {ServiceVisitRoutePanel} from "./ServiceVisitRoutePanel";
+import {ServiceVisitFeedbackPanel} from "./ServiceVisitFeedbackPanel";
 import {inputClass, selectClass} from "../forms/FormField";
 
 function localDate():string{
@@ -24,10 +25,11 @@ function localDate():string{
 }
 /** SVC-005: durable Windows-only field visit events, never automated location tracking. */
 export function ServiceSiteVisitPanel({
-  orders, assignments,
+  orders, assignments,customers=[],
 }:{
   orders:readonly ServiceOrder[];
   assignments:readonly StaffAssignment[];
+  customers?:readonly Customer[];
 }){
   const [isDesktop,setIsDesktop]=React.useState(false);
   React.useEffect(()=>{
@@ -59,6 +61,7 @@ export function ServiceSiteVisitPanel({
   catch(e){listError=e instanceof Error?e.message:"Cannot load site visits";}
   const ordersById=new Map(orders.map(o=>[o.id,o]));
   const assignmentNames=new Map(assignments.map(a=>[a.id,a.staffName||a.staffId]));
+  const customersById=new Map(customers.filter(c=>!c.deletedAt).map(c=>[c.id,c]));
   function mutate(fn:()=>unknown,success:string){
     setError(null);setMessage(null);
     try{
@@ -172,6 +175,12 @@ export function ServiceSiteVisitPanel({
             <ServiceSiteVisitEvidencePanel visit={v} canWrite={canWrite} mutate={mutate}/>
             <ServiceVisitSignaturePanel visit={v} canWrite={canWrite} mutate={mutate}/>
             <ServiceVisitPartsPanel visit={v} canWrite={canWrite} mutate={mutate}/>
+            <ServiceVisitFeedbackPanel visit={v} canWrite={canWrite} mutate={mutate}
+              customerPhone={(()=>{
+                const c=customersById.get(v.customerId);
+                return c&&(c.branchId==null||c.branchId===v.branchId)
+                  ?(c.whatsapp||c.phone):null;
+              })()}/>
           </td>
           <td className="p-2">
             {canWrite&&v.status==="scheduled"&&<>

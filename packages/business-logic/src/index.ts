@@ -271,3 +271,6 @@ export * from "./service-job-cost-report";
 
 // Registry SVC-013: manual offline technician route sequencing (no paid routing API).
 export * from "./service-visit-route-planner";
+
+// SVC-FB01: staff-recorded post-visit feedback, not a public Google review.
+export * from "./service-visit-feedback";
