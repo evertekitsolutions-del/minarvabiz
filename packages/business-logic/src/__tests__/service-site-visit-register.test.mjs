@@ -972,3 +972,118 @@ test("SVC-013 finished visits cannot be reordered and old visit backups remain r
   assert.throws(()=>domain.hydrateServiceSiteVisits([wrong]),/route/i);
   assert.deepEqual(domain.exportServiceSiteVisits(),[legacy]);
 });
+
+
+function completedVisitForFeedback(){
+  const v=schedule();
+  let current=domain.markServiceSiteArrival(v.id,v.version);
+  for(const check of current.checklist){
+    current=domain.setServiceSiteVisitCheck({
+      visitId:current.id,expectedVersion:current.version,
+      itemId:check.id,result:"passed",notes:"Checked onsite"});
+  }
+  current=domain.recordServiceVisitSignatureDecline({
+    visitId:current.id,expectedVersion:current.version,
+    reason:"Authorized representative had left the site"});
+  return domain.completeServiceSiteVisit(current.id,current.version);
+}
+test("SVC-FB01 staff captures volunteered rating only after finished visit",()=>{
+  reset();
+  const scheduled=schedule();
+  assert.throws(()=>domain.recordServiceVisitFeedback({
+    visitId:scheduled.id,expectedVersion:scheduled.version,
+    outcome:"rated",rating:5,comment:"",source:"in_person",
+    customerResponseConfirmed:true}),/completed/);
+  domain.hydrateServiceSiteVisits([]);
+  const finished=completedVisitForFeedback(),before=persist;
+  const response=domain.recordServiceVisitFeedback({
+    visitId:finished.id,expectedVersion:finished.version,
+    outcome:"rated",rating:2,comment:"Camera disconnects after rain",
+    source:"phone",customerResponseConfirmed:true,
+  });
+  assert.equal(response.status,"completed");
+  assert.equal(response.version,finished.version+1);
+  assert.deepEqual(response.feedback,{
+    outcome:"rated",rating:2,comment:"Camera disconnects after rain",
+    source:"phone",recordedAt:"2026-10-22T08:00:00.000Z",
+  });
+  assert.equal(persist,before+1);
+  assert.equal(events.at(-1)[0],"service_site_visit.feedback");
+  assert.ok(!JSON.stringify(events.at(-1)).includes("Camera disconnects"));
+  assert.equal(events.at(-1)[4].feedback.needsRecovery,true);
+  const read=domain.listServiceSiteVisits();
+  read[0].feedback.comment="Tampered";
+  assert.equal(domain.listServiceSiteVisits()[0].feedback.comment,
+    "Camera disconnects after rain");
+  const snap=domain.exportServiceSiteVisits();
+  domain.hydrateServiceSiteVisits([]);
+  domain.hydrateServiceSiteVisits(snap);
+  assert.deepEqual(domain.exportServiceSiteVisits(),snap);
+});
+test("SVC-FB01 customer may decline response with reason, never fake rating",()=>{
+  reset();const finished=completedVisitForFeedback();
+  const denied=domain.recordServiceVisitFeedback({
+    visitId:finished.id,expectedVersion:finished.version,
+    outcome:"declined",rating:null,comment:"Customer prefers not to respond",
+    source:"in_person",customerResponseConfirmed:true,
+  });
+  assert.equal(denied.feedback.outcome,"declined");
+  assert.equal(denied.feedback.rating,null);
+  assert.equal(denied.feedback.comment,"Customer prefers not to respond");
+  assert.throws(()=>domain.recordServiceVisitFeedback({
+    visitId:denied.id,expectedVersion:denied.version,
+    outcome:"rated",rating:5,comment:"",source:"phone",
+    customerResponseConfirmed:true}),/only be captured once/);
+});
+test("SVC-FB01 requires customer response attestation and refuses stale, cross-branch and web writes",()=>{
+  reset();const finished=completedVisitForFeedback();
+  const data={visitId:finished.id,expectedVersion:finished.version,
+    outcome:"rated",rating:5,comment:"Great service",source:"in_person",
+    customerResponseConfirmed:true};
+  const before=persist,eventsBefore=events.length;
+  assert.throws(()=>domain.recordServiceVisitFeedback({...data,customerResponseConfirmed:false}),/Confirm/);
+  assert.throws(()=>domain.recordServiceVisitFeedback({...data,expectedVersion:1}),/changed/);
+  branch.id="b2";
+  assert.throws(()=>domain.recordServiceVisitFeedback(data),/active branch/);
+  branch.id="b1";
+  permissions.delete("orders.assign");
+  assert.throws(()=>domain.recordServiceVisitFeedback(data),/Denied/);
+  permissions.add("orders.assign");
+  isProd=true;
+  assert.throws(()=>domain.recordServiceVisitFeedback(data),/installed Windows SQLite/);
+  isProd=false;
+  order.customerId="changed";
+  assert.throws(()=>domain.recordServiceVisitFeedback(data),/order\/customer/);
+  order.customerId="c1";order.status="delivered";
+  const response=domain.recordServiceVisitFeedback(data);
+  assert.equal(response.feedback.rating,5);
+  assert.equal(persist,before+1);
+  assert.equal(events.length,eventsBefore+1);
+});
+test("SVC-FB01 rejects malformed backup response and preserves state without partial hydration",()=>{
+  reset();let finished=completedVisitForFeedback();
+  finished=domain.recordServiceVisitFeedback({
+    visitId:finished.id,expectedVersion:finished.version,
+    outcome:"rated",rating:4,comment:"All equipment working",
+    source:"whatsapp",customerResponseConfirmed:true,
+  });
+  const backup=domain.exportServiceSiteVisits();
+  for(const tamper of [
+    {...finished.feedback,rating:7},
+    {...finished.feedback,recordedAt:"2026-10-21T00:00:00.000Z"},
+    {...finished.feedback,recordedAt:"2026-10-25T00:00:00.000Z"},
+    {...finished.feedback,comment:"Injected\nscript"},
+    {...finished.feedback,outcome:"declined",rating:4},
+    {...finished.feedback,extra:"forged"},
+  ]){
+    assert.throws(()=>domain.hydrateServiceSiteVisits([{...finished,feedback:tamper}]));
+    assert.deepEqual(domain.exportServiceSiteVisits(),backup);
+  }
+  assert.throws(()=>domain.hydrateServiceSiteVisits([
+    {...finished,status:"arrived",completedAt:null}]),/completed/);
+  assert.deepEqual(domain.exportServiceSiteVisits(),backup);
+  const legacy={...finished};delete legacy.feedback;
+  domain.hydrateServiceSiteVisits([legacy]);
+  assert.deepEqual(domain.exportServiceSiteVisits(),[legacy]);
+  domain.hydrateServiceSiteVisits(backup);
+});
