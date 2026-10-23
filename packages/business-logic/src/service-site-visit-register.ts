@@ -225,7 +225,7 @@ function record(value:unknown):ServiceSiteVisit{
         o.feedback,v.completedAt,v.updatedAt,v.status)} : withRoute;
   return Object.hasOwn(o,"recovery")
     ? {...withFeedback,recovery:validateServiceVisitRecovery(
-        o.recovery,withFeedback.feedback,v.status,v.updatedAt)} : withFeedback;
+        o.recovery,(withFeedback as ServiceSiteVisit).feedback,v.status,v.updatedAt)} : withFeedback;
 }
 /** Pure validation precedes snapshot mutation; older backups have no visit key. */
 export function validateServiceSiteVisits(input:unknown):ServiceSiteVisit[]{
