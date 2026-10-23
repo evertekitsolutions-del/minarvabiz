@@ -3,7 +3,6 @@
 import * as React from "react";
 import { AuditLogList } from "../audit/AuditLogList";
 import { CustomerProfile } from "../crm/CustomerProfile";
-import { DayEndClosePanel } from "../reports/DayEndClose";
 import { PaymentsPanel } from "../payments/PaymentsPanel";
 import { ReturnsPanel } from "../returns/ReturnsPanel";
 import { StaffDetail } from "../staff/StaffDetail";
@@ -14,7 +13,7 @@ import { DesktopFirstCustomerGuide } from "./DesktopFirstCustomerGuide";
 import { Button } from "../Button";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { Modal } from "../forms/Modal";
-import { closeBusinessDay, listDayEndCloses, ordersStore, phase5Store, phase6Store, phase7Store, store } from "@minarvabiz/business-logic";
+import { ordersStore, phase5Store, phase6Store, phase7Store, store } from "@minarvabiz/business-logic";
 import type { NavItemId } from "../../lib/nav";
 import type { PaymentMethod, Supplier } from "@minarvabiz/types";
 
@@ -73,27 +72,11 @@ export function OfflineModulesPanel({
   }, [activeNav, customerId, staffId, preferredCustomerId, preferredStaffId]);
 
   if (activeNav === "dashboard") return <DesktopFirstCustomerGuide onNavigate={onNavigate} />;
-  if (!["day-end", "payments", "customer-crm", "returns", "suppliers", "staff-detail", "audit", "messages", "agenda"].includes(activeNav)) return null;
+  if (!["payments", "customer-crm", "returns", "suppliers", "staff-detail", "audit", "messages", "agenda"].includes(activeNav)) return null;
 
   if (activeNav === "messages") return <CustomerMessagesPanel />;
 
   if (activeNav === "agenda") return <BusinessAgenda orders={ordersStore.listOrders()} onOpenOrders={onNavigate ? () => onNavigate("/services", "services") : undefined} />;
-
-  if (activeNav === "day-end") {
-    const closes = listDayEndCloses().map((c) => ({ id: c.id, businessDate: c.businessDate, closedAt: c.closedAt, report: { totalSales: c.report.totalSales, netProfit: c.report.netProfit, cashReceived: c.report.cashReceived, outstandingAmount: c.report.outstandingAmount }, metricsNote: c.metricsNote }));
-    return <DayEndClosePanel closes={closes} onCloseDay={() => {
-      try {
-        const result = closeBusinessDay();
-        if (!result.record) return { ok: false, error: result.error || "Failed" };
-        setActionError(null); persistDesktop(); refresh();
-        return { ok: true, record: { id: result.record.id, businessDate: result.record.businessDate, closedAt: result.record.closedAt, report: { totalSales: result.record.report.totalSales, netProfit: result.record.report.netProfit, cashReceived: result.record.report.cashReceived, outstandingAmount: result.record.report.outstandingAmount }, metricsNote: result.record.metricsNote } };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        setActionError(message);
-        return { ok: false, error: message };
-      }
-    }} />;
-  }
 
   if (activeNav === "payments") {
     const outstanding = store.listCustomers().filter((c) => c.outstandingBalance > 0);
