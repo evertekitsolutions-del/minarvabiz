@@ -30,6 +30,10 @@ import {validateServiceVisitSla,type ServiceVisitSlaTargets} from "./service-vis
 import {validateServiceRouteSequence} from "./service-visit-route-planner";
 import {validateServiceVisitFeedback,feedbackAuditMetadata,
   type ServiceVisitFeedback,type ServiceVisitFeedbackSource} from "./service-visit-feedback";
+import {
+  validateServiceVisitRecovery,recoveryAudit,type ServiceVisitRecovery,
+  type RecoveryContactMethod,
+} from "./service-visit-recovery";
 
 export type SiteVisitStatus = "scheduled" | "arrived" | "completed" | "cancelled";
 export type SiteVisitCheckResult = "pending" | "passed" | "failed" | "not_applicable";
@@ -82,12 +86,14 @@ export interface ServiceSiteVisit {
   readonly routeSequence?:number|null;
   /** Optional for historical snapshots. New visits begin with no response. */
   readonly feedback?:ServiceVisitFeedback|null;
+  /** Optional for older backups. Staff-managed recovery after low customer rating. */
+  readonly recovery?:ServiceVisitRecovery|null;
 }
 const records:ServiceSiteVisit[]=[];
 const CAPACITY=10_000;
 const FIELDS=["id","branchId","orderId","customerId","assignmentId","staffId",
  "scheduledOn","siteAddress","notes","status","arrivedAt","completedAt",
- "cancellationReason","version","createdAt","updatedAt","checklist","evidence","handover","sla","parts","routeSequence","feedback"];
+ "cancellationReason","version","createdAt","updatedAt","checklist","evidence","handover","sla","parts","routeSequence","feedback","recovery"];
 function id(value:unknown,label:string):string{
   if(typeof value!=="string"||value.length<1||value.length>128||
     value.trim()!==value||/[\r\n]/.test(value))throw new Error("Invalid "+label);
@@ -153,7 +159,8 @@ function cloneVisit(v:ServiceSiteVisit):ServiceSiteVisit{
     ...(v.evidence?{evidence:v.evidence.map(e=>({...e}))}:{}),
     ...(Object.hasOwn(v,"handover")?{handover:v.handover?{...v.handover}:null}:{}),
     ...(v.sla?{sla:{...v.sla}}:{}),...(v.parts?{parts:v.parts.map(p=>({...p}))}:{}),
-    ...(Object.hasOwn(v,"feedback")?{feedback:v.feedback?{...v.feedback}:null}:{})};
+    ...(Object.hasOwn(v,"feedback")?{feedback:v.feedback?{...v.feedback}:null}:{}),
+    ...(Object.hasOwn(v,"recovery")?{recovery:v.recovery?{...v.recovery}:null}:{})};
 }
 /** All visit audit paths must exclude both attachments and signature image bytes. */
 function auditVisit(v:ServiceSiteVisit){
@@ -162,7 +169,8 @@ function auditVisit(v:ServiceSiteVisit){
       void unused;return meta;
     })}:{}),
     ...(Object.hasOwn(v,"handover")?{handover:safeHandoverAudit(v.handover)}:{}),
-    ...(Object.hasOwn(v,"feedback")?{feedback:feedbackAuditMetadata(v.feedback)}:{})};
+    ...(Object.hasOwn(v,"feedback")?{feedback:feedbackAuditMetadata(v.feedback)}:{}),
+    ...(Object.hasOwn(v,"recovery")?{recovery:recoveryAudit(v.recovery)}:{})};
 }
 function record(value:unknown):ServiceSiteVisit{
   if(value===null||typeof value!=="object"||Array.isArray(value))throw new Error("Invalid site visit record");
@@ -212,9 +220,12 @@ function record(value:unknown):ServiceSiteVisit{
   const withRoute=Object.hasOwn(o,"routeSequence")
     ? {...withParts,routeSequence:validateServiceRouteSequence(o.routeSequence)}
     : withParts;
-  return Object.hasOwn(o,"feedback")
+  const withFeedback=Object.hasOwn(o,"feedback")
     ? {...withRoute,feedback:validateServiceVisitFeedback(
         o.feedback,v.completedAt,v.updatedAt,v.status)} : withRoute;
+  return Object.hasOwn(o,"recovery")
+    ? {...withFeedback,recovery:validateServiceVisitRecovery(
+        o.recovery,withFeedback.feedback,v.status,v.updatedAt)} : withFeedback;
 }
 /** Pure validation precedes snapshot mutation; older backups have no visit key. */
 export function validateServiceSiteVisits(input:unknown):ServiceSiteVisit[]{
@@ -300,7 +311,7 @@ export function scheduleServiceSiteVisit(input:{
     assignmentId,staffId:assignment.staffId,scheduledOn,siteAddress,notes,
     status:"scheduled",arrivedAt:null,completedAt:null,cancellationReason:null,
     version:1,createdAt:now,updatedAt:now,checklist:newSiteVisitChecklist(),evidence:[],handover:null,
-    ...(input.sla?{sla:validateServiceVisitSla(input.sla,now)}:{}),parts:[],routeSequence:null,feedback:null});
+    ...(input.sla?{sla:validateServiceVisitSla(input.sla,now)}:{}),parts:[],routeSequence:null,feedback:null,recovery:null});
   records.push(v);
   auditAction("service_site_visit.schedule","service_site_visit",v.id,null,auditVisit(v));
   touchPersistence();
@@ -605,6 +616,75 @@ export function recordServiceVisitFeedback(input:{
       feedback:feedbackAuditMetadata(feedback)});
   touchPersistence();
   return cloneVisit(next);
+}
+/**
+ * Only the completed visit with a genuine recorded 1/2-star feedback may open
+ * a recovery case. Delivery of messages/calls is not assumed by this API.
+ */
+function editRecovery(input:{visitId:string;expectedVersion:number},
+  action:"open"|"contact"|"close",
+  mutate:(v:ServiceSiteVisit,now:string)=>ServiceVisitRecovery
+):ServiceSiteVisit{
+  assertPermission("orders.assign");writable();
+  const active=branch();
+  const i=records.findIndex(v=>v.id===input.visitId&&v.branchId===active);
+  if(i<0)throw new Error("Recovery site visit not found in active branch");
+  const before=records[i];
+  if(before.version!==input.expectedVersion)
+    throw new Error("Site visit changed; refresh first");
+  const order=ordersStore.getOrder(before.orderId);
+  // Completed service orders can be delivered; never use the open-order guard.
+  if(!order||order.deletedAt||order.status==="cancelled"||
+    order.branchId!==active||order.customerId!==before.customerId)
+    throw new Error("Recovery order/customer no longer matches active branch");
+  if(before.status!=="completed"||!before.feedback||
+    before.feedback.outcome!=="rated"||before.feedback.rating===null||
+    before.feedback.rating>2)
+    throw new Error("Only completed low-rating visits need a recovery case");
+  const now=nowISO();
+  const caseData=validateServiceVisitRecovery(mutate(before,now),before.feedback,
+    before.status,now);
+  if(!caseData)throw new Error("Recovery case data required");
+  const next=record({...before,recovery:caseData,version:before.version+1,updatedAt:now});
+  records.splice(i,1,next);
+  auditAction("service_site_visit.recovery_"+action,"service_site_visit",next.id,
+    {version:before.version,recovery:recoveryAudit(before.recovery)},
+    {version:next.version,recovery:recoveryAudit(caseData)});
+  touchPersistence();
+  return cloneVisit(next);
+}
+export function openServiceVisitRecovery(input:{
+  visitId:string;expectedVersion:number;dueOn:string;plan:string;
+}):ServiceSiteVisit{
+  return editRecovery(input,"open",(v,now)=>{
+    if(!Object.hasOwn(v,"recovery")||v.recovery!==null)
+      throw new Error("Recovery case already opened or is legacy");
+    return {status:"open",dueOn:input.dueOn,plan:input.plan,openedAt:now,
+      contactedAt:null,contactMethod:null,contactNotes:null,resolvedAt:null,outcomeNotes:null};
+  });
+}
+export function confirmServiceVisitRecoveryContact(input:{
+  visitId:string;expectedVersion:number;method:RecoveryContactMethod;notes:string;
+}):ServiceSiteVisit{
+  return editRecovery(input,"contact",(v,now)=>{
+    if(v.recovery?.status!=="open")
+      throw new Error("Recovery must be open before confirming customer contact");
+    return {...v.recovery,status:"contacted",contactedAt:now,
+      contactMethod:input.method,contactNotes:input.notes};
+  });
+}
+export function closeServiceVisitRecovery(input:{
+  visitId:string;expectedVersion:number;outcome:"resolved"|"closed_unresolved";
+  outcomeNotes:string;
+}):ServiceSiteVisit{
+  return editRecovery(input,"close",(v,now)=>{
+    if(v.recovery?.status!=="contacted")
+      throw new Error("Customer recovery must record contact before closure");
+    if(input.outcome!=="resolved"&&input.outcome!=="closed_unresolved")
+      throw new Error("Invalid customer recovery outcome");
+    return {...v.recovery,status:input.outcome,resolvedAt:now,
+      outcomeNotes:input.outcomeNotes};
+  });
 }
 function transition(input:{
   visitId:string;expectedVersion:number;action:"arrive"|"complete"|"cancel";reason?:string;
