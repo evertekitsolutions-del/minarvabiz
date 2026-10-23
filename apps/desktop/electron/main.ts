@@ -16,6 +16,7 @@ import { prepareSqliteRestoreStage, cleanupSqliteRestoreStage, type SqliteRestor
 import { beginSqliteRestoreJournal, clearSqliteRestoreJournal, recoverSqliteRestoreAtStartup } from "./sqlite-restore-recovery";
 import { reconcileFailedSqliteRestore } from "./sqlite-restore-failure";
 import { claimPrimaryDesktopInstance } from "./single-instance-owner";
+import { validateSupportPacketForExport } from "./support-packet";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 const runtimeSmoke = process.env.MINARVA_RUNTIME_SMOKE === "1";
@@ -466,6 +467,26 @@ ipcMain.handle("trial:activate", (event, registration: unknown) => {
   catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 });
 ipcMain.handle("trial:markSynced", (event) => { requireTrustedRenderer(event); const trial = readTrial(); if (!trial) return false; try { writeTrial({ ...trial, synced: true }); return true; } catch { return false; } });
+ipcMain.handle("support:exportPacket", async (event, raw: unknown) => {
+  requireTrustedRenderer(event);
+  let content: string;
+  try { content = validateSupportPacketForExport(raw); }
+  catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Invalid support request." }; }
+  const destination = await dialog.showSaveDialog({
+    title: "Export Minarva Biz Support Request",
+    defaultPath: path.join(app.getPath("documents"), `minarvabiz-support-${timestamp()}.json`),
+    filters: [{ name: "Minarva Biz Support Request (JSON)", extensions: ["json"] }],
+  });
+  if (destination.canceled || !destination.filePath) return { ok: false, cancelled: true };
+  if (path.extname(destination.filePath).toLowerCase() !== ".json") return { ok: false, error: "Support requests must be saved as .json files." };
+  try {
+    // Exclusive creation prevents accidentally overwriting an existing customer file.
+    fs.writeFileSync(destination.filePath, content, { encoding: "utf8", flag: "wx" });
+    return { ok: true, filename: path.basename(destination.filePath) };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Could not save the support packet." };
+  }
+});
 ipcMain.handle("backup:list", async (event) => {
   requireTrustedRenderer(event);
   return listBackupFiles();

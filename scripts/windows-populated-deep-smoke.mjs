@@ -236,6 +236,11 @@ async function main() {
     await waitForDesktopWorkspace(async () => JSON.parse(await evalIn(ws, desktopWorkspaceSnapshot)));
     console.log("TRIAL_READY PASS");
     await assertMain(ws, "FIRST_CUSTOMER_GUIDE", ["First customer setup", "operator confirmations"]);
+    await click(ws, "PORTABLE_SUPPORT_MENU", ["ai support center"]);
+    await assertMainEventually(ws, "PORTABLE_SUPPORT_LANDING", ["Minarva Biz Support Center", "Ideas & Feature Requests"]);
+    await click(ws, "PORTABLE_SUPPORT_REQUEST", ["ideas & feature requests"]);
+    await assertMain(ws, "PORTABLE_SUPPORT_EXPORT", ["Export request (JSON)", "Contact email"]);
+    await click(ws, "PORTABLE_SUPPORT_DASHBOARD", ["dashboard"]);
 
     // Customer create + row drill-down.
     await click(ws, "CUSTOMERS", ["customers"]);

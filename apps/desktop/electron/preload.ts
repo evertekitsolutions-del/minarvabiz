@@ -64,6 +64,9 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
     return ipcRenderer.invoke("db:writeBinary", data) as Promise<boolean>;
   },
   sqliteExists: () => ipcRenderer.invoke("db:exists") as Promise<boolean>,
+  exportSupportPacket: (json: string) => typeof json === "string" && json.length <= 3_000_000
+    ? ipcRenderer.invoke("support:exportPacket", json) as Promise<{ ok: boolean; filename?: string; cancelled?: boolean; error?: string }>
+    : Promise.resolve({ ok: false, error: "Support request is too large." }),
   listBackups: () => ipcRenderer.invoke("backup:list") as Promise<NativeBackupMeta[]>,
   createManualBackup: () => ipcRenderer.invoke("backup:createManual") as Promise<NativeBackupResult>,
   exportBackup: (id: string) => ipcRenderer.invoke("backup:export", id) as Promise<NativeBackupResult>,
@@ -109,6 +112,7 @@ export type MinarvaDesktopApi = {
   readSqliteBinary: () => Promise<Uint8Array | null>;
   writeSqliteBinary: (data: Uint8Array) => Promise<boolean>;
   sqliteExists: () => Promise<boolean>;
+  exportSupportPacket: (json: string) => Promise<{ ok: boolean; filename?: string; cancelled?: boolean; error?: string }>;
   listBackups: () => Promise<NativeBackupMeta[]>;
   createManualBackup: () => Promise<NativeBackupResult>;
   exportBackup: (id: string) => Promise<NativeBackupResult>;
