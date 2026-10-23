@@ -30,36 +30,67 @@ export function DayEndClosePanel({
   onReopenDay,
   canClose = true,
   canReopen = false,
+  hasUnsaved = false,
+  onRetryPending,
 }: {
   closes: DayEndCloseView[];
-  onCloseDay: () => DayEndMutationResult;
-  onReopenDay?: (businessDate: string, reason: string) => DayEndMutationResult;
+  onCloseDay: () => DayEndMutationResult | Promise<DayEndMutationResult>;
+  onReopenDay?: (businessDate: string, reason: string) => DayEndMutationResult | Promise<DayEndMutationResult>;
+  hasUnsaved?: boolean;
+  onRetryPending?: () => Promise<DayEndMutationResult>;
   canClose?: boolean;
   canReopen?: boolean;
 }) {
   const [msg, setMsg] = React.useState<string | null>(null);
   const [reopenId, setReopenId] = React.useState<string | null>(null);
   const [reopenReason, setReopenReason] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const busyRef = React.useRef(false);
 
-  const closeToday = () => {
+  const run = async (action: () => DayEndMutationResult | Promise<DayEndMutationResult>,
+    successText: (result: DayEndMutationResult) => string) => {
+    if (busyRef.current) return { ok: false };
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      const result = await action();
+      setMsg(result.ok ? successText(result) : result.error || "Day-end operation failed.");
+      return result;
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : "Day-end operation failed.");
+      return { ok: false };
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
+
+  const closeToday = async () => {
+    if (busyRef.current || hasUnsaved) {
+      setMsg("Save the pending day-end operation before another change.");
+      return;
+    }
     if (!canClose) {
       setMsg("You do not have permission to close the business day.");
       return;
     }
     if (!window.confirm("Close and lock today? New financial postings will be blocked until the day is reopened.")) return;
-    const result = onCloseDay();
-    setMsg(result.ok ? `Closed and locked ${result.record?.businessDate}` : result.error || "Failed");
+    await run(onCloseDay, (result) => `Closed and locked ${result.record?.businessDate}`);
   };
 
-  const reopen = (close: DayEndCloseView) => {
+  const reopen = async (close: DayEndCloseView) => {
+    if (busyRef.current || hasUnsaved) {
+      setMsg("Save the pending day-end operation before another change.");
+      return;
+    }
     const reason = reopenReason.trim();
     if (reason.length < 3) {
       setMsg("Reopen reason is required.");
       return;
     }
     if (!window.confirm(`Reopen business day ${close.businessDate}? This action is recorded in the audit log.`)) return;
-    const result = onReopenDay?.(close.businessDate, reason) ?? { ok: false, error: "Reopen action unavailable" };
-    setMsg(result.ok ? `Reopened ${close.businessDate}` : result.error || "Failed");
+    const result = await run(() => onReopenDay?.(close.businessDate, reason) ?? { ok: false, error: "Reopen action unavailable" },
+      () => `Reopened ${close.businessDate}`);
     if (result.ok) {
       setReopenId(null);
       setReopenReason("");
@@ -75,10 +106,16 @@ export function DayEndClosePanel({
             Snapshot today&apos;s totals, lock financial posting, and preserve a reasoned reopen audit trail.
           </p>
         </div>
-        <Button disabled={!canClose} onClick={closeToday}>
+        <Button disabled={!canClose || busy || hasUnsaved} onClick={() => void closeToday()}>
           Close & lock today
         </Button>
       </div>
+      {hasUnsaved && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        A day-end close/reopen changed the local session but its SQLite save is unconfirmed. Do not close the application or repeat the operation.
+        {onRetryPending && <Button type="button" variant="outline" disabled={busy} onClick={() => void run(onRetryPending, () => "Original day-end change saved to SQLite.")}>
+          {busy ? "Saving…" : "Retry saving existing day-end"}
+        </Button>}
+      </div>}
       {msg && <p role="status" className="text-sm text-slate-600">{msg}</p>}
       <div className="space-y-2">
         {closes.length === 0 && (
@@ -142,7 +179,7 @@ export function DayEndClosePanel({
                           />
                         </label>
                         <div className="flex gap-2">
-                          <Button size="sm" onClick={() => reopen(c)}>Confirm reopen</Button>
+                          <Button size="sm" disabled={busy || hasUnsaved} onClick={() => void reopen(c)}>Confirm reopen</Button>
                           <Button variant="outline" size="sm" onClick={() => { setReopenId(null); setReopenReason(""); }}>
                             Cancel
                           </Button>
