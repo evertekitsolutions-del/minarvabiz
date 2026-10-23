@@ -1,5 +1,7 @@
 import * as React from "react";
 import { DayEndClosePanel } from "@minarvabiz/ui";
+import { persistDomainToSqlite } from "../lib/sqlite-bootstrap";
+import { createDurableDayEndController } from "../lib/durable-day-end";
 import {
   can,
   closeBusinessDay,
@@ -7,6 +9,11 @@ import {
   reopenBusinessDay,
   type DayEndCloseRecord,
 } from "@minarvabiz/business-logic";
+
+// Module-level lifetime survives navigating away from a failed disk write.
+const durableDayEnd = createDurableDayEndController<DayEndCloseRecord>(
+  closeBusinessDay, reopenBusinessDay, persistDomainToSqlite,
+);
 
 function toView(entry: DayEndCloseRecord) {
   return {
@@ -29,9 +36,11 @@ function toView(entry: DayEndCloseRecord) {
 
 export function DesktopDayEndPanel({ onChanged }: { onChanged?: () => void }) {
   const [closes, setCloses] = React.useState(() => listDayEndCloses());
+  const [pending, setPending] = React.useState(() => durableDayEnd.hasPending());
 
   const refresh = () => {
     setCloses(listDayEndCloses());
+    setPending(durableDayEnd.hasPending());
     onChanged?.();
   };
 
@@ -40,17 +49,24 @@ export function DesktopDayEndPanel({ onChanged }: { onChanged?: () => void }) {
       canClose={can("dayend.close")}
       canReopen={can("dayend.reopen")}
       closes={closes.map(toView)}
-      onCloseDay={() => {
-        const result = closeBusinessDay();
-        if (result.error || !result.record) return { ok: false, error: result.error || "Failed" };
-        refresh();
-        return { ok: true, record: toView(result.record) };
+      hasUnsaved={pending}
+      onCloseDay={async () => {
+        try {
+          const result = await durableDayEnd.close();
+          return { ok: result.ok, error: result.error, record: result.record ? toView(result.record) : undefined };
+        } finally { refresh(); }
       }}
-      onReopenDay={(businessDate, reason) => {
-        const result = reopenBusinessDay(businessDate, reason);
-        if (result.error || !result.record) return { ok: false, error: result.error || "Failed" };
-        refresh();
-        return { ok: true, record: toView(result.record) };
+      onReopenDay={async (businessDate, reason) => {
+        try {
+          const result = await durableDayEnd.reopen(businessDate, reason);
+          return { ok: result.ok, error: result.error, record: result.record ? toView(result.record) : undefined };
+        } finally { refresh(); }
+      }}
+      onRetryPending={async () => {
+        try {
+          const result = await durableDayEnd.retry();
+          return { ok: result.ok, error: result.error, record: result.record ? toView(result.record) : undefined };
+        } finally { refresh(); }
       }}
     />
   );

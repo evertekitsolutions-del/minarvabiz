@@ -585,6 +585,8 @@ jobs:
         run: node --test packages/ui/src/components/support/__tests__/portable-support-packet.test.mjs apps/desktop/electron/__tests__/support-packet.test.mjs
       - name: Verify durable Windows POS sale and recovery on native-write failures
         run: node --test apps/desktop/src/lib/__tests__/durable-sale-commit.test.mjs
+      - name: Verify day-end close and reopen wait for SQLite persistence, without duplicate mutations
+        run: node --test apps/desktop/src/lib/__tests__/durable-day-end.test.mjs
       - name: Validate Windows interaction smoke syntax
         run: node --check scripts/windows-populated-deep-smoke.mjs
       - run: pnpm --filter @minarvabiz/desktop build:renderer
