@@ -3,7 +3,7 @@
 import * as React from "react";
 import { Button } from "../Button";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
-import { canUseSupportApi, createPortableSupportPacket } from "./portable-support-packet";
+import { canUseSupportApi, createPortableSupportPacket, portableTechnicalTranscript } from "./portable-support-packet";
 
 type SupportMode = "technical" | "feedback" | null;
 type ChatMessage = { id: string; role: "user" | "assistant"; content: string };
@@ -269,7 +269,10 @@ export function SupportCenter({
 
   async function exportPortableSupport(kind: "technical" | "feedback") {
     setPortableMessage("");
-    const transcript = messages.filter(m => m.id !== "welcome").map(({ role, content }) => ({ role, content }));
+    const transcript = portableTechnicalTranscript(
+      messages.filter(m => m.id !== "welcome").map(({ role, content }) => ({ role, content })),
+      kind === "technical" ? chatText : "",
+    );
     if (kind === "technical" && !transcript.some(m => m.role === "user")) {
       setPortableMessage("Ask at least one question before exporting a technical support request.");
       return;
