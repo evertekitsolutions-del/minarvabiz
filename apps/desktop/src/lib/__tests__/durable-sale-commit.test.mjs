@@ -76,3 +76,24 @@ test("validation failures create no pending success and a later valid sale can p
   assert.equal(commit.hasPending(), false);
   assert.equal((await commit.submit(payload)).saleId, "s2");
 });
+
+test("manual recovery receipt is reused once when the original cart is submitted", async () => {
+  let creates = 0;
+  const commit = createDurableSaleCommit(
+    () => { creates++; return { errors: [], sale: { id: "s" + creates, invoiceNumber: "INV-" + creates } }; },
+    async () => true,
+  );
+  // Force failure on the first acknowledgment while keeping invoice in memory.
+  const flaky = createDurableSaleCommit(
+    () => { creates++; return { errors: [], sale: { id: "s" + creates, invoiceNumber: "INV-" + creates } }; },
+    (() => { let n = 0; return async () => ++n > 1; })(),
+  );
+  assert.equal((await flaky.submit(payload)).success, false);
+  assert.equal((await flaky.retryPending()).success, true);
+  const recovered = await flaky.submit({ ...payload });
+  assert.equal(recovered.success, true);
+  assert.equal(creates, 1);
+  assert.equal((await flaky.submit(payload)).saleId, "s2");
+  assert.equal(creates, 2);
+  assert.equal((await commit.submit(payload)).saleId, "s3");
+});
