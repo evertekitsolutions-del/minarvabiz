@@ -578,6 +578,8 @@ jobs:
       - name: Verify shared dimensional row editor rendering
         run: node --experimental-strip-types scripts/dimension-row-editor-smoke.mjs
       - run: pnpm --filter @minarvabiz/ui typecheck
+      - name: Test desktop first-customer onboarding evidence and navigation
+        run: node --test packages/ui/src/components/desktop/__tests__/first-customer-guide-model.test.mjs
       - run: pnpm --filter @minarvabiz/desktop typecheck
       - name: Verify durable Windows POS sale and recovery on native-write failures
         run: node --test apps/desktop/src/lib/__tests__/durable-sale-commit.test.mjs
