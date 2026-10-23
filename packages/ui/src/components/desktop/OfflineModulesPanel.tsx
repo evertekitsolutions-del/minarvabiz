@@ -80,6 +80,7 @@ export function OfflineModulesPanel({
   const [supplierError, setSupplierError] = React.useState<string | null>(null);
   const [supplierPaymentOpen, setSupplierPaymentOpen] = React.useState(false);
   const [supplierPaymentSaving, setSupplierPaymentSaving] = React.useState(false);
+  const supplierPaymentSaveLock = React.useRef(false);
   const [supplierPaymentTarget, setSupplierPaymentTarget] = React.useState<Supplier | null>(null);
   const [supplierPaymentForm, setSupplierPaymentForm] = React.useState({ date: todayLocal(), amount: "", paymentMethod: "cash" as PaymentMethod, reference: "", notes: "" });
   const [actionError, setActionError] = React.useState<string | null>(null);
@@ -248,7 +249,8 @@ export function OfflineModulesPanel({
     };
 
     async function saveSupplierPayment() {
-      if (supplierPaymentSaving || !supplierPaymentTarget) return;
+      if (supplierPaymentSaveLock.current || !supplierPaymentTarget) return;
+      supplierPaymentSaveLock.current = true;
       setSupplierPaymentSaving(true);
       try {
         const native = typeof window !== "undefined" &&
@@ -284,6 +286,7 @@ export function OfflineModulesPanel({
       } catch (cause) {
         setActionError(cause instanceof Error ? cause.message : String(cause));
       } finally {
+        supplierPaymentSaveLock.current = false;
         setSupplierPaymentSaving(false);
       }
     }
