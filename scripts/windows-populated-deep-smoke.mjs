@@ -621,13 +621,16 @@ async function main() {
     // Day-end governance: verify installed close + audited reopen controls.
     await click(ws, "DAY_END", ["day-end close"]);
     await assertMain(ws, "DAY_END", ["Day-end close & lock", "Close & lock today"]);
+    const dayEndPanels = await evalIn(ws, `[...document.querySelectorAll("h3")].filter(el => (el.textContent || "").trim() === "Day-end close & lock").length`);
+    if (dayEndPanels !== 1) throw new Error(`Duplicate day-end close panels detected: ${dayEndPanels}`);
+    console.log("SINGLE_DAY_END_PANEL PASS");
     await evalIn(ws, "window.confirm=()=>true");
     await click(ws, "CLOSE_TODAY", ["close & lock today"]);
-    await assertMain(ws, "DAY_END_CLOSED", ["Closed & locked", "Net", "Reopen day"]);
+    await assertMainEventually(ws, "DAY_END_CLOSED", ["Closed & locked", "Net", "Reopen day"]);
     await click(ws, "REOPEN_DAY", ["reopen day"]);
     await setMainField(ws, "Reopen reason", "QA day-end verification");
     await click(ws, "CONFIRM_REOPEN", ["confirm reopen"]);
-    await assertMain(ws, "DAY_END_REOPENED", ["Reopened", "QA day-end verification"]);
+    await assertMainEventually(ws, "DAY_END_REOPENED", ["Reopened", "QA day-end verification"]);
 
     // Notifications and report callbacks.
     await click(ws, "NOTIFICATIONS", ["messages & notifications", "notifications"]);
