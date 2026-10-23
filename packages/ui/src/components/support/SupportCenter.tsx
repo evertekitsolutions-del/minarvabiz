@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Button } from "../Button";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
+import { canUseSupportApi, createPortableSupportPacket } from "./portable-support-packet";
 
 type SupportMode = "technical" | "feedback" | null;
 type ChatMessage = { id: string; role: "user" | "assistant"; content: string };
@@ -16,6 +17,7 @@ export interface SupportCenterProps {
 }
 
 type DesktopSupportApi = {
+  exportSupportPacket?: (json: string) => Promise<{ ok: boolean; cancelled?: boolean; filename?: string; error?: string }>;
   getVersion?: () => Promise<string>;
   platform?: string;
   sqliteExists?: () => Promise<boolean>;
@@ -188,6 +190,9 @@ export function SupportCenter({
   const [feedbackImageName, setFeedbackImageName] = React.useState("");
   const [feedbackBusy, setFeedbackBusy] = React.useState(false);
   const [feedbackMessage, setFeedbackMessage] = React.useState("");
+  const [portableMessage, setPortableMessage] = React.useState("");
+  const nativeSupport = typeof window !== "undefined" ? (window as Window & { minarvaDesktop?: DesktopSupportApi }).minarvaDesktop : undefined;
+  const remoteSupportAvailable = online && canUseSupportApi(apiBaseUrl, Boolean(nativeSupport));
 
   React.useEffect(() => {
     setClientId(supportClientId());
@@ -262,6 +267,65 @@ export function SupportCenter({
     }
   }
 
+  async function exportPortableSupport(kind: "technical" | "feedback") {
+    setPortableMessage("");
+    const transcript = messages.filter(m => m.id !== "welcome").map(({ role, content }) => ({ role, content }));
+    if (kind === "technical" && !transcript.some(m => m.role === "user")) {
+      setPortableMessage("Ask at least one question before exporting a technical support request.");
+      return;
+    }
+    if (kind === "feedback" && (!feedbackTitle.trim() || !feedbackDescription.trim())) {
+      setPortableMessage("Enter the request title and details before exporting.");
+      return;
+    }
+    try {
+      const json = createPortableSupportPacket({
+        type: kind === "technical" ? "technical_escalation" : feedbackType,
+        title: kind === "technical"
+          ? transcript.find(m => m.role === "user")!.content.slice(0, 160)
+          : feedbackTitle,
+        description: kind === "technical"
+          ? "Customer requests human troubleshooting. Attached transcript was recorded locally."
+          : feedbackDescription,
+        module: kind === "technical" ? currentModule : feedbackModule,
+        priority: kind === "technical" ? "high" : feedbackPriority,
+        contactEmail: kind === "technical" ? "" : feedbackEmail,
+        image: kind === "technical" ? chatImage : feedbackImage,
+        transcript: kind === "technical" ? transcript : [],
+        context: {
+          appVersion: requestContext.appVersion,
+          edition: requestContext.edition,
+          platform: requestContext.platform,
+          module: requestContext.module,
+          organizationName: requestContext.organizationName,
+          diagnostics: shareDiagnostics ? requestContext.diagnostics : null,
+        },
+      });
+      if (nativeSupport) {
+        if (!nativeSupport.exportSupportPacket) throw new Error("Native support export is unavailable in this installer.");
+        const saved = await nativeSupport.exportSupportPacket(json);
+        if (saved.cancelled) return;
+        if (!saved.ok) throw new Error(saved.error || "Could not save the support request.");
+        setPortableMessage(`Saved ${saved.filename || "support request"}. This file has NOT been sent. Share it using your existing support contact channel.`);
+      } else {
+        const blobUrl = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+        try {
+          const link = document.createElement("a");
+          link.href = blobUrl;
+          link.download = "minarvabiz-support-" + new Date().toISOString().replace(/[:.]/g, "-") + ".json";
+          document.body.append(link);
+          link.click();
+          link.remove();
+          setPortableMessage("Support JSON download requested. This file has NOT been sent. Share it using your support contact channel.");
+        } finally {
+          window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1_000);
+        }
+      }
+    } catch (error) {
+      setPortableMessage(error instanceof Error ? error.message : "Support request export failed.");
+    }
+  }
+
   async function sendChat() {
     const text = chatText.trim();
     if (!text || chatBusy) return;
@@ -275,6 +339,7 @@ export function SupportCenter({
     setChatText("");
 
     try {
+      if (!remoteSupportAvailable) throw new Error("AI support is not reachable or configured. Export this request for manual support instead.");
       const response = await fetch(endpoint(apiBaseUrl, "/api/support/chat"), {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -314,6 +379,7 @@ export function SupportCenter({
     }
     setEscalationMessage("Sending…");
     try {
+      if (!remoteSupportAvailable) throw new Error("Support server is not reachable or configured. Export the request instead.");
       const response = await fetch(endpoint(apiBaseUrl, "/api/support/feedback"), {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -341,6 +407,7 @@ export function SupportCenter({
     setFeedbackBusy(true);
     setFeedbackMessage("");
     try {
+      if (!remoteSupportAvailable) throw new Error("Support server is not reachable or configured. Export the request instead.");
       const response = await fetch(endpoint(apiBaseUrl, "/api/support/feedback"), {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -376,13 +443,13 @@ export function SupportCenter({
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-200">Minarva Biz Support Center</div>
-              <h2 className="mt-2 text-2xl font-bold">24/7 AI help + direct product feedback</h2>
+              <h2 className="mt-2 text-2xl font-bold">{remoteSupportAvailable ? "AI help + direct product feedback" : "Offline support request export"}</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-                Get guided help for Minarva Biz, including screenshot analysis, or send feature ideas and workflow improvements directly to the product admin inbox.
+                {remoteSupportAvailable ? "Ask for guided help, share a screenshot or submit feedback to the configured support service." : "Prepare a portable support request without an AI service or paid infrastructure. Export it and share the file through your existing support contact channel."}
               </p>
             </div>
             <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${typeof navigator !== "undefined" && navigator.onLine ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-400/15 text-amber-200"}`}>
-              {typeof navigator !== "undefined" && navigator.onLine ? "● Online" : "● Internet required"}
+              {remoteSupportAvailable ? "● Support online" : "● Offline export available"}
             </span>
           </div>
         </div>
@@ -391,14 +458,14 @@ export function SupportCenter({
           {modeCard(
             "AI Technical Support",
             "Ask anything about the software. Upload an error screenshot and the AI will inspect it, explain the likely cause and give safe step-by-step troubleshooting.",
-            "24/7 AI",
+            remoteSupportAvailable ? "AI available" : "Offline export",
             () => setMode("technical"),
             "bg-indigo-50 text-indigo-700",
           )}
           {modeCard(
             "Ideas & Feature Requests",
             "Tell us what would make Minarva Biz easier or better for your business. Requests are recorded in the admin Support Inbox for review and planning.",
-            "Direct to Admin",
+            remoteSupportAvailable ? "Direct to Admin" : "Export request",
             () => setMode("feedback"),
             "bg-violet-50 text-violet-700",
           )}
@@ -477,7 +544,7 @@ export function SupportCenter({
                   Share redacted diagnostics
                 </label>
               </div>
-              <Button onClick={() => void sendChat()} disabled={!chatText.trim() || chatBusy}>{chatBusy ? "Analyzing…" : "Send"}</Button>
+              <Button onClick={() => void sendChat()} disabled={!remoteSupportAvailable || !chatText.trim() || chatBusy}>{chatBusy ? "Analyzing…" : "Send"}</Button>
             </div>
             {chatError && <p className="mt-3 text-sm text-red-600">{chatError}</p>}
           </div>
@@ -489,10 +556,11 @@ export function SupportCenter({
             <div className="mt-1 text-xs text-slate-500">Send this conversation to the Minarva Biz admin Support Inbox for human review.</div>
             {escalationMessage && <div className="mt-2 text-xs font-medium text-indigo-700">{escalationMessage}</div>}
           </div>
-          <Button variant="outline" onClick={() => void escalateChat()}>Escalate to Support</Button>
+          <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={!remoteSupportAvailable} onClick={() => void escalateChat()}>Escalate to Support</Button><Button variant="outline" onClick={() => void exportPortableSupport("technical")}>Export support request</Button></div>
         </div>
 
-        <p className="text-xs leading-5 text-slate-500">AI responses can be imperfect. Minarva Biz Support is designed to avoid destructive fixes and to escalate when the available product evidence is insufficient.</p>
+        {portableMessage && <p role="status" className="text-sm text-indigo-700">{portableMessage}</p>}
+        <p className="text-xs leading-5 text-slate-500">Exporting a file does not submit a ticket. Review the content and screenshot before sharing it. AI answers, when available, can be imperfect.</p>
       </div>
     );
   }
@@ -502,7 +570,7 @@ export function SupportCenter({
       <div>
         <button type="button" onClick={() => setMode(null)} className="text-sm font-medium text-indigo-700 hover:underline">← Support Center</button>
         <h2 className="mt-2 text-2xl font-semibold text-slate-900">Ideas & Feature Requests</h2>
-        <p className="mt-1 text-sm text-slate-500">Your submission goes directly into the Minarva Biz admin Support Inbox with version and module context.</p>
+        <p className="mt-1 text-sm text-slate-500">{remoteSupportAvailable ? "Your submission is sent to the configured support inbox." : "No support server is configured or reachable. Export the request as JSON and share it through your support contact channel."}</p>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -546,15 +614,17 @@ export function SupportCenter({
               Include redacted diagnostics
             </label>
           </div>
-          <Button onClick={() => void submitFeedback()} disabled={feedbackBusy || !feedbackTitle.trim() || !feedbackDescription.trim()}>
+          <Button onClick={() => void submitFeedback()} disabled={!remoteSupportAvailable || feedbackBusy || !feedbackTitle.trim() || !feedbackDescription.trim()}>
             {feedbackBusy ? "Submitting…" : "Send to Product Team"}
           </Button>
+          <Button type="button" variant="outline" disabled={!feedbackTitle.trim() || !feedbackDescription.trim()} onClick={() => void exportPortableSupport("feedback")}>Export request (JSON)</Button>
         </div>
+        {portableMessage && <p role="status" className="mt-4 text-sm text-indigo-700">{portableMessage}</p>}
         {feedbackMessage && <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700">{feedbackMessage}</p>}
       </div>
 
       <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4 text-xs leading-5 text-indigo-800">
-        We record the request text, selected module, app version and the redacted context you choose to share. Raw database contents, license tokens and device IDs are not included.
+        Remote submission shares the request and optional selected diagnostics. Local export only writes the chosen JSON file; it is not transmitted. Review it before forwarding. Raw databases and license tokens are not automatically attached.
       </div>
     </div>
   );
