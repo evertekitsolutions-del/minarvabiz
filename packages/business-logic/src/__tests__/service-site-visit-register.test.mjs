@@ -192,7 +192,7 @@ test("UI, domain export and atomic snapshot roundtrip wiring is present",()=>{
   assert.match(ui,/ServiceSiteVisitChecklist visit=\{v\}/);
   assert.match(checklistUi,/setServiceSiteVisitCheck\(/);
   assert.match(ui,/cancelServiceSiteVisit\(v\.id,v\.version,cancelReason\)/);
-  assert.match(list,/<ServiceSiteVisitPanel orders=\{orders\} assignments=\{staffAssignments\} \/>/);
+  assert.match(list,/<ServiceSiteVisitPanel orders=\{orders\} assignments=\{staffAssignments\} customers=\{customers\} \/>/);
   assert.match(index,/export \* from "\.\/service-site-visit-register"/);
   assert.match(snapshot,/siteVisits\.validateServiceSiteVisits\(input\.serviceSiteVisits/);
   assert.match(snapshot,/siteVisits\.hydrateServiceSiteVisits\(snap\.serviceSiteVisits/);
