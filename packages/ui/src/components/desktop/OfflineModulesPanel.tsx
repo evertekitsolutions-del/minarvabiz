@@ -4,6 +4,7 @@ import * as React from "react";
 import { AuditLogList } from "../audit/AuditLogList";
 import { CustomerProfile } from "../crm/CustomerProfile";
 import { PaymentsPanel } from "../payments/PaymentsPanel";
+import { createDurableCollection } from "../payments/durable-collection";
 import { ReturnsPanel } from "../returns/ReturnsPanel";
 import { StaffDetail } from "../staff/StaffDetail";
 import { SupplierList } from "../suppliers/SupplierList";
@@ -16,6 +17,16 @@ import { Modal } from "../forms/Modal";
 import { ordersStore, phase5Store, phase6Store, phase7Store, store } from "@minarvabiz/business-logic";
 import type { NavItemId } from "../../lib/nav";
 import type { PaymentMethod, Supplier } from "@minarvabiz/types";
+
+// Shared across route unmounts: an unacknowledged payment must never be recreated.
+const durableCustomerCollection = createDurableCollection(
+  (input: Parameters<typeof store.recordCustomerPayment>[0]) => store.recordCustomerPayment(input),
+  async () => {
+    const native = (window as Window & { __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopFlush;
+    if (!native) throw new Error("Windows SQLite save bridge is unavailable.");
+    return native();
+  },
+);
 
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
 
@@ -80,17 +91,35 @@ export function OfflineModulesPanel({
 
   if (activeNav === "payments") {
     const outstanding = store.listCustomers().filter((c) => c.outstandingBalance > 0);
-    return <><PaymentsPanel outstanding={outstanding} payments={store.listPayments()} customers={store.listCustomers()} suppliers={phase5Store.listSuppliers()} onCollect={(data) => {
-      try {
-        const result = store.recordCustomerPayment(data);
-        if (!result.errors.length) { setActionError(null); persistDesktop(); refresh(); }
-        return result.errors.length ? { ok: false, error: result.errors.join("; ") } : { ok: true };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        setActionError(message);
-        return { ok: false, error: message };
-      }
-    }} />{actionError && <p className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{actionError}</p>}</>;
+    const nativeCollectionHost = typeof window !== "undefined" && Boolean((window as Window & { minarvaDesktop?: unknown }).minarvaDesktop);
+    return <><PaymentsPanel outstanding={outstanding} payments={store.listPayments()} customers={store.listCustomers()} suppliers={phase5Store.listSuppliers()}
+      hasPendingCollection={nativeCollectionHost && durableCustomerCollection.hasPending()}
+      onRetryPendingCollection={async () => {
+        try {
+          const result = await durableCustomerCollection.retryPending();
+          if (result.ok) setActionError(null);
+          else setActionError(result.error || "Payment remains unsaved.");
+          return { ok: result.ok, error: result.error };
+        } finally { refresh(); }
+      }}
+      onCollect={async (data) => {
+        if (!nativeCollectionHost) {
+          try {
+            const result = store.recordCustomerPayment(data);
+            if (!result.errors.length) { setActionError(null); persistDesktop(); refresh(); }
+            return result.errors.length ? { ok: false, error: result.errors.join("; ") } : { ok: true };
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setActionError(message);
+            return { ok: false, error: message };
+          }
+        }
+        try {
+          const result = await durableCustomerCollection.collect(data);
+          setActionError(result.ok ? null : result.error || "Payment remains unsaved.");
+          return { ok: result.ok, error: result.error };
+        } finally { refresh(); }
+      }} />{actionError && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{actionError}</p>}</>;
   }
 
   if (activeNav === "customer-crm") {

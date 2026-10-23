@@ -37,6 +37,8 @@ export function PaymentsPanel({
   onCollect,
   onRemind,
   requestedCustomerId,
+  hasPendingCollection = false,
+  onRetryPendingCollection,
 }: {
   outstanding: Customer[];
   payments: Payment[];
@@ -47,7 +49,9 @@ export function PaymentsPanel({
     amount: number;
     method: PaymentMethod;
     notes?: string;
-  }) => { ok: boolean; error?: string };
+  }) => { ok: boolean; error?: string } | Promise<{ ok: boolean; error?: string }>;
+  hasPendingCollection?: boolean;
+  onRetryPendingCollection?: () => Promise<{ ok: boolean; error?: string }>;
   onRemind?: (customer: Customer) => void;
   requestedCustomerId?: string | null;
 }) {
@@ -57,6 +61,61 @@ export function PaymentsPanel({
   const [method, setMethod] = React.useState<PaymentMethod>("cash");
   const [notes, setNotes] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
+  const [savingCollection, setSavingCollection] = React.useState(false);
+  const collecting = React.useRef(false);
+
+  const retryPending = async () => {
+    if (collecting.current || !onRetryPendingCollection) return;
+    collecting.current = true;
+    setSavingCollection(true);
+    try {
+      const result = await onRetryPendingCollection();
+      if (!result.ok) {
+        setError(result.error || "The existing payment could not be saved.");
+        return;
+      }
+      setError(null);
+      setOpen(false);
+      setNotes("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save the existing payment.");
+    } finally {
+      collecting.current = false;
+      setSavingCollection(false);
+    }
+  };
+
+  const recordCollection = async () => {
+    if (collecting.current || hasPendingCollection) {
+      setError("Save the pending payment before collecting again.");
+      return;
+    }
+    collecting.current = true;
+    setSavingCollection(true);
+    try {
+      const liveCustomer = findCollectionCustomer(outstanding, customerId);
+      if (!liveCustomer) throw new Error("Select a customer with an outstanding balance.");
+      const validatedAmount = parseCollectionAmount(amount, liveCustomer.outstandingBalance);
+      const result = await onCollect({
+        customerId: liveCustomer.id,
+        amount: validatedAmount,
+        method,
+        notes: notes || undefined,
+      });
+      if (!result.ok) {
+        setError(result.error || "Unable to record payment.");
+        return;
+      }
+      setOpen(false);
+      setError(null);
+      setNotes("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to record payment.");
+    } finally {
+      collecting.current = false;
+      setSavingCollection(false);
+    }
+  };
   const [collectionLinkNotice, setCollectionLinkNotice] = React.useState<string | null>(null);
   const processedCustomerLink = React.useRef<string | null>(null);
 
@@ -248,12 +307,18 @@ export function PaymentsPanel({
             setAmount(outstanding[0] ? String(outstanding[0].outstandingBalance) : "");
             setOpen(true);
           }}
-          disabled={outstanding.length === 0}
+          disabled={outstanding.length === 0 || savingCollection || hasPendingCollection}
         >
           + Collect payment
         </Button>
       </div>
 
+      {hasPendingCollection && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        A customer payment was applied in memory but SQLite did not confirm its save. Do not close the app, collect another payment or restart until the original write succeeds.
+        {onRetryPendingCollection && <Button type="button" variant="outline" disabled={savingCollection} onClick={() => void retryPending()}>
+          {savingCollection ? "Saving…" : "Retry saving existing payment"}
+        </Button>}
+      </div>}
       {collectionLinkNotice && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{collectionLinkNotice}</p>}
 
       <Card>
@@ -362,36 +427,14 @@ export function PaymentsPanel({
       <Modal
         open={open}
         title="Collect payment"
-        onClose={() => setOpen(false)}
+        onClose={() => { if (!savingCollection) setOpen(false); }}
         footer={
           <>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button
-              onClick={() => {
-                try {
-                  const liveCustomer = findCollectionCustomer(outstanding, customerId);
-                  if (!liveCustomer) throw new Error("Select a customer with an outstanding balance.");
-                  const validatedAmount = parseCollectionAmount(amount, liveCustomer.outstandingBalance);
-                  const result = onCollect({
-                    customerId: liveCustomer.id,
-                    amount: validatedAmount,
-                    method,
-                    notes: notes || undefined,
-                  });
-                  if (!result.ok) {
-                    setError(result.error || "Unable to record payment.");
-                    return;
-                  }
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Unable to record payment.");
-                  return;
-                }
-                setOpen(false);
-                setError(null);
-                setNotes("");
-              }}
-            >
-              Record payment
+            <Button variant="outline" disabled={savingCollection} onClick={() => setOpen(false)}>Cancel</Button>
+            {hasPendingCollection && onRetryPendingCollection && <Button variant="outline" disabled={savingCollection}
+              onClick={() => void retryPending()}>Retry saving existing payment</Button>}
+            <Button disabled={savingCollection || hasPendingCollection} onClick={() => void recordCollection()}>
+              {savingCollection ? "Saving payment to disk…" : "Record payment"}
             </Button>
           </>
         }

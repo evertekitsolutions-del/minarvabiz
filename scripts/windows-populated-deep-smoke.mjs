@@ -364,7 +364,10 @@ async function main() {
     await click(ws, "COLLECT_PAYMENT", ["collect"]);
     await setField(ws, "Collect payment", "Amount", "90");
     await click(ws, "RECORD_PAYMENT", ["record payment"]);
-    await assertMain(ws, "PAYMENT_RECORDED", ["Payments", "QA POS Customer", "₹200.00"]);
+    await assertMainEventually(ws, "PAYMENT_RECORDED", ["Payments", "QA POS Customer", "₹200.00"]);
+    await assertMain(ws, "PAYMENT_DURABLY_SAVED", ["Payments"]);
+    const pendingPaymentNotice = await evalIn(ws, `document.querySelector('[role="alert"]')?.textContent?.includes("payment was applied in memory") ?? false`);
+    if (pendingPaymentNotice) throw new Error("Customer payment was not durably saved.");
 
     await click(ws, "SETTLED_SALES", ["sales & billing"]);
     await click(ws, "SETTLED_HISTORY", ["history"]);
@@ -604,7 +607,7 @@ async function main() {
     await setField(ws, "Collect payment", "Amount", "300");
     await selectDialogFieldByText(ws, "Collect payment", "Method", "UPI");
     await click(ws, "LAUNDRY_RECORD_COLLECTION", ["record payment"]);
-    await assertMain(ws, "LAUNDRY_COLLECTION_ALLOCATED", ["Service orders:", "Laundry:", "100.00"]);
+    await assertMainEventually(ws, "LAUNDRY_COLLECTION_ALLOCATED", ["Service orders:", "Laundry:", "100.00"]);
     await click(ws, "LAUNDRY_CANCEL_RETURN", ["laundry & ironing"]);
     await assertMain(ws, "LAUNDRY_CANCEL_LIST", ["Laundry & Ironing", "QA Shirt"]);
     await clickButton(ws, "LAUNDRY_CANCEL_OPEN", ["cancel ticket"]);
