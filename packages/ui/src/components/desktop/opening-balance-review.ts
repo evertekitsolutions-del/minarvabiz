@@ -43,11 +43,10 @@ export function buildOpeningBalanceReviewCsv(input: OutstandingReviewInput): str
   const append = (type: "customer" | "supplier", parties: readonly OutstandingReviewParty[]) => {
     for (const party of parties) {
       if (!party.id.trim()) throw new Error(type + " has no stable identity.");
-      lines.push([
-        type, party.id, party.name,
-        money(party.outstandingBalance, type + " " + party.id + " outstanding balance"),
-        "", "PENDING", "",
-      ].map(csvCell).join(","));
+      // Financial amounts must stay numeric, including negative credit balances.
+      // Only untrusted party identifiers and names need spreadsheet-text escaping.
+      const recorded = money(party.outstandingBalance, type + " " + party.id + " outstanding balance");
+      lines.push([type, csvCell(party.id), csvCell(party.name), recorded, "", "PENDING", ""].join(","));
     }
   };
   append("customer", input.customers);
