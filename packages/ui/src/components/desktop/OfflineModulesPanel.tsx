@@ -91,8 +91,9 @@ export function OfflineModulesPanel({
 
   if (activeNav === "payments") {
     const outstanding = store.listCustomers().filter((c) => c.outstandingBalance > 0);
+    const nativeCollectionHost = typeof window !== "undefined" && Boolean((window as Window & { minarvaDesktop?: unknown }).minarvaDesktop);
     return <><PaymentsPanel outstanding={outstanding} payments={store.listPayments()} customers={store.listCustomers()} suppliers={phase5Store.listSuppliers()}
-      hasPendingCollection={Boolean((window as Window & { minarvaDesktop?: unknown }).minarvaDesktop) && durableCustomerCollection.hasPending()}
+      hasPendingCollection={nativeCollectionHost && durableCustomerCollection.hasPending()}
       onRetryPendingCollection={async () => {
         try {
           const result = await durableCustomerCollection.retryPending();
@@ -102,7 +103,7 @@ export function OfflineModulesPanel({
         } finally { refresh(); }
       }}
       onCollect={async (data) => {
-        if (!(window as Window & { minarvaDesktop?: unknown }).minarvaDesktop) {
+        if (!nativeCollectionHost) {
           try {
             const result = store.recordCustomerPayment(data);
             if (!result.errors.length) { setActionError(null); persistDesktop(); refresh(); }
