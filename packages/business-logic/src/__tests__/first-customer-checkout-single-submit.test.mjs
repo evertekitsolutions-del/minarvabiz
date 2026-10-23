@@ -71,13 +71,15 @@ for (const [name, file, cartState, submitCall, reset] of [
     );
     assert.match(source, /React\.useRef\(createCheckoutSubmitGate\(\)\)/);
     assert.match(source, new RegExp(`if \\(\\b${cartState}\\.length === 0\\) checkoutSubmitGate\\.current\\.release\\(\\)`));
-    const start = source.indexOf("  function complete() {");
+    const start = source.search(/  (?:async )?function complete\(\) \{/);
     const end = source.indexOf("\n  }", start);
     assert.ok(start >= 0 && end > start, "complete handler must be present");
     const handler = source.slice(start, end);
     const claim = handler.indexOf("checkoutSubmitGate.current.tryStart()");
     const submit = handler.indexOf(submitCall);
     assert.ok(claim >= 0 && submit > claim, "guard must claim synchronously before checkout side effects");
+    const firstAwait = handler.indexOf("await ");
+    assert.ok(firstAwait < 0 || claim < firstAwait, "latch must be claimed before the first asynchronous suspension");
     const unlocks = [...handler.matchAll(/checkoutSubmitGate\.current\.release\(\)/g)];
     assert.ok(unlocks.length >= 2, "failure return and throw must both release the latch");
     assert.ok(handler.includes(reset), "successful checkout must clear the cart");

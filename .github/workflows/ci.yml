@@ -579,6 +579,8 @@ jobs:
         run: node --experimental-strip-types scripts/dimension-row-editor-smoke.mjs
       - run: pnpm --filter @minarvabiz/ui typecheck
       - run: pnpm --filter @minarvabiz/desktop typecheck
+      - name: Verify durable Windows POS sale and recovery on native-write failures
+        run: node --test apps/desktop/src/lib/__tests__/durable-sale-commit.test.mjs
       - name: Validate Windows interaction smoke syntax
         run: node --check scripts/windows-populated-deep-smoke.mjs
       - run: pnpm --filter @minarvabiz/desktop build:renderer

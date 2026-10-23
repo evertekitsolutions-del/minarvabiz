@@ -14,6 +14,8 @@ import { store, ordersStore, phase5Store, phase6Store, phase7Store, getShopProfi
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
+import { useDurableSaleCommit } from "./lib/use-durable-sale-commit";
+import { DesktopPendingInvoiceSaveBanner } from "./components/DesktopPendingInvoiceSaveBanner";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
 import { DesktopStaffEditorModal } from "./components/DesktopStaffEditorModal";
 import { DesktopCustomerMasterPanel } from "./components/DesktopCustomerMasterPanel";
@@ -94,6 +96,7 @@ export function App() {
   const [purchaseForm, setPurchaseForm] = React.useState({ date:todayLocal(), supplierId:"", description:"", amount:"", paidAmount:"", paymentMethod:"cash" as PaymentMethod, kind:"general" as "general"|"order_specific", orderId:"", notes:"" });
   const [staffForm, setStaffForm] = React.useState({ name:"", phone:"", email:"", role:"staff" as RoleName, salary:"", joiningDate:todayLocal(), status:"active" as "active"|"inactive"|"on_leave", notes:"" });
   const autoBackupInFlight = React.useRef(false);
+  const saleCommit = useDurableSaleCommit();
   const refreshAll = React.useCallback(() => {
     setCustomers(store.listCustomers());
     setProducts(store.listProducts({ query: productQuery || undefined, categoryId: productCategoryId || undefined, lowStockOnly }));
@@ -118,7 +121,6 @@ export function App() {
     try {
       if (!await persistDomainToSqlite()) throw new Error("The native SQLite write was rejected");
     } catch (error) {
-      // SQLite required.
       setModuleError(`SQLite save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
       console.error("[minarvabiz] SQLite save failed", error);
     }
@@ -134,7 +136,6 @@ export function App() {
     try {
       if (!await persistDomainToSqlite()) throw new Error("Attendance changes are not yet saved to SQLite. Keep the app open and retry.");
     } catch (error) {
-      // Attendance requires SQLite.
       throw error;
     } finally {
       refreshAll();
@@ -186,15 +187,11 @@ export function App() {
   const actions:QuickAction[]=[];
   if(licenseFeatures.sales) actions.push({id:"sale",label:"New Sale",description:"Create Invoice",icon:<span>🛒</span>,tone:"blue",onClick:()=>{setActiveNav("sales");setSalesTab("pos");}});
   if(licenseFeatures.orders) actions.push({id:"order",label:"New Order",description:"Tailoring Order",icon:<span>👗</span>,tone:"pink",onClick:()=>{setActiveNav("services");setCreateOpen(true);}});
-  function handleSale(payload:{customerId:string|null;lines:CartLine[];paidAmount:number;paymentMethod:PaymentMethod;paymentSplits?:Array<{method:PaymentMethod;amount:number;reference?:string|null}>}) {
-    try {
-      const result=store.createSale(payload);
-      if(result.errors.length)return{success:false,errors:result.errors};
-      setModuleError(null); void persistAndRefresh();
-      return{success:true,invoiceNumber:result.sale.invoiceNumber,saleId:result.sale.id};
-    } catch(error) {
-      const message=errorMessage(error); setModuleError(message); return{success:false,errors:[message]};
-    }
+  async function handleSale(payload:Parameters<typeof store.createSale>[0]) {
+    const r=await saleCommit.submit(payload);
+    refreshAll();
+    setModuleError(r.success?null:r.errors?.join("; ")||"SQLite save failed");
+    return r;
   }
   function handleCreateOrder(){
     try {
@@ -237,6 +234,7 @@ export function App() {
   const professionalReports=buildProfessionalReportData(reportFrom||undefined,reportTo||undefined);
   return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} desktopModuleContext={{customerId:crmCustomerId,staffId:staffDetailId,returnSaleId,onReturnSaleHandled:()=>setReturnSaleId("")}} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png",navItems:allowedNav}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:listCustomerCommunicationQueue().filter(row=>row.status==="pending"||row.status==="failed").length,onMessagesClick:()=>navTo("messages"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("agenda"),onSearch:setGlobalSearchQuery}}>
     <DesktopEntitlementMonitor enabled={dbReady} onTrialStateChange={setTrialState} onLicenseStateChange={setCommercialLicense}/>
+    {saleCommit.hasPending() && <DesktopPendingInvoiceSaveBanner onRetry={async()=>{const r=await saleCommit.retryPending();refreshAll();setModuleError(r.success?null:r.errors?.join("; ")||"SQLite save failed");}}/>}
     {view==="dashboard"&&dash&&<div className="space-y-4"><DesktopLicenseExpiryBanner commercialActive={commercialActive} trialState={trialState} daysRemaining={licenseDaysForDashboard} onManage={()=>navTo("license")}/><Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/></div>}
     {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery("")} onNavigate={(_href,id)=>{setGlobalSearchQuery("");navTo(id);}}/>}
     {view==="customers"&&<DesktopCustomerMasterPanel onAdd={openCustomerCreator} onPersist={persistAndRefresh} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}

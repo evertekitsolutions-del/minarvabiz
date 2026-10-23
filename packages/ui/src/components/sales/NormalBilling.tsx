@@ -33,7 +33,7 @@ export function NormalBilling({
 }: {
   products: Product[];
   customers: Customer[];
-  onCompleteSale: (payload: { customerId: string | null; lines: CartLine[]; paidAmount: number; paymentMethod: PaymentMethod; notes?: string }) => SaleResult;
+  onCompleteSale: (payload: { customerId: string | null; lines: CartLine[]; paidAmount: number; paymentMethod: PaymentMethod; notes?: string }) => SaleResult | Promise<SaleResult>;
   onAddCustomer?: () => void;
   onAddProduct?: () => void;
   onPrintSale?: (saleId: string, paper: "a4" | "thermal") => void;
@@ -54,6 +54,7 @@ export function NormalBilling({
   const [message, setMessage] = React.useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [lastSale, setLastSale] = React.useState<{ id: string; invoice: string } | null>(null);
   const checkoutSubmitGate = React.useRef(createCheckoutSubmitGate());
+  const [savingSale, setSavingSale] = React.useState(false);
 
   React.useEffect(() => {
     if (lines.length === 0) checkoutSubmitGate.current.release();
@@ -130,7 +131,7 @@ export function NormalBilling({
     }
   }
 
-  function complete() {
+  async function complete() {
     if (!lines.length) { setMessage({ type: "err", text: "Add at least one item." }); return; }
     const payment = paidAmount.trim() === "" ? 0 : Number(paidAmount);
     if (!Number.isFinite(payment) || payment < 0) {
@@ -140,8 +141,9 @@ export function NormalBilling({
     // A successful synchronous submit remains latched until the cleared cart
     // is committed. React setState does not immediately change this closure.
     if (!checkoutSubmitGate.current.tryStart()) return;
+    setSavingSale(true);
     try {
-      const result = onCompleteSale({
+      const result = await onCompleteSale({
         customerId: customerId || null,
         lines,
         paidAmount: payment,
@@ -159,6 +161,8 @@ export function NormalBilling({
     } catch (error) {
       checkoutSubmitGate.current.release();
       setMessage({ type: "err", text: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setSavingSale(false);
     }
   }
 
@@ -268,7 +272,7 @@ export function NormalBilling({
                 <select className="h-10 rounded-lg border border-slate-200 px-3 text-sm" value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}><option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="online">Online</option><option value="other">Other</option></select>
                 <input className="h-10 rounded-lg border border-slate-200 px-3 text-sm" type="number" min="0" step="0.01" placeholder="Paid amount" value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} />
               </div>
-              <Button className="w-full" disabled={!lines.length} onClick={complete}>Save Bill</Button>
+              <Button className="w-full" disabled={savingSale || !lines.length} onClick={complete}>{savingSale ? "Saving to disk…" : "Save Bill"}</Button>
             </div>
           </div>
           {message && <p className={`text-sm ${message.type === "ok" ? "text-emerald-600" : "text-rose-600"}`}>{message.text}</p>}
