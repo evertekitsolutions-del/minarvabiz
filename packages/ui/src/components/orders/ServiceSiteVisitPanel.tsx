@@ -17,6 +17,7 @@ import {ServiceJobCostPanel} from "./ServiceJobCostPanel";
 import {ServiceVisitRoutePanel} from "./ServiceVisitRoutePanel";
 import {ServiceVisitFeedbackPanel} from "./ServiceVisitFeedbackPanel";
 import {ServiceRecoverySummary,ServiceVisitRecoveryPanel} from "./ServiceVisitRecoveryPanel";
+import {ServiceFeedbackInsightsPanel} from "./ServiceFeedbackInsightsPanel";
 import {inputClass, selectClass} from "../forms/FormField";
 
 function localDate():string{
@@ -153,6 +154,7 @@ export function ServiceSiteVisitPanel({
     </div>}
     <ServiceVisitSlaPanel visits={visits}/>
     <ServiceRecoverySummary visits={visits}/>
+    <ServiceFeedbackInsightsPanel visits={visits}/>
     <ServiceVisitRoutePanel visits={visits} canWrite={canWrite} mutate={mutate}/>
     <ServiceJobCostPanel orders={orders} visits={visits}/>
     <div className="mt-4 max-h-96 overflow-auto rounded-lg border border-slate-200">
