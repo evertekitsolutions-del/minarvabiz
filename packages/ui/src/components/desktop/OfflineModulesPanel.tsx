@@ -11,6 +11,7 @@ import { SupplierList } from "../suppliers/SupplierList";
 import { CustomerMessagesPanel } from "../notifications/CustomerMessagesPanel";
 import { BusinessAgenda } from "../agenda/BusinessAgenda";
 import { DesktopFirstCustomerGuide } from "./DesktopFirstCustomerGuide";
+import { parseSupplierAmountInput } from "./supplier-amount-input";
 import { Button } from "../Button";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { Modal } from "../forms/Modal";
@@ -25,6 +26,18 @@ const durableCustomerCollection = createDurableCollection(
     const native = (window as Window & { __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopFlush;
     if (!native) throw new Error("Windows SQLite save bridge is unavailable.");
     return native();
+  },
+);
+
+// Shared across route remounts: failed native acknowledgment may only retry
+// persisting the same supplier payment, never create another journal/payment.
+const durableSupplierCollection = createDurableCollection(
+  (input: Parameters<typeof phase5Store.recordSupplierPayment>[0]) =>
+    phase5Store.recordSupplierPayment(input),
+  async () => {
+    const flush = (window as Window & { __minarvaDesktopFlush?: () => Promise<boolean> }).__minarvaDesktopFlush;
+    if (!flush) throw new Error("Windows SQLite save bridge is unavailable.");
+    return flush();
   },
 );
 
@@ -66,6 +79,7 @@ export function OfflineModulesPanel({
   const [supplierArchiveReason, setSupplierArchiveReason] = React.useState("");
   const [supplierError, setSupplierError] = React.useState<string | null>(null);
   const [supplierPaymentOpen, setSupplierPaymentOpen] = React.useState(false);
+  const [supplierPaymentSaving, setSupplierPaymentSaving] = React.useState(false);
   const [supplierPaymentTarget, setSupplierPaymentTarget] = React.useState<Supplier | null>(null);
   const [supplierPaymentForm, setSupplierPaymentForm] = React.useState({ date: todayLocal(), amount: "", paymentMethod: "cash" as PaymentMethod, reference: "", notes: "" });
   const [actionError, setActionError] = React.useState<string | null>(null);
@@ -209,7 +223,7 @@ export function OfflineModulesPanel({
             email: supplierForm.email.trim() || null,
             address: supplierForm.address.trim() || null,
             category: supplierForm.category.trim() || null,
-            openingBalance: parseFloat(supplierForm.openingBalance) || 0,
+            openingBalance: parseSupplierAmountInput(supplierForm.openingBalance, "opening"),
             notes: supplierForm.notes.trim() || null,
           });
         }
@@ -232,6 +246,47 @@ export function OfflineModulesPanel({
       persistDesktop();
       refresh();
     };
+
+    async function saveSupplierPayment() {
+      if (supplierPaymentSaving || !supplierPaymentTarget) return;
+      setSupplierPaymentSaving(true);
+      try {
+        const native = typeof window !== "undefined" &&
+          Boolean((window as Window & { minarvaDesktop?: unknown }).minarvaDesktop);
+        let result: { ok: boolean; error?: string };
+        if (durableSupplierCollection.hasPending()) {
+          result = await durableSupplierCollection.retryPending();
+        } else {
+          const input = {
+            supplierId: supplierPaymentTarget.id,
+            amount: parseSupplierAmountInput(supplierPaymentForm.amount, "payment"),
+            paymentMethod: supplierPaymentForm.paymentMethod,
+            date: supplierPaymentForm.date,
+            reference: supplierPaymentForm.reference || null,
+            notes: supplierPaymentForm.notes || null,
+          };
+          if (native) {
+            result = await durableSupplierCollection.collect(input);
+          } else {
+            const recorded = phase5Store.recordSupplierPayment(input);
+            result = { ok: recorded.errors.length === 0 && Boolean(recorded.payment),
+              error: recorded.errors.join("; ") || "Supplier payment was not created." };
+            if (result.ok) persistDesktop();
+          }
+        }
+        if (!result.ok) {
+          setActionError(result.error || "Supplier payment has not been confirmed in SQLite.");
+          return;
+        }
+        setSupplierPaymentOpen(false);
+        setActionError(null);
+        refresh();
+      } catch (cause) {
+        setActionError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        setSupplierPaymentSaving(false);
+      }
+    }
 
     return <>
       <SupplierList
@@ -275,27 +330,17 @@ export function OfflineModulesPanel({
       <Modal
         open={supplierPaymentOpen}
         title="Record Supplier Payment"
-        onClose={() => setSupplierPaymentOpen(false)}
-        footer={<><Button variant="outline" onClick={() => setSupplierPaymentOpen(false)}>Cancel</Button><Button onClick={() => {
-          try {
-            if (!supplierPaymentTarget) return;
-            const result = phase5Store.recordSupplierPayment({
-              supplierId: supplierPaymentTarget.id,
-              amount: parseFloat(supplierPaymentForm.amount) || 0,
-              paymentMethod: supplierPaymentForm.paymentMethod,
-              date: supplierPaymentForm.date,
-              reference: supplierPaymentForm.reference || null,
-              notes: supplierPaymentForm.notes || null,
-            });
-            if (result.errors.length) { setActionError(result.errors.join("; ")); return; }
-            setSupplierPaymentOpen(false);
-            setActionError(null);
-            persistDesktop();
-            refresh();
-          } catch (error) {
-            setActionError(error instanceof Error ? error.message : String(error));
-          }
-        }}>Record Payment</Button></>}
+        onClose={() => {
+          if (!durableSupplierCollection.hasPending() && !supplierPaymentSaving) setSupplierPaymentOpen(false);
+        }}
+        footer={<>
+          <Button variant="outline" disabled={supplierPaymentSaving || durableSupplierCollection.hasPending()}
+            onClick={() => setSupplierPaymentOpen(false)}>Cancel</Button>
+          <Button disabled={supplierPaymentSaving} onClick={() => void saveSupplierPayment()}>
+            {supplierPaymentSaving ? "Saving..." : durableSupplierCollection.hasPending()
+              ? "Retry saving existing payment" : "Record Payment"}
+          </Button>
+        </>}
       >
         <div className="space-y-3">
           <p className="text-sm text-slate-600">{supplierPaymentTarget?.name} · Outstanding <strong>{supplierPaymentTarget?.outstandingBalance.toFixed(2)}</strong></p>
@@ -304,6 +349,10 @@ export function OfflineModulesPanel({
           <FormField label="Payment method"><select className={selectClass} value={supplierPaymentForm.paymentMethod} onChange={(e) => setSupplierPaymentForm({ ...supplierPaymentForm, paymentMethod: e.target.value as PaymentMethod })}><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank">Bank</option><option value="online">Online</option><option value="other">Other</option></select></FormField>
           <FormField label="Reference"><input className={inputClass} value={supplierPaymentForm.reference} onChange={(e) => setSupplierPaymentForm({ ...supplierPaymentForm, reference: e.target.value })}/></FormField>
           <FormField label="Notes"><input className={inputClass} value={supplierPaymentForm.notes} onChange={(e) => setSupplierPaymentForm({ ...supplierPaymentForm, notes: e.target.value })}/></FormField>
+          {durableSupplierCollection.hasPending() && <p role="alert" className="text-sm text-amber-700">
+            A previous supplier payment exists in memory but SQLite has not confirmed it.
+            Retry saving the existing payment; do not collect another payment or close the app.
+          </p>}
           {actionError && <p className="text-sm text-rose-600">{actionError}</p>}
         </div>
       </Modal>
