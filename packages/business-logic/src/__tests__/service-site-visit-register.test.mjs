@@ -875,3 +875,100 @@ test("SVC-007 runtime wiring presents product-linked usage and local ledger warn
   assert.match(domainSrc,/productsStore\.getProduct\(productId\)/);
   assert.doesNotMatch(domainSrc,/remoteAdjustStock\(/);
 });
+
+
+test("SVC-013 route stop updates are optimistic, audited and included in Windows backup",()=>{
+  reset();const v=schedule();
+  assert.equal(v.routeSequence,null);
+  const first=domain.setServiceSiteVisitRouteSequence({
+    visitId:v.id,expectedVersion:v.version,routeSequence:2,
+  });
+  assert.equal(first.version,2);
+  assert.equal(first.routeSequence,2);
+  assert.equal(events.at(-1)[0],"service_site_visit.route_sequence");
+  assert.equal(events.at(-1)[4].routeSequence,2);
+  assert.throws(()=>domain.setServiceSiteVisitRouteSequence({
+    visitId:v.id,expectedVersion:1,routeSequence:3,
+  }),/changed/);
+  const saved=domain.exportServiceSiteVisits();
+  domain.hydrateServiceSiteVisits([]);
+  domain.hydrateServiceSiteVisits(saved);
+  assert.deepEqual(domain.exportServiceSiteVisits(),saved);
+  const cleared=domain.setServiceSiteVisitRouteSequence({
+    visitId:v.id,expectedVersion:2,routeSequence:null,
+  });
+  assert.equal(cleared.version,3);
+  assert.equal(cleared.routeSequence,null);
+  assert.equal(domain.listServiceSiteVisits()[0].routeSequence,null);
+});
+
+test("SVC-013 branch, staff assignment, production and role guard stop route changes",()=>{
+  reset();const v=schedule();
+  const before=domain.exportServiceSiteVisits();
+  const auditCount=events.length,autoBefore=persist;
+  for(const n of [0,-1,101,1.5,NaN,Infinity,undefined,"3"]){
+    assert.throws(()=>domain.setServiceSiteVisitRouteSequence({
+      visitId:v.id,expectedVersion:v.version,routeSequence:n,
+    }),undefined,String(n));
+  }
+  branch.id="b2";
+  assert.throws(()=>domain.setServiceSiteVisitRouteSequence({
+    visitId:v.id,expectedVersion:v.version,routeSequence:1,
+  }),/active branch/);
+  branch.id="b1";
+  permissions.delete("orders.assign");
+  assert.throws(()=>domain.setServiceSiteVisitRouteSequence({
+    visitId:v.id,expectedVersion:v.version,routeSequence:1,
+  }),/Denied/);
+  permissions.add("orders.assign");isProd=true;
+  assert.throws(()=>domain.setServiceSiteVisitRouteSequence({
+    visitId:v.id,expectedVersion:v.version,routeSequence:1,
+  }),/installed Windows SQLite/);
+  isProd=false;assignment.status="cancelled";
+  assert.throws(()=>domain.setServiceSiteVisitRouteSequence({
+    visitId:v.id,expectedVersion:v.version,routeSequence:1,
+  }),/assignment/);
+  assignment.status="assigned";
+  assert.deepEqual(domain.exportServiceSiteVisits(),before);
+  assert.equal(events.length,auditCount);assert.equal(persist,autoBefore);
+});
+
+test("SVC-013 conflicting route slots fail before snapshot replacement or live mutation",()=>{
+  reset();const visit=schedule();
+  const assigned=domain.setServiceSiteVisitRouteSequence({
+    visitId:visit.id,expectedVersion:visit.version,routeSequence:1,
+  });
+  const other={...assigned,id:"other",orderId:"o2",assignmentId:"a2",
+    createdAt:assigned.createdAt,version:1};
+  const snapshot=domain.exportServiceSiteVisits();
+  assert.throws(()=>domain.hydrateServiceSiteVisits([assigned,other]),
+    /Duplicate technician route stop/);
+  assert.deepEqual(domain.exportServiceSiteVisits(),snapshot);
+  domain.hydrateServiceSiteVisits([assigned,{...other,routeSequence:2}]);
+  assert.throws(()=>domain.setServiceSiteVisitRouteSequence({
+    visitId:assigned.id,expectedVersion:assigned.version,routeSequence:2,
+  }),/already used/);
+  const current=domain.exportServiceSiteVisits();
+  assert.equal(current[0].routeSequence,1);
+  assert.equal(current[1].routeSequence,2);
+  domain.hydrateServiceSiteVisits(snapshot);
+});
+
+test("SVC-013 finished visits cannot be reordered and old visit backups remain readable",()=>{
+  reset();let visit=schedule();visit=domain.markServiceSiteArrival(visit.id,visit.version);
+  for(const check of visit.checklist)visit=domain.setServiceSiteVisitCheck({
+    visitId:visit.id,expectedVersion:visit.version,itemId:check.id,
+    result:"passed",notes:"Confirmed"});
+  visit=domain.recordServiceVisitSignatureDecline({visitId:visit.id,
+    expectedVersion:visit.version,reason:"Signer was away from site"});
+  const complete=domain.completeServiceSiteVisit(visit.id,visit.version);
+  assert.throws(()=>domain.setServiceSiteVisitRouteSequence({
+    visitId:complete.id,expectedVersion:complete.version,routeSequence:1,
+  }),/closed site visit/);
+  const legacy={...complete};delete legacy.routeSequence;
+  domain.hydrateServiceSiteVisits([legacy]);
+  assert.deepEqual(domain.exportServiceSiteVisits(),[legacy]);
+  const wrong={...legacy,routeSequence:0};
+  assert.throws(()=>domain.hydrateServiceSiteVisits([wrong]),/route/i);
+  assert.deepEqual(domain.exportServiceSiteVisits(),[legacy]);
+});

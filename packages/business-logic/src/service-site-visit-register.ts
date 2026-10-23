@@ -27,6 +27,7 @@ import {
   validateHandoverPng, validateSiteVisitHandover, type SiteVisitHandover,
 } from "./service-site-visit-signature";
 import {validateServiceVisitSla,type ServiceVisitSlaTargets} from "./service-visit-sla";
+import {validateServiceRouteSequence} from "./service-visit-route-planner";
 
 export type SiteVisitStatus = "scheduled" | "arrived" | "completed" | "cancelled";
 export type SiteVisitCheckResult = "pending" | "passed" | "failed" | "not_applicable";
@@ -75,12 +76,14 @@ export interface ServiceSiteVisit {
   readonly sla?:ServiceVisitSlaTargets;
   /** Staff-recorded parts; no stock movement, COGS or invoice posting. */
   readonly parts?:ServiceVisitPart[];
+  /** Manual technician/day sequence. Null means unsequenced; no GPS/route optimization. */
+  readonly routeSequence?:number|null;
 }
 const records:ServiceSiteVisit[]=[];
 const CAPACITY=10_000;
 const FIELDS=["id","branchId","orderId","customerId","assignmentId","staffId",
  "scheduledOn","siteAddress","notes","status","arrivedAt","completedAt",
- "cancellationReason","version","createdAt","updatedAt","checklist","evidence","handover","sla","parts"];
+ "cancellationReason","version","createdAt","updatedAt","checklist","evidence","handover","sla","parts","routeSequence"];
 function id(value:unknown,label:string):string{
   if(typeof value!=="string"||value.length<1||value.length>128||
     value.trim()!==value||/[\r\n]/.test(value))throw new Error("Invalid "+label);
@@ -197,19 +200,27 @@ function record(value:unknown):ServiceSiteVisit{
         o.handover,v.arrivedAt,v.updatedAt,v.status)} : withEvidence;
   const withSla=Object.hasOwn(o,"sla")
     ? {...withHandover,sla:validateServiceVisitSla(o.sla,v.createdAt)} : withHandover;
-  return Object.hasOwn(o,"parts")
+  const withParts=Object.hasOwn(o,"parts")
     ? {...withSla,parts:validateServiceVisitParts(o.parts,v.arrivedAt,v.updatedAt,v.status)}
     : withSla;
+  return Object.hasOwn(o,"routeSequence")
+    ? {...withParts,routeSequence:validateServiceRouteSequence(o.routeSequence)}
+    : withParts;
 }
 /** Pure validation precedes snapshot mutation; older backups have no visit key. */
 export function validateServiceSiteVisits(input:unknown):ServiceSiteVisit[]{
   if(input==null)return [];
   if(!Array.isArray(input)||input.length>CAPACITY)throw new Error("Invalid site visit snapshot");
-  const ids=new Set<string>(),scheduled=new Set<string>();
+  const ids=new Set<string>(),scheduled=new Set<string>(),routeSlots=new Set<string>();
   let totalBytes=0;
   return input.map(raw=>{
     const v=record(raw),key=JSON.stringify([v.branchId,v.orderId,v.assignmentId,v.scheduledOn]);
     if(ids.has(v.id)||scheduled.has(key))throw new Error("Duplicate service site visit");
+    if((v.status==="scheduled"||v.status==="arrived")&&v.routeSequence!=null){
+      const routeKey=JSON.stringify([v.branchId,v.staffId,v.scheduledOn,v.routeSequence]);
+      if(routeSlots.has(routeKey))throw new Error("Duplicate technician route stop number");
+      routeSlots.add(routeKey);
+    }
     totalBytes+=serviceVisitEvidenceBytes(v.evidence??[])+handoverImageBytes(v.handover);
     if(totalBytes>SITE_EVIDENCE_MAX_SNAPSHOT_BYTES)
       throw new Error("Total offline site evidence exceeds snapshot capacity");
@@ -280,11 +291,43 @@ export function scheduleServiceSiteVisit(input:{
     assignmentId,staffId:assignment.staffId,scheduledOn,siteAddress,notes,
     status:"scheduled",arrivedAt:null,completedAt:null,cancellationReason:null,
     version:1,createdAt:now,updatedAt:now,checklist:newSiteVisitChecklist(),evidence:[],handover:null,
-    ...(input.sla?{sla:validateServiceVisitSla(input.sla,now)}:{}),parts:[]});
+    ...(input.sla?{sla:validateServiceVisitSla(input.sla,now)}:{}),parts:[],routeSequence:null});
   records.push(v);
   auditAction("service_site_visit.schedule","service_site_visit",v.id,null,auditVisit(v));
   touchPersistence();
   return cloneVisit(v);
+}
+/** Assign/release a route stop number for this technician and planned day.
+ * CAS, branch scoping and linked assignment protect against stale/forged writes.
+ * No stock/accounting posting or third-party traffic calculation.
+ */
+export function setServiceSiteVisitRouteSequence(input:{
+  visitId:string;expectedVersion:number;routeSequence:number|null;
+}):ServiceSiteVisit{
+  assertPermission("orders.assign");writable();
+  const active=branch();
+  const i=records.findIndex(v=>v.id===input.visitId&&v.branchId===active);
+  if(i<0)throw new Error("Visit not found in active branch");
+  const old=records[i];
+  if(old.version!==input.expectedVersion)throw new Error("Site visit changed; refresh first");
+  if(old.status!=="scheduled"&&old.status!=="arrived")
+    throw new Error("Cannot resequence a closed site visit");
+  linkedOrder(old.orderId,active);
+  linkedAssignment(old.assignmentId,old.orderId,active);
+  const number=validateServiceRouteSequence(input.routeSequence);
+  if(number!==null&&records.some(v=>v.id!==old.id&&v.branchId===active&&
+    v.staffId===old.staffId&&v.scheduledOn===old.scheduledOn&&
+    (v.status==="scheduled"||v.status==="arrived")&&v.routeSequence===number))
+    throw new Error("Route stop number already used for this technician/day");
+  if(old.routeSequence===number)return cloneVisit(old);
+  const next=record({...old,routeSequence:number,version:old.version+1,
+    updatedAt:nowISO()});
+  records.splice(i,1,next);
+  auditAction("service_site_visit.route_sequence","service_site_visit",next.id,
+    {version:old.version,routeSequence:old.routeSequence??null},
+    {version:next.version,routeSequence:number});
+  touchPersistence();
+  return cloneVisit(next);
 }
 export function startLegacySiteVisitChecklist(visitId:string,expectedVersion:number):ServiceSiteVisit{
   assertPermission("orders.assign");writable();
