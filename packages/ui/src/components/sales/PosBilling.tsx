@@ -44,7 +44,7 @@ export interface PosBillingProps {
     paymentMethod: PaymentMethod;
     paymentSplits?: PosPaymentSplit[];
     notes?: string;
-  }) => { success: boolean; invoiceNumber?: string; saleId?: string; errors?: string[] };
+  }) => { success: boolean; invoiceNumber?: string; saleId?: string; errors?: string[] } | Promise<{ success: boolean; invoiceNumber?: string; saleId?: string; errors?: string[] }>;
   onComplete?: PosBillingProps["onCompleteSale"];
   onFindByBarcode?: (barcode: string) => Product | undefined;
   onAddCustomer?: () => void;
@@ -108,6 +108,7 @@ export function PosBilling({
   const [message, setMessage] = React.useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [lastSale, setLastSale] = React.useState<{ id: string; invoice: string } | null>(null);
   const checkoutSubmitGate = React.useRef(createCheckoutSubmitGate());
+  const [savingSale, setSavingSale] = React.useState(false);
 
   React.useEffect(() => {
     // Only a committed empty-cart render permits the next business transaction.
@@ -266,7 +267,7 @@ export function PosBilling({
     });
   }
 
-  function complete() {
+  async function complete() {
     const submit = onCompleteSale ?? onComplete;
     if (!submit) {
       setMessage({ type: "err", text: "Sale action is unavailable." });
@@ -292,8 +293,9 @@ export function PosBilling({
 
     // React state resets are batched; a second click can still see the old cart.
     if (!checkoutSubmitGate.current.tryStart()) return;
+    setSavingSale(true);
     try {
-      const result = submit({
+      const result = await submit({
         customerId: customerId || null,
         lines: cart,
         paidAmount,
@@ -312,10 +314,13 @@ export function PosBilling({
     } catch (error) {
       checkoutSubmitGate.current.release();
       setMessage({ type: "err", text: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setSavingSale(false);
     }
   }
 
   function holdCurrentSale() {
+    if (checkoutSubmitGate.current.isClaimed()) return;
     if (!onHoldSale) return;
     if (!cart.length) {
       setMessage({ type: "err", text: "Add at least one product before holding the sale." });
@@ -624,9 +629,9 @@ export function PosBilling({
             )}
 
             <div className="grid grid-cols-3 gap-2">
-              <Button type="button" variant="outline" onClick={resetCheckout}>Clear</Button>
-              <Button type="button" variant="outline" disabled={!cart.length || !onHoldSale} onClick={holdCurrentSale}>Hold Sale</Button>
-              <Button type="button" disabled={cart.length === 0} onClick={complete}>Complete Sale</Button>
+              <Button type="button" variant="outline" disabled={savingSale} onClick={resetCheckout}>Clear</Button>
+              <Button type="button" variant="outline" disabled={savingSale || !cart.length || !onHoldSale} onClick={holdCurrentSale}>Hold Sale</Button>
+              <Button type="button" disabled={savingSale || cart.length === 0} onClick={complete}>{savingSale ? "Saving to disk…" : "Complete Sale"}</Button>
             </div>
           </CardContent>
         </Card>
