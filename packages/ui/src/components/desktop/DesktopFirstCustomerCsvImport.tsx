@@ -41,19 +41,20 @@ export function DesktopFirstCustomerCsvImport({ onSaved }: { onSaved: () => void
   const busyRef = React.useRef(false);
   const [message, setMessage] = React.useState("");
   const [pending, setPending] = React.useState(() => importer.hasPending());
+  const [reviewRequired, setReviewRequired] = React.useState(() => importer.requiresReview());
 
   function clearPreview() {
     setCsv(""); setFileName(""); setRows([]); setRowCount(0); setErrors([]); setMessage("");
   }
 
   function selectKind(value: FirstCustomerCsvKind) {
-    if (busyRef.current || importer.hasPending()) return;
+    if (busyRef.current || importer.hasPending() || importer.requiresReview()) return;
     setKind(value);
     clearPreview();
   }
 
   async function loadFile(file?: File) {
-    if (!file || busyRef.current || importer.hasPending()) return;
+    if (!file || busyRef.current || importer.hasPending() || importer.requiresReview()) return;
     clearPreview();
     if (file.size > limits[kind]) {
       setErrors([kind + " CSV exceeds the allowed file size."]);
@@ -80,7 +81,7 @@ export function DesktopFirstCustomerCsvImport({ onSaved }: { onSaved: () => void
   }
 
   async function confirmImport() {
-    if (busyRef.current || importer.hasPending() || !can(permissions[kind]) || errors.length || !rowCount) return;
+    if (busyRef.current || importer.hasPending() || importer.requiresReview() || !can(permissions[kind]) || errors.length || !rowCount) return;
     busyRef.current = true;
     setBusy(true);
     setMessage("");
@@ -94,6 +95,7 @@ export function DesktopFirstCustomerCsvImport({ onSaved }: { onSaved: () => void
         setMessage(result.error || "CSV import failed.");
       }
       setPending(importer.hasPending());
+      setReviewRequired(importer.requiresReview());
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -112,6 +114,7 @@ export function DesktopFirstCustomerCsvImport({ onSaved }: { onSaved: () => void
         onSaved();
       } else setMessage(result.error || "SQLite save not confirmed.");
       setPending(importer.hasPending());
+      setReviewRequired(importer.requiresReview());
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -130,7 +133,7 @@ export function DesktopFirstCustomerCsvImport({ onSaved }: { onSaved: () => void
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  const blocked = busy || pending || !can(permissions[kind]);
+  const blocked = busy || pending || reviewRequired || !can(permissions[kind]);
   return (
     <section aria-label="First customer CSV import" className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
       <h3 className="font-semibold text-slate-900">Import opening data from CSV</h3>
@@ -138,6 +141,9 @@ export function DesktopFirstCustomerCsvImport({ onSaved }: { onSaved: () => void
         Reuse existing product, customer and supplier master import engines. Preview before creating records.
         Receivables, payables and bank/cash opening balances must be posted separately through the accounting workflow.
       </p>
+      {reviewRequired && <div role="alert" className="mt-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">
+        CSV import outcome is uncertain. New imports are blocked for this session. Review existing master records and reconcile them with a trusted backup before taking further action. Do not retry the same CSV blindly.
+      </div>}
       {pending && <div role="alert" className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
         Imported {importer.pendingKind()} records are already in memory, but SQLite save is unconfirmed.
         Do not close Minarva Biz or import another file. Retry saving the existing records.
