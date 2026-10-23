@@ -235,6 +235,7 @@ async function main() {
     }
     await waitForDesktopWorkspace(async () => JSON.parse(await evalIn(ws, desktopWorkspaceSnapshot)));
     console.log("TRIAL_READY PASS");
+    await assertMain(ws, "FIRST_CUSTOMER_GUIDE", ["First customer setup", "operator confirmations"]);
 
     // Customer create + row drill-down.
     await click(ws, "CUSTOMERS", ["customers"]);

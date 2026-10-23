@@ -10,6 +10,7 @@ import { StaffDetail } from "../staff/StaffDetail";
 import { SupplierList } from "../suppliers/SupplierList";
 import { CustomerMessagesPanel } from "../notifications/CustomerMessagesPanel";
 import { BusinessAgenda } from "../agenda/BusinessAgenda";
+import { DesktopFirstCustomerGuide } from "./DesktopFirstCustomerGuide";
 import { Button } from "../Button";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { Modal } from "../forms/Modal";
@@ -71,6 +72,7 @@ export function OfflineModulesPanel({
     setActionError(null);
   }, [activeNav, customerId, staffId, preferredCustomerId, preferredStaffId]);
 
+  if (activeNav === "dashboard") return <DesktopFirstCustomerGuide onNavigate={onNavigate} />;
   if (!["day-end", "payments", "customer-crm", "returns", "suppliers", "staff-detail", "audit", "messages", "agenda"].includes(activeNav)) return null;
 
   if (activeNav === "messages") return <CustomerMessagesPanel />;
