@@ -2,16 +2,18 @@
 
 import * as React from "react";
 import type { Customer } from "@minarvabiz/types";
-import { buildManualServiceWhatsAppLink } from "@minarvabiz/business-logic";
+import { buildManualServiceWhatsAppLink, parseGoogleReviewUrl } from "@minarvabiz/business-logic";
 import type { ServiceSiteVisit } from "@minarvabiz/business-logic";
 import { availableVisitNoticeKinds, buildVisitNoticeMessage, serviceVisitNoticeLabel } from "./service-site-visit-notices";
 
 /** No background send. Explicit WhatsApp compose links for the same branch/customer only. */
-export function ServiceSiteVisitNoticeLinks({ visit, customer, orderNumber, businessName, canShare }: {
+export function ServiceSiteVisitNoticeLinks({ visit, customer, orderNumber, businessName, technicianName, googleReviewUrl, canShare }: {
   visit: ServiceSiteVisit;
   customer: Customer | undefined;
   orderNumber: string;
   businessName: string;
+  technicianName: string;
+  googleReviewUrl: string;
   canShare: boolean;
 }) {
   if (!canShare || !customer || customer.deletedAt ||
@@ -23,11 +25,14 @@ export function ServiceSiteVisitNoticeLinks({ visit, customer, orderNumber, busi
 
   const links = availableVisitNoticeKinds(visit.status).flatMap(kind => {
     try {
-      const message = buildVisitNoticeMessage(kind, {
-        status: visit.status, orderNumber, businessName,
+      let message = buildVisitNoticeMessage(kind, {
+        status: visit.status, orderNumber, businessName, technicianName,
         scheduledOn: visit.scheduledOn, siteAddress: visit.siteAddress,
         arrivedAt: visit.arrivedAt, completedAt: visit.completedAt,
       });
+      if (kind === "feedback" && googleReviewUrl.trim()) {
+        message += "\nOptional Google review: " + parseGoogleReviewUrl(googleReviewUrl);
+      }
       return [{ kind, url: buildManualServiceWhatsAppLink(phone, message) }];
     } catch {
       return [];
