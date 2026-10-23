@@ -189,11 +189,11 @@ export function App() {
   const actions:QuickAction[]=[];
   if(licenseFeatures.sales) actions.push({id:"sale",label:"New Sale",description:"Create Invoice",icon:<span>🛒</span>,tone:"blue",onClick:()=>{setActiveNav("sales");setSalesTab("pos");}});
   if(licenseFeatures.orders) actions.push({id:"order",label:"New Order",description:"Tailoring Order",icon:<span>👗</span>,tone:"pink",onClick:()=>{setActiveNav("services");setCreateOpen(true);}});
-  async function handleSale(payload:{customerId:string|null;lines:CartLine[];paidAmount:number;paymentMethod:PaymentMethod;paymentSplits?:Array<{method:PaymentMethod;amount:number;reference?:string|null}>}) {
-    const result = await durableSaleCommit.submit(payload);
+  async function handleSale(payload:Parameters<typeof store.createSale>[0]) {
+    const r=await durableSaleCommit.submit(payload);
     refreshAll();
-    setModuleError(result.success ? null : (result.errors || ["Sale could not be saved"]).join("; "));
-    return result;
+    setModuleError(r.success?null:r.errors?.join("; ")||"SQLite save failed");
+    return r;
   }
   function handleCreateOrder(){
     try {
@@ -236,7 +236,7 @@ export function App() {
   const professionalReports=buildProfessionalReportData(reportFrom||undefined,reportTo||undefined);
   return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} desktopModuleContext={{customerId:crmCustomerId,staffId:staffDetailId,returnSaleId,onReturnSaleHandled:()=>setReturnSaleId("")}} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png",navItems:allowedNav}} header={{showSearch:view!=="dashboard",title:view==="services"?"Services & Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:listCustomerCommunicationQueue().filter(row=>row.status==="pending"||row.status==="failed").length,onMessagesClick:()=>navTo("messages"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("agenda"),onSearch:setGlobalSearchQuery}}>
     <DesktopEntitlementMonitor enabled={dbReady} onTrialStateChange={setTrialState} onLicenseStateChange={setCommercialLicense}/>
-    {durableSaleCommit.hasPending() && <DesktopPendingInvoiceSaveBanner onRetry={async()=>{const r=await durableSaleCommit.retryPending();refreshAll();setModuleError(r.success?null:(r.errors||["SQLite save failed"]).join("; "));}}/>}
+    {durableSaleCommit.hasPending() && <DesktopPendingInvoiceSaveBanner onRetry={async()=>{const r=await durableSaleCommit.retryPending();refreshAll();setModuleError(r.success?null:r.errors?.join("; ")||"SQLite save failed");}}/>}
     {view==="dashboard"&&dash&&<div className="space-y-4"><DesktopLicenseExpiryBanner commercialActive={commercialActive} trialState={trialState} daysRemaining={licenseDaysForDashboard} onManage={()=>navTo("license")}/><Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/></div>}
     {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery("")} onNavigate={(_href,id)=>{setGlobalSearchQuery("");navTo(id);}}/>}
     {view==="customers"&&<DesktopCustomerMasterPanel onAdd={openCustomerCreator} onPersist={persistAndRefresh} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}
