@@ -5,10 +5,11 @@ import type {ServiceOrder, StaffAssignment, Customer} from "@minarvabiz/types";
 import {
   can, isProductionMode, listServiceSiteVisits, scheduleServiceSiteVisit,
   markServiceSiteArrival, completeServiceSiteVisit, cancelServiceSiteVisit,
-  type ServiceSiteVisit,
+  type ServiceSiteVisit, getShopProfile,
 } from "@minarvabiz/business-logic";
 import {Button} from "../Button";
 import {ServiceSiteVisitChecklist} from "./ServiceSiteVisitChecklist";
+import {ServiceSiteVisitNoticeLinks} from "./ServiceSiteVisitNoticeLinks";
 import {ServiceSiteVisitEvidencePanel} from "./ServiceSiteVisitEvidencePanel";
 import {ServiceVisitSignaturePanel} from "./ServiceVisitSignaturePanel";
 import {ServiceVisitSlaPanel} from "./ServiceVisitSlaPanel";
@@ -62,6 +63,8 @@ export function ServiceSiteVisitPanel({
   try{visits=listServiceSiteVisits();}
   catch(e){listError=e instanceof Error?e.message:"Cannot load site visits";}
   const ordersById=new Map(orders.map(o=>[o.id,o]));
+  const shopProfile=getShopProfile();
+  const businessName=shopProfile.shopName||"our service team";
   const assignmentNames=new Map(assignments.map(a=>[a.id,a.staffName||a.staffId]));
   const customersById=new Map(customers.filter(c=>!c.deletedAt).map(c=>[c.id,c]));
   function mutate(fn:()=>unknown,success:string){
@@ -79,7 +82,7 @@ export function ServiceSiteVisitPanel({
     <p className="mt-2 text-xs text-slate-600">
       Schedule a visit for an assigned technician, record site arrival and work completion,
       or cancel with a reason. Timestamps are manually confirmed; GPS attendance and
-      customer WhatsApp messages are not automated. Visits are included in offline backup/restore.
+      WhatsApp updates require explicit operator sharing; no automated send is performed. Visits are included in offline backup/restore.
     </p>
     {!canWrite&&<p className="mt-2 text-xs text-amber-700">
       Live Web is read-only until authorized cloud persistence is implemented.
@@ -188,6 +191,10 @@ export function ServiceSiteVisitPanel({
               })()}/>
           </td>
           <td className="p-2">
+            <ServiceSiteVisitNoticeLinks visit={v} customer={customersById.get(v.customerId)}
+              orderNumber={ordersById.get(v.orderId)?.orderNumber??v.orderId}
+              businessName={businessName} technicianName={assignmentNames.get(v.assignmentId)??v.staffId}
+              googleReviewUrl={shopProfile.googleReviewUrl??""} canShare={canWrite} />
             {canWrite&&v.status==="scheduled"&&<>
               <Button size="sm" variant="outline" onClick={()=>mutate(
                 ()=>markServiceSiteArrival(v.id,v.version),"Site arrival recorded")}>Mark arrived</Button>
