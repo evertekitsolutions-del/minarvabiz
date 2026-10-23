@@ -7,7 +7,8 @@ import {
 } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
 import { DesktopFirstCustomerCsvImport } from "./DesktopFirstCustomerCsvImport";
-import { buildOpeningBalanceReviewCsv } from "./opening-balance-review";
+import { buildOpeningBalanceReviewCsv, compareOpeningBalanceReviewCsv,
+  type OpeningBalanceReviewResult } from "./opening-balance-review";
 import type { NavItemId } from "../../lib/nav";
 import {
   firstCustomerEvidence, firstCustomerReviewCounts, firstCustomerRoutes,
@@ -22,6 +23,15 @@ type GuideWindow = Window & {
   minarvaDesktop?: NativeGuideApi;
   __minarvaDesktopFlush?: () => Promise<boolean>;
 };
+
+function currentOpeningBalances() {
+  return {
+    customers: store.listCustomers().map(({ id, name, outstandingBalance }) =>
+      ({ id, name, outstandingBalance })),
+    suppliers: phase5Store.listSuppliers().map(({ id, name, outstandingBalance }) =>
+      ({ id, name, outstandingBalance })),
+  };
+}
 
 function observedLocalData(): FirstCustomerSignals {
   const shop = getShopProfile();
@@ -49,6 +59,10 @@ export function DesktopFirstCustomerGuide({ onNavigate }: {
   const [unsavedReview, setUnsavedReview] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [expanded, setExpanded] = React.useState(false);
+  const [balanceReview, setBalanceReview] = React.useState<OpeningBalanceReviewResult | null>(null);
+  const [balanceReviewName, setBalanceReviewName] = React.useState("");
+  const [balanceReviewError, setBalanceReviewError] = React.useState<string | null>(null);
+  const [balanceReviewBusy, setBalanceReviewBusy] = React.useState(false);
 
   const reloadNative = React.useCallback(async () => {
     const native = (window as GuideWindow).minarvaDesktop;
@@ -118,12 +132,7 @@ export function DesktopFirstCustomerGuide({ onNavigate }: {
       return;
     }
     try {
-      const csv = buildOpeningBalanceReviewCsv({
-        customers: store.listCustomers().map(({ id, name, outstandingBalance }) =>
-          ({ id, name, outstandingBalance })),
-        suppliers: phase5Store.listSuppliers().map(({ id, name, outstandingBalance }) =>
-          ({ id, name, outstandingBalance })),
-      });
+      const csv = buildOpeningBalanceReviewCsv(currentOpeningBalances());
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
       const link = document.createElement("a");
       link.href = url;
@@ -135,6 +144,30 @@ export function DesktopFirstCustomerGuide({ onNavigate }: {
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
+  async function uploadBalanceReview(file?: File) {
+    if (!file || balanceReviewBusy) return;
+    if (!can("settings.manage")) {
+      setBalanceReviewError("Only authorized administrators can review financial balances.");
+      return;
+    }
+    setBalanceReview(null);
+    setBalanceReviewError(null);
+    setBalanceReviewName(file.name);
+    if (file.size > 8 * 1024 * 1024) {
+      setBalanceReviewError("Review worksheet exceeds the 8 MB file limit.");
+      return;
+    }
+    setBalanceReviewBusy(true);
+    try {
+      const review = compareOpeningBalanceReviewCsv(await file.text(), currentOpeningBalances());
+      setBalanceReview(review);
+    } catch (cause) {
+      setBalanceReviewError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBalanceReviewBusy(false);
     }
   }
 
@@ -178,14 +211,47 @@ export function DesktopFirstCustomerGuide({ onNavigate }: {
             </div>
           </div>;
         })}
-        <DesktopFirstCustomerCsvImport onSaved={() => setRevision(n => n + 1)} />
+        <DesktopFirstCustomerCsvImport onSaved={() => { setBalanceReview(null); setRevision(n => n + 1); }} />
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="text-sm font-semibold text-slate-900">Outstanding balance reconciliation</p>
           <p className="mt-1 text-xs text-slate-600">Download a read-only worksheet with current customer receivables and supplier payables. Enter externally verified amounts and review notes in the spreadsheet. This does not import balances, post ledgers or prove opening-balance reconciliation.</p>
-          <div className="mt-2"><Button type="button" variant="outline" size="sm"
-            disabled={!can("settings.manage")} onClick={downloadBalanceReview}>
-            Download outstanding review CSV
-          </Button></div>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <Button type="button" variant="outline" size="sm"
+              disabled={!can("settings.manage")} onClick={downloadBalanceReview}>
+              Download outstanding review CSV
+            </Button>
+            <label className={"cursor-pointer rounded-md border border-slate-300 bg-white px-3 py-2 text-xs " +
+              (balanceReviewBusy || !can("settings.manage") ? "opacity-50" : "")}>
+              {balanceReviewBusy ? "Checking worksheet..." : "Review completed CSV"}
+              <input type="file" accept=".csv,text/csv" className="sr-only"
+                aria-label="Review completed outstanding balance CSV"
+                disabled={balanceReviewBusy || !can("settings.manage")}
+                onChange={e => {
+                  const selected = e.target.files?.[0]; e.target.value = "";
+                  void uploadBalanceReview(selected);
+                }} />
+            </label>
+          </div>
+          {balanceReviewError && <p role="alert" className="mt-2 text-xs text-rose-700">{balanceReviewError}</p>}
+          {balanceReview && <div className="mt-3 space-y-2 text-xs text-slate-700">
+            <p>Reviewed file: {balanceReviewName}. Read-only comparison against currently loaded balances.</p>
+            {balanceReview.ok
+              ? <p role="status">{balanceReview.matched} matched · {balanceReview.discrepancies} discrepancies · {balanceReview.pending} pending out of {balanceReview.total} parties.</p>
+              : <p role="alert" className="text-rose-700">Worksheet rejected. No balances were changed.</p>}
+            {balanceReview.errors.length > 0 && <ul className="list-disc space-y-1 pl-5 text-rose-700">
+              {balanceReview.errors.slice(0, 10).map((problem, index) =>
+                <li key={index}>{problem}</li>)}
+              {balanceReview.errors.length > 10 && <li>Additional errors omitted.</li>}
+            </ul>}
+            {balanceReview.ok && balanceReview.discrepancies > 0 &&
+              <div className="max-h-40 overflow-auto rounded-md border border-amber-200 bg-white p-2">
+                {balanceReview.rows.filter(r => r.state === "discrepancy").slice(0, 20).map(r =>
+                  <p key={r.kind + r.id}>{r.kind}: {r.name} — recorded {r.current.toFixed(2)},
+                    verified {r.verified?.toFixed(2)}, difference {r.difference?.toFixed(2)}</p>)}
+              </div>}
+            <p>Comparison results are not posted to accounting, saved as verified UAT, or persisted as approval.
+              Re-upload after any change to live balances. Resolve discrepancies through authorized accounting workflows.</p>
+          </div>}
         </div>
         <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
           {([
