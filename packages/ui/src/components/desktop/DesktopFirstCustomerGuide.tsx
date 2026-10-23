@@ -7,6 +7,7 @@ import {
 } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
 import { DesktopFirstCustomerCsvImport } from "./DesktopFirstCustomerCsvImport";
+import { buildOpeningBalanceReviewCsv } from "./opening-balance-review";
 import type { NavItemId } from "../../lib/nav";
 import {
   firstCustomerEvidence, firstCustomerReviewCounts, firstCustomerRoutes,
@@ -111,6 +112,32 @@ export function DesktopFirstCustomerGuide({ onNavigate }: {
     } finally { setBusy(false); }
   }
 
+  function downloadBalanceReview() {
+    if (!can("settings.manage")) {
+      setError("Only authorized business administrators can export party balances.");
+      return;
+    }
+    try {
+      const csv = buildOpeningBalanceReviewCsv({
+        customers: store.listCustomers().map(({ id, name, outstandingBalance }) =>
+          ({ id, name, outstandingBalance })),
+        suppliers: phase5Store.listSuppliers().map(({ id, name, outstandingBalance }) =>
+          ({ id, name, outstandingBalance })),
+      });
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "minarvabiz-outstanding-balance-review.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
   function navigate(id: NavItemId, href: string) {
     onNavigate?.(href, id);
   }
@@ -152,6 +179,14 @@ export function DesktopFirstCustomerGuide({ onNavigate }: {
           </div>;
         })}
         <DesktopFirstCustomerCsvImport onSaved={() => setRevision(n => n + 1)} />
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-sm font-semibold text-slate-900">Outstanding balance reconciliation</p>
+          <p className="mt-1 text-xs text-slate-600">Download a read-only worksheet with current customer receivables and supplier payables. Enter externally verified amounts and review notes in the spreadsheet. This does not import balances, post ledgers or prove opening-balance reconciliation.</p>
+          <div className="mt-2"><Button type="button" variant="outline" size="sm"
+            disabled={!can("settings.manage")} onClick={downloadBalanceReview}>
+            Download outstanding review CSV
+          </Button></div>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
           {([
             ["accounting", "Opening bank & accounts"], ["sales", "Create first invoice"],
