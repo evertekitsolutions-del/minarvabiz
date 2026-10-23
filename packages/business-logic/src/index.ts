@@ -280,3 +280,6 @@ export * from "./service-visit-recovery";
 
 // SVC-FB03 branch-scoped staff-recorded feedback insights; report-only.
 export * from "./service-feedback-insights";
+
+// Portable, explicit service itinerary calendar downloads.
+export * from "./service-visit-calendar";

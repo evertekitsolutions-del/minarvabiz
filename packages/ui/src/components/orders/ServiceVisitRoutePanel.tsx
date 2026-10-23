@@ -2,6 +2,7 @@
 import * as React from "react";
 import {
   buildServiceVisitRouteDays,exportServiceRoutePlanCsv,
+  exportServiceVisitCalendar,listServiceSiteVisits,
   googleMapsServiceStopLink,googleMapsServiceRouteLink,
   setServiceSiteVisitRouteSequence,type ServiceSiteVisit,
   type ServiceRouteVisit,
@@ -44,10 +45,23 @@ export function ServiceVisitRoutePanel({visits,canWrite,mutate}:{
   mutate:(fn:()=>unknown,message:string)=>void;
 }){
   const [dateFilter,setDateFilter]=React.useState("");
+  const [exportError,setExportError]=React.useState<string|null>(null);
   let days:ReturnType<typeof buildServiceVisitRouteDays>=[];
   let error:string|null=null;
   try{days=buildServiceVisitRouteDays(visits,dateFilter||undefined);}
   catch(e){error=e instanceof Error?e.message:"Cannot build route list";}
+  function exportCalendar(day:ReturnType<typeof buildServiceVisitRouteDays>[number]){
+    setExportError(null);
+    try{
+      // Refresh permissions and active-branch scope at the moment of export.
+      const calendar=exportServiceVisitCalendar(listServiceSiteVisits(),day,new Date().toISOString());
+      const url=URL.createObjectURL(new Blob([calendar],{type:"text/calendar;charset=utf-8"}));
+      const a=document.createElement("a");
+      a.href=url;a.download="technician-visits-"+day.scheduledOn+".ics";a.rel="noopener";
+      try{document.body.appendChild(a);a.click();}
+      finally{a.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000);}
+    }catch(e){setExportError(e instanceof Error?e.message:"Calendar export failed");}
+  }
   function exportCsv(){
     const csv=exportServiceRoutePlanCsv(days);
     const url=URL.createObjectURL(new Blob(["\uFEFF",csv],
@@ -81,6 +95,7 @@ export function ServiceVisitRoutePanel({visits,canWrite,mutate}:{
       <Button size="sm" variant="outline" disabled={!days.length}
         onClick={exportCsv}>Export route worksheet CSV</Button>
     </div>
+    {exportError&&<p role="alert" className="text-xs text-rose-700">{exportError}</p>}
     {error&&<p role="alert" className="text-xs text-rose-700">{error}</p>}
     {days.map(day=><div key={day.key} className="mt-2 rounded border border-slate-200 bg-white p-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -96,6 +111,13 @@ export function ServiceVisitRoutePanel({visits,canWrite,mutate}:{
         This route contains more than eight sites. The Maps shortcut includes
         only the first eight. Use individual maps or the full CSV for remaining sites.
       </p>}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="outline" onClick={()=>exportCalendar(day)}>
+          Download calendar (.ics)
+        </Button>
+        <span className="text-xs text-slate-500">All-day visits for this technician and day.
+          Import into your calendar; later changes need a new export. Includes site addresses.</span>
+      </div>
       {day.unsequenced>0&&<p className="text-xs text-slate-500">
         {day.unsequenced} unsequenced site(s) appear after numbered stops.
       </p>}

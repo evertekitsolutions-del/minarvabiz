@@ -109,3 +109,18 @@ Local copy: `packages/business-logic/src/vendor/open-mercato/gtin.ts` (only the 
 Open Mercato upstream MIT Core: https://github.com/open-mercato/open-mercato/blob/eb3193df03b9ce0b196be417fe265c1dc47c0868/packages/core/src/modules/wms/lib/expiry.ts
 
 Copied verbatim with an attribution header into `packages/business-logic/src/vendor/open-mercato/expiry.ts`. Copyright (c) 2025-2026 Open Mercato contributors. Full MIT copyright notice, permission grant and disclaimer are reproduced above in the Open Mercato license text section of this file. The proprietary Minarva offline batch-expiry register uses the upstream `startOfUtcDay`, `addUtcDays`, and `EXPIRING_SOON_DAYS` helpers. It does not import upstream cloud framework, Enterprise code, or bundled database/stock modules.
+
+## ics text formatting (vendored)
+
+- Upstream: https://github.com/adamgibbons/ics
+- Commit: `be80affe735f1c97d2c5e2801a9a4f826ff4b631` (package version 3.12.1).
+- Reused file: `src/utils/format-text.js`, adapted to TypeScript and lone-CR normalization in `packages/business-logic/src/vendor/ics/format-text.ts`.
+- License: ISC; full copyright and permission notice retained in adjacent `LICENSE`.
+- Only this dependency-free text formatter is copied. Calendar selection, all-day serialization and UTF-8 byte folding are Minarva code. No upstream dependencies, network service, calendar account or recurring fee.
+
+ISC License (ISC)
+Copyright (c) 2016, Adam Gibbons <adam.d.gibbons@gmail.com>
+
+Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
