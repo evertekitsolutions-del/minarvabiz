@@ -319,7 +319,7 @@ export function OrderList({
 
       <DataTable columns={columns} rows={visibleOrders} onRowClick={onSelect} emptyMessage={overdueOnly ? "No overdue orders match the selected filters" : assignedStaffFilter ? "No orders match the assigned staff filter" : "No orders match the selected filters"} />
       <ServiceWarrantyPanel orders={orders} />
-      <ServiceSiteVisitPanel orders={orders} assignments={staffAssignments} />
+      <ServiceSiteVisitPanel orders={orders} assignments={staffAssignments} customers={customers} />
     </div>
   );
 }
