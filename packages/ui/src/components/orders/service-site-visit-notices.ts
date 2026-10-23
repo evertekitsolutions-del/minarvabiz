@@ -1,9 +1,10 @@
 /** SVC: accurate, opt-in, manual customer visit updates; no automatic API sends. */
-export type VisitNoticeKind = "scheduled" | "arrived" | "completed" | "feedback" | "cancelled";
+export type VisitNoticeKind = "assigned" | "scheduled" | "arrived" | "completed" | "feedback" | "cancelled";
 export type VisitNoticeStatus = "scheduled" | "arrived" | "completed" | "cancelled";
 export interface VisitNoticeContext {
   status: VisitNoticeStatus;
   orderNumber: string;
+  technicianName: string;
   businessName: string;
   scheduledOn: string;
   siteAddress: string;
@@ -12,6 +13,7 @@ export interface VisitNoticeContext {
 }
 
 const noticeLabels: Record<VisitNoticeKind, string> = {
+  assigned: "Technician assigned",
   scheduled: "Visit scheduled",
   arrived: "Technician arrived",
   completed: "Visit completed",
@@ -22,7 +24,7 @@ export const serviceVisitNoticeLabel = (kind: VisitNoticeKind) => noticeLabels[k
 
 export function availableVisitNoticeKinds(status: VisitNoticeStatus): readonly VisitNoticeKind[] {
   switch (status) {
-    case "scheduled": return ["scheduled"];
+    case "scheduled": return ["assigned", "scheduled"];
     case "arrived": return ["arrived"];
     case "completed": return ["completed", "feedback"];
     case "cancelled": return ["cancelled"];
@@ -56,6 +58,11 @@ export function buildVisitNoticeMessage(kind: VisitNoticeKind, info: VisitNotice
   const prefix = "Service order " + order + " — ";
   let message: string;
   switch (kind) {
+    case "assigned": {
+      const technician = safeDisplay(info.technicianName, "technician name", 160);
+      message = prefix + technician + " has been assigned to your visit scheduled for " + day + ".";
+      break;
+    }
     case "scheduled":
       message = prefix + "a technician visit is scheduled for " + day + " at " + address + ".";
       break;
