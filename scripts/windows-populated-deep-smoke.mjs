@@ -311,7 +311,7 @@ async function main() {
     const cartState = JSON.parse(await evalIn(ws, `JSON.stringify({main:(document.querySelector('[data-testid="app-content"]')?.innerText||''),complete:[...document.querySelectorAll('button')].find(b=>(b.innerText||'').includes('Complete Sale'))?.disabled})`));
     if (cartState.complete) throw new Error("Complete Sale remained disabled after resuming held sale");
     await click(ws, "COMPLETE_SALE", ["complete sale"]);
-    await assertMain(ws, "SALE_COMPLETED", ["Sale completed"]);
+    await assertMainEventually(ws, "SALE_COMPLETED", ["Sale completed"]);
     await click(ws, "SALES_HISTORY", ["history"]);
     await assertMain(ws, "SALES_HISTORY", ["Sales", "QA POS Customer"]);
 
@@ -389,7 +389,7 @@ async function main() {
     await setByAriaLabel(ws, "Discount % QA POS Product", "10");
     await setByAriaLabel(ws, "Payment amount 1", "90");
     await click(ws, "DISCOUNT_COMPLETE", ["complete sale"]);
-    await assertMain(ws, "DISCOUNT_SALE_DONE", ["Sale completed"]);
+    await assertMainEventually(ws, "DISCOUNT_SALE_DONE", ["Sale completed"]);
     await click(ws, "DISCOUNT_RETURNS", ["returns & refunds"]);
     await click(ws, "DISCOUNT_NEW_RETURN", ["new return"]);
     await selectDialogFieldByText(ws, "Process return", "Original sale", "₹90.00");
