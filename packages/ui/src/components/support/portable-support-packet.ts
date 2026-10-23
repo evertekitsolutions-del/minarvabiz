@@ -23,6 +23,16 @@ export interface PortableSupportRequest {
   };
 }
 
+/** Preserve an unsent technical draft when the AI server is offline. */
+export function portableTechnicalTranscript(
+  messages: readonly { role: "user" | "assistant"; content: string }[],
+  draft: string,
+): Array<{ role: "user" | "assistant"; content: string }> {
+  const transcript = messages.map(({ role, content }) => ({ role, content }));
+  if (draft.trim()) transcript.push({ role: "user", content: draft.trim() });
+  return transcript;
+}
+
 export const SUPPORT_PACKET_FORMAT = "minarvabiz.support.v1";
 export const SUPPORT_PACKET_MAX_BYTES = 3_000_000;
 
