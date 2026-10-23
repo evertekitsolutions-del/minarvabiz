@@ -591,6 +591,8 @@ jobs:
         run: node --test packages/ui/src/components/support/__tests__/portable-support-packet.test.mjs apps/desktop/electron/__tests__/support-packet.test.mjs
       - name: Verify customer collections cannot duplicate payment and accounting postings after failed native write
         run: node --test packages/ui/src/components/payments/__tests__/durable-collection.test.mjs
+      - name: Verify Windows supplier opening/payment amount validity and exactly-once SQLite settlement
+        run: node --test packages/ui/src/components/desktop/__tests__/supplier-payment-durability.test.mjs
       - name: Verify durable Windows POS sale and recovery on native-write failures
         run: node --test apps/desktop/src/lib/__tests__/durable-sale-commit.test.mjs
       - name: Verify day-end close and reopen wait for SQLite persistence, without duplicate mutations
