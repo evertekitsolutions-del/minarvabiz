@@ -588,6 +588,8 @@ jobs:
         run: node --test packages/ui/src/components/desktop/__tests__/opening-balance-review.test.mjs
       - name: Verify reviewed balance worksheet comparison, stale-data and duplicate rejection
         run: node --test packages/ui/src/components/desktop/__tests__/opening-balance-compare.test.mjs
+      - name: Verify accountant opening balance exception CSV report and reversible party identity
+        run: node --test packages/ui/src/components/desktop/__tests__/opening-balance-exception-report.test.mjs
       - run: pnpm --filter @minarvabiz/desktop typecheck
       - name: Verify offline support packet serialization and native export policy
         run: node --test packages/ui/src/components/support/__tests__/portable-support-packet.test.mjs apps/desktop/electron/__tests__/support-packet.test.mjs

@@ -8,6 +8,7 @@ import {
 import { Button } from "../Button";
 import { DesktopFirstCustomerCsvImport } from "./DesktopFirstCustomerCsvImport";
 import { buildOpeningBalanceReviewCsv, compareOpeningBalanceReviewCsv,
+  buildOpeningBalanceExceptionReportCsv,
   type OpeningBalanceReviewResult } from "./opening-balance-review";
 import type { NavItemId } from "../../lib/nav";
 import {
@@ -61,6 +62,7 @@ export function DesktopFirstCustomerGuide({ onNavigate }: {
   const [expanded, setExpanded] = React.useState(false);
   const [balanceReview, setBalanceReview] = React.useState<OpeningBalanceReviewResult | null>(null);
   const [balanceReviewName, setBalanceReviewName] = React.useState("");
+  const [balanceReviewCsv, setBalanceReviewCsv] = React.useState<string | null>(null);
   const [balanceReviewError, setBalanceReviewError] = React.useState<string | null>(null);
   const [balanceReviewBusy, setBalanceReviewBusy] = React.useState(false);
 
@@ -154,6 +156,7 @@ export function DesktopFirstCustomerGuide({ onNavigate }: {
       return;
     }
     setBalanceReview(null);
+    setBalanceReviewCsv(null);
     setBalanceReviewError(null);
     setBalanceReviewName(file.name);
     if (file.size > 8 * 1024 * 1024) {
@@ -162,12 +165,47 @@ export function DesktopFirstCustomerGuide({ onNavigate }: {
     }
     setBalanceReviewBusy(true);
     try {
-      const review = compareOpeningBalanceReviewCsv(await file.text(), currentOpeningBalances());
+      const worksheet = await file.text();
+      const review = compareOpeningBalanceReviewCsv(worksheet, currentOpeningBalances());
       setBalanceReview(review);
+      if (review.ok) setBalanceReviewCsv(worksheet);
     } catch (cause) {
       setBalanceReviewError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setBalanceReviewBusy(false);
+    }
+  }
+
+  function downloadBalanceExceptionReport() {
+    if (!can("settings.manage")) {
+      setBalanceReviewError("Only authorized administrators can export reviewed financial balances.");
+      return;
+    }
+    if (!balanceReviewCsv || balanceReviewBusy) {
+      setBalanceReviewError("Upload a valid review worksheet before downloading the accountant report.");
+      return;
+    }
+    try {
+      // The source data may have changed after upload. Refuse a stale handoff.
+      const fresh = compareOpeningBalanceReviewCsv(balanceReviewCsv, currentOpeningBalances());
+      setBalanceReview(fresh);
+      if (!fresh.ok) {
+        setBalanceReviewCsv(null);
+        setBalanceReviewError("Current balances changed since the worksheet was reviewed. Download a new worksheet and reconcile it again.");
+        return;
+      }
+      const csv = buildOpeningBalanceExceptionReportCsv(fresh);
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "minarvabiz-opening-balance-exception-report.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setBalanceReviewError(null);
+    } catch (cause) {
+      setBalanceReviewError(cause instanceof Error ? cause.message : String(cause));
     }
   }
 
@@ -211,7 +249,7 @@ export function DesktopFirstCustomerGuide({ onNavigate }: {
             </div>
           </div>;
         })}
-        <DesktopFirstCustomerCsvImport onSaved={() => { setBalanceReview(null); setRevision(n => n + 1); }} />
+        <DesktopFirstCustomerCsvImport onSaved={() => { setBalanceReview(null); setBalanceReviewCsv(null); setRevision(n => n + 1); }} />
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="text-sm font-semibold text-slate-900">Outstanding balance reconciliation</p>
           <p className="mt-1 text-xs text-slate-600">Download a read-only worksheet with current customer receivables and supplier payables. Enter externally verified amounts and review notes in the spreadsheet. This does not import balances, post ledgers or prove opening-balance reconciliation.</p>
@@ -235,6 +273,11 @@ export function DesktopFirstCustomerGuide({ onNavigate }: {
           {balanceReviewError && <p role="alert" className="mt-2 text-xs text-rose-700">{balanceReviewError}</p>}
           {balanceReview && <div className="mt-3 space-y-2 text-xs text-slate-700">
             <p>Reviewed file: {balanceReviewName}. Read-only comparison against currently loaded balances.</p>
+            {balanceReview.ok && <Button type="button" variant="outline" size="sm"
+              disabled={!balanceReviewCsv || balanceReviewBusy || !can("settings.manage")}
+              onClick={downloadBalanceExceptionReport}>
+              Download accountant reconciliation report
+            </Button>}
             {balanceReview.ok
               ? <p role="status">{balanceReview.matched} matched · {balanceReview.discrepancies} discrepancies · {balanceReview.pending} pending out of {balanceReview.total} parties.</p>
               : <p role="alert" className="text-rose-700">Worksheet rejected. No balances were changed.</p>}
@@ -249,7 +292,7 @@ export function DesktopFirstCustomerGuide({ onNavigate }: {
                   <p key={r.kind + r.id}>{r.kind}: {r.name} — recorded {r.current.toFixed(2)},
                     verified {r.verified?.toFixed(2)}, difference {r.difference?.toFixed(2)}</p>)}
               </div>}
-            <p>Comparison results are not posted to accounting, saved as verified UAT, or persisted as approval.
+            <p>Download reports are recalculated against current balances at export time. They do not constitute accountant approval. Comparison results are not posted to accounting, saved as verified UAT, or persisted as approval.
               Re-upload after any change to live balances. Resolve discrepancies through authorized accounting workflows.</p>
           </div>}
         </div>
