@@ -119,7 +119,7 @@ export default function CustomersPage() {
     const parsed = customerSchema.safeParse({
       name: form.name, phone: form.phone || null, email: form.email || null, address: form.address || null, notes: form.notes || null,
     });
-    if (!parsed.success) { setError(parsed.error.errors[0]?.message ?? "Invalid input"); return; }
+    if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Invalid input"); return; }
     try {
       if (editTarget) {
         if (!store.updateCustomer(editTarget.id, parsed.data)) throw new Error("Customer not found");
