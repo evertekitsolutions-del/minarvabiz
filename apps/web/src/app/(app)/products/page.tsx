@@ -98,7 +98,7 @@ export default function ProductsPage() {
         minimumStock: parseNonNegativeStockQuantity(form.minimumStock),
         isActive: true,
       });
-      if (!parsed.success) { setError(parsed.error.errors[0]?.message ?? "Invalid input"); return; }
+      if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Invalid input"); return; }
       if (editingId) {
         const patch: Partial<Product> = { ...parsed.data };
         delete patch.stockQuantity;

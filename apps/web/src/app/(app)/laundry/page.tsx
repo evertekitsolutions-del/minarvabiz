@@ -121,7 +121,7 @@ export default function LaundryPage() {
       address: customerForm.address || null,
       notes: customerForm.notes || null,
     });
-    if (!parsed.success) { setCustomerError(parsed.error.errors[0]?.message ?? "Invalid input"); return; }
+    if (!parsed.success) { setCustomerError(parsed.error.issues[0]?.message ?? "Invalid input"); return; }
     try {
       store.createCustomer(parsed.data);
       setCustomerOpen(false);

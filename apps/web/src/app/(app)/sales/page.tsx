@@ -110,7 +110,7 @@ export default function SalesPage() {
       notes: customerForm.notes || null,
     });
     if (!parsed.success) {
-      setCustomerError(parsed.error.errors[0]?.message ?? "Invalid input");
+      setCustomerError(parsed.error.issues[0]?.message ?? "Invalid input");
       return;
     }
     try {
