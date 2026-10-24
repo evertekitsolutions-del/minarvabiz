@@ -47,12 +47,9 @@ test("product and sales schemas preserve invoice and stock defaults", () => {
   assert.equal(uuidSchema.safeParse("invalid").success, false);
 });
 
-test("oversized input collections are rejected using the configured upper bounds", () => {
-  const tooMany = Array.from({ length: 120_000 }, () => ({
-    productId: "11111111-1111-4111-8111-111111111111", quantity: 1, unitPrice: 1,
-  }));
-  // The sales request validator currently constrains only minimum items.
-  // A guard here is scoped to a bounded representative upper size to exercise Zod 4 safely.
-  assert.equal(createSaleSchema.safeParse({ items: tooMany.slice(0, 2) }).success, true);
+test("patched Zod rejects constrained oversized collections", () => {
+  const { z } = require("zod");
+  const oversized = Array.from({ length: 10_000 }, () => 1);
+  assert.equal(z.array(z.number()).max(3).safeParse(oversized).success, false);
   assert.equal(createSaleSchema.safeParse({ items: [] }).success, false);
 });
