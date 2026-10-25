@@ -89,7 +89,7 @@ export default function ServicesOrdersPage() {
       notes: customerForm.notes || null,
     });
     if (!parsed.success) {
-      setCustomerAddError(parsed.error.errors[0]?.message ?? "Invalid customer details");
+      setCustomerAddError(parsed.error.issues[0]?.message ?? "Invalid customer details");
       return;
     }
     try {

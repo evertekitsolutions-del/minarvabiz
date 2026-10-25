@@ -6,6 +6,6 @@
   "types": "./src/index.ts",
   "exports": { ".": "./src/index.ts" },
   "scripts": { "typecheck": "tsc --noEmit" },
-  "dependencies": { "@minarvabiz/types": "workspace:*", "zod": "^3.24.1" },
+  "dependencies": { "@minarvabiz/types": "workspace:*", "zod": "^4.6.7" },
   "devDependencies": { "typescript": "^5.7.2" }
 }
