@@ -585,6 +585,8 @@ jobs:
         run: node --test packages/ui/src/components/desktop/__tests__/first-customer-guide-model.test.mjs
       - name: Verify service site visit status and feedback WhatsApp notice eligibility
         run: node --test packages/ui/src/components/orders/__tests__/service-site-visit-notices.test.mjs
+      - name: Verify active-branch service visit CSV report and spreadsheet-safe export
+        run: node --test packages/ui/src/components/orders/__tests__/service-visit-export.test.mjs
       - name: Verify first-customer bulk CSV import native persistence and duplicate prevention
         run: node --test packages/ui/src/components/desktop/__tests__/durable-csv-import.test.mjs
       - name: Verify first-customer outstanding balance review worksheet export
