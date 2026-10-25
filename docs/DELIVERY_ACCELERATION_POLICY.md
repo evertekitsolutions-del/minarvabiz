@@ -10,7 +10,9 @@ This plan keeps the **entire** agreed scope. It changes sequencing and evidence,
 
 `docs/PRODUCT_DELIVERY_BACKLOG.json` is the top-level delivery scoreboard covering all phases A–F. It references all 18 business/control registry groups (329 capability IDs) and the entire AI registry (111 distinct AI IDs), plus industry packs and infrastructure outcomes. These are **requirements in scope, NOT delivery claims**.
 
-The first three prioritized outcomes are:
+The **former** first three priorities below are historical and are overridden for *development sequencing* by `docs/OWNER_DIRECTIVE_2026-10-20.md` (Q1–Q8, then Phase H). They remain in scope:
+
+The former first three prioritized outcomes were:
 1. `A-FIRST-CUSTOMER`: verifiable first-customer sales/stock/printing/backup/onboarding/update/support flow with released Windows app and Online/Offline/Hybrid UAT;
 2. `A-SYNC-V2`: reliable branch/warehouse ownership, offline-first outbox, replay/conflict resolution and true multi-device recovery;
 3. `A-LICENSE-CUTOVER`: commercial device entitlement and provider-neutral License Admin, without mandatory Render.
@@ -48,9 +50,9 @@ The gate now reports `DISABLED_NO_CODING`, `BLOCKED_NO_CODING` or `REVIEW_PATCH_
 
 The optional GitHub Copilot CLI source_patch step stays **disabled** unless the owner first verifies entitlement, possible charges and explicit opt-in. Turning it on by guessing billing status is unacceptable. There is currently **no verified always-on autonomous coder**; do not claim otherwise.
 
-## Immediate next work
+## Immediate next work — superseded by owner feature-first directive (2026-10-20)
 
-1. Perform a real installed-Windows/online first-customer flow and record precise blockers (not assumptions). Create the smallest actual blocking user-facing acceptance PR.
-2. Parallel audit `A-SYNC-V2` incomplete authorized multi-branch reconciliation and migrations, preserving customer data and existing Sync v1.
-3. Deliver revenue-related end-to-end features and controlled release UAT before discretionary performance/security polishing.
-4. Update capability-level evidence and report actual progress, never fabricate a 1% increment.
+1. Record `docs/OWNER_DIRECTIVE_2026-10-20.md`, update repo agent/backlog guidance and tighten the existing CI license gate; merge only after the required checks pass.
+2. Start **Q1 A-CORE-PARITY**: verify live-main SAL-003 sales-order completeness, then implement the missing/partial coherent sales-order-to-invoice vertical slice (or record implementation evidence and move to SAL-007 if it already exists). Continue billing, finance, inventory and procurement Q1 IDs in owner queue order. Research Open Mercato at a pinned MIT commit before adapting any pure code.
+3. Then Q2 global core/country tax packs; Q3 control plane; Q4 AI; Q5 growth; Q6 commerce/BI; Q7 verticals; Q8 integrations and owned infrastructure. Full ID queue and acceptance obligations: `docs/OWNER_DIRECTIVE_2026-10-20.md`.
+4. **Phase H deferred**: additional `A-FIRST-CUSTOMER` and `A-SYNC-V2` optional hardening, cent-guards, backup/restore/release-gate polish, unrelated performance/security polishing and repeated audits. Add verified non-blocking findings to `docs/HARDENING_DEFERRED.md`. Preserve merged protections and only interrupt for the owner's three documented blocking exceptions. Never count a source PR as accepted or invent a percentage.
