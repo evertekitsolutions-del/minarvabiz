@@ -10,6 +10,7 @@ import {
 import {Button} from "../Button";
 import {ServiceSiteVisitChecklist} from "./ServiceSiteVisitChecklist";
 import {ServiceSiteVisitNoticeLinks} from "./ServiceSiteVisitNoticeLinks";
+import {buildBranchServiceVisitReportCsv} from "./service-visit-export";
 import {ServiceSiteVisitEvidencePanel} from "./ServiceSiteVisitEvidencePanel";
 import {ServiceVisitSignaturePanel} from "./ServiceVisitSignaturePanel";
 import {ServiceVisitSlaPanel} from "./ServiceVisitSlaPanel";
@@ -67,6 +68,41 @@ export function ServiceSiteVisitPanel({
   const businessName=shopProfile.shopName||"our service team";
   const assignmentNames=new Map(assignments.map(a=>[a.id,a.staffName||a.staffId]));
   const customersById=new Map(customers.filter(c=>!c.deletedAt).map(c=>[c.id,c]));
+  function exportBranchVisits(){
+    if(!can("reports.view")) {
+      setError("Only authorized report viewers can export field visits.");
+      return;
+    }
+    setError(null);
+    try {
+      // Refresh the authorized active-branch snapshot at click time; never
+      // export a cached prior branch's records after permission/scope changes.
+      const current=listServiceSiteVisits();
+      const exportRows=current.map(v=>{
+        const order=ordersById.get(v.orderId);
+        const technician=assignments.find(a=>a.id===v.assignmentId&&a.orderId===v.orderId);
+        return {
+          orderNumber:order?.branchId===v.branchId?order.orderNumber:v.orderId,
+          technician:technician?(technician.staffName||technician.staffId):v.staffId,
+          plannedDate:v.scheduledOn,siteAddress:v.siteAddress,status:v.status,
+          arrivedAt:v.arrivedAt,completedAt:v.completedAt,
+          cancellationReason:v.cancellationReason,
+        };
+      });
+      const csv=buildBranchServiceVisitReportCsv(exportRows);
+      const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+      const anchor=document.createElement("a");
+      anchor.href=url;
+      anchor.download="minarvabiz-branch-field-visits.csv";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+      setMessage("Current branch field visit report downloaded. No service records were changed.");
+    }catch(e){
+      setError(e instanceof Error?e.message:"Could not export field visit report");
+    }
+  }
   function mutate(fn:()=>unknown,success:string){
     setError(null);setMessage(null);
     try{
@@ -84,6 +120,15 @@ export function ServiceSiteVisitPanel({
       or cancel with a reason. Timestamps are manually confirmed; GPS attendance and
       WhatsApp updates require explicit operator sharing; no automated send is performed. Visits are included in offline backup/restore.
     </p>
+    <div className="mt-3">
+      <Button size="sm" variant="outline" onClick={exportBranchVisits}>
+        Download active-branch field visit report CSV
+      </Button>
+      <p className="mt-1 text-[11px] text-slate-500">
+        Operator-initiated read-only export. Contains technician and site details; share only with authorized staff.
+        No customer phone numbers or automated messages are included.
+      </p>
+    </div>
     {!canWrite&&<p className="mt-2 text-xs text-amber-700">
       Live Web is read-only until authorized cloud persistence is implemented.
     </p>}
