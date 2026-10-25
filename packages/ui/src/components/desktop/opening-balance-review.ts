@@ -27,11 +27,18 @@ function money(value: number, description: string): string {
   return (cents / 100).toFixed(2);
 }
 
+/**
+ * Spreadsheet-safe and reversible for formula-like IDs, including original
+ * leading apostrophes. The reviewer must preserve the exported ID verbatim.
+ */
+function spreadsheetText(value: string): string {
+  const untrustedPrefix = /^[\s\uFEFF\u200B-\u200F\u202A-\u202E\u2066-\u2069]*[=+\-@]/u;
+  return untrustedPrefix.test(value) || value.startsWith("'") ||
+    /^[\t\r\n]/u.test(value) ? "'" + value : value;
+}
+
 function csvCell(value: string): string {
-  // An imported party name/ID might be interpreted as a spreadsheet formula.
-  // Prefixing an apostrophe preserves its visible text without evaluation.
-  const safe = /^[\s\uFEFF]*[=+\-@]/u.test(value) || /^[\t\r\n]/u.test(value)
-    ? "'" + value : value;
+  const safe = spreadsheetText(value);
   return /[",\r\n]/.test(safe) ? '"' + safe.replace(/"/g, '""') + '"' : safe;
 }
 
@@ -64,6 +71,7 @@ export interface OpeningBalanceReviewRow {
   verified: number | null;
   difference: number | null;
   state: OpeningBalanceReviewState;
+  notes: string;
 }
 export interface OpeningBalanceReviewResult {
   ok: boolean;
@@ -178,7 +186,7 @@ export function compareOpeningBalanceReviewCsv(
     ["supplier", input.suppliers],
   ] as const) {
     for (const party of parties) {
-      const key = reviewKey(kind, party.id);
+      const key = reviewKey(kind, spreadsheetText(party.id));
       if (!party.id.trim() || expected.has(key)) {
         errors.push("Current party IDs are missing or duplicated; reconcile the local catalog.");
         return result();
@@ -193,7 +201,8 @@ export function compareOpeningBalanceReviewCsv(
       if (errors.length < 30) errors.push("CSV row " + (i + 1) + " must contain seven columns.");
       continue;
     }
-    const [kind, id, , snapshot, verified, status] = cells;
+    const [kind, exportedId, , snapshot, verified, status, notes] = cells;
+    const id = exportedId;
     const key = reviewKey(kind, id);
     const party = expected.get(key);
     if (!party || (kind !== "customer" && kind !== "supplier")) {
@@ -212,16 +221,16 @@ export function compareOpeningBalanceReviewCsv(
       if (!["PENDING", "VERIFIED"].includes(state)) throw new Error("Review status must be PENDING or VERIFIED.");
       if (state === "PENDING") {
         if (verified.trim()) throw new Error("Set review status to VERIFIED before entering a verified amount.");
-        rows.push({ kind, id, name: party.name, current: current / 100, verified: null, difference: null, state: "pending" });
+        rows.push({ kind, id: party.id, name: party.name, current: current / 100, verified: null, difference: null, state: "pending", notes });
         continue;
       }
       const confirmed = csvMoneyToMinor(verified.trim());
       const delta = confirmed - current;
       if (!Number.isSafeInteger(delta)) throw new Error("Difference exceeds accounting limits.");
       rows.push({
-        kind, id, name: party.name, current: current / 100,
+        kind, id: party.id, name: party.name, current: current / 100,
         verified: confirmed / 100, difference: delta / 100,
-        state: delta === 0 ? "matched" : "discrepancy",
+        state: delta === 0 ? "matched" : "discrepancy", notes,
       });
     } catch (error) {
       if (errors.length < 30) errors.push("CSV row " + (i + 1) + ": " +
@@ -235,4 +244,49 @@ export function compareOpeningBalanceReviewCsv(
     }
   }
   return result();
+}
+
+
+const REPORT_HEADER = [
+  "party_type", "party_id", "party_name", "current_outstanding",
+  "verified_outstanding", "difference", "review_status", "review_notes",
+] as const;
+
+/**
+ * Accountant handoff report for reviewed records. It is a calculation summary,
+ * NOT an accounting posting, an approved ledger, or an independently verified UAT.
+ * The caller MUST re-run comparison with current local balances at export time.
+ */
+export function buildOpeningBalanceExceptionReportCsv(review: OpeningBalanceReviewResult): string {
+  if (!review.ok || review.errors.length || review.total !== review.rows.length ||
+      review.rows.length > 50_000 || review.matched + review.discrepancies + review.pending !== review.total) {
+    throw new Error("Unverified reconciliation result cannot be exported. Review the current worksheet again.");
+  }
+  const lines = [REPORT_HEADER.join(",")];
+  for (const row of review.rows) {
+    if (row.kind !== "customer" && row.kind !== "supplier") {
+      throw new Error("Invalid party type in the reconciliation report.");
+    }
+    if (row.state !== "pending" && row.state !== "matched" && row.state !== "discrepancy") {
+      throw new Error("Invalid reconciliation state.");
+    }
+    const recorded = money(row.current, "Recorded opening balance");
+    const verified = row.verified == null ? "" : money(row.verified, "Verified opening balance");
+    const difference = row.difference == null ? "" : money(row.difference, "Opening balance difference");
+    if ((row.state === "pending") !== (row.verified == null && row.difference == null)) {
+      throw new Error("Incomplete reconciliation values; review the worksheet again.");
+    }
+    if (row.state !== "pending" && (
+      row.verified == null || row.difference == null ||
+      Math.round(row.verified * 100) - Math.round(row.current * 100) !== Math.round(row.difference * 100) ||
+      (row.state === "matched") !== (row.difference === 0)
+    )) {
+      throw new Error("The reconciliation result is inconsistent and cannot be exported.");
+    }
+    lines.push([
+      row.kind, csvCell(row.id), csvCell(row.name), recorded, verified, difference,
+      row.state.toUpperCase(), csvCell(row.notes),
+    ].join(","));
+  }
+  return "\uFEFF" + lines.join("\r\n") + "\r\n";
 }
