@@ -8,7 +8,7 @@ import { getShopProfile } from "./shop-profile";
 import { SERVICE_TYPE_LABELS } from "./orders";
 import { escapeHtml } from "./html";
 import { getPrintSettings } from "./print-settings";
-import { tryDesktopPrintHtml } from "./desktop-print";
+import { requestDesktopPrintHtml } from "./desktop-print";
 
 export function buildSaleReceiptText(
   sale: Sale,
@@ -64,19 +64,83 @@ ${autoPrint ? "<script>window.onload=function(){window.print();}</script>" : ""}
 </body></html>`;
 }
 
+export type ReceiptPrintAttempt =
+  | { ok: true; state: "native-accepted" | "browser-window-opened" }
+  | { ok: false; state: "blocked"; error: string };
+
+/**
+ * Dispatch a receipt print without creating or retrying any business transaction.
+ * "native-accepted" means the OS print request was accepted, not that paper
+ * physically emerged from the printer.
+ */
+async function requestReceiptPrint(
+  html: string,
+  autoPrintHtml: string,
+  paper: "a4" | "thermal",
+  dimensions: string,
+): Promise<ReceiptPrintAttempt> {
+  if (typeof window === "undefined") {
+    return { ok: false, state: "blocked", error: "Printing requires an open app window" };
+  }
+  try {
+    const native = requestDesktopPrintHtml(html, paper);
+    if (native) {
+      const result = await native;
+      return result.ok
+        ? { ok: true, state: "native-accepted" }
+        : { ok: false, state: "blocked", error: result.error || "Printer rejected the request" };
+    }
+    // Must open synchronously before any await so browser popup protection
+    // does not misclassify the print window as unsolicited.
+    const popup = window.open("", "_blank", dimensions);
+    if (!popup) {
+      return {
+        ok: false,
+        state: "blocked",
+        error: "Print window was blocked. Allow popups for this app, then retry the saved document.",
+      };
+    }
+    try {
+      popup.document.write(autoPrintHtml);
+      popup.document.close();
+    } catch (error) {
+      try { popup.close(); } catch { /* popup may already be unavailable */ }
+      throw error;
+    }
+    return { ok: true, state: "browser-window-opened" };
+  } catch (error) {
+    return { ok: false, state: "blocked", error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export function requestSaleReceiptPrint(
+  sale: Sale,
+  opts?: { shopName?: string; address?: string; phone?: string },
+): Promise<ReceiptPrintAttempt> {
+  const paper = getPrintSettings().defaultInvoicePaper;
+  return requestReceiptPrint(
+    buildSaleReceiptHtml(sale, { ...opts, autoPrint: false }),
+    buildSaleReceiptHtml(sale, { ...opts, autoPrint: true }),
+    paper,
+    "width=400,height=600",
+  );
+}
+
+export function requestOrderReceiptPrint(order: ServiceOrder): Promise<ReceiptPrintAttempt> {
+  const paper = getPrintSettings().defaultInvoicePaper;
+  return requestReceiptPrint(
+    buildOrderReceiptHtml(order, { autoPrint: false }),
+    buildOrderReceiptHtml(order, { autoPrint: true }),
+    paper,
+    "width=400,height=600",
+  );
+}
+
 export function printSaleReceipt(
   sale: Sale,
   opts?: { shopName?: string; address?: string; phone?: string }
-): void {
-  if (typeof window === "undefined") return;
-  const paper = getPrintSettings().defaultInvoicePaper;
-  const directHtml = buildSaleReceiptHtml(sale, { ...opts, autoPrint: false });
-  if (tryDesktopPrintHtml(directHtml, paper)) return;
-  const html = buildSaleReceiptHtml(sale, { ...opts, autoPrint: true });
-  const w = window.open("", "_blank", "width=400,height=600");
-  if (!w) return;
-  w.document.write(html);
-  w.document.close();
+): Promise<ReceiptPrintAttempt> {
+  return requestSaleReceiptPrint(sale, opts);
 }
 
 export function buildOrderReceiptText(order: ServiceOrder): string {
@@ -112,14 +176,6 @@ export function buildOrderReceiptHtml(order: ServiceOrder, opts?: { autoPrint?: 
 </head><body><pre>${escaped}</pre>${autoPrint ? "<script>window.onload=function(){window.print();}</script>" : ""}</body></html>`;
 }
 
-export function printOrderReceipt(order: ServiceOrder): void {
-  if (typeof window === "undefined") return;
-  const paper = getPrintSettings().defaultInvoicePaper;
-  const directHtml = buildOrderReceiptHtml(order, { autoPrint: false });
-  if (tryDesktopPrintHtml(directHtml, paper)) return;
-  const html = buildOrderReceiptHtml(order, { autoPrint: true });
-  const w = window.open("", "_blank", "width=400,height=600");
-  if (!w) return;
-  w.document.write(html);
-  w.document.close();
+export function printOrderReceipt(order: ServiceOrder): Promise<ReceiptPrintAttempt> {
+  return requestOrderReceiptPrint(order);
 }
