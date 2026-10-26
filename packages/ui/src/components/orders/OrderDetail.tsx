@@ -12,7 +12,7 @@ import type { TemplateId } from "@minarvabiz/business-logic";
 import { canCollectServiceOrderBalance } from "./service-order-collection";
 import {
   SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_FLOW,
-  measurementRevisionHistory, ordersStore, buildOrderInvoiceHtml, printOrderInvoice, canAssignServiceOrder,
+  measurementRevisionHistory, ordersStore, buildOrderInvoiceHtml, requestOrderInvoicePrint, canAssignServiceOrder,
   canStartServiceAssignment, canCompleteServiceAssignment, availableServiceWhatsAppTemplates,
 } from "@minarvabiz/business-logic";
 
@@ -91,6 +91,7 @@ export function OrderDetail({
   const [qcIssue, setQcIssue] = React.useState("");
   const [qcIssues, setQcIssues] = React.useState<string[]>([]);
   const [printPreviewPaper, setPrintPreviewPaper] = React.useState<"a4" | "thermal" | null>(null);
+  const [printNotice, setPrintNotice] = React.useState<{ state: "ok" | "error"; message: string } | null>(null);
   const [editOpen, setEditOpen] = React.useState(false);
   const [staffToAssign, setStaffToAssign] = React.useState("");
   const [staffAssignError, setStaffAssignError] = React.useState<string | null>(null);
@@ -102,6 +103,28 @@ export function OrderDetail({
   const [editReason, setEditReason] = React.useState("");
   const [cancelOpen, setCancelOpen] = React.useState(false);
   const [cancelReason, setCancelReason] = React.useState("");
+  function printServiceInvoice(paper: "a4" | "thermal") {
+    setPrintNotice(null);
+    // Dispatch synchronously from the click handler to avoid browser popup blocking.
+    void requestOrderInvoicePrint(order, paper).then((result) => {
+      setPrintNotice({
+        state: result.ok ? "ok" : "error",
+        message: result.ok
+          ? result.state === "native-accepted"
+            ? `Service invoice ${order.orderNumber} saved. Printer accepted the request; check physical output.`
+            : `Service invoice ${order.orderNumber} saved. Print window opened; complete the print dialog.`
+          : `Service invoice ${order.orderNumber} was not printed: ${result.error}`,
+      });
+      setPrintPreviewPaper(null);
+    }).catch((error: unknown) => {
+      setPrintNotice({
+        state: "error",
+        message: `Service invoice ${order.orderNumber} was not printed: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      setPrintPreviewPaper(null);
+    });
+  }
+
   const profit = {
     revenue: order.price,
     materialCost: order.externalMaterialCost,
@@ -605,6 +628,19 @@ export function OrderDetail({
         </div>
       </Modal>
 
+      {printNotice && (
+        <div
+          role={printNotice.state === "error" ? "alert" : "status"}
+          aria-live={printNotice.state === "error" ? "assertive" : "polite"}
+          className={`mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-sm ${printNotice.state === "error" ? "border-amber-300 bg-amber-50 text-amber-950" : "border-slate-200 bg-slate-50 text-slate-800"}`}
+        >
+          <p>{printNotice.message}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => { setPrintPreviewPaper("a4"); setPrintNotice(null); }}>Retry A4</Button>
+            <Button size="sm" variant="outline" onClick={() => { setPrintPreviewPaper("thermal"); setPrintNotice(null); }}>Retry Thermal</Button>
+          </div>
+        </div>
+      )}
       {printPreviewPaper && (
         <PrintPreviewModal
           open
@@ -612,7 +648,7 @@ export function OrderDetail({
           html={buildOrderInvoiceHtml(order, { paper: printPreviewPaper, autoPrint: false })}
           paper={printPreviewPaper}
           onClose={() => setPrintPreviewPaper(null)}
-          onPrint={() => printOrderInvoice(order, printPreviewPaper)}
+          onPrint={() => printServiceInvoice(printPreviewPaper)}
         />
       )}
     </div>
