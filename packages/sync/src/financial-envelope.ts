@@ -39,7 +39,7 @@ export class FinancialEnvelopeDeduplicator {
  private readonly seen=new Map<string,{eventId:string;fingerprint:string}>();
  accept(value:unknown):FinancialEnvelopeAcceptance {
   const result=validateFinancialSyncEnvelope(value);if(!result.ok)return{status:"invalid",errors:result.errors};
-  const e=result.envelope,key=e.tenantId+"\\u0000"+e.idempotencyKey,fp=fingerprint(e),prior=this.seen.get(key);
+  const e=result.envelope,key=JSON.stringify([e.tenantId,e.idempotencyKey]),fp=fingerprint(e),prior=this.seen.get(key);
   if(prior){if(prior.fingerprint===fp)return{status:"duplicate",originalEventId:prior.eventId};return{status:"idempotency-conflict",originalEventId:prior.eventId,error:"Idempotency key was already used for a different financial command"};}
   this.seen.set(key,{eventId:e.eventId,fingerprint:fp});return{status:"accepted",envelope:e};
  }
