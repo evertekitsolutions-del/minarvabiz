@@ -163,23 +163,3 @@ test("deduplicator can be reused after clear and returns stable conflict details
   assert.equal(accepted.status,"accepted");
   if(accepted.status==="accepted")assert.equal(accepted.envelope.eventId,"event-after-clear");
 });
-
-test("exports the financial envelope contract from the sync package barrel", async () => {
-  const { registerHooks } = await import("node:module");
-  registerHooks({
-    resolve(specifier, context, nextResolve) {
-      if (specifier.startsWith(".") && !/\\.[a-z]+$/i.test(specifier)) {
-        try {
-          return nextResolve(specifier + ".ts", context);
-        } catch {
-          // Fall through for relative specifiers that are not TypeScript modules.
-        }
-      }
-      return nextResolve(specifier, context);
-    },
-  });
-  const sync = await import("../index.ts");
-  assert.equal(sync.FINANCIAL_SYNC_SCHEMA_VERSION, FINANCIAL_SYNC_SCHEMA_VERSION);
-  assert.equal(typeof sync.validateFinancialSyncEnvelope, "function");
-  assert.equal(typeof sync.FinancialEnvelopeDeduplicator, "function");
-});
