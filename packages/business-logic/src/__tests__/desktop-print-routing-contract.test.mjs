@@ -14,9 +14,12 @@ const bridge = read("packages/business-logic/src/desktop-print.ts");
 const main = read("apps/desktop/electron/main.ts");
 const settings = read("packages/business-logic/src/print-settings.ts");
 
-for (const source of [invoice, receipt, labels]) {
+for (const source of [invoice, labels]) {
   assert.match(source, /tryDesktopPrintHtml/);
 }
+assert.match(receipt, /requestDesktopPrintHtml/);
+assert.match(receipt, /requestSaleReceiptPrint/);
+assert.match(receipt, /requestOrderReceiptPrint/);
 assert.match(bridge, /paper: DesktopPrintPaper/);
 assert.match(bridge, /silentDesktopPrint/);
 assert.match(main, /"a4" \| "thermal" \| "label"/);

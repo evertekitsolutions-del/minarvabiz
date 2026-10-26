@@ -525,6 +525,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify first-customer sale and service receipt print recovery
+        run: node --test packages/business-logic/src/__tests__/first-customer-receipt-print-recovery.test.mjs
       - name: Static production quality smoke
         shell: bash
         run: |
