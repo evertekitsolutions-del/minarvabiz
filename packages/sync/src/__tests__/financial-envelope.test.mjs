@@ -110,3 +110,56 @@ test("validated envelopes deep-clone nested payloads",()=>{
     assert.equal(input.payload.lines[0].sku,"MUTATED-INPUT");
   }
 });
+
+
+test("validates every supported event type and rejects malformed required field types",()=>{
+  for(const eventType of FINANCIAL_SYNC_EVENT_TYPES)assert.equal(validateFinancialSyncEnvelope(valid({eventType})).ok,true,eventType);
+  for(const field of ["eventId","idempotencyKey","tenantId","companyId","branchId","deviceId","aggregateType","aggregateId"]){
+    for(const value of [null,0,{},[]])assert.equal(validateFinancialSyncEnvelope(valid({[field]:value})).ok,false,field+" type");
+  }
+  assert.equal(validateFinancialSyncEnvelope(valid({schemaVersion:null})).ok,false);
+  assert.equal(validateFinancialSyncEnvelope(valid({currency:"US1"})).ok,false);
+});
+
+test("rejects noncanonical and impossible timestamps and non-plain nested payload objects",()=>{
+  for(const occurredAt of [
+    "2026-10-26T05:00:00.000+00:00",
+    "2026-10-26T05:00:00.001Z ",
+    "2026-13-26T05:00:00.000Z",
+    "2026-10-26T25:00:00.000Z"
+  ])assert.equal(validateFinancialSyncEnvelope(valid({occurredAt})).ok,false,occurredAt);
+  assert.equal(validateFinancialSyncEnvelope(valid({payload:{nested:new Date()}})).ok,false);
+  assert.equal(validateFinancialSyncEnvelope(valid({payload:{nested:Object.create({inherited:"no"})}})).ok,false);
+});
+
+test("rejects cyclic arrays and preserves tenant-scoped command identity",()=>{
+  const cycle=[];cycle.push(cycle);
+  assert.equal(validateFinancialSyncEnvelope(valid({payload:{cycle}})).ok,false);
+  const d=new FinancialEnvelopeDeduplicator();
+  assert.equal(d.accept(valid()).status,"accepted");
+  for(const changed of [
+    {companyId:"company-2"},
+    {branchId:"branch-2"},
+    {deviceId:"device-2"},
+    {aggregateType:"refund"},
+    {aggregateId:"sale-2"},
+    {eventType:"payment.recorded"},
+    {currency:"USD"}
+  ])assert.equal(d.accept(valid(changed)).status,"idempotency-conflict");
+  assert.equal(d.size,1);
+});
+
+test("deduplicator can be reused after clear and returns stable conflict details",()=>{
+  const d=new FinancialEnvelopeDeduplicator();
+  d.accept(valid());
+  const conflict=d.accept(valid({payload:{totalMinor:1}}));
+  assert.equal(conflict.status,"idempotency-conflict");
+  if(conflict.status==="idempotency-conflict"){
+    assert.equal(conflict.originalEventId,"event-1");
+    assert.match(conflict.error,/different financial command/);
+  }
+  d.clear();
+  const accepted=d.accept(valid({eventId:"event-after-clear"}));
+  assert.equal(accepted.status,"accepted");
+  if(accepted.status==="accepted")assert.equal(accepted.envelope.eventId,"event-after-clear");
+});
