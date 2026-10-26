@@ -568,6 +568,7 @@ jobs:
           node packages/sync/src/__tests__/supabase-pull-cursors.test.mjs
           node packages/sync/src/__tests__/attendance-transport.test.mjs
           node packages/sync/src/__tests__/attendance-ack-retry.test.mjs
+          node --experimental-strip-types --test packages/sync/src/__tests__/financial-envelope.test.mjs
       - name: Run complete business logic test suite
         shell: bash
         run: |
