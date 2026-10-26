@@ -22,7 +22,7 @@ test("service invoice print returns an explicit recoverable result", () => {
 test("service order detail surfaces print result and offers saved-invoice retries", () => {
   assert.match(detail, /requestOrderInvoicePrint/);
   assert.match(detail, /role=\{printNotice\.state === "error" \? "alert" : "status"\}/);
-  assert.match(detail, /Service invoice \\$\\{order\\.orderNumber\\} was not printed:/);
+  assert.match(detail, /Service invoice \\$\{order\.orderNumber\} was not printed:/);
   assert.match(detail, /Retry A4/);
   assert.match(detail, /Retry Thermal/);
   assert.doesNotMatch(detail, /printOrderInvoice/);
