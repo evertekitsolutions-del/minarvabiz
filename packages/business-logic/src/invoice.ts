@@ -175,6 +175,53 @@ ${documentFooterHtml(template, order.notes)}
 </div>${autoPrint ? "<script>window.onload=function(){window.print&&window.print()}</script>" : ""}</body></html>`;
 }
 
+export function requestOrderInvoicePrint(
+  order: ServiceOrder,
+  paper?: "a4" | "thermal",
+  templateId?: string,
+): Promise<SaleInvoicePrintAttempt> {
+  if (typeof window === "undefined") {
+    return Promise.resolve({ ok: false, state: "blocked", error: "Printing requires an open app window" });
+  }
+  try {
+    const selectedPaper = paper ?? getPrintSettings().defaultInvoicePaper;
+    const directHtml = buildOrderInvoiceHtml(order, { paper: selectedPaper, autoPrint: false, templateId });
+    const native = requestDesktopPrintHtml(directHtml, selectedPaper);
+    if (native) {
+      return native.then((result): SaleInvoicePrintAttempt =>
+        result.ok
+          ? { ok: true, state: "native-accepted" }
+          : { ok: false, state: "blocked", error: result.error || "Printer rejected the request" },
+      );
+    }
+    const html = buildOrderInvoiceHtml(order, { paper: selectedPaper, autoPrint: true, templateId });
+    const popup = window.open(
+      "",
+      "_blank",
+      selectedPaper === "thermal" ? "width=420,height=700" : "width=900,height=900",
+    );
+    if (!popup) {
+      return Promise.resolve({
+        ok: false, state: "blocked",
+        error: "Print window was blocked. Allow popups for this app, then retry the saved service invoice.",
+      });
+    }
+    try {
+      popup.document.write(html);
+      popup.document.close();
+    } catch (error) {
+      try { popup.close(); } catch { /* popup may already be unavailable */ }
+      throw error;
+    }
+    return Promise.resolve({ ok: true, state: "browser-window-opened" });
+  } catch (error) {
+    return Promise.resolve({
+      ok: false, state: "blocked",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export function printOrderInvoice(order: ServiceOrder, paper?: "a4" | "thermal", templateId?: string) {
   if (typeof window === "undefined") return;
   const selectedPaper = paper ?? getPrintSettings().defaultInvoicePaper;
