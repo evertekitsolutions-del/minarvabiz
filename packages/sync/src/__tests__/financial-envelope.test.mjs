@@ -5,7 +5,7 @@ import {
   FINANCIAL_SYNC_EVENT_TYPES,
   FINANCIAL_SYNC_SCHEMA_VERSION,
   validateFinancialSyncEnvelope,
-} from "../index.ts";
+} from "../financial-envelope.ts";
 
 const valid=(overrides={})=>({
   schemaVersion:FINANCIAL_SYNC_SCHEMA_VERSION,eventId:"event-1",
