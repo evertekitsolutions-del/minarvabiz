@@ -92,6 +92,8 @@ jobs:
         run: node --experimental-strip-types packages/ui/src/components/sales/__tests__/unpaid-sale-filter.test.mjs
       - name: Verify Sales History customer due collection actions
         run: node --experimental-strip-types packages/ui/src/components/sales/__tests__/sale-customer-collection.test.mjs
+      - name: Verify first-customer sale and service receipt print recovery
+        run: node --test packages/business-logic/src/__tests__/first-customer-receipt-print-recovery.test.mjs
       - name: Verify customer due collection deep link and amounts
         run: node --experimental-strip-types packages/ui/src/components/payments/__tests__/collection-prefill.test.mjs
       - name: Verify installed attendance smoke waits for save completion
