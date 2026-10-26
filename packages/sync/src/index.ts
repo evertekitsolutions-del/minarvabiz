@@ -44,3 +44,5 @@ export * from "./engine";
 export * from "./supabase-adapter";
 
 export { writeAttendanceRow, attendanceRemoteRow } from "./attendance-transport";
+
+export * from "./financial-envelope";
