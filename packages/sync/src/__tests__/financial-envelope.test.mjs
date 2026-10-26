@@ -98,3 +98,15 @@ test("clear resets the in-process idempotency map",()=>{
   const d=new FinancialEnvelopeDeduplicator();d.accept(valid());assert.equal(d.size,1);
   d.clear();assert.equal(d.size,0);assert.equal(d.accept(valid()).status,"accepted");
 });
+
+test("validated envelopes deep-clone nested payloads",()=>{
+  const input=valid();const originalSku=input.payload.lines[0].sku;
+  const result=validateFinancialSyncEnvelope(input);
+  assert.equal(result.ok,true);
+  if(result.ok){
+    input.payload.lines[0].sku="MUTATED-INPUT";
+    assert.equal(result.envelope.payload.lines[0].sku,originalSku);
+    result.envelope.payload.lines[0].sku="MUTATED-OUTPUT";
+    assert.equal(input.payload.lines[0].sku,"MUTATED-INPUT");
+  }
+});
