@@ -117,7 +117,7 @@ test("no window reports error and existing fire-and-forget API remains non-throw
 test("Sales Page reports print failure separately from saved transaction and retries existing ID", () => {
   const page = fs.readFileSync("apps/web/src/app/(app)/sales/page.tsx", "utf8");
   assert.match(page, /requestSaleInvoicePrint\(sale, paper\)/);
-  assert.match(page, /printExistingInvoice\(result.sale.id, "a4"\)/);
+  assert.match(page, /printExistingInvoice\(result.sale.id, getPrintSettings\(\)\.defaultInvoicePaper\)/);
   assert.match(page, /Invoice \$\{sale.invoiceNumber\} is saved, but printing failed/);
   assert.match(page, /Retry A4/);
   assert.match(page, /Retry Thermal/);
