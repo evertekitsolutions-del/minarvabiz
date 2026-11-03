@@ -11,7 +11,7 @@ export function createDurableCollection<TInput, TReceipt extends CollectionRecei
   createPayment: (input: TInput) => CollectionMutation<TReceipt>,
   persist: () => Promise<boolean>,
 ) {
-  let pending: { paymentId: string } | null = null;
+  let pending: { paymentId: string; fingerprint: string } | null = null;
   let saving = false;
   let recovered: { fingerprint: string; paymentId: string } | null = null;
   const fingerprint = (input: TInput): string => JSON.stringify(input);
@@ -28,7 +28,7 @@ export function createDurableCollection<TInput, TReceipt extends CollectionRecei
       const saved = pending;
       pending = null;
       if (isRecoveryRetry) recovered = saved;
-      return { ok: true, paymentId };
+      return { ok: true, paymentId: saved.paymentId };
     } catch (error) {
       return {
         ok: false,
