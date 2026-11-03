@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { openSqliteDatabase } from "../sqlite-browser.ts";
+import fs from "node:fs";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
+require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+}).outputText, filename);
+const { openSqliteDatabase } = require("../sqlite-browser.ts");
 
 test("SQLite binary survives close, fresh adapter reopen and domain snapshot restore", async () => {
   let diskImage = null;
