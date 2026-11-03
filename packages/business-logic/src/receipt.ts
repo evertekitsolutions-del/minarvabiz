@@ -54,11 +54,17 @@ export function buildSaleReceiptHtml(
   const text = buildSaleReceiptText(sale, opts);
   const autoPrint = opts?.autoPrint !== false;
   const escaped = escapeHtml(text);
-  return `<!DOCTYPE html><html><head><title>${escapeHtml(sale.invoiceNumber)}</title>
+  const settings = getPrintSettings();
+  const thermal = settings.defaultInvoicePaper === "thermal";
+  const width = `${settings.thermalWidthMm}mm`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(sale.invoiceNumber)}</title>
 <style>
-  body { font-family: ui-monospace, monospace; font-size: 12px; padding: 16px; }
-  pre { white-space: pre-wrap; }
-  @media print { body { padding: 0; } }
+  @page{size:${thermal ? `${width} auto` : "A4"};margin:${thermal ? "0" : "12mm"}}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#fff;color:#111;font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.35}
+  body{width:${thermal ? width : "auto"};padding:${thermal ? "2mm" : "0"}}
+  pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;font:inherit}
+  @media print{body{padding:${thermal ? "2mm" : "0"}}}
 </style></head><body><pre>${escaped}</pre>
 ${autoPrint ? "<script>window.onload=function(){window.print();}</script>" : ""}
 </body></html>`;
@@ -107,8 +113,18 @@ export function buildOrderReceiptHtml(order: ServiceOrder, opts?: { autoPrint?: 
   const text = buildOrderReceiptText(order);
   const escaped = escapeHtml(text);
   const autoPrint = opts?.autoPrint !== false;
-  return `<!DOCTYPE html><html><head><title>${escapeHtml(order.orderNumber)}</title>
-<style>body{font-family:ui-monospace,monospace;font-size:12px;padding:16px}pre{white-space:pre-wrap}@media print{body{padding:0}}</style>
+  const settings = getPrintSettings();
+  const thermal = settings.defaultInvoicePaper === "thermal";
+  const width = `${settings.thermalWidthMm}mm`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(order.orderNumber)}</title>
+<style>
+  @page{size:${thermal ? `${width} auto` : "A4"};margin:${thermal ? "0" : "12mm"}}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#fff;color:#111;font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.35}
+  body{width:${thermal ? width : "auto"};padding:${thermal ? "2mm" : "0"}}
+  pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;font:inherit}
+  @media print{body{padding:${thermal ? "2mm" : "0"}}}
+</style>
 </head><body><pre>${escaped}</pre>${autoPrint ? "<script>window.onload=function(){window.print();}</script>" : ""}</body></html>`;
 }
 
