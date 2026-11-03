@@ -65,11 +65,24 @@ assert.equal(moved.errors.length,0,moved.errors.join("; "));
 moved=updateItem(first.id,{processingStatus:"delivered"});
 assert.equal(moved.errors.length,0,moved.errors.join("; "));
 
+const second=created.order.items[1];
+for (const status of ["washing","ironing","quality_check"]) {
+  moved=updateItem(second.id,{processingStatus:status});
+  assert.equal(moved.errors.length,0,moved.errors.join("; "));
+}
+moved=updateItem(second.id,{qualityStatus:"passed"});
+assert.equal(moved.errors.length,0,moved.errors.join("; "));
+for (const status of ["ready","delivered"]) {
+  moved=updateItem(second.id,{processingStatus:status});
+  assert.equal(moved.errors.length,0,moved.errors.join("; "));
+}
+await new Promise(resolve=>setTimeout(resolve,0));
+
 const snapshot=phase5.listLaundryOrders()[0];
 assert.equal(snapshot.items?.[0].processingStatus,"delivered");
 assert.equal(snapshot.items?.[0].qualityStatus,"passed");
-assert.equal(snapshot.items?.[1].processingStatus,"received");
-assert.equal(snapshot.status,"pending");
+assert.equal(snapshot.items?.[1].processingStatus,"delivered");
+assert.equal(snapshot.status,"delivered");
 assert.equal(snapshot.quantity,3);
 assert.equal(snapshot.totalCustomerCharge,60);
 assert(outbox.listPendingOutbox().some(event=>event.aggregateType==="laundry_orders"&&event.aggregateId===created.order.id));
