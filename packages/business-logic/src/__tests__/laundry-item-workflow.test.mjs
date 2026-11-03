@@ -38,32 +38,38 @@ assert.equal(created.order.pickupAt,"2026-11-03");
 assert.equal(created.order.dueAt,"2026-11-05");
 
 const first=created.order.items[0];
-let moved=phase5.updateLaundryItemWorkflow(created.order.id,first.id,"washing");
+function updateItem(itemId, patch) {
+  const current=phase5.listLaundryOrders().find(order=>order.id===created.order.id);
+  const items=current.items.map(item=>item.id===itemId?{...item,...patch}:{...item});
+  return phase5.updateLaundryDetails(created.order.id,{items});
+}
+let moved=updateItem(first.id,{processingStatus:"washing"});
 assert.equal(moved.errors.length,0,moved.errors.join("; "));
-moved=phase5.updateLaundryItemWorkflow(created.order.id,first.id,"ironing");
+moved=updateItem(first.id,{processingStatus:"ironing"});
 assert.equal(moved.errors.length,0,moved.errors.join("; "));
-moved=phase5.updateLaundryItemWorkflow(created.order.id,first.id,"quality_check");
+moved=updateItem(first.id,{processingStatus:"quality_check"});
 assert.equal(moved.errors.length,0,moved.errors.join("; "));
-moved=phase5.updateLaundryItemWorkflow(created.order.id,first.id,"quality_check","failed");
+moved=updateItem(first.id,{qualityStatus:"failed"});
 assert.equal(moved.errors.length,0,moved.errors.join("; "));
-moved=phase5.updateLaundryItemWorkflow(created.order.id,first.id,"ready");
+moved=updateItem(first.id,{processingStatus:"ready"});
 assert.equal(moved.order,null);
 assert.match(moved.errors.join("; "),/quality check must pass/i);
-moved=phase5.updateLaundryItemWorkflow(created.order.id,first.id,"ironing");
+moved=updateItem(first.id,{processingStatus:"ironing"});
 assert.equal(moved.errors.length,0,moved.errors.join("; "));
-moved=phase5.updateLaundryItemWorkflow(created.order.id,first.id,"quality_check");
+moved=updateItem(first.id,{processingStatus:"quality_check"});
 assert.equal(moved.errors.length,0,moved.errors.join("; "));
-moved=phase5.updateLaundryItemWorkflow(created.order.id,first.id,"quality_check","passed");
+moved=updateItem(first.id,{qualityStatus:"passed"});
 assert.equal(moved.errors.length,0,moved.errors.join("; "));
-moved=phase5.updateLaundryItemWorkflow(created.order.id,first.id,"ready");
+moved=updateItem(first.id,{processingStatus:"ready"});
 assert.equal(moved.errors.length,0,moved.errors.join("; "));
-moved=phase5.updateLaundryItemWorkflow(created.order.id,first.id,"delivered");
+moved=updateItem(first.id,{processingStatus:"delivered"});
 assert.equal(moved.errors.length,0,moved.errors.join("; "));
 
 const snapshot=phase5.listLaundryOrders()[0];
 assert.equal(snapshot.items?.[0].processingStatus,"delivered");
 assert.equal(snapshot.items?.[0].qualityStatus,"passed");
 assert.equal(snapshot.items?.[1].processingStatus,"received");
+assert.equal(snapshot.status,"pending");
 assert.equal(snapshot.quantity,3);
 assert.equal(snapshot.totalCustomerCharge,60);
 assert(outbox.listPendingOutbox().some(event=>event.aggregateType==="laundry_orders"&&event.aggregateId===created.order.id));
