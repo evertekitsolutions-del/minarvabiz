@@ -1,6 +1,6 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 
-const base = String(process.env.MINARVA_LICENSE_EDGE_URL || "https://minarva-biz-license-edge.minarva-biz.workers.dev").replace(/\/$/, "");
+const base = String(process.env.MINARVA_LICENSE_EDGE_URL || "https://minarva-biz-license-edge.anilalbert7.workers.dev").replace(/\/$/, "");
 const adminOrigin = String(process.env.MINARVA_LICENSE_ADMIN_ORIGIN || "https://minarvabiz-license-admin.onrender.com").replace(/\/$/, "");
 
 function assert(condition, message) {
