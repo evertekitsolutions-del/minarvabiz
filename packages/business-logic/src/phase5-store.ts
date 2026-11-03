@@ -564,6 +564,7 @@ export function updateLaundryItemWorkflow(
   item.processingStatus = status;
   if (qualityStatus !== undefined) item.qualityStatus = qualityStatus;
   item.notes = item.notes ?? null;
+  if (order.mode === "in_house_ironing" && order.items?.every((entry) => entry.processingStatus === "delivered")) order.status = "delivered";
   order.updatedAt = nowISO();
   order.version += 1;
   enqueueOutbox("laundry_orders", order.id, "update", { ...order });
