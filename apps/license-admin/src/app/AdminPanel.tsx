@@ -18,6 +18,7 @@ import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerPr
 import { useAdminAuthentication, type BrowserAdminDashboard } from "./admin-panel/useAdminAuthentication";
 import {
   createBrowserOfflineActivation,
+  convertBrowserTrialToLicense,
   issueBrowserLicense,
   loadBrowserAdminDashboard,
   setBrowserLicenseStatus,
@@ -48,6 +49,7 @@ export default function AdminPanel({
   const [trialRegistrations, setTrialRegistrations] = React.useState<BrowserAdminDashboard["trials"]>([]);
   const [browserDirect, setBrowserDirect] = React.useState(false);
   const [customerName, setCustomerName] = React.useState("");
+  const [selectedTrialId, setSelectedTrialId] = React.useState<string | null>(null);
   const [plan, setPlan] = React.useState<LicensePlan>("professional");
   const [edition, setEdition] = React.useState<Edition>("hybrid");
   const [expiresAt, setExpiresAt] = React.useState("");
@@ -117,7 +119,9 @@ export default function AdminPanel({
     };
     setBusy(true);
     setMessage(null);
-    const result = await issueBrowserLicense(input);
+    const result = selectedTrialId
+      ? await convertBrowserTrialToLicense({ registrationId: selectedTrialId, ...input })
+      : await issueBrowserLicense(input);
     setBusy(false);
     if (!result.ok) {
       setMessage(result.error || "License issue failed.");
@@ -125,6 +129,7 @@ export default function AdminPanel({
     }
     setLastToken(result.token || null);
     setCustomerName("");
+    setSelectedTrialId(null);
     await refreshAfterMutation();
   }
 
@@ -195,7 +200,24 @@ export default function AdminPanel({
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
       <div className="mx-auto max-w-6xl space-y-6">
         <AdminHeader identity={activeIdentity} onSignOut={() => void signOut()} />
-        <TrialRegistrationInbox registrations={trialRegistrations} />
+        <TrialRegistrationInbox
+          registrations={trialRegistrations}
+          onSelectForConversion={(item) => {
+            setSelectedTrialId(item.id);
+            setCustomerName(item.organization_name);
+            setPlan("professional");
+            setEdition("hybrid");
+            setExpiresAt("");
+            setActivationLimit("");
+            setMessage("Existing trial customer selected. Set the paid plan, expiry, device limit and features, then issue the license.");
+          }}
+        />
+        {selectedTrialId && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+            Paid conversion mode: the selected trial registration ID will be reused as the license customer ID. No new customer identity will be created.
+            <button type="button" className="ml-3 font-semibold underline" onClick={() => setSelectedTrialId(null)}>Cancel conversion</button>
+          </div>
+        )}
         <div className="grid gap-6 md:grid-cols-2">
           <OnlineCustomerProvisionCard {...onlineProvisioning} />
           <LicenseCreateCard
