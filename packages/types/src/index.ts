@@ -406,13 +406,31 @@ export interface Supplier {
   branchId?: UUID | null;
 }
 
+export type LaundryItemProcessingStatus = "received" | "washing" | "ironing" | "quality_check" | "ready" | "delivered";
+export type LaundryQualityStatus = "pending" | "passed" | "failed";
+
+export interface LaundryItem {
+  id: UUID;
+  label: string;
+  quantity: number;
+  tagCode: string;
+  processingStatus: LaundryItemProcessingStatus;
+  qualityStatus: LaundryQualityStatus;
+  notes?: string | null;
+}
+
 export interface LaundryOrder {
   id: UUID;
   orderNumber: string;
   customerId: UUID;
   customerName?: string | null;
   garment?: string | null;
+  /** Legacy aggregate quantity; equals the sum of item quantities when items exist. */
   quantity: number;
+  /** Optional itemized garments; omitted on legacy records. */
+  items?: LaundryItem[];
+  pickupAt?: ISODateString | null;
+  dueAt?: ISODateString | null;
   /** outsourced vs in-house ironing */
   mode: "outsourced" | "in_house_ironing";
   supplierId?: UUID | null;
