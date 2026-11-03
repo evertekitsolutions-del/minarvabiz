@@ -19,6 +19,7 @@ const ALLOWED_ROUTES = new Map([
   ["GET /api/admin/me", { maxBody: 0, nativeAdminMe: true }],
   ["GET /api/admin/licenses", { maxBody: 0, nativeAdminLicenses: true }],
   ["GET /api/admin/trials", { maxBody: 0, nativeAdminTrials: true }],
+  ["POST /api/admin/trials/convert", { maxBody: 16 * 1024, nativeAdminTrialConvert: true }],
   ["POST /api/admin/licenses", { maxBody: 16 * 1024, nativeAdminLicenseIssue: true }],
   ["POST /api/admin/licenses/offline-activation", { maxBody: 8 * 1024, nativeAdminOfflineActivation: true }],
   ["PATCH /api/admin/licenses/status", { maxBody: 8 * 1024, nativeAdminLicenseStatus: true }],
@@ -1272,12 +1273,14 @@ async function adminAuthenticatedRpc(request, env, rpcName, rpcBody = {}) {
       code === "INVALID_FEATURES" ||
       code === "NOT_FOUND" ||
       code === "LICENSE_CONFLICT" ||
+      code === "TRIAL_ALREADY_CONVERTED" ||
+      code === "TRIAL_REVOKED" ||
       code === "EMERGENCY_CREDENTIAL_CONFLICT"
     ) {
       const fallbackStatus =
         code === "NOT_FOUND"
           ? 404
-          : code === "LICENSE_CONFLICT" || code === "EMERGENCY_CREDENTIAL_CONFLICT"
+          : code === "LICENSE_CONFLICT" || code === "TRIAL_ALREADY_CONVERTED" || code === "TRIAL_REVOKED" || code === "EMERGENCY_CREDENTIAL_CONFLICT"
             ? 409
             : 400;
       return json(
@@ -1721,6 +1724,76 @@ async function adminLicensesNatively(request, env) {
 
 async function adminTrialsNatively(request, env) {
   return adminAuthenticatedRpc(request, env, "cloudflare_admin_list_trial_registrations");
+}
+
+function parseAdminTrialConversionBody(bytes) {
+  try {
+    const body = JSON.parse(new TextDecoder().decode(bytes || new Uint8Array()));
+    const registrationId = typeof body?.registrationId === "string" ? body.registrationId.trim() : "";
+    if (!UUID_RE.test(registrationId)) return null;
+    const issue = parseAdminLicenseIssueBody(bytes);
+    if (!issue || issue.plan === "trial") return null;
+    return { registrationId, ...issue };
+  } catch {
+    return null;
+  }
+}
+
+async function adminTrialConvertNatively(request, env, route) {
+  const contentType = request.headers.get("content-type") || "";
+  if (!/^application\\/json(?:\\s*;|$)/i.test(contentType)) {
+    return json({ ok: false, code: "UNSUPPORTED_MEDIA_TYPE" }, 415, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+  const body = await readRequestBody(request, route.maxBody);
+  if (body?.tooLarge) return json({ ok: false, code: "REQUEST_TOO_LARGE" }, 413, {
+    "x-minarva-admin-backend": "cloudflare-native",
+  });
+  const parsed = parseAdminTrialConversionBody(body?.bytes);
+  if (!parsed) return json({ ok: false, code: "INVALID_REQUEST" }, 400, {
+    "x-minarva-admin-backend": "cloudflare-native",
+  });
+
+  const authority = signingAuthority(env);
+  const edgeSecret = String(env.LICENSE_EDGE_RPC_SECRET || "").trim();
+  if (!authority || edgeSecret.length < 32) return json({
+    ok: false, code: "ADMIN_SERVICE_TEMPORARILY_UNAVAILABLE",
+  }, 503, { "x-minarva-admin-backend": "cloudflare-native" });
+
+  const issuedAt = new Date().toISOString();
+  if (parsed.expiresAt && new Date(parsed.expiresAt).getTime() < Date.now()) {
+    return json({ ok: false, code: "INVALID_REQUEST" }, 400, {
+      "x-minarva-admin-backend": "cloudflare-native",
+    });
+  }
+  const payload = {
+    licenseId: randomUUID(),
+    customerId: parsed.registrationId,
+    product: "minarvabiz",
+    edition: parsed.edition,
+    plan: parsed.plan,
+    features: parsed.features,
+    issuedAt,
+    expiresAt: parsed.expiresAt,
+    activationLimit: parsed.activationLimit,
+    deviceBindings: [],
+  };
+  const token = await signLicenseTokenNatively(payload, authority.privateKey);
+  const tokenSha256 = createHash("sha256").update(token, "utf8").digest("hex");
+  return adminAuthenticatedRpc(request, env, "cloudflare_admin_convert_trial_to_license", {
+    p_edge_secret: edgeSecret,
+    p_registration_id: parsed.registrationId,
+    p_license_id: payload.licenseId,
+    p_plan: payload.plan,
+    p_edition: payload.edition,
+    p_expires_at: payload.expiresAt,
+    p_activation_limit: payload.activationLimit,
+    p_features: payload.features,
+    p_token: token,
+    p_token_sha256: tokenSha256,
+    p_issued_at: payload.issuedAt,
+  });
 }
 
 function parseAdminLicenseIssueBody(bytes) {
@@ -2642,6 +2715,10 @@ export default {
 
     if (route.nativeAdminTrials) {
       return withAdminCors(await adminTrialsNatively(request, env), request, env);
+    }
+
+    if (route.nativeAdminTrialConvert) {
+      return withAdminCors(await adminTrialConvertNatively(request, env, route), request, env);
     }
 
     if (route.nativeAdminLicenseIssue) {
