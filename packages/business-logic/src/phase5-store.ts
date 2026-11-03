@@ -549,7 +549,10 @@ export function updateLaundryItemWorkflow(
     received: "washing", washing: "ironing", ironing: "quality_check",
     quality_check: "ready", ready: "delivered", delivered: null,
   };
-  if (transitions[item.processingStatus] !== status) return { order: null, errors: [`Cannot move item from ${item.processingStatus} to ${status}`] };
+  if (status !== item.processingStatus && transitions[item.processingStatus] !== status
+    && !(item.processingStatus === "quality_check" && item.qualityStatus === "failed" && status === "ironing")) {
+    return { order: null, errors: [`Cannot move item from ${item.processingStatus} to ${status}`] };
+  }
   const nextQuality = qualityStatus ?? item.qualityStatus;
   if (status === "ready" && item.qualityStatus !== "passed" && nextQuality !== "passed") {
     return { order: null, errors: ["Quality check must pass before an item can be marked ready"] };
