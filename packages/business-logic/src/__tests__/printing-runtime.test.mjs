@@ -177,6 +177,7 @@ test("invoice, receipt and barcode builders produce printable HTML", () => {
 
   const invoiceHtml = buildSaleInvoiceHtml(sale, { paper: "thermal", autoPrint: false });
   assert.match(invoiceHtml, /INV-1001/);
+  assert.match(invoiceHtml, /@page\\{size:58mm auto/);
   assert.doesNotMatch(invoiceHtml, /window\.print/);
 
   const receiptHtml = buildSaleReceiptHtml(sale, { autoPrint: false });
