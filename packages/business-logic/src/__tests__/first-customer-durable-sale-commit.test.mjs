@@ -151,3 +151,25 @@ test("business validation failure creates no pending invoice and permits correct
   assert.equal(corrected.saleId, "sale-VALID");
   assert.equal(creates, 2);
 });
+
+test("late stale-form replay remains deduplicated after a different checkout", async () => {
+  let creates = 0;
+  let writes = 0;
+  const commit = createDurableSaleCommit(
+    (input) => { creates++; return created(input.id); },
+    async () => ++writes > 1,
+  );
+
+  assert.equal((await commit.submit(payload("LATE"))).success, false);
+  const recovered = await commit.retryPending();
+  assert.equal(recovered.success, true);
+
+  const nextSale = await commit.submit(payload("NEXT-AFTER-RECOVERY"));
+  assert.equal(nextSale.success, true);
+  assert.equal(nextSale.saleId, "sale-NEXT-AFTER-RECOVERY");
+  assert.equal(creates, 2);
+
+  const lateStaleSubmit = await commit.submit(payload("LATE"));
+  assert.deepEqual(lateStaleSubmit, recovered);
+  assert.equal(creates, 2, "Late replay of the recovered form must not create a third invoice");
+});
