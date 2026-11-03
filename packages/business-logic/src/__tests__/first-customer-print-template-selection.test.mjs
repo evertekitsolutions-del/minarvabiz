@@ -71,7 +71,7 @@ test("wrong-paper template never changes A4 or thermal print layout", () => {
   const a4Html = invoice.buildSaleInvoiceHtml(sale, { paper: "a4", templateId: thermalInvoice.id, autoPrint: false });
   const thermalHtml = quotations.buildQuotationHtml(quotation, { paper: "thermal", templateId: a4Quote.id, autoPrint: false });
   assert.match(a4Html, /@page\{size:A4/);
-  assert.match(thermalHtml, /@page\{size:80mm 297mm/);
+  assert.match(thermalHtml, /@page\{size:80mm auto/);
   const custom = templates.savePrintTemplate({ ...a4Invoice, id: "custom-matching-invoice-a4", isSystem: false, heading: "CUSTOM ACCEPTED INVOICE", isDefault: true });
   assert.equal(templates.getPrintTemplateFor("invoice", "a4", custom.id).id, custom.id);
   assert.match(invoice.buildSaleInvoiceHtml(sale, { paper: "a4", templateId: custom.id, autoPrint: false }), /CUSTOM ACCEPTED INVOICE/);
