@@ -23,12 +23,14 @@ import type {
   AuthStage,
   LicenseRegistryRow,
   SupportRequestRow,
+  TrialRegistrationRow,
 } from "./types";
 
 export interface BrowserAdminDashboard {
   identity: AdminIdentityView;
   licenses: LicenseRegistryRow[];
   requests: SupportRequestRow[];
+  trials: TrialRegistrationRow[];
 }
 
 export function useAdminAuthentication(
