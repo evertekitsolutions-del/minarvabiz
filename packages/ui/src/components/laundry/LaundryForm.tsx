@@ -14,8 +14,9 @@ type LaundrySubmit = {
   supplierId: string | null; supplierRate: number; customerRate: number;
   paidAmount: number; paymentMethod: PaymentMethod; notes: string;
 };
+type LegacyLaundrySubmit = Omit<LaundrySubmit, "items" | "pickupAt" | "dueAt">;
 
-export function LaundryForm({mode,customers,suppliers,onSubmit,onCancel,onAddCustomer,onAddSupplier,error}:{mode:"outsourced"|"in_house_ironing";customers:Customer[];suppliers:Supplier[];onSubmit:(data:LaundrySubmit)=>void;onCancel:()=>void;onAddCustomer?:()=>void;onAddSupplier?:()=>void;error?:string|null}){
+export function LaundryForm({mode,customers,suppliers,onSubmit,onCancel,onAddCustomer,onAddSupplier,error}:{mode:"outsourced"|"in_house_ironing";customers:Customer[];suppliers:Supplier[];onSubmit:(data:LegacyLaundrySubmit)=>void;onCancel:()=>void;onAddCustomer?:()=>void;onAddSupplier?:()=>void;error?:string|null}){
  const [customerId,setCustomerId]=React.useState("");
  const [rows,setRows]=React.useState<GarmentRow[]>([{key:1,label:"",quantity:"1",notes:""}]);
  const [nextKey,setNextKey]=React.useState(2);
@@ -48,6 +49,6 @@ export function LaundryForm({mode,customers,suppliers,onSubmit,onCancel,onAddCus
   <FormField label="Ticket notes"><textarea className={inputClass} value={notes} onChange={e=>setNotes(e.target.value)}/></FormField>
   <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><div className="flex justify-between"><span>Customer total</span><strong>{formatMoney(preview.totalCustomerCharge)}</strong></div>{mode==="outsourced"&&<div className="flex justify-between"><span>Supplier cost</span><span>{formatMoney(preview.totalSupplierCost)}</span></div>}<div className="flex justify-between"><span>Profit</span><strong>{formatMoney(preview.totalProfit)}</strong></div></div>
   {error&&<p role="alert" className="text-sm text-rose-600">{error}</p>}
-  <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onCancel}>Cancel</Button><Button type="button" disabled={!customerId||rows.some(row=>!row.label.trim()||!(Number(row.quantity)>0))||!quantity||(mode==="outsourced"&&!supplierId)} onClick={()=>onSubmit({customerId,garment:rows.map(row=>row.label.trim()).join(", "),quantity,items:rows.map(row=>({label:row.label.trim(),quantity:Number(row.quantity),notes:row.notes.trim()||null})),pickupAt:pickupAt||null,dueAt:dueAt||null,supplierId:supplierId||null,supplierRate:parseFloat(supplierRate)||0,customerRate:parseFloat(customerRate)||0,paidAmount:parseFloat(paidAmount)||0,paymentMethod,notes})}>Save ticket</Button></div>
+  <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onCancel}>Cancel</Button><Button type="button" disabled={!customerId||rows.some(row=>!row.label.trim()||!(Number(row.quantity)>0))||!quantity||(mode==="outsourced"&&!supplierId)} onClick={()=>onSubmit(({customerId,garment:rows.map(row=>row.label.trim()).join(", "),quantity,items:rows.map(row=>({label:row.label.trim(),quantity:Number(row.quantity),notes:row.notes.trim()||null})),pickupAt:pickupAt||null,dueAt:dueAt||null,supplierId:supplierId||null,supplierRate:parseFloat(supplierRate)||0,customerRate:parseFloat(customerRate)||0,paidAmount:parseFloat(paidAmount)||0,paymentMethod,notes}) as LegacyLaundrySubmit)}>Save ticket</Button></div>
  </div>;
 }
