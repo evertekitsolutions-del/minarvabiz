@@ -106,8 +106,6 @@ jobs:
         run: node --experimental-strip-types packages/business-logic/src/__tests__/payment-history-csv.test.mjs
       - name: Verify filtered laundry CSV and injection safety
         run: node --experimental-strip-types packages/business-logic/src/__tests__/laundry-tickets-csv.test.mjs
-      - name: Verify itemized laundry intake, tags, schedule and quality workflow
-        run: node --experimental-strip-types packages/business-logic/src/__tests__/laundry-item-workflow.test.mjs
       - name: Verify CSV frontend safety
         run: node scripts/frontend-tools-csv-contract.test.mjs
       - name: Verify default GST rate validation and explicit-save UI
@@ -164,6 +162,8 @@ jobs:
       - name: Verify coverage reporting and ratchet workflow contract
         run: node scripts/coverage-workflow-smoke.mjs
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify itemized laundry intake, tags, schedule and quality workflow
+        run: node --experimental-strip-types packages/business-logic/src/__tests__/laundry-item-workflow.test.mjs
       - run: pnpm --filter @minarvabiz/utils typecheck
       - name: Verify provider-neutral commercial entitlement contract
         run: node --experimental-strip-types scripts/commercial-entitlement-contract-smoke.mjs
