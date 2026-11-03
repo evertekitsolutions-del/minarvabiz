@@ -42,6 +42,10 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'code', 'INVALID_REQUEST', 'httpStatus', 400);
   END IF;
 
+  IF p_plan NOT IN ('basic', 'professional', 'business', 'enterprise') THEN
+    RETURN jsonb_build_object('ok', false, 'code', 'INVALID_REQUEST', 'httpStatus', 400);
+  END IF;
+
   SELECT *
     INTO v_trial
     FROM public.trial_registrations
