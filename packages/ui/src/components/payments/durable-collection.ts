@@ -11,23 +11,24 @@ export function createDurableCollection<TInput, TReceipt extends CollectionRecei
   createPayment: (input: TInput) => CollectionMutation<TReceipt>,
   persist: () => Promise<boolean>,
 ) {
-  let pending: { paymentId: string } | null = null;
+  let pending: { paymentId: string; fingerprint: string } | null = null;
   let saving = false;
-  let recoveredPaymentId: string | null = null;
+  let recovered: { fingerprint: string; paymentId: string } | null = null;
+  const fingerprint = (input: TInput): string => JSON.stringify(input);
   const blocked = (): DurableCollectionResult => ({
     ok: false,
     error: "An earlier customer payment has not been saved to SQLite. Retry saving that existing payment before collecting another. Do not create a replacement payment.",
   });
-  const saveExisting = async (): Promise<DurableCollectionResult> => {
+  const saveExisting = async (isRecoveryRetry = false): Promise<DurableCollectionResult> => {
     if (!pending) return { ok: false, error: "No unsaved customer payment exists." };
     try {
       if (!await persist()) return {
         ok: false, error: "SQLite did not confirm the customer payment. The same payment and allocations are pending; retry saving without collecting again.",
       };
-      const paymentId = pending.paymentId;
+      const saved = pending;
       pending = null;
-      recoveredPaymentId = paymentId;
-      return { ok: true, paymentId };
+      if (isRecoveryRetry) recovered = saved;
+      return { ok: true, paymentId: saved.paymentId };
     } catch (error) {
       return {
         ok: false,
@@ -40,14 +41,22 @@ export function createDurableCollection<TInput, TReceipt extends CollectionRecei
     hasPending(): boolean { return pending !== null; },
     pendingPaymentId(): string | null { return pending?.paymentId ?? null; },
     async collect(input: TInput): Promise<DurableCollectionResult> {
+      let inputFingerprint: string;
+      try { inputFingerprint = fingerprint(input); }
+      catch (error) { return { ok: false, error: "Cannot identify the collection request: " + (error instanceof Error ? error.message : String(error)) }; }
       if (saving || pending) return blocked();
+      if (recovered?.fingerprint === inputFingerprint) {
+        const receipt = recovered;
+        recovered = null;
+        return { ok: true, paymentId: receipt.paymentId };
+      }
       saving = true;
       try {
         const result = createPayment(input);
         if (result.errors.length || !result.payment?.id) {
           return { ok: false, error: result.errors.join("; ") || "Collection did not return a payment identity." };
         }
-        pending = { paymentId: result.payment.id };
+        pending = { paymentId: result.payment.id, fingerprint: inputFingerprint };
         return await saveExisting();
       } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : String(error) };
@@ -59,13 +68,13 @@ export function createDurableCollection<TInput, TReceipt extends CollectionRecei
       if (saving) return blocked();
       if (!pending) return { ok: false, error: "No unsaved customer payment exists." };
       saving = true;
-      try { return await saveExisting(); }
+      try { return await saveExisting(true); }
       finally { saving = false; }
     },
     /** Return a receipt once, for a form left open while a pending payment was saved manually. */
     consumeRecoveredPaymentId(): string | null {
-      const value = recoveredPaymentId;
-      recoveredPaymentId = null;
+      const value = recovered?.paymentId ?? null;
+      recovered = null;
       return value;
     },
   };

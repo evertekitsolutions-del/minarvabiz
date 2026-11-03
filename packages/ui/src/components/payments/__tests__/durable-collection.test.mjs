@@ -70,3 +70,33 @@ test("domain validation rejection never queues a phantom payment or SQLite write
   assert.equal(save.hasPending(), false);
   assert.equal(writes, 0);
 });
+
+
+test("late stale-form replay after recovery returns the original payment receipt", async () => {
+  let creates = 0, writes = 0;
+  const save = createDurableCollection(
+    () => ({ payment: { id: "pay-recovered-" + (++creates) }, errors: [] }),
+    async () => ++writes > 1,
+  );
+  assert.equal((await save.collect(input)).ok, false);
+  const recovered = await save.retryPending();
+  assert.deepEqual(recovered, { ok: true, paymentId: "pay-recovered-1" });
+
+  const different = await save.collect({ ...input, amount: 125 });
+  assert.deepEqual(different, { ok: true, paymentId: "pay-recovered-2" });
+  const lateStaleReplay = await save.collect(input);
+  assert.deepEqual(lateStaleReplay, recovered);
+  assert.equal(creates, 2, "late stale submit must not create a third payment");
+  assert.equal(writes, 3, "stale replay must not write a new SQLite image");
+});
+
+test("ordinary successful identical collections remain separate legitimate payments", async () => {
+  let creates = 0;
+  const save = createDurableCollection(
+    () => ({ payment: { id: "pay-normal-" + (++creates) }, errors: [] }),
+    async () => true,
+  );
+  assert.equal((await save.collect(input)).paymentId, "pay-normal-1");
+  assert.equal((await save.collect(input)).paymentId, "pay-normal-2");
+  assert.equal(creates, 2);
+});
