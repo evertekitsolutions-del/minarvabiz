@@ -41,6 +41,19 @@ export interface LicenseRegistryRow {
 }
 
 
+export interface TrialRegistrationRow {
+  id: string;
+  email: string;
+  phone: string;
+  organization_name: string;
+  address: string;
+  device_id: string;
+  status: string;
+  trial_started_at: string;
+  trial_expires_at: string;
+  created_at: string;
+}
+
 export type SupportRequestType = "technical_escalation" | "bug" | "feature_request" | "suggestion";
 export type SupportRequestStatus = "new" | "in_review" | "planned" | "resolved" | "rejected" | "duplicate";
 export type SupportRequestPriority = "low" | "normal" | "high" | "urgent";
