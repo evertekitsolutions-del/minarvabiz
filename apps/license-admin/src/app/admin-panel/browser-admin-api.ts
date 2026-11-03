@@ -48,6 +48,8 @@ function errorMessage(data: any, status: number) {
     INVALID_FEATURES: "The selected feature set is invalid for this plan.",
     NOT_FOUND: "The requested record was not found.",
     LICENSE_CONFLICT: "The license could not be created because of a conflict.",
+    TRIAL_ALREADY_CONVERTED: "This trial registration already has a paid license.",
+    TRIAL_REVOKED: "A revoked trial registration cannot be converted.",
     ACTIVATION_LIMIT_REACHED: "Activation limit reached. Deactivate an existing device first.",
     EXPIRED: "The license has expired.",
     LICENSE_NOT_ACTIVE: "The license is not active.",
