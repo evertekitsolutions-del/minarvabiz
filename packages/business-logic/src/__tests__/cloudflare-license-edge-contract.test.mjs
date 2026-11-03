@@ -37,7 +37,7 @@ const adminCustomerProvisioning = read("supabase/migrations/20261002_cloudflare_
 const adminBootstrapAuthority = read("supabase/migrations/20261003_cloudflare_admin_bootstrap_authority.sql");
 const adminBootstrapSignupReservation = read("supabase/migrations/20261003_cloudflare_admin_bootstrap_signup_reservation.sql");
 
-const EDGE = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
+const EDGE = "https://minarva-biz-license-edge.anilalbert7.workers.dev";
 
 assert.match(worker, /ALLOWED_ROUTES/);
 assert.doesNotMatch(worker, /redirect:\s*"error"/);
