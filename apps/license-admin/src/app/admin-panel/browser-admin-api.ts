@@ -176,6 +176,22 @@ export async function issueBrowserLicense(input: {
   });
 }
 
+
+export async function convertBrowserTrialToLicense(input: {
+  registrationId: string;
+  customerName: string;
+  plan: LicensePlan;
+  edition: Edition;
+  expiresAt?: string | null;
+  activationLimit?: number;
+  featureOverrides?: Partial<LicenseFeatures>;
+}) {
+  return edgeRequest<{ token?: string; license?: Record<string, unknown>; trialRegistrationId?: string }>(
+    "/api/admin/trials/convert",
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
 export async function setBrowserLicenseStatus(licenseId: string, status: LicenseStatusAction) {
   return edgeRequest<{ license?: Record<string, unknown> }>("/api/admin/licenses/status", {
     method: "PATCH",
