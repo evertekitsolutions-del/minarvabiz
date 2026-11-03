@@ -37,7 +37,7 @@ assert.equal(created.order.totalCustomerCharge,60);
 assert.equal(created.order.pickupAt,"2026-11-03");
 assert.equal(created.order.dueAt,"2026-11-05");
 
-const first=created.order.items![0];
+const first=created.order.items[0];
 let moved=phase5.updateLaundryItemWorkflow(created.order.id,first.id,"washing");
 assert.equal(moved.errors.length,0,moved.errors.join("; "));
 moved=phase5.updateLaundryItemWorkflow(created.order.id,first.id,"ironing");
@@ -66,7 +66,7 @@ assert.equal(snapshot.items?.[0].qualityStatus,"passed");
 assert.equal(snapshot.items?.[1].processingStatus,"received");
 assert.equal(snapshot.quantity,3);
 assert.equal(snapshot.totalCustomerCharge,60);
-assert(outbox.listPendingOutbox().some(event=>event.aggregateType==="laundry_orders"&&event.aggregateId===created.order!.id));
+assert(outbox.listPendingOutbox().some(event=>event.aggregateType==="laundry_orders"&&event.aggregateId===created.order.id));
 assert(phase7.listAuditLogs(50).some(event=>event.action==="laundry.item_workflow"&&event.recordId===created.order!.id));
 
 const invalidDate=phase5.createLaundryOrder({customerId:"c",mode:"in_house_ironing",quantity:1,items:[{label:"Skirt",quantity:1}],pickupAt:"2026-11-07",dueAt:"2026-11-06",supplierRate:0,customerRate:10});
