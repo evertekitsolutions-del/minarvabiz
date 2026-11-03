@@ -512,6 +512,40 @@ export function updateLaundryDetails(id: UUID, input: { garment?: string | null;
   return { order: { ...order }, errors: [] };
 }
 
+export function updateLaundryItemWorkflow(
+  orderId: UUID,
+  itemId: UUID,
+  status: LaundryItemProcessingStatus,
+  qualityStatus?: LaundryQualityStatus,
+): { order: LaundryOrder | null; errors: string[] } {
+  assertPermission("orders.manage");
+  const order = laundryOrders.find((item) => item.id === orderId && !item.deletedAt);
+  if (!order || order.status === "cancelled") return { order: null, errors: ["Active laundry ticket not found"] };
+  const item = order.items?.find((entry) => entry.id === itemId);
+  if (!item) return { order: null, errors: ["Laundry item not found"] };
+  const transitions: Record<LaundryItemProcessingStatus, LaundryItemProcessingStatus | null> = {
+    received: "washing", washing: "ironing", ironing: "quality_check",
+    quality_check: "ready", ready: "delivered", delivered: null,
+  };
+  if (transitions[item.processingStatus] !== status) return { order: null, errors: [`Cannot move item from ${item.processingStatus} to ${status}`] };
+  const nextQuality = qualityStatus ?? item.qualityStatus;
+  if (status === "ready" && item.qualityStatus !== "passed" && nextQuality !== "passed") {
+    return { order: null, errors: ["Quality check must pass before an item can be marked ready"] };
+  }
+  if (status !== "quality_check" && qualityStatus !== undefined) return { order: null, errors: ["Quality result can only be recorded during quality check"] };
+  if (qualityStatus && !["pending", "passed", "failed"].includes(qualityStatus)) return { order: null, errors: ["Invalid quality result"] };
+  const before = { ...item };
+  item.processingStatus = status;
+  if (qualityStatus !== undefined) item.qualityStatus = qualityStatus;
+  item.notes = item.notes ?? null;
+  order.updatedAt = nowISO();
+  order.version += 1;
+  enqueueOutbox("laundry_orders", order.id, "update", { ...order });
+  auditAction("laundry.item_workflow", "laundry_orders", order.id, before, { item: { ...item }, version: order.version });
+  touchPersistence();
+  return { order: { ...order, items: order.items?.map((entry) => ({ ...entry })) ?? [] }, errors: [] };
+}
+
 export function cancelLaundryOrder(input: {
   orderId: UUID;
   reason: string;
