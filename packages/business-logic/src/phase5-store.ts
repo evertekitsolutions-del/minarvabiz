@@ -488,7 +488,7 @@ export function updateLaundryDetails(id: UUID, input: { garment?: string | null;
   const dueAt = input.dueAt === undefined ? order.dueAt ?? null : input.dueAt || null;
   if (pickupAt && dueAt && dueAt < pickupAt) return { order: null, errors: ["Due date cannot be before pickup date"] };
   if (input.items) {
-    if (input.items.length !== (order.items?.length ?? 0) || input.items.length > 100) return { order: null, errors: ["Laundry item rows cannot be added or removed after ticket posting"] };
+    if (!order.items || input.items.length !== order.items.length || input.items.length > 100) return { order: null, errors: ["Laundry item rows cannot be added or removed after ticket posting"] };
     const transitions: Record<LaundryItemProcessingStatus, LaundryItemProcessingStatus | null> = {
       received: "washing", washing: "ironing", ironing: "quality_check",
       quality_check: "ready", ready: "delivered", delivered: null,
@@ -496,6 +496,8 @@ export function updateLaundryDetails(id: UUID, input: { garment?: string | null;
     for (const nextItem of input.items) {
       const current = order.items?.find((item) => item.id === nextItem.id);
       if (!current || !nextItem.label.trim() || !Number.isFinite(nextItem.quantity) || nextItem.quantity <= 0 || nextItem.quantity > 100000
+        || !["received", "washing", "ironing", "quality_check", "ready", "delivered"].includes(nextItem.processingStatus)
+        || !["pending", "passed", "failed"].includes(nextItem.qualityStatus)
         || nextItem.label !== current.label || nextItem.quantity !== current.quantity || nextItem.tagCode !== current.tagCode) {
         return { order: null, errors: ["Garment identity, tag and quantity are immutable after ticket posting"] };
       }
@@ -516,7 +518,10 @@ export function updateLaundryDetails(id: UUID, input: { garment?: string | null;
     order.quantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
     order.garment = order.items.map((item) => item.label).join(", ");
     if (order.mode === "in_house_ironing") order.status = order.items.every((item) => item.processingStatus === "delivered") ? "delivered" : "pending";
-  } else if (input.garment !== undefined) order.garment = input.garment?.trim() || null;
+  } else if (input.garment !== undefined) {
+    if (order.items?.length && (input.garment?.trim() || "") !== (order.garment || "")) return { order: null, errors: ["Edit item names in the garment rows; ticket-level garment summary is derived from those rows"] };
+    order.garment = input.garment?.trim() || null;
+  }
   if (input.notes !== undefined) order.notes = input.notes?.trim() || null;
   order.pickupAt = pickupAt;
   order.dueAt = dueAt;
