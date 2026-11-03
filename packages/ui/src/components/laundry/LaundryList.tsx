@@ -53,6 +53,8 @@ export function LaundryList({
   const [editTarget, setEditTarget] = React.useState<LaundryOrder | null>(null);
   const [editGarment, setEditGarment] = React.useState("");
   const [editNotes, setEditNotes] = React.useState("");
+  const [editPickupAt, setEditPickupAt] = React.useState("");
+  const [editDueAt, setEditDueAt] = React.useState("");
   const [editError, setEditError] = React.useState<string | null>(null);
   const [csvFeedback, setCsvFeedback] = React.useState<{ failed: boolean; message: string } | null>(null);
 
@@ -85,6 +87,7 @@ export function LaundryList({
         order.garment || "",
         order.supplierName || "",
         order.notes || "",
+        ...(order.items || []).map((item) => item.tagCode),
       ].some((value) => value.toLowerCase().includes(query));
     });
   }, [orders, q, customerId, mode, status, supplierId, dateFrom, dateTo]);
@@ -109,6 +112,8 @@ export function LaundryList({
     setEditTarget(order);
     setEditGarment(order.garment || "");
     setEditNotes(order.notes || "");
+    setEditPickupAt(order.pickupAt?.slice(0, 10) || "");
+    setEditDueAt(order.dueAt?.slice(0, 10) || "");
     setEditError(null);
   };
 
@@ -132,7 +137,7 @@ export function LaundryList({
 
   const saveEdit = () => {
     if (!editTarget || !onUpdateDetails) return;
-    const result = onUpdateDetails(editTarget, { garment: editGarment, notes: editNotes });
+    const result = onUpdateDetails(editTarget, { garment: editGarment, notes: editNotes, pickupAt: editPickupAt || null, dueAt: editDueAt || null } as { garment: string; notes: string });
     if (!result.success) {
       setEditError(result.error || "Unable to update laundry ticket");
       return;
@@ -361,6 +366,10 @@ export function LaundryList({
           <FormField label="Garment / item">
             <input className={inputClass} value={editGarment} onChange={(e) => setEditGarment(e.target.value)} />
           </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Pickup date"><input type="date" className={inputClass} value={editPickupAt} onChange={(e) => setEditPickupAt(e.target.value)} /></FormField>
+            <FormField label="Due / delivery date"><input type="date" min={editPickupAt || undefined} className={inputClass} value={editDueAt} onChange={(e) => setEditDueAt(e.target.value)} /></FormField>
+          </div>
           <FormField label="Notes">
             <textarea className={inputClass + " h-24 py-2"} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
           </FormField>
