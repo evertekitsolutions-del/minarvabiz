@@ -106,6 +106,8 @@ jobs:
         run: node --experimental-strip-types packages/business-logic/src/__tests__/payment-history-csv.test.mjs
       - name: Verify filtered laundry CSV and injection safety
         run: node --experimental-strip-types packages/business-logic/src/__tests__/laundry-tickets-csv.test.mjs
+      - name: Verify itemized laundry intake, tags, schedule and quality workflow
+        run: node --experimental-strip-types packages/business-logic/src/__tests__/laundry-item-workflow.test.mjs
       - name: Verify CSV frontend safety
         run: node scripts/frontend-tools-csv-contract.test.mjs
       - name: Verify default GST rate validation and explicit-save UI
