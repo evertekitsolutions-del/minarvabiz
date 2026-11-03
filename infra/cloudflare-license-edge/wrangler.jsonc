@@ -13,6 +13,7 @@
   },
   "vars": {
     "SUPABASE_URL": "https://wmjgefbaliuwmaxyzxkq.supabase.co",
-    "MINARVA_ONLINE_APP_URL": "https://minarvabiz-steel.vercel.app"
+    "MINARVA_ONLINE_APP_URL": "https://minarvabiz-steel.vercel.app",
+    "LICENSE_ADMIN_ALLOWED_ORIGINS": "https://minarvabiz-license-admin.pages.dev"
   }
 }
