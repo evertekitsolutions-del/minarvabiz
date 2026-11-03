@@ -994,6 +994,7 @@ export function recordCustomerPayment(input: {
     ].filter(Boolean).join(" · ") || null,
     paidAt: now,
     createdAt: now,
+    branchId: customer.branchId ?? null,
     version: 1,
   };
 
