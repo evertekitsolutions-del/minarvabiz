@@ -584,6 +584,7 @@ assert.match(validationLifecycle, /a\.device_id = v_device_id/);
 assert.match(offlineLifecycle, /WHERE l\.license_id = v_license_id[\s\S]*FOR UPDATE/);
 assert.match(offlineLifecycle, /v_license\.status <> 'active'/);
 assert.match(offlineLifecycle, /v_license\.expires_at <= v_now/);
+assert.match(offlineLifecycle, /SET status = 'expired', updated_at = v_now[\s\S]*WHERE id = v_license\.id AND status = 'active'/);
 assert.match(offlineLifecycle, /v_active_count >= v_license\.activation_limit/);
 assert.match(offlineLifecycle, /'mode', 'offline-package-created'/);
 assert.match(conversionLifecycle, /p_registration_id,\s*v_trial\.organization_name/);
