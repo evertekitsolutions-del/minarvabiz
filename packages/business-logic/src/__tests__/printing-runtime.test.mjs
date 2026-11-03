@@ -177,15 +177,28 @@ test("invoice, receipt and barcode builders produce printable HTML", () => {
 
   const invoiceHtml = buildSaleInvoiceHtml(sale, { paper: "thermal", autoPrint: false });
   assert.match(invoiceHtml, /INV-1001/);
+  assert.match(invoiceHtml, /@page\{size:58mm auto/);
   assert.doesNotMatch(invoiceHtml, /window\.print/);
 
   const receiptHtml = buildSaleReceiptHtml(sale, { autoPrint: false });
   assert.match(receiptHtml, /INV-1001/);
+  assert.match(receiptHtml, /@page\{size:58mm auto/);
+  assert.match(receiptHtml, /width:58mm/);
   assert.doesNotMatch(receiptHtml, /window\.print/);
 
   const orderHtml = buildOrderReceiptHtml(order, { autoPrint: false });
   assert.match(orderHtml, /ORD-1001/);
+  assert.match(orderHtml, /@page\{size:58mm auto/);
+  assert.match(orderHtml, /width:58mm/);
   assert.doesNotMatch(orderHtml, /window\.print/);
+
+  updatePrintSettings({ defaultInvoicePaper: "thermal", thermalWidthMm: 80 });
+  const threeInchSaleReceipt = buildSaleReceiptHtml(sale, { autoPrint: false });
+  const threeInchOrderReceipt = buildOrderReceiptHtml(order, { autoPrint: false });
+  assert.match(threeInchSaleReceipt, /@page\{size:80mm auto/);
+  assert.match(threeInchSaleReceipt, /width:80mm/);
+  assert.match(threeInchOrderReceipt, /@page\{size:80mm auto/);
+  assert.match(threeInchOrderReceipt, /width:80mm/);
 });
 
 test("desktop native bridge receives bill, receipt and label print jobs", async () => {

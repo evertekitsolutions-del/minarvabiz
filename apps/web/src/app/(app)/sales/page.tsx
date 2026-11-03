@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { PosBilling, NormalBilling, SalesList, Button, Modal, FormField, inputClass } from "@minarvabiz/ui";
-import { store, requestSaleInvoicePrint, buildSaleInvoiceHtml, assertLimit, can, readAuthorizedInvoiceGrossProfit } from "@minarvabiz/business-logic";
+import { store, requestSaleInvoicePrint, buildSaleInvoiceHtml, getPrintSettings, assertLimit, can, readAuthorizedInvoiceGrossProfit } from "@minarvabiz/business-logic";
 import type { Product, Customer, Sale, CartLine, PaymentMethod } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
@@ -87,7 +87,7 @@ export default function SalesPage() {
       return { success: false, errors: result.errors };
     }
     refresh();
-    printExistingInvoice(result.sale.id, "a4");
+    printExistingInvoice(result.sale.id, getPrintSettings().defaultInvoicePaper);
     return { success: true, invoiceNumber: result.sale.invoiceNumber, saleId: result.sale.id };
   }
 

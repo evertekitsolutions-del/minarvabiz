@@ -3,7 +3,7 @@ import { assertPermission } from "./permissions";
 import { assertBusinessDayOpen } from "./business-day-state";
 import { enqueueOutbox } from "./outbox-bridge";
 import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase, remoteSupplierSettlement, remoteUpsertCustomer } from "./remote-write";
-import type { Supplier, LaundryOrder, Expense, ExpenseCategory, Purchase, PaymentMethod, UUID } from "@minarvabiz/types";
+import type { Supplier, LaundryOrder, LaundryItem, LaundryItemProcessingStatus, LaundryQualityStatus, Expense, ExpenseCategory, Purchase, PaymentMethod, UUID } from "@minarvabiz/types";
 import {
   addMinorUnits,
   formatMinorUnits,
@@ -353,11 +353,13 @@ export function recordSupplierPayment(input: {
 }
 
 export function listLaundryOrders(opts?: { mode?: "outsourced"|"in_house_ironing"; status?: LaundryOrder["status"]; customerId?: UUID; supplierId?: UUID; dateFrom?: string; dateTo?: string; query?: string }): LaundryOrder[] { let list=laundryOrders.filter(o=>!o.deletedAt);if(opts?.mode)list=list.filter(o=>o.mode===opts.mode);if(opts?.status)list=list.filter(o=>o.status===opts.status);if(opts?.customerId)list=list.filter(o=>o.customerId===opts.customerId);if(opts?.supplierId)list=list.filter(o=>o.supplierId===opts.supplierId);if(opts?.dateFrom)list=list.filter(o=>o.createdAt.slice(0,10)>=opts.dateFrom!);if(opts?.dateTo)list=list.filter(o=>o.createdAt.slice(0,10)<=opts.dateTo!);if(opts?.query?.trim()){const q=opts.query.toLowerCase();list=list.filter(o=>o.orderNumber.toLowerCase().includes(q)||o.customerName?.toLowerCase().includes(q)||o.garment?.toLowerCase().includes(q)||o.supplierName?.toLowerCase().includes(q)||o.notes?.toLowerCase().includes(q));}return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
-export function createLaundryOrder(input: { customerId: UUID; garment?: string|null; quantity:number; mode:"outsourced"|"in_house_ironing"; supplierId?: UUID|null; supplierRate:number; customerRate:number; notes?:string|null; paidAmount?:number; paymentMethod?:PaymentMethod }): {order:LaundryOrder|null;errors:string[]} {
+export function createLaundryOrder(input: { customerId: UUID; garment?: string|null; quantity:number; items?: Array<{ label: string; quantity: number; notes?: string | null }>; pickupAt?: string | null; dueAt?: string | null; mode:"outsourced"|"in_house_ironing"; supplierId?: UUID|null; supplierRate:number; customerRate:number; notes?:string|null; paidAmount?:number; paymentMethod?:PaymentMethod }): {order:LaundryOrder|null;errors:string[]} {
   assertPermission("orders.manage");
   assertBusinessDayOpen();
   const errors:string[]=[];
-  const quantity=Number(input.quantity);
+  const itemInputs = (input.items ?? []).map((item) => ({ label: String(item.label ?? "").trim(), quantity: Number(item.quantity), notes: item.notes?.trim() || null }));
+  const itemQuantity = itemInputs.reduce((sum, item) => sum + item.quantity, 0);
+  const quantity=Number(input.items?.length ? itemQuantity : input.quantity);
   const customerRateInput=Number(input.customerRate);
   const supplierRateInput=Number(input.supplierRate);
   const paidInput=Number(input.paidAmount??0);
@@ -368,6 +370,15 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
 
   if(!input.customerId) errors.push("Customer is required");
   if(!["outsourced","in_house_ironing"].includes(input.mode)) errors.push("Invalid laundry mode");
+  if (input.items?.length) {
+    if (itemInputs.length > 100) errors.push("A laundry ticket can contain at most 100 item rows");
+    if (itemInputs.some((item) => !item.label || item.label.length > 120)) errors.push("Every garment row needs a name of 1–120 characters");
+    if (itemInputs.some((item) => quantityMilliOrNull(item.quantity) == null || item.quantity <= 0)) errors.push("Every garment row needs a positive quantity");
+    if (input.items.length !== itemInputs.length) errors.push("Invalid garment rows");
+  }
+  if (input.pickupAt && Number.isNaN(Date.parse(input.pickupAt))) errors.push("Invalid pickup date");
+  if (input.dueAt && Number.isNaN(Date.parse(input.dueAt))) errors.push("Invalid due date");
+  if (input.pickupAt && input.dueAt && input.dueAt < input.pickupAt) errors.push("Due date cannot be before pickup date");
   if(quantityMilli==null||quantityMilli<=0) errors.push("Quantity must be positive and finite");
   if(customerRateMinor==null||customerRateMinor<0) errors.push("Customer rate must be a finite non-negative amount");
   if(rawSupplierRateMinor==null||rawSupplierRateMinor<0) errors.push("Supplier rate must be a finite non-negative amount");
@@ -418,10 +429,17 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
   const now=nowISO();
   const order:LaundryOrder={
     id:generateId(),orderNumber,customerId:input.customerId,customerName:customer.name,
-    garment:input.garment??null,quantity,mode:input.mode,supplierId:input.mode==="outsourced"?(input.supplierId??null):null,
+    garment:input.items?.length ? itemInputs.map((item) => item.label).join(", ") : (input.garment??null),quantity,
+    items: input.items?.length ? itemInputs.map((item, index): LaundryItem => ({
+      id: generateId(), label: item.label, quantity: item.quantity,
+      tagCode: `${orderNumber}-${String(index + 1).padStart(3, "0")}`,
+      processingStatus: "received", qualityStatus: "pending", notes: item.notes,
+    })) : undefined,
+    pickupAt: input.pickupAt ?? null, dueAt: input.dueAt ?? null,
+    mode:input.mode,supplierId:input.mode==="outsourced"?(input.supplierId??null):null,
     supplierName:supplier?.name??null,supplierRate,customerRate,profit:fromMinorUnits(totalProfitMinor),
     totalCustomerCharge:fromMinorUnits(totalCustomerMinor),totalSupplierCost:fromMinorUnits(totalSupplierMinor),
-    status:input.mode==="in_house_ironing"?"delivered":"pending",notes:input.notes??null,
+    status:input.mode==="in_house_ironing" && !input.items?.length ? "delivered" : "pending",notes:input.notes??null,
     paidAmount:paid,balanceAmount:balance,createdAt:now,updatedAt:now,version:1
   };
   const accountingPlan=planLaundryPosting(order,paymentMethod);
@@ -459,24 +477,105 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
   return {order,errors:[]};
 }
 
-export function updateLaundryDetails(id: UUID, input: { garment?: string | null; notes?: string | null }): { order: LaundryOrder | null; errors: string[] } {
+export function updateLaundryDetails(id: UUID, input: { garment?: string | null; notes?: string | null; pickupAt?: string | null; dueAt?: string | null; items?: LaundryItem[] }): { order: LaundryOrder | null; errors: string[] } {
   assertPermission("orders.manage");
   const order = laundryOrders.find((item) => item.id === id && !item.deletedAt);
   if (!order) return { order: null, errors: ["Laundry order not found"] };
   if (order.status === "cancelled") return { order: null, errors: ["Cancelled laundry tickets are immutable"] };
-  const before = { garment: order.garment ?? null, notes: order.notes ?? null, updatedAt: order.updatedAt, version: order.version };
-  order.garment = input.garment?.trim() || null;
-  order.notes = input.notes?.trim() || null;
+  if (input.pickupAt && Number.isNaN(Date.parse(input.pickupAt))) return { order: null, errors: ["Invalid pickup date"] };
+  if (input.dueAt && Number.isNaN(Date.parse(input.dueAt))) return { order: null, errors: ["Invalid due date"] };
+  const pickupAt = input.pickupAt === undefined ? order.pickupAt ?? null : input.pickupAt || null;
+  const dueAt = input.dueAt === undefined ? order.dueAt ?? null : input.dueAt || null;
+  if (pickupAt && dueAt && dueAt < pickupAt) return { order: null, errors: ["Due date cannot be before pickup date"] };
+  if (input.items) {
+    if (!order.items || input.items.length !== order.items.length || input.items.length > 100) return { order: null, errors: ["Laundry item rows cannot be added or removed after ticket posting"] };
+    const transitions: Record<LaundryItemProcessingStatus, LaundryItemProcessingStatus | null> = {
+      received: "washing", washing: "ironing", ironing: "quality_check",
+      quality_check: "ready", ready: "delivered", delivered: null,
+    };
+    for (const nextItem of input.items) {
+      const current = order.items?.find((item) => item.id === nextItem.id);
+      if (!current || !nextItem.label.trim() || !Number.isFinite(nextItem.quantity) || nextItem.quantity <= 0 || nextItem.quantity > 100000
+        || !["received", "washing", "ironing", "quality_check", "ready", "delivered"].includes(nextItem.processingStatus)
+        || !["pending", "passed", "failed"].includes(nextItem.qualityStatus)
+        || nextItem.label !== current.label || nextItem.quantity !== current.quantity || nextItem.tagCode !== current.tagCode) {
+        return { order: null, errors: ["Garment identity, tag and quantity are immutable after ticket posting"] };
+      }
+      if (nextItem.processingStatus !== current.processingStatus
+        && transitions[current.processingStatus] !== nextItem.processingStatus
+        && !(current.processingStatus === "quality_check" && current.qualityStatus === "failed" && nextItem.processingStatus === "ironing")) {
+        return { order: null, errors: [`Invalid item workflow transition for ${current.tagCode}`] };
+      }
+      if (nextItem.processingStatus === "ready" && nextItem.qualityStatus !== "passed") return { order: null, errors: ["Quality check must pass before an item can be marked ready"] };
+      if (nextItem.qualityStatus !== current.qualityStatus && current.processingStatus !== "ironing" && current.processingStatus !== "quality_check") {
+        return { order: null, errors: ["Quality result can only be changed during quality check"] };
+      }
+    }
+  }
+  const before = { garment: order.garment ?? null, notes: order.notes ?? null, pickupAt: order.pickupAt ?? null, dueAt: order.dueAt ?? null, items: order.items ?? null, updatedAt: order.updatedAt, version: order.version };
+  if (input.items) {
+    order.items = input.items.map((item) => ({ ...item, label: item.label.trim(), tagCode: item.tagCode.trim() }));
+    order.quantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    order.garment = order.items.map((item) => item.label).join(", ");
+    if (order.mode === "in_house_ironing") order.status = order.items.every((item) => item.processingStatus === "delivered") ? "delivered" : "pending";
+  } else if (input.garment !== undefined) {
+    if (order.items?.length && (input.garment?.trim() || "") !== (order.garment || "")) return { order: null, errors: ["Edit item names in the garment rows; ticket-level garment summary is derived from those rows"] };
+    order.garment = input.garment?.trim() || null;
+  }
+  if (input.notes !== undefined) order.notes = input.notes?.trim() || null;
+  order.pickupAt = pickupAt;
+  order.dueAt = dueAt;
   order.updatedAt = nowISO();
   order.version += 1;
   enqueueOutbox("laundry_orders", order.id, "update", { ...order });
   auditAction("laundry.update_details", "laundry_orders", order.id, before, {
     garment: order.garment ?? null,
     notes: order.notes ?? null,
+    pickupAt: order.pickupAt ?? null,
+    dueAt: order.dueAt ?? null,
+    items: order.items ?? null,
     version: order.version,
   });
   touchPersistence();
   return { order: { ...order }, errors: [] };
+}
+
+export function updateLaundryItemWorkflow(
+  orderId: UUID,
+  itemId: UUID,
+  status: LaundryItemProcessingStatus,
+  qualityStatus?: LaundryQualityStatus,
+): { order: LaundryOrder | null; errors: string[] } {
+  assertPermission("orders.manage");
+  const order = laundryOrders.find((item) => item.id === orderId && !item.deletedAt);
+  if (!order || order.status === "cancelled") return { order: null, errors: ["Active laundry ticket not found"] };
+  const item = order.items?.find((entry) => entry.id === itemId);
+  if (!item) return { order: null, errors: ["Laundry item not found"] };
+  const transitions: Record<LaundryItemProcessingStatus, LaundryItemProcessingStatus | null> = {
+    received: "washing", washing: "ironing", ironing: "quality_check",
+    quality_check: "ready", ready: "delivered", delivered: null,
+  };
+  if (status !== item.processingStatus && transitions[item.processingStatus] !== status
+    && !(item.processingStatus === "quality_check" && item.qualityStatus === "failed" && status === "ironing")) {
+    return { order: null, errors: [`Cannot move item from ${item.processingStatus} to ${status}`] };
+  }
+  const nextQuality = qualityStatus ?? item.qualityStatus;
+  if (status === "ready" && item.qualityStatus !== "passed" && nextQuality !== "passed") {
+    return { order: null, errors: ["Quality check must pass before an item can be marked ready"] };
+  }
+  if (status !== "quality_check" && qualityStatus !== undefined) return { order: null, errors: ["Quality result can only be recorded during quality check"] };
+  if (qualityStatus && !["pending", "passed", "failed"].includes(qualityStatus)) return { order: null, errors: ["Invalid quality result"] };
+  const before = { ...item };
+  item.processingStatus = status;
+  if (qualityStatus !== undefined) item.qualityStatus = qualityStatus;
+  item.notes = item.notes ?? null;
+  if (order.mode === "in_house_ironing" && order.items?.every((entry) => entry.processingStatus === "delivered")) order.status = "delivered";
+  order.updatedAt = nowISO();
+  order.version += 1;
+  enqueueOutbox("laundry_orders", order.id, "update", { ...order });
+  auditAction("laundry.item_workflow", "laundry_orders", order.id, before, { item: { ...item }, version: order.version });
+  touchPersistence();
+  return { order: { ...order, items: order.items?.map((entry) => ({ ...entry })) ?? [] }, errors: [] };
 }
 
 export function cancelLaundryOrder(input: {
