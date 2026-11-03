@@ -73,7 +73,7 @@ assert.equal(snapshot.status,"pending");
 assert.equal(snapshot.quantity,3);
 assert.equal(snapshot.totalCustomerCharge,60);
 assert(outbox.listPendingOutbox().some(event=>event.aggregateType==="laundry_orders"&&event.aggregateId===created.order.id));
-assert(phase7.listAuditLogs(50).some(event=>event.action==="laundry.item_workflow"&&event.recordId===created.order!.id));
+assert(phase7.listAuditLogs(50).some(event=>event.action==="laundry.update_details"&&event.recordId===created.order.id));
 
 const invalidDate=phase5.createLaundryOrder({customerId:"c",mode:"in_house_ironing",quantity:1,items:[{label:"Skirt",quantity:1}],pickupAt:"2026-11-07",dueAt:"2026-11-06",supplierRate:0,customerRate:10});
 assert.equal(invalidDate.order,null);
