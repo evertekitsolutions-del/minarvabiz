@@ -1,0 +1,66 @@
+name: License Admin — Cloudflare Pages Direct Deploy
+
+on:
+  push:
+    branches:
+      - feat/cloudflare-pages-license-admin-direct-deploy
+  pull_request:
+    paths:
+      - "apps/license-admin/**"
+      - "packages/licensing/**"
+      - "packages/types/**"
+      - "packages/ui/**"
+      - "packages/utils/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/license-admin-pages-direct-deploy.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: license-admin-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build static admin
+        run: pnpm --filter @minarvabiz/license-admin build
+
+      - name: Upload static build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-admin-pages-static
+          path: apps/license-admin/out/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Deploy preview to Cloudflare Pages
+        if: github.event_name == 'push' && env.CLOUDFLARE_API_TOKEN != ''
+        env:
+          CLOUDFLARE_ACCOUNT_ID: bf64dd0a8470aefc70efa6c7152400a6
+        run: >-
+          pnpm dlx wrangler@4 pages deploy apps/license-admin/out
+          --project-name=minarvabiz-license-admin-anil
+          --branch=feat-cloudflare-license-admin
