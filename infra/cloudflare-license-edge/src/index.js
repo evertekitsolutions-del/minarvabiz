@@ -1741,7 +1741,7 @@ function parseAdminTrialConversionBody(bytes) {
 
 async function adminTrialConvertNatively(request, env, route) {
   const contentType = request.headers.get("content-type") || "";
-  if (!/^application\\/json(?:\\s*;|$)/i.test(contentType)) {
+  if (!/^application\/json(?:\s*;|$)/i.test(contentType)) {
     return json({ ok: false, code: "UNSUPPORTED_MEDIA_TYPE" }, 415, {
       "x-minarva-admin-backend": "cloudflare-native",
     });
