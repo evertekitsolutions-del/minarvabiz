@@ -112,6 +112,24 @@ export function LaundryList({
     setEditError(null);
   };
 
+  const saveItemWorkflow = (itemId: string, patch: { processingStatus?: string; qualityStatus?: string }) => {
+    if (!detailTarget || !onUpdateDetails || !detailTarget.items) return;
+    const items = detailTarget.items.map((item) => item.id === itemId ? { ...item, ...patch } : { ...item });
+    const result = onUpdateDetails(detailTarget, {
+      garment: detailTarget.garment || "",
+      notes: detailTarget.notes || "",
+      items,
+      pickupAt: detailTarget.pickupAt ?? null,
+      dueAt: detailTarget.dueAt ?? null,
+    } as { garment: string; notes: string });
+    if (!result.success) {
+      setEditError(result.error || "Unable to update item workflow");
+      return;
+    }
+    setEditError(null);
+    if (result.order) setDetailTarget(result.order);
+  };
+
   const saveEdit = () => {
     if (!editTarget || !onUpdateDetails) return;
     const result = onUpdateDetails(editTarget, { garment: editGarment, notes: editNotes });
@@ -279,7 +297,30 @@ export function LaundryList({
               <div><div className="text-xs text-slate-500">Quantity</div><div className="font-medium text-slate-900">{detailTarget.quantity}</div></div>
               <div><div className="text-xs text-slate-500">Supplier</div><div className="font-medium text-slate-900">{detailTarget.supplierName || "—"}</div></div>
               <div><div className="text-xs text-slate-500">Last updated</div><div className="font-medium text-slate-900">{new Date(detailTarget.updatedAt).toLocaleString("en-IN")}</div></div>
+              <div><div className="text-xs text-slate-500">Pickup date</div><div className="font-medium text-slate-900">{detailTarget.pickupAt ? new Date(detailTarget.pickupAt).toLocaleDateString("en-IN") : "—"}</div></div>
+              <div><div className="text-xs text-slate-500">Due / delivery date</div><div className="font-medium text-slate-900">{detailTarget.dueAt ? new Date(detailTarget.dueAt).toLocaleDateString("en-IN") : "—"}</div></div>
             </div>
+            {detailTarget.items?.length ? <section className="space-y-2">
+              <h3 className="text-sm font-semibold text-slate-900">Garment tracking & quality control</h3>
+              {detailTarget.items.map((item) => <div key={item.id} className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-[1fr_130px_150px] sm:items-center">
+                <div><div className="font-medium text-slate-900">{item.label} × {item.quantity}</div><div className="font-mono text-xs text-slate-500">Tag: {item.tagCode}</div><div className="text-xs text-slate-500">QC: {item.qualityStatus}</div></div>
+                <div className="text-sm capitalize text-slate-700">{item.processingStatus.replaceAll("_", " ")}</div>
+                {onUpdateDetails && detailTarget.status !== "cancelled" ? <div className="flex flex-col gap-1">
+                  <select aria-label={`Workflow for ${item.tagCode}`} className={selectClass} value={item.processingStatus} onChange={(e) => saveItemWorkflow(item.id, { processingStatus: e.target.value })}>
+                    <option value={item.processingStatus}>{item.processingStatus.replaceAll("_", " ")}</option>
+                    {item.processingStatus === "received" && <option value="washing">Washing</option>}
+                    {item.processingStatus === "washing" && <option value="ironing">Ironing</option>}
+                    {item.processingStatus === "ironing" && <option value="quality_check">Quality check</option>}
+                    {item.processingStatus === "quality_check" && item.qualityStatus === "failed" && <option value="ironing">Return to ironing</option>}
+                    {item.processingStatus === "quality_check" && item.qualityStatus === "passed" && <option value="ready">Ready</option>}
+                    {item.processingStatus === "ready" && <option value="delivered">Delivered</option>}
+                  </select>
+                  {item.processingStatus === "quality_check" && <select aria-label={`Quality result for ${item.tagCode}`} className={selectClass} value={item.qualityStatus} onChange={(e) => saveItemWorkflow(item.id, { qualityStatus: e.target.value })}>
+                    <option value="pending">QC pending</option><option value="passed">QC passed</option><option value="failed">QC failed</option>
+                  </select>}
+                </div> : <span className="text-xs text-slate-500">Read only</span>}
+              </div>)}
+            </section> : null}
             <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-5">
               <div><div className="text-xs text-slate-500">Customer rate</div><div className="font-semibold">{formatMoney(detailTarget.customerRate)}</div></div>
               <div><div className="text-xs text-slate-500">Supplier rate</div><div className="font-semibold">{formatMoney(detailTarget.supplierRate)}</div></div>
