@@ -25,6 +25,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,9 +57,8 @@ jobs:
           retention-days: 7
 
       - name: Deploy preview to Cloudflare Pages
-        if: github.event_name == 'push' && secrets.CLOUDFLARE_API_TOKEN != ''
+        if: github.event_name == 'push' && env.CLOUDFLARE_API_TOKEN != ''
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: bf64dd0a8470aefc70efa6c7152400a6
         run: >-
           pnpm dlx wrangler@4 pages deploy apps/license-admin/out
