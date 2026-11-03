@@ -85,7 +85,7 @@ export function planCollectionPosting(
   const receivableMinor = addMinorUnits(saleReceivableMinor, toMinorUnits(additionalPostedReceivable));
   const paymentMinor = toMinorUnits(payment.amount);
   return planAutomaticPosting({ referenceType: 'auto_collection', referenceId: payment.id, date: payment.paidAt,
-    description: 'Customer collection ' + (payment.notes ?? payment.id), lines: [
+    description: 'Customer collection ' + (payment.notes ?? payment.id), branchId: payment.branchId ?? null, lines: [
       { key: tenderKey(payment.method), debit: fromMinorUnits(paymentMinor) },
       { key: 'accounts_receivable', credit: fromMinorUnits(receivableMinor) },
       { key: 'legacy_settlement_clearing', credit: fromMinorUnits(subtractMinorUnits(paymentMinor, receivableMinor)) },
