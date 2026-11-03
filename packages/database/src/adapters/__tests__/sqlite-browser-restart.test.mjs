@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
@@ -10,15 +12,16 @@ require.extensions[".ts"] = (module, filename) => module._compile(ts.transpileMo
 const { openSqliteDatabase } = require("../sqlite-browser.ts");
 
 test("SQLite binary survives close, fresh adapter reopen and domain snapshot restore", async () => {
-  let diskImage = null;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "minarvabiz-sqlite-restart-"));
+  const dbPath = path.join(root, "minarvabiz.db");
   const io = {
-    readFile: () => diskImage && new Uint8Array(diskImage),
-    writeFile: (_path, bytes) => { diskImage = new Uint8Array(bytes); },
-    exists: () => diskImage !== null,
-    mkdirp: () => {},
+    readFile: (file) => fs.existsSync(file) ? new Uint8Array(fs.readFileSync(file)) : null,
+    writeFile: (file, bytes) => fs.writeFileSync(file, bytes),
+    exists: (file) => fs.existsSync(file),
+    mkdirp: (dir) => { if (dir) fs.mkdirSync(dir, { recursive: true }); },
   };
 
-  const first = await openSqliteDatabase("minarvabiz.db", io);
+  const first = await openSqliteDatabase(dbPath, io);
   first.exec("CREATE TABLE IF NOT EXISTS domain_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)");
   const expected = {
     version: 2,
@@ -31,17 +34,16 @@ test("SQLite binary survives close, fresh adapter reopen and domain snapshot res
       "domain_snapshot_v2", JSON.stringify(expected), "2026-11-03T00:00:00.000Z",
     ]);
   });
-  assert.ok(diskImage instanceof Uint8Array);
-  assert.ok(diskImage.byteLength > 0);
-  const committedImage = new Uint8Array(diskImage);
   first.close();
+  assert.ok(fs.existsSync(dbPath));
+  assert.ok(fs.statSync(dbPath).size > 0);
 
-  // A new adapter instance reads only the committed binary image, like a new app process.
-  diskImage = committedImage;
-  const restarted = await openSqliteDatabase("minarvabiz.db", io);
+  // A new adapter instance reads the actual committed SQLite file, like a new app process.
+  const restarted = await openSqliteDatabase(dbPath, io);
   assert.deepEqual(restarted.query("PRAGMA quick_check").map((row) => Object.values(row)[0]), ["ok"]);
   const rows = restarted.query("SELECT value FROM domain_kv WHERE key = ?", ["domain_snapshot_v2"]);
   assert.equal(rows.length, 1);
   assert.deepEqual(JSON.parse(String(rows[0].value)), expected);
   restarted.close();
+  fs.rmSync(root, { recursive: true, force: true });
 });
