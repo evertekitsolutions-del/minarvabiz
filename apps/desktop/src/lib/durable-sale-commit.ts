@@ -23,7 +23,8 @@ export function createDurableSaleCommit<TPayload>(
   let pending: { fingerprint: string; receipt: DurableSaleReceipt } | null = null;
   let saving = false;
   // If the operator saved a pending sale from the recovery banner, its original
-  // form may still be open. The next identical submit returns that receipt once.
+  // form may still be open. Its first matching replay returns that receipt once;
+  // unrelated checkouts must not clear this guard.
   let recovered: { fingerprint: string; receipt: DurableSaleReceipt } | null = null;
 
   const failure = (message: string): DurableSaleReceipt => ({
@@ -57,10 +58,12 @@ export function createDurableSaleCommit<TPayload>(
       } catch (error) {
         return failure("Cannot identify the checkout: " + (error instanceof Error ? error.message : String(error)));
       }
-      if (recovered) {
+      // Keep the recovery receipt until its exact stale form is replayed.
+      // A different checkout must not discard this dedupe guard.
+      if (recovered?.fingerprint === fingerprint) {
         const previous = recovered;
         recovered = null;
-        if (previous.fingerprint === fingerprint) return previous.receipt;
+        return previous.receipt;
       }
       if (pending && pending.fingerprint !== fingerprint) {
         return failure("A previous invoice has not been saved. Retry that unchanged checkout first; do not create another sale.");
