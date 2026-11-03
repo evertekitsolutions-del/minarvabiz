@@ -439,7 +439,7 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
     mode:input.mode,supplierId:input.mode==="outsourced"?(input.supplierId??null):null,
     supplierName:supplier?.name??null,supplierRate,customerRate,profit:fromMinorUnits(totalProfitMinor),
     totalCustomerCharge:fromMinorUnits(totalCustomerMinor),totalSupplierCost:fromMinorUnits(totalSupplierMinor),
-    status:input.mode==="in_house_ironing"?"delivered":"pending",notes:input.notes??null,
+    status:input.mode==="in_house_ironing" && !input.items?.length ? "delivered" : "pending",notes:input.notes??null,
     paidAmount:paid,balanceAmount:balance,createdAt:now,updatedAt:now,version:1
   };
   const accountingPlan=planLaundryPosting(order,paymentMethod);
@@ -515,6 +515,7 @@ export function updateLaundryDetails(id: UUID, input: { garment?: string | null;
     order.items = input.items.map((item) => ({ ...item, label: item.label.trim(), tagCode: item.tagCode.trim() }));
     order.quantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
     order.garment = order.items.map((item) => item.label).join(", ");
+    if (order.mode === "in_house_ironing") order.status = order.items.every((item) => item.processingStatus === "delivered") ? "delivered" : "pending";
   } else if (input.garment !== undefined) order.garment = input.garment?.trim() || null;
   if (input.notes !== undefined) order.notes = input.notes?.trim() || null;
   order.pickupAt = pickupAt;
