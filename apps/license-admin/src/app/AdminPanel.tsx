@@ -231,6 +231,7 @@ export default function AdminPanel({
             lastToken={lastToken}
             busy={busy}
             canIssue={canIssue}
+            trialConversion={Boolean(selectedTrialId)}
             onCustomerNameChange={setCustomerName}
             onPlanChange={setPlan}
             onEditionChange={setEdition}
