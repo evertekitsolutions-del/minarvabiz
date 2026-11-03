@@ -8,6 +8,7 @@ import type {
   LicenseStatusAction,
   SupportRequestRow,
   SupportRequestStatus,
+  TrialRegistrationRow,
 } from "./types";
 import type { BrowserAdminPendingAuth } from "./browser-admin-auth";
 import {
@@ -134,6 +135,7 @@ export async function loadBrowserAdminDashboard(): Promise<ApiResult<{
   identity: AdminIdentityView;
   licenses: LicenseRegistryRow[];
   requests: SupportRequestRow[];
+  trials: TrialRegistrationRow[];
 }>> {
   const me = await edgeRequest<{ identity: AdminIdentityView }>("/api/admin/me");
   if (!me.ok) return me;
@@ -142,9 +144,11 @@ export async function loadBrowserAdminDashboard(): Promise<ApiResult<{
   const [licenses, support] = await Promise.all([
     edgeRequest<{ licenses: LicenseRegistryRow[] }>("/api/admin/licenses"),
     edgeRequest<{ requests: SupportRequestRow[] }>("/api/admin/support"),
+    edgeRequest<{ registrations: TrialRegistrationRow[] }>("/api/admin/trials"),
   ]);
   if (!licenses.ok) return licenses;
   if (!support.ok) return support;
+  if (!trials.ok) return trials;
 
   return {
     ok: true,
@@ -154,6 +158,7 @@ export async function loadBrowserAdminDashboard(): Promise<ApiResult<{
     },
     licenses: Array.isArray(licenses.licenses) ? licenses.licenses : [],
     requests: Array.isArray(support.requests) ? support.requests : [],
+    trials: Array.isArray(trials.registrations) ? trials.registrations : [],
   };
 }
 
