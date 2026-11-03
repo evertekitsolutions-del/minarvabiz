@@ -487,7 +487,29 @@ export function updateLaundryDetails(id: UUID, input: { garment?: string | null;
   const pickupAt = input.pickupAt === undefined ? order.pickupAt ?? null : input.pickupAt || null;
   const dueAt = input.dueAt === undefined ? order.dueAt ?? null : input.dueAt || null;
   if (pickupAt && dueAt && dueAt < pickupAt) return { order: null, errors: ["Due date cannot be before pickup date"] };
-  if (input.items && (input.items.length > 100 || input.items.some((item) => !item.label.trim() || !Number.isFinite(item.quantity) || item.quantity <= 0 || item.quantity > 100000))) return { order: null, errors: ["Invalid laundry item rows"] };
+  if (input.items) {
+    if (input.items.length !== (order.items?.length ?? 0) || input.items.length > 100) return { order: null, errors: ["Laundry item rows cannot be added or removed after ticket posting"] };
+    const transitions: Record<LaundryItemProcessingStatus, LaundryItemProcessingStatus | null> = {
+      received: "washing", washing: "ironing", ironing: "quality_check",
+      quality_check: "ready", ready: "delivered", delivered: null,
+    };
+    for (const nextItem of input.items) {
+      const current = order.items?.find((item) => item.id === nextItem.id);
+      if (!current || !nextItem.label.trim() || !Number.isFinite(nextItem.quantity) || nextItem.quantity <= 0 || nextItem.quantity > 100000
+        || nextItem.label !== current.label || nextItem.quantity !== current.quantity || nextItem.tagCode !== current.tagCode) {
+        return { order: null, errors: ["Garment identity, tag and quantity are immutable after ticket posting"] };
+      }
+      if (nextItem.processingStatus !== current.processingStatus
+        && transitions[current.processingStatus] !== nextItem.processingStatus
+        && !(current.processingStatus === "quality_check" && current.qualityStatus === "failed" && nextItem.processingStatus === "ironing")) {
+        return { order: null, errors: [`Invalid item workflow transition for ${current.tagCode}`] };
+      }
+      if (nextItem.processingStatus === "ready" && nextItem.qualityStatus !== "passed") return { order: null, errors: ["Quality check must pass before an item can be marked ready"] };
+      if (nextItem.qualityStatus !== current.qualityStatus && current.processingStatus !== "ironing" && current.processingStatus !== "quality_check") {
+        return { order: null, errors: ["Quality result can only be changed during quality check"] };
+      }
+    }
+  }
   const before = { garment: order.garment ?? null, notes: order.notes ?? null, pickupAt: order.pickupAt ?? null, dueAt: order.dueAt ?? null, items: order.items ?? null, updatedAt: order.updatedAt, version: order.version };
   if (input.items) {
     order.items = input.items.map((item) => ({ ...item, label: item.label.trim(), tagCode: item.tagCode.trim() }));
