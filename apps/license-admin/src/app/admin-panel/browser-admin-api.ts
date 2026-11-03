@@ -141,7 +141,7 @@ export async function loadBrowserAdminDashboard(): Promise<ApiResult<{
   if (!me.ok) return me;
   if (!validIdentity(me.identity)) return { ok: false, error: "Administrator identity response is invalid." };
 
-  const [licenses, support] = await Promise.all([
+  const [licenses, support, trials] = await Promise.all([
     edgeRequest<{ licenses: LicenseRegistryRow[] }>("/api/admin/licenses"),
     edgeRequest<{ requests: SupportRequestRow[] }>("/api/admin/support"),
     edgeRequest<{ registrations: TrialRegistrationRow[] }>("/api/admin/trials"),
