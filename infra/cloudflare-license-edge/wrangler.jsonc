@@ -3,6 +3,7 @@
   "name": "minarva-biz-license-edge",
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "secrets": {
     "required": [
