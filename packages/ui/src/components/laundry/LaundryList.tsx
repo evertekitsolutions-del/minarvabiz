@@ -325,6 +325,7 @@ export function LaundryList({
                   </select>}
                 </div> : <span className="text-xs text-slate-500">Read only</span>}
               </div>)}
+              {editError && <p role="alert" className="text-sm text-rose-600">{editError}</p>}
             </section> : null}
             <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-5">
               <div><div className="text-xs text-slate-500">Customer rate</div><div className="font-semibold">{formatMoney(detailTarget.customerRate)}</div></div>
