@@ -558,4 +558,36 @@ assert.match(trialConversionMigration, /GRANT EXECUTE ON FUNCTION public\.cloudf
 assert.ok(migrationOrder.includes("20261104_cloudflare_admin_convert_trial_to_license.sql"));
 assert.match(adminTrialInboxMigration, /cloudflare_admin_list_trial_registrations/);
 
+// Paid lifecycle invariants: activation, validation, offline package issuance and conversion
+// must all operate on the same database license/customer identity.
+const activationLifecycle = activationBridge.slice(
+  activationBridge.indexOf("CREATE OR REPLACE FUNCTION public.cloudflare_prepare_license_activation"),
+);
+const validationLifecycle = validationBridge.slice(
+  validationBridge.indexOf("CREATE OR REPLACE FUNCTION public.cloudflare_validate_license"),
+);
+const offlineLifecycle = adminOfflineActivation.slice(
+  adminOfflineActivation.indexOf("CREATE OR REPLACE FUNCTION public.cloudflare_admin_prepare_offline_activation"),
+);
+const conversionLifecycle = trialConversionMigration.slice(
+  trialConversionMigration.indexOf("CREATE OR REPLACE FUNCTION public.cloudflare_admin_convert_trial_to_license"),
+);
+assert.match(activationLifecycle, /l\.customer_id/);
+assert.match(activationLifecycle, /l\.status/);
+assert.match(activationLifecycle, /l\.expires_at/);
+assert.match(activationLifecycle, /public\.activate_license_device\(v_license\.id, v_device_id\)/);
+assert.match(validationLifecycle, /l\.customer_id/);
+assert.match(validationLifecycle, /v_license\.status <> 'active'/);
+assert.match(validationLifecycle, /v_license\.expires_at <= v_now/);
+assert.match(validationLifecycle, /a\.status = 'active'/);
+assert.match(validationLifecycle, /a\.device_id = v_device_id/);
+assert.match(offlineLifecycle, /WHERE l\.license_id = v_license_id[\s\S]*FOR UPDATE/);
+assert.match(offlineLifecycle, /v_license\.status <> 'active'/);
+assert.match(offlineLifecycle, /v_license\.expires_at <= v_now/);
+assert.match(offlineLifecycle, /v_active_count >= v_license\.activation_limit/);
+assert.match(offlineLifecycle, /'mode', 'offline-package-created'/);
+assert.match(conversionLifecycle, /p_registration_id,\s*v_trial\.organization_name/);
+assert.match(conversionLifecycle, /SET status = 'converted',[\s\S]*converted_license_id = p_license_id::TEXT/);
+assert.match(conversionLifecycle, /FOR UPDATE/);
+
 console.log("Cloudflare license edge contract tests passed");
