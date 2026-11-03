@@ -18,6 +18,7 @@ const ALLOWED_ROUTES = new Map([
   ["POST /api/admin/bootstrap/claim", { maxBody: 0, nativeAdminBootstrapClaim: true }],
   ["GET /api/admin/me", { maxBody: 0, nativeAdminMe: true }],
   ["GET /api/admin/licenses", { maxBody: 0, nativeAdminLicenses: true }],
+  ["GET /api/admin/trials", { maxBody: 0, nativeAdminTrials: true }],
   ["POST /api/admin/licenses", { maxBody: 16 * 1024, nativeAdminLicenseIssue: true }],
   ["POST /api/admin/licenses/offline-activation", { maxBody: 8 * 1024, nativeAdminOfflineActivation: true }],
   ["PATCH /api/admin/licenses/status", { maxBody: 8 * 1024, nativeAdminLicenseStatus: true }],
@@ -1718,6 +1719,10 @@ async function adminLicensesNatively(request, env) {
   return adminAuthenticatedRpc(request, env, "cloudflare_admin_list_licenses");
 }
 
+async function adminTrialsNatively(request, env) {
+  return adminAuthenticatedRpc(request, env, "cloudflare_admin_list_trial_registrations");
+}
+
 function parseAdminLicenseIssueBody(bytes) {
   try {
     const raw = new TextDecoder().decode(bytes || new Uint8Array());
@@ -2633,6 +2638,10 @@ export default {
 
     if (route.nativeAdminLicenses) {
       return withAdminCors(await adminLicensesNatively(request, env), request, env);
+    }
+
+    if (route.nativeAdminTrials) {
+      return withAdminCors(await adminTrialsNatively(request, env), request, env);
     }
 
     if (route.nativeAdminLicenseIssue) {
