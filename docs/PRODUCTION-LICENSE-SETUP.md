@@ -32,7 +32,7 @@ Before the first commercial customer, production contained zero license and acti
 
 The Cloudflare License Edge derives its Ed25519 signing seed from `LICENSE_EDGE_RPC_SECRET` using the domain string `minarvabiz-ed25519-authority-v1`. The derived private key never leaves the Worker. `/api/public-key` exposes only the derived public key; commercial Windows builds fetch that public key during packaging.
 
-The same authority signs online activation certificates and update manifests. Cloudflare-native licensing uses the encrypted edge RPC secret plus the Supabase publishable key and does **not** require a Supabase service-role/secret key.
+The production Worker is `minarva-biz-license-edge` on the connected Cloudflare account. Its active workers.dev hostname is `https://minarva-biz-license-edge.anilalbert7.workers.dev`. The Worker secrets `LICENSE_EDGE_RPC_SECRET` and `SUPABASE_PUBLISHABLE_KEY` are stored as Cloudflare secrets; the matching SHA-256 edge credential is registered in `license_private.edge_credentials`. The same authority signs online activation certificates and update manifests. Cloudflare-native licensing uses the encrypted edge RPC secret plus the Supabase publishable key and does **not** require a Supabase service-role/secret key.
 
 ### Legacy license-admin application
 
@@ -84,7 +84,7 @@ Set:
 
 ```text
 MINARVA_LICENSE_PUBLIC_KEY_HEX=<matching 64 hex public key>
-VITE_LICENSE_API_URL=<production license API base URL>
+VITE_LICENSE_API_URL=https://minarva-biz-license-edge.anilalbert7.workers.dev
 ```
 
 The desktop build script writes the public key into a generated `apps/desktop/electron/license-config.ts`. A private key is never written into that file.
