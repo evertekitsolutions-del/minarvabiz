@@ -527,4 +527,30 @@ assert.ok(release.includes(`VITE_LICENSE_API_URL: "${EDGE}"`));
 assert.ok(release.includes(`MINARVA_UPDATE_MANIFEST_URL: "${EDGE}/api/update/manifest"`));
 assert.ok(publisher.includes(`const base = "${EDGE}";`));
 
+
+const trialConversionMigration = read("supabase/migrations/20261104_cloudflare_admin_convert_trial_to_license.sql");
+const migrationOrder = read("supabase/MIGRATION_ORDER.txt");
+assert.match(worker, /POST \/api\/admin\/trials\/convert/);
+assert.match(worker, /nativeAdminTrialConvert: true/);
+assert.match(worker, /parseAdminTrialConversionBody/);
+assert.match(worker, /adminTrialConvertNatively/);
+assert.match(worker, /cloudflare_admin_convert_trial_to_license/);
+assert.match(worker, /customerId: parsed\.registrationId/);
+assert.match(browserAdminApi, /convertBrowserTrialToLicense/);
+assert.match(browserAdminApi, /\/api\/admin\/trials\/convert/);
+assert.match(adminPanel, /convertBrowserTrialToLicense/);
+assert.match(adminPanel, /selectedTrialId/);
+assert.match(trialInbox, /onSelectForConversion/);
+assert.match(trialConversionMigration, /cloudflare_admin_convert_trial_to_license/);
+assert.match(trialConversionMigration, /FOR UPDATE/);
+assert.match(trialConversionMigration, /p_registration_id,/);
+assert.match(trialConversionMigration, /p_registration_id,\s*$/m);
+assert.match(trialConversionMigration, /'converted'/);
+assert.match(trialConversionMigration, /converted_license_id/);
+assert.match(trialConversionMigration, /cloudflare_admin_issue_license/);
+assert.match(trialConversionMigration, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_convert_trial_to_license/);
+assert.match(trialConversionMigration, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_convert_trial_to_license[\\s\\S]*TO authenticated/);
+assert.ok(migrationOrder.includes("20261104_cloudflare_admin_convert_trial_to_license.sql"));
+assert.match(adminTrialInboxMigration, /cloudflare_admin_list_trial_registrations/);
+
 console.log("Cloudflare license edge contract tests passed");
