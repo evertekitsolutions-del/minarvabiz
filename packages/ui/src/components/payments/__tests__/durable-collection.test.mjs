@@ -70,3 +70,33 @@ test("domain validation rejection never queues a phantom payment or SQLite write
   assert.equal(save.hasPending(), false);
   assert.equal(writes, 0);
 });
+
+test("concurrent retry and new collection cannot race the same pending SQLite write", async () => {
+  let creates = 0;
+  let writes = 0;
+  let release;
+  const save = createDurableCollection(
+    () => { creates++; return { payment: { id: "pay-race" }, errors: [] }; },
+    async () => {
+      writes++;
+      if (writes === 1) return false;
+      if (writes === 2) return new Promise(resolve => { release = resolve; });
+      return true;
+    },
+  );
+
+  assert.equal((await save.collect(input)).ok, false);
+  const retry = save.retryPending();
+  await Promise.resolve();
+  assert.equal(save.pendingPaymentId(), "pay-race");
+  assert.match((await save.retryPending()).error, /earlier customer payment/i);
+  assert.match((await save.collect({ ...input, amount: 200 })).error, /earlier customer payment/i);
+  assert.equal(creates, 1);
+  assert.equal(writes, 2);
+
+  release(true);
+  assert.deepEqual(await retry, { ok: true, paymentId: "pay-race" });
+  assert.equal(save.hasPending(), false);
+  assert.equal(creates, 1);
+  assert.equal(writes, 2);
+});
