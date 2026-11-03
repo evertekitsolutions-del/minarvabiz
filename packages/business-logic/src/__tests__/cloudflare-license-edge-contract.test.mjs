@@ -14,6 +14,7 @@ const release = read(".github/workflows/release-windows.yml");
 const publisher = read(".github/workflows/publish-windows-release.yml");
 const desktopLicense = read("apps/desktop/electron/license.ts");
 const adminPanel = read("apps/license-admin/src/app/AdminPanel.tsx");
+const licenseCreateCard = read("apps/license-admin/src/app/admin-panel/LicenseCreateCard.tsx");
 const trialInbox = read("apps/license-admin/src/app/admin-panel/TrialRegistrationInbox.tsx");
 const adminTrialInboxMigration = read("supabase/migrations/20261103_cloudflare_admin_trial_registration_inbox.sql");
 assert.equal(fs.existsSync(path.join(root, "apps/license-admin/src/app/actions.ts")), false);
