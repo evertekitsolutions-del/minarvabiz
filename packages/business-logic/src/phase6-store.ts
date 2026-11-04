@@ -10,6 +10,7 @@ import { generateId, nowISO } from "@minarvabiz/utils";
 import { calculateIncentive } from "./incentives";
 import * as mainStore from "./store";
 import * as ordersStore from "./orders-store";
+import * as phase5Store from "./phase5-store";
 import { canAssignServiceOrder, canStartServiceAssignment, canCompleteServiceAssignment } from "./order-assignment-guard";
 import * as phase9Store from "./phase9-store";
 import { checkRosterSlot, rosterRange, validateShiftRule, type ShiftRule, type RosterSlot, type RosterPolicy } from "./workforce-roster";
@@ -675,11 +676,14 @@ export function getCustomerCrmProfile(customerId:UUID):CustomerCrmProfile|null{
   const profiles=ordersStore.listMeasurementProfiles(customerId);
   const customerOrders=ordersStore.listOrders({customerId});
   const customerSales=mainStore.listSales().filter(s=>s.customerId===customerId);
+  const customerLaundry=phase5Store.listLaundryOrders({customerId});
   return{
     customer,
     measurementCount:profiles.length,
     orderCount:customerOrders.length,
     saleCount:customerSales.length,
+    laundryCount:customerLaundry.length,
+    recentLaundry:customerLaundry.slice(0,5).map(order=>({id:order.id,orderNumber:order.orderNumber,garment:order.garment??"",status:order.status,total:order.totalCustomerCharge,date:order.createdAt})),
     recentOrders:customerOrders.slice(0,5).map(order=>({id:order.id,orderNumber:order.orderNumber,status:order.status,price:order.price,date:order.orderDate})),
     recentSales:customerSales.slice(0,5).map(sale=>({id:sale.id,invoiceNumber:sale.invoiceNumber,total:sale.total,date:sale.saleDate})),
   };
