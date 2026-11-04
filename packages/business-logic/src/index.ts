@@ -18,6 +18,7 @@ export * from "./branch-intelligence";
 export * from "./next-best-actions";
 export * from "./profit";
 export * from "./laundry";
+export * from "./laundry-service-receipt";
 export * from "./laundry-vendor-scorecard";
 export * from "./laundry-rate-cards";
 export * from "./laundry-incidents";
