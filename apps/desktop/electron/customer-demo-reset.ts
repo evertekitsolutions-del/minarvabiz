@@ -47,9 +47,13 @@ export async function resetLegacyShowcaseBusinessData(input: {
   if (!fs.existsSync(database)) return { status: "skipped" };
 
   // Backup and rename only a normal, existing SQLite file, never a symlink.
-  const stat = fs.lstatSync(database);
-  if (!stat.isFile() || stat.isSymbolicLink()) {
-    return { status: "blocked", error: "Customer database must be a regular file." };
+  try {
+    const stat = fs.lstatSync(database);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      return { status: "blocked", error: "Customer database must be a regular file." };
+    }
+  } catch (error) {
+    return { status: "blocked", error: `Cannot inspect customer database: ${error instanceof Error ? error.message : String(error)}` };
   }
 
   let verifiedBackup: { ok: boolean; path?: string; error?: string };
@@ -64,7 +68,11 @@ export async function resetLegacyShowcaseBusinessData(input: {
   }
 
   const retainedDir = path.join(input.userDataDir, "backups");
-  fs.mkdirSync(retainedDir, { recursive: true });
+  try {
+    fs.mkdirSync(retainedDir, { recursive: true });
+  } catch (error) {
+    return { status: "blocked", error: `Cannot prepare backup directory: ${error instanceof Error ? error.message : String(error)}` };
+  }
   const archive = path.join(retainedDir,
     `minarvabiz-pre-update-era-wardrobe-${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID()}.db`);
 
