@@ -121,6 +121,32 @@ async function clickButton(ws, name, patterns, wait = 650) {
   return out;
 }
 
+async function driveLaundryGarmentQc(ws) {
+  const steps = [
+    ["Workflow for ", "washing"], ["Workflow for ", "ironing"],
+    ["Workflow for ", "quality_check"], ["Quality result for ", "passed"],
+    ["Workflow for ", "ready"], ["Workflow for ", "delivered"],
+  ];
+  for (const [prefix, target] of steps) {
+    const raw = await evalIn(ws, `(async()=>{
+      const d=[...document.querySelectorAll('[role="dialog"]')].find(x=>/laundry ticket/i.test(x.getAttribute('aria-label')||''));
+      const select=[...(d?.querySelectorAll('select')||[])].find(s=>(s.getAttribute('aria-label')||'').startsWith(${JSON.stringify(prefix)}));
+      if(!select)return JSON.stringify({ok:false,prefix:${JSON.stringify(prefix)},target:${JSON.stringify(target)}});
+      const option=[...select.options].find(x=>x.value===${JSON.stringify(target)});
+      if(!option)return JSON.stringify({ok:false,target:${JSON.stringify(target)},options:[...select.options].map(x=>x.value)});
+      const setter=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value')?.set;
+      setter?setter.call(select,${JSON.stringify(target)}):select.value=${JSON.stringify(target)};
+      select.dispatchEvent(new Event('change',{bubbles:true}));
+      await new Promise(resolve=>setTimeout(resolve,450));
+      const current=[...(d?.querySelectorAll('select')||[])].find(s=>(s.getAttribute('aria-label')||'').startsWith(${JSON.stringify(prefix)}));
+      return JSON.stringify({ok:!!current&&current.value===${JSON.stringify(target)},target:${JSON.stringify(target)},current:current?.value,error:d?.querySelector('[role="alert"]')?.textContent||null});
+    })()`);
+    const result=JSON.parse(raw);
+    if(!result.ok||result.error)throw new Error(`LAUNDRY_QC_${target} failed: ${raw}`);
+    console.log(`LAUNDRY_QC_${target.toUpperCase()} PASS`);
+  }
+}
+
 async function clickRowButton(ws, name, rowText, buttonText, wait = 650) {
   const raw = await evalIn(ws, `(async()=>{const row=[...document.querySelectorAll('tbody tr')].find(r=>(r.innerText||'').toLowerCase().includes(${JSON.stringify(rowText.toLowerCase())}));if(!row)return JSON.stringify({ok:false,error:'row'});const button=[...row.querySelectorAll('button,[role="button"]')].find(b=>((b.innerText||b.textContent||'')+' '+(b.getAttribute('aria-label')||'')).toLowerCase().includes(${JSON.stringify(buttonText.toLowerCase())})&&!b.disabled);if(!button)return JSON.stringify({ok:false,error:'button',available:[...row.querySelectorAll('button,[role="button"]')].map(b=>(b.innerText||b.textContent||'').trim())});button.click();await new Promise(r=>setTimeout(r,${wait}));return JSON.stringify({ok:true,text:(button.innerText||button.textContent||'').trim(),main:(document.querySelector('[data-testid="app-content"]')?.innerText||'').slice(0,5000)});})()`);
   const out = JSON.parse(raw);
@@ -595,12 +621,15 @@ async function main() {
     await selectDialogFieldByText(ws, "Outsourced Laundry", "Laundry supplier", "QA Supplier");
     await setField(ws, "Outsourced Laundry", "Paid now", "50");
     await selectDialogFieldByText(ws, "Outsourced Laundry", "Payment method", "UPI");
-    await click(ws, "SAVE_LAUNDRY", ["save"]);
+    await clickDialogButton(ws, "SAVE_LAUNDRY", "Outsourced Laundry", "Save ticket");
     await assertMain(ws, "LAUNDRY_SAVED", ["1 tickets", "QA POS Customer", "QA Shirt"]);
     await clickButton(ws, "LAUNDRY_MARK_SENT", ["mark sent"]);
     await assertMain(ws, "LAUNDRY_SENT", ["Mark Received"]);
     await clickButton(ws, "LAUNDRY_MARK_RECEIVED", ["mark received"]);
-    await assertMain(ws, "LAUNDRY_RECEIVED", ["Mark Delivered"]);
+    await assertMain(ws, "LAUNDRY_RECEIVED", ["Finish garment QC in Details before delivery"]);
+    await clickRowButton(ws, "LAUNDRY_DETAILS", "QA Shirt", "Details");
+    await driveLaundryGarmentQc(ws);
+    await clickDialogButton(ws, "LAUNDRY_DETAILS_CLOSE", "Laundry ticket", "Close");
     await clickButton(ws, "LAUNDRY_MARK_DELIVERED", ["mark delivered"]);
     await assertMain(ws, "LAUNDRY_DELIVERED", ["delivered"]);
     await click(ws, "LAUNDRY_VERIFY_PAYMENT", ["payments"]);
