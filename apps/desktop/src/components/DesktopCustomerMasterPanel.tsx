@@ -50,6 +50,15 @@ export function DesktopCustomerMasterPanel({ onAdd, onSelect, onPersist }: Props
     if (!collectionTarget || collectionSaving) return;
     const amount = Number(collectionAmount);
     if (!Number.isFinite(amount) || amount <= 0) { setCollectionError("Enter a valid payment amount."); return; }
+    const liveCustomer = store.getCustomer(collectionTarget.id);
+    if (!liveCustomer || liveCustomer.deletedAt || liveCustomer.outstandingBalance <= 0) {
+      setCollectionError("This customer no longer has an outstanding balance.");
+      return;
+    }
+    if (amount > liveCustomer.outstandingBalance) {
+      setCollectionError("Payment amount cannot exceed the current outstanding balance.");
+      return;
+    }
     setCollectionSaving(true);
     setCollectionError(null);
     try {
