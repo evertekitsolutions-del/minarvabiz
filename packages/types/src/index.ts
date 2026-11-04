@@ -414,6 +414,10 @@ export interface LaundryItem {
   label: string;
   quantity: number;
   tagCode: string;
+  /** Saved service classification and promise; billing price remains the ticket rate. */
+  serviceCode?: string | null;
+  fabricType?: string | null;
+  tatHours?: number | null;
   processingStatus: LaundryItemProcessingStatus;
   qualityStatus: LaundryQualityStatus;
   notes?: string | null;
