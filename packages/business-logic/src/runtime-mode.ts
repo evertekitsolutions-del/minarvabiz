@@ -5,6 +5,10 @@
 export type RuntimeMode = "production" | "demo" | "development";
 
 function readMode(): RuntimeMode {
+  // Electron preload is present before renderer modules initialize. An old
+  // localStorage demo toggle must NEVER seed a real customer SQLite workspace.
+  if (typeof window !== "undefined" && "minarvaDesktop" in window) return "production";
+
   const env =
     (typeof process !== "undefined" && process.env?.MINARVA_MODE) ||
     (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_MINARVA_MODE) ||
