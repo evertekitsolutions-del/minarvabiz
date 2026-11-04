@@ -15,6 +15,7 @@ import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, Servic
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
 import { createDesktopPersistence } from "./lib/desktop-persistence";
+import { createDurableCustomerCollection } from "./lib/durable-customer-collection";
 import { useDurableSaleCommit } from "./lib/use-durable-sale-commit";
 import { DesktopPendingInvoiceSaveBanner } from "./components/DesktopPendingInvoiceSaveBanner";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
@@ -121,6 +122,15 @@ export function App() {
     () => createDesktopPersistence(refreshAll, setModuleError),
     [refreshAll],
   );
+  // The collection coordinator lives at App scope, not inside the Customers
+  // view: navigation must never discard an unsaved SQLite payment identity.
+  const persistCustomerCollectionRef = React.useRef(persistCustomerCollection);
+  persistCustomerCollectionRef.current = persistCustomerCollection;
+  const [customerCollection] = React.useState(() => createDurableCustomerCollection(
+    (input: { customerId: string; amount: number; method: PaymentMethod; notes?: string }) =>
+      store.recordCustomerPayment(input),
+    () => persistCustomerCollectionRef.current(),
+  ));
   const persistRosterAndRefresh = React.useCallback(async () => {
     try {
       if (!await persistDomainToSqlite()) throw new Error("Roster changes are not yet saved to SQLite. Keep the application open and retry.");
@@ -233,7 +243,7 @@ export function App() {
     {saleCommit.hasPending() && <DesktopPendingInvoiceSaveBanner onRetry={async()=>{const r=await saleCommit.retryPending();refreshAll();setModuleError(r.success?null:r.errors?.join("; ")||"SQLite save failed");}}/>}
     {view==="dashboard"&&dash&&<div className="space-y-4"><DesktopLicenseExpiryBanner commercialActive={commercialActive} trialState={trialState} daysRemaining={licenseDaysForDashboard} onManage={()=>navTo("license")}/><Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/></div>}
     {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery("")} onNavigate={(_href,id)=>{setGlobalSearchQuery("");navTo(id);}}/>}
-    {view==="customers"&&<DesktopCustomerMasterPanel onAdd={openCustomerCreator} onPersist={persistCustomerCollection} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}
+    {view==="customers"&&<DesktopCustomerMasterPanel onAdd={openCustomerCreator} onPersist={persistCustomerCollection} collection={customerCollection} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}
     {view==="products"&&<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={()=>setLowStockOnly(v=>!v)} onSearch={setProductQuery} onFilterCategory={setProductCategoryId} onAddCategory={()=>{setCategoryForm({name:"",description:""});setCategoryOpen(true);}} onAdd={()=>{resetProductForm();setProductOpen(true);}} onEdit={openProductEditor} onAdjustStock={openStockAdjust} onArchive={handleArchiveProduct} onPrintBarcode={openBarcodeLabel}/>} 
     {view==="warehouse"&&<WarehousePanel/>}
     {view==="accounting"&&<AccountingPanel/>}
