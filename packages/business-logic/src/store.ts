@@ -245,7 +245,7 @@ export function purgeArchivedCustomer(id: UUID): { purged: boolean; error?: stri
 export function listProducts(opts?: { query?: string; categoryId?: string; lowStockOnly?: boolean }): Product[] {
   let list = products.filter((p) => !p.deletedAt);
   if (opts?.categoryId) list = list.filter((p) => p.categoryId === opts.categoryId);
-  if (opts?.lowStockOnly) list = list.filter((p) => isLowStock(p.stockQuantity, p.minimumStock));
+  if (opts?.lowStockOnly) list = list.filter((p) => !p.hasVariants && isLowStock(p.stockQuantity, p.minimumStock));
   if (opts?.query?.trim()) {
     const q = opts.query.toLowerCase();
     list = list.filter((p) => p.name.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q) || p.barcode?.includes(q));
