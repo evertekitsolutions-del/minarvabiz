@@ -19,6 +19,7 @@ export * from "./next-best-actions";
 export * from "./profit";
 export * from "./laundry";
 export * from "./laundry-vendor-scorecard";
+export * from "./laundry-rate-cards";
 export * from "./incentives";
 export * from "./dashboard";
 export * from "./sales";
