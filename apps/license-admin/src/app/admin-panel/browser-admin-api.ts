@@ -100,6 +100,44 @@ async function edgeRequest<T extends object>(
   }
 }
 
+/**
+ * Recover the trial inbox without weakening administrator authorization.
+ * Named sessions already carry an MFA-verified Supabase JWT; the direct
+ * PostgREST RPC also validates auth.uid(), aal2, active role and license.read.
+ * This is used only when the Cloudflare inbox route is unavailable.
+ */
+async function loadTrialRegistrations(): Promise<ApiResult<{ registrations: TrialRegistrationRow[] }>> {
+  const edge = await edgeRequest<{ registrations: TrialRegistrationRow[] }>("/api/admin/trials");
+  if (edge.ok || ["UNAUTHENTICATED", "MFA_REQUIRED", "FORBIDDEN", "ADMIN_NOT_ALLOWED", "ADMIN_IDENTITY_MISMATCH"].includes(edge.code || "")) {
+    return edge;
+  }
+
+  const session = readBrowserAdminSession();
+  if (!session) return edge; // Emergency credentials are never sent to Supabase.
+
+  try {
+    const response = await fetch(`${session.supabaseUrl}/rest/v1/rpc/cloudflare_admin_list_trial_registrations`, {
+      method: "POST",
+      headers: {
+        apikey: session.supabasePublishableKey,
+        authorization: `Bearer ${session.accessToken}`,
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: "{}",
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
+    });
+    const data = await response.json().catch(() => null);
+    if (response.ok && data?.ok === true && Array.isArray(data.registrations)) {
+      return { ok: true, registrations: data.registrations as TrialRegistrationRow[] };
+    }
+  } catch {
+    // Preserve the original noncritical inbox error for the dashboard warning.
+  }
+  return edge;
+}
+
 function validIdentity(value: any): value is AdminIdentityView {
   return Boolean(
     value &&
@@ -147,7 +185,7 @@ export async function loadBrowserAdminDashboard(): Promise<ApiResult<{
   const [licenses, support, trials] = await Promise.all([
     edgeRequest<{ licenses: LicenseRegistryRow[] }>("/api/admin/licenses"),
     edgeRequest<{ requests: SupportRequestRow[] }>("/api/admin/support"),
-    edgeRequest<{ registrations: TrialRegistrationRow[] }>("/api/admin/trials"),
+    loadTrialRegistrations(),
   ]);
   if (!licenses.ok) return licenses;
   if (!support.ok) return support;
