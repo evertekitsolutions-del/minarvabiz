@@ -134,7 +134,12 @@ export function buildBarcodeLabelHtml(
   <div class="label ${settings.labelLayout === "detailed" ? "detailed" : "compact"} ${labelHeightMm < 25 ? "short" : ""}">
     <div class="shop">${escapeHtml(shop.shopName || "Minarva Biz")}</div>
     <div class="name">${escapeHtml(product.name)}</div>
-    ${[categoryName, product.size, product.color, product.brand].some(Boolean) ? `<div class="meta">${escapeHtml([categoryName, product.size, product.color, product.brand].filter(Boolean).join(" · "))}</div>` : ""}
+    <div class="variant-attributes">
+      ${product.size ? `<span>Size: ${escapeHtml(product.size)}</span>` : ""}
+      ${product.color ? `<span>Colour: ${escapeHtml(product.color)}</span>` : ""}
+      ${product.fabric ? `<span>Material: ${escapeHtml(product.fabric)}</span>` : ""}
+    </div>
+    ${[categoryName, product.size, product.color, product.brand].some(Boolean) ? `<div class="meta">${escapeHtml([categoryName, product.brand].filter(Boolean).join(" · "))}</div>` : ""}
     ${product.sku ? `<div class="sku">SKU: ${escapeHtml(product.sku)}</div>` : ""}
     <div class="codes ${labelCodeMode}">
       ${labelCodeMode !== "qr" ? `<div class="barcode">${barcodeSvg(codeValue)}</div>` : ""}
@@ -155,6 +160,9 @@ export function buildBarcodeLabelHtml(
   .shop{font-size:9px;color:#475569}
   .name{font-size:11px;font-weight:700}
   .meta,.sku{font-size:8px}
+  .variant-attributes{display:flex;flex:0 0 auto;align-items:center;justify-content:center;flex-wrap:wrap;gap:.4mm 1mm;font-size:8px;font-weight:700;line-height:1.1}
+  .variant-attributes:empty{display:none}
+  .variant-attributes span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .label.compact .meta,.label.compact .sku,.label.short .shop,.label.short .meta,.label.short .sku{display:none}
   .codes{display:flex;flex:1 1 7mm;align-items:center;justify-content:center;gap:1mm;min-height:4mm;max-height:11mm;margin:0;overflow:hidden}
   .barcode,.qr{height:100%;min-height:0;min-width:0;display:flex;align-items:center;justify-content:center}
