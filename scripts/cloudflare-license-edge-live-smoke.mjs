@@ -1,7 +1,7 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 
-const base = String(process.env.MINARVA_LICENSE_EDGE_URL || "https://minarva-biz-license-edge.minarva-biz.workers.dev").replace(/\/$/, "");
-const adminOrigin = String(process.env.MINARVA_LICENSE_ADMIN_ORIGIN || "https://minarvabiz-license-admin.onrender.com").replace(/\/$/, "");
+const base = String(process.env.MINARVA_LICENSE_EDGE_URL || "https://minarva-biz-license-edge.anilalbert7.workers.dev").replace(/\/$/, "");
+const adminOrigin = String(process.env.MINARVA_LICENSE_ADMIN_ORIGIN || "https://minarvabiz-license-admin-anil.pages.dev").replace(/\/$/, "");
 
 function assert(condition, message) {
   if (!condition) throw new Error(`LICENSE EDGE LIVE SMOKE FAILED: ${message}`);
@@ -105,6 +105,7 @@ const adminAuthConfig = await fetchJson("/api/admin/auth-config", {
 });
 assert(adminAuthConfig.response.ok, `admin auth config HTTP ${adminAuthConfig.response.status}`);
 assert(adminAuthConfig.data?.ok === true, "admin auth config did not report ok");
+assert(new URL(String(adminAuthConfig.data?.passwordResetUrl || "")).origin === adminOrigin, "password reset must return to the connected production Admin Pages origin");
 assert(/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(String(adminAuthConfig.data?.supabaseUrl || "")), "admin auth config Supabase URL invalid");
 const publicKey = String(adminAuthConfig.data?.supabasePublishableKey || "");
 assert(publicKey.length >= 20, "admin auth publishable key missing");
