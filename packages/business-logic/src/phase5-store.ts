@@ -1,3 +1,4 @@
+import { allowDemoSeed } from "./runtime-mode";
 import { planDirectPurchasePosting, planSupplierPaymentPosting, supplierOpeningPayableBalance } from "./procurement-accounting";
 import { assertPermission } from "./permissions";
 import { assertBusinessDayOpen } from "./business-day-state";
@@ -24,10 +25,10 @@ import { listPurchaseInvoices, prepareSupplierInvoiceSettlements } from "./procu
 import { auditAction } from "./audit-actions";
 import { touchPersistence } from "./autosave";
 
-const suppliers: Supplier[] = [
+const suppliers: Supplier[] = allowDemoSeed() ? [
   { id: "sup-1", name: "City Laundry Works", company: "CLW", phone: "9800011111", category: "laundry", openingBalance: 0, outstandingBalance: 0, createdAt: nowISO(), updatedAt: nowISO() },
   { id: "sup-2", name: "Thread & Co.", company: "T&C Supplies", phone: "9800022222", category: "materials", openingBalance: 0, outstandingBalance: 0, createdAt: nowISO(), updatedAt: nowISO() },
-];
+] : [];
 const SYSTEM_EXPENSE_CATEGORY_NAME_BY_ID: Record<string, string> = {
   "ec-3": "Rental",
   "ec-4": "Water",
