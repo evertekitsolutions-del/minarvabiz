@@ -46,6 +46,10 @@ export function CustomerProfile({
           <div className="text-xs text-slate-500">Measurements</div>
           <div className="text-lg font-bold">{profile.measurementCount}</div>
         </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <div className="text-xs text-slate-500">Laundry tickets</div>
+          <div className="text-lg font-bold">{profile.laundryCount}</div>
+        </CardContent></Card>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -74,6 +78,19 @@ export function CustomerProfile({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle className="text-sm font-semibold">Recent laundry & ironing</CardTitle></CardHeader>
+        <CardContent className="space-y-2">
+          {profile.recentLaundry.length === 0 && <p className="text-sm text-slate-400">None</p>}
+          {profile.recentLaundry.map((order) => (
+            <div key={order.id} className="flex justify-between gap-3 text-sm">
+              <span>{order.orderNumber} · {order.garment || "Garment"} <span className="text-slate-400">({order.status.replaceAll("_", " ")})</span></span>
+              <span className="font-medium">{formatMoney(order.total)}</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       {customer.notes && (
         <p className="text-sm text-slate-600"><span className="font-medium">Notes:</span> {customer.notes}</p>

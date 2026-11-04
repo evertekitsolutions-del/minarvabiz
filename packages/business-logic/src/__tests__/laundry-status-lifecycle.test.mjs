@@ -47,9 +47,13 @@ assert.equal(moved.order,null); assert.match(moved.error,/separate refund\/recon
 
 reset();
 created=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"in_house_ironing",supplierRate:0,customerRate:10,paidAmount:10});
-assert(created.order); assert.equal(created.order.status,"delivered"); const ironingSnap=snap();
+assert(created.order); assert.equal(created.order.status,"pending"); const ironingSnap=snap();
 moved=phase5.updateLaundryStatus(created.order.id,"sent");
-assert.equal(moved.order,null); assert.match(moved.error,/completed at creation/i); assert.equal(snap(),ironingSnap);
+assert.equal(moved.order,null); assert.match(moved.error,/cannot change laundry status/i); assert.equal(snap(),ironingSnap);
+moved=phase5.updateLaundryStatus(created.order.id,"received");
+assert(moved.order); assert.equal(moved.order.status,"received");
+moved=phase5.updateLaundryStatus(created.order.id,"delivered");
+assert(moved.order); assert.equal(moved.order.status,"delivered");
 
 reset();
 created=phase5.createLaundryOrder({customerId:"c",quantity:1,mode:"outsourced",supplierId:"s",supplierRate:4,customerRate:10,paidAmount:0});
