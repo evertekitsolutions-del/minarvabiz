@@ -11,6 +11,7 @@ import { LicenseSummaryCard } from "./admin-panel/LicenseSummaryCard";
 import { OfflineActivationCard } from "./admin-panel/OfflineActivationCard";
 import { OnlineCustomerProvisionCard } from "./admin-panel/OnlineCustomerProvisionCard";
 import { SupportInboxSection } from "./admin-panel/SupportInboxSection";
+import { TrialRegistrationInbox } from "./admin-panel/TrialRegistrationInbox";
 import { EmergencyAuthorityCard } from "./admin-panel/EmergencyAuthorityCard";
 import { MfaRotationCard } from "./admin-panel/MfaRotationCard";
 import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerProvisioning";
@@ -44,6 +45,7 @@ export default function AdminPanel({
   const [activeIdentity, setActiveIdentity] = React.useState(identity);
   const [licenses, setLicenses] = React.useState(initialLicenses);
   const [supportRequests, setSupportRequests] = React.useState(initialSupportRequests);
+  const [trialRegistrations, setTrialRegistrations] = React.useState<BrowserAdminDashboard["trials"]>([]);
   const [browserDirect, setBrowserDirect] = React.useState(false);
   const [customerName, setCustomerName] = React.useState("");
   const [plan, setPlan] = React.useState<LicensePlan>("professional");
@@ -61,6 +63,7 @@ export default function AdminPanel({
     setActiveIdentity(dashboard.identity);
     setLicenses(dashboard.licenses);
     setSupportRequests(dashboard.requests);
+    setTrialRegistrations(dashboard.trials);
     setBrowserDirect(true);
   }, []);
 
@@ -192,6 +195,7 @@ export default function AdminPanel({
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
       <div className="mx-auto max-w-6xl space-y-6">
         <AdminHeader identity={activeIdentity} onSignOut={() => void signOut()} />
+        <TrialRegistrationInbox registrations={trialRegistrations} />
         <div className="grid gap-6 md:grid-cols-2">
           <OnlineCustomerProvisionCard {...onlineProvisioning} />
           <LicenseCreateCard
