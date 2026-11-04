@@ -49,3 +49,29 @@ test("domain validation rejection creates no pending payment and performs no wri
   assert.equal(flow.hasPending(), false);
   assert.equal(writes, 0);
 });
+
+test("false acknowledgement and concurrent retries retain exactly one desktop payment", async () => {
+  let creates = 0, writes = 0, release;
+  const flow = createDurableCustomerCollection(
+    () => ({ payment: { id: "p" + (++creates) }, errors: [] }),
+    async () => {
+      writes++;
+      if (writes === 1) return false;
+      return new Promise(resolve => { release = resolve; });
+    },
+  );
+  assert.equal((await flow.collect(payload)).ok, false);
+  assert.equal(flow.hasPending(), true);
+  const retry = flow.retryPending();
+  assert.equal((await flow.retryPending()).ok, false);
+  assert.equal((await flow.collect({ ...payload, amount: 75 })).ok, false);
+  assert.equal(creates, 1);
+  assert.equal(writes, 2);
+  assert.equal(flow.hasPending(), true);
+  release(true);
+  assert.deepEqual(await retry, { ok: true, paymentId: "p1" });
+  assert.equal(flow.hasPending(), false);
+  assert.equal((await flow.retryPending()).ok, false);
+  assert.equal(creates, 1);
+  assert.equal(writes, 2);
+});
