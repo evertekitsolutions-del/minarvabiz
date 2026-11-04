@@ -12,7 +12,7 @@ try {
     globalThis.window = { location: { hostname } };
     assert.equal(
       licenseEdgeOrigin(),
-      "https://minarva-biz-license-edge.anilalbert7.workers.dev",
+      "https://license-api.minarvabiz.com",
       "Production admin must not inherit a legacy build-time Cloudflare Worker origin",
     );
   }
