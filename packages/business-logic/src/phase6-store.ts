@@ -1,3 +1,4 @@
+import { allowDemoSeed } from "./runtime-mode";
 import { assertPermission } from "./permissions";
 import { getRemoteWriter, getRemoteWriterGeneration } from "./remote-write";
 import { exportOutbox, discardAttendanceOutbox, discardWorkforceRosterConflictEvent, markOutboxSynced, markOutboxFailed } from "./outbox-bridge";
@@ -13,14 +14,14 @@ import { canAssignServiceOrder, canStartServiceAssignment, canCompleteServiceAss
 import * as phase9Store from "./phase9-store";
 import { checkRosterSlot, rosterRange, validateShiftRule, type ShiftRule, type RosterSlot, type RosterPolicy } from "./workforce-roster";
 
-const staff:StaffMember[]=[{id:"staff-1",name:"Ravi Kumar",phone:"9876511111",role:"tailor",salary:18000,status:"active",joiningDate:"2024-01-15",createdAt:nowISO(),updatedAt:nowISO()},{id:"staff-2",name:"Meena Devi",phone:"9876522222",role:"tailor",salary:16000,status:"active",joiningDate:"2024-03-01",createdAt:nowISO(),updatedAt:nowISO()},{id:"staff-3",name:"Suresh Nair",phone:"9876533333",role:"cashier",salary:14000,status:"active",joiningDate:"2023-11-10",createdAt:nowISO(),updatedAt:nowISO()}];
+const staff:StaffMember[]=allowDemoSeed() ? [{id:"staff-1",name:"Ravi Kumar",phone:"9876511111",role:"tailor",salary:18000,status:"active",joiningDate:"2024-01-15",createdAt:nowISO(),updatedAt:nowISO()},{id:"staff-2",name:"Meena Devi",phone:"9876522222",role:"tailor",salary:16000,status:"active",joiningDate:"2024-03-01",createdAt:nowISO(),updatedAt:nowISO()},{id:"staff-3",name:"Suresh Nair",phone:"9876533333",role:"cashier",salary:14000,status:"active",joiningDate:"2023-11-10",createdAt:nowISO(),updatedAt:nowISO()}] : [];
 const assignments:StaffAssignment[]=[];
 const attendance:StaffAttendanceRecord[]=[];
 const shiftRules: ShiftRule[] = [];
 const rosterSlots: RosterSlot[] = [];
-const incentiveRules:IncentiveRuleRecord[]=[{id:"rule-1",name:"Ladies tailoring fixed",serviceType:"ladies_tailoring",type:"fixed",value:100,isActive:true,createdAt:nowISO(),updatedAt:nowISO()},{id:"rule-2",name:"Wedding dress 5%",serviceType:"wedding_dress",type:"percentage",value:5,isActive:true,createdAt:nowISO(),updatedAt:nowISO()},{id:"rule-3",name:"T-shirt printing fixed",serviceType:"tshirt_printing",type:"fixed",value:20,isActive:true,createdAt:nowISO(),updatedAt:nowISO()}];
+const incentiveRules:IncentiveRuleRecord[]=allowDemoSeed() ? [{id:"rule-1",name:"Ladies tailoring fixed",serviceType:"ladies_tailoring",type:"fixed",value:100,isActive:true,createdAt:nowISO(),updatedAt:nowISO()},{id:"rule-2",name:"Wedding dress 5%",serviceType:"wedding_dress",type:"percentage",value:5,isActive:true,createdAt:nowISO(),updatedAt:nowISO()},{id:"rule-3",name:"T-shirt printing fixed",serviceType:"tshirt_printing",type:"fixed",value:20,isActive:true,createdAt:nowISO(),updatedAt:nowISO()}] : [];
 const payouts:StaffIncentivePayout[]=[];
-const notifications:AppNotification[]=[{id:"n-1",kind:"low_stock",title:"Low stock alert",body:"Cotton Thread (White) is below minimum (5 left)",href:"/inventory",read:false,createdAt:nowISO()},{id:"n-2",kind:"order_ready",title:"Order ready",body:"An order is ready for delivery",href:"/services",read:false,createdAt:nowISO()}];
+const notifications:AppNotification[]=allowDemoSeed() ? [{id:"n-1",kind:"low_stock",title:"Low stock alert",body:"Cotton Thread (White) is below minimum (5 left)",href:"/inventory",read:false,createdAt:nowISO()},{id:"n-2",kind:"order_ready",title:"Order ready",body:"An order is ready for delivery",href:"/services",read:false,createdAt:nowISO()}] : [];
 
 export function listStaff(opts?:{status?:StaffStatus;role?:string;query?:string}):StaffMember[]{let list=staff.filter(s=>!s.deletedAt);if(opts?.status)list=list.filter(s=>s.status===opts.status);if(opts?.role)list=list.filter(s=>s.role===opts.role);if(opts?.query?.trim()){const q=opts.query.trim().toLowerCase();list=list.filter(s=>[s.name,s.phone??"",s.email??"",s.role].some(value=>value.toLowerCase().includes(q)));}return list.sort((a,b)=>a.name.localeCompare(b.name));}
 export function getStaff(id:UUID){return staff.find(s=>s.id===id&&!s.deletedAt);}
