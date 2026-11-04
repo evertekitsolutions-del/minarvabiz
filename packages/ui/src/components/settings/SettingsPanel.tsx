@@ -24,7 +24,7 @@ export interface SettingsPanelProps {
   };
   tax: { enableGst: boolean; defaultRatePercent: number };
   backup: { enabled: boolean; intervalHours: number; retentionCount: number; destinationPath: string };
-  printing: { defaultInvoicePaper: "a4" | "thermal"; thermalWidthMm: 58 | 80; a4PrinterName: string; thermalPrinterName: string; labelPrinterName: string; labelWidthMm: number; labelHeightMm: number; labelCodeMode: "barcode" | "qr" | "both"; silentDesktopPrint: boolean };
+  printing: { defaultInvoicePaper: "a4" | "thermal"; thermalWidthMm: 58 | 80; a4PrinterName: string; thermalPrinterName: string; labelPrinterName: string; labelWidthMm: number; labelHeightMm: number; labelCodeMode: "barcode" | "qr" | "both"; labelLayout: "compact" | "detailed"; silentDesktopPrint: boolean };
   onSaveProfile: (patch: Partial<SettingsPanelProps["profile"]>) => void;
   onSaveTax: (patch: Partial<SettingsPanelProps["tax"]>) => void;
   onSaveBackup: (patch: Partial<SettingsPanelProps["backup"]>) => void;
@@ -364,6 +364,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
         <FormField label="Thermal printer"><select className={selectClass} value={draftPrinting.thermalPrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, thermalPrinterName: e.target.value })}><option value="">Use Windows print dialog/default printer</option>{printers.map(p => <option key={`th-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
         <FormField label="Barcode label printer"><select className={selectClass} value={draftPrinting.labelPrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, labelPrinterName: e.target.value })}><option value="">Use thermal printer / Windows dialog</option>{printers.map(p => <option key={`label-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
         <FormField label="Label code"><select className={selectClass} value={draftPrinting.labelCodeMode} onChange={e => setDraftPrinting({ ...draftPrinting, labelCodeMode: e.target.value as "barcode" | "qr" | "both" })}><option value="both">Barcode + QR code</option><option value="barcode">Barcode only</option><option value="qr">QR code only</option></select></FormField>
+        <FormField label="Label layout"><select className={selectClass} value={draftPrinting.labelLayout} onChange={e => setDraftPrinting({ ...draftPrinting, labelLayout: e.target.value as "compact" | "detailed" })}><option value="compact">Compact — prominent price, no extra details</option><option value="detailed">Detailed — category and SKU when space allows</option></select></FormField>
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Label width (mm)"><input className={inputClass} type="number" min="20" max="120" value={draftPrinting.labelWidthMm} onChange={e => setDraftPrinting({ ...draftPrinting, labelWidthMm: Math.max(20, Math.min(120, Number(e.target.value) || 50)) })} /></FormField>
           <FormField label="Label height (mm)"><input className={inputClass} type="number" min="15" max="150" value={draftPrinting.labelHeightMm} onChange={e => setDraftPrinting({ ...draftPrinting, labelHeightMm: Math.max(15, Math.min(150, Number(e.target.value) || 30)) })} /></FormField>
@@ -375,7 +376,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <Button type="button" variant="outline" onClick={testSelectedPrinter} disabled={printTestState === "working"}>{printTestState === "working" ? "Printing test…" : "Test invoice printer"}</Button>
         <Button type="button" variant="outline" onClick={testLabelPrinter} disabled={printTestState === "working"}>Test label printer</Button>
-        <Button onClick={() => onSavePrinting({ defaultInvoicePaper: draftPrinting.defaultInvoicePaper, thermalWidthMm: draftPrinting.thermalWidthMm, a4PrinterName: draftPrinting.a4PrinterName, thermalPrinterName: draftPrinting.thermalPrinterName, labelPrinterName: draftPrinting.labelPrinterName, labelWidthMm: draftPrinting.labelWidthMm, labelHeightMm: draftPrinting.labelHeightMm, labelCodeMode: draftPrinting.labelCodeMode, silentDesktopPrint: draftPrinting.silentDesktopPrint })}>Save printer settings</Button>
+        <Button onClick={() => onSavePrinting({ defaultInvoicePaper: draftPrinting.defaultInvoicePaper, thermalWidthMm: draftPrinting.thermalWidthMm, a4PrinterName: draftPrinting.a4PrinterName, thermalPrinterName: draftPrinting.thermalPrinterName, labelPrinterName: draftPrinting.labelPrinterName, labelWidthMm: draftPrinting.labelWidthMm, labelHeightMm: draftPrinting.labelHeightMm, labelCodeMode: draftPrinting.labelCodeMode, labelLayout: draftPrinting.labelLayout, silentDesktopPrint: draftPrinting.silentDesktopPrint })}>Save printer settings</Button>
       </div>
     </section>
     <TrashRecoveryPanel />
