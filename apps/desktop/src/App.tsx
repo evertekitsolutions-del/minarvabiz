@@ -22,7 +22,7 @@ import { DesktopLicenseView } from "./components/DesktopLicenseView";
 import { DesktopStaffEditorModal } from "./components/DesktopStaffEditorModal";
 import { BarcodeLabelPrintModal } from "./components/BarcodeLabelPrintModal";
 import { ProductEditorModal } from "./components/ProductEditorModal";
-import { parseProductVariants, type ProductVariantDraft } from "@minarvabiz/business-logic";
+import { parseProductVariants, createProductVariantFamily, addProductVariants, type ProductVariantDraft } from "@minarvabiz/business-logic";
 import { DesktopCustomerMasterPanel } from "./components/DesktopCustomerMasterPanel";
 import { DesktopLicenseExpiryBanner, effectiveLicenseDaysRemaining } from "./components/DesktopLicenseExpiryBanner";
 import { DesktopEntitlementMonitor } from "./components/DesktopEntitlementMonitor";
@@ -206,8 +206,8 @@ export function App() {
           const patch:Partial<Product>={...payload,hasVariants:true,barcode:null,size:null,color:null,fabric:null};
           delete patch.stockQuantity;
           store.updateProduct(editingProductId,patch);
-          if(variantRows.length)store.addProductVariants(editingProductId,variantRows);
-        } else store.createProductVariantFamily(payload,variantRows);
+          if(variantRows.length)addProductVariants(editingProductId,variantRows);
+        } else createProductVariantFamily(payload,variantRows);
       } else {
         if(editingProductId){
           const previous=store.getProduct(editingProductId);
