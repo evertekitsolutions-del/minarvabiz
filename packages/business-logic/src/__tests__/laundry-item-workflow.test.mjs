@@ -23,7 +23,7 @@ outbox.hydrateOutbox([]);
 
 const created=phase5.createLaundryOrder({
   customerId:"c",mode:"in_house_ironing",quantity:3,items:[
-    {label:"Shirt",quantity:2,notes:"White"},
+    {label:"Shirt",quantity:2,notes:"White",serviceCode:"steam_iron",fabricType:"cotton",tatHours:24},
     {label:"Saree",quantity:1,notes:"Silk"},
   ],pickupAt:"2026-11-03",dueAt:"2026-11-05",supplierRate:0,customerRate:20,paidAmount:0
 });
@@ -31,12 +31,20 @@ assert.equal(created.errors.length,0,created.errors.join("; "));
 assert(created.order);
 assert.equal(created.order.quantity,3);
 assert.equal(created.order.items?.length,2);
+assert.equal(created.order.items?.[0].serviceCode,"steam_iron");
+assert.equal(created.order.items?.[0].fabricType,"cotton");
+assert.equal(created.order.items?.[0].tatHours,24);
 assert.equal(created.order.items?.[0].tagCode,created.order.orderNumber+"-001");
 assert.equal(created.order.items?.[1].tagCode,created.order.orderNumber+"-002");
 assert.equal(created.order.totalCustomerCharge,60);
 assert.equal(created.order.pickupAt,"2026-11-03");
 assert.equal(created.order.dueAt,"2026-11-05");
 
+const invalidItemChange=phase5.updateLaundryDetails(created.order.id,{items:[
+  {...created.order.items[0],serviceCode:"dry_clean"}, created.order.items[1],
+]});
+assert.equal(invalidItemChange.order,null);
+assert.match(invalidItemChange.errors.join("; "),/immutable/i);
 const first=created.order.items[0];
 function updateItem(itemId, patch) {
   const current=phase5.listLaundryOrders().find(order=>order.id===created.order.id);
