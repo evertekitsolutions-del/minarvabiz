@@ -22,7 +22,7 @@ export function LaundryRoutePanel({ orders, customers }: {
   return <section className="rounded-xl border border-slate-200 bg-white p-3">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div><h3 className="text-sm font-semibold text-slate-900">Laundry pickup & drop route worksheet</h3>
-        <p className="text-xs text-slate-500">Local planned stops · Manual device-local acknowledgment · No GPS tracking or courier API</p></div>
+        <p className="text-xs text-slate-500">Local planned stops · No route optimization, GPS tracking or courier API · Manual device-local acknowledgment</p></div>
       <Button variant="outline" size="sm" onClick={() => setExpanded(open => !open)}>{expanded ? "Hide route" : "Plan route"}</Button>
     </div>
     {expanded && <div className="mt-3 space-y-3">
