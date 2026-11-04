@@ -24,6 +24,14 @@ const componentPaths = [
 ];
 
 const panel = await readFile(panelPath, "utf8");
+const browserApi = await readFile(new URL("../apps/license-admin/src/app/admin-panel/browser-admin-api.ts", import.meta.url), "utf8");
+assert.match(browserApi, /trialInboxWarning/);
+assert.match(browserApi, /if \(!licenses\.ok\) return licenses/);
+assert.match(browserApi, /if \(!support\.ok\) return support/);
+assert.match(browserApi, /UNAUTHENTICATED.*MFA_REQUIRED.*FORBIDDEN.*ADMIN_NOT_ALLOWED/);
+assert.match(browserApi, /trials: trials\.ok && Array\.isArray\(trials\.registrations\)/);
+assert.match(panel, /dashboard\.trialInboxWarning/);
+
 const components = [];
 for (const relativePath of componentPaths) {
   components.push(await readFile(new URL(relativePath, import.meta.url), "utf8"));
