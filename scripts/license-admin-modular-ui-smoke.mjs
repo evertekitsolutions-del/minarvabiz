@@ -50,6 +50,20 @@ for (const relativePath of componentPaths) {
   components.push(await readFile(new URL(relativePath, import.meta.url), "utf8"));
 }
 const combined = [panel, ...components].join("\n");
+// A selected trial must not inherit an earlier enterprise/trial feature mask.
+const createCard = components[1];
+const professional = defaultFeatures("professional");
+assert.equal(Object.values(professional).filter(Boolean).length, 7);
+for (const excluded of ["staff", "advancedReports", "cloudSync", "multiUser", "multiBranch", "apiAccess"]) {
+  assert.equal(professional[excluded], false, `Professional must not grant ${excluded}`);
+}
+assert.match(panel, /setFeatures\(defaultFeatures\("professional"\)\)/);
+assert.match(panel, /setEdition\("offline"\)/);
+assert.match(panel, /setActivationLimit\("1"\)/);
+assert.match(createCard, /const allowedByPlan = defaultFeatures\(plan\)/);
+assert.match(createCard, /disabled=\{!allowedByPlan\[key\]\}/);
+assert.match(createCard, /Boolean\(features\[key\]\) && Boolean\(allowedByPlan\[key\]\)/);
+
 
 assert.ok(panel.length < 10_000, "AdminPanel should remain a thin orchestrator");
 assert.match(panel, /AdminAuthCard/);

@@ -208,10 +208,11 @@ export default function AdminPanel({
             setSelectedTrialId(item.id);
             setCustomerName(item.organization_name);
             setPlan("professional");
-            setEdition("hybrid");
+            setFeatures(defaultFeatures("professional"));
+            setEdition("offline");
             setExpiresAt("");
-            setActivationLimit("");
-            setMessage("Existing trial customer selected. Set the paid plan, expiry, device limit and features, then issue the license.");
+            setActivationLimit("1");
+            setMessage("Trial selected. Set expiry and issue the license.");
           }}
         />
         {selectedTrialId && <TrialConversionNotice onCancel={() => setSelectedTrialId(null)} />}
