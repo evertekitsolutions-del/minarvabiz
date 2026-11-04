@@ -22,7 +22,7 @@ import { DesktopLicenseView } from "./components/DesktopLicenseView";
 import { DesktopStaffEditorModal } from "./components/DesktopStaffEditorModal";
 import { BarcodeLabelPrintModal } from "./components/BarcodeLabelPrintModal";
 import { ProductEditorModal } from "./components/ProductEditorModal";
-import type { ProductVariantDraft } from "@minarvabiz/business-logic";
+import { parseProductVariants, type ProductVariantDraft } from "@minarvabiz/business-logic";
 import { DesktopCustomerMasterPanel } from "./components/DesktopCustomerMasterPanel";
 import { DesktopLicenseExpiryBanner, effectiveLicenseDaysRemaining } from "./components/DesktopLicenseExpiryBanner";
 import { DesktopEntitlementMonitor } from "./components/DesktopEntitlementMonitor";
@@ -199,7 +199,7 @@ export function App() {
           // Validate ALL new rows before mutating an existing parent.
           if(variantRows.length) {
             const existing=store.listProducts().filter(p=>p.parentProductId===editingProductId);
-            store.parseProductVariants(variantRows,existing.map(p=>({
+            parseProductVariants(variantRows,existing.map(p=>({
               size:p.size||"",color:p.color||"",material:p.fabric||"",sku:p.sku||null,barcode:p.barcode||null,
             })));
           }
