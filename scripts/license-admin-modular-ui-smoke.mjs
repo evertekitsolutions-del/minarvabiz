@@ -27,7 +27,7 @@ const panel = await readFile(panelPath, "utf8");
 const browserApi = await readFile(new URL("../apps/license-admin/src/app/admin-panel/browser-admin-api.ts", import.meta.url), "utf8");
 assert.match(browserApi, /trialInboxWarning/);
 // MFA-bound fallback when the Worker trial-list route is missing or times out.
-assert.match(browserApi, /rest\\/v1\\/rpc\\/cloudflare_admin_list_trial_registrations/);
+assert.ok(browserApi.includes('rest/v1/rpc/cloudflare_admin_list_trial_registrations'));
 assert.match(browserApi, /const session = readBrowserAdminSession\(\)/);
 assert.match(browserApi, /if \(!session\) return edge/);
 assert.match(browserApi, /authorization: \`Bearer \$\{session\.accessToken\}\`/);
