@@ -27,6 +27,12 @@ test("processing and due messages are state-aware, no premature ready notificati
  assert(!kinds(ready).includes("order_processing"));
  assert.match(laundryCustomerMessage("order_ready",ready).body,/LDY-0001/);
 });
+test("outsourced tickets cannot claim ready before partner returns garments",()=>{
+ const order={...base,mode:"outsourced",status:"sent",items:[{...base.items[0],
+  processingStatus:"ready",qualityStatus:"passed"}]};
+ assert(!kinds(order).includes("order_ready"));
+ assert(kinds({...order,status:"received"}).includes("order_ready"));
+});
 test("delivered messages allow feedback only; cancelled ticket is never contacted",()=>{
  const delivered={...base,status:"delivered",balanceAmount:0};
  assert.deepEqual(kinds(delivered),["feedback_request"]);
