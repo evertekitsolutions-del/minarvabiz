@@ -5,6 +5,7 @@ import type { AuditLogEntry, LaundryOrder } from "@minarvabiz/types";
 import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
+import { LaundryIncidentsPanel } from "./LaundryIncidentsPanel";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { buildLaundryVendorScorecard, exportLaundryTicketsCsv } from "@minarvabiz/business-logic";
@@ -301,6 +302,7 @@ export function LaundryList({
           </div>
         </div>
 
+        <LaundryIncidentsPanel orders={orders} />
         {csvFeedback && <p role={csvFeedback.failed ? "alert" : "status"} className={`text-sm ${csvFeedback.failed ? "text-rose-700" : "text-slate-600"}`}>{csvFeedback.message}</p>}
         {tagPrintFeedback && <p role="status" className="text-sm text-slate-600">{tagPrintFeedback}</p>}
         <p className="text-xs text-slate-500">CSV includes displayed cancelled tickets for traceability. Use Reports for reconciled financial totals.</p>
