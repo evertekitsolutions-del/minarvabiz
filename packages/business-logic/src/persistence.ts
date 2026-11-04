@@ -13,6 +13,7 @@ import * as ordersStore from "./orders-store";
 import * as phase5Store from "./phase5-store";
 import * as laundryRates from "./laundry-rate-cards";
 import * as laundryIncidents from "./laundry-incidents";
+import * as laundryHandover from "./laundry-handover";
 import * as phase6Store from "./phase6-store";
 import * as holidayCache from "./holiday-cache";
 import * as phase7Store from "./phase7-store";
@@ -65,6 +66,8 @@ export interface DomainSnapshot {
   laundryRateCards?: ReturnType<typeof laundryRates.exportLaundryRateCards>;
   /** Offline-only incident claims; estimates never automatically post to finance. */
   laundryIncidents?: ReturnType<typeof laundryIncidents.exportLaundryIncidents>;
+  /** Device-local customer handover acknowledgment, not synced or automatically messaged. */
+  laundryHandoverProofs?: ReturnType<typeof laundryHandover.exportLaundryHandoverProofs>;
   expenses: Expense[];
   purchases: Purchase[];
   suppliers: Supplier[];
@@ -133,6 +136,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     laundry: phase5.laundryOrders,
     laundryRateCards: laundryRates.exportLaundryRateCards(),
     laundryIncidents: laundryIncidents.exportLaundryIncidents(),
+    laundryHandoverProofs: laundryHandover.exportLaundryHandoverProofs(),
     expenses: phase5.expenses,
     purchases: phase5.purchases,
     suppliers: phase5.suppliers,
@@ -251,6 +255,7 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     laundry: collection(input.laundry, "laundry"),
     laundryRateCards: laundryRates.validateLaundryRateCards(input.laundryRateCards ?? []),
     laundryIncidents: laundryIncidents.validateLaundryIncidents(input.laundryIncidents ?? []),
+    laundryHandoverProofs: laundryHandover.validateLaundryHandoverProofs(input.laundryHandoverProofs ?? []),
     expenses: collection(input.expenses, "expenses"),
     purchases: collection(input.purchases, "purchases"),
     suppliers: collection(input.suppliers, "suppliers"),
@@ -302,6 +307,7 @@ function applyDomainSnapshot(snap: DomainSnapshot): void {
   ordersStore.hydrateOrders({ orders: snap.orders, measurements: snap.measurements });
   laundryRates.hydrateLaundryRateCards(snap.laundryRateCards ?? []);
   laundryIncidents.hydrateLaundryIncidents(snap.laundryIncidents ?? []);
+  laundryHandover.hydrateLaundryHandoverProofs(snap.laundryHandoverProofs ?? []);
   phase5Store.hydratePhase5({
     suppliers: snap.suppliers,
     laundryOrders: snap.laundry,
