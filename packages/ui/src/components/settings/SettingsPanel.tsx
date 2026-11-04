@@ -242,11 +242,23 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
     setPrintTestMessage("Sending barcode label test to the selected printer…");
     const width = Math.max(20, Math.min(120, Number(draftPrinting.labelWidthMm) || 50));
     const height = Math.max(15, Math.min(150, Number(draftPrinting.labelHeightMm) || 30));
+    const columns = draftPrinting.labelColumns === 2 ? 2 : 1;
+    const pageWidth = columns === 2 ? Number(draftPrinting.labelRollWidthMm) : width;
+    const gap = columns === 2 ? Number(draftPrinting.labelGapMm) : 0;
+    const margin = columns === 2 ? Number(draftPrinting.labelLeftMarginMm) : 0;
+    if (!Number.isFinite(pageWidth) || !Number.isFinite(gap) || !Number.isFinite(margin)
+      || pageWidth < width * columns + gap + margin) {
+      setPrintTestState("error");
+      setPrintTestMessage("Roll width does not fit the two stickers, gap and left margin. Correct the geometry first.");
+      return;
+    }
+    const testLabels = Array.from({length: columns}, (_, i) =>
+      `<div class="label"><strong>${i === 0 ? "LEFT" : "RIGHT"} — 38×38</strong><div class="bars"></div><div>2900000000000</div></div>`).join("");
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Minarva Biz Label Test</title>
-<style>*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif}.label{width:${width}mm;height:${height}mm;padding:2mm;text-align:center;overflow:hidden}.name{font-size:11px;font-weight:700}.bars{height:12mm;margin:1mm 0;background:repeating-linear-gradient(90deg,#000 0,#000 1px,#fff 1px,#fff 3px)}.code{font-size:9px;letter-spacing:1px}</style>
-</head><body><div class="label"><div class="name">Minarva Biz Label Test</div><div class="bars"></div><div class="code">2900000000000</div></div></body></html>`;
+<style>@page{size:${pageWidth}mm ${height}mm;margin:0}*{box-sizing:border-box}html,body{width:${pageWidth}mm;margin:0;padding:0;font-family:Arial,sans-serif}.sheet{width:${pageWidth}mm;height:${height}mm;padding-left:${margin}mm;display:grid;grid-template-columns:repeat(${columns},${width}mm);column-gap:${gap}mm;overflow:hidden}.label{width:${width}mm;height:${height}mm;padding:2mm;text-align:center;overflow:hidden;font-size:9px}.bars{height:12mm;margin:1mm 0;background:repeating-linear-gradient(90deg,#000 0,#000 1px,#fff 1px,#fff 3px)}</style>
+</head><body><div class="sheet">${testLabels}</div></body></html>`;
     try {
-      const result = await api.printHtml({ html, deviceName, paper: "label", labelWidthMm: width, labelHeightMm: height, silent: true });
+      const result = await api.printHtml({ html, deviceName, paper: "label", labelWidthMm: pageWidth, labelHeightMm: height, silent: true });
       if (!result.ok) {
         setPrintTestState("error");
         setPrintTestMessage(result.error || "The label printer rejected the test page.");
