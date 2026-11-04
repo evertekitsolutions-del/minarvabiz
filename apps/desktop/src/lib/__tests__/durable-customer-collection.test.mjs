@@ -102,7 +102,9 @@ test("navigation retains an unsaved customer collection in the app coordinator",
 test("desktop navigation mounts the same collection coordinator and exposes retry banner", () => {
   const app = fs.readFileSync("apps/desktop/src/App.tsx", "utf8");
   const panel = fs.readFileSync("apps/desktop/src/components/DesktopCustomerMasterPanel.tsx", "utf8");
-  assert.match(app, /React\.useState\(\(\) => createDurableCustomerCollection\(/);
+  const hook = fs.readFileSync("apps/desktop/src/lib/use-desktop-customer-collection.ts", "utf8");
+  assert.match(app, /useDesktopCustomerCollection\(persistCustomerCollection\)/);
+  assert.match(hook, /React\.useState\(\(\) => createDurableCustomerCollection\(/);
   assert.match(app, /collection=\{customerCollection\}/);
   assert.match(panel, /collection\.hasPending\(\) && !collectionTarget/);
   assert.match(panel, /Retry pending payment save/);
