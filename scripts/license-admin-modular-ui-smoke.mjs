@@ -26,6 +26,14 @@ const componentPaths = [
 const panel = await readFile(panelPath, "utf8");
 const browserApi = await readFile(new URL("../apps/license-admin/src/app/admin-panel/browser-admin-api.ts", import.meta.url), "utf8");
 assert.match(browserApi, /trialInboxWarning/);
+// MFA-bound fallback when the Worker trial-list route is missing or times out.
+assert.ok(browserApi.includes('rest/v1/rpc/cloudflare_admin_list_trial_registrations'));
+assert.match(browserApi, /const session = readBrowserAdminSession\(\)/);
+assert.match(browserApi, /if \(!session\) return edge/);
+assert.match(browserApi, /authorization: \`Bearer \$\{session\.accessToken\}\`/);
+assert.match(browserApi, /edge\.ok \|\| \["UNAUTHENTICATED", "MFA_REQUIRED", "FORBIDDEN", "ADMIN_NOT_ALLOWED"/);
+assert.match(browserApi, /return \{ ok: true, registrations: data\.registrations/);
+
 assert.match(browserApi, /if \(!licenses\.ok\) return licenses/);
 assert.match(browserApi, /if \(!support\.ok\) return support/);
 assert.match(browserApi, /UNAUTHENTICATED.*MFA_REQUIRED.*FORBIDDEN.*ADMIN_NOT_ALLOWED/);
