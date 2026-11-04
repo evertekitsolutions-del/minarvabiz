@@ -74,9 +74,10 @@ export function saveLaundryRateCard(input: LaundryRateInput): LaundryRateCard {
   const checked = validateLaundryRateCards([{ ...input, id: "preflight", updatedAt: nowISO() }])[0];
   const existing = cards.find(item => key(item) === key(checked));
   const next: LaundryRateCard = { ...checked, id: existing?.id || generateId(), updatedAt: nowISO() };
+  const before = existing ? { ...existing } : null;
   if (existing) Object.assign(existing, next); else cards.push(next);
   touchPersistence();
-  auditAction("laundry.rate_card_save", "laundry_rate_cards", next.id, existing ? { ...existing } : null, { ...next });
+  auditAction("laundry.rate_card_save", "laundry_rate_cards", next.id, before, { ...next });
   return { ...next };
 }
 
