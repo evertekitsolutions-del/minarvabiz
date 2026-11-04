@@ -24,7 +24,7 @@ export interface SettingsPanelProps {
   };
   tax: { enableGst: boolean; defaultRatePercent: number };
   backup: { enabled: boolean; intervalHours: number; retentionCount: number; destinationPath: string };
-  printing: { defaultInvoicePaper: "a4" | "thermal"; thermalWidthMm: 58 | 80; a4PrinterName: string; thermalPrinterName: string; labelPrinterName: string; labelWidthMm: number; labelHeightMm: number; labelCodeMode: "barcode" | "qr" | "both"; labelLayout: "compact" | "detailed"; labelColumns: 1 | 2; labelRollWidthMm: number; labelGapMm: number; labelLeftMarginMm: number; silentDesktopPrint: boolean };
+  printing: { defaultInvoicePaper: "a4" | "thermal"; thermalWidthMm: 58 | 80; a4PrinterName: string; thermalPrinterName: string; labelPrinterName: string; labelWidthMm: number; labelHeightMm: number; labelCodeMode: "barcode" | "qr" | "both"; labelLayout: "compact" | "detailed"; labelColumns: 1 | 2; labelRollWidthMm: number; labelGapMm: number; labelLeftMarginMm: number; labelRowGapMm: number; silentDesktopPrint: boolean };
   onSaveProfile: (patch: Partial<SettingsPanelProps["profile"]>) => void;
   onSaveTax: (patch: Partial<SettingsPanelProps["tax"]>) => void;
   onSaveBackup: (patch: Partial<SettingsPanelProps["backup"]>) => void;
@@ -245,6 +245,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
     const columns = draftPrinting.labelColumns === 2 ? 2 : 1;
     const pageWidth = columns === 2 ? Number(draftPrinting.labelRollWidthMm) : width;
     const gap = columns === 2 ? Number(draftPrinting.labelGapMm) : 0;
+    const pageHeight = height + (columns === 2 ? Number(draftPrinting.labelRowGapMm) : 0);
     const margin = columns === 2 ? Number(draftPrinting.labelLeftMarginMm) : 0;
     if (!Number.isFinite(pageWidth) || !Number.isFinite(gap) || !Number.isFinite(margin)
       || pageWidth < width * columns + gap + margin) {
@@ -255,10 +256,10 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
     const testLabels = Array.from({length: columns}, (_, i) =>
       `<div class="label"><strong>${i === 0 ? "LEFT" : "RIGHT"} — 38×38</strong><div class="bars"></div><div>2900000000000</div></div>`).join("");
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Minarva Biz Label Test</title>
-<style>@page{size:${pageWidth}mm ${height}mm;margin:0}*{box-sizing:border-box}html,body{width:${pageWidth}mm;margin:0;padding:0;font-family:Arial,sans-serif}.sheet{width:${pageWidth}mm;height:${height}mm;padding-left:${margin}mm;display:grid;grid-template-columns:repeat(${columns},${width}mm);column-gap:${gap}mm;overflow:hidden}.label{width:${width}mm;height:${height}mm;padding:2mm;text-align:center;overflow:hidden;font-size:9px}.bars{height:12mm;margin:1mm 0;background:repeating-linear-gradient(90deg,#000 0,#000 1px,#fff 1px,#fff 3px)}</style>
+<style>@page{size:${pageWidth}mm ${pageHeight}mm;margin:0}*{box-sizing:border-box}html,body{width:${pageWidth}mm;margin:0;padding:0;font-family:Arial,sans-serif}.sheet{width:${pageWidth}mm;height:${pageHeight}mm;padding-left:${margin}mm;display:grid;grid-template-columns:repeat(${columns},${width}mm);column-gap:${gap}mm;overflow:hidden}.label{width:${width}mm;height:${height}mm;padding:2mm;text-align:center;overflow:hidden;font-size:9px}.bars{height:12mm;margin:1mm 0;background:repeating-linear-gradient(90deg,#000 0,#000 1px,#fff 1px,#fff 3px)}</style>
 </head><body><div class="sheet">${testLabels}</div></body></html>`;
     try {
-      const result = await api.printHtml({ html, deviceName, paper: "label", labelWidthMm: pageWidth, labelHeightMm: height, silent: true });
+      const result = await api.printHtml({ html, deviceName, paper: "label", labelWidthMm: pageWidth, labelHeightMm: pageHeight, silent: true });
       if (!result.ok) {
         setPrintTestState("error");
         setPrintTestMessage(result.error || "The label printer rejected the test page.");
@@ -384,12 +385,13 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
         <FormField label="Label code"><select className={selectClass} value={draftPrinting.labelCodeMode} onChange={e => setDraftPrinting({ ...draftPrinting, labelCodeMode: e.target.value as "barcode" | "qr" | "both" })}><option value="both">Barcode + QR code</option><option value="barcode">Barcode only</option><option value="qr">QR code only</option></select></FormField>
         <FormField label="Sticker arrangement"><select className={selectClass} value={draftPrinting.labelColumns} onChange={e => setDraftPrinting({ ...draftPrinting, labelColumns: Number(e.target.value) === 2 ? 2 : 1 })}><option value={1}>One sticker per row</option><option value={2}>Two stickers per row (2-up)</option></select></FormField>
         <FormField label="4-inch roll / 38×38 mm stickers">
-          <Button type="button" variant="outline" onClick={()=>setDraftPrinting({...draftPrinting,labelRollWidthMm:101.6,labelWidthMm:38,labelHeightMm:38,labelColumns:2,labelGapMm:3,labelLeftMarginMm:11.3})}>Use 4″ roll — 2 × 38 mm stickers</Button>
+          <Button type="button" variant="outline" onClick={()=>setDraftPrinting({...draftPrinting,labelRollWidthMm:101.6,labelWidthMm:38,labelHeightMm:38,labelColumns:2,labelGapMm:3,labelLeftMarginMm:11.3,labelRowGapMm:0})}>Use 4″ roll — 2 × 38 mm stickers</Button>
         </FormField>
         {draftPrinting.labelColumns === 2 && <>
           <FormField label="Roll width (mm)"><input type="number" className={inputClass} min="70" max="120" step="0.1" value={draftPrinting.labelRollWidthMm} onChange={e=>setDraftPrinting({...draftPrinting,labelRollWidthMm:Number(e.target.value)})}/></FormField>
           <FormField label="Gap between stickers (mm)"><input type="number" className={inputClass} min="0" max="30" step="0.1" value={draftPrinting.labelGapMm} onChange={e=>setDraftPrinting({...draftPrinting,labelGapMm:Number(e.target.value)})}/></FormField>
           <FormField label="Left margin / offset (mm)"><input type="number" className={inputClass} min="0" max="50" step="0.1" value={draftPrinting.labelLeftMarginMm} onChange={e=>setDraftPrinting({...draftPrinting,labelLeftMarginMm:Number(e.target.value)})}/></FormField>
+          <FormField label="Row gap / feed gap (mm)"><input type="number" className={inputClass} min="0" max="20" step="0.1" value={draftPrinting.labelRowGapMm} onChange={e=>setDraftPrinting({...draftPrinting,labelRowGapMm:Number(e.target.value)})}/></FormField>
           <p className="text-xs text-slate-600 md:col-span-2">Two columns print together across the roll. Measure the actual gap and left edge of your stickers; adjust offsets after a test print. Roll width must fit both stickers plus the gap.</p>
         </>}
         <FormField label="Label layout"><select className={selectClass} value={draftPrinting.labelLayout} onChange={e => setDraftPrinting({ ...draftPrinting, labelLayout: e.target.value as "compact" | "detailed" })}><option value="compact">Compact — prominent price, no extra details</option><option value="detailed">Detailed — category and SKU when space allows</option></select></FormField>
@@ -404,7 +406,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <Button type="button" variant="outline" onClick={testSelectedPrinter} disabled={printTestState === "working"}>{printTestState === "working" ? "Printing test…" : "Test invoice printer"}</Button>
         <Button type="button" variant="outline" onClick={testLabelPrinter} disabled={printTestState === "working"}>Test label printer</Button>
-        <Button onClick={() => onSavePrinting({ defaultInvoicePaper: draftPrinting.defaultInvoicePaper, thermalWidthMm: draftPrinting.thermalWidthMm, a4PrinterName: draftPrinting.a4PrinterName, thermalPrinterName: draftPrinting.thermalPrinterName, labelPrinterName: draftPrinting.labelPrinterName, labelWidthMm: draftPrinting.labelWidthMm, labelHeightMm: draftPrinting.labelHeightMm, labelCodeMode: draftPrinting.labelCodeMode, labelLayout: draftPrinting.labelLayout, labelColumns: draftPrinting.labelColumns, labelRollWidthMm: draftPrinting.labelRollWidthMm, labelGapMm: draftPrinting.labelGapMm, labelLeftMarginMm: draftPrinting.labelLeftMarginMm, silentDesktopPrint: draftPrinting.silentDesktopPrint })}>Save printer settings</Button>
+        <Button onClick={() => onSavePrinting({ defaultInvoicePaper: draftPrinting.defaultInvoicePaper, thermalWidthMm: draftPrinting.thermalWidthMm, a4PrinterName: draftPrinting.a4PrinterName, thermalPrinterName: draftPrinting.thermalPrinterName, labelPrinterName: draftPrinting.labelPrinterName, labelWidthMm: draftPrinting.labelWidthMm, labelHeightMm: draftPrinting.labelHeightMm, labelCodeMode: draftPrinting.labelCodeMode, labelLayout: draftPrinting.labelLayout, labelColumns: draftPrinting.labelColumns, labelRollWidthMm: draftPrinting.labelRollWidthMm, labelGapMm: draftPrinting.labelGapMm, labelLeftMarginMm: draftPrinting.labelLeftMarginMm, labelRowGapMm: draftPrinting.labelRowGapMm, silentDesktopPrint: draftPrinting.silentDesktopPrint })}>Save printer settings</Button>
       </div>
     </section>
     <TrashRecoveryPanel />
