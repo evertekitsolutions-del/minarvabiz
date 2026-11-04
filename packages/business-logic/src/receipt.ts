@@ -58,7 +58,8 @@ export function buildSaleReceiptHtml(
     (opts?.phone ?? profile.phone) ? `Tel: ${opts?.phone ?? profile.phone}` : "",
     profile.gstin ? `GSTIN: ${profile.gstin}` : ""].filter(Boolean);
   const header = headerLines.map(line => `<div>${escapeHtml(line)}</div>`).join("");
-  const details = escapeHtml(text.split("\n").slice(headerLines.length).join("\n"));
+  const escaped = escapeHtml(text);
+  const details = escaped.split("\n").slice(headerLines.length).join("\n");
   return `<!DOCTYPE html><html><head><title>${escapeHtml(sale.invoiceNumber)}</title>
 <style>body{font-family:ui-monospace,monospace;font-size:12px;padding:2mm;margin:0}
 .receipt-head{text-align:center;overflow-wrap:anywhere;margin-bottom:4mm;line-height:1.4}
@@ -112,7 +113,8 @@ export function buildOrderReceiptHtml(order: ServiceOrder, opts?: { autoPrint?: 
   const shop = getShopProfile();
   const headerLines = [shop.shopName,shop.address,shop.phone ? `Tel: ${shop.phone}` : "",shop.gstin ? `GSTIN: ${shop.gstin}` : ""].filter(Boolean);
   const header = headerLines.map(line=>`<div>${escapeHtml(line)}</div>`).join("");
-  const details = escapeHtml(text.split("\n").slice(headerLines.length).join("\n"));
+  const escaped = escapeHtml(text);
+  const details = escaped.split("\n").slice(headerLines.length).join("\n");
   const autoPrint = opts?.autoPrint !== false;
   return `<!DOCTYPE html><html><head><title>${escapeHtml(order.orderNumber)}</title>
 <style>body{font-family:ui-monospace,monospace;font-size:12px;padding:2mm;margin:0}
