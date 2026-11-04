@@ -11,7 +11,7 @@ function localToday() {
 }
 export function LaundryRoutePanel({ orders, customers }: {
   orders: readonly LaundryOrder[];
-  customers: readonly Pick<Customer, "id" | "name" | "address" | "branchId">[];
+  customers: readonly Pick<Customer, "id" | "name" | "address" | "branchId" | "deletedAt">[];
 }) {
   const [expanded, setExpanded] = React.useState(false);
   const [day, setDay] = React.useState(localToday);

@@ -70,7 +70,7 @@ export function LaundryList({
   onUpdateDetails,
 }: {
   orders: LaundryOrder[];
-  customers?: Pick<Customer,"id" | "name" | "phone" | "whatsapp" | "address" | "branchId">[];
+  customers?: Pick<Customer,"id" | "name" | "phone" | "whatsapp" | "address" | "branchId" | "deletedAt">[];
   auditLogs?: AuditLogEntry[];
   onAddOutsourced?: () => void;
   onAddIroning?: () => void;

@@ -54,3 +54,9 @@ test("shared Windows and Web laundry view includes the route worksheet",()=>{
  assert.match(panel,/buildLaundryRouteDraft/);
  assert.match(panel,/No route optimization/);
 });
+
+test("archived customers never appear as planned route stops",()=>{
+ const draft=buildLaundryRouteDraft([order("retired")],[customer("c1",{deletedAt:"2026-11-02T10:00:00Z"})],day,"pickup");
+ assert.equal(draft.stops.length,0);
+ assert.equal(draft.missingAddressOrders,1);
+});

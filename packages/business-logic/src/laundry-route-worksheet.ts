@@ -36,14 +36,14 @@ function readyForHandover(order: LaundryOrder): boolean {
 
 export function buildLaundryRouteDraft(
   orders: readonly LaundryOrder[],
-  customers: readonly Pick<Customer, "id" | "name" | "address" | "branchId">[],
+  customers: readonly Pick<Customer, "id" | "name" | "address" | "branchId" | "deletedAt">[],
   day: string,
   leg: LaundryRouteLeg,
 ): LaundryRouteDraft {
   assertDay(day);
   if (!["pickup", "dropoff"].includes(leg) || !Array.isArray(orders) || !Array.isArray(customers)
     || orders.length > 100000 || customers.length > 100000) throw new Error("Invalid laundry route input");
-  const byCustomer = new Map(customers.filter(c => c?.id).map(c => [c.id, c]));
+  const byCustomer = new Map(customers.filter(c => c?.id && !c.deletedAt).map(c => [c.id, c]));
   const seen = new Set<string>(), stops = new Map<string, LaundryRouteStop>();
   let missingAddressOrders = 0, notReadyOrders = 0;
   for (const order of orders) {
