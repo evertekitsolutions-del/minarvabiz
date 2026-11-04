@@ -26,7 +26,7 @@ const componentPaths = [
 const panel = await readFile(panelPath, "utf8");
 const browserApi = await readFile(new URL("../apps/license-admin/src/app/admin-panel/browser-admin-api.ts", import.meta.url), "utf8");
 const edgeConfig = await readFile(new URL("../apps/license-admin/src/app/admin-panel/license-edge-config.ts", import.meta.url), "utf8");
-assert.ok(edgeConfig.includes("https://minarva-biz-license-edge.anilalbert7.workers.dev"), "Admin must target the account-owned enabled Workers subdomain");
+assert.ok(edgeConfig.includes("https://license-api.minarvabiz.com"), "Admin must target the company-owned Workers Custom Domain");
 assert.ok(!edgeConfig.includes("minarva-biz-license-edge.minarva-biz.workers.dev"), "Do not use the unowned legacy Workers subdomain");
 assert.match(edgeConfig, /NEXT_PUBLIC_LICENSE_EDGE_URL/);
 

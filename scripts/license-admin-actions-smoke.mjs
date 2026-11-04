@@ -205,7 +205,7 @@ globalThis.fetch = async (input, init = {}) => {
 const emergencyLogin = await emergencyAuthModule.beginBrowserEmergencyLogin("browser-smoke-credential");
 assert.equal(emergencyLogin.ok, true);
 assert.deepEqual(observedLogin, {
-  url: "https://minarva-biz-license-edge.anilalbert7.workers.dev/api/admin/emergency/login",
+  url: "https://license-api.minarvabiz.com/api/admin/emergency/login",
   body: { credential: "browser-smoke-credential" },
   method: "POST",
 });
