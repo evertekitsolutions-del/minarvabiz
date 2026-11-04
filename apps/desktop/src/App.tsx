@@ -116,13 +116,15 @@ export function App() {
     setProfiles(selectedOrder ? ordersStore.listMeasurementProfiles(selectedOrder.customerId) : []);
     setModuleTick((v) => v + 1);
   }, [lowStockOnly, productQuery, productCategoryId, orderQuery, orderStatus, orderType, orderCustomerId, orderDateFrom, orderDateTo, orderDeliveryDateFrom, orderDeliveryDateTo, selectedOrder]);
-  const persistAndRefresh = React.useCallback(async () => {
+  const persistAndRefresh = React.useCallback(async (): Promise<boolean> => {
     refreshAll();
     try {
       if (!await persistDomainToSqlite()) throw new Error("The native SQLite write was rejected");
+      return true;
     } catch (error) {
       setModuleError(`SQLite save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
       console.error("[minarvabiz] SQLite save failed", error);
+      return false;
     }
   }, [refreshAll]);
   const persistRosterAndRefresh = React.useCallback(async () => {
