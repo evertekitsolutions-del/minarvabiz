@@ -16,6 +16,7 @@ import {
   toQuantityMilli,
 } from "@minarvabiz/utils";
 import { calculateLaundryProfit } from "./laundry";
+import { canMoveLaundryItem, validateLaundryItemMutation } from "./laundry-workflow-guards";
 import { LAUNDRY_SERVICES, LAUNDRY_FABRICS } from "./laundry-rate-cards";
 import { hasLaundryPosting, planLaundryCancellation, planLaundryPosting } from "./laundry-accounting";
 import { purchaseBalance, nextDocNumber } from "./expenses";
@@ -508,29 +509,12 @@ export function updateLaundryDetails(id: UUID, input: { garment?: string | null;
   const dueAt = input.dueAt === undefined ? order.dueAt ?? null : input.dueAt || null;
   if (pickupAt && dueAt && dueAt < pickupAt) return { order: null, errors: ["Due date cannot be before pickup date"] };
   if (input.items) {
-    if (!order.items || input.items.length !== order.items.length || input.items.length > 100) return { order: null, errors: ["Laundry item rows cannot be added or removed after ticket posting"] };
-    const transitions: Record<LaundryItemProcessingStatus, LaundryItemProcessingStatus | null> = {
-      received: "washing", washing: "ironing", ironing: "quality_check",
-      quality_check: "ready", ready: "delivered", delivered: null,
-    };
+    if (!order.items || input.items.length !== order.items.length || input.items.length > 100) {
+      return { order: null, errors: ["Laundry item rows cannot be added or removed after ticket posting"] };
+    }
     for (const nextItem of input.items) {
-      const current = order.items?.find((item) => item.id === nextItem.id);
-      if (!current || !nextItem.label.trim() || !Number.isFinite(nextItem.quantity) || nextItem.quantity <= 0 || nextItem.quantity > 100000
-        || !["received", "washing", "ironing", "quality_check", "ready", "delivered"].includes(nextItem.processingStatus)
-        || !["pending", "passed", "failed"].includes(nextItem.qualityStatus)
-        || nextItem.label !== current.label || nextItem.quantity !== current.quantity || nextItem.tagCode !== current.tagCode
-        || nextItem.serviceCode !== current.serviceCode || nextItem.fabricType !== current.fabricType || nextItem.tatHours !== current.tatHours) {
-        return { order: null, errors: ["Garment identity, tag and quantity are immutable after ticket posting"] };
-      }
-      if (nextItem.processingStatus !== current.processingStatus
-        && transitions[current.processingStatus] !== nextItem.processingStatus
-        && !(current.processingStatus === "quality_check" && current.qualityStatus === "failed" && nextItem.processingStatus === "ironing")) {
-        return { order: null, errors: [`Invalid item workflow transition for ${current.tagCode}`] };
-      }
-      if (nextItem.processingStatus === "ready" && nextItem.qualityStatus !== "passed") return { order: null, errors: ["Quality check must pass before an item can be marked ready"] };
-      if (nextItem.qualityStatus !== current.qualityStatus && current.processingStatus !== "ironing" && current.processingStatus !== "quality_check") {
-        return { order: null, errors: ["Quality result can only be changed during quality check"] };
-      }
+      const error = validateLaundryItemMutation(order.items.find(item => item.id === nextItem.id), nextItem);
+      if (error) return { order: null, errors: [error] };
     }
   }
   const before = { garment: order.garment ?? null, notes: order.notes ?? null, pickupAt: order.pickupAt ?? null, dueAt: order.dueAt ?? null, items: order.items ?? null, updatedAt: order.updatedAt, version: order.version };
@@ -572,12 +556,7 @@ export function updateLaundryItemWorkflow(
   if (!order || order.status === "cancelled") return { order: null, errors: ["Active laundry ticket not found"] };
   const item = order.items?.find((entry) => entry.id === itemId);
   if (!item) return { order: null, errors: ["Laundry item not found"] };
-  const transitions: Record<LaundryItemProcessingStatus, LaundryItemProcessingStatus | null> = {
-    received: "washing", washing: "ironing", ironing: "quality_check",
-    quality_check: "ready", ready: "delivered", delivered: null,
-  };
-  if (status !== item.processingStatus && transitions[item.processingStatus] !== status
-    && !(item.processingStatus === "quality_check" && item.qualityStatus === "failed" && status === "ironing")) {
+  if (!canMoveLaundryItem(item, status)) {
     return { order: null, errors: [`Cannot move item from ${item.processingStatus} to ${status}`] };
   }
   const nextQuality = qualityStatus ?? item.qualityStatus;
