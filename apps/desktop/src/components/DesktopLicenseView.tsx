@@ -127,12 +127,21 @@ export function DesktopLicenseView({
         activationId={trialInUse ? "Trial activation" : state.activationId}
         deviceFingerprint={deviceFingerprint}
         onRefresh={() => void refresh()}
-        onActivateToken={(token) => {
-          void window.minarvaDesktop?.activateLicenseToken(token).then(async (value) => {
+        onActivateToken={async (token) => {
+          const api = window.minarvaDesktop;
+          if (!api?.activateLicenseToken) {
+            return { ok: false, error: "Windows license activation service is unavailable. Please restart the software." };
+          }
+          try {
+            const value = await api.activateLicenseToken(token);
             onStateChange(value as DesktopCommercialLicenseState);
-            const trial = await window.minarvaDesktop?.getTrialState();
+            const trial = await api.getTrialState();
             if (trial) onTrialStateChange(trial);
-          });
+            const ok = value.status === "active" || value.status === "grace";
+            return { ok, error: ok ? undefined : value.reason || "License verification was rejected." };
+          } catch (error) {
+            return { ok: false, error: error instanceof Error ? error.message : String(error) };
+          }
         }}
         onDeactivate={commercialActive ? () => {
           if (!window.confirm("Deactivate this license on this computer? Business data will be kept, but licensed features will be unavailable until reactivated.")) return;

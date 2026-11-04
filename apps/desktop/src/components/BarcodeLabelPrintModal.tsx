@@ -3,7 +3,7 @@ import { Modal, Button, FormField, inputClass } from "@minarvabiz/ui";
 import { buildBarcodeLabelHtml, printBarcodeLabels, type PrintSettings } from "@minarvabiz/business-logic";
 import type { Product } from "@minarvabiz/types";
 
-type LabelSettings = Pick<PrintSettings, "labelWidthMm" | "labelHeightMm" | "labelCodeMode" | "labelLayout">;
+type LabelSettings = Pick<PrintSettings, "labelWidthMm" | "labelHeightMm" | "labelCodeMode" | "labelLayout" | "labelColumns" | "labelRollWidthMm" | "labelGapMm" | "labelLeftMarginMm" | "labelRowGapMm">;
 
 export function BarcodeLabelPrintModal({
   product, categoryName, copies, onCopiesChange, onClose, onError, settings,
@@ -18,11 +18,11 @@ export function BarcodeLabelPrintModal({
 }) {
   const previewHtml = React.useMemo(() => product
     ? buildBarcodeLabelHtml(product, {
-        categoryName, copies: 1, autoPrint: false,
+        categoryName, copies: settings.labelColumns === 2 ? 2 : 1, autoPrint: false,
         labelWidthMm: settings.labelWidthMm,
         labelHeightMm: settings.labelHeightMm,
       })
-    : "", [product, categoryName, settings.labelWidthMm, settings.labelHeightMm, settings.labelCodeMode, settings.labelLayout]);
+    : "", [product, categoryName, settings.labelWidthMm, settings.labelHeightMm, settings.labelCodeMode, settings.labelLayout, settings.labelColumns, settings.labelRollWidthMm, settings.labelGapMm, settings.labelLeftMarginMm, settings.labelRowGapMm]);
 
   const print = () => {
     if (!product) return;
@@ -55,11 +55,11 @@ export function BarcodeLabelPrintModal({
         {product && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
           <p className="mb-2 text-sm font-semibold text-slate-800">Label preview — actual sticker size</p>
           <p className="mb-2 text-xs text-slate-500">
-            {settings.labelWidthMm} × {settings.labelHeightMm} mm · {settings.labelCodeMode} · {settings.labelLayout} layout
+            {settings.labelWidthMm} × {settings.labelHeightMm} mm · {settings.labelColumns} across · {settings.labelCodeMode} · {settings.labelLayout} layout
           </p>
           <iframe title="Product barcode label preview" sandbox=""
             className="block border border-slate-300 bg-white"
-            style={{ width: `${settings.labelWidthMm}mm`, height: `${settings.labelHeightMm}mm`, maxWidth: "100%" }}
+            style={{ width: `${settings.labelColumns === 2 ? settings.labelRollWidthMm : settings.labelWidthMm}mm`, height: `${settings.labelHeightMm + (settings.labelColumns === 2 ? settings.labelRowGapMm : 0)}mm`, maxWidth: "100%" }}
             srcDoc={previewHtml} />
           <p className="mt-2 text-xs text-slate-500">
             Change size, layout or printer in Settings → Printer settings.

@@ -124,12 +124,19 @@ export function buildBarcodeLabelHtml(
   const labelHeightMm = Math.max(15, Math.min(150, Number(opts?.labelHeightMm ?? settings.labelHeightMm)));
   const codeValue = product.barcode || product.sku || product.id;
   const labelCodeMode = settings.labelCodeMode;
+  const columns = settings.labelColumns === 2 ? 2 : 1;
+  const rollWidthMm = columns === 2 ? settings.labelRollWidthMm : labelWidthMm;
+  const pageHeightMm = labelHeightMm + (columns === 2 ? settings.labelRowGapMm : 0);
+  const gapMm = columns === 2 ? settings.labelGapMm : 0;
+  const availableMarginMm = rollWidthMm - (columns * labelWidthMm) - gapMm;
+  if (availableMarginMm < 0) throw new Error("Sticker width + columns + gap exceed the configured roll width");
+  const leftMarginMm = columns === 2 ? Math.min(settings.labelLeftMarginMm, availableMarginMm) : 0;
   let qrHtml = "";
   if (labelCodeMode !== "barcode") {
     try { qrHtml = qrSvg(codeValue, `QR ${codeValue}`); }
     catch (error) { qrHtml = `<span class="missing">${escapeHtml(error instanceof Error ? error.message : "Unable to encode QR")}</span>`; }
   }
-  const blocks = Array.from({ length: copies })
+  const labels = Array.from({ length: copies })
     .map(() => `
   <div class="label ${settings.labelLayout === "detailed" ? "detailed" : "compact"} ${labelHeightMm < 25 ? "short" : ""}">
     <div class="shop">${escapeHtml(shop.shopName || "Minarva Biz")}</div>
@@ -146,16 +153,18 @@ export function buildBarcodeLabelHtml(
       ${labelCodeMode !== "barcode" ? `<div class="qr">${qrHtml}</div>` : ""}
     </div>
     <div class="price">${formatMoney(product.sellingPrice)}</div>
-  </div>`)
-    .join("");
+  </div>`);
+  const blocks = Array.from({ length: Math.ceil(labels.length / columns) }, (_, index) =>
+    `<div class="label-sheet">${labels.slice(index * columns, (index + 1) * columns).join("")}</div>`
+  ).join("");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Product Labels</title>
 <style>
-  @page{size:${labelWidthMm}mm ${labelHeightMm}mm;margin:0}
+  @page{size:${rollWidthMm}mm ${pageHeightMm}mm;margin:0}
   *{box-sizing:border-box}
-  html,body{width:${labelWidthMm}mm;margin:0;padding:0}
+  html,body{width:${rollWidthMm}mm;margin:0;padding:0}
   body{font-family:Arial,sans-serif;color:#111}
-  .label{width:${labelWidthMm}mm;height:${labelHeightMm}mm;padding:1.1mm;text-align:center;border:1px dashed #bbb;display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:.3mm;overflow:hidden;break-inside:avoid;page-break-after:always}
-  .label:last-child{page-break-after:auto}
+  .label-sheet{width:${rollWidthMm}mm;height:${pageHeightMm}mm;padding-left:${leftMarginMm}mm;display:grid;grid-template-columns:repeat(${columns},${labelWidthMm}mm);column-gap:${gapMm}mm;align-content:start;page-break-after:always;break-after:page;overflow:hidden}\n  .label-sheet:last-child{page-break-after:auto;break-after:auto}\n  .label{width:${labelWidthMm}mm;height:${labelHeightMm}mm;padding:1.1mm;text-align:center;border:1px dashed #bbb;display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:.3mm;overflow:hidden;break-inside:avoid}
+
   .shop,.name,.meta,.sku{display:block;flex:0 1 auto;min-height:0;line-height:1.08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .shop{font-size:9px;color:#475569}
   .name{font-size:11px;font-weight:700}
@@ -188,8 +197,8 @@ export function printBarcodeLabels(product: Product, copies = 1, categoryName?: 
     labelHeightMm: settings.labelHeightMm,
   });
   if (tryDesktopPrintHtml(directHtml, "label", {
-    labelWidthMm: settings.labelWidthMm,
-    labelHeightMm: settings.labelHeightMm,
+    labelWidthMm: settings.labelColumns === 2 ? settings.labelRollWidthMm : settings.labelWidthMm,
+    labelHeightMm: settings.labelHeightMm + (settings.labelColumns === 2 ? settings.labelRowGapMm : 0),
   })) return;
 
   const w = window.open("", "_blank", "width=500,height=700");

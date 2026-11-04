@@ -66,7 +66,7 @@ export function LicensePanel({
 }: {
   state: LicenseViewState;
   usage: UsageView;
-  onActivateToken: (token: string) => void;
+  onActivateToken: (token: string) => Promise<{ ok: boolean; error?: string } | void> | { ok: boolean; error?: string } | void;
   onStartTrial?: () => void;
   onDeactivate?: () => void;
   onRefresh?: () => void;
@@ -75,6 +75,26 @@ export function LicensePanel({
   deviceFingerprint?: string | null;
 }) {
   const [token, setToken] = React.useState("");
+  const [activating, setActivating] = React.useState(false);
+  const [activationFeedback, setActivationFeedback] = React.useState<{ ok: boolean; message: string } | null>(null);
+  async function submitActivation() {
+    if (!token.trim() || activating) return;
+    setActivating(true);
+    setActivationFeedback(null);
+    try {
+      const result = await onActivateToken(token.trim());
+      if (!result) {
+        setActivationFeedback({ ok: true, message: "Activation submitted. Use Refresh to check license status." });
+      } else if (result.ok) {
+        setActivationFeedback({ ok: true, message: "License activated successfully." });
+        setToken("");
+      } else {
+        setActivationFeedback({ ok: false, message: result.error || "License activation failed. Please check the license and retry." });
+      }
+    } catch (error) {
+      setActivationFeedback({ ok: false, message: error instanceof Error ? error.message : "License activation request failed." });
+    } finally { setActivating(false); }
+  }
   const warning = expiryWarning(state.daysRemaining, state.status);
 
   const statusColor =
@@ -193,15 +213,16 @@ export function LicensePanel({
             <textarea
               className={inputClass + " h-24 py-2 font-mono text-xs"}
               value={token}
-              onChange={(e) => setToken(e.target.value)}
+              onChange={(e) => { setToken(e.target.value); setActivationFeedback(null); }}
               placeholder="Paste signed license token…"
             />
           </FormField>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => onActivateToken(token.trim())} disabled={!token.trim()}>Activate / Renew</Button>
+            <Button onClick={() => void submitActivation()} disabled={!token.trim() || activating}>{activating ? "Activating…" : "Activate / Renew"}</Button>
             {onStartTrial && <Button variant="outline" onClick={onStartTrial}>Start trial</Button>}
             {onDeactivate && <Button variant="outline" onClick={onDeactivate}>Deactivate</Button>}
           </div>
+          {activationFeedback && <p role="status" aria-live="polite" className={`rounded-lg p-3 text-sm ${activationFeedback.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>{activationFeedback.message}</p>}
         </CardContent>
       </Card>
     </div>

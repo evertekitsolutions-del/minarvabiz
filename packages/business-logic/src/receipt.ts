@@ -53,15 +53,20 @@ export function buildSaleReceiptHtml(
 ): string {
   const text = buildSaleReceiptText(sale, opts);
   const autoPrint = opts?.autoPrint !== false;
+  const profile = getShopProfile();
+  const headerLines = [opts?.shopName ?? profile.shopName, opts?.address ?? profile.address,
+    (opts?.phone ?? profile.phone) ? `Tel: ${opts?.phone ?? profile.phone}` : "",
+    profile.gstin ? `GSTIN: ${profile.gstin}` : ""].filter(Boolean);
+  const header = headerLines.map(line => `<div>${escapeHtml(line)}</div>`).join("");
   const escaped = escapeHtml(text);
+  const details = escaped.split("\n").slice(headerLines.length).join("\n");
   return `<!DOCTYPE html><html><head><title>${escapeHtml(sale.invoiceNumber)}</title>
-<style>
-  body { font-family: ui-monospace, monospace; font-size: 12px; padding: 16px; }
-  pre { white-space: pre-wrap; }
-  @media print { body { padding: 0; } }
-</style></head><body><pre>${escaped}</pre>
-${autoPrint ? "<script>window.onload=function(){window.print();}</script>" : ""}
-</body></html>`;
+<style>body{font-family:ui-monospace,monospace;font-size:12px;padding:2mm;margin:0}
+.receipt-head{text-align:center;overflow-wrap:anywhere;margin-bottom:4mm;line-height:1.4}
+.receipt-head div:first-child{font-size:15px;font-weight:800}
+pre{white-space:pre-wrap;margin:0;text-align:left}@media print{body{padding:0}}</style>
+</head><body><div class="receipt-head">${header}</div><pre>${details}</pre>
+${autoPrint ? "<script>window.onload=function(){window.print();}</script>" : ""}</body></html>`;
 }
 
 export function printSaleReceipt(
@@ -105,11 +110,18 @@ export function buildOrderReceiptText(order: ServiceOrder): string {
 
 export function buildOrderReceiptHtml(order: ServiceOrder, opts?: { autoPrint?: boolean }): string {
   const text = buildOrderReceiptText(order);
+  const shop = getShopProfile();
+  const headerLines = [shop.shopName,shop.address,shop.phone ? `Tel: ${shop.phone}` : "",shop.gstin ? `GSTIN: ${shop.gstin}` : ""].filter(Boolean);
+  const header = headerLines.map(line=>`<div>${escapeHtml(line)}</div>`).join("");
   const escaped = escapeHtml(text);
+  const details = escaped.split("\n").slice(headerLines.length).join("\n");
   const autoPrint = opts?.autoPrint !== false;
   return `<!DOCTYPE html><html><head><title>${escapeHtml(order.orderNumber)}</title>
-<style>body{font-family:ui-monospace,monospace;font-size:12px;padding:16px}pre{white-space:pre-wrap}@media print{body{padding:0}}</style>
-</head><body><pre>${escaped}</pre>${autoPrint ? "<script>window.onload=function(){window.print();}</script>" : ""}</body></html>`;
+<style>body{font-family:ui-monospace,monospace;font-size:12px;padding:2mm;margin:0}
+.receipt-head{text-align:center;overflow-wrap:anywhere;margin-bottom:4mm;line-height:1.4}
+.receipt-head div:first-child{font-size:15px;font-weight:800}
+pre{white-space:pre-wrap;margin:0;text-align:left}@media print{body{padding:0}}</style>
+</head><body><div class="receipt-head">${header}</div><pre>${details}</pre>${autoPrint ? "<script>window.onload=function(){window.print();}</script>" : ""}</body></html>`;
 }
 
 export function printOrderReceipt(order: ServiceOrder): void {
