@@ -3,7 +3,7 @@
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@minarvabiz/ui";
 import type { Edition, LicenseFeatures } from "@minarvabiz/types";
 import type { LicensePlan } from "@minarvabiz/licensing";
-import { EDITIONS, FEATURE_LABELS, PLANS } from "./model";
+import { EDITIONS, FEATURE_LABELS, PLANS, defaultFeatures } from "./model";
 
 interface LicenseCreateCardProps {
   customerName: string;
@@ -47,8 +47,9 @@ export function LicenseCreateCard(props: LicenseCreateCardProps) {
     onFeatureChange,
     onIssue,
   } = props;
+  const allowedByPlan = defaultFeatures(plan);
   const availableKeys = (Object.keys(features) as (keyof LicenseFeatures)[]).filter(
-    (key) => features[key],
+    (key) => Boolean(features[key]) && Boolean(allowedByPlan[key]),
   );
 
   return (
@@ -101,10 +102,11 @@ export function LicenseCreateCard(props: LicenseCreateCardProps) {
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {(Object.keys(features) as (keyof LicenseFeatures)[]).map((key) => (
-              <label key={key} className="flex items-center gap-2 text-sm text-slate-700">
+              <label key={key} className={`flex items-center gap-2 text-sm ${allowedByPlan[key] ? "text-slate-700" : "text-slate-400"}`}>
                 <input
                   type="checkbox"
-                  checked={Boolean(features[key])}
+                  checked={Boolean(features[key]) && Boolean(allowedByPlan[key])}
+                  disabled={!allowedByPlan[key]}
                   onChange={(event) => onFeatureChange(key, event.target.checked)}
                 />
                 {FEATURE_LABELS[key]}
