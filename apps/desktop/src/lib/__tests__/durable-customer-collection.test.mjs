@@ -75,3 +75,36 @@ test("false acknowledgement and concurrent retries retain exactly one desktop pa
   assert.equal(creates, 1);
   assert.equal(writes, 2);
 });
+
+test("navigation retains an unsaved customer collection in the app coordinator", async () => {
+  let created = 0, saved = 0;
+  const appCoordinator = createDurableCustomerCollection(
+    () => ({ payment: { id: "payment-" + (++created) }, errors: [] }),
+    async () => ++saved > 1,
+  );
+  const mountCustomerView = () => ({
+    hasPending: () => appCoordinator.hasPending(),
+    collect: input => appCoordinator.collect(input),
+    retry: () => appCoordinator.retryPending(),
+  });
+  const firstMount = mountCustomerView();
+  assert.equal((await firstMount.collect(payload)).ok, false);
+  assert.equal(firstMount.hasPending(), true);
+  // Simulate leaving Customers and returning: the app-scoped coordinator survives.
+  const secondMount = mountCustomerView();
+  assert.equal(secondMount.hasPending(), true);
+  assert.equal((await secondMount.collect(payload)).ok, false);
+  assert.deepEqual(await secondMount.retry(), { ok: true, paymentId: "payment-1" });
+  assert.equal(created, 1);
+  assert.equal(saved, 2);
+});
+
+test("desktop navigation mounts the same collection coordinator and exposes retry banner", () => {
+  const app = fs.readFileSync("apps/desktop/src/App.tsx", "utf8");
+  const panel = fs.readFileSync("apps/desktop/src/components/DesktopCustomerMasterPanel.tsx", "utf8");
+  assert.match(app, /React\.useState\(\(\) => createDurableCustomerCollection\(/);
+  assert.match(app, /collection=\{customerCollection\}/);
+  assert.match(panel, /collection\.hasPending\(\) && !collectionTarget/);
+  assert.match(panel, /Retry pending payment save/);
+  assert.doesNotMatch(panel, /createDurableCustomerCollection\(/);
+});
