@@ -26,7 +26,7 @@ const ticket=phase5.createLaundryOrder({customerId:"customer-inc",mode:"in_house
 assert.equal(ticket.errors.length,0,ticket.errors.join("; "));
 const beforeLedger=JSON.stringify(accounting.exportAccountingState().journals);
 const tag=ticket.order.items[0].tagCode;
-test("record garment damage, resolve once, audit and snapshot",()=>{
+test("record garment damage, resolve once, audit and snapshot",async()=>{
   const created=incidents.registerLaundryIncident({orderId:ticket.order.id,itemTag:tag,
     incidentType:"damage",description:"Seam damaged",estimatedCustomerCompensation:75});
   assert.equal(created.status,"open");
@@ -41,6 +41,9 @@ test("record garment damage, resolve once, audit and snapshot",()=>{
   incidents.hydrateLaundryIncidents(saved);
   assert.deepEqual(incidents.exportLaundryIncidents(),saved);
   assert.equal(JSON.stringify(accounting.exportAccountingState().journals),beforeLedger);
+  for(let attempt=0;attempt<40&&!phase7.listAuditLogs(50).some(event=>event.action==="laundry.incident_open");attempt++) {
+    await new Promise(resolve=>setTimeout(resolve,10));
+  }
   assert(phase7.listAuditLogs(50).some(event=>event.action==="laundry.incident_open"));
   assert(phase7.listAuditLogs(50).some(event=>event.action==="laundry.incident_decide"));
 });
