@@ -84,6 +84,7 @@ export * from "./product-variant-planner";
 export * from "./product-variant-family";
 export * from "./whatsapp";
 export * from "./manual-service-whatsapp";
+export * from "./laundry-customer-messaging";
 export * from "./google-review-link";
 export * from "./roles-nav";
 export * from "./stock-take";
