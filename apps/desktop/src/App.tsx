@@ -14,6 +14,7 @@ import { store, ordersStore, phase5Store, phase6Store, phase7Store, getShopProfi
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
+import { createDesktopPersistence } from "./lib/desktop-persistence";
 import { useDurableSaleCommit } from "./lib/use-durable-sale-commit";
 import { DesktopPendingInvoiceSaveBanner } from "./components/DesktopPendingInvoiceSaveBanner";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
@@ -116,26 +117,10 @@ export function App() {
     setProfiles(selectedOrder ? ordersStore.listMeasurementProfiles(selectedOrder.customerId) : []);
     setModuleTick((v) => v + 1);
   }, [lowStockOnly, productQuery, productCategoryId, orderQuery, orderStatus, orderType, orderCustomerId, orderDateFrom, orderDateTo, orderDeliveryDateFrom, orderDeliveryDateTo, selectedOrder]);
-  const persistAndRefresh = React.useCallback(async () => {
-    refreshAll();
-    try {
-      if (!await persistDomainToSqlite()) throw new Error("The native SQLite write was rejected");
-    } catch (error) {
-      setModuleError(`SQLite save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
-      console.error("[minarvabiz] SQLite save failed", error);
-    }
-  }, [refreshAll]);
-  const persistCustomerCollection = React.useCallback(async (): Promise<boolean> => {
-    refreshAll();
-    try {
-      if (!await persistDomainToSqlite()) throw new Error("The native SQLite write was rejected");
-      return true;
-    } catch (error) {
-      setModuleError(`SQLite customer payment save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
-      console.error("[minarvabiz] SQLite customer payment save failed", error);
-      return false;
-    }
-  }, [refreshAll]);
+  const { persistAndRefresh, persistCustomerCollection } = React.useMemo(
+    () => createDesktopPersistence(refreshAll, setModuleError),
+    [refreshAll],
+  );
   const persistRosterAndRefresh = React.useCallback(async () => {
     try {
       if (!await persistDomainToSqlite()) throw new Error("Roster changes are not yet saved to SQLite. Keep the application open and retry.");
