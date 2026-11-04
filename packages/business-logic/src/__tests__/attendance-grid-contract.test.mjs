@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const ts = require("typescript");
 
 const read=(p)=>fs.readFileSync(p,"utf8");
 const types=read("packages/types/src/index.ts");
@@ -56,5 +59,45 @@ assert.equal(refreshes,2,"Rejected save must refresh UI and remain visible");
 const diskError=new Error("disk write failed");
 await assert.rejects(makePersist(()=>refreshes++,async()=>{throw diskError}),e=>e===diskError);
 assert.equal(refreshes,3,"Disk errors remain visible and preserve UI refresh");
-assert.match(desktop,/setModuleError\(`SQLite save failed/,"Other desktop saves must show failures instead of silently using browser storage");
+// Exercise the extracted persistence boundary: swallowing a rejected write,
+// reporting success before acknowledgement, or hiding the error must fail here.
+const source = read("apps/desktop/src/lib/desktop-persistence.ts");
+const compiled = ts.transpileModule(source, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const exports = {};
+let write = async () => true;
+new Function("require", "exports", "console", compiled)(specifier => {
+  assert.equal(specifier, "./sqlite-bootstrap");
+  return { persistDomainToSqlite: () => write() };
+}, exports, { error() {} });
+let domainRefreshes = 0;
+const messages = [];
+const callbacks = exports.createDesktopPersistence(() => domainRefreshes++, message => messages.push(message));
+assert.match(desktop, /createDesktopPersistence\(refreshAll, setModuleError\)/);
+assert.match(desktop, /onPersist=\{persistCustomerCollection\}/);
+
+let acknowledge;
+write = () => new Promise(resolve => { acknowledge = resolve; });
+let completed = false;
+const saving = callbacks.persistCustomerCollection().then(result => { completed = true; return result; });
+await Promise.resolve();
+assert.equal(completed, false, "Collection must await native acknowledgement");
+acknowledge(true);
+assert.equal(await saving, true);
+assert.equal(messages.length, 0);
+
+for (const failure of [false, new Error("disk full"), "native IPC disconnected"]) {
+  write = async () => { if (failure === false) return false; throw failure; };
+  assert.equal(await callbacks.persistCustomerCollection(), false);
+  assert.match(messages.at(-1), /SQLite customer payment save failed/);
+  assert.match(messages.at(-1), /retry/i);
+  assert.equal(await callbacks.persistAndRefresh(), undefined);
+  assert.match(messages.at(-1), /SQLite domain save failed/);
+}
+assert.equal(messages.length, 6, "Every rejected write must be visible");
+assert.equal(domainRefreshes, 7);
+write = async () => true;
+assert.equal(await callbacks.persistCustomerCollection(), true, "A later native retry can succeed");
+assert.equal(messages.length, 6, "Successful retry must not report a new error");
 console.log("Attendance SQLite confirmation/failure behavior PASS");

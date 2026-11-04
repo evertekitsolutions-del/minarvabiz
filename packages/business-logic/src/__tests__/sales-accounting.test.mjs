@@ -90,4 +90,18 @@ assert.equal(balance('payment_clearing'), 118);
 reset(); remote.registerRemoteWriter({ upsertAccountingAccount: async () => { throw new Error('offline'); }, upsertJournalEntry: async () => { throw new Error('must not write journal before accounts'); } }, "org-test:user-test");
 const warn = console.warn; console.warn = () => {};
 try { const offline = create(); assert.deepEqual(offline.errors, []); await new Promise(resolve => setImmediate(resolve)); for (const type of ['accounts', 'journal_entries', 'journal_entry_lines']) assert(outbox.listPendingOutbox().some(e => e.aggregateType === type)); } finally { console.warn = warn; remote.registerRemoteWriter(null); }
+// Customer collections retain branch scope through the posted journal.
+reset();
+const branchId = 'branch-00000000-0000-4000-8000-000000000001';
+store.hydrateCore({
+  customers: [{ id: 'branch-customer', name: 'Branch customer', branchId, outstandingBalance: 100, totalSpending: 0 }],
+  sales: [], payments: [],
+});
+const branchCollection = store.recordCustomerPayment({ customerId: 'branch-customer', amount: 25, method: 'cash' });
+assert.deepEqual(branchCollection.errors, []);
+assert.equal(branchCollection.payment.branchId, branchId);
+const branchJournal = accounting.listJournalEntries().find(j => j.referenceType === 'auto_collection' && j.referenceId === branchCollection.payment.id);
+assert(branchJournal);
+assert.equal(branchJournal.branchId, branchId);
+balanced();
 console.log('Sales accounting lifecycle, tenders, collections, tax/cost reversals, exchange, rounding, legacy clearing, permissions, replay, restore and offline persistence PASS');

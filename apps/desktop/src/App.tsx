@@ -14,6 +14,8 @@ import { store, ordersStore, phase5Store, phase6Store, phase7Store, getShopProfi
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
+import { createDesktopPersistence } from "./lib/desktop-persistence";
+import { useDesktopCustomerCollection } from "./lib/use-desktop-customer-collection";
 import { useDurableSaleCommit } from "./lib/use-durable-sale-commit";
 import { DesktopPendingInvoiceSaveBanner } from "./components/DesktopPendingInvoiceSaveBanner";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
@@ -116,15 +118,11 @@ export function App() {
     setProfiles(selectedOrder ? ordersStore.listMeasurementProfiles(selectedOrder.customerId) : []);
     setModuleTick((v) => v + 1);
   }, [lowStockOnly, productQuery, productCategoryId, orderQuery, orderStatus, orderType, orderCustomerId, orderDateFrom, orderDateTo, orderDeliveryDateFrom, orderDeliveryDateTo, selectedOrder]);
-  const persistAndRefresh = React.useCallback(async () => {
-    refreshAll();
-    try {
-      if (!await persistDomainToSqlite()) throw new Error("The native SQLite write was rejected");
-    } catch (error) {
-      setModuleError(`SQLite save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
-      console.error("[minarvabiz] SQLite save failed", error);
-    }
-  }, [refreshAll]);
+  const { persistAndRefresh, persistCustomerCollection } = React.useMemo(
+    () => createDesktopPersistence(refreshAll, setModuleError),
+    [refreshAll],
+  );
+  const customerCollection = useDesktopCustomerCollection(persistCustomerCollection);
   const persistRosterAndRefresh = React.useCallback(async () => {
     try {
       if (!await persistDomainToSqlite()) throw new Error("Roster changes are not yet saved to SQLite. Keep the application open and retry.");
@@ -237,7 +235,7 @@ export function App() {
     {saleCommit.hasPending() && <DesktopPendingInvoiceSaveBanner onRetry={async()=>{const r=await saleCommit.retryPending();refreshAll();setModuleError(r.success?null:r.errors?.join("; ")||"SQLite save failed");}}/>}
     {view==="dashboard"&&dash&&<div className="space-y-4"><DesktopLicenseExpiryBanner commercialActive={commercialActive} trialState={trialState} daysRemaining={licenseDaysForDashboard} onManage={()=>navTo("license")}/><Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/></div>}
     {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery("")} onNavigate={(_href,id)=>{setGlobalSearchQuery("");navTo(id);}}/>}
-    {view==="customers"&&<DesktopCustomerMasterPanel onAdd={openCustomerCreator} onPersist={persistAndRefresh} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}
+    {view==="customers"&&<DesktopCustomerMasterPanel onAdd={openCustomerCreator} onPersist={persistCustomerCollection} collection={customerCollection} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}
     {view==="products"&&<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={()=>setLowStockOnly(v=>!v)} onSearch={setProductQuery} onFilterCategory={setProductCategoryId} onAddCategory={()=>{setCategoryForm({name:"",description:""});setCategoryOpen(true);}} onAdd={()=>{resetProductForm();setProductOpen(true);}} onEdit={openProductEditor} onAdjustStock={openStockAdjust} onArchive={handleArchiveProduct} onPrintBarcode={openBarcodeLabel}/>} 
     {view==="warehouse"&&<WarehousePanel/>}
     {view==="accounting"&&<AccountingPanel/>}
