@@ -31,6 +31,7 @@ export interface BrowserAdminDashboard {
   licenses: LicenseRegistryRow[];
   requests: SupportRequestRow[];
   trials: TrialRegistrationRow[];
+  trialInboxWarning?: string;
 }
 
 export function useAdminAuthentication(

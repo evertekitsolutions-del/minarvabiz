@@ -138,6 +138,7 @@ export async function loadBrowserAdminDashboard(): Promise<ApiResult<{
   licenses: LicenseRegistryRow[];
   requests: SupportRequestRow[];
   trials: TrialRegistrationRow[];
+  trialInboxWarning?: string;
 }>> {
   const me = await edgeRequest<{ identity: AdminIdentityView }>("/api/admin/me");
   if (!me.ok) return me;
@@ -150,7 +151,12 @@ export async function loadBrowserAdminDashboard(): Promise<ApiResult<{
   ]);
   if (!licenses.ok) return licenses;
   if (!support.ok) return support;
-  if (!trials.ok) return trials;
+  // A noncritical trial inbox outage must not block an MFA-verified admin
+  // from issuing an independent paid license for a waiting customer.
+  // Authentication/authorization failures must still fail closed.
+  if (!trials.ok && ["UNAUTHENTICATED", "MFA_REQUIRED", "FORBIDDEN", "ADMIN_NOT_ALLOWED"].includes(trials.code || "")) {
+    return trials;
+  }
 
   return {
     ok: true,
@@ -160,7 +166,10 @@ export async function loadBrowserAdminDashboard(): Promise<ApiResult<{
     },
     licenses: Array.isArray(licenses.licenses) ? licenses.licenses : [],
     requests: Array.isArray(support.requests) ? support.requests : [],
-    trials: Array.isArray(trials.registrations) ? trials.registrations : [],
+    trials: trials.ok && Array.isArray(trials.registrations) ? trials.registrations : [],
+    ...(!trials.ok ? {
+      trialInboxWarning: "Trial registration inbox is currently unavailable. You can still create a customer license manually. Try Refresh for the inbox.",
+    } : {}),
   };
 }
 
