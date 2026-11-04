@@ -554,7 +554,7 @@ assert.match(trialConversionMigration, /'converted'/);
 assert.match(trialConversionMigration, /converted_license_id/);
 assert.match(trialConversionMigration, /cloudflare_admin_issue_license/);
 assert.match(trialConversionMigration, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_convert_trial_to_license/);
-assert.match(trialConversionMigration, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_convert_trial_to_license[\\s\\S]*TO authenticated/);
+assert.match(trialConversionMigration, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_convert_trial_to_license[\s\S]*TO authenticated/);
 assert.ok(migrationOrder.includes("20261104_cloudflare_admin_convert_trial_to_license.sql"));
 assert.match(adminTrialInboxMigration, /cloudflare_admin_list_trial_registrations/);
 
