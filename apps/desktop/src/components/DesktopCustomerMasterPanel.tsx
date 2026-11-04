@@ -164,7 +164,7 @@ export function DesktopCustomerMasterPanel({ onAdd, onSelect, onPersist }: Props
         onAdd={onAdd}
         onSearch={setQuery}
         onSelect={onSelect}
-        onCollect={openCollection}
+        onCollect={can("payments.collect") ? openCollection : undefined}
         onSetOpeningBalance={can("settings.manage") ? openOpeningBalance : undefined}
         onEdit={openEdit}
         onArchive={(customer) => { setArchiveTarget(customer); setArchiveReason(""); setError(null); }}
