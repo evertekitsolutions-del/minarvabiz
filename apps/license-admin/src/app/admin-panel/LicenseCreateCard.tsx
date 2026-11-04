@@ -16,6 +16,7 @@ interface LicenseCreateCardProps {
   lastToken: string | null;
   busy: boolean;
   canIssue: boolean;
+  trialConversion?: boolean;
   onCustomerNameChange: (value: string) => void;
   onPlanChange: (value: LicensePlan) => void;
   onEditionChange: (value: Edition) => void;
@@ -37,6 +38,7 @@ export function LicenseCreateCard(props: LicenseCreateCardProps) {
     lastToken,
     busy,
     canIssue,
+    trialConversion = false,
     onCustomerNameChange,
     onPlanChange,
     onEditionChange,
@@ -51,12 +53,13 @@ export function LicenseCreateCard(props: LicenseCreateCardProps) {
 
   return (
     <Card>
-      <CardHeader><CardTitle className="text-base">Create customer license</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base">{trialConversion ? "Convert trial to paid license" : "Create customer license"}</CardTitle></CardHeader>
       <CardContent className="space-y-3">
         <input
-          className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+          className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm read-only:bg-slate-100 read-only:text-slate-500"
           placeholder="Customer / organization name"
           value={customerName}
+          readOnly={trialConversion}
           onChange={(event) => onCustomerNameChange(event.target.value)}
         />
         <div className="grid grid-cols-2 gap-3">
@@ -65,7 +68,7 @@ export function LicenseCreateCard(props: LicenseCreateCardProps) {
             value={plan}
             onChange={(event) => onPlanChange(event.target.value as LicensePlan)}
           >
-            {PLANS.map((item) => <option key={item}>{item}</option>)}
+            {PLANS.filter((item) => !trialConversion || item !== "trial").map((item) => <option key={item}>{item}</option>)}
           </select>
           <select
             className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
@@ -117,7 +120,7 @@ export function LicenseCreateCard(props: LicenseCreateCardProps) {
           <p className="text-xs text-amber-600">Your role is read-only for license issuance.</p>
         )}
         <Button disabled={busy || !customerName.trim() || !canIssue} onClick={onIssue}>
-          {busy ? "Generating…" : "Generate License"}
+          {busy ? "Generating…" : trialConversion ? "Convert and issue paid license" : "Generate License"}
         </Button>
         {lastToken && (
           <div className="space-y-1">
