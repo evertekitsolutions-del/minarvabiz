@@ -104,4 +104,23 @@ const branchJournal = accounting.listJournalEntries().find(j => j.referenceType 
 assert(branchJournal);
 assert.equal(branchJournal.branchId, branchId);
 balanced();
+
+// SQLite restart round-trip: payment/customer state and its accounting journal
+// must be restored together, with the same payment identity and branch scope.
+const coreSnapshot = structuredClone(store.exportCoreState());
+const accountingSnapshot = structuredClone(accounting.exportAccountingState());
+const paymentIdBeforeRestart = branchCollection.payment.id;
+reset();
+store.hydrateCore(coreSnapshot);
+accounting.hydrateAccountingState(accountingSnapshot);
+const restoredPayment = store.listPayments().find(payment => payment.id === paymentIdBeforeRestart);
+assert(restoredPayment, "customer collection must survive a core-state restore");
+assert.equal(restoredPayment.branchId, branchId);
+const restoredJournal = accounting.listJournalEntries().find(j =>
+  j.referenceType === 'auto_collection' && j.referenceId === paymentIdBeforeRestart
+);
+assert(restoredJournal, "customer collection journal must survive an accounting-state restore");
+assert.equal(restoredJournal.branchId, branchId);
+assert.equal(restoredJournal.totalDebit, restoredJournal.totalCredit);
+balanced();
 console.log('Sales accounting lifecycle, tenders, collections, tax/cost reversals, exchange, rounding, legacy clearing, permissions, replay, restore and offline persistence PASS');
