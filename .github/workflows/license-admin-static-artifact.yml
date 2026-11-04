@@ -26,6 +26,7 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm --filter @minarvabiz/license-admin build
       - run: node scripts/license-admin-static-artifact-smoke.mjs
+      - run: node --experimental-strip-types scripts/license-admin-edge-runtime-smoke.mjs
       - name: Upload provider-neutral static artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
