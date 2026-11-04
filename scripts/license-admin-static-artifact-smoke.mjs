@@ -7,6 +7,17 @@ const out = path.join(root, "apps", "license-admin", "out");
 assert.ok(fs.existsSync(path.join(out, "index.html")), "static License Admin index.html is missing");
 assert.ok(fs.existsSync(path.join(out, "_headers")), "portable security _headers file is missing");
 
+const cspHeaders = fs.readFileSync(path.join(out, "_headers"), "utf8");
+const csp = cspHeaders.split("\n").find((line) => line.trim().startsWith("Content-Security-Policy:")) || "";
+const connectDirective = csp.split(";").map((part) => part.trim()).find((part) => part.startsWith("connect-src ")) || "";
+assert.ok(connectDirective.includes("https://license-api.minarvabiz.com"), "CSP must permit the real production License Worker for named-admin login");
+assert.ok(connectDirective.includes("https://*.supabase.co"), "CSP must permit verified Supabase Auth and PostgREST");
+assert.ok(!connectDirective.includes("minarva-biz-license-edge.minarva-biz.workers.dev"), "CSP must not rely on obsolete Worker URL");
+assert.ok(!connectDirective.includes("* "), "CSP must not allow all outbound origins");
+assert.ok(csp.includes("object-src 'none'"), "Keep CSP object isolation");
+assert.ok(csp.includes("frame-ancestors 'none'"), "Keep CSP clickjacking protection");
+
+
 const forbidden = [
   "SUPABASE_SECRET_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
