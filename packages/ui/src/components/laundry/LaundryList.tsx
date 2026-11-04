@@ -254,8 +254,9 @@ export function LaundryList({
       key: "action",
       header: "Actions",
       render: (r) => {
+        const allItemsPassedQc = !r.items?.length || r.items.every(item => item.processingStatus === "delivered" && item.qualityStatus === "passed");
         const next = r.mode === "outsourced" && r.status !== "cancelled"
-          ? (r.status === "pending" ? "sent" : r.status === "sent" ? "received" : r.status === "received" ? "delivered" : null)
+          ? (r.status === "pending" ? "sent" : r.status === "sent" ? "received" : r.status === "received" && allItemsPassedQc ? "delivered" : null)
           : !r.items?.length && r.mode === "in_house_ironing"
             ? (r.status === "pending" ? "received" : r.status === "received" ? "delivered" : null)
             : null;
@@ -264,6 +265,7 @@ export function LaundryList({
           <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
             <Button size="sm" variant="outline" onClick={() => openDetails(r)}>Details</Button>
             {r.status !== "cancelled" && onUpdateDetails && <Button size="sm" variant="outline" onClick={() => openEdit(r)}>Edit Details</Button>}
+            {r.mode === "outsourced" && r.status === "received" && !allItemsPassedQc && <span className="self-center text-xs text-amber-700">Finish garment QC in Details before delivery</span>}
             {label && onStatusChange && <Button size="sm" variant="outline" onClick={() => onStatusChange(r, next!)}>{label}</Button>}
             {r.status !== "cancelled" && onCancel && <Button size="sm" variant="danger" onClick={() => onCancel(r)}>Cancel Ticket</Button>}
           </div>
