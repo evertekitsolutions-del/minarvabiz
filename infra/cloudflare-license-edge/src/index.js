@@ -423,6 +423,41 @@ async function activateNatively(request, env, route, authority) {
       );
     }
 
+    // PostgreSQL TIMESTAMPTZ re-serializes the expiry. Desktop checks that
+    // the signed activation certificate matches the license expiry literally.
+    // Reuse the Ed25519-verified original text, not the database formatting.
+    let signedLicense = null;
+    try {
+      const parts = parsed.licenseToken.split(".");
+      if (
+        parts.length === 2 &&
+        nodeVerify(
+          null,
+          Buffer.from(parts[0], "utf8"),
+          createPublicKey(authority.privateKey),
+          Buffer.from(parts[1], "base64url"),
+        )
+      ) {
+        signedLicense = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8"));
+      }
+    } catch {}
+    const signedExpiry = signedLicense?.expiresAt ?? null;
+    const storedExpiry = output.expiresAt ?? null;
+    if (
+      signedLicense?.product !== "minarvabiz" ||
+      signedLicense?.licenseId !== licenseId ||
+      (signedExpiry === null) !== (storedExpiry === null) ||
+      (signedExpiry !== null &&
+        (!Number.isFinite(Date.parse(signedExpiry)) ||
+          Date.parse(signedExpiry) !== Date.parse(storedExpiry)))
+    ) {
+      return json(
+        { ok: false, code: "LICENSE_CERTIFICATE_MISMATCH" },
+        503,
+        { "x-minarva-license-backend": "cloudflare-native" },
+      );
+    }
+
     const activationCertificate = await signActivationCertificateNatively(
       {
         type: "minarvabiz-activation-v1",
@@ -430,7 +465,7 @@ async function activateNatively(request, env, route, authority) {
         activationId,
         deviceId: parsed.deviceId,
         issuedAt: validatedAt,
-        expiresAt: output.expiresAt || null,
+        expiresAt: signedExpiry,
       },
       authority.privateKey,
     );
