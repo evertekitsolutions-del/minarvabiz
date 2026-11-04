@@ -348,6 +348,7 @@ export function archiveProduct(id: UUID, reason: string): { product: Product | n
   const archiveReason = reason.trim();
   if (archiveReason.length < 3) return { product: null, error: "Archive reason is required" };
   if (Math.abs(p.stockQuantity) > 1e-9) return { product: null, error: "Adjust product stock to zero before archiving" };
+  if (p.hasVariants && products.some(child => child.parentProductId === p.id && !child.deletedAt)) return { product: null, error: "Archive individual variant items before archiving the product group" };
   const before = { ...p };
   p.deletedAt = nowISO();
   p.isActive = false;
@@ -391,7 +392,6 @@ export function purgeArchivedProduct(id: UUID): { purged: boolean; error?: strin
   return { purged: true };
 }
 
-/** @deprecated Use archiveProduct with a mandatory business reason. */
 export function deleteProduct(id: UUID): Product | null {
   return archiveProduct(id, "Legacy product archive").product;
 }
@@ -432,7 +432,6 @@ export function listStockTransfers(): StockTransferRecord[] {
   return [...stockTransfers].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-/** @deprecated Use the controlled Warehouse Management transfer workflow. */
 export function transferStock(input: {
   sourceProductId: UUID;
   destinationProductId: UUID;
