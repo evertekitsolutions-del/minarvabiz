@@ -36,8 +36,6 @@ jobs:
         run: node packages/business-logic/src/__tests__/universal-business-schema-contract.test.mjs
       - name: Verify tenant-safe service resource availability rules (UBP-04a)
         run: node --experimental-strip-types --test packages/business-logic/src/__tests__/resource-booking.test.mjs
-      - name: Verify SQLite binary survives desktop restart and domain snapshot restore
-        run: node --experimental-strip-types --test packages/database/src/adapters/__tests__/sqlite-browser-restart.test.mjs
       - name: Verify desktop workspace readiness after trial activation
         run: node --test scripts/desktop-workspace-ready.test.mjs
       - name: Verify GitHub Actions hardening
@@ -164,6 +162,8 @@ jobs:
       - name: Verify coverage reporting and ratchet workflow contract
         run: node scripts/coverage-workflow-smoke.mjs
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify SQLite binary survives desktop restart and domain snapshot restore
+        run: node --experimental-strip-types --test packages/database/src/adapters/__tests__/sqlite-browser-restart.test.mjs
       - run: pnpm --filter @minarvabiz/utils typecheck
       - name: Verify provider-neutral commercial entitlement contract
         run: node --experimental-strip-types scripts/commercial-entitlement-contract-smoke.mjs
