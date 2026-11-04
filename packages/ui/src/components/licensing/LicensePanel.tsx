@@ -83,7 +83,9 @@ export function LicensePanel({
     setActivationFeedback(null);
     try {
       const result = await onActivateToken(token.trim());
-      if (!result) {\n        setActivationFeedback({ ok: true, message: "Activation submitted. Use Refresh to check license status." });\n      } else if (result.ok) {
+      if (!result) {
+        setActivationFeedback({ ok: true, message: "Activation submitted. Use Refresh to check license status." });
+      } else if (result.ok) {
         setActivationFeedback({ ok: true, message: "License activated successfully." });
         setToken("");
       } else {
