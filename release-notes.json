@@ -34,5 +34,11 @@
     "Products & Inventory: enter different Size, Colour and Material combinations with separate piece quantities under one product; each variant gets its own SKU/barcode and inventory balance.",
     "Each size/colour/material variant can be scanned and billed independently. The parent group is not itself a saleable stock item.",
     "Barcode labels display Size, Colour and Material for each variant in addition to the product, scannable barcode and price. The default sticker copy count follows that variant’s available stock (up to 100)."
+  ],
+  "1.0.20": [
+    "Added a calibrated 4-inch (101.6mm) two-across 38 × 38mm sticker roll preset, adjustable gap/left margin, true two-column printing, and LEFT/RIGHT test label.",
+    "A4 and thermal invoices and receipts now center the business name, address, and header contact details.",
+    "Unsaved Business Settings and Printer Settings remain visible during desktop refreshes instead of resetting while typing.",
+    "License Activate / Renew now waits for completion, displays actual errors, and connects to the bundled production HTTPS licensing service."
   ]
 }
