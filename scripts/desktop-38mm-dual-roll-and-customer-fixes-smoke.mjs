@@ -36,7 +36,7 @@ for (const field of ["Size: M","Colour: Red","Material: Cotton","Rs.799.00"])
 assert.doesNotMatch(html,/window\.print\(\)/);
 prefs={...prefs,labelRowGapMm:2};
 const withGap=m.exports.buildBarcodeLabelHtml(product,{copies:2,autoPrint:false});
-assert.match(withGap,/@page\\{size:101\\.6mm 40mm;margin:0\\}/);
+assert.match(withGap,/@page\{size:101\.6mm 40mm;margin:0\}/);
 prefs={...prefs,labelRowGapMm:0,labelColumns:1};
 const single=m.exports.buildBarcodeLabelHtml(product,{copies:1,autoPrint:false});
 assert.match(single,/@page\{size:38mm 38mm;margin:0\}/);
