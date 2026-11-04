@@ -193,7 +193,7 @@ export function printBarcodeLabels(product: Product, copies = 1, categoryName?: 
     copies,
     categoryName,
     autoPrint: false,
-    labelWidthMm: settings.labelColumns === 2 ? settings.labelRollWidthMm : settings.labelWidthMm,
+    labelWidthMm: settings.labelWidthMm,
     labelHeightMm: settings.labelHeightMm,
   });
   if (tryDesktopPrintHtml(directHtml, "label", {
@@ -207,7 +207,7 @@ export function printBarcodeLabels(product: Product, copies = 1, categoryName?: 
     copies,
     categoryName,
     autoPrint: true,
-    labelWidthMm: settings.labelColumns === 2 ? settings.labelRollWidthMm : settings.labelWidthMm,
+    labelWidthMm: settings.labelWidthMm,
     labelHeightMm: settings.labelHeightMm,
   }));
   w.document.close();
