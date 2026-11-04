@@ -96,6 +96,7 @@ export function ProductList({
       render: (r) => (
         <div>
           <div className="font-medium text-slate-900">{r.name}</div>
+          {r.hasVariants ? <div className="text-xs font-semibold text-indigo-700">Variant group — use individual rows for sales/stock/labels</div> : r.parentProductId ? <div className="text-xs text-indigo-700">Size: {r.size||"—"} · Colour: {r.color||"—"} · Material: {r.fabric||"—"}</div> : null}
           <div className="text-xs text-slate-500">
             {r.sku || "—"} {r.barcode ? `· ${r.barcode}` : ""}
           </div>
@@ -116,6 +117,7 @@ export function ProductList({
       key: "stockQuantity",
       header: "Stock",
       render: (r) => {
+        if (r.hasVariants) return <span className="text-xs font-semibold text-indigo-700">Variant stock (see rows)</span>;
         const low = r.stockQuantity <= r.minimumStock;
         return (
           <span className={low ? "font-semibold text-rose-600" : "text-slate-700"}>
@@ -146,8 +148,8 @@ export function ProductList({
       render: (r) => (
         <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
           {onEdit && <Button size="sm" variant="outline" onClick={() => onEdit(r)}>Edit</Button>}
-          {onAdjustStock && <Button size="sm" variant="outline" onClick={() => onAdjustStock(r)}>Stock</Button>}
-          {onPrintBarcode && <Button size="sm" variant="outline" onClick={() => onPrintBarcode(r)}>Label</Button>}
+          {onAdjustStock && !r.hasVariants && <Button size="sm" variant="outline" onClick={() => onAdjustStock(r)}>Stock</Button>}
+          {onPrintBarcode && !r.hasVariants && <Button size="sm" variant="outline" onClick={() => onPrintBarcode(r)}>Label</Button>}
           {onArchive && <Button size="sm" variant="outline" onClick={() => { setArchiveTarget(r); setArchiveReason(""); setArchiveError(null); }}>Archive</Button>}
         </div>
       ),
