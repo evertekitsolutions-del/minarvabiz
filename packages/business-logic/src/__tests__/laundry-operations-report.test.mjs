@@ -64,3 +64,10 @@ test("shared desktop/web UI exposes real operational reports",()=>{
   assert.match(panel,/Laundry reporting month/);
   assert.match(panel,/not the reconciled financial ledger/i);
 });
+
+test("empty reporting period produces zero booked and delivered tickets",()=>{
+  const report=buildLaundryOperationsReport([],"2026-11-01","2026-11-30","2026-11-04");
+  assert.equal(report.bookedTickets,0);
+  assert.equal(report.deliveredTickets,0);
+  assert.equal(report.overdueOpenTickets,0);
+});
