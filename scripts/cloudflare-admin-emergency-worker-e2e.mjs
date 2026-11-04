@@ -468,7 +468,7 @@ const parityAudit = JSON.parse(
   ),
 );
 assert.equal(Number(parityAudit.wrong_source), 0);
-assert.equal(Number(parityAudit.license_issue), 1);
+assert.equal(Number(parityAudit.license_issue), 2, "Emergency paid trial conversion and new license issuance must each be audited");
 assert.ok(Number(parityAudit.license_status) >= 2);
 assert.equal(Number(parityAudit.offline), 1);
 assert.equal(Number(parityAudit.support), 1);
