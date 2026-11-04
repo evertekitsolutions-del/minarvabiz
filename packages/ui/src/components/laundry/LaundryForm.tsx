@@ -39,7 +39,7 @@ export function LaundryForm({mode,customers,suppliers,onSubmit,onCancel,onAddCus
  const firstGarment=rows[0]?.label.trim()||"";
  const validTat=Number.isSafeInteger(Number(tatHours))&&Number(tatHours)>=1&&Number(tatHours)<=2160;
  function applyRate(){
-  const rate=findLaundryRateCard({mode,serviceCode,garment:firstGarment,fabric:fabricType});
+  const rate=findLaundryRateCard({mode,serviceCode,garment:firstGarment,fabric:fabricType,supplierId:mode==="outsourced"?(supplierId||null):null});
   if(!rate){setRateFeedback("No saved rate for this service, garment and fabric.");return;}
   setCustomerRate(String(rate.customerRate));setSupplierRate(String(rate.supplierRate));setTatHours(String(rate.tatHours));
   if(pickupAt&&!dueAt){
@@ -51,7 +51,7 @@ export function LaundryForm({mode,customers,suppliers,onSubmit,onCancel,onAddCus
  function saveRate(){
   if(!firstGarment||!validTat){setRateFeedback("Garment and valid turnaround hours required.");return;}
   try{
-   saveLaundryRateCard({mode,serviceCode,garment:firstGarment,fabric:fabricType,
+   saveLaundryRateCard({mode,serviceCode,garment:firstGarment,fabric:fabricType,supplierId:mode==="outsourced"?(supplierId||null):null,
     customerRate:Number(customerRate),supplierRate:mode==="in_house_ironing"?0:Number(supplierRate),
     tatHours:Number(tatHours)});
    setRateCards(listLaundryRateCards());setRateFeedback("Rate saved locally with backups.");
