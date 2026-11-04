@@ -2,17 +2,24 @@ import * as React from "react";
 import { Button, CustomerList, FormField, Modal, inputClass } from "@minarvabiz/ui";
 import { can, setOpeningCustomerBalance, store } from "@minarvabiz/business-logic";
 import type { Customer, PaymentMethod } from "@minarvabiz/types";
-import { createDurableCustomerCollection } from "../lib/durable-customer-collection";
+type CustomerCollectionInput = { customerId: string; amount: number; method: PaymentMethod; notes?: string };
+type CollectionResult = { ok: true; paymentId: string } | { ok: false; error: string };
+type CustomerCollection = {
+  hasPending(): boolean;
+  collect(input: CustomerCollectionInput): Promise<CollectionResult>;
+  retryPending(): Promise<CollectionResult>;
+};
 
 type Props = {
   onAdd: () => void;
   onSelect: (customer: Customer) => void;
   onPersist: () => boolean | Promise<boolean>;
+  collection: CustomerCollection;
 };
 
 const emptyForm = { name: "", phone: "", whatsapp: "", email: "", address: "", birthday: "", notes: "" };
 
-export function DesktopCustomerMasterPanel({ onAdd, onSelect, onPersist }: Props) {
+export function DesktopCustomerMasterPanel({ onAdd, onSelect, onPersist, collection }: Props) {
   const [query, setQuery] = React.useState("");
   const [editTarget, setEditTarget] = React.useState<Customer | null>(null);
   const [openingBalanceTarget, setOpeningBalanceTarget] = React.useState<Customer | null>(null);
@@ -29,11 +36,6 @@ export function DesktopCustomerMasterPanel({ onAdd, onSelect, onPersist }: Props
   const [collectionNotes, setCollectionNotes] = React.useState("");
   const [collectionError, setCollectionError] = React.useState<string | null>(null);
   const [collectionSaving, setCollectionSaving] = React.useState(false);
-  const collectionRef = React.useRef<ReturnType<typeof createDurableCustomerCollection> | null>(null);
-  if (!collectionRef.current) collectionRef.current = createDurableCustomerCollection(
-    (input: { customerId: string; amount: number; method: PaymentMethod; notes?: string }) => store.recordCustomerPayment(input),
-    async () => Boolean(await onPersist()),
-  );
   void revision;
 
   const customers = store.listCustomers(query);
@@ -62,7 +64,7 @@ export function DesktopCustomerMasterPanel({ onAdd, onSelect, onPersist }: Props
     setCollectionSaving(true);
     setCollectionError(null);
     try {
-      const result = await collectionRef.current!.collect({
+      const result = await collection.collect({
         customerId: collectionTarget.id, amount, method: collectionMethod,
         notes: collectionNotes.trim() || undefined,
       });
@@ -80,7 +82,7 @@ export function DesktopCustomerMasterPanel({ onAdd, onSelect, onPersist }: Props
     setCollectionSaving(true);
     setCollectionError(null);
     try {
-      const result = await collectionRef.current!.retryPending();
+      const result = await collection.retryPending();
       if (!result.ok) { setCollectionError(result.error || "The existing payment is still pending."); return; }
       setCollectionTarget(null);
       setCollectionNotes("");
@@ -168,6 +170,17 @@ export function DesktopCustomerMasterPanel({ onAdd, onSelect, onPersist }: Props
 
   return (
     <>
+      {collection.hasPending() && !collectionTarget && (
+        <div role="alert" className="mb-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          A customer payment is still pending SQLite confirmation. Retry the existing payment before collecting another one.
+          <div className="mt-2">
+            <Button disabled={collectionSaving} onClick={() => void retryCollectionSave()}>
+              {collectionSaving ? "Saving…" : "Retry pending payment save"}
+            </Button>
+          </div>
+          {collectionError && <p className="mt-2 text-rose-700">{collectionError}</p>}
+        </div>
+      )}
       <CustomerList
         customers={customers}
         onAdd={onAdd}
@@ -181,15 +194,15 @@ export function DesktopCustomerMasterPanel({ onAdd, onSelect, onPersist }: Props
       <Modal
         open={Boolean(collectionTarget)}
         title={collectionTarget ? `Collect Payment — ${collectionTarget.name}` : "Collect Payment"}
-        onClose={() => { if (!collectionRef.current?.hasPending()) setCollectionTarget(null); }}
-        footer={<><Button variant="outline" disabled={collectionSaving || collectionRef.current?.hasPending()} onClick={() => setCollectionTarget(null)}>Cancel</Button><Button disabled={collectionSaving || !collectionAmount.trim() || Boolean(collectionRef.current?.hasPending())} onClick={() => void saveCollection()}>{collectionSaving ? "Saving…" : "Save Payment"}</Button></>}
+        onClose={() => { if (!collection.hasPending()) setCollectionTarget(null); }}
+        footer={<><Button variant="outline" disabled={collectionSaving || collection.hasPending()} onClick={() => setCollectionTarget(null)}>Cancel</Button><Button disabled={collectionSaving || !collectionAmount.trim() || Boolean(collection.hasPending())} onClick={() => void saveCollection()}>{collectionSaving ? "Saving…" : "Save Payment"}</Button></>}
       >
         <div className="space-y-3">
           <p className="text-sm text-slate-600">Outstanding: <strong>{String(collectionTarget?.outstandingBalance ?? 0)}</strong></p>
           <FormField label="Amount"><input className={inputClass} type="number" min="0.01" step="0.01" value={collectionAmount} onChange={event => setCollectionAmount(event.target.value)} /></FormField>
           <FormField label="Payment method"><select className={inputClass} value={collectionMethod} onChange={event => setCollectionMethod(event.target.value as PaymentMethod)}><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank">Bank</option><option value="online">Online</option><option value="other">Other</option></select></FormField>
           <FormField label="Notes"><textarea className={inputClass} value={collectionNotes} onChange={event => setCollectionNotes(event.target.value)} /></FormField>
-          {collectionRef.current?.hasPending() && <div role="alert" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">SQLite has not confirmed this payment. Keep the app open and retry the same payment. Do not collect another payment.<div className="mt-2"><Button disabled={collectionSaving} onClick={() => void retryCollectionSave()}>{collectionSaving ? "Saving…" : "Retry existing payment save"}</Button></div></div>}
+          {collection.hasPending() && <div role="alert" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">SQLite has not confirmed this payment. Keep the app open and retry the same payment. Do not collect another payment.<div className="mt-2"><Button disabled={collectionSaving} onClick={() => void retryCollectionSave()}>{collectionSaving ? "Saving…" : "Retry existing payment save"}</Button></div></div>}
           {collectionError && <p role="alert" className="text-sm text-rose-600">{collectionError}</p>}
         </div>
       </Modal>
