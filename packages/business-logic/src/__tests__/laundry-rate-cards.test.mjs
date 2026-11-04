@@ -24,6 +24,14 @@ test("all six services, controlled garment/fabric rate save and read-only quote 
   assert.equal(cards.listLaundryRateCards().length,1);
   assert.equal(cards.listLaundryRateCards()[0].customerRate,275);
 });
+test("supplier-specific rate contract overrides generic laundry tariff safely",()=>{
+  const vendor=cards.saveLaundryRateCard({...input,supplierId:"supplier-1",customerRate:310,supplierRate:175,tatHours:36});
+  assert.equal(vendor.supplierId,"supplier-1");
+  assert.equal(cards.findLaundryRateCard({...input,supplierId:"supplier-1"})?.customerRate,310);
+  assert.equal(cards.findLaundryRateCard({...input,supplierId:"supplier-2"})?.customerRate,275);
+  assert.equal(cards.findLaundryRateCard({...input,supplierId:"supplier-1"})?.tatHours,36);
+});
+
 test("malformed rates, duplicates, in-house supplier charges and excessive TAT fail atomically",()=>{
   const before=JSON.stringify(cards.exportLaundryRateCards());
   for(const rate of [
