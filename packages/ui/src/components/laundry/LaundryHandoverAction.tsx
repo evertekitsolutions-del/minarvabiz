@@ -59,6 +59,6 @@ export function LaundryHandoverAction({ order, leg }: {
       </form>}
       {error && <p className="mt-1 text-xs text-rose-700" role="alert">{error}</p>}
     </>}
-    <p className="mt-1 text-[11px] text-slate-500">Saved only in this device's encrypted/local backup workflow where configured; not a synced courier proof.</p>
+    <p className="mt-1 text-[11px] text-slate-500">Saved only in this device's offline snapshot/backup; not a synced courier proof.</p>
   </div>;
 }
