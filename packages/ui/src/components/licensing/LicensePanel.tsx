@@ -66,7 +66,7 @@ export function LicensePanel({
 }: {
   state: LicenseViewState;
   usage: UsageView;
-  onActivateToken: (token: string) => Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string };
+  onActivateToken: (token: string) => Promise<{ ok: boolean; error?: string } | void> | { ok: boolean; error?: string } | void;
   onStartTrial?: () => void;
   onDeactivate?: () => void;
   onRefresh?: () => void;
@@ -83,7 +83,7 @@ export function LicensePanel({
     setActivationFeedback(null);
     try {
       const result = await onActivateToken(token.trim());
-      if (result.ok) {
+      if (!result) {\n        setActivationFeedback({ ok: true, message: "Activation submitted. Use Refresh to check license status." });\n      } else if (result.ok) {
         setActivationFeedback({ ok: true, message: "License activated successfully." });
         setToken("");
       } else {
