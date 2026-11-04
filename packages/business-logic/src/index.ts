@@ -21,6 +21,7 @@ export * from "./laundry";
 export * from "./laundry-vendor-scorecard";
 export * from "./laundry-rate-cards";
 export * from "./laundry-incidents";
+export * from "./laundry-handover";
 export * from "./tailor-job-card";
 export * from "./laundry-operations-report";
 export * from "./incentives";
