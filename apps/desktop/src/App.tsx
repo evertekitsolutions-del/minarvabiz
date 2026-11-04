@@ -15,7 +15,7 @@ import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, Servic
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
 import { createDesktopPersistence } from "./lib/desktop-persistence";
-import { createDurableCustomerCollection } from "./lib/durable-customer-collection";
+import { useDesktopCustomerCollection } from "./lib/use-desktop-customer-collection";
 import { useDurableSaleCommit } from "./lib/use-durable-sale-commit";
 import { DesktopPendingInvoiceSaveBanner } from "./components/DesktopPendingInvoiceSaveBanner";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
@@ -122,15 +122,7 @@ export function App() {
     () => createDesktopPersistence(refreshAll, setModuleError),
     [refreshAll],
   );
-  // The collection coordinator lives at App scope, not inside the Customers
-  // view: navigation must never discard an unsaved SQLite payment identity.
-  const persistCustomerCollectionRef = React.useRef(persistCustomerCollection);
-  persistCustomerCollectionRef.current = persistCustomerCollection;
-  const [customerCollection] = React.useState(() => createDurableCustomerCollection(
-    (input: { customerId: string; amount: number; method: PaymentMethod; notes?: string }) =>
-      store.recordCustomerPayment(input),
-    () => persistCustomerCollectionRef.current(),
-  ));
+  const customerCollection = useDesktopCustomerCollection(persistCustomerCollection);
   const persistRosterAndRefresh = React.useCallback(async () => {
     try {
       if (!await persistDomainToSqlite()) throw new Error("Roster changes are not yet saved to SQLite. Keep the application open and retry.");
