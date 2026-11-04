@@ -19,5 +19,10 @@
     "Windows Customers now includes direct outstanding-balance collection with branch-scoped accounting entries.",
     "Customer payments wait for native SQLite confirmation; failed saves can be retried without creating a duplicate payment.",
     "An unresolved payment stays recoverable when navigating away from Customers and returning."
+  ],
+  "1.0.17": [
+    "Existing Windows installations update through Software Updates > Update & Restart; no onsite reinstall is required.",
+    "A designated legacy demo customer's old business database is archived and verified before the new clean workspace opens.",
+    "Customer trial activation, device identity, licensing, and two backup copies are preserved; other customers' data is not reset."
   ]
 }
