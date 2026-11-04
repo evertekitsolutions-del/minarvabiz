@@ -16,6 +16,7 @@ export interface PrintSettings {
   labelWidthMm: number;
   labelHeightMm: number;
   labelCodeMode: "barcode" | "qr" | "both";
+  labelLayout: "compact" | "detailed";
   silentDesktopPrint: boolean;
   templates: PrintDocumentTemplate[];
   updatedAt: string;
@@ -30,6 +31,7 @@ const defaults: PrintSettings = {
   labelWidthMm: 50,
   labelHeightMm: 30,
   labelCodeMode: "both",
+  labelLayout: "compact",
   silentDesktopPrint: false,
   templates: defaultPrintTemplates(),
   updatedAt: nowISO(),
@@ -56,6 +58,7 @@ export function updatePrintSettings(patch: Partial<PrintSettings>): PrintSetting
     labelWidthMm,
     labelHeightMm,
     labelCodeMode: patch.labelCodeMode === "barcode" || patch.labelCodeMode === "qr" || patch.labelCodeMode === "both" ? patch.labelCodeMode : settings.labelCodeMode,
+    labelLayout: patch.labelLayout === "compact" || patch.labelLayout === "detailed" ? patch.labelLayout : settings.labelLayout,
     templates: patch.templates ? normalizePrintTemplates(patch.templates) : settings.templates,
     updatedAt: nowISO(),
   };
@@ -73,6 +76,7 @@ export function hydratePrintSettings(value: Partial<PrintSettings> | null | unde
     labelWidthMm: Number.isFinite(Number(value.labelWidthMm)) ? Math.max(20, Math.min(120, Number(value.labelWidthMm))) : defaults.labelWidthMm,
     labelHeightMm: Number.isFinite(Number(value.labelHeightMm)) ? Math.max(15, Math.min(150, Number(value.labelHeightMm))) : defaults.labelHeightMm,
     labelCodeMode: value.labelCodeMode === "barcode" || value.labelCodeMode === "qr" || value.labelCodeMode === "both" ? value.labelCodeMode : defaults.labelCodeMode,
+    labelLayout: value.labelLayout === "compact" || value.labelLayout === "detailed" ? value.labelLayout : defaults.labelLayout,
     templates: normalizePrintTemplates(value.templates),
     updatedAt: value.updatedAt || nowISO(),
   };
