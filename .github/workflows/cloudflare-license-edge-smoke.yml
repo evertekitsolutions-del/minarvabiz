@@ -6,6 +6,7 @@ on:
     paths:
       - "infra/cloudflare-license-edge/**"
       - "scripts/cloudflare-license-edge-live-smoke.mjs"
+      - "scripts/license-activation-certificate-expiry-regression.mjs"
       - ".github/workflows/cloudflare-license-edge-smoke.yml"
       - ".github/workflows/release-windows.yml"
       - ".github/workflows/publish-windows-release.yml"
@@ -28,6 +29,9 @@ jobs:
 
       - name: Verify self-host origin portability
         run: node scripts/cloudflare-license-edge-self-host-origin-smoke.mjs
+
+      - name: Verify signed activation certificate expiry regression
+        run: node scripts/license-activation-certificate-expiry-regression.mjs
 
       - name: Verify Cloudflare license edge
         run: node scripts/cloudflare-license-edge-live-smoke.mjs
