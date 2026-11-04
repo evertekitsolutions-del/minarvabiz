@@ -24,5 +24,10 @@
     "Existing Windows installations update through Software Updates > Update & Restart; no onsite reinstall is required.",
     "A designated legacy demo customer's old business database is archived and verified before the new clean workspace opens.",
     "Customer trial activation, device identity, licensing, and two backup copies are preserved; other customers' data is not reset."
+  ],
+  "1.0.18": [
+    "Barcode labels now use their exact sticker paper size and keep the selling price visible instead of clipping it below the printable area.",
+    "Products > Print Barcode Label now includes a real in-app actual-size sticker preview, independent of unsupported Windows print preview.",
+    "Settings > Printer settings adds a compact (price-priority) or detailed label layout, alongside existing size, code mode, printer selection and copies controls."
   ]
 }
