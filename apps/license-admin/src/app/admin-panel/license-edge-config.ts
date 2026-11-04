@@ -1,4 +1,4 @@
-const DEFAULT_LICENSE_EDGE_URL = "https://minarva-biz-license-edge.anilalbert7.workers.dev";
+const DEFAULT_LICENSE_EDGE_URL = "https://license-api.minarvabiz.com";
 
 function validEdgeOrigin(value: string) {
   try {
@@ -25,7 +25,7 @@ function validEdgeOrigin(value: string) {
  * The production Admin Pages deployment is owned by a different Cloudflare
  * account than the licensing Worker. Its build environment may still contain
  * a legacy NEXT_PUBLIC_LICENSE_EDGE_URL pointing at a non-existent Worker.
- * Pin the known Admin site to the verified licensing Worker. Other sites
+ * Pin the known Admin site to the Minarva-owned, TLS-enabled Worker Custom Domain. Other sites
  * preserve the documented configurable self-host migration path.
  */
 export function licenseEdgeOrigin() {
