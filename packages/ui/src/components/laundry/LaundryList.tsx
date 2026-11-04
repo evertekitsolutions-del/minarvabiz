@@ -404,7 +404,7 @@ export function LaundryList({
               <h3 className="text-sm font-semibold text-slate-900">Garment tracking & quality control</h3>
               <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-slate-500">Print one Code 39 label per garment item.</p><Button size="sm" variant="outline" onClick={() => printGarmentTags(detailTarget)}>Print garment tags</Button></div>
               {detailTarget.items.map((item) => <div key={item.id} className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-[1fr_130px_150px] sm:items-center">
-                <div><div className="font-medium text-slate-900">{item.label} × {item.quantity}</div><div className="font-mono text-xs text-slate-500">Tag: {item.tagCode}</div><div className="text-xs text-slate-500">QC: {item.qualityStatus}</div></div>
+                <div><div className="font-medium text-slate-900">{item.label} × {item.quantity}</div><div className="font-mono text-xs text-slate-500">Tag: {item.tagCode}</div><div className="text-xs text-slate-500">QC: {item.qualityStatus}</div>{item.serviceCode && <div className="text-xs text-slate-500">Service: {item.serviceCode.replaceAll("_", " ")} · Fabric: {item.fabricType || "regular"}{item.tatHours ? ` · TAT: ${item.tatHours}h` : ""}</div>}</div>
                 <div className="text-sm capitalize text-slate-700">{item.processingStatus.replaceAll("_", " ")}</div>
                 {onUpdateDetails && detailTarget.status !== "cancelled" ? <div className="flex flex-col gap-1">
                   <select aria-label={`Workflow for ${item.tagCode}`} className={selectClass} value={item.processingStatus} onChange={(e) => saveItemWorkflow(item.id, { processingStatus: e.target.value })}>
