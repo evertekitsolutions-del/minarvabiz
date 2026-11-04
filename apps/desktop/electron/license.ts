@@ -2,7 +2,7 @@ import { app, ipcMain, safeStorage } from "electron";
 import * as fs from "fs";
 import * as path from "path";
 import { createPublicKey, verify } from "crypto";
-import { BUNDLED_LICENSE_PUBLIC_KEY_HEX } from "./license-config";
+import { BUNDLED_LICENSE_PUBLIC_KEY_HEX, BUNDLED_LICENSE_API_URL } from "./license-config";
 
 type LicensePlan = "trial" | "basic" | "professional" | "business" | "enterprise";
 type LicenseEdition = "online" | "offline" | "hybrid";
@@ -19,7 +19,7 @@ const MAX_LICENSE_PACKAGE_CHARS = 256 * 1024;
 function invalidLicenseInput(reason: string): DesktopLicenseState { return { status: "invalid", plan: null, edition: null, features: null, daysRemaining: null, graceDaysRemaining: null, reason }; }
 function filePath() { return path.join(app.getPath("userData"), LICENSE_FILE); }
 function publicKeyHex() { const runtime = String(process.env.MINARVA_LICENSE_PUBLIC_KEY_HEX || process.env.LICENSE_PUBLIC_KEY || "").replace(/^0x/, "").replace(/\s/g, "").toLowerCase(); return runtime || BUNDLED_LICENSE_PUBLIC_KEY_HEX; }
-function apiBaseUrl() { return String(process.env.VITE_LICENSE_API_URL || process.env.MINARVA_LICENSE_API_URL || "").trim().replace(/\/$/, ""); }
+function apiBaseUrl() { return String(process.env.VITE_LICENSE_API_URL || process.env.MINARVA_LICENSE_API_URL || BUNDLED_LICENSE_API_URL).trim().replace(/\/$/, ""); }
 function hexToBytes(hex: string) { const out = Buffer.alloc(hex.length / 2); for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16); return out; }
 function fromBase64Url(value: string) { return Buffer.from(value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4), "base64"); }
 function verifySignatureToken(token: string, keyHex: string): { body: string; payload: unknown } | null { try { const parts = token.split("."); if (parts.length !== 2) return null; const [body, signature] = parts; if (!body || !signature || !/^[0-9a-f]{64}$/.test(keyHex)) return null; const publicKey = createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), hexToBytes(keyHex)]), format: "der", type: "spki" }); if (!verify(null, Buffer.from(body, "utf8"), publicKey, fromBase64Url(signature))) return null; return { body, payload: JSON.parse(fromBase64Url(body).toString("utf8")) as unknown }; } catch { return null; } }
