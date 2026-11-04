@@ -8,6 +8,7 @@ import { formatMoney } from "../customers/format";
 import { LaundryIncidentsPanel } from "./LaundryIncidentsPanel";
 import { LaundryOperationsPanel } from "./LaundryOperationsPanel";
 import { LaundryWhatsAppPanel } from "./LaundryWhatsAppPanel";
+import { LaundryRoutePanel } from "./LaundryRoutePanel";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { buildLaundryVendorScorecard, exportLaundryTicketsCsv } from "@minarvabiz/business-logic";
@@ -69,7 +70,7 @@ export function LaundryList({
   onUpdateDetails,
 }: {
   orders: LaundryOrder[];
-  customers?: Pick<Customer,"id" | "name" | "phone" | "whatsapp">[];
+  customers?: Pick<Customer,"id" | "name" | "phone" | "whatsapp" | "address" | "branchId">[];
   auditLogs?: AuditLogEntry[];
   onAddOutsourced?: () => void;
   onAddIroning?: () => void;
@@ -309,6 +310,7 @@ export function LaundryList({
           </div>
         </div>
 
+        <LaundryRoutePanel orders={orders} customers={customers} />
         <LaundryOperationsPanel orders={orders} />
         <LaundryIncidentsPanel orders={orders} />
         {csvFeedback && <p role={csvFeedback.failed ? "alert" : "status"} className={`text-sm ${csvFeedback.failed ? "text-rose-700" : "text-slate-600"}`}>{csvFeedback.message}</p>}
