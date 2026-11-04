@@ -152,8 +152,7 @@ export function buildBarcodeLabelHtml(
       ${labelCodeMode !== "barcode" ? `<div class="qr">${qrHtml}</div>` : ""}
     </div>
     <div class="price">${formatMoney(product.sellingPrice)}</div>
-  </div>`)
-    .join("");
+  </div>`);
   const blocks = Array.from({ length: Math.ceil(labels.length / columns) }, (_, index) =>
     `<div class="label-sheet">${labels.slice(index * columns, (index + 1) * columns).join("")}</div>`
   ).join("");
