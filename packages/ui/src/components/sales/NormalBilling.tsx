@@ -187,7 +187,7 @@ export function NormalBilling({
                 setAreaDraft(emptyAreaDraft(unit === "sqm" ? "sqm" : "sqft"));
               }}>
                 <option value="">Select product</option>
-                {products.filter((p) => p.isActive).map((p) => <option key={p.id} value={p.id}>{p.name} — stock {p.stockQuantity}</option>)}
+                {products.filter((p) => p.isActive && !p.hasVariants).map((p) => <option key={p.id} value={p.id}>{p.name} — stock {p.stockQuantity}</option>)}
               </select>
               {onAddProduct && <Button type="button" variant="outline" onClick={onAddProduct}>+ Product</Button>}
             </div>
