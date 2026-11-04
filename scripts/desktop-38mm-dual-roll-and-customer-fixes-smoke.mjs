@@ -11,7 +11,7 @@ const result = ts.transpileModule(source, {compilerOptions:{
 },reportDiagnostics:true});
 assert.equal(result.diagnostics?.length || 0,0,"Label TypeScript must transpile cleanly");
 let prefs = {labelWidthMm:38,labelHeightMm:38,labelColumns:2,labelRollWidthMm:101.6,
-  labelGapMm:3,labelLeftMarginMm:11.3,labelCodeMode:"barcode",labelLayout:"compact"};
+  labelGapMm:3,labelLeftMarginMm:11.3,labelRowGapMm:0,labelCodeMode:"barcode",labelLayout:"compact"};
 const m={exports:{}};
 const lookup=(id)=>{
   if(id==="./shop-profile")return {getShopProfile:()=>({shopName:"ERA WARDROBE"})};
@@ -34,7 +34,10 @@ assert.equal((html.match(/class="label compact/g)||[]).length,3);
 for (const field of ["Size: M","Colour: Red","Material: Cotton","Rs.799.00"])
   assert.equal(html.split(field).length - 1,3,field+" on all labels");
 assert.doesNotMatch(html,/window\.print\(\)/);
-prefs={...prefs,labelColumns:1};
+prefs={...prefs,labelRowGapMm:2};
+const withGap=m.exports.buildBarcodeLabelHtml(product,{copies:2,autoPrint:false});
+assert.match(withGap,/@page\\{size:101\\.6mm 40mm;margin:0\\}/);
+prefs={...prefs,labelRowGapMm:0,labelColumns:1};
 const single=m.exports.buildBarcodeLabelHtml(product,{copies:1,autoPrint:false});
 assert.match(single,/@page\{size:38mm 38mm;margin:0\}/);
 assert.match(single,/grid-template-columns:repeat\(1,38mm\)/);
