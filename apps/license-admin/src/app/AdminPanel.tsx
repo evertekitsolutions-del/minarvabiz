@@ -12,6 +12,7 @@ import { OfflineActivationCard } from "./admin-panel/OfflineActivationCard";
 import { OnlineCustomerProvisionCard } from "./admin-panel/OnlineCustomerProvisionCard";
 import { SupportInboxSection } from "./admin-panel/SupportInboxSection";
 import { TrialRegistrationInbox } from "./admin-panel/TrialRegistrationInbox";
+import { TrialConversionNotice } from "./admin-panel/TrialConversionNotice";
 import { EmergencyAuthorityCard } from "./admin-panel/EmergencyAuthorityCard";
 import { MfaRotationCard } from "./admin-panel/MfaRotationCard";
 import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerProvisioning";
@@ -212,12 +213,7 @@ export default function AdminPanel({
             setMessage("Existing trial customer selected. Set the paid plan, expiry, device limit and features, then issue the license.");
           }}
         />
-        {selectedTrialId && (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-            Paid conversion mode: the selected trial registration ID will be reused as the license customer ID. No new customer identity will be created.
-            <button type="button" className="ml-3 font-semibold underline" onClick={() => setSelectedTrialId(null)}>Cancel conversion</button>
-          </div>
-        )}
+        {selectedTrialId && <TrialConversionNotice onCancel={() => setSelectedTrialId(null)} />}
         <div className="grid gap-6 md:grid-cols-2">
           <OnlineCustomerProvisionCard {...onlineProvisioning} />
           <LicenseCreateCard
