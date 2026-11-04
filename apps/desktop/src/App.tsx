@@ -116,14 +116,23 @@ export function App() {
     setProfiles(selectedOrder ? ordersStore.listMeasurementProfiles(selectedOrder.customerId) : []);
     setModuleTick((v) => v + 1);
   }, [lowStockOnly, productQuery, productCategoryId, orderQuery, orderStatus, orderType, orderCustomerId, orderDateFrom, orderDateTo, orderDeliveryDateFrom, orderDeliveryDateTo, selectedOrder]);
-  const persistAndRefresh = React.useCallback(async (): Promise<boolean> => {
+  const persistAndRefresh = React.useCallback(async () => {
+    refreshAll();
+    try {
+      if (!await persistDomainToSqlite()) throw new Error("The native SQLite write was rejected");
+    } catch (error) {
+      setModuleError(`SQLite save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
+      console.error("[minarvabiz] SQLite save failed", error);
+    }
+  }, [refreshAll]);
+  const persistCustomerCollection = React.useCallback(async (): Promise<boolean> => {
     refreshAll();
     try {
       if (!await persistDomainToSqlite()) throw new Error("The native SQLite write was rejected");
       return true;
     } catch (error) {
-      setModuleError(`SQLite save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
-      console.error("[minarvabiz] SQLite save failed", error);
+      setModuleError(`SQLite customer payment save failed. Keep Minarva Biz open and retry: ${errorMessage(error)}`);
+      console.error("[minarvabiz] SQLite customer payment save failed", error);
       return false;
     }
   }, [refreshAll]);
@@ -239,7 +248,7 @@ export function App() {
     {saleCommit.hasPending() && <DesktopPendingInvoiceSaveBanner onRetry={async()=>{const r=await saleCommit.retryPending();refreshAll();setModuleError(r.success?null:r.errors?.join("; ")||"SQLite save failed");}}/>}
     {view==="dashboard"&&dash&&<div className="space-y-4"><DesktopLicenseExpiryBanner commercialActive={commercialActive} trialState={trialState} daysRemaining={licenseDaysForDashboard} onManage={()=>navTo("license")}/><Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/></div>}
     {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery("")} onNavigate={(_href,id)=>{setGlobalSearchQuery("");navTo(id);}}/>}
-    {view==="customers"&&<DesktopCustomerMasterPanel onAdd={openCustomerCreator} onPersist={persistAndRefresh} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}
+    {view==="customers"&&<DesktopCustomerMasterPanel onAdd={openCustomerCreator} onPersist={persistCustomerCollection} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}
     {view==="products"&&<ProductList products={products} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={()=>setLowStockOnly(v=>!v)} onSearch={setProductQuery} onFilterCategory={setProductCategoryId} onAddCategory={()=>{setCategoryForm({name:"",description:""});setCategoryOpen(true);}} onAdd={()=>{resetProductForm();setProductOpen(true);}} onEdit={openProductEditor} onAdjustStock={openStockAdjust} onArchive={handleArchiveProduct} onPrintBarcode={openBarcodeLabel}/>} 
     {view==="warehouse"&&<WarehousePanel/>}
     {view==="accounting"&&<AccountingPanel/>}
