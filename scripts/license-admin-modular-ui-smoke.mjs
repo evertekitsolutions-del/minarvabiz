@@ -25,6 +25,11 @@ const componentPaths = [
 
 const panel = await readFile(panelPath, "utf8");
 const browserApi = await readFile(new URL("../apps/license-admin/src/app/admin-panel/browser-admin-api.ts", import.meta.url), "utf8");
+const edgeConfig = await readFile(new URL("../apps/license-admin/src/app/admin-panel/license-edge-config.ts", import.meta.url), "utf8");
+assert.ok(edgeConfig.includes("https://minarva-biz-license-edge.anilalbert7.workers.dev"), "Admin must target the account-owned enabled Workers subdomain");
+assert.ok(!edgeConfig.includes("minarva-biz-license-edge.minarva-biz.workers.dev"), "Do not use the unowned legacy Workers subdomain");
+assert.match(edgeConfig, /NEXT_PUBLIC_LICENSE_EDGE_URL/);
+
 assert.match(browserApi, /trialInboxWarning/);
 // MFA-bound fallback when the Worker trial-list route is missing or times out.
 assert.ok(browserApi.includes('rest/v1/rpc/cloudflare_admin_list_trial_registrations'));
