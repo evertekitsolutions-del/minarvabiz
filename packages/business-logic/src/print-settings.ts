@@ -21,6 +21,7 @@ export interface PrintSettings {
   labelRollWidthMm: number;
   labelGapMm: number;
   labelLeftMarginMm: number;
+  labelRowGapMm: number;
   silentDesktopPrint: boolean;
   templates: PrintDocumentTemplate[];
   updatedAt: string;
@@ -40,6 +41,7 @@ const defaults: PrintSettings = {
   labelRollWidthMm: 101.6,
   labelGapMm: 3,
   labelLeftMarginMm: 11.3,
+  labelRowGapMm: 0,
   silentDesktopPrint: false,
   templates: defaultPrintTemplates(),
   updatedAt: nowISO(),
@@ -71,6 +73,7 @@ export function updatePrintSettings(patch: Partial<PrintSettings>): PrintSetting
     labelRollWidthMm: Number.isFinite(Number(patch.labelRollWidthMm)) ? Math.max(40, Math.min(120, Number(patch.labelRollWidthMm))) : settings.labelRollWidthMm,
     labelGapMm: Number.isFinite(Number(patch.labelGapMm)) ? Math.max(0, Math.min(30, Number(patch.labelGapMm))) : settings.labelGapMm,
     labelLeftMarginMm: Number.isFinite(Number(patch.labelLeftMarginMm)) ? Math.max(0, Math.min(50, Number(patch.labelLeftMarginMm))) : settings.labelLeftMarginMm,
+    labelRowGapMm: Number.isFinite(Number(patch.labelRowGapMm)) ? Math.max(0, Math.min(20, Number(patch.labelRowGapMm))) : settings.labelRowGapMm,
     templates: patch.templates ? normalizePrintTemplates(patch.templates) : settings.templates,
     updatedAt: nowISO(),
   };
@@ -93,6 +96,7 @@ export function hydratePrintSettings(value: Partial<PrintSettings> | null | unde
     labelRollWidthMm: Number.isFinite(Number(value.labelRollWidthMm)) ? Math.max(40, Math.min(120, Number(value.labelRollWidthMm))) : defaults.labelRollWidthMm,
     labelGapMm: Number.isFinite(Number(value.labelGapMm)) ? Math.max(0, Math.min(30, Number(value.labelGapMm))) : defaults.labelGapMm,
     labelLeftMarginMm: Number.isFinite(Number(value.labelLeftMarginMm)) ? Math.max(0, Math.min(50, Number(value.labelLeftMarginMm))) : defaults.labelLeftMarginMm,
+    labelRowGapMm: Number.isFinite(Number(value.labelRowGapMm)) ? Math.max(0, Math.min(20, Number(value.labelRowGapMm))) : defaults.labelRowGapMm,
     templates: normalizePrintTemplates(value.templates),
     updatedAt: value.updatedAt || nowISO(),
   };
