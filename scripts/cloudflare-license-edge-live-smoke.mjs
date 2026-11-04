@@ -1,7 +1,7 @@
 import { createHash, createPublicKey, verify } from "node:crypto";
 
 const base = String(process.env.MINARVA_LICENSE_EDGE_URL || "https://minarva-biz-license-edge.anilalbert7.workers.dev").replace(/\/$/, "");
-const adminOrigin = String(process.env.MINARVA_LICENSE_ADMIN_ORIGIN || "https://minarvabiz-license-admin-anil.pages.dev").replace(/\/$/, "");
+const adminOrigin = String(process.env.MINARVA_LICENSE_ADMIN_ORIGIN || "https://minarvabiz-license-admin.pages.dev").replace(/\/$/, "");
 
 function assert(condition, message) {
   if (!condition) throw new Error(`LICENSE EDGE LIVE SMOKE FAILED: ${message}`);
