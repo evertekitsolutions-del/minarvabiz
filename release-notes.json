@@ -29,5 +29,10 @@
     "Barcode labels now use their exact sticker paper size and keep the selling price visible instead of clipping it below the printable area.",
     "Products > Print Barcode Label now includes a real in-app actual-size sticker preview, independent of unsupported Windows print preview.",
     "Settings > Printer settings adds a compact (price-priority) or detailed label layout, alongside existing size, code mode, printer selection and copies controls."
+  ],
+  "1.0.19": [
+    "Products & Inventory: enter different Size, Colour and Material combinations with separate piece quantities under one product; each variant gets its own SKU/barcode and inventory balance.",
+    "Each size/colour/material variant can be scanned and billed independently. The parent group is not itself a saleable stock item.",
+    "Barcode labels display Size, Colour and Material for each variant in addition to the product, scannable barcode and price. The default sticker copy count follows that variant’s available stock (up to 100)."
   ]
 }
