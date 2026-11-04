@@ -96,10 +96,16 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
   const [updateNotes, setUpdateNotes] = React.useState("");
   const [printTestState, setPrintTestState] = React.useState<"idle" | "working" | "done" | "error">("idle");
   const [printTestMessage, setPrintTestMessage] = React.useState("");
-  React.useEffect(() => setDraftProfile(profile), [profile]);
-  React.useEffect(() => setDraftTax(tax), [tax]);
-  React.useEffect(() => setDraftBackup(backup), [backup]);
-  React.useEffect(() => setDraftPrinting(printing), [printing]);
+  // Persisted values are re-created as new objects on unrelated desktop rerenders.
+  // Sync only when actual saved content changes, never overwrite unsaved edits.
+  const savedProfileKey = JSON.stringify(profile);
+  const savedTaxKey = JSON.stringify(tax);
+  const savedBackupKey = JSON.stringify(backup);
+  const savedPrintingKey = JSON.stringify(printing);
+  React.useEffect(() => setDraftProfile(profile), [savedProfileKey]);
+  React.useEffect(() => setDraftTax(tax), [savedTaxKey]);
+  React.useEffect(() => setDraftBackup(backup), [savedBackupKey]);
+  React.useEffect(() => setDraftPrinting(printing), [savedPrintingKey]);
   React.useEffect(() => { const api = getDiagnosticsApi(); if (!api?.listPrinters) return; void api.listPrinters().then(setPrinters).catch(() => setPrinters([])); }, []);
   React.useEffect(() => applyTheme(theme), [theme]);
 
