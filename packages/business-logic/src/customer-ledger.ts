@@ -2,7 +2,9 @@
  * Customer ledger / credit account statement
  */
 import type { LedgerEntry, UUID } from "@minarvabiz/types";
-import { addMinorUnits, fromMinorUnits, generateId, subtractMinorUnits, toMinorUnits, type MoneyMinor } from "@minarvabiz/utils";
+import { addMinorUnits, fromMinorUnits, subtractMinorUnits, toMinorUnits, type MoneyMinor } from "@minarvabiz/utils";
+import * as tailoring from "./orders-store";
+import * as laundry from "./phase5-store";
 import * as mainStore from "./store";
 import { escapeHtml } from "./html";
 
@@ -15,76 +17,90 @@ export interface CustomerStatement {
   outstanding: number;
   advanceBalance: number;
   entries: LedgerEntry[];
+  /** Difference between recorded charge/payment events and authoritative customer balance. No automatic journal adjustment is made. */
+  reconciliationDifference: number;
 }
 
-/** Build statement from live sales, payments, returns */
+/** Reconstruct the customer statement from actual charge and payment source records.
+ * This is a read-only audit: historical/opening inconsistencies are disclosed, never posted as fake adjustments.
+ */
 export function buildCustomerStatement(customerId: UUID): CustomerStatement | null {
   const customer = mainStore.getCustomer(customerId);
   if (!customer) return null;
 
-  const sales = mainStore.listSales().filter((s) => s.customerId === customerId);
-  const payments = mainStore.listPayments().filter((p) => p.customerId === customerId);
-
-  let totalSalesMinor: MoneyMinor = 0;
-  let totalPaidMinor: MoneyMinor = 0;
-  const totalRefundMinor: MoneyMinor = 0;
   const entries: LedgerEntry[] = [];
-  let runningMinor: MoneyMinor = 0;
+  let totalCharges: MoneyMinor = 0;
+  let totalPaid: MoneyMinor = 0;
+  let totalRefund: MoneyMinor = 0;
 
-  for (const s of sales) {
-    const saleTotalMinor = toMinorUnits(s.total);
-    const salePaidMinor = toMinorUnits(s.paidAmount);
-    totalSalesMinor = addMinorUnits(totalSalesMinor, saleTotalMinor);
-    totalPaidMinor = addMinorUnits(totalPaidMinor, salePaidMinor);
-    runningMinor = addMinorUnits(runningMinor, subtractMinorUnits(saleTotalMinor, salePaidMinor));
+  function append(entryType: LedgerEntry["entryType"], referenceType: string, referenceId: string,
+    createdAt: string, notes: string, debitMinor: MoneyMinor, creditMinor: MoneyMinor) {
     entries.push({
-      id: generateId(),
-      partyType: "customer",
-      partyId: customerId,
-      entryType: "sale",
-      referenceType: "sale",
-      referenceId: s.id,
-      debit: s.total,
-      credit: s.paidAmount,
-      balanceAfter: fromMinorUnits(runningMinor),
-      notes: s.invoiceNumber,
-      createdAt: s.saleDate,
-    });
-  }
-  for (const p of payments) {
-    if (p.referenceType === "sale") continue; // already counted in sale paid
-    const paymentMinor = toMinorUnits(p.amount);
-    totalPaidMinor = addMinorUnits(totalPaidMinor, paymentMinor);
-    runningMinor = subtractMinorUnits(runningMinor, paymentMinor);
-    entries.push({
-      id: p.id,
-      partyType: "customer",
-      partyId: customerId,
-      entryType: "payment",
-      referenceType: p.referenceType,
-      referenceId: p.referenceId,
-      debit: 0,
-      credit: p.amount,
-      balanceAfter: fromMinorUnits(runningMinor),
-      notes: p.notes || p.method,
-      createdAt: p.paidAt,
+      id: "statement:" + referenceType + ":" + referenceId + ":" + entryType,
+      partyType: "customer", partyId: customerId, entryType, referenceType, referenceId,
+      debit: fromMinorUnits(debitMinor), credit: fromMinorUnits(creditMinor),
+      balanceAfter: 0, notes, createdAt,
     });
   }
 
-  entries.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const customerBalanceMinor = toMinorUnits(customer.outstandingBalance);
-  const outstanding = fromMinorUnits(Math.max(0, customerBalanceMinor));
-  const advanceBalance = fromMinorUnits(Math.max(0, -customerBalanceMinor));
+  for (const sale of mainStore.listSales()) {
+    if (sale.customerId !== customerId) continue;
+    const amount = toMinorUnits(sale.total);
+    totalCharges = addMinorUnits(totalCharges, amount);
+    append("sale", "sale", sale.id, sale.saleDate, sale.invoiceNumber, amount, 0);
+    if (sale.status === "cancelled" || sale.status === "returned") {
+      append("adjustment", "sale_return", sale.id, sale.updatedAt,
+        "Reversed " + sale.invoiceNumber + " (" + sale.status + ")", 0, amount);
+    }
+  }
 
+  for (const order of tailoring.listOrders({ customerId })) {
+    if (order.status === "cancelled") continue;
+    const amount = addMinorUnits(toMinorUnits(order.advance), toMinorUnits(order.balance));
+    totalCharges = addMinorUnits(totalCharges, amount);
+    append("sale", "order", order.id, order.orderDate, "Tailoring: " + order.orderNumber, amount, 0);
+  }
+
+  for (const order of laundry.listLaundryOrders({ customerId })) {
+    if (order.status === "cancelled") continue;
+    const amount = toMinorUnits(order.totalCustomerCharge);
+    totalCharges = addMinorUnits(totalCharges, amount);
+    append("sale", "laundry", order.id, order.createdAt, "Laundry: " + order.orderNumber, amount, 0);
+  }
+
+  // Include every receipt exactly once, including at-sale/advance payments.
+  // The sale/order paidAmount fields are cumulative and must not be counted again.
+  for (const payment of mainStore.listPayments()) {
+    if (payment.customerId !== customerId) continue;
+    const amount = toMinorUnits(payment.amount);
+    if (payment.referenceType === "refund") {
+      totalRefund = addMinorUnits(totalRefund, amount);
+      append("refund", "refund", payment.id, payment.paidAt, payment.notes || "Refund", amount, 0);
+    } else {
+      totalPaid = addMinorUnits(totalPaid, amount);
+      append("payment", payment.referenceType, payment.id, payment.paidAt,
+        payment.notes || ("Payment via " + payment.method), 0, amount);
+    }
+  }
+
+  entries.sort((a, b) => a.createdAt.localeCompare(b.createdAt)
+    || (a.entryType === "sale" ? -1 : b.entryType === "sale" ? 1 : 0)
+    || a.id.localeCompare(b.id));
+  let running: MoneyMinor = 0;
+  for (const entry of entries) {
+    running = addMinorUnits(running, subtractMinorUnits(toMinorUnits(entry.debit), toMinorUnits(entry.credit)));
+    entry.balanceAfter = fromMinorUnits(running);
+  }
+
+  const balance = toMinorUnits(customer.outstandingBalance);
   return {
-    customerId,
-    customerName: customer.name,
-    totalSales: fromMinorUnits(totalSalesMinor),
-    totalPaid: fromMinorUnits(totalPaidMinor),
-    totalRefund: fromMinorUnits(totalRefundMinor),
-    outstanding,
-    advanceBalance,
+    customerId, customerName: customer.name,
+    totalSales: fromMinorUnits(totalCharges), totalPaid: fromMinorUnits(totalPaid),
+    totalRefund: fromMinorUnits(totalRefund),
+    outstanding: fromMinorUnits(Math.max(0, balance)),
+    advanceBalance: fromMinorUnits(Math.max(0, -balance)),
     entries,
+    reconciliationDifference: fromMinorUnits(subtractMinorUnits(balance, running)),
   };
 }
 
@@ -100,7 +116,8 @@ export function buildCustomerStatementHtml(stmt: CustomerStatement): string {
 td,th{border-bottom:1px solid #e2e8f0;padding:6px;text-align:left}</style></head>
 <body><h1>Customer Statement</h1>
 <p>${escapeHtml(stmt.customerName)}</p>
-<p>Sales: ${stmt.totalSales} · Paid: ${stmt.totalPaid} · Outstanding: ${stmt.outstanding} · Advance: ${stmt.advanceBalance}</p>
+<p>Charges: ${stmt.totalSales} · Receipts: ${stmt.totalPaid} · Refunds: ${stmt.totalRefund} · Outstanding: ${stmt.outstanding} · Advance: ${stmt.advanceBalance}</p>
+${stmt.reconciliationDifference ? `<p style="color:#b91c1c"><strong>Unreconciled historical/opening difference: ${stmt.reconciliationDifference}</strong>. Review the underlying source documents. No balancing journal has been created.</p>` : ""}
 <table><thead><tr><th>Date</th><th>Type</th><th>Ref</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
 <tbody>${rows}</tbody></table>
 <script>window.onload=function(){window.print()}</script></body></html>`;
