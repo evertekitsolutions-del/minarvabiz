@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
-import type { AuditLogEntry, LaundryOrder } from "@minarvabiz/types";
+import type { AuditLogEntry, Customer, LaundryOrder } from "@minarvabiz/types";
 import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { LaundryIncidentsPanel } from "./LaundryIncidentsPanel";
 import { LaundryOperationsPanel } from "./LaundryOperationsPanel";
+import { LaundryWhatsAppPanel } from "./LaundryWhatsAppPanel";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { buildLaundryVendorScorecard, exportLaundryTicketsCsv } from "@minarvabiz/business-logic";
@@ -56,6 +57,7 @@ function code39Svg(value: string) {
 
 export function LaundryList({
   orders,
+  customers = [],
   auditLogs = [],
   onAddOutsourced,
   onAddIroning,
@@ -67,6 +69,7 @@ export function LaundryList({
   onUpdateDetails,
 }: {
   orders: LaundryOrder[];
+  customers?: Pick<Customer,"id" | "name" | "phone" | "whatsapp">[];
   auditLogs?: AuditLogEntry[];
   onAddOutsourced?: () => void;
   onAddIroning?: () => void;
@@ -85,6 +88,7 @@ export function LaundryList({
   const [dateFrom, setDateFrom] = React.useState("");
   const [dateTo, setDateTo] = React.useState("");
   const [detailTarget, setDetailTarget] = React.useState<LaundryOrder | null>(null);
+  const [messageTarget, setMessageTarget] = React.useState<LaundryOrder | null>(null);
   const [editTarget, setEditTarget] = React.useState<LaundryOrder | null>(null);
   const [editGarment, setEditGarment] = React.useState("");
   const [editNotes, setEditNotes] = React.useState("");
@@ -266,6 +270,7 @@ export function LaundryList({
         return (
           <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
             <Button size="sm" variant="outline" onClick={() => openDetails(r)}>Details</Button>
+            <Button size="sm" variant="outline" onClick={() => setMessageTarget(r)}>WhatsApp</Button>
             {r.status !== "cancelled" && onUpdateDetails && <Button size="sm" variant="outline" onClick={() => openEdit(r)}>Edit Details</Button>}
             {r.mode === "outsourced" && r.status === "received" && !allItemsPassedQc && <span className="self-center text-xs text-amber-700">Finish garment QC in Details before delivery</span>}
             {label && onStatusChange && <Button size="sm" variant="outline" onClick={() => onStatusChange(r, next!)}>{label}</Button>}
@@ -289,6 +294,7 @@ export function LaundryList({
 
   return (
     <>
+      <LaundryWhatsAppPanel order={messageTarget} customer={customers.find(c => c.id === messageTarget?.customerId) || null} onClose={() => setMessageTarget(null)} />
       <div className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
