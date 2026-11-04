@@ -67,6 +67,7 @@ export default function AdminPanel({
     setLicenses(dashboard.licenses);
     setSupportRequests(dashboard.requests);
     setTrialRegistrations(dashboard.trials);
+    setMessage(dashboard.trialInboxWarning || null);
     setBrowserDirect(true);
   }, []);
 
