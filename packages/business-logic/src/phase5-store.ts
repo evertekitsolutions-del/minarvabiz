@@ -16,6 +16,7 @@ import {
   toQuantityMilli,
 } from "@minarvabiz/utils";
 import { calculateLaundryProfit } from "./laundry";
+import { LAUNDRY_SERVICES, LAUNDRY_FABRICS } from "./laundry-rate-cards";
 import { hasLaundryPosting, planLaundryCancellation, planLaundryPosting } from "./laundry-accounting";
 import { purchaseBalance, nextDocNumber } from "./expenses";
 import * as mainStore from "./store";
@@ -354,11 +355,18 @@ export function recordSupplierPayment(input: {
 }
 
 export function listLaundryOrders(opts?: { mode?: "outsourced"|"in_house_ironing"; status?: LaundryOrder["status"]; customerId?: UUID; supplierId?: UUID; dateFrom?: string; dateTo?: string; query?: string }): LaundryOrder[] { let list=laundryOrders.filter(o=>!o.deletedAt);if(opts?.mode)list=list.filter(o=>o.mode===opts.mode);if(opts?.status)list=list.filter(o=>o.status===opts.status);if(opts?.customerId)list=list.filter(o=>o.customerId===opts.customerId);if(opts?.supplierId)list=list.filter(o=>o.supplierId===opts.supplierId);if(opts?.dateFrom)list=list.filter(o=>o.createdAt.slice(0,10)>=opts.dateFrom!);if(opts?.dateTo)list=list.filter(o=>o.createdAt.slice(0,10)<=opts.dateTo!);if(opts?.query?.trim()){const q=opts.query.toLowerCase();list=list.filter(o=>o.orderNumber.toLowerCase().includes(q)||o.customerName?.toLowerCase().includes(q)||o.garment?.toLowerCase().includes(q)||o.supplierName?.toLowerCase().includes(q)||o.notes?.toLowerCase().includes(q));}return list.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); }
-export function createLaundryOrder(input: { customerId: UUID; garment?: string|null; quantity:number; items?: Array<{ label: string; quantity: number; notes?: string | null }>; pickupAt?: string | null; dueAt?: string | null; mode:"outsourced"|"in_house_ironing"; supplierId?: UUID|null; supplierRate:number; customerRate:number; notes?:string|null; paidAmount?:number; paymentMethod?:PaymentMethod }): {order:LaundryOrder|null;errors:string[]} {
+export function createLaundryOrder(input: { customerId: UUID; garment?: string|null; quantity:number; items?: Array<{ label: string; quantity: number; notes?: string | null; serviceCode?: string | null; fabricType?: string | null; tatHours?: number | null }>; pickupAt?: string | null; dueAt?: string | null; mode:"outsourced"|"in_house_ironing"; supplierId?: UUID|null; supplierRate:number; customerRate:number; notes?:string|null; paidAmount?:number; paymentMethod?:PaymentMethod }): {order:LaundryOrder|null;errors:string[]} {
   assertPermission("orders.manage");
   assertBusinessDayOpen();
   const errors:string[]=[];
-  const itemInputs = (input.items ?? []).map((item) => ({ label: String(item.label ?? "").trim(), quantity: Number(item.quantity), notes: item.notes?.trim() || null }));
+  const itemInputs = (input.items ?? []).map((item) => ({
+    label: String(item.label ?? "").trim(),
+    quantity: Number(item.quantity),
+    notes: item.notes?.trim() || null,
+    serviceCode: item.serviceCode?.trim() || null,
+    fabricType: item.fabricType?.trim() || null,
+    tatHours: item.tatHours ?? null,
+  }));
   const itemQuantity = itemInputs.reduce((sum, item) => sum + item.quantity, 0);
   const quantity=Number(input.items?.length ? itemQuantity : input.quantity);
   const customerRateInput=Number(input.customerRate);
@@ -375,6 +383,16 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
     if (itemInputs.length > 100) errors.push("A laundry ticket can contain at most 100 item rows");
     if (itemInputs.some((item) => !item.label || item.label.length > 120)) errors.push("Every garment row needs a name of 1–120 characters");
     if (itemInputs.some((item) => quantityMilliOrNull(item.quantity) == null || item.quantity <= 0)) errors.push("Every garment row needs a positive quantity");
+    if (itemInputs.some((item) => item.serviceCode !== null && !LAUNDRY_SERVICES.some(service => service.code === item.serviceCode))) {
+      errors.push("Unsupported laundry service");
+    }
+    if (itemInputs.some((item) => item.fabricType !== null && !LAUNDRY_FABRICS.some(fabric => fabric === item.fabricType))) {
+      errors.push("Unsupported garment fabric");
+    }
+    if (itemInputs.some((item) => item.tatHours !== null
+      && (!Number.isSafeInteger(item.tatHours) || item.tatHours < 1 || item.tatHours > 2160))) {
+      errors.push("Invalid garment turnaround time");
+    }
     if (input.items.length !== itemInputs.length) errors.push("Invalid garment rows");
   }
   if (input.pickupAt && Number.isNaN(Date.parse(input.pickupAt))) errors.push("Invalid pickup date");
@@ -435,6 +453,7 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
       id: generateId(), label: item.label, quantity: item.quantity,
       tagCode: `${orderNumber}-${String(index + 1).padStart(3, "0")}`,
       processingStatus: "received", qualityStatus: "pending", notes: item.notes,
+      serviceCode: item.serviceCode, fabricType: item.fabricType, tatHours: item.tatHours,
     })) : undefined,
     pickupAt: input.pickupAt ?? null, dueAt: input.dueAt ?? null,
     mode:input.mode,supplierId:input.mode==="outsourced"?(input.supplierId??null):null,
@@ -499,7 +518,8 @@ export function updateLaundryDetails(id: UUID, input: { garment?: string | null;
       if (!current || !nextItem.label.trim() || !Number.isFinite(nextItem.quantity) || nextItem.quantity <= 0 || nextItem.quantity > 100000
         || !["received", "washing", "ironing", "quality_check", "ready", "delivered"].includes(nextItem.processingStatus)
         || !["pending", "passed", "failed"].includes(nextItem.qualityStatus)
-        || nextItem.label !== current.label || nextItem.quantity !== current.quantity || nextItem.tagCode !== current.tagCode) {
+        || nextItem.label !== current.label || nextItem.quantity !== current.quantity || nextItem.tagCode !== current.tagCode
+        || nextItem.serviceCode !== current.serviceCode || nextItem.fabricType !== current.fabricType || nextItem.tatHours !== current.tatHours) {
         return { order: null, errors: ["Garment identity, tag and quantity are immutable after ticket posting"] };
       }
       if (nextItem.processingStatus !== current.processingStatus
