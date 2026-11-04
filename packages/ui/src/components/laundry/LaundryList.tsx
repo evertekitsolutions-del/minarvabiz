@@ -7,6 +7,7 @@ import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { LaundryIncidentsPanel } from "./LaundryIncidentsPanel";
 import { LaundryOperationsPanel } from "./LaundryOperationsPanel";
+import { LaundryWhatsAppActions } from "./LaundryWhatsAppActions";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { buildLaundryVendorScorecard, exportLaundryTicketsCsv } from "@minarvabiz/business-logic";
@@ -429,6 +430,7 @@ export function LaundryList({
               </div>)}
               {editError && <p role="alert" className="text-sm text-rose-600">{editError}</p>}
             </section> : null}
+            <LaundryWhatsAppActions order={detailTarget} />
             <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-5">
               <div><div className="text-xs text-slate-500">Customer rate</div><div className="font-semibold">{formatMoney(detailTarget.customerRate)}</div></div>
               <div><div className="text-xs text-slate-500">Supplier rate</div><div className="font-semibold">{formatMoney(detailTarget.supplierRate)}</div></div>
