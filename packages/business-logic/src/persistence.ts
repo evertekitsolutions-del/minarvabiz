@@ -11,6 +11,7 @@ import type {
 import * as store from "./store";
 import * as ordersStore from "./orders-store";
 import * as phase5Store from "./phase5-store";
+import * as laundryRates from "./laundry-rate-cards";
 import * as phase6Store from "./phase6-store";
 import * as holidayCache from "./holiday-cache";
 import * as phase7Store from "./phase7-store";
@@ -59,6 +60,8 @@ export interface DomainSnapshot {
   orders: ServiceOrder[];
   measurements: MeasurementProfile[];
   laundry: LaundryOrder[];
+  /** Local-first customizable service/fabric/garment tariff; included in desktop backup. */
+  laundryRateCards?: ReturnType<typeof laundryRates.exportLaundryRateCards>;
   expenses: Expense[];
   purchases: Purchase[];
   suppliers: Supplier[];
@@ -125,6 +128,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     orders: ordersStore.listOrders(),
     measurements: [],
     laundry: phase5.laundryOrders,
+    laundryRateCards: laundryRates.exportLaundryRateCards(),
     expenses: phase5.expenses,
     purchases: phase5.purchases,
     suppliers: phase5.suppliers,
@@ -241,6 +245,7 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     orders: collection(input.orders, "orders"),
     measurements: collection(input.measurements, "measurements"),
     laundry: collection(input.laundry, "laundry"),
+    laundryRateCards: laundryRates.validateLaundryRateCards(input.laundryRateCards ?? []),
     expenses: collection(input.expenses, "expenses"),
     purchases: collection(input.purchases, "purchases"),
     suppliers: collection(input.suppliers, "suppliers"),
@@ -290,6 +295,7 @@ function applyDomainSnapshot(snap: DomainSnapshot): void {
     heldSales: snap.heldSales,
   });
   ordersStore.hydrateOrders({ orders: snap.orders, measurements: snap.measurements });
+  laundryRates.hydrateLaundryRateCards(snap.laundryRateCards ?? []);
   phase5Store.hydratePhase5({
     suppliers: snap.suppliers,
     laundryOrders: snap.laundry,
