@@ -61,6 +61,7 @@ export function validateLiveSaleCheckout(
       continue;
     }
     if (live.isActive === false) errors.push(`${live.name}: product is inactive`);
+    if (live.hasVariants) errors.push(`${live.name}: choose a specific size / colour / material variant`);
     if (Number.isFinite(line.quantity) && line.quantity > 0) {
       try {
         demanded.set(live.id, addStockQuantities(demanded.get(live.id) ?? 0, line.quantity));
