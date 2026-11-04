@@ -131,11 +131,11 @@ export function buildBarcodeLabelHtml(
   }
   const blocks = Array.from({ length: copies })
     .map(() => `
-  <div class="label">
+  <div class="label ${settings.labelLayout === "detailed" ? "detailed" : "compact"} ${labelHeightMm < 25 ? "short" : ""}">
     <div class="shop">${escapeHtml(shop.shopName || "Minarva Biz")}</div>
     <div class="name">${escapeHtml(product.name)}</div>
-    <div class="meta">${escapeHtml([categoryName, product.size, product.color, product.brand].filter(Boolean).join(" · "))}</div>
-    <div class="sku">${product.sku ? "SKU: " + escapeHtml(product.sku) : ""}</div>
+    ${[categoryName, product.size, product.color, product.brand].some(Boolean) ? `<div class="meta">${escapeHtml([categoryName, product.size, product.color, product.brand].filter(Boolean).join(" · "))}</div>` : ""}
+    ${product.sku ? `<div class="sku">SKU: ${escapeHtml(product.sku)}</div>` : ""}
     <div class="codes ${labelCodeMode}">
       ${labelCodeMode !== "qr" ? `<div class="barcode">${barcodeSvg(codeValue)}</div>` : ""}
       ${labelCodeMode !== "barcode" ? `<div class="qr">${qrHtml}</div>` : ""}
@@ -145,18 +145,26 @@ export function buildBarcodeLabelHtml(
     .join("");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Product Labels</title>
 <style>
+  @page{size:${labelWidthMm}mm ${labelHeightMm}mm;margin:0}
   *{box-sizing:border-box}
-  body{font-family:system-ui,Arial,sans-serif;margin:0;color:#111}
-  .label{width:${labelWidthMm}mm;height:${labelHeightMm}mm;padding:2.5mm;text-align:center;border:1px dashed #ccc;page-break-after:always;overflow:hidden}
-  .shop{font-size:9px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .name{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .meta,.sku{font-size:8px;min-height:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .codes{display:flex;align-items:center;justify-content:center;gap:1mm;margin:.6mm 0;min-height:11mm}
+  html,body{width:${labelWidthMm}mm;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;color:#111}
+  .label{width:${labelWidthMm}mm;height:${labelHeightMm}mm;padding:1.1mm;text-align:center;border:1px dashed #bbb;display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:.3mm;overflow:hidden;break-inside:avoid;page-break-after:always}
+  .label:last-child{page-break-after:auto}
+  .shop,.name,.meta,.sku{display:block;flex:0 1 auto;min-height:0;line-height:1.08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .shop{font-size:9px;color:#475569}
+  .name{font-size:11px;font-weight:700}
+  .meta,.sku{font-size:8px}
+  .label.compact .meta,.label.compact .sku,.label.short .shop,.label.short .meta,.label.short .sku{display:none}
+  .codes{display:flex;flex:1 1 7mm;align-items:center;justify-content:center;gap:1mm;min-height:4mm;max-height:11mm;margin:0;overflow:hidden}
+  .barcode,.qr{height:100%;min-height:0;min-width:0;display:flex;align-items:center;justify-content:center}
   .codes.barcode .barcode{width:100%}.codes.qr .qr{width:100%}
   .codes.both .barcode{width:72%}.codes.both .qr{width:26%}
-  .barcode-svg{display:block;width:100%;height:11mm;margin:0 auto}.qr-svg{display:block;width:11mm;height:11mm;margin:0 auto}
-  .missing{font-size:10px;color:#b91c1c}.price{font-size:12px;font-weight:800}
-  @media print{.label{border:none}}
+  .barcode-svg{display:block;max-width:100%;width:100%;height:100%;max-height:11mm;margin:0 auto}
+  .qr-svg{display:block;width:100%;height:100%;max-width:11mm;max-height:11mm;margin:0 auto}
+  .missing{font-size:8px;color:#b91c1c}
+  .price{flex:0 0 auto;display:block;font-size:13px;line-height:1.1;font-weight:800;white-space:nowrap;overflow:visible}
+  @media print{.label{border:0}}
 </style></head><body>${blocks}
 ${autoPrint ? "<script>window.onload=function(){window.print()}</script>" : ""}</body></html>`;
 }
