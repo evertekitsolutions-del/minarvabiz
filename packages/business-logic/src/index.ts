@@ -75,6 +75,7 @@ export * from "./customer-reminders";
 export * from "./tax-config";
 export { parseDefaultTaxRateInput } from "./tax-rate-validation";
 export * from "./barcode-labels";
+export * from "./product-variant-planner";
 export * from "./whatsapp";
 export * from "./manual-service-whatsapp";
 export * from "./google-review-link";
