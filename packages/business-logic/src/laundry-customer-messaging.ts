@@ -15,7 +15,8 @@ export const LAUNDRY_MESSAGE_OPTIONS: ReadonlyArray<{ id: TemplateId; label: str
 
 export function availableLaundryMessages(order: LaundryOrder) {
   const active = order.status !== "cancelled" && order.status !== "delivered";
-  const ready = !!order.items?.length
+  const ready = (order.mode === "in_house_ironing" || order.status === "received")
+    && !!order.items?.length
     && order.items.every(item => (item.processingStatus === "ready" || item.processingStatus === "delivered")
       && item.qualityStatus === "passed");
   return LAUNDRY_MESSAGE_OPTIONS.filter(({ id }) => {
