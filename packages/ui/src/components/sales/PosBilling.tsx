@@ -132,6 +132,7 @@ export function PosBilling({
   const changeDue = tenderState.changeDue;
 
   function addProduct(p: Product, qty = 1) {
+    if (p.hasVariants) { setMessage({ type: "err", text: "Choose a specific size / colour / material variant" }); return; }
     if (isAreaBillableProduct(p)) {
       setAreaProductId(p.id);
       setAreaDraft(newAreaDraft(p.unit));
@@ -354,12 +355,12 @@ export function PosBilling({
   }
 
   const filtered = search.trim()
-    ? products.filter((p) => p.isActive && (
+    ? products.filter((p) => p.isActive && !p.hasVariants && (
         p.name.toLowerCase().includes(search.toLowerCase())
         || p.sku?.toLowerCase().includes(search.toLowerCase())
         || p.barcode?.includes(search)
       ))
-    : products.filter((p) => p.isActive).slice(0, 12);
+    : products.filter((p) => p.isActive && !p.hasVariants).slice(0, 12);
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
@@ -439,6 +440,7 @@ export function PosBilling({
                 className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <div className="truncate text-sm font-medium text-slate-900">{p.name}</div>
+                {(p.size||p.color||p.fabric)&&<div className="mt-1 truncate text-xs text-slate-600">{[p.size,p.color,p.fabric].filter(Boolean).join(" · ")}</div>}
                 <div className="mt-1 text-xs text-slate-500">Stock: {p.stockQuantity}</div>
                 <div className="mt-1 text-sm font-semibold text-indigo-600">{formatMoney(p.sellingPrice)}</div>
                 {p.stockQuantity <= 0 && <div className="mt-1 text-xs font-medium text-rose-600">Out of stock</div>}

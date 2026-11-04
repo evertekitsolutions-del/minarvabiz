@@ -29,6 +29,7 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: node scripts/desktop-production-demo-seed-guard-smoke.mjs
       - run: node scripts/desktop-label-layout-regression.mjs
+      - run: node scripts/desktop-boutique-variant-stock-smoke.mjs
       - run: node scripts/desktop-customer-demo-reset-smoke.mjs
       - run: pnpm --filter @minarvabiz/desktop typecheck
       - run: pnpm --filter @minarvabiz/desktop run package:win

@@ -64,8 +64,11 @@ assert.match(web, /disabled=\{!!editingId\}/);
 assert.match(web, /Stock qty \(use Adjust Stock\)/);
 
 const desktop = fs.readFileSync(new URL("../../../../apps/desktop/src/App.tsx", import.meta.url), "utf8");
-assert.match(desktop, /const patch:Partial<Product>=\{\.\.\.payload\};delete patch\.stockQuantity;store\.updateProduct\(editingProductId,patch\)/);
-assert.match(desktop, /disabled=\{!!editingProductId\}/);
-assert.match(desktop, /Stock \(use Adjust Stock\)/);
+assert.match(desktop, /const patch:Partial<Product>=\{\.\.\.payload\};\s*delete patch\.stockQuantity;\s*store\.updateProduct\(editingProductId,patch\)/);
+const editor = fs.readFileSync(new URL("../../../../apps/desktop/src/components/ProductEditorModal.tsx", import.meta.url), "utf8");
+assert.match(editor, /disabled=\{Boolean\(editingProductId\)\|\|productForm\.hasVariants\}/);
+assert.match(editor, /Stock \(use Adjust Stock\)/);
+assert.match(desktop, /createProductVariantFamily\(payload,variantRows\)/);
+assert.match(desktop, /addProductVariants\(editingProductId,variantRows\)/);
 
 console.log("Product edit stock-bypass guard tests passed");

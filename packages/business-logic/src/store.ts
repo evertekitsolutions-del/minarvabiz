@@ -245,7 +245,7 @@ export function purgeArchivedCustomer(id: UUID): { purged: boolean; error?: stri
 export function listProducts(opts?: { query?: string; categoryId?: string; lowStockOnly?: boolean }): Product[] {
   let list = products.filter((p) => !p.deletedAt);
   if (opts?.categoryId) list = list.filter((p) => p.categoryId === opts.categoryId);
-  if (opts?.lowStockOnly) list = list.filter((p) => isLowStock(p.stockQuantity, p.minimumStock));
+  if (opts?.lowStockOnly) list = list.filter((p) => !p.hasVariants && isLowStock(p.stockQuantity, p.minimumStock));
   if (opts?.query?.trim()) {
     const q = opts.query.toLowerCase();
     list = list.filter((p) => p.name.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q) || p.barcode?.includes(q));
@@ -348,6 +348,7 @@ export function archiveProduct(id: UUID, reason: string): { product: Product | n
   const archiveReason = reason.trim();
   if (archiveReason.length < 3) return { product: null, error: "Archive reason is required" };
   if (Math.abs(p.stockQuantity) > 1e-9) return { product: null, error: "Adjust product stock to zero before archiving" };
+  if (p.hasVariants && products.some(child => child.parentProductId === p.id && !child.deletedAt)) return { product: null, error: "Archive individual variant items before archiving the product group" };
   const before = { ...p };
   p.deletedAt = nowISO();
   p.isActive = false;
@@ -391,7 +392,6 @@ export function purgeArchivedProduct(id: UUID): { purged: boolean; error?: strin
   return { purged: true };
 }
 
-/** @deprecated Use archiveProduct with a mandatory business reason. */
 export function deleteProduct(id: UUID): Product | null {
   return archiveProduct(id, "Legacy product archive").product;
 }
@@ -399,6 +399,7 @@ export function deleteProduct(id: UUID): Product | null {
 export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "adjustment", quantity: number, notes?: string | null): Product | null {
   assertPermission("inventory.adjust"); if (!Number.isFinite(quantity)) return null;
   const p = getProduct(productId); if (!p) return null;
+  if (p.hasVariants) throw new Error("Adjust stock on a specific size/colour/material variant, not the group");
   const before = p.stockQuantity;
   const { next, reduction } = planManualStockAdjustment(p.id, p.branchId, before, type, quantity);
   if (reduction > 0) consumeWarehouseStock(p.id, reduction, p.branchId ?? null);
@@ -412,6 +413,7 @@ export function adjustStockToQuantity(productId: UUID, rawTarget: string, expect
   assertPermission("inventory.adjust");
   const p = getProduct(productId);
   if (!p) throw new Error("Product not found");
+  if (p.hasVariants) throw new Error("Choose an individual variant to adjust stock");
   const delta = stockCountDelta(rawTarget, p.stockQuantity, expectedCurrentStock);
   if (delta === 0) return p;
   const updated = adjustStock(productId, "adjustment", delta, notes); if (!updated) throw new Error("Stock adjustment could not be completed");
@@ -430,7 +432,6 @@ export function listStockTransfers(): StockTransferRecord[] {
   return [...stockTransfers].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-/** @deprecated Use the controlled Warehouse Management transfer workflow. */
 export function transferStock(input: {
   sourceProductId: UUID;
   destinationProductId: UUID;
