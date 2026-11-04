@@ -48,6 +48,8 @@ function errorMessage(data: any, status: number) {
     INVALID_FEATURES: "The selected feature set is invalid for this plan.",
     NOT_FOUND: "The requested record was not found.",
     LICENSE_CONFLICT: "The license could not be created because of a conflict.",
+    TRIAL_ALREADY_CONVERTED: "This trial registration already has a paid license.",
+    TRIAL_REVOKED: "A revoked trial registration cannot be converted.",
     ACTIVATION_LIMIT_REACHED: "Activation limit reached. Deactivate an existing device first.",
     EXPIRED: "The license has expired.",
     LICENSE_NOT_ACTIVE: "The license is not active.",
@@ -174,6 +176,22 @@ export async function issueBrowserLicense(input: {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+
+export async function convertBrowserTrialToLicense(input: {
+  registrationId: string;
+  customerName: string;
+  plan: LicensePlan;
+  edition: Edition;
+  expiresAt?: string | null;
+  activationLimit?: number;
+  featureOverrides?: Partial<LicenseFeatures>;
+}) {
+  return edgeRequest<{ token?: string; license?: Record<string, unknown>; trialRegistrationId?: string }>(
+    "/api/admin/trials/convert",
+    { method: "POST", body: JSON.stringify(input) },
+  );
 }
 
 export async function setBrowserLicenseStatus(licenseId: string, status: LicenseStatusAction) {

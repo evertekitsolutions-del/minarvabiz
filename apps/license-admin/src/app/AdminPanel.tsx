@@ -12,12 +12,14 @@ import { OfflineActivationCard } from "./admin-panel/OfflineActivationCard";
 import { OnlineCustomerProvisionCard } from "./admin-panel/OnlineCustomerProvisionCard";
 import { SupportInboxSection } from "./admin-panel/SupportInboxSection";
 import { TrialRegistrationInbox } from "./admin-panel/TrialRegistrationInbox";
+import { TrialConversionNotice } from "./admin-panel/TrialConversionNotice";
 import { EmergencyAuthorityCard } from "./admin-panel/EmergencyAuthorityCard";
 import { MfaRotationCard } from "./admin-panel/MfaRotationCard";
 import { useOnlineCustomerProvisioning } from "./admin-panel/useOnlineCustomerProvisioning";
 import { useAdminAuthentication, type BrowserAdminDashboard } from "./admin-panel/useAdminAuthentication";
 import {
   createBrowserOfflineActivation,
+  convertBrowserTrialToLicense,
   issueBrowserLicense,
   loadBrowserAdminDashboard,
   setBrowserLicenseStatus,
@@ -48,6 +50,7 @@ export default function AdminPanel({
   const [trialRegistrations, setTrialRegistrations] = React.useState<BrowserAdminDashboard["trials"]>([]);
   const [browserDirect, setBrowserDirect] = React.useState(false);
   const [customerName, setCustomerName] = React.useState("");
+  const [selectedTrialId, setSelectedTrialId] = React.useState<string | null>(null);
   const [plan, setPlan] = React.useState<LicensePlan>("professional");
   const [edition, setEdition] = React.useState<Edition>("hybrid");
   const [expiresAt, setExpiresAt] = React.useState("");
@@ -117,7 +120,9 @@ export default function AdminPanel({
     };
     setBusy(true);
     setMessage(null);
-    const result = await issueBrowserLicense(input);
+    const result = selectedTrialId
+      ? await convertBrowserTrialToLicense({ registrationId: selectedTrialId, ...input })
+      : await issueBrowserLicense(input);
     setBusy(false);
     if (!result.ok) {
       setMessage(result.error || "License issue failed.");
@@ -125,6 +130,7 @@ export default function AdminPanel({
     }
     setLastToken(result.token || null);
     setCustomerName("");
+    setSelectedTrialId(null);
     await refreshAfterMutation();
   }
 
@@ -195,7 +201,19 @@ export default function AdminPanel({
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
       <div className="mx-auto max-w-6xl space-y-6">
         <AdminHeader identity={activeIdentity} onSignOut={() => void signOut()} />
-        <TrialRegistrationInbox registrations={trialRegistrations} />
+        <TrialRegistrationInbox
+          registrations={trialRegistrations}
+          onSelectForConversion={(item) => {
+            setSelectedTrialId(item.id);
+            setCustomerName(item.organization_name);
+            setPlan("professional");
+            setEdition("hybrid");
+            setExpiresAt("");
+            setActivationLimit("");
+            setMessage("Existing trial customer selected. Set the paid plan, expiry, device limit and features, then issue the license.");
+          }}
+        />
+        {selectedTrialId && <TrialConversionNotice onCancel={() => setSelectedTrialId(null)} />}
         <div className="grid gap-6 md:grid-cols-2">
           <OnlineCustomerProvisionCard {...onlineProvisioning} />
           <LicenseCreateCard
@@ -209,6 +227,7 @@ export default function AdminPanel({
             lastToken={lastToken}
             busy={busy}
             canIssue={canIssue}
+            trialConversion={Boolean(selectedTrialId)}
             onCustomerNameChange={setCustomerName}
             onPlanChange={setPlan}
             onEditionChange={setEdition}

@@ -303,6 +303,48 @@ assert.equal(beforeLicenses.status, 200, JSON.stringify(beforeLicenses.data));
 assert.equal(beforeLicenses.data.ok, true);
 assert.ok(Array.isArray(beforeLicenses.data.licenses));
 
+const trialRegistrationId = "22222222-2222-4222-8222-222222222222";
+sql(
+  "insert into public.trial_registrations " +
+  "(id,email,phone,organization_name,address,device_id,status,trial_started_at,trial_expires_at) values (" +
+  literal(trialRegistrationId) + "::uuid,'emergency-paid@example.test','9999000012'," +
+  "'Emergency Paid Boutique','Test address'," + literal("b".repeat(64)) + "," +
+  "'registered_email_pending',now(),now()+interval '30 days') " +
+  "on conflict (id) do nothing;",
+);
+
+const emergencyTrialInbox = await workerJson("/api/admin/trials", { token: currentToken });
+assert.equal(emergencyTrialInbox.status, 200, JSON.stringify(emergencyTrialInbox.data));
+assert.ok(emergencyTrialInbox.data.registrations.some(row => row.id === trialRegistrationId));
+
+const trialConverted = await workerJson("/api/admin/trials/convert", {
+  method: "POST",
+  token: currentToken,
+  body: { registrationId: trialRegistrationId, customerName: "Emergency Paid Boutique",
+    plan: "basic", edition: "offline", activationLimit: 1 },
+});
+assert.equal(trialConverted.status, 200, JSON.stringify(trialConverted.data));
+const conversionLicenseId = String(trialConverted.data.license?.licenseId || "");
+assert.match(conversionLicenseId, /^[a-f0-9-]{36}$/i);
+assert.match(String(trialConverted.data.token || ""), /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+assert.equal(
+  sql("select customer_id from public.licenses where license_id=" + literal(conversionLicenseId)),
+  trialRegistrationId,
+);
+assert.equal(
+  sql("select status from public.trial_registrations where id=" + literal(trialRegistrationId) + "::uuid"),
+  "converted",
+);
+
+const duplicateConversion = await workerJson("/api/admin/trials/convert", {
+  method: "POST",
+  token: currentToken,
+  body: { registrationId: trialRegistrationId, customerName: "Emergency Paid Boutique",
+    plan: "basic", edition: "offline", activationLimit: 1 },
+});
+assert.equal(duplicateConversion.status, 409, JSON.stringify(duplicateConversion.data));
+assert.equal(duplicateConversion.data.code, "TRIAL_ALREADY_CONVERTED");
+
 const issued = await workerJson("/api/admin/licenses", {
   method: "POST",
   token: currentToken,
@@ -426,7 +468,7 @@ const parityAudit = JSON.parse(
   ),
 );
 assert.equal(Number(parityAudit.wrong_source), 0);
-assert.equal(Number(parityAudit.license_issue), 1);
+assert.equal(Number(parityAudit.license_issue), 2, "Emergency paid trial conversion and new license issuance must each be audited");
 assert.ok(Number(parityAudit.license_status) >= 2);
 assert.equal(Number(parityAudit.offline), 1);
 assert.equal(Number(parityAudit.support), 1);

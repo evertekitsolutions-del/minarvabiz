@@ -65,6 +65,10 @@ BEGIN
   END IF;
 
   IF v_license.expires_at IS NOT NULL AND v_license.expires_at <= v_now THEN
+    UPDATE public.licenses
+    SET status = 'expired', updated_at = v_now
+    WHERE id = v_license.id AND status = 'active';
+
     RETURN jsonb_build_object('ok', false, 'code', 'EXPIRED', 'httpStatus', 409);
   END IF;
 

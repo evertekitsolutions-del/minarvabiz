@@ -14,6 +14,7 @@ const release = read(".github/workflows/release-windows.yml");
 const publisher = read(".github/workflows/publish-windows-release.yml");
 const desktopLicense = read("apps/desktop/electron/license.ts");
 const adminPanel = read("apps/license-admin/src/app/AdminPanel.tsx");
+const licenseCreateCard = read("apps/license-admin/src/app/admin-panel/LicenseCreateCard.tsx");
 const trialInbox = read("apps/license-admin/src/app/admin-panel/TrialRegistrationInbox.tsx");
 const adminTrialInboxMigration = read("supabase/migrations/20261103_cloudflare_admin_trial_registration_inbox.sql");
 assert.equal(fs.existsSync(path.join(root, "apps/license-admin/src/app/actions.ts")), false);
@@ -526,5 +527,68 @@ assert.match(publicKeyHex, /^[0-9a-f]{64}$/);
 assert.ok(release.includes(`VITE_LICENSE_API_URL: "${EDGE}"`));
 assert.ok(release.includes(`MINARVA_UPDATE_MANIFEST_URL: "${EDGE}/api/update/manifest"`));
 assert.ok(publisher.includes(`const base = "${EDGE}";`));
+
+
+const trialConversionMigration = read("supabase/migrations/20261104_cloudflare_admin_convert_trial_to_license.sql");
+const migrationOrder = read("supabase/MIGRATION_ORDER.txt");
+assert.match(worker, /POST \/api\/admin\/trials\/convert/);
+assert.match(worker, /nativeAdminTrialConvert: true/);
+assert.match(worker, /parseAdminTrialConversionBody/);
+assert.match(worker, /adminTrialConvertNatively/);
+assert.match(worker, /cloudflare_admin_convert_trial_to_license/);
+assert.match(worker, /customerId: parsed\.registrationId/);
+assert.match(browserAdminApi, /convertBrowserTrialToLicense/);
+assert.match(browserAdminApi, /\/api\/admin\/trials\/convert/);
+assert.match(adminPanel, /convertBrowserTrialToLicense/);
+assert.match(adminPanel, /selectedTrialId/);
+assert.match(adminPanel, /trialConversion=\{Boolean\(selectedTrialId\)\}/);
+assert.match(licenseCreateCard, /readOnly=\{trialConversion\}/);
+assert.match(licenseCreateCard, /trialConversion \? "Convert and issue paid license"/);
+assert.match(licenseCreateCard, /PLANS\.filter\(\(item\) => !trialConversion \|\| item !== "trial"\)/);
+assert.match(trialInbox, /onSelectForConversion/);
+assert.match(trialConversionMigration, /cloudflare_admin_convert_trial_to_license/);
+assert.match(trialConversionMigration, /FOR UPDATE/);
+assert.match(trialConversionMigration, /p_registration_id,/);
+assert.match(trialConversionMigration, /p_registration_id,\s*$/m);
+assert.match(trialConversionMigration, /'converted'/);
+assert.match(trialConversionMigration, /converted_license_id/);
+assert.match(trialConversionMigration, /cloudflare_admin_issue_license/);
+assert.match(trialConversionMigration, /REVOKE ALL ON FUNCTION public\.cloudflare_admin_convert_trial_to_license/);
+assert.match(trialConversionMigration, /GRANT EXECUTE ON FUNCTION public\.cloudflare_admin_convert_trial_to_license[\s\S]*TO authenticated/);
+assert.ok(migrationOrder.includes("20261104_cloudflare_admin_convert_trial_to_license.sql"));
+assert.match(adminTrialInboxMigration, /cloudflare_admin_list_trial_registrations/);
+
+// Paid lifecycle invariants: activation, validation, offline package issuance and conversion
+// must all operate on the same database license/customer identity.
+const activationLifecycle = activationBridge.slice(
+  activationBridge.indexOf("CREATE OR REPLACE FUNCTION public.cloudflare_prepare_license_activation"),
+);
+const validationLifecycle = validationBridge.slice(
+  validationBridge.indexOf("CREATE OR REPLACE FUNCTION public.cloudflare_validate_license"),
+);
+const offlineLifecycle = adminOfflineActivation.slice(
+  adminOfflineActivation.indexOf("CREATE OR REPLACE FUNCTION public.cloudflare_admin_prepare_offline_activation"),
+);
+const conversionLifecycle = trialConversionMigration.slice(
+  trialConversionMigration.indexOf("CREATE OR REPLACE FUNCTION public.cloudflare_admin_convert_trial_to_license"),
+);
+assert.match(activationLifecycle, /l\.customer_id/);
+assert.match(activationLifecycle, /l\.status/);
+assert.match(activationLifecycle, /l\.expires_at/);
+assert.match(activationLifecycle, /public\.activate_license_device\(v_license\.id, v_device_id\)/);
+assert.match(validationLifecycle, /l\.customer_id/);
+assert.match(validationLifecycle, /v_license\.status <> 'active'/);
+assert.match(validationLifecycle, /v_license\.expires_at <= v_now/);
+assert.match(validationLifecycle, /a\.status = 'active'/);
+assert.match(validationLifecycle, /a\.device_id = v_device_id/);
+assert.match(offlineLifecycle, /WHERE l\.license_id = v_license_id[\s\S]*FOR UPDATE/);
+assert.match(offlineLifecycle, /v_license\.status <> 'active'/);
+assert.match(offlineLifecycle, /v_license\.expires_at <= v_now/);
+assert.match(offlineLifecycle, /SET status = 'expired', updated_at = v_now[\s\S]*WHERE id = v_license\.id AND status = 'active'/);
+assert.match(offlineLifecycle, /v_active_count >= v_license\.activation_limit/);
+assert.match(offlineLifecycle, /'mode', 'offline-package-created'/);
+assert.match(conversionLifecycle, /p_registration_id,\s*v_trial\.organization_name/);
+assert.match(conversionLifecycle, /SET status = 'converted',[\s\S]*converted_license_id = p_license_id::TEXT/);
+assert.match(conversionLifecycle, /FOR UPDATE/);
 
 console.log("Cloudflare license edge contract tests passed");
