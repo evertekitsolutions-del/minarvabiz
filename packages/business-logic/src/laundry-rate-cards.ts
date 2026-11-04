@@ -68,7 +68,7 @@ export function listLaundryRateCards(): LaundryRateCard[] {
     || a.garment.localeCompare(b.garment) || a.fabric.localeCompare(b.fabric));
 }
 
-export function findLaundryRateCard(input: Pick<LaundryRateInput, "mode" | "serviceCode" | "garment" | "fabric">): LaundryRateCard | null {
+export function findLaundryRateCard(input: Pick<LaundryRateInput, "mode" | "serviceCode" | "garment" | "fabric" | "supplierId">): LaundryRateCard | null {
   const matched = cards.find(item => key(item) === key(input));
   const generic = input.mode === "outsourced" && input.supplierId
     ? cards.find(item => key(item) === key({ ...input, supplierId: null }))
