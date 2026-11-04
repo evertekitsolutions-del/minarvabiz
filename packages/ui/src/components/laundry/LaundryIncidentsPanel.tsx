@@ -23,7 +23,7 @@ export function LaundryIncidentsPanel({ orders }: { orders: LaundryOrder[] }) {
   const [feedback, setFeedback] = React.useState<{ error: boolean; text: string } | null>(null);
   const activeOrders = React.useMemo(() => orders.filter(order => order.status !== "cancelled" && !order.deletedAt), [orders]);
   const selectedOrder = activeOrders.find(order => order.id === orderId);
-  const permitted = can("orders.manage");
+  const permitted = can("returns.manage");
 
   const refresh = () => setRecords(listLaundryIncidents());
 
