@@ -1,12 +1,13 @@
 import * as React from "react";
 import { Button, CustomerList, FormField, Modal, inputClass } from "@minarvabiz/ui";
 import { can, setOpeningCustomerBalance, store } from "@minarvabiz/business-logic";
-import type { Customer } from "@minarvabiz/types";
+import type { Customer, PaymentMethod } from "@minarvabiz/types";
+import { createDurableCustomerCollection } from "../lib/durable-customer-collection";
 
 type Props = {
   onAdd: () => void;
   onSelect: (customer: Customer) => void;
-  onPersist: () => void | Promise<void>;
+  onPersist: () => boolean | Promise<boolean>;
 };
 
 const emptyForm = { name: "", phone: "", whatsapp: "", email: "", address: "", birthday: "", notes: "" };
@@ -22,9 +23,63 @@ export function DesktopCustomerMasterPanel({ onAdd, onSelect, onPersist }: Props
   const [form, setForm] = React.useState(emptyForm);
   const [error, setError] = React.useState<string | null>(null);
   const [revision, setRevision] = React.useState(0);
+  const [collectionTarget, setCollectionTarget] = React.useState<Customer | null>(null);
+  const [collectionAmount, setCollectionAmount] = React.useState("");
+  const [collectionMethod, setCollectionMethod] = React.useState<PaymentMethod>("cash");
+  const [collectionNotes, setCollectionNotes] = React.useState("");
+  const [collectionError, setCollectionError] = React.useState<string | null>(null);
+  const [collectionSaving, setCollectionSaving] = React.useState(false);
+  const collectionRef = React.useRef<ReturnType<typeof createDurableCustomerCollection> | null>(null);
+  if (!collectionRef.current) collectionRef.current = createDurableCustomerCollection(
+    (input: { customerId: string; amount: number; method: PaymentMethod; notes?: string }) => store.recordCustomerPayment(input),
+    async () => Boolean(await onPersist()),
+  );
   void revision;
 
   const customers = store.listCustomers(query);
+
+  function openCollection(customer: Customer) {
+    setCollectionTarget(customer);
+    setCollectionAmount(String(customer.outstandingBalance));
+    setCollectionMethod("cash");
+    setCollectionNotes("");
+    setCollectionError(null);
+  }
+
+  async function saveCollection() {
+    if (!collectionTarget || collectionSaving) return;
+    const amount = Number(collectionAmount);
+    if (!Number.isFinite(amount) || amount <= 0) { setCollectionError("Enter a valid payment amount."); return; }
+    setCollectionSaving(true);
+    setCollectionError(null);
+    try {
+      const result = await collectionRef.current!.collect({
+        customerId: collectionTarget.id, amount, method: collectionMethod,
+        notes: collectionNotes.trim() || undefined,
+      });
+      if (!result.ok) { setCollectionError(result.error || "Payment was not saved."); return; }
+      setCollectionTarget(null);
+      setCollectionNotes("");
+      setRevision(value => value + 1);
+    } catch (error) {
+      setCollectionError(error instanceof Error ? error.message : "Payment collection failed.");
+    } finally { setCollectionSaving(false); }
+  }
+
+  async function retryCollectionSave() {
+    if (collectionSaving) return;
+    setCollectionSaving(true);
+    setCollectionError(null);
+    try {
+      const result = await collectionRef.current!.retryPending();
+      if (!result.ok) { setCollectionError(result.error || "The existing payment is still pending."); return; }
+      setCollectionTarget(null);
+      setCollectionNotes("");
+      setRevision(value => value + 1);
+    } catch (error) {
+      setCollectionError(error instanceof Error ? error.message : "Unable to save the pending payment.");
+    } finally { setCollectionSaving(false); }
+  }
 
   function openEdit(customer: Customer) {
     setEditTarget(customer);
@@ -109,10 +164,26 @@ export function DesktopCustomerMasterPanel({ onAdd, onSelect, onPersist }: Props
         onAdd={onAdd}
         onSearch={setQuery}
         onSelect={onSelect}
+        onCollect={openCollection}
         onSetOpeningBalance={can("settings.manage") ? openOpeningBalance : undefined}
         onEdit={openEdit}
         onArchive={(customer) => { setArchiveTarget(customer); setArchiveReason(""); setError(null); }}
       />
+      <Modal
+        open={Boolean(collectionTarget)}
+        title={collectionTarget ? `Collect Payment — ${collectionTarget.name}` : "Collect Payment"}
+        onClose={() => { if (!collectionRef.current?.hasPending()) setCollectionTarget(null); }}
+        footer={<><Button variant="outline" disabled={collectionSaving || collectionRef.current?.hasPending()} onClick={() => setCollectionTarget(null)}>Cancel</Button><Button disabled={collectionSaving || !collectionAmount.trim() || Boolean(collectionRef.current?.hasPending())} onClick={() => void saveCollection()}>{collectionSaving ? "Saving…" : "Save Payment"}</Button></>}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-slate-600">Outstanding: <strong>{String(collectionTarget?.outstandingBalance ?? 0)}</strong></p>
+          <FormField label="Amount"><input className={inputClass} type="number" min="0.01" step="0.01" value={collectionAmount} onChange={event => setCollectionAmount(event.target.value)} /></FormField>
+          <FormField label="Payment method"><select className={inputClass} value={collectionMethod} onChange={event => setCollectionMethod(event.target.value as PaymentMethod)}><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank">Bank</option><option value="online">Online</option><option value="other">Other</option></select></FormField>
+          <FormField label="Notes"><textarea className={inputClass} value={collectionNotes} onChange={event => setCollectionNotes(event.target.value)} /></FormField>
+          {collectionRef.current?.hasPending() && <div role="alert" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">SQLite has not confirmed this payment. Keep the app open and retry the same payment. Do not collect another payment.<div className="mt-2"><Button disabled={collectionSaving} onClick={() => void retryCollectionSave()}>{collectionSaving ? "Saving…" : "Retry existing payment save"}</Button></div></div>}
+          {collectionError && <p role="alert" className="text-sm text-rose-600">{collectionError}</p>}
+        </div>
+      </Modal>
       <Modal
         open={Boolean(editTarget)}
         title={editTarget ? `Edit Customer — ${editTarget.name}` : "Edit Customer"}
