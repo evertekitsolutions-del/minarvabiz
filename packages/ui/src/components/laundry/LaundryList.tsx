@@ -19,6 +19,39 @@ function actionLabel(action: string) {
   return action.replace(/^laundry\./, "").replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const CODE39: Record<string, string> = {
+  "0":"nnnwwnwnn","1":"wnnwnnnnw","2":"nnwwnnnnw","3":"wnwwnnnnn",
+  "4":"nnnwwnnnw","5":"wnnwwnnnn","6":"nnwwwnnnn","7":"nnnwnnwnw",
+  "8":"wnnwnnwnn","9":"nnwwnnwnn","A":"wnnnnwnnw","B":"nnwnnwnnw",
+  "C":"wnwnnwnnn","D":"nnnnwwnnw","E":"wnnnwwnnn","F":"nnwnwwnnn",
+  "G":"nnnnnwwnw","H":"wnnnnwwnn","I":"nnwnnwwnn","J":"nnnnwwwnn",
+  "K":"wnnnnnnww","L":"nnwnnnnww","M":"wnwnnnnwn","N":"nnnnwnnww",
+  "O":"wnnnwnnwn","P":"nnwnwnnwn","Q":"nnnnnnnww","R":"wnnnnnnwn",
+  "S":"nnwnnnnwn","T":"nnnnwnnwn","U":"wwnnnnnnw","V":"nwwnnnnnw",
+  "W":"wwwnnnnnn","X":"nwnnwnnnw","Y":"wwnnwnnnn","Z":"nwwnwnnnn",
+  "-":"nwnnnnwnw",".":"wwnnnwnnn"," ":"nwwnnnwnn","$":"nwnwnwnnn",
+  "/":"nwnwnnnwn","+":"nwnnnwnwn","%":"nnnwnwnwn","*":"nwnnwnwnn",
+};
+function escapePrintHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[char]!));
+}
+function code39Svg(value: string) {
+  const encoded = "*" + value.toUpperCase() + "*";
+  if ([...encoded].some((char) => !CODE39[char])) return "";
+  const unit = 2;
+  let x = 8;
+  const bars: string[] = [];
+  [...encoded].forEach((char, charIndex) => {
+    [...CODE39[char]].forEach((width, index) => {
+      const size = width === "w" ? unit * 3 : unit;
+      if (index % 2 === 0) bars.push(`<rect x="${x}" y="0" width="${size}" height="42" />`);
+      x += size;
+    });
+    if (charIndex < encoded.length - 1) x += unit;
+  });
+  return `<svg class="barcode" viewBox="0 0 ${x + 8} 42" role="img" aria-label="Code 39 barcode for ${escapePrintHtml(value)}">${bars.join("")}</svg>`;
+}
+
 export function LaundryList({
   orders,
   auditLogs = [],
@@ -53,8 +86,11 @@ export function LaundryList({
   const [editTarget, setEditTarget] = React.useState<LaundryOrder | null>(null);
   const [editGarment, setEditGarment] = React.useState("");
   const [editNotes, setEditNotes] = React.useState("");
+  const [editPickupAt, setEditPickupAt] = React.useState("");
+  const [editDueAt, setEditDueAt] = React.useState("");
   const [editError, setEditError] = React.useState<string | null>(null);
   const [csvFeedback, setCsvFeedback] = React.useState<{ failed: boolean; message: string } | null>(null);
+  const [tagPrintFeedback, setTagPrintFeedback] = React.useState<string | null>(null);
 
   const customerOptions = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -85,6 +121,7 @@ export function LaundryList({
         order.garment || "",
         order.supplierName || "",
         order.notes || "",
+        ...(order.items || []).map((item) => item.tagCode),
       ].some((value) => value.toLowerCase().includes(query));
     });
   }, [orders, q, customerId, mode, status, supplierId, dateFrom, dateTo]);
@@ -109,12 +146,32 @@ export function LaundryList({
     setEditTarget(order);
     setEditGarment(order.garment || "");
     setEditNotes(order.notes || "");
+    setEditPickupAt(order.pickupAt?.slice(0, 10) || "");
+    setEditDueAt(order.dueAt?.slice(0, 10) || "");
     setEditError(null);
+  };
+
+  const saveItemWorkflow = (itemId: string, patch: { processingStatus?: string; qualityStatus?: string }) => {
+    if (!detailTarget || !onUpdateDetails || !detailTarget.items) return;
+    const items = detailTarget.items.map((item) => item.id === itemId ? { ...item, ...patch } : { ...item });
+    const result = onUpdateDetails(detailTarget, {
+      garment: detailTarget.garment || "",
+      notes: detailTarget.notes || "",
+      items,
+      pickupAt: detailTarget.pickupAt ?? null,
+      dueAt: detailTarget.dueAt ?? null,
+    } as { garment: string; notes: string });
+    if (!result.success) {
+      setEditError(result.error || "Unable to update item workflow");
+      return;
+    }
+    setEditError(null);
+    if (result.order) setDetailTarget(result.order);
   };
 
   const saveEdit = () => {
     if (!editTarget || !onUpdateDetails) return;
-    const result = onUpdateDetails(editTarget, { garment: editGarment, notes: editNotes });
+    const result = onUpdateDetails(editTarget, { garment: editGarment, notes: editNotes, pickupAt: editPickupAt || null, dueAt: editDueAt || null } as { garment: string; notes: string });
     if (!result.success) {
       setEditError(result.error || "Unable to update laundry ticket");
       return;
@@ -123,6 +180,45 @@ export function LaundryList({
     setEditTarget(null);
     setEditError(null);
   };
+
+  function printGarmentTags(order: LaundryOrder) {
+    const items = order.items || [];
+    if (!items.length) {
+      setTagPrintFeedback("This legacy ticket has no itemized garment tags to print.");
+      return;
+    }
+    const popup = window.open("", "_blank", "width=900,height=700");
+    if (!popup) {
+      setTagPrintFeedback("Print window was blocked. Allow pop-ups and try again.");
+      return;
+    }
+    const labels = items.map((item) => `
+      <article class="tag">
+        <div class="brand">MINARVA BIZ · LAUNDRY</div>
+        <div class="ticket">${escapePrintHtml(order.orderNumber)}</div>
+        <div class="garment">${escapePrintHtml(item.label)} × ${escapePrintHtml(String(item.quantity))}</div>
+        ${code39Svg(item.tagCode)}
+        <div class="code">${escapePrintHtml(item.tagCode)}</div>
+        <div class="customer">${escapePrintHtml(order.customerName || "Customer")}</div>
+        <div class="due">${order.dueAt ? "Due: " + escapePrintHtml(order.dueAt.slice(0, 10)) : ""}</div>
+      </article>`).join("");
+    popup.document.open();
+    popup.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Garment tags — ${escapePrintHtml(order.orderNumber)}</title>
+      <style>
+        @page{size:A4;margin:10mm}*{box-sizing:border-box}body{font:12px Arial,sans-serif;margin:0;color:#111}
+        .sheet{display:grid;grid-template-columns:repeat(3,1fr);gap:5mm}
+        .tag{height:48mm;border:1px dashed #777;padding:3mm;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;break-inside:avoid}
+        .brand{font-size:8px;letter-spacing:.7px;font-weight:bold}.ticket{font-size:10px;margin-top:2mm}
+        .garment{font-size:13px;font-weight:bold;margin-top:1mm;text-align:center}
+        .barcode{width:100%;max-height:14mm;margin-top:2mm;fill:#000}
+        .code{font:bold 10px monospace;letter-spacing:1px;margin-top:1mm}
+        .customer,.due{font-size:8px;margin-top:1mm}
+        @media screen{body{padding:12px;background:#eee}.sheet{max-width:190mm;margin:auto}.tag{background:white}}
+      </style></head><body><main class="sheet">${labels}</main>
+      <script>window.addEventListener("load",()=>{window.focus();window.print();});</script></body></html>`);
+    popup.document.close();
+    setTagPrintFeedback(`Print dialog opened for ${items.length} garment tag(s). Verify barcode readability with your scanner after printing.`);
+  }
 
   function downloadFilteredTickets() {
     if (!filtered.length) return;
@@ -160,7 +256,9 @@ export function LaundryList({
       render: (r) => {
         const next = r.mode === "outsourced" && r.status !== "cancelled"
           ? (r.status === "pending" ? "sent" : r.status === "sent" ? "received" : r.status === "received" ? "delivered" : null)
-          : null;
+          : !r.items?.length && r.mode === "in_house_ironing"
+            ? (r.status === "pending" ? "received" : r.status === "received" ? "delivered" : null)
+            : null;
         const label = next === "sent" ? "Mark Sent" : next === "received" ? "Mark Received" : next === "delivered" ? "Mark Delivered" : null;
         return (
           <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
@@ -197,6 +295,7 @@ export function LaundryList({
         </div>
 
         {csvFeedback && <p role={csvFeedback.failed ? "alert" : "status"} className={`text-sm ${csvFeedback.failed ? "text-rose-700" : "text-slate-600"}`}>{csvFeedback.message}</p>}
+        {tagPrintFeedback && <p role="status" className="text-sm text-slate-600">{tagPrintFeedback}</p>}
         <p className="text-xs text-slate-500">CSV includes displayed cancelled tickets for traceability. Use Reports for reconciled financial totals.</p>
         <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-7">
           <label className="text-xs font-medium text-slate-600 lg:col-span-2">
@@ -279,7 +378,32 @@ export function LaundryList({
               <div><div className="text-xs text-slate-500">Quantity</div><div className="font-medium text-slate-900">{detailTarget.quantity}</div></div>
               <div><div className="text-xs text-slate-500">Supplier</div><div className="font-medium text-slate-900">{detailTarget.supplierName || "—"}</div></div>
               <div><div className="text-xs text-slate-500">Last updated</div><div className="font-medium text-slate-900">{new Date(detailTarget.updatedAt).toLocaleString("en-IN")}</div></div>
+              <div><div className="text-xs text-slate-500">Pickup date</div><div className="font-medium text-slate-900">{detailTarget.pickupAt ? new Date(detailTarget.pickupAt).toLocaleDateString("en-IN") : "—"}</div></div>
+              <div><div className="text-xs text-slate-500">Due / delivery date</div><div className="font-medium text-slate-900">{detailTarget.dueAt ? new Date(detailTarget.dueAt).toLocaleDateString("en-IN") : "—"}</div></div>
             </div>
+            {detailTarget.items?.length ? <section className="space-y-2">
+              <h3 className="text-sm font-semibold text-slate-900">Garment tracking & quality control</h3>
+              <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-slate-500">Print one Code 39 label per garment item.</p><Button size="sm" variant="outline" onClick={() => printGarmentTags(detailTarget)}>Print garment tags</Button></div>
+              {detailTarget.items.map((item) => <div key={item.id} className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-[1fr_130px_150px] sm:items-center">
+                <div><div className="font-medium text-slate-900">{item.label} × {item.quantity}</div><div className="font-mono text-xs text-slate-500">Tag: {item.tagCode}</div><div className="text-xs text-slate-500">QC: {item.qualityStatus}</div></div>
+                <div className="text-sm capitalize text-slate-700">{item.processingStatus.replaceAll("_", " ")}</div>
+                {onUpdateDetails && detailTarget.status !== "cancelled" ? <div className="flex flex-col gap-1">
+                  <select aria-label={`Workflow for ${item.tagCode}`} className={selectClass} value={item.processingStatus} onChange={(e) => saveItemWorkflow(item.id, { processingStatus: e.target.value })}>
+                    <option value={item.processingStatus}>{item.processingStatus.replaceAll("_", " ")}</option>
+                    {item.processingStatus === "received" && <option value="washing">Washing</option>}
+                    {item.processingStatus === "washing" && <option value="ironing">Ironing</option>}
+                    {item.processingStatus === "ironing" && <option value="quality_check">Quality check</option>}
+                    {item.processingStatus === "quality_check" && item.qualityStatus === "failed" && <option value="ironing">Return to ironing</option>}
+                    {item.processingStatus === "quality_check" && item.qualityStatus === "passed" && <option value="ready">Ready</option>}
+                    {item.processingStatus === "ready" && <option value="delivered">Delivered</option>}
+                  </select>
+                  {item.processingStatus === "quality_check" && <select aria-label={`Quality result for ${item.tagCode}`} className={selectClass} value={item.qualityStatus} onChange={(e) => saveItemWorkflow(item.id, { qualityStatus: e.target.value })}>
+                    <option value="pending">QC pending</option><option value="passed">QC passed</option><option value="failed">QC failed</option>
+                  </select>}
+                </div> : <span className="text-xs text-slate-500">Read only</span>}
+              </div>)}
+              {editError && <p role="alert" className="text-sm text-rose-600">{editError}</p>}
+            </section> : null}
             <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-5">
               <div><div className="text-xs text-slate-500">Customer rate</div><div className="font-semibold">{formatMoney(detailTarget.customerRate)}</div></div>
               <div><div className="text-xs text-slate-500">Supplier rate</div><div className="font-semibold">{formatMoney(detailTarget.supplierRate)}</div></div>
@@ -320,6 +444,10 @@ export function LaundryList({
           <FormField label="Garment / item">
             <input className={inputClass} value={editGarment} onChange={(e) => setEditGarment(e.target.value)} />
           </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Pickup date"><input type="date" className={inputClass} value={editPickupAt} onChange={(e) => setEditPickupAt(e.target.value)} /></FormField>
+            <FormField label="Due / delivery date"><input type="date" min={editPickupAt || undefined} className={inputClass} value={editDueAt} onChange={(e) => setEditDueAt(e.target.value)} /></FormField>
+          </div>
           <FormField label="Notes">
             <textarea className={inputClass + " h-24 py-2"} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
           </FormField>
