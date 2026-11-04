@@ -12,7 +12,8 @@ import type { TemplateId } from "@minarvabiz/business-logic";
 import { canCollectServiceOrderBalance } from "./service-order-collection";
 import {
   SERVICE_TYPE_LABELS, ORDER_STATUS_LABELS, ORDER_STATUS_FLOW,
-  measurementRevisionHistory, ordersStore, buildOrderInvoiceHtml, printOrderInvoice, canAssignServiceOrder,
+  measurementRevisionHistory, ordersStore, buildOrderInvoiceHtml, printOrderInvoice,
+  buildTailorJobCardHtml, printTailorJobCard, canAssignServiceOrder,
   canStartServiceAssignment, canCompleteServiceAssignment, availableServiceWhatsAppTemplates,
 } from "@minarvabiz/business-logic";
 
@@ -91,6 +92,7 @@ export function OrderDetail({
   const [qcIssue, setQcIssue] = React.useState("");
   const [qcIssues, setQcIssues] = React.useState<string[]>([]);
   const [printPreviewPaper, setPrintPreviewPaper] = React.useState<"a4" | "thermal" | null>(null);
+  const [jobCardOpen, setJobCardOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [staffToAssign, setStaffToAssign] = React.useState("");
   const [staffAssignError, setStaffAssignError] = React.useState<string | null>(null);
@@ -209,6 +211,7 @@ export function OrderDetail({
             <Button variant="outline" onClick={() => onCollectBalance(order)}>Collect Customer Due</Button>
           )}
           <Button variant="outline" onClick={() => setPrintPreviewPaper("a4")}>Preview A4</Button>
+          {order.serviceType !== "tshirt_printing" && <Button variant="outline" onClick={() => setJobCardOpen(true)}>Preview Tailor Job Card</Button>}
           <Button variant="outline" onClick={() => setPrintPreviewPaper("thermal")}>Preview Thermal</Button>
           {onUpdateOperationalDetails && order.status !== "delivered" && order.status !== "cancelled" && (
             <Button variant="outline" onClick={openOperationalEditor}>Edit / Reschedule</Button>
@@ -605,6 +608,14 @@ export function OrderDetail({
         </div>
       </Modal>
 
+      {jobCardOpen && <PrintPreviewModal
+        open
+        title={`Tailor Job Card ${order.orderNumber}`}
+        html={buildTailorJobCardHtml(order, { measurements: measurementProfiles?.find(profile => profile.id === order.measurementProfileId) || null, assignments: staffAssignments })}
+        paper="a4"
+        onClose={() => setJobCardOpen(false)}
+        onPrint={() => printTailorJobCard(order, { measurements: measurementProfiles?.find(profile => profile.id === order.measurementProfileId) || null, assignments: staffAssignments })}
+      />}
       {printPreviewPaper && (
         <PrintPreviewModal
           open
