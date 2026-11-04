@@ -59,7 +59,7 @@ export function issueLaundryHandoverCode(orderId: string, leg: LaundryHandoverLe
   const identity = key(orderId, leg);
   const active = challenges.get(identity);
   if (active && active.expiresAt > Date.now() && active.attempts < MAX_ATTEMPTS) {
-    throw new Error("A code is already active for this ticket; verify it before requesting another");
+    return { code: active.code, expiresAt: new Date(active.expiresAt).toISOString() };
   }
   const random = globalThis.crypto?.getRandomValues;
   if (typeof random !== "function") throw new Error("Secure random number generator unavailable");
