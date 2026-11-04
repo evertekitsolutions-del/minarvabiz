@@ -748,6 +748,8 @@ export interface CustomerCrmProfile {
   measurementCount: number;
   orderCount: number;
   saleCount: number;
+  laundryCount: number;
+  recentLaundry: Array<{ id: UUID; orderNumber: string; garment: string; status: string; total: number; date: string }>;
   recentOrders: Array<{ id: UUID; orderNumber: string; status: string; price: number; date: string }>;
   recentSales: Array<{ id: UUID; invoiceNumber: string; total: number; date: string }>;
 }
