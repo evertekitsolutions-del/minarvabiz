@@ -69,7 +69,7 @@ export function registerLaundryIncident(input: {
   estimatedCustomerCompensation?: number;
   estimatedVendorRecovery?: number;
 }): LaundryIncident {
-  assertPermission("orders.manage");
+  assertPermission("returns.manage");
   const order = listLaundryOrders().find(o => o.id === input.orderId && !o.deletedAt);
   if (!order || order.status === "cancelled") throw new Error("Active laundry ticket required");
   if (input.itemTag && !order.items?.some(item => item.tagCode === input.itemTag)) {
@@ -95,7 +95,7 @@ export function registerLaundryIncident(input: {
 }
 
 export function decideLaundryIncident(input: { id: string; status: "resolved" | "rejected"; notes: string }): LaundryIncident {
-  assertPermission("orders.manage");
+  assertPermission("returns.manage");
   const incident = incidents.find(row => row.id === input.id);
   if (!incident) throw new Error("Laundry incident not found");
   if (incident.status !== "open") throw new Error("Incident already finalized");
