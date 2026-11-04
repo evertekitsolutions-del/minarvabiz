@@ -92,4 +92,37 @@ const invalidDate=phase5.createLaundryOrder({customerId:"c",mode:"in_house_ironi
 assert.equal(invalidDate.order,null);
 assert.match(invalidDate.errors.join("; "),/due date cannot be before pickup/i);
 
+const outsourcedSupplier=phase5.createSupplier({name:"QC Laundry Vendor",category:"laundry"});
+const outsourced=phase5.createLaundryOrder({
+  customerId:"c",mode:"outsourced",supplierId:outsourcedSupplier.id,
+  quantity:1,items:[{label:"Suit",quantity:1}],supplierRate:10,customerRate:25,paidAmount:0,
+});
+assert.equal(outsourced.errors.length,0,outsourced.errors.join("; "));
+assert.equal(outsourced.order?.status,"pending");
+assert.equal(phase5.updateLaundryStatus(outsourced.order.id,"sent").order?.status,"sent");
+assert.equal(phase5.updateLaundryStatus(outsourced.order.id,"received").order?.status,"received");
+const earlyHandover=phase5.updateLaundryStatus(outsourced.order.id,"delivered");
+assert.equal(earlyHandover.order,null);
+assert.match(earlyHandover.error,/every garment must pass QC/i);
+const itemId=outsourced.order.items[0].id;
+for(const stage of ["washing","ironing","quality_check"]){
+  const current=phase5.listLaundryOrders().find(o=>o.id===outsourced.order.id);
+  const result=phase5.updateLaundryDetails(outsourced.order.id,{
+    items:current.items.map(i=>i.id===itemId?{...i,processingStatus:stage}:{...i}),
+  });
+  assert.equal(result.errors.length,0,result.errors.join("; "));
+}
+let current=phase5.listLaundryOrders().find(o=>o.id===outsourced.order.id);
+assert.equal(phase5.updateLaundryDetails(outsourced.order.id,{
+  items:current.items.map(i=>i.id===itemId?{...i,qualityStatus:"passed"}:{...i}),
+}).errors.length,0);
+for(const stage of ["ready","delivered"]){
+  current=phase5.listLaundryOrders().find(o=>o.id===outsourced.order.id);
+  const result=phase5.updateLaundryDetails(outsourced.order.id,{
+    items:current.items.map(i=>i.id===itemId?{...i,processingStatus:stage}:{...i}),
+  });
+  assert.equal(result.errors.length,0,result.errors.join("; "));
+}
+assert.equal(phase5.updateLaundryStatus(outsourced.order.id,"delivered").order?.status,"delivered");
+
 console.log("Laundry itemization, tag identity, pickup/due dates, per-item workflow, QC rework/pass, audit/outbox and financial immutability PASS");
