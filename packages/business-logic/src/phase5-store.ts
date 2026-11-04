@@ -745,6 +745,10 @@ export function updateLaundryStatus(
   if (order.mode === "in_house_ironing" && order.items?.length) {
     return { order: null, error: "Use garment item QC workflow before delivery" };
   }
+  if (status === "delivered" && order.items?.length
+    && !order.items.every((item) => item.processingStatus === "delivered" && item.qualityStatus === "passed")) {
+    return { order: null, error: "Every garment must pass QC and be marked delivered before closing this ticket" };
+  }
   const next: Partial<Record<LaundryOrder["status"], LaundryOrder["status"]>> = order.mode === "in_house_ironing"
     ? { pending: "received", received: "delivered" }
     : { pending: "sent", sent: "received", received: "delivered" };
