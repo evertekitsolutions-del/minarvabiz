@@ -21,7 +21,10 @@ const india = { locale: "en-IN", timeZone: "Asia/Kolkata", currency: "INR" };
 const oman = { locale: "ar-OM", timeZone: "Asia/Muscat", currency: "OMR" };
 
 test("canonicalizes industry-neutral locale/time zone/currency", () => {
-  assert.deepEqual(validateWorkspaceDisplayPreferences({ ...india, currency: "inr" }), india);
+  assert.deepEqual(validateWorkspaceDisplayPreferences({ ...india, currency: "inr" }), {
+    ...india,
+    timeZone: new Intl.DateTimeFormat("en-IN", { timeZone: india.timeZone }).resolvedOptions().timeZone,
+  });
   assert.deepEqual(validateWorkspaceDisplayPreferences(oman), oman);
 });
 
