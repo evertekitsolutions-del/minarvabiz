@@ -958,7 +958,7 @@ mainStore.registerCustomerReceivableProvider("laundry", {
     return laundryOrders
       .filter((order) => {
         const balanceMinor = moneyMinorOrNull(order.balanceAmount);
-        return !order.deletedAt && order.customerId === customerId && order.status !== "cancelled" && balanceMinor != null && balanceMinor > 0;
+        return !order.deletedAt && laundryRecordInActiveBranch(order) && order.customerId === customerId && order.status !== "cancelled" && balanceMinor != null && balanceMinor > 0;
       })
       .map((order) => ({
         id: order.id,
@@ -971,7 +971,7 @@ mainStore.registerCustomerReceivableProvider("laundry", {
   },
   validate(allocations) {
     for (const { item, amount } of allocations) {
-      const order = laundryOrders.find((candidate) => candidate.id === item.id && !candidate.deletedAt);
+      const order = laundryOrders.find((candidate) => candidate.id === item.id && !candidate.deletedAt && laundryRecordInActiveBranch(candidate));
       if (!order || order.status === "cancelled") return "Laundry collection target is no longer available";
       const totalMinor = moneyMinorOrNull(order.totalCustomerCharge);
       const paidMinor = moneyMinorOrNull(order.paidAmount);
@@ -988,7 +988,7 @@ mainStore.registerCustomerReceivableProvider("laundry", {
   },
   apply(allocations, now) {
     for (const { item, amount } of allocations) {
-      const order = laundryOrders.find((candidate) => candidate.id === item.id && !candidate.deletedAt);
+      const order = laundryOrders.find((candidate) => candidate.id === item.id && !candidate.deletedAt && laundryRecordInActiveBranch(candidate));
       if (!order || order.status === "cancelled") throw new Error("Laundry collection target is no longer available");
       const totalMinor = moneyMinorOrNull(order.totalCustomerCharge);
       const paidMinor = moneyMinorOrNull(order.paidAmount);
