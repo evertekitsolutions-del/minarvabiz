@@ -19,7 +19,7 @@ type ExportableTicket = Pick<LaundryOrder,
 
 const HEADER = "ticket_number,date,customer,mode,status,garment,quantity,supplier,customer_charge,supplier_cost,profit,paid,balance,notes";
 
-function csvCell(value: string | number | null | undefined): string {
+export function csvCell(value: string | number | null | undefined): string {
   if (typeof value === "number") {
     if (!Number.isFinite(value)) throw new Error("Laundry ticket contains an invalid numeric value.");
     return String(value);
