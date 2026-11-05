@@ -12,7 +12,7 @@ const roles=require("../permissions.ts");
 
 function make(id,patch={}) {
   return {
-    id,orderNumber:"LDY-"+id,customerId:"customer-1",branchId:"branch-1",mode:"outsourced",
+    id,orderNumber:"LDY-"+id,customerId:"customer-1",branchId:"branch-hq",mode:"outsourced",
     status:"pending",items:[{id:"garment-"+id,label:"Shirt",tagCode:"TAG-"+id,quantity:1,
       qualityStatus:"pending",processingStatus:"received"}],
     deletedAt:null,createdAt:"2026-11-01T00:00:00Z",updatedAt:"2026-11-01T00:00:00Z",version:1,
@@ -25,6 +25,10 @@ function reset(orders) {
   custody.hydrateLaundryHandoverProofs([]);
   phase5.hydratePhase5({laundryOrders:orders,suppliers:[]});
 }
+test("foreign branch pickup never issues local device confirmation code",()=>{
+  reset([make("foreign",{branchId:"branch-foreign"})]);
+  assert.throws(()=>custody.issueLaundryHandoverCode("foreign","pickup"),/active undelivered/i);
+});
 test("pending pickup requires a fresh six-digit challenge, records proof without retaining code",()=>{
   reset([make("p")]);
   const issued=custody.issueLaundryHandoverCode("p","pickup");
@@ -37,7 +41,7 @@ test("pending pickup requires a fresh six-digit challenge, records proof without
     orderId:"p",leg:"pickup",code:issued.code,acknowledgedBy:"Customer P",
   });
   assert.equal(proof.customerId,"customer-1");
-  assert.equal(proof.branchId,"branch-1");
+  assert.equal(proof.branchId,"branch-hq");
   assert.equal(proof.verificationMethod,"in_person_code");
   const serialized=JSON.stringify(custody.exportLaundryHandoverProofs());
   assert(!serialized.includes(issued.code));
