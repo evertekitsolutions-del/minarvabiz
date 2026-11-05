@@ -102,3 +102,56 @@ test("shared Windows and Web product editors use scoped hierarchy and safe CRUD"
   assert(productList.includes("buildScopedCategoryTree"));
   assert(nativeProduct.includes("buildScopedCategoryTree"));
 });
+
+
+test("invalid category inputs and branch collisions fail without mutating hierarchy",()=>{
+  reset();
+  const a=store.createCategory({name:"A",branchId:"b1"});
+  const snapshot=JSON.stringify(store.listCategories());
+  for(const changes of [
+    {name:"  "},{name:"too long".repeat(30)},{name:"Line\nBreak"},
+    {name:"A"},{name:"valid",description:"x".repeat(501)},
+    {name:"Missing",parentId:"nonexistent"},
+    {name:"Other",parentId:a.id,branchId:"b2"},
+  ]){
+    assert.throws(()=>store.createCategory({branchId:"b1",...changes}));
+    assert.equal(JSON.stringify(store.listCategories()),snapshot);
+  }
+  const other=store.createCategory({name:"Other",branchId:"b1"});
+  const c1=store.createCategory({name:"Same",parentId:a.id,branchId:"b1"});
+  const c2=store.createCategory({name:"Same",parentId:other.id,branchId:"b1"});
+  assert.notEqual(c1.id,c2.id);
+  assert.equal(store.updateCategory(c2.id,{parentId:a.id},c2.updatedAt).category,null);
+  assert.throws(()=>hierarchy.buildScopedCategoryTree([cat("x","X","x")],"b1"));
+});
+test("updates protect archived/unavailable parents and stale category references",()=>{
+  reset();
+  const root=store.createCategory({name:"Root",branchId:"b1"});
+  const child=store.createCategory({name:"Child",parentId:root.id,branchId:"b1"});
+  const before=JSON.stringify(store.listCategories());
+  assert.match(store.updateCategory(child.id,{parentId:"missing"},child.updatedAt).error,/Parent/);
+  assert.match(store.updateCategory(root.id,{parentId:root.id},root.updatedAt).error,/cycle/);
+  assert.match(store.updateCategory("unknown",{name:"New"},"y").error,/not found/);
+  assert.match(store.archiveCategory("unknown","y").error,/not found/);
+  assert.equal(JSON.stringify(store.listCategories()),before);
+  const edited=store.updateCategory(root.id,{name:"Renamed",description:"summary"},root.updatedAt).category;
+  assert.equal(edited.name,"Renamed");
+  assert.equal(edited.description,"summary");
+  assert.match(store.archiveCategory(root.id,root.updatedAt).error,/changed/);
+  assert.match(store.archiveCategory(root.id,edited.updatedAt).error,/child/);
+  const moved=store.updateCategory(child.id,{parentId:null},child.updatedAt).category;
+  assert.equal(moved.parentId,null);
+  assert.equal(store.archiveCategory(root.id,edited.updatedAt).error,undefined);
+});
+test("tree handles historical orphans and exported MIT label format",()=>{
+  const fromVendor=require("../vendor/open-mercato/categoryTree.ts");
+  assert.equal(fromVendor.formatCategoryTreeLabel("Root",0),"Root");
+  assert(fromVendor.formatCategoryTreeLabel("Child",2).includes("↳"));
+  const options=hierarchy.buildScopedCategoryTree([cat("child","Child","missing")],"b1");
+  assert.equal(options.length,1);
+  assert.equal(options[0].path,"Child");
+  assert.equal(hierarchy.categoryDescendantIds([cat("x","X","z"),cat("z","Z","x")],"x").size,2);
+  assert.throws(()=>hierarchy.buildScopedCategoryTree([
+    ...Array.from({length:53},(_,i)=>cat("depth-"+i,"Level "+i,i===0?null:"depth-"+(i-1)))
+  ],"b1"),/too deep/);
+});
