@@ -67,7 +67,7 @@ export function applyMarketingConsentEvent(
   previous: MarketingConsentEvent | null,
   next: MarketingConsentEvent,
 ): MarketingConsentDecision {
-  const reject = (reason: Exclude<MarketingConsentDecision["reason"], never>) =>
+  const reject = (reason: Extract<MarketingConsentDecision, { accepted: false }>["reason"]) =>
     ({ accepted: false as const, reason });
   if (!validEvent(next) || !validScope(policy)) return reject("invalid_event");
   if (!sameScope(policy, next)) return reject("scope_mismatch");
