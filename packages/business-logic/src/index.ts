@@ -12,6 +12,7 @@ export * from "./normal-area-billing";
 export * from "./pos-area-cart";
 export * from "./dimension-sale-protocol";
 export * from "./design-library";
+export * from "./boutique-design-portfolio";
 export * from "./delivery-logistics";
 export * from "./business-modes";
 export * from "./branch-intelligence";
