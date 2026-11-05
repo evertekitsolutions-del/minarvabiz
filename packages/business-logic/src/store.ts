@@ -263,7 +263,7 @@ export function getProductByBarcode(barcode: string): Product | undefined {
 }
 
 function assertFiniteProductNumerics(input: Partial<Product>): void {
-  for (const field of ["costPrice", "sellingPrice", "discount", "taxRate", "stockQuantity", "minimumStock"] as const) {
+  for (const field of ["costPrice", "sellingPrice", "mrp", "specialOfferPrice", "discount", "taxRate", "stockQuantity", "minimumStock"] as const) {
     const value = input[field];
     if (value != null && !Number.isFinite(value)) {
       throw new Error(`Product ${field} must be a finite number`);
@@ -274,6 +274,12 @@ function assertFiniteProductNumerics(input: Partial<Product>): void {
 export function createProduct(input: Omit<Product, "id" | "createdAt" | "updatedAt" | "deletedAt" | "version">): Product {
   assertPermission("products.manage");
   assertFiniteProductNumerics(input);
+  const mrp = input.mrp ?? input.sellingPrice, offer = input.specialOfferPrice ?? input.sellingPrice;
+  if (mrp < 0 || offer < 0 || offer > mrp || offer !== input.sellingPrice ||
+      !Number.isSafeInteger(Math.round(mrp*100)) || !Number.isSafeInteger(Math.round(offer*100)) ||
+      Math.round(mrp*100)/100 !== mrp || Math.round(offer*100)/100 !== offer) {
+    throw new Error("Product MRP / special offer prices are inconsistent");
+  }
 
   const openingStock = Number(input.stockQuantity ?? 0);
   if (openingStock < 0 || !Number.isSafeInteger(Math.round(openingStock * 1000))) {
@@ -331,6 +337,11 @@ export function updateProduct(id: UUID, patch: Partial<Product>): Product | null
   assertFiniteProductNumerics(patch);
   const p = getProduct(id);
   if (!p) return null;
+  const candidate={...p,...patch};
+  const mrp=candidate.mrp??candidate.sellingPrice, offer=candidate.specialOfferPrice??candidate.sellingPrice;
+  if (!Number.isFinite(mrp)||!Number.isFinite(offer)||mrp<0||offer<0||offer>mrp||
+    offer!==candidate.sellingPrice||!Number.isSafeInteger(Math.round(mrp*100))||
+    !Number.isSafeInteger(Math.round(offer*100)))throw new Error("Product MRP / special offer prices are inconsistent");
   if (patch.stockQuantity != null && patch.stockQuantity !== p.stockQuantity) {
     throw new Error("Product stock quantity must be changed through inventory adjustment");
   }
