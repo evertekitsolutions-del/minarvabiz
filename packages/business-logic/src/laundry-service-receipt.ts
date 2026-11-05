@@ -35,7 +35,7 @@ export function buildLaundryServiceReceiptHtml(order: LaundryOrder, opts: Laundr
     throw new Error("Invalid laundry garment quantity");
   }
   const totals = calculateLaundryTicketTotals({ mode:order.mode, quantity:order.quantity,
-    customerRate:order.customerRate, supplierRate:order.supplierRate, items:order.items });
+    customerRate:order.customerRate, supplierRate:order.supplierRate ?? 0, items:order.items });
   if (Math.round(totals.totalCustomerCharge * 100) !== Math.round(order.totalCustomerCharge * 100)) {
     throw new Error("Laundry receipt garment prices do not reconcile");
   }
