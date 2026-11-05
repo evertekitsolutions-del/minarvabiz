@@ -1,0 +1,114 @@
+"use client";
+
+import * as React from "react";
+import { getRuntimeMode, getSessionUser, phase9Store } from "@minarvabiz/business-logic";
+import {
+  buildIndustryProfile, industryPreferenceKey, listIndustryPacks,
+  readIndustryProfile, writeIndustryProfile,
+  type IndustryPackId, type IndustryWorkspaceProfile,
+} from "@minarvabiz/business-logic";
+
+const packs = listIndustryPacks();
+
+/**
+ * Operator-local industry workspace preferences. These do not activate licensed
+ * modules, modify shared records, or imply the listed workflows are implemented.
+ */
+export default function IndustryWorkspacePage() {
+  const [scope, setScope] = React.useState<string | null>(null);
+  const [profile, setProfile] = React.useState<IndustryWorkspaceProfile>({ version: 1, primary: null, enabled: [] });
+  const [loaded, setLoaded] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [message, setMessage] = React.useState("");
+
+  React.useEffect(() => {
+    function load() {
+      const user = getSessionUser();
+      const key = industryPreferenceKey(
+        user?.id ?? null,
+        phase9Store.getActiveBranch()?.id ?? null,
+        getRuntimeMode() === "demo",
+      );
+      setScope(key);
+      setMessage("");
+      try {
+        setProfile(key ? readIndustryProfile(window.localStorage, key) : { version: 1, primary: null, enabled: [] });
+        setError(key ? "" : "Sign in and select a branch before saving preferences.");
+      } catch {
+        setProfile({ version: 1, primary: null, enabled: [] });
+        setError("Saved preferences are invalid or unavailable. No industry packs have been enabled.");
+      }
+      setLoaded(true);
+    }
+    load();
+    window.addEventListener("minarva:data-hydrated", load);
+    window.addEventListener("storage", load);
+    return () => {
+      window.removeEventListener("minarva:data-hydrated", load);
+      window.removeEventListener("storage", load);
+    };
+  }, []);
+
+  function toggle(id: IndustryPackId, checked: boolean) {
+    const enabled = checked ? [...profile.enabled, id] : profile.enabled.filter(pack => pack !== id);
+    const primary = profile.primary && enabled.includes(profile.primary) ? profile.primary : null;
+    setProfile(buildIndustryProfile(primary, enabled));
+    setMessage("");
+  }
+
+  function save() {
+    if (!scope) return;
+    try {
+      const next = buildIndustryProfile(profile.primary, profile.enabled);
+      writeIndustryProfile(window.localStorage, scope, next);
+      setProfile(next);
+      setError("");
+      setMessage("Industry workspace preferences saved for this browser, user and branch.");
+    } catch {
+      setError("Could not save industry preferences. Check browser storage permissions or quota.");
+      setMessage("");
+    }
+  }
+
+  return (
+    <main className="mx-auto max-w-3xl space-y-5">
+      <header className="space-y-2">
+        <h1 className="text-xl font-semibold">Industry workspace preferences</h1>
+        <p className="text-sm text-slate-600">
+          Choose relevant business types without forcing boutique or any other industry on every company.
+          This is a browser-local workspace preference, not a module entitlement or shared company configuration.
+          Listed capabilities are planning labels and do not certify that every workflow is available.
+        </p>
+      </header>
+      {error && <p role="alert" className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+      <fieldset disabled={!loaded || !scope} className="space-y-3">
+        <legend className="mb-3 font-medium">Optional industry packs</legend>
+        {packs.map(pack => (
+          <label key={pack.id} className="flex cursor-pointer gap-3 rounded-lg border border-slate-200 bg-white p-3">
+            <input type="checkbox" className="mt-1 size-4" checked={profile.enabled.includes(pack.id)}
+              onChange={event => toggle(pack.id, event.target.checked)} />
+            <span><span className="block font-medium">{pack.label}</span>
+              <span className="text-xs text-slate-600">Relevant workflows: {pack.modules.join(", ")}</span>
+            </span>
+          </label>
+        ))}
+        <label className="block text-sm font-medium">
+          Primary industry
+          <select className="mt-2 block w-full rounded-lg border border-slate-300 bg-white p-2"
+            value={profile.primary ?? ""} onChange={event => setProfile(buildIndustryProfile(
+              event.target.value ? event.target.value as IndustryPackId : null, profile.enabled,
+            ))}>
+            <option value="">None / mixed business</option>
+            {packs.filter(pack => profile.enabled.includes(pack.id)).map(pack =>
+              <option key={pack.id} value={pack.id}>{pack.label}</option>)}
+          </select>
+        </label>
+        <button type="button" onClick={save}
+          className="rounded-lg bg-indigo-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+          Save preferences
+        </button>
+      </fieldset>
+      {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
+    </main>
+  );
+}
