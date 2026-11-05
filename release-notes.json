@@ -79,6 +79,10 @@
     "Products with multiple sizes, colours, fabrics or brands now hide the redundant parent Barcode/Generate field. Existing single-item products retain manual barcode entry and Generate.",
     "Each stock variant retains its own SKU and barcode. Leaving the variant barcode blank generates a unique barcode automatically when the product is saved.",
     "Variant stock entry now displays one, two or three spacious columns depending on screen width instead of seven cramped input columns.",
-    "No changes to existing product records, barcodes, stock balances, customer purchases, registration or license activation."
+    "No changes to existing product records, barcodes, stock balances, customer purchases, registration or license activation.",
+    "Fix POSIFLEX thermal receipt jobs cutting blank or tiny paper by using receipt-content-length media sizing and keeping the selected Windows receipt printer.",
+    "Barcode labels no longer fallback to the thermal bill printer. Select the actual barcode printer separately in Settings and use direct print to that device.",
+    "Two 38 × 25 mm stickers print as one 2-up row without forced extra page breaks. Further copies use a continuous strip with a configured physical row pitch.",
+    "CROMO 38 × 25 preset includes barcode and QR together; compact labels preserve product size, colour, material and prices when recorded. Sensor calibration/driver paper pitch still requires a physical test."
   ]
 }
