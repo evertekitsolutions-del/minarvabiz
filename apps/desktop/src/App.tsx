@@ -191,7 +191,7 @@ export function App() {
       if(productForm.hasVariants && !editingProductId) {
         const rows=parseProductVariants(variantRows.map(row=>({...row,brand:row.brand?.trim()||productForm.brand})));
         const total=rows.reduce((sum,row)=>sum+row.quantity,0);
-        if(!/^\\d+$/.test(productForm.stockQuantity) || !Number.isSafeInteger(Number(productForm.stockQuantity)) ||
+        if(!/^[0-9]+$/.test(productForm.stockQuantity) || !Number.isSafeInteger(Number(productForm.stockQuantity)) ||
            Number(productForm.stockQuantity)!==total)
           throw new Error(`Total stock must exactly match the sum of variant quantities (${total} pcs)`);
       }
