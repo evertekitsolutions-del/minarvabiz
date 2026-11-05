@@ -66,7 +66,7 @@ test("replay rejects forged source, revision and non-latest event IDs", () => {
   const initial = createIndustryWorkflowRecord(profile, scope);
   const first = applyIndustryWorkflowEvent(profile, initial, event);
   assert.throws(() => applyIndustryWorkflowEvent(profile, first, { ...event, from: "ready" }), /Conflicting/);
-  assert.throws(() => applyIndustryWorkflowEvent(profile, first, { ...event, expectedRevision: -1 }), /Conflicting/);
+  assert.throws(() => applyIndustryWorkflowEvent(profile, first, { ...event, expectedRevision: -1 }), /Invalid workflow revision history/);
   const secondEvent = { ...event, eventId: "event-2", expectedRevision: 1, from: "preparing", to: "ready" };
   const second = applyIndustryWorkflowEvent(profile, first, secondEvent);
   assert.equal(applyIndustryWorkflowEvent(profile, second, secondEvent), second);
