@@ -152,3 +152,23 @@ test("single-supplier RFQ export protects competitors' details and spreadsheet f
   const after=rfq.getProcurementRfq(quoted.id);
   assert.equal(after.quotes.length,1);
 });
+
+
+test("interrupted RFQ award recovers its existing PO without creating a duplicate",()=>{
+  reset();
+  const original=rfq.createProcurementRfq(request("RFQ-REPLAY"));
+  const issued=rfq.issueProcurementRfq(original.id,original.version);
+  const quoted=rfq.recordProcurementRfqQuote(issued.id,issued.version,bid("s1"));
+  const preAward=rfq.exportProcurementRfqState();
+  const saved=rfq.awardProcurementRfq(quoted.id,quoted.version,"s1");
+  const firstPo=saved.purchaseOrder.id;
+  assert(saved.purchaseOrder.notes.includes("MINARVA-RFQ-ID:"+quoted.id));
+  rfq.hydrateProcurementRfqState(preAward); // simulate earlier RFQ snapshot with newer persisted PO
+  const recovered=rfq.awardProcurementRfq(quoted.id,quoted.version,"s1");
+  assert.equal(recovered.purchaseOrder.id,firstPo);
+  assert.equal(procurement.listPurchaseOrders().length,1);
+  assert.equal(recovered.rfq.purchaseOrderId,firstPo);
+  rfq.hydrateProcurementRfqState(preAward);
+  assert.throws(()=>rfq.awardProcurementRfq(quoted.id,quoted.version,"s2"),/quotation|different/i);
+  assert.equal(procurement.listPurchaseOrders().length,1);
+});
