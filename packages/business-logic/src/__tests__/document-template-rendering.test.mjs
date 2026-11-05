@@ -27,7 +27,7 @@ for (const paper of ['a4','thermal']) {
   assert.match(html,/Material charges/);
   assert.match(html,/Labour charges/);
   assert.match(html,/Advance/);
-  assert.match(html,paper==='a4'?/size:A4/:/size:58mm 297mm/);
+  assert.match(html,paper==='a4'?/size:A4/:/@page\{size:auto;margin:0\}/);
   const service = invoice.buildOrderInvoiceHtml(order,{paper,autoPrint:false});
   assert.match(service,/ORD-TEST/);
   assert.doesNotMatch(service,/<img|<script>/);
