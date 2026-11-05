@@ -31,7 +31,7 @@ assert.match(html,/column-gap:3mm/);
 assert.match(html,/padding-left:11\.3mm/);
 assert.equal((html.match(/class="label-sheet"/g)||[]).length,2);
 assert.equal((html.match(/class="label compact/g)||[]).length,3);
-for (const field of ["Size: M","Colour: Red","Material: Cotton","Rs.799.00"])
+for (const field of ["Size: M","Colour: Red","Material: Cotton","MRP Rs.799.00","Offer Rs.799.00"])
   assert.equal(html.split(field).length - 1,3,field+" on all labels");
 assert.doesNotMatch(html,/window\.print\(\)/);
 prefs={...prefs,labelRowGapMm:2};
