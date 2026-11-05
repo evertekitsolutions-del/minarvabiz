@@ -12,6 +12,7 @@ import { can, buildAuthorizedStockCountWorksheet, buildAuthorizedStockCountRevie
 
 export function ProductList({
   products,
+  allProducts,
   categories,
   onAdd,
   onAddCategory,
@@ -28,6 +29,7 @@ export function ProductList({
   onPrintBarcode,
 }: {
   products: Product[];
+  allProducts?: Product[];
   categories: Category[];
   onAdd?: () => void;
   onAddCategory?: () => void;
@@ -96,7 +98,7 @@ export function ProductList({
       render: (r) => (
         <div>
           <div className="font-medium text-slate-900">{r.name}</div>
-          {r.hasVariants ? <div className="text-xs font-semibold text-indigo-700">Variant group — use individual rows for sales/stock/labels</div> : r.parentProductId ? <div className="text-xs text-indigo-700">Size: {r.size||"—"} · Colour: {r.color||"—"} · Material: {r.fabric||"—"}</div> : null}
+          {r.hasVariants ? <div className="text-xs font-semibold text-indigo-700">Variant group — use individual rows for sales/stock/labels</div> : r.parentProductId ? <div className="text-xs text-indigo-700">Brand: {r.brand||"—"} · Size: {r.size||"—"} · Colour: {r.color||"—"} · Material: {r.fabric||"—"}</div> : null}
           <div className="text-xs text-slate-500">
             {r.sku || "—"} {r.barcode ? `· ${r.barcode}` : ""}
           </div>
@@ -110,14 +112,14 @@ export function ProductList({
     },
     {
       key: "sellingPrice",
-      header: "Price",
-      render: (r) => formatMoney(r.sellingPrice),
+      header: "MRP / Offer",
+      render: (r) => <div><div className="text-xs text-slate-500">MRP: {formatMoney(r.mrp ?? r.sellingPrice)}</div><div className="font-semibold text-slate-900">Offer: {formatMoney(r.sellingPrice)}</div></div>,
     },
     {
       key: "stockQuantity",
       header: "Stock",
       render: (r) => {
-        if (r.hasVariants) return <span className="text-xs font-semibold text-indigo-700">Variant stock (see rows)</span>;
+        if (r.hasVariants) { const total = (allProducts ?? products).filter(child=>child.parentProductId===r.id && !child.deletedAt).reduce((sum,child)=>sum+child.stockQuantity,0); return <span className="text-xs font-semibold text-indigo-700">{total} {r.unit} across variants</span>; }
         const low = r.stockQuantity <= r.minimumStock;
         return (
           <span className={low ? "font-semibold text-rose-600" : "text-slate-700"}>

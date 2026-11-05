@@ -23,7 +23,7 @@ const lookup=(id)=>{
   throw Error("unexpected import "+id);
 };
 vm.runInThisContext(`(function(require,module,exports){\n${result.outputText}\n})`)(lookup,m,m.exports);
-const product={id:"p1",name:"Kurti",barcode:"2907885160674",size:"M",color:"Red",fabric:"Cotton",sellingPrice:799};
+const product={id:"p1",name:"Kurti",barcode:"2907885160674",size:"M",color:"Red",fabric:"Cotton",mrp:999,sellingPrice:799};
 const html=m.exports.buildBarcodeLabelHtml(product,{copies:3,autoPrint:false});
 assert.match(html,/@page\{size:101\.6mm 38mm;margin:0\}/);
 assert.match(html,/grid-template-columns:repeat\(2,38mm\)/);
@@ -31,7 +31,7 @@ assert.match(html,/column-gap:3mm/);
 assert.match(html,/padding-left:11\.3mm/);
 assert.equal((html.match(/class="label-sheet"/g)||[]).length,2);
 assert.equal((html.match(/class="label compact/g)||[]).length,3);
-for (const field of ["Size: M","Colour: Red","Material: Cotton","Rs.799.00"])
+for (const field of ["Size: M","Colour: Red","Material: Cotton","Offer: Rs.799.00","MRP: Rs.999.00"])
   assert.equal(html.split(field).length - 1,3,field+" on all labels");
 assert.doesNotMatch(html,/window\.print\(\)/);
 prefs={...prefs,labelRowGapMm:2};
