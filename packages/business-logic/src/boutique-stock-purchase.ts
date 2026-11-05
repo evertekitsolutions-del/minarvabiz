@@ -4,6 +4,7 @@ import * as suppliersStore from "./phase5-store";
 import { getActiveBranch } from "./phase9-store";
 import { assertPermission } from "./permissions";
 import type { PaymentMethod, PurchaseInvoice } from "@minarvabiz/types";
+import { addMinorUnits, fromMinorUnits, multiplyMinorByQuantity, percentOfMinor, toMinorUnits } from "@minarvabiz/utils";
 
 export interface BoutiqueStockPurchaseLine {
   productId: string;
@@ -26,6 +27,23 @@ export interface BoutiqueStockPurchaseResult {
   error?: string;
 }
 
+/** Uses the same line-by-line integer-cent tax rounding as procurement.
+ * Summing unrounded tax across lines can differ by multiple cents. */
+export function calculateBoutiqueStockPurchaseTotal(lines: readonly BoutiqueStockPurchaseLine[]): number {
+  let totalMinor = 0;
+  for (const line of lines) {
+    if (!Number.isSafeInteger(line.quantity) || line.quantity <= 0
+      || !Number.isFinite(line.unitCost) || line.unitCost < 0) {
+      throw new Error("Invalid stock purchase quantity or cost");
+    }
+    const tax = line.taxRate ?? 0;
+    if (!Number.isFinite(tax) || tax < 0 || tax > 100) throw new Error("Invalid purchase tax rate");
+    const subtotal = multiplyMinorByQuantity(toMinorUnits(line.unitCost), line.quantity);
+    totalMinor = addMinorUnits(totalMinor, subtotal, percentOfMinor(subtotal, tax));
+  }
+  return fromMinorUnits(totalMinor);
+}
+
 /** Stock is credited by the existing GRN exactly once; the posted supplier
  * invoice records AP but must not credit stock again. No legacy direct
  * purchase entry is created, preventing duplicated supplier payables. */
@@ -44,7 +62,6 @@ export function postBoutiqueStockPurchase(input: BoutiqueStockPurchaseInput): Bo
       inv.status!=="cancelled")) return {invoice:null,error:"Supplier bill number already recorded; stock was not received again"};
   const branch = getActiveBranch();
   const seen = new Set<string>();
-  let totalMinor=0;
   for (const [i,line] of input.lines.entries()) {
     const product=mainStore.getProduct(line.productId);
     if (!product || !product.isActive || product.hasVariants) return {invoice:null,error:`Row ${i+1}: select an individual saleable product or variant`};
@@ -59,12 +76,17 @@ export function postBoutiqueStockPurchase(input: BoutiqueStockPurchaseInput): Bo
       return {invoice:null,error:`Row ${i+1}: enter a valid unit purchase cost`};
     const tax=line.taxRate??0;
     if (!Number.isFinite(tax)||tax<0||tax>100) return {invoice:null,error:`Row ${i+1}: invalid tax rate`};
-    totalMinor+=Math.round(line.unitCost*100)*line.quantity*(1+tax/100);
-    if (!Number.isSafeInteger(Math.round(totalMinor))) return {invoice:null,error:"Purchase amount exceeds safe range"};
+  }
+  let totalMinor: number;
+  try {
+    totalMinor = toMinorUnits(calculateBoutiqueStockPurchaseTotal(input.lines));
+  } catch {
+    return { invoice:null, error:"Purchase amount exceeds supported precision or range" };
   }
   const paid=input.paidAmount??0;
-  if (!Number.isFinite(paid)||paid<0||Math.abs(paid*100-Math.round(paid*100))>1e-7||
-    paid>Math.round(totalMinor)/100+0.01)
+  const paidMinor=Math.round(paid*100);
+  if (!Number.isFinite(paid)||paid<0||!Number.isSafeInteger(paidMinor)||
+    Math.abs(paid*100-paidMinor)>1e-7||paidMinor>totalMinor)
     return {invoice:null,error:"Paid amount must not exceed invoice amount"};
   if (paid>0&&!input.paymentMethod) return {invoice:null,error:"Select payment method"};
 

@@ -112,3 +112,36 @@ test("duplicate product, impossible quantities and forged parent variants fail w
  const after=JSON.stringify({stock:store.exportCoreState(),procurement:procurement.exportProcurementState(),accounting:account.exportAccountingState()});
  assert.equal(after,before);
 });
+
+test("each purchase line rounds tax to cents before summing, and full payment never exceeds the real invoice",()=>{
+ reset();
+ const supplier=supplierStore.createSupplier({name:"Tiny Price Fabric Supplier",openingBalance:0});
+ const products=Array.from({length:4},(_,i)=>store.createProduct({
+   name:"Sample trim "+i,sku:"TRIM-"+i,barcode:"TEST-"+i,unit:"pcs",costPrice:0.01,
+   sellingPrice:0.10,mrp:0.10,stockQuantity:0,minimumStock:0,isActive:true
+ }));
+ const lines=products.map(product=>({productId:product.id,quantity:1,unitCost:0.01,taxRate:50}));
+ assert.equal(purchase.calculateBoutiqueStockPurchaseTotal(lines),0.08,
+   "Each 0.01 line is 0.01 base + 0.01 rounded tax; four lines total 0.08");
+ const before=JSON.stringify(procurement.exportProcurementState());
+ const tooMuch=purchase.postBoutiqueStockPurchase({
+   supplierId:supplier.id,supplierInvoiceNumber:"OVERPAY-1",invoiceDate:"2026-11-05",
+   lines,paidAmount:0.09,paymentMethod:"cash"
+ });
+ assert.match(tooMuch.error,/Paid amount/i);
+ assert.equal(JSON.stringify(procurement.exportProcurementState()),before);
+ assert(products.every(p=>store.getProduct(p.id).stockQuantity===0));
+ const exact=purchase.postBoutiqueStockPurchase({
+   supplierId:supplier.id,supplierInvoiceNumber:"EXACT-1",invoiceDate:"2026-11-05",
+   lines,paidAmount:0.08,paymentMethod:"cash"
+ });
+ assert.equal(exact.error,undefined,exact.error);
+ assert.equal(exact.invoice?.total,0.08);
+ assert.equal(exact.invoice?.taxAmount,0.04);
+ assert.equal(exact.invoice?.paidAmount,0.08);
+ assert.equal(exact.invoice?.balanceAmount,0);
+ assert(products.every(p=>store.getProduct(p.id).stockQuantity===1));
+ assert(account.buildBalanceSheet().balanced);
+ const modal=fs.readFileSync(new URL("../../../../apps/desktop/src/components/BoutiqueStockPurchaseModal.tsx",import.meta.url),"utf8");
+ assert.match(modal,/calculateBoutiqueStockPurchaseTotal\(lines\.map/);
+});

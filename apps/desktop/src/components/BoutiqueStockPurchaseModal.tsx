@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { postBoutiqueStockPurchase, type BoutiqueStockPurchaseLine } from "@minarvabiz/business-logic";
+import { postBoutiqueStockPurchase, calculateBoutiqueStockPurchaseTotal, type BoutiqueStockPurchaseLine } from "@minarvabiz/business-logic";
 import type { Product, Supplier, PaymentMethod } from "@minarvabiz/types";
 
 type DraftLine = { productId:string; quantity:string; unitCost:string; taxRate:string };
@@ -28,10 +28,13 @@ export function BoutiqueStockPurchaseModal({open,products,suppliers,onClose,onCh
   const saleable=React.useMemo(()=>products.filter(p=>!p.deletedAt&&p.isActive&&!p.hasVariants),[products]);
   const byId=React.useMemo(()=>new Map(saleable.map(p=>[p.id,p])),[saleable]);
   const update=(i:number,patch:Partial<DraftLine>)=>setLines(current=>current.map((line,index)=>index===i?{...line,...patch}:line));
-  const total=lines.reduce((acc,line)=>{
-    const cost=Number(line.unitCost),qty=Number(line.quantity),tax=Number(line.taxRate);
-    return acc+(Number.isFinite(cost)&&Number.isFinite(qty)&&Number.isFinite(tax)?cost*qty*(1+tax/100):0);
-  },0);
+  const total=React.useMemo(()=>{
+    try{return calculateBoutiqueStockPurchaseTotal(lines.map(line=>({
+      productId:line.productId,quantity:Number(line.quantity),
+      unitCost:Number(line.unitCost),taxRate:Number(line.taxRate),
+    })));}
+    catch{return Number.NaN;}
+  },[lines]);
   async function save() {
     if(saving.current)return;
     saving.current=true;setBusy(true);setError(null);
