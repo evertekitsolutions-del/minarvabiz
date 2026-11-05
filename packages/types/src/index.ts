@@ -47,6 +47,8 @@ export interface Product {
   parentProductId?: UUID | null;
   hasVariants?: boolean;
   unit: string; costPrice: number; sellingPrice: number;
+  /** Optional displayed list price; sellingPrice remains the effective checkout price for legacy POS. */
+  mrp?: number | null; specialOfferPrice?: number | null;
   discount?: number | null; taxRate?: number | null; stockQuantity: number;
   minimumStock: number; supplierId?: UUID | null; imageUrl?: string | null;
   notes?: string | null; isActive: boolean;
