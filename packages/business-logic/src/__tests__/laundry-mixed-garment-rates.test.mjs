@@ -115,6 +115,16 @@ test("pure mixed quote rejects quantity mismatch, in-house vendor cost and unsaf
   assert.throws(()=>calculateLaundryTicketTotals({mode:"in_house_ironing",quantity:3,customerRate:1,supplierRate:0,items}),/rates/i);
   assert.throws(()=>calculateLaundryTicketTotals({mode:"outsourced",quantity:3,customerRate:1,supplierRate:0,items:[{...items[0],customerRate:Infinity},items[1]]}));
 });
+test("mixed small fractional garment counts preserve exact milli-units",()=>{
+  const first={customerRate:10.01,supplierRate:2,quantity:0.1};
+  const second={customerRate:20.01,supplierRate:4,quantity:0.2};
+  const total=calculateLaundryTicketTotals({mode:"outsourced",quantity:first.quantity+second.quantity,
+    customerRate:0,supplierRate:0,items:[first,second]});
+  assert.equal(total.totalCustomerCharge,5);
+  assert.equal(total.totalSupplierCost,1);
+  assert.throws(()=>calculateLaundryTicketTotals({mode:"outsourced",quantity:0.3001,
+    customerRate:0,supplierRate:0,items:[first,second]}),/quantit/i);
+});
 test("legacy tickets remain uniform-price and existing receipt behavior is unchanged",()=>{
   setup();
   const normal=phase5.createLaundryOrder({customerId:"c",mode:"in_house_ironing",quantity:2,
