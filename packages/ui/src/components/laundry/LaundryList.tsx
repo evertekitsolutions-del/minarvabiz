@@ -360,7 +360,7 @@ export function LaundryList({
         <LaundryIncidentsPanel orders={orders} />
         {csvFeedback && <p role={csvFeedback.failed ? "alert" : "status"} className={`text-sm ${csvFeedback.failed ? "text-rose-700" : "text-slate-600"}`}>{csvFeedback.message}</p>}
         {tagPrintFeedback && <p role="status" className="text-sm text-slate-600">{tagPrintFeedback}</p>}
-        {receiptPrintFeedback && <p role={receiptPrintFeedback.failed ? "alert" : "status"} className={"text-sm " + (receiptPrintFeedback.failed?"text-rose-700":"text-slate-600")}>{receiptPrintFeedback.message}</p>
+        {receiptPrintFeedback && <p role={receiptPrintFeedback.failed ? "alert" : "status"} className={"text-sm " + (receiptPrintFeedback.failed?"text-rose-700":"text-slate-600")}>{receiptPrintFeedback.message}</p>}
         {collectSuccess && <p role="status" className="text-sm text-emerald-700">{collectSuccess}</p>}
         <p className="text-xs text-slate-500">CSV includes displayed cancelled tickets for traceability. Use Reports for reconciled financial totals.</p>
         {vendorScores.length > 0 && <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3" aria-label="Laundry vendor comparison">
