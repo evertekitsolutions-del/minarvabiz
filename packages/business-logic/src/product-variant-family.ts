@@ -11,8 +11,8 @@ export function addProductVariants(parentId: UUID, drafts: readonly ProductVaria
   const parent = getProduct(parentId);
   if (!parent || !parent.hasVariants || parent.parentProductId) throw new Error("Select a variant-group product");
   const existingChildren = listProducts().filter(item => item.parentProductId === parentId && !item.deletedAt);
-  const rows = parseProductVariants(drafts, existingChildren.map(item => ({
-    size: item.size || "", color: item.color || "", material: item.fabric || "",
+  const rows = parseProductVariants(drafts.map(item => ({ ...item, brand: item.brand?.trim() || parent.brand || "" })), existingChildren.map(item => ({
+    size: item.size || "", color: item.color || "", material: item.fabric || "", brand: item.brand || "",
     sku: item.sku || null, barcode: item.barcode || null,
   })));
   const occupiedSkus = new Set(listProducts().flatMap(item => [item.sku, item.barcode]).filter(Boolean).map(value => String(value).toLowerCase()));
@@ -29,10 +29,10 @@ export function addProductVariants(parentId: UUID, drafts: readonly ProductVaria
     // A variant is a normal saleable product: billing, refunds and warehouse
     // movements already book against this exact Product ID.
     return { ...parent,
-      name: `${parent.name} — ${[row.size, row.color, row.material].filter(Boolean).join(" / ")}`,
+      name: `${parent.name} — ${[row.brand, row.size, row.color, row.material].filter(Boolean).join(" / ")}`,
       parentProductId: parent.id,
       hasVariants: false,
-      size: row.size || null, color: row.color || null, fabric: row.material || null,
+      size: row.size || null, color: row.color || null, fabric: row.material || null, brand: row.brand || null,
       sku, barcode, stockQuantity: row.quantity,
     };
   });
@@ -46,7 +46,7 @@ export function createProductVariantFamily(
 ): { parent: Product; variants: Product[] } {
   assertPermission("products.manage");
   if (input.parentProductId) throw new Error("Variant group cannot have another parent");
-  const rows = parseProductVariants(drafts);
+  const rows = parseProductVariants(drafts.map(item => ({ ...item, brand: item.brand?.trim() || input.brand || "" })));
   if (Number(input.stockQuantity) !== 0) throw new Error("Enter stock separately in variant rows; parent opening stock must be zero");
   if (input.sku && listProducts().some(p => p.sku?.toLowerCase() === input.sku?.toLowerCase()))
     throw new Error("Parent SKU already exists");
