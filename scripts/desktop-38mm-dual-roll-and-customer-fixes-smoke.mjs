@@ -57,7 +57,7 @@ try {
   assert.equal(sent.length,1);
   assert.equal(sent[0].paper,"label");
   assert.deepEqual(sent[0].opts,{labelWidthMm:101.6,labelHeightMm:38,silent:true});
-  assert.match(sent[0].html,/grid-template-columns:repeat\\(2,38mm\\)/);
+  assert.match(sent[0].html,/grid-template-columns:repeat\(2,38mm\)/);
   assert.equal((sent[0].html.match(/class="label-sheet"/g)||[]).length,2);
   prefs={...prefs,labelPrinterName:"",thermalPrinterName:""};
   assert.match((await m.exports.sendBarcodeLabelsToPrinter(product,2)).error,/Select a barcode label printer/);
@@ -68,8 +68,8 @@ try {
 }
 const modal=fs.readFileSync(new URL("../apps/desktop/src/components/BarcodeLabelPrintModal.tsx",import.meta.url),"utf8");
 assert.match(modal,/Use 4-inch roll — 2 stickers per row/);
-assert.match(modal,/srcDoc=\\{preview.html\\}/);
-assert.match(modal,/sendBarcodeLabelsToPrinter\\(product, count, categoryName\\)/);
+assert.match(modal,/srcDoc=\{preview.html\}/);
+assert.match(modal,/sendBarcodeLabelsToPrinter\(product, count, categoryName\)/);
 
 const settings=fs.readFileSync(new URL("../packages/ui/src/components/settings/SettingsPanel.tsx",import.meta.url),"utf8");
 assert.match(settings,/savedProfileKey = JSON\.stringify\(profile\)/);
