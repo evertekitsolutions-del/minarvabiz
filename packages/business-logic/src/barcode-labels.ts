@@ -229,7 +229,7 @@ export function printBarcodeLabels(product: Product, copies = 1, categoryName?: 
   });
   if (tryDesktopPrintHtml(directHtml, "label", {
     labelWidthMm: settings.labelColumns === 2 ? settings.labelRollWidthMm : settings.labelWidthMm,
-    labelHeightMm: settings.labelHeightMm + (settings.labelColumns === 2 ? settings.labelRowGapMm : 0),
+    labelHeightMm: (settings.labelHeightMm + (settings.labelColumns === 2 ? settings.labelRowGapMm : 0)) * Math.ceil(Math.max(1, Math.min(100, copies)) / (settings.labelColumns === 2 ? 2 : 1)),
   })) return;
 
   const w = window.open("", "_blank", "width=500,height=700");
