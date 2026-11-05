@@ -32,7 +32,7 @@ export function BoutiqueStockPurchaseModal({open,products,suppliers,onClose,onCh
     const cost=Number(line.unitCost),qty=Number(line.quantity),tax=Number(line.taxRate);
     return acc+(Number.isFinite(cost)&&Number.isFinite(qty)&&Number.isFinite(tax)?cost*qty*(1+tax/100):0);
   },0);
-  function save() {
+  async function save() {
     if(saving.current)return;
     saving.current=true;setBusy(true);setError(null);
     try {
@@ -50,10 +50,11 @@ export function BoutiqueStockPurchaseModal({open,products,suppliers,onClose,onCh
       if(result.error||!result.invoice)throw new Error(result.error||"Supplier bill was not posted");
       // Only reset after the posting succeeds. On partial error the bill
       // number guard prevents accidental double receipt of the same invoice.
+      await onChanged();
       setSupplierId("");setInvoiceNumber("");setLines([blank()]);
       setPaidAmount("0");setNotes("");
-      onChanged();onClose();
-    }catch(cause){setError(cause instanceof Error?cause.message:String(cause));}
+      onClose();
+    }catch(cause){setError((cause instanceof Error?cause.message:String(cause))+" — If the invoice was already posted, check Procurement before retrying.");}
     finally{saving.current=false;setBusy(false);}
   }
   return <Modal open={open} title="Purchase Bill — Add Products to Stock"
