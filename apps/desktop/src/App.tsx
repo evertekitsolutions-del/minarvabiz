@@ -316,7 +316,7 @@ export function App() {
         <Button onClick={()=>{setModuleError(null);setStockPurchaseOpen(true);}}>+ Purchase Bill + Receive Stock</Button>
         <Button variant="outline" onClick={()=>{setModuleError(null);setPurchaseOpen(true);}}>Other Purchase (no stock change)</Button>
       </div>
-      <PurchaseList purchases={purchases} suppliers={suppliers} onAdd={()=>{setModuleError(null);setStockPurchaseOpen(true);}}/><DesktopProcurementPanel suppliers={suppliers} products={products} onChanged={persistAndRefresh}/>
+      <PurchaseList purchases={purchases} suppliers={suppliers} onAdd={()=>{setModuleError(null);setPurchaseForm(v=>({...v,date:v.date||todayLocal()}));setPurchaseOpen(true);}}/><DesktopProcurementPanel suppliers={suppliers} products={products} onChanged={persistAndRefresh}/>
       <DesktopSupplierOpeningBalancePanel onPersist={persistAndRefresh} onAdd={()=>setSupplierOpen(true)}/></div>} 
     {view==="staff"&&<div className="space-y-4"><Button variant="outline" onClick={()=>setRosterOpen(v=>!v)}>{rosterOpen?"Back to staff list":"Open Shift & Roster Planner"}</Button>{rosterOpen?<DesktopRosterPanel staff={staff} onChanged={persistRosterAndRefresh} onError={setModuleError}/>:<StaffList staff={staff} onAdd={()=>{resetStaffForm();setModuleError(null);setStaffOpen(true);}} onEdit={openStaffEditor} onArchive={(m,reason)=>{try{const r=phase6Store.archiveStaff(m.id,reason);if(r.error)return{error:r.error};void persistAndRefresh();return{success:true};}catch(error){return{error:errorMessage(error)};}}} onSelect={member=>{setStaffDetailId(member.id);navTo("staff-detail");}}/>}</div>} 
     {view==="roster"&&<DesktopRosterPanel staff={staff} onChanged={persistRosterAndRefresh} onError={setModuleError}/>}
