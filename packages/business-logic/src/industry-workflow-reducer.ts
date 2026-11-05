@@ -65,12 +65,17 @@ export function applyIndustryWorkflowEvent(
       !Number.isSafeInteger(event.expectedRevision) || event.expectedRevision < 0 ||
       !Array.isArray(record.appliedEventIds) ||
       record.appliedEventIds.some(id => !nonempty(id)) ||
+      record.revision !== record.appliedEventIds.length ||
       new Set(record.appliedEventIds).size !== record.appliedEventIds.length) {
     throw new Error("Invalid workflow revision history");
   }
   if (record.appliedEventIds.includes(event.eventId)) {
     // Never acknowledge a replay with different content or an older target stage.
-    if (record.stage !== event.to || event.expectedRevision >= record.revision) {
+    const targetIndex = template.stages.indexOf(record.stage);
+    if (record.stage !== event.to || targetIndex < 1 ||
+        template.stages[targetIndex - 1] !== event.from ||
+        event.expectedRevision !== record.revision - 1 ||
+        record.appliedEventIds[record.appliedEventIds.length - 1] !== event.eventId) {
       throw new Error("Conflicting workflow event replay");
     }
     return record;
