@@ -28,6 +28,7 @@ export * from "./laundry-incidents";
 export * from "./laundry-handover";
 export * from "./tailor-job-card";
 export * from "./laundry-operations-report";
+export * from "./laundry-receivables-ageing";
 export * from "./laundry-operations-csv";
 export * from "./tally-voucher-export";
 export * from "./incentives";
