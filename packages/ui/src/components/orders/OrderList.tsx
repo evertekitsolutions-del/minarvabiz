@@ -36,8 +36,11 @@ export function OrderList({
   onFilterDeliveryDateFrom,
   onFilterDeliveryDateTo,
   onSelect,
+  industryProfile = "general",
 }: {
   orders: ServiceOrder[];
+  /** Boutique-only Windows UI hides unrelated field-service screens without deleting saved data. */
+  industryProfile?: "general" | "boutique_laundry";
   customers?: Customer[];
   staffMembers?: StaffMember[];
   staffAssignments?: StaffAssignment[];
@@ -53,6 +56,7 @@ export function OrderList({
   onFilterDeliveryDateTo?: (date: string) => void;
   onSelect?: (o: ServiceOrder) => void;
 }) {
+  const showFieldServiceTools = industryProfile !== "boutique_laundry";
   const [q, setQ] = React.useState("");
   const [status, setStatus] = React.useState("");
   const [type, setType] = React.useState("");
@@ -191,7 +195,7 @@ export function OrderList({
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Services & Orders</h2>
+          <h2 className="text-xl font-semibold text-slate-900">{showFieldServiceTools ? "Services & Orders" : "Boutique & Tailoring Orders"}</h2>
           <p role="status" className="text-sm text-slate-500">{visibleOrders.length} of {orders.length} matching orders</p>
         </div>
         <div className="flex gap-2">
@@ -202,7 +206,7 @@ export function OrderList({
       </div>
 
       {exportFeedback && <p role={exportFeedback.error ? "alert" : "status"} className={`text-sm ${exportFeedback.error ? "text-rose-700" : "text-slate-600"}`}>{exportFeedback.text}</p>}
-      <details className="rounded-xl border border-slate-200 bg-white p-3">
+      {showFieldServiceTools && <details className="rounded-xl border border-slate-200 bg-white p-3">
         <summary className="cursor-pointer text-sm font-semibold text-slate-900">Plan AMC visits</summary>
         <p className="mt-2 text-xs text-slate-600">Schedule-only preview for an annual maintenance contract. No contract, job, notification or customer record is saved.</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -250,7 +254,7 @@ export function OrderList({
             </ol>
           </div>
         )}
-      </details>
+      </details>}
       <label className="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" className="size-4 accent-indigo-600" checked={overdueOnly} onChange={(event) => setOverdueOnly(event.target.checked)} />Overdue deliveries only</label>
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-6">
         <label className="text-xs font-medium text-slate-600 lg:col-span-2">
@@ -318,8 +322,8 @@ export function OrderList({
       </div>
 
       <DataTable columns={columns} rows={visibleOrders} onRowClick={onSelect} emptyMessage={overdueOnly ? "No overdue orders match the selected filters" : assignedStaffFilter ? "No orders match the assigned staff filter" : "No orders match the selected filters"} />
-      <ServiceWarrantyPanel orders={orders} />
-      <ServiceSiteVisitPanel orders={orders} assignments={staffAssignments} customers={customers} />
+      {showFieldServiceTools && <ServiceWarrantyPanel orders={orders} />}
+      {showFieldServiceTools && <ServiceSiteVisitPanel orders={orders} assignments={staffAssignments} customers={customers} />}
     </div>
   );
 }

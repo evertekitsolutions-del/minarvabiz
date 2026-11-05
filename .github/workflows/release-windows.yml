@@ -47,6 +47,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Verify customer Boutique, Tailoring and Laundry transactions
+        shell: pwsh
+        run: |
+          node packages/business-logic/src/__tests__/boutique-laundry-commercial-acceptance.test.mjs
+          node packages/business-logic/src/__tests__/laundry-mixed-garment-rates.test.mjs
+          node packages/business-logic/src/__tests__/laundry-accounting.test.mjs
+          node packages/business-logic/src/__tests__/laundry-collection-accounting.test.mjs
+          node packages/business-logic/src/__tests__/laundry-item-workflow.test.mjs
+
       - name: Verify commercial fallback refusal
         shell: pwsh
         run: node scripts/verify-production-license-config.mjs
