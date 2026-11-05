@@ -56,7 +56,7 @@ const idValid = (value: string): boolean =>
   typeof value === "string" && value.length > 0 && value.length <= 128 &&
   /^[a-zA-Z0-9][a-zA-Z0-9:_-]*$/.test(value);
 const timestampValid = (value: string): boolean => {
-  if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$/.test(value)) return false;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)) return false;
   const date = new Date(value);
   return Number.isFinite(date.getTime()) && date.toISOString() === new Date(date.getTime()).toISOString() &&
     date.toISOString().slice(0,19) === value.slice(0,19);
