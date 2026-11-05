@@ -231,7 +231,7 @@ export function exportProcurementRfqState(): {records:ProcurementRfq[]} {
   return {records:copyList()};
 }
 /** Backward-compatible snapshot restore, strict enough to reject malformed bid/award links. */
-export function hydrateProcurementRfqState(input:{records?:ProcurementRfq[]} | null | undefined):void {
+export function validateProcurementRfqState(input:{records?:ProcurementRfq[]} | null | undefined):{records:ProcurementRfq[]} {
   const values=input?.records??[];
   if(!Array.isArray(values)||values.length>10000)throw new Error("Invalid RFQ snapshot");
   const seen=new Set<string>(),references=new Set<string>();
@@ -270,5 +270,9 @@ export function hydrateProcurementRfqState(input:{records?:ProcurementRfq[]} | n
     }
     return clone(item);
   });
-  records.splice(0,records.length,...restored);
+  return {records:restored};
+}
+export function hydrateProcurementRfqState(input:{records?:ProcurementRfq[]} | null | undefined):void {
+  const validated=validateProcurementRfqState(input);
+  records.splice(0,records.length,...validated.records);
 }
