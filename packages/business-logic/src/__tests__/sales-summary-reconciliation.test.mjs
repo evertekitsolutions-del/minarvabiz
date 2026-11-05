@@ -73,3 +73,30 @@ test("the operational sales and day-end reports count a posted order-linked expe
   store.hydrateCore(savedCore);
  }
 });
+
+test("daily outstanding includes unpaid laundry tickets without double-counting ticket receipts",()=>{
+ const savedCore=store.exportCoreState();
+ const savedOrders=orders.listOrders();
+ const savedPhase5=phase5.exportPhase5State();
+ const savedReturns=phase7.listReturns();
+ try{
+  const now=new Date().toISOString();
+  store.hydrateCore({products:[],customers:[],sales:[],payments:[]});
+  orders.hydrateOrders({orders:[]});
+  phase7.hydratePhase7({returns:[]});
+  phase5.hydratePhase5({laundryOrders:[{
+   id:"laundry1",createdAt:now,status:"pending",mode:"in_house_ironing",
+   customerId:"test-customer",quantity:2,customerRate:50,supplierRate:0,
+   totalCustomerCharge:100,totalSupplierCost:0,paidAmount:30,balanceAmount:70,
+   profit:100
+  }],expenses:[],purchases:[]});
+  const day=phase7.dayEndReport();
+  assert.equal(day.totalSales,100);
+  assert.equal(day.outstandingAmount,70);
+ }finally{
+  phase7.hydratePhase7({returns:savedReturns});
+  phase5.hydratePhase5(savedPhase5);
+  orders.hydrateOrders({orders:savedOrders});
+  store.hydrateCore(savedCore);
+ }
+});
