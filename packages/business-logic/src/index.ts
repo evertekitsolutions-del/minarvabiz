@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// PLT-015 read-only authorised company/branch ledger projection (not a posting engine).
+export * from "./company-branch-consolidation";
