@@ -19,7 +19,8 @@ export function validateLaundryItemMutation(current: LaundryItem | undefined, ne
     || !["received", "washing", "ironing", "quality_check", "ready", "delivered"].includes(next.processingStatus)
     || !["pending", "passed", "failed"].includes(next.qualityStatus)
     || next.label !== current.label || next.quantity !== current.quantity || next.tagCode !== current.tagCode
-    || next.serviceCode !== current.serviceCode || next.fabricType !== current.fabricType || next.tatHours !== current.tatHours) {
+    || next.serviceCode !== current.serviceCode || next.fabricType !== current.fabricType || next.tatHours !== current.tatHours
+    || next.customerRate !== current.customerRate || next.supplierRate !== current.supplierRate) {
     return "Garment identity, tag and quantity are immutable after ticket posting";
   }
   if (!canMoveLaundryItem(current, next.processingStatus)) {
