@@ -47,5 +47,11 @@
     "Manual WhatsApp customer messages, pickup/delivery verification, route worksheets and damage/loss incident registers are available for laundry operations.",
     "Customer CRM includes boutique design references and laundry history; customer statements unify tailoring, laundry and recorded receipts.",
     "Existing 1.0.19 customer data is preserved; use the in-app verified Update & Restart flow, which checks installer authenticity and local SQLite backup before upgrade."
+  ],
+  "1.0.21": [
+    "Product Add now remembers Brand, Fabric, Size, Color and Unit values from saved products for reusable selections, including measured sizes and XS–XXXL.",
+    "One product supports independent Brand × Fabric × Size × Color variants, each with its own quantity, barcode and SKU; the entered total stock is checked against the variant totals.",
+    "Products now retain MRP and Special Offer Price separately; billing uses the saved offer price and barcode labels show both MRP and offer price.",
+    "Purchases now offers a supplier Purchase Bill to receive individual products and variants into stock, post the supplier payable once and record optional payment, while the existing non-stock Add Purchase workflow remains available."
   ]
 }
