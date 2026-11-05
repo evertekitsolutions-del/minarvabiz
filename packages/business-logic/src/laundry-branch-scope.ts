@@ -9,11 +9,11 @@ export function activeLaundryBranchId(): string | null {
   return getActiveBranch()?.id ?? null;
 }
 
-export function laundryRecordInActiveBranch(
-  record: Pick<LaundryOrder, "branchId">,
-): boolean {
+export function laundryEffectiveBranchId(record: Pick<LaundryOrder, "branchId">): string | null {
+  return record.branchId || listBranches().find(branch => branch.isHeadquarters)?.id || null;
+}
+
+export function laundryRecordInActiveBranch(record: Pick<LaundryOrder, "branchId">): boolean {
   const activeId = activeLaundryBranchId();
-  if (!activeId) return false;
-  const headOfficeId = listBranches().find((branch) => branch.isHeadquarters)?.id;
-  return (record.branchId ?? headOfficeId) === activeId;
+  return Boolean(activeId) && laundryEffectiveBranchId(record) === activeId;
 }
