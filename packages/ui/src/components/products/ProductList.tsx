@@ -96,7 +96,7 @@ export function ProductList({
       render: (r) => (
         <div>
           <div className="font-medium text-slate-900">{r.name}</div>
-          {r.hasVariants ? <div className="text-xs font-semibold text-indigo-700">Variant group — use individual rows for sales/stock/labels</div> : r.parentProductId ? <div className="text-xs text-indigo-700">Size: {r.size||"—"} · Colour: {r.color||"—"} · Material: {r.fabric||"—"}</div> : null}
+          {r.hasVariants ? <div className="text-xs font-semibold text-indigo-700">Variant group — use individual rows for sales/stock/labels</div> : r.parentProductId ? <div className="text-xs text-indigo-700">Brand: {r.brand||"—"} · Fabric: {r.fabric||"—"} · Size: {r.size||"—"} · Colour: {r.color||"—"}</div> : null}
           <div className="text-xs text-slate-500">
             {r.sku || "—"} {r.barcode ? `· ${r.barcode}` : ""}
           </div>
@@ -110,8 +110,11 @@ export function ProductList({
     },
     {
       key: "sellingPrice",
-      header: "Price",
-      render: (r) => formatMoney(r.sellingPrice),
+      header: "MRP / Offer",
+      render: (r) => <div className="space-y-0.5">
+        <div className="text-xs text-slate-500">MRP <span className="line-through">{formatMoney(r.mrp??r.sellingPrice)}</span></div>
+        <div className="font-semibold text-indigo-700">Offer {formatMoney(r.specialOfferPrice??r.sellingPrice)}</div>
+      </div>,
     },
     {
       key: "stockQuantity",
