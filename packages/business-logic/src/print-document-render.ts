@@ -25,7 +25,7 @@ export function documentCss(template: PrintDocumentTemplate, width: string): str
   const padding = compact ? "3mm" : "12mm";
   const border = template.layout === "classic" ? "#0f172a" : "#e2e8f0";
   return `
-@page{size:${compact ? `${width} 297mm` : "A4"};margin:${padding}}
+@page{size:${compact ? "auto" : "A4"};margin:${compact ? "0" : padding}}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:#fff;color:#0f172a;font-family:Arial,Helvetica,sans-serif;font-size:${base}px}
 body{padding:${padding}}

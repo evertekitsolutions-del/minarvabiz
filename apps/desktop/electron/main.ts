@@ -180,17 +180,42 @@ async function printHtmlDocument(input: {
       }
     }
     await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    // Receipts are variable-length rolls, not fixed 297 mm sheets. Large
+    // blank-page feeds and premature cuts occur when the page does not match
+    // the rendered invoice content. Keep multi-page invoices bounded.
+    let thermalPageHeightMm = 297;
+    if (paper === "thermal") {
+      const visibleText = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+      if (visibleText.length < 5) return { ok: false, error: "Thermal invoice content is empty; nothing was sent to the cutter." };
+      // Trusted DOM measurement is best; a text-based bound keeps printing
+      // functional if this locked-down (javascript:false) print view denies it.
+      thermalPageHeightMm = Math.min(290, Math.max(55, Math.ceil(visibleText.length / 35 * 4 + 35)));
+      try {
+        const documentMetrics = await win.webContents.executeJavaScript(`(() => {
+          const content = document.querySelector('.sheet') || document.body;
+          return { heightPx: Math.ceil(content.getBoundingClientRect().height),
+            text: (document.body.innerText || '').trim().length };
+        })()`, true) as { heightPx: number; text: number };
+        if (documentMetrics.text >= 5 && Number.isFinite(documentMetrics.heightPx) && documentMetrics.heightPx > 0) {
+          thermalPageHeightMm = Math.min(290, Math.max(40, Math.ceil(documentMetrics.heightPx * 25.4 / 96 + 10)));
+        }
+      } catch {
+        runtimeSmokeLog("thermal-measurement-unavailable; using bounded safe receipt-length estimate");
+      }
+    }
     const pageSize: Electron.WebContentsPrintOptions["pageSize"] =
       paper === "a4"
         ? "A4"
         : paper === "label"
           ? { width: labelWidthMm * 1000, height: labelHeightMm * 1000 }
-          : { width: thermalWidthMm * 1000, height: 297000 };
+          : { width: thermalWidthMm * 1000, height: thermalPageHeightMm * 1000 };
     return await new Promise((resolve) => {
       win.webContents.print({
         silent,
         printBackground: true,
-        deviceName: silent ? deviceName || undefined : undefined,
+        deviceName: deviceName || undefined,
         margins: { marginType: "none" },
         pageSize,
       }, (success, failureReason) => {

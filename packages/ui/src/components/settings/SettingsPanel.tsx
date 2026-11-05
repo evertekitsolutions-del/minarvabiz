@@ -233,10 +233,10 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
       setPrintTestMessage("Label printer testing is available only in the Windows desktop edition.");
       return;
     }
-    const deviceName = draftPrinting.labelPrinterName || draftPrinting.thermalPrinterName;
+    const deviceName = draftPrinting.labelPrinterName;
     if (!deviceName) {
       setPrintTestState("error");
-      setPrintTestMessage("Select a label printer (or thermal printer fallback) before running a label test.");
+      setPrintTestMessage("Select a dedicated Barcode label printer before running a label test. Do not use the POS receipt printer.");
       return;
     }
     setPrintTestState("working");
@@ -382,12 +382,12 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
         <FormField label="Thermal receipt width"><select className={selectClass} value={draftPrinting.thermalWidthMm} onChange={e => setDraftPrinting({ ...draftPrinting, thermalWidthMm: Number(e.target.value) === 58 ? 58 : 80 })}><option value={80}>80 mm</option><option value={58}>58 mm</option></select></FormField>
         <FormField label="A4 printer"><select className={selectClass} value={draftPrinting.a4PrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, a4PrinterName: e.target.value })}><option value="">Use Windows print dialog/default printer</option>{printers.map(p => <option key={`a4-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
         <FormField label="Thermal printer"><select className={selectClass} value={draftPrinting.thermalPrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, thermalPrinterName: e.target.value })}><option value="">Use Windows print dialog/default printer</option>{printers.map(p => <option key={`th-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
-        <FormField label="Barcode label printer"><select className={selectClass} value={draftPrinting.labelPrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, labelPrinterName: e.target.value })}><option value="">Use thermal printer / Windows dialog</option>{printers.map(p => <option key={`label-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
+        <FormField label="Barcode label printer"><select className={selectClass} value={draftPrinting.labelPrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, labelPrinterName: e.target.value })}><option value="">Select barcode label printer</option>{printers.map(p => <option key={`label-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
         <FormField label="Label code"><select className={selectClass} value={draftPrinting.labelCodeMode} onChange={e => setDraftPrinting({ ...draftPrinting, labelCodeMode: e.target.value as "barcode" | "qr" | "both" })}><option value="both">Barcode + QR code</option><option value="barcode">Barcode only</option><option value="qr">QR code only</option></select></FormField>
         <FormField label="Sticker arrangement"><select className={selectClass} value={draftPrinting.labelColumns} onChange={e => setDraftPrinting({ ...draftPrinting, labelColumns: Number(e.target.value) === 2 ? 2 : 1 })}><option value={1}>One sticker per row</option><option value={2}>Two stickers per row (2-up)</option></select></FormField>
         <FormField label="CROMO 38×25 mm — 2 UP / NO GAP">
           <Button type="button" variant="outline" onClick={()=>setDraftPrinting({...draftPrinting,...CROMO_38X25_2UP_NOGAP_PRESET})}>Use CROMO 38×25 — 2-up / NO GAP</Button>
-          <p className="mt-1 text-xs text-slate-500">76 mm combined sticker width. Initial backing estimate: 80 mm with 2 mm left offset; measure the liner and calibrate if necessary. After selecting, click Save printer settings.</p>
+          <p className="mt-1 text-xs text-slate-500">76 mm sticker span; 80 mm liner / 2 mm left are trial values. QR + barcode enabled. Measure the physical distance between label rows: if longer than 25 mm, enter the extra distance in Row gap / feed gap. Select a separate label printer, then Save printer settings.</p>
         </FormField>
         <FormField label="4-inch roll / 38×38 mm stickers">
           <Button type="button" variant="outline" onClick={()=>setDraftPrinting({...draftPrinting,labelRollWidthMm:101.6,labelWidthMm:38,labelHeightMm:38,labelColumns:2,labelGapMm:3,labelLeftMarginMm:11.3,labelRowGapMm:0})}>Use 4″ roll — 2 × 38 mm stickers</Button>

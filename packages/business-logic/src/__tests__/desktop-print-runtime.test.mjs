@@ -110,7 +110,7 @@ await new Promise((resolve) => setTimeout(resolve, 0));
 assert.equal(calls.at(-1).paper, "label");
 assert.equal(calls.at(-1).deviceName, "Label 50x30");
 assert.equal(calls.at(-1).labelWidthMm, 50);
-assert.equal(calls.at(-1).labelHeightMm, 30);
+assert.equal(calls.at(-1).labelHeightMm, 60, 'Two single-column labels should occupy one continuous 60mm print strip');
 
 const now = new Date().toISOString();
 const sale = {

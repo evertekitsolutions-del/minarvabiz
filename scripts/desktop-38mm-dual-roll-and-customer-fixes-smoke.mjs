@@ -26,7 +26,7 @@ const lookup=(id)=>{
 vm.runInThisContext(`(function(require,module,exports){\n${result.outputText}\n})`)(lookup,m,m.exports);
 const product={id:"p1",name:"Kurti",barcode:"2907885160674",size:"M",color:"Red",fabric:"Cotton",mrp:999,sellingPrice:799};
 const html=m.exports.buildBarcodeLabelHtml(product,{copies:3,autoPrint:false});
-assert.match(html,/@page\{size:101\.6mm 38mm;margin:0\}/);
+assert.match(html,/@page\{size:101\.6mm 76mm;margin:0\}/);
 assert.match(html,/grid-template-columns:repeat\(2,38mm\)/);
 assert.match(html,/column-gap:3mm/);
 assert.match(html,/padding-left:11\.3mm/);
@@ -35,6 +35,7 @@ assert.equal((html.match(/class="label compact/g)||[]).length,3);
 for (const field of ["Size: M","Colour: Red","Material: Cotton","Offer: Rs.799.00","MRP: Rs.999.00"])
   assert.equal(html.split(field).length - 1,3,field+" on all labels");
 assert.doesNotMatch(html,/window\.print\(\)/);
+assert.doesNotMatch(html,/page-break-after:always|break-after:page/);
 prefs={...prefs,labelRowGapMm:2};
 const withGap=m.exports.buildBarcodeLabelHtml(product,{copies:2,autoPrint:false});
 assert.match(withGap,/@page\{size:101\.6mm 40mm;margin:0\}/);
@@ -56,11 +57,11 @@ try {
   assert.deepEqual(direct,{ok:true});
   assert.equal(sent.length,1);
   assert.equal(sent[0].paper,"label");
-  assert.deepEqual(sent[0].opts,{labelWidthMm:101.6,labelHeightMm:38,silent:true});
+  assert.deepEqual(sent[0].opts,{labelWidthMm:101.6,labelHeightMm:76,silent:true});
   assert.match(sent[0].html,/grid-template-columns:repeat\(2,38mm\)/);
   assert.equal((sent[0].html.match(/class="label-sheet"/g)||[]).length,2);
   prefs={...prefs,labelPrinterName:"",thermalPrinterName:""};
-  assert.match((await m.exports.sendBarcodeLabelsToPrinter(product,2)).error,/Select a barcode label printer/);
+  assert.match((await m.exports.sendBarcodeLabelsToPrinter(product,2)).error,/Select the dedicated Barcode label printer/);
   assert.equal(sent.length,1,"Refuse direct printing without a configured label printer");
 } finally {
   if(previousWindow===undefined)delete globalThis.window;
@@ -95,27 +96,34 @@ vm.runInThisContext(`(function(require,module,exports){\n${presetCompiled.output
 const cromo=presetModule.exports.CROMO_38X25_2UP_NOGAP_PRESET;
 assert.deepEqual({...cromo},{labelWidthMm:38,labelHeightMm:25,labelColumns:2,
   labelRollWidthMm:80,labelGapMm:0,labelLeftMarginMm:2,labelRowGapMm:0,
-  labelCodeMode:"barcode",labelLayout:"compact"});
+  labelCodeMode:"both",labelLayout:"compact"});
 const actual=presetModule.exports.updatePrintSettings(cromo);
 assert.equal(actual.labelHeightMm,25);
 assert.equal(actual.labelGapMm,0);
 assert.equal(actual.labelPrinterName,"","A label preset must never guess or overwrite the device");
 prefs={...prefs,...cromo,labelPrinterName:"QA CROMO printer",thermalPrinterName:""};
 const chromoHtml=m.exports.buildBarcodeLabelHtml(product,{copies:3,autoPrint:false});
-assert.match(chromoHtml,/@page\{size:80mm 25mm;margin:0\}/);
+assert.match(chromoHtml,/@page\{size:80mm 50mm;margin:0\}/);
 assert.match(chromoHtml,/grid-template-columns:repeat\(2,38mm\)/);
 assert.match(chromoHtml,/column-gap:0mm/);
 assert.match(chromoHtml,/padding-left:2mm/);
 assert.equal((chromoHtml.match(/class="label-sheet"/g)||[]).length,2);
 assert.equal((chromoHtml.match(/label compact short/g)||[]).length,3);
-assert.match(chromoHtml,/.label.short\{padding:.65mm .7mm;gap:.2mm\}/);
+assert.match(chromoHtml,/.label.short\{padding:.65mm .7mm;gap:.2mm;min-height:0\}/);
 for(const field of ["Size: M","Colour: Red","Material: Cotton","Offer: Rs.799.00","MRP: Rs.999.00"])
  assert.equal(chromoHtml.split(field).length-1,3,"Chromo short labels keep "+field);
+const twoStickers=m.exports.buildBarcodeLabelHtml(product,{copies:2,autoPrint:false});
+assert.match(twoStickers,/@page\{size:80mm 25mm;margin:0\}/,
+  "Two CROMO stickers across must be ONE physical print row");
+assert.equal((twoStickers.match(/class="label-sheet"/g)||[]).length,1);
+assert.equal((twoStickers.match(/<svg class=['"]qr-svg/g)||[]).length,2,
+  "Each of the two labels must include a QR");
+assert.doesNotMatch(twoStickers,/page-break-after:always|break-after:page/);
 try{
  globalThis.window={};
  const result=await m.exports.sendBarcodeLabelsToPrinter(product,3);
  assert.deepEqual(result,{ok:true});
- assert.deepEqual(sent.at(-1).opts,{labelWidthMm:80,labelHeightMm:25,silent:true});
+ assert.deepEqual(sent.at(-1).opts,{labelWidthMm:80,labelHeightMm:50,silent:true});
  assert.equal(sent.at(-1).html,chromoHtml,"WYSIWYG preview and print payload must be identical");
 }finally{
  if(previousWindow===undefined)delete globalThis.window;
