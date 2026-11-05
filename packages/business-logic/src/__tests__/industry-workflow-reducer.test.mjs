@@ -61,3 +61,21 @@ test("reducer has no I/O, license or stock side effects", () => {
   const src = fs.readFileSync(new URL("../industry-workflow-reducer.ts", import.meta.url), "utf8");
   assert.doesNotMatch(src, /localStorage|phase9Store|supabase|fetch\(|insert\(|updateLicense|postJournal/);
 });
+
+test("replay rejects forged source, revision and non-latest event IDs", () => {
+  const initial = createIndustryWorkflowRecord(profile, scope);
+  const first = applyIndustryWorkflowEvent(profile, initial, event);
+  assert.throws(() => applyIndustryWorkflowEvent(profile, first, { ...event, from: "ready" }), /Conflicting/);
+  assert.throws(() => applyIndustryWorkflowEvent(profile, first, { ...event, expectedRevision: -1 }), /Conflicting/);
+  const secondEvent = { ...event, eventId: "event-2", expectedRevision: 1, from: "preparing", to: "ready" };
+  const second = applyIndustryWorkflowEvent(profile, first, secondEvent);
+  assert.equal(applyIndustryWorkflowEvent(profile, second, secondEvent), second);
+  assert.throws(() => applyIndustryWorkflowEvent(profile, second, event), /Conflicting/);
+  assert.throws(() => applyIndustryWorkflowEvent(profile, second, { ...secondEvent, from: "placed" }), /Conflicting/);
+});
+
+test("revision history length cannot be forged", () => {
+  const record = createIndustryWorkflowRecord(profile, scope);
+  assert.throws(() => applyIndustryWorkflowEvent(profile, { ...record, revision: 1 }, event), /revision history/);
+  assert.throws(() => applyIndustryWorkflowEvent(profile, { ...record, appliedEventIds: ["ghost"] }, event), /revision history/);
+});
