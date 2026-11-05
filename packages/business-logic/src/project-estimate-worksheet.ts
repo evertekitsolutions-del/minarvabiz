@@ -1,0 +1,90 @@
+/**
+ * PRJ-006 — industry-neutral project estimate worksheet.
+ * Original Minarva Biz source; no third-party code or dependencies.
+ * Non-posting proposal: financial posting remains with the core ledger.
+ */
+export type ProjectEstimateKind = "labor" | "material" | "expense";
+export interface ProjectEstimateLine {
+  readonly id: string;
+  readonly description: string;
+  readonly kind: ProjectEstimateKind;
+  readonly quantity: string;
+  readonly unitCost: string;
+  readonly markupPercent: string;
+}
+export interface ProjectEstimateInput {
+  readonly tenantId: string;
+  readonly companyId: string;
+  readonly branchId: string;
+  readonly projectId: string;
+  readonly currency: string;
+  readonly revision: number;
+  readonly lines: readonly ProjectEstimateLine[];
+}
+export interface ProjectEstimateScope {
+  readonly tenantId: string;
+  readonly companyId: string;
+  readonly branchId: string;
+  readonly projectId: string;
+  readonly canViewCosts: boolean;
+}
+export interface ProjectEstimateResult {
+  readonly projectId: string;
+  readonly revision: number;
+  readonly currency: string;
+  readonly costMinor: number;
+  readonly proposedRevenueMinor: number;
+  readonly grossMarginMinor: number;
+  readonly lines: readonly { id: string; kind: ProjectEstimateKind; costMinor: number; proposedRevenueMinor: number }[];
+}
+function required(value: unknown, name: string): string {
+  if (typeof value !== "string" || !value.trim() || value.length > 128) throw new Error("Invalid " + name);
+  return value;
+}
+function decimal(raw: string, name: string, scale: number, maxWhole: number): bigint {
+  if (typeof raw !== "string" || !/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(raw)) throw new Error("Invalid " + name);
+  const [whole, fraction = ""] = raw.split(".");
+  if (whole.length > maxWhole || fraction.length > scale) throw new Error("Invalid " + name + " precision");
+  return BigInt(whole) * 10n ** BigInt(scale) + BigInt(fraction.padEnd(scale, "0"));
+}
+function roundedDivide(numerator: bigint, denominator: bigint): bigint {
+  return (numerator + denominator / 2n) / denominator;
+}
+function safeMinor(value: bigint): number {
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("Estimate monetary total overflow");
+  return Number(value);
+}
+/** Requires an authoritative host-validated scope; does not persist, approve, tax or post. */
+export function calculateProjectEstimate(input: ProjectEstimateInput, scope: ProjectEstimateScope): ProjectEstimateResult {
+  if (!scope.canViewCosts) throw new Error("Project cost permission denied");
+  for (const key of ["tenantId", "companyId", "branchId", "projectId"] as const) {
+    if (required(input[key], key) !== required(scope[key], key)) throw new Error("Project scope mismatch");
+  }
+  const currency = required(input.currency, "currency");
+  if (!/^[A-Z]{3}$/.test(currency)) throw new Error("Invalid currency code");
+  if (!Number.isSafeInteger(input.revision) || input.revision < 0) throw new Error("Invalid estimate revision");
+  if (!Array.isArray(input.lines) || input.lines.length < 1 || input.lines.length > 500) throw new Error("Estimate requires 1–500 lines");
+  const seen = new Set<string>();
+  let totalCost = 0n, totalRevenue = 0n;
+  const lines = input.lines.map(line => {
+    const id = required(line.id, "line ID");
+    if (seen.has(id)) throw new Error("Duplicate estimate line ID");
+    seen.add(id);
+    if (!["labor", "material", "expense"].includes(line.kind)) throw new Error("Invalid estimate line kind");
+    if (typeof line.description !== "string" || !line.description.trim() || line.description.length > 500) throw new Error("Invalid line description");
+    const quantity = decimal(line.quantity, "quantity", 3, 6);
+    const unitCost = decimal(line.unitCost, "unit cost", 2, 10);
+    const markup = decimal(line.markupPercent, "markup", 2, 3);
+    if (quantity === 0n || markup > 100000n) throw new Error("Invalid quantity or markup range");
+    const cost = roundedDivide(quantity * unitCost, 1000n);
+    const revenue = roundedDivide(cost * (10000n + markup), 10000n);
+    totalCost += cost;
+    totalRevenue += revenue;
+    return Object.freeze({ id, kind: line.kind, costMinor: safeMinor(cost), proposedRevenueMinor: safeMinor(revenue) });
+  });
+  return Object.freeze({
+    projectId: input.projectId, revision: input.revision, currency,
+    costMinor: safeMinor(totalCost), proposedRevenueMinor: safeMinor(totalRevenue),
+    grossMarginMinor: safeMinor(totalRevenue - totalCost), lines: Object.freeze(lines),
+  });
+}
