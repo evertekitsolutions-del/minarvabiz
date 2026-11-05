@@ -124,7 +124,7 @@ export function CategoryManagementPanel({ onChanged, onCreated }: Props) {
     {permission && !treeError && <div className="space-y-2 rounded-lg border p-3">
       <h3 className="text-sm font-semibold">{editing ? "Edit category" : "Create category / subcategory"}</h3>
       <FormField label="Category name *">
-        <input aria-label="Category hierarchy name" className={inputClass} maxLength={100}
+        <input aria-label="Category name" className={inputClass} maxLength={100}
           value={name} disabled={busy || !!pendingSave} onChange={event => setName(event.target.value)}/>
       </FormField>
       <FormField label="Parent category">
@@ -141,7 +141,7 @@ export function CategoryManagementPanel({ onChanged, onCreated }: Props) {
       </FormField>
       <div className="flex flex-wrap gap-2">
         <Button size="sm" disabled={busy || !!pendingSave || !name.trim()} onClick={() => { void submit(); }}>
-          {busy ? "Saving..." : editing ? "Update category" : "Create category"}
+          {busy ? "Saving..." : editing ? "Update Category" : "Save Category"}
         </Button>
         {editing && <Button size="sm" variant="outline" disabled={busy || !!pendingSave} onClick={reset}>Cancel edit</Button>}
       </div>
