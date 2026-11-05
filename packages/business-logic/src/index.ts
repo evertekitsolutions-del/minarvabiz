@@ -299,3 +299,5 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+export * from "./industry-workspace-profile";
