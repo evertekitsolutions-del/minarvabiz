@@ -49,5 +49,5 @@ test("grant cannot authorize a skipped transition or unselected pack", () => {
 
 test("authorization boundary contains no I/O, payments or entitlement side effects", () => {
   const src = fs.readFileSync(new URL("../industry-workflow-access.ts", import.meta.url), "utf8");
-  assert.doesNotMatch(src, /localStorage|supabase|fetch\\(|postJournal|insert\\(|updateLicense/);
+  assert.doesNotMatch(src, /localStorage|supabase|fetch\(|postJournal|insert\(|updateLicense/);
 });
