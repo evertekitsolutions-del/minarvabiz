@@ -112,7 +112,8 @@ export function verifyLaundryHandoverCode(input: {
   return { ...proof };
 }
 export function listLaundryHandoverProofs(orderId?: string): LaundryHandoverProof[] {
-  return proofs.filter(x => !orderId || x.orderId === orderId).map(x => ({ ...x }))
+  const visible = new Set(listLaundryOrders().map(order => order.id));
+  return proofs.filter(x => visible.has(x.orderId) && (!orderId || x.orderId === orderId)).map(x => ({ ...x }))
     .sort((a, b) => b.verifiedAt.localeCompare(a.verifiedAt));
 }
 export function validateLaundryHandoverProofs(raw: unknown): LaundryHandoverProof[] {
@@ -136,7 +137,7 @@ export function validateLaundryHandoverProofs(raw: unknown): LaundryHandoverProo
   });
 }
 export function exportLaundryHandoverProofs(): LaundryHandoverProof[] {
-  return listLaundryHandoverProofs();
+  return proofs.map(proof => ({ ...proof }));
 }
 export function hydrateLaundryHandoverProofs(raw: unknown): void {
   const validated = validateLaundryHandoverProofs(raw);
