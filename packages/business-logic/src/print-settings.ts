@@ -39,7 +39,7 @@ export const CROMO_38X25_2UP_NOGAP_PRESET = {
   labelGapMm: 0,
   labelLeftMarginMm: 2,
   labelRowGapMm: 0,
-  labelCodeMode: "barcode",
+  labelCodeMode: "both",
   labelLayout: "compact",
 } as const satisfies Partial<PrintSettings>;
 
