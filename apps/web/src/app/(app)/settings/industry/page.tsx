@@ -4,7 +4,7 @@ import * as React from "react";
 import { getRuntimeMode, getSessionUser, phase9Store } from "@minarvabiz/business-logic";
 import {
   buildIndustryProfile, industryPreferenceKey, listIndustryPacks,
-  readIndustryProfile, writeIndustryProfile,
+  readIndustryProfile, writeIndustryProfile, listIndustryWorkflowTemplates,
   type IndustryPackId, type IndustryWorkspaceProfile,
 } from "@minarvabiz/business-logic";
 
@@ -108,6 +108,22 @@ export default function IndustryWorkspacePage() {
           Save preferences
         </button>
       </fieldset>
+      <section aria-label="Industry workflow examples" className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+        <h2 className="font-semibold">Selected industry workflow examples</h2>
+        <p className="text-xs text-slate-600">Read-only planning templates. These do not create orders, enable modules, grant permissions or change customer records.</p>
+        {listIndustryWorkflowTemplates(profile).length === 0 ? (
+          <p className="text-sm text-slate-600">Select an optional industry to preview its typical workflow.</p>
+        ) : (
+          <ul className="space-y-3">
+            {listIndustryWorkflowTemplates(profile).map(template => (
+              <li key={template.id} className="rounded-md bg-slate-50 p-3">
+                <div className="text-sm font-medium">{template.label}</div>
+                <div className="mt-1 text-xs text-slate-600">{template.stages.join(" → ")}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
     </main>
   );
