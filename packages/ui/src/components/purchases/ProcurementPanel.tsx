@@ -507,7 +507,7 @@ export function ProcurementPanel({
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">Supplier purchase price history</CardTitle>
-          <p className="text-xs text-slate-500">Posted supplier invoice costs (excl. tax). Not a current quote or contracted price.</p>
+          <p className="text-xs text-slate-500">Only posted supplier invoice costs (excl. tax). Not a current quote or contracted price.</p>
         </CardHeader>
         <CardContent className="space-y-3">
           <label className="block max-w-lg text-xs font-medium text-slate-600">
