@@ -350,8 +350,11 @@ async function main() {
     await assertMain(ws, "SALES_HISTORY", ["Sales", "QA POS Customer"]);
 
     // Service order creation must work from the desktop UI.
-    await click(ws, "SERVICES", ["services & orders"]);
-    await assertMain(ws, "SERVICES", ["Services & Orders", "New Order"]);
+    await click(ws, "SERVICES", ["boutique & tailoring", "services & orders"]);
+    await assertMain(ws, "SERVICES", ["Boutique & Tailoring Orders", "New Order"]);
+    const unwantedServiceTools = await evalIn(ws, `(document.querySelector('[data-testid="app-content"]')?.innerText||'').includes('Plan AMC visits') || (document.querySelector('[data-testid="app-content"]')?.innerText||'').includes('Service warranties and claim tracking') || (document.querySelector('[data-testid="app-content"]')?.innerText||'').includes('Field service site visits')`);
+    if (unwantedServiceTools) throw new Error("Boutique customer edition must not render AMC, warranty or field-service UI");
+    console.log("BOUTIQUE_RELEVANT_MODULES_ONLY PASS");
     await click(ws, "NEW_ORDER", ["new order"]);
     await selectDialogFieldByText(ws, "New Service Order", "Customer", "QA POS Customer");
     await setField(ws, "New Service Order", "Price", "250");
