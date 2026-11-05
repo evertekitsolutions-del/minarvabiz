@@ -62,7 +62,6 @@ test("four-dimensional brand/size/colour/fabric stock, accurate MRP + offer labe
 test("supplier stock bill receives each variant exactly once and posts supplier payable once",()=>{
  reset();
  const supplier=supplierStore.createSupplier({name:"Fabric House",category:"boutique",openingBalance:0});
- assert.equal(supplier.errors.length,0);
  const product=store.createProduct({
   name:"Dress Red M",sku:"BRAND-DRESS-RM",barcode:"BT-001",brand:"Brand A",fabric:"Cotton",size:"M",color:"Red",
   unit:"pcs",costPrice:100,mrp:399,sellingPrice:299,stockQuantity:1,minimumStock:0,isActive:true
@@ -71,7 +70,7 @@ test("supplier stock bill receives each variant exactly once and posts supplier 
   name:"Dress Red L",sku:"BRAND-DRESS-RL",barcode:"BT-002",brand:"Brand A",fabric:"Cotton",size:"L",color:"Red",
   unit:"pcs",costPrice:110,mrp:429,sellingPrice:329,stockQuantity:2,minimumStock:0,isActive:true
  });
- const input={supplierId:supplier.supplier.id,supplierInvoiceNumber:"SUP-101",invoiceDate:"2026-11-05",
+ const input={supplierId:supplier.id,supplierInvoiceNumber:"SUP-101",invoiceDate:"2026-11-05",
  lines:[{productId:product.id,quantity:3,unitCost:90,taxRate:0},
         {productId:other.id,quantity:4,unitCost:100,taxRate:0}],
  paidAmount:170,paymentMethod:"cash"};
@@ -86,7 +85,7 @@ test("supplier stock bill receives each variant exactly once and posts supplier 
  assert.equal(posted.invoice.total,670);
  assert.equal(posted.invoice.paidAmount,170);
  assert.equal(posted.invoice.balanceAmount,500);
- assert.equal(supplierStore.getSupplier(supplier.supplier.id).outstandingBalance,500);
+ assert.equal(supplierStore.getSupplier(supplier.id).outstandingBalance,500);
  assert(account.buildBalanceSheet().balanced);
  const retry=purchase.postBoutiqueStockPurchase(input);
  assert.match(retry.error,/already recorded/i);
@@ -100,7 +99,7 @@ test("duplicate product, impossible quantities and forged parent variants fail w
  name:"Dress",sku:"DRESS",unit:"pcs",costPrice:10,mrp:50,sellingPrice:35,
  stockQuantity:0,minimumStock:0,isActive:true,hasVariants:true
  },[draft("A","S","Black","Cotton",0)]);
- const input={supplierId:supplier.supplier.id,supplierInvoiceNumber:"X-1",invoiceDate:"2026-11-05",
+ const input={supplierId:supplier.id,supplierInvoiceNumber:"X-1",invoiceDate:"2026-11-05",
  lines:[{productId:variant.variants[0].id,quantity:1,unitCost:10}]};
  const before=JSON.stringify({stock:store.exportCoreState(),procurement:procurement.exportProcurementState(),accounting:account.exportAccountingState()});
  for(const change of [
