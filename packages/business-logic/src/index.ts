@@ -25,6 +25,7 @@ export * from "./laundry-incidents";
 export * from "./laundry-handover";
 export * from "./tailor-job-card";
 export * from "./laundry-operations-report";
+export * from "./laundry-operations-csv";
 export * from "./incentives";
 export * from "./dashboard";
 export * from "./sales";
