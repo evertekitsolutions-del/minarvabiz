@@ -76,6 +76,58 @@ assert.match(settings,/savedProfileKey = JSON\.stringify\(profile\)/);
 assert.doesNotMatch(settings,/setDraftProfile\(profile\), \[profile\]/);
 assert.match(settings,/Use 4″ roll — 2 × 38 mm stickers/);
 
+// The customer's actual CROMO roll: 38×25 mm stickers, 2-up, NO GAP.
+// 80 mm backing and 2 mm side offsets are adjustable calibration defaults.
+const presetSource=read("print-settings.ts");
+const presetCompiled=ts.transpileModule(presetSource,{compilerOptions:{
+  module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022
+},reportDiagnostics:true});
+assert.equal(presetCompiled.diagnostics?.length||0,0);
+const presetModule={exports:{}};
+const presetLookup=id=>{
+  if(id==="@minarvabiz/utils")return {nowISO:()=>new Date().toISOString()};
+  if(id==="./autosave")return {touchPersistence:()=>{}};
+  if(id==="./print-templates")return {defaultPrintTemplates:()=>[],
+    normalizePrintTemplates:x=>x,sanitizePrintTemplate:x=>x};
+  throw Error("Unexpected print-settings dependency: "+id);
+};
+vm.runInThisContext(`(function(require,module,exports){\\n${presetCompiled.outputText}\\n})`)(presetLookup,presetModule,presetModule.exports);
+const cromo=presetModule.exports.CROMO_38X25_2UP_NOGAP_PRESET;
+assert.deepEqual({...cromo},{labelWidthMm:38,labelHeightMm:25,labelColumns:2,
+  labelRollWidthMm:80,labelGapMm:0,labelLeftMarginMm:2,labelRowGapMm:0,
+  labelCodeMode:"barcode",labelLayout:"compact"});
+const actual=presetModule.exports.updatePrintSettings(cromo);
+assert.equal(actual.labelHeightMm,25);
+assert.equal(actual.labelGapMm,0);
+assert.equal(actual.labelPrinterName,"","A label preset must never guess or overwrite the device");
+prefs={...prefs,...cromo,labelPrinterName:"QA CROMO printer",thermalPrinterName:""};
+const chromoHtml=m.exports.buildBarcodeLabelHtml(product,{copies:3,autoPrint:false});
+assert.match(chromoHtml,/@page\\{size:80mm 25mm;margin:0\\}/);
+assert.match(chromoHtml,/grid-template-columns:repeat\\(2,38mm\\)/);
+assert.match(chromoHtml,/column-gap:0mm/);
+assert.match(chromoHtml,/padding-left:2mm/);
+assert.equal((chromoHtml.match(/class="label-sheet"/g)||[]).length,2);
+assert.equal((chromoHtml.match(/label compact short/g)||[]).length,3);
+assert.match(chromoHtml,/.label.short\\{padding:.65mm .7mm;gap:.2mm\\}/);
+for(const field of ["Size: M","Colour: Red","Material: Cotton","Offer: Rs.799.00","MRP: Rs.999.00"])
+ assert.equal(chromoHtml.split(field).length-1,3,"Chromo short labels keep "+field);
+try{
+ globalThis.window={};
+ const result=await m.exports.sendBarcodeLabelsToPrinter(product,3);
+ assert.deepEqual(result,{ok:true});
+ assert.deepEqual(sent.at(-1).opts,{labelWidthMm:80,labelHeightMm:25,silent:true});
+ assert.equal(sent.at(-1).html,chromoHtml,"WYSIWYG preview and print payload must be identical");
+}finally{
+ if(previousWindow===undefined)delete globalThis.window;
+ else globalThis.window=previousWindow;
+}
+const modalSource=fs.readFileSync(new URL("../apps/desktop/src/components/BarcodeLabelPrintModal.tsx",import.meta.url),"utf8");
+const settingsSource=fs.readFileSync(new URL("../packages/ui/src/components/settings/SettingsPanel.tsx",import.meta.url),"utf8");
+assert.match(modalSource,/Use CROMO 38×25 — 2-up \\/ NO GAP/);
+assert.match(modalSource,/updatePrintSettings\\(CROMO_38X25_2UP_NOGAP_PRESET\\)/);
+assert.match(settingsSource,/CROMO_38X25_2UP_NOGAP_PRESET/);
+assert.match(settingsSource,/LEFT" : "RIGHT"} — \${width}×${height}/);
+
 const printDocument=read("print-document-render.ts");
 assert.match(printDocument,/\.top\{display:block;text-align:center/);
 assert.match(printDocument,/\.brand\{text-align:center/);
