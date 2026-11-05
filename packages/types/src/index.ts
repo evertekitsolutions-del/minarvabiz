@@ -47,6 +47,8 @@ export interface Product {
   parentProductId?: UUID | null;
   hasVariants?: boolean;
   unit: string; costPrice: number; sellingPrice: number;
+  /** Printed maximum retail price; sellingPrice is the automatic POS offer price. */
+  mrp?: number | null;
   discount?: number | null; taxRate?: number | null; stockQuantity: number;
   minimumStock: number; supplierId?: UUID | null; imageUrl?: string | null;
   notes?: string | null; isActive: boolean;
