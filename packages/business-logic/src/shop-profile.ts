@@ -4,6 +4,7 @@
 
 import { nowISO } from "@minarvabiz/utils";
 import { touchPersistence } from "./autosave";
+import { validateWorkspaceDisplayPreferences } from "./workspace-display-preferences";
 
 export interface ShopProfile {
   shopName: string;
@@ -22,6 +23,8 @@ export interface ShopProfile {
   gstin: string;
   receiptFooter: string;
   currency: string;
+  locale?: string;
+  timeZone?: string;
   updatedAt: string;
 }
 
@@ -41,6 +44,8 @@ const defaultProfile: ShopProfile = {
   gstin: "",
   receiptFooter: "Thank you for your business!",
   currency: "INR",
+  locale: "en-IN",
+  timeZone: "Asia/Kolkata",
   updatedAt: nowISO(),
 };
 
@@ -51,9 +56,15 @@ export function getShopProfile(): ShopProfile {
 }
 
 export function updateShopProfile(patch: Partial<ShopProfile>): ShopProfile {
+  const next = { ...profile, ...patch };
+  const display = validateWorkspaceDisplayPreferences({
+    locale: next.locale || "en-IN",
+    timeZone: next.timeZone || "Asia/Kolkata",
+    currency: next.currency,
+  });
   profile = {
-    ...profile,
-    ...patch,
+    ...next,
+    ...display,
     updatedAt: nowISO(),
   };
   touchPersistence();
