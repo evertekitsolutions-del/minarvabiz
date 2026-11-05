@@ -39,17 +39,17 @@ export function DesktopPurchaseEntryModal({
   const stockIntake = lines.length > 0;
 
   return <Modal
-    open={open} title="Add Purchase Bill & Receive Stock"
+    open={open} title="Add Purchase"
     onClose={onClose}
     footer={<><Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-      <Button type="button" onClick={onSave}>Save Bill & Receive Stock</Button></>}
+      <Button type="button" onClick={onSave}>Save Purchase & Receive Stock</Button></>}
   ><div className="space-y-4">
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <FormField label="Bill date"><input className={inputClass} type="date" value={form.date} onChange={e=>setForm(v=>({...v,date:e.target.value}))}/></FormField>
       <FormField label="Supplier"><div className="flex gap-2"><select className={selectClass} value={form.supplierId} onChange={e=>setForm(v=>({...v,supplierId:e.target.value}))}>
         <option value="">Choose supplier</option>{suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
       </select><Button type="button" variant="outline" onClick={onAddSupplier}>+ Supplier</Button></div></FormField>
-      <FormField label="Supplier bill / reference *"><input className={inputClass} value={form.description} onChange={e=>setForm(v=>({...v,description:e.target.value}))} placeholder="Supplier invoice number / details"/></FormField>
+      <FormField label="Description / Supplier bill / reference *"><input className={inputClass} value={form.description} onChange={e=>setForm(v=>({...v,description:e.target.value}))} placeholder="Supplier invoice number / details"/></FormField>
       <FormField label="Purchase type"><select className={selectClass} value={form.kind} onChange={e=>{setForm(v=>({...v,kind:e.target.value as "general"|"order_specific"}));if(e.target.value!=="general")setLines([]);}}>
         <option value="general">Stock / General</option><option value="order_specific">Tailoring order expense</option>
       </select></FormField>
