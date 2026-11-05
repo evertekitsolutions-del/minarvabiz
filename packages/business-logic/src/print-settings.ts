@@ -27,6 +27,22 @@ export interface PrintSettings {
   updatedAt: string;
 }
 
+/** CROMO 38×25 mm / two across / no inter-label or feed gap.
+ * 76 mm is sticker span; 80 mm liner and 2 mm side margin are CALIBRATION
+ * STARTING VALUES, not manufacturer-confirmed backing dimensions.
+ * Never apply globally: shops with different rolls keep existing settings. */
+export const CROMO_38X25_2UP_NOGAP_PRESET = {
+  labelWidthMm: 38,
+  labelHeightMm: 25,
+  labelColumns: 2,
+  labelRollWidthMm: 80,
+  labelGapMm: 0,
+  labelLeftMarginMm: 2,
+  labelRowGapMm: 0,
+  labelCodeMode: "barcode",
+  labelLayout: "compact",
+} as const satisfies Partial<PrintSettings>;
+
 const defaults: PrintSettings = {
   defaultInvoicePaper: "a4",
   thermalWidthMm: 80,
