@@ -229,7 +229,7 @@ export function App() {
   const licenseDaysForDashboard = effectiveLicenseDaysRemaining(commercialLicense, trialState);
   if(!commercialActive&&trialState.status!=="active")return <TrialGate state={trialState} onActivate={activateTrial}/>;
   if(!licenseFeatures)return <TrialGate state={trialState} onActivate={activateTrial}/>;
-  const allowedNav = MAIN_NAV.filter((item)=>{const feature=NAV_FEATURE[item.id];return !feature||Boolean(licenseFeatures[feature]);});
+  const allowedNav = MAIN_NAV.filter((item)=>{const feature=NAV_FEATURE[item.id];return !feature||Boolean(licenseFeatures[feature]);}).map(item=>item.id==="services"?{...item,label:"Boutique & Tailoring"}:item);
   const actions:QuickAction[]=[];
   if(licenseFeatures.sales) actions.push({id:"sale",label:"New Sale",description:"Create Invoice",icon:<span>🛒</span>,tone:"blue",onClick:()=>{setActiveNav("sales");setSalesTab("pos");}});
   if(licenseFeatures.orders) actions.push({id:"order",label:"New Order",description:"Tailoring Order",icon:<span>👗</span>,tone:"pink",onClick:()=>{setActiveNav("services");setCreateOpen(true);}});
