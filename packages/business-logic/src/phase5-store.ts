@@ -4,7 +4,7 @@ import { assertPermission } from "./permissions";
 import { assertBusinessDayOpen } from "./business-day-state";
 import { enqueueOutbox } from "./outbox-bridge";
 import { remoteCreateSupplier, remoteUpsertSupplier, remoteCreateLaundry, remoteCreatePurchase, remoteSupplierSettlement, remoteUpsertCustomer } from "./remote-write";
-import type { Supplier, LaundryOrder, LaundryItem, LaundryItemProcessingStatus, LaundryQualityStatus, Expense, ExpenseCategory, Purchase, PaymentMethod, UUID } from "@minarvabiz/types";
+import type { Supplier, LaundryOrder, LaundryItem, LaundryItemProcessingStatus, LaundryQualityStatus, Expense, ExpenseCategory, Purchase, PurchaseStockLine, PaymentMethod, UUID } from "@minarvabiz/types";
 import {
   addMinorUnits,
   formatMinorUnits,
@@ -14,6 +14,7 @@ import {
   subtractMinorUnits,
   toMinorUnits,
   toQuantityMilli,
+  multiplyMinorByQuantity,
 } from "@minarvabiz/utils";
 import { calculateLaundryTicketTotals } from "./laundry";
 import { canMoveLaundryItem, validateLaundryItemMutation } from "./laundry-workflow-guards";
@@ -22,6 +23,8 @@ import { LAUNDRY_SERVICES, LAUNDRY_FABRICS } from "./laundry-rate-cards";
 import { hasLaundryPosting, planLaundryCancellation, planLaundryPosting } from "./laundry-accounting";
 import { purchaseBalance, nextDocNumber } from "./expenses";
 import * as mainStore from "./store";
+import { getActiveBranch } from "./phase9-store";
+import { planManualStockAdjustment } from "./stock-adjustment-guard";
 import * as ordersStore from "./orders-store";
 import { planAutomaticPosting, planExpenseReversal, postExpenseJournal } from "./accounting-store";
 import { listPurchaseInvoices, prepareSupplierInvoiceSettlements } from "./procurement-store";
@@ -877,7 +880,7 @@ export function reverseExpense(id: UUID, reason: string): { expense: Expense | n
 }
 
 export function listPurchases(opts?:{kind?:"general"|"order_specific"}):Purchase[]{let list=purchases.filter(p=>!p.deletedAt);if(opts?.kind)list=list.filter(p=>p.kind===opts.kind);return list.sort((a,b)=>b.date.localeCompare(a.date));}
-export function createPurchase(input: { date?: string; supplierId?: UUID | null; description: string; amount: number; paymentMethod: PaymentMethod; paidAmount?: number; kind: "general" | "order_specific"; orderId?: UUID | null; notes?: string | null }): { purchase: Purchase | null; errors: string[] } {
+export function createPurchase(input: { date?: string; supplierId?: UUID | null; description: string; amount: number; paymentMethod: PaymentMethod; paidAmount?: number; kind: "general" | "order_specific"; orderId?: UUID | null; notes?: string | null; stockLines?: ReadonlyArray<{ productId: UUID; quantity: number; unitCost: number }> }): { purchase: Purchase | null; errors: string[] } {
   assertPermission("purchases.manage");
   assertBusinessDayOpen(input.date?.slice(0, 10));
   const errors: string[] = [];
@@ -887,6 +890,37 @@ export function createPurchase(input: { date?: string; supplierId?: UUID | null;
   if (amountMinor == null || paidInputMinor == null || amountMinor <= 0 || paidInputMinor < 0) errors.push("Invalid purchase amount");
   if (!["general", "order_specific"].includes(input.kind)) errors.push("Invalid purchase kind");
   if (input.kind === "order_specific" && !input.orderId) errors.push("Order is required for order-specific purchase");
+  // Treat the supplier bill and exact SKU receipt as one validated unit.
+  // Preflight every quantity/product BEFORE posting finance, supplier payables,
+  // changing stock, emitting outbox or consuming a purchase document number.
+  const stockLines: PurchaseStockLine[] = [];
+  const projectedStock = new Map<UUID, number>();
+  if (input.stockLines?.length) {
+    assertPermission("inventory.adjust");
+    if (input.kind !== "general" || input.orderId) errors.push("Stock-line intake is only available for general purchases");
+    if (input.stockLines.length > 100) errors.push("Maximum 100 stock lines per supplier bill");
+    const activeBranch = getActiveBranch()?.id ?? null;
+    let lineTotalMinor = 0;
+    for (const [index, line] of input.stockLines.entries()) {
+      try {
+        const product = mainStore.getProduct(line.productId);
+        if (!product || !product.isActive || product.hasVariants) throw new Error("Select an active product or individual size/colour variant");
+        if (product.branchId && activeBranch && product.branchId !== activeBranch) throw new Error("Product belongs to another branch");
+        const quantityMilli = toQuantityMilli(line.quantity);
+        const unitCostMinor = toMinorUnits(line.unitCost);
+        if (quantityMilli <= 0 || unitCostMinor < 0) throw new Error("Quantity must be positive and unit cost non-negative");
+        const lineMinor = multiplyMinorByQuantity(unitCostMinor, line.quantity);
+        lineTotalMinor = addMinorUnits(lineTotalMinor, lineMinor);
+        const current = projectedStock.get(product.id) ?? product.stockQuantity;
+        const next = planManualStockAdjustment(product.id, product.branchId, current, "stock_in", line.quantity).next;
+        projectedStock.set(product.id, next);
+        stockLines.push({ productId: product.id, quantity: line.quantity, unitCost: line.unitCost, lineTotal: fromMinorUnits(lineMinor) });
+      } catch (cause) {
+        errors.push(`Stock line ${index + 1}: ${cause instanceof Error ? cause.message : "invalid stock line"}`);
+      }
+    }
+    if (amountMinor != null && lineTotalMinor !== amountMinor) errors.push("Supplier bill amount must equal the sum of the stock lines");
+  }
   const supplier = input.supplierId ? getSupplier(input.supplierId) : undefined;
   if (input.supplierId && !supplier) errors.push("Supplier not found");
   if (errors.length || amountMinor == null || paidInputMinor == null) return { purchase: null, errors };
@@ -914,7 +948,8 @@ export function createPurchase(input: { date?: string; supplierId?: UUID | null;
   const purchase: Purchase = { id: generateId(), purchaseNumber, date: input.date || nowISO(), supplierId: input.supplierId ?? null,
     supplierName: supplier?.name ?? null, description: input.description, amount: bal.amount, paymentMethod: input.paymentMethod,
     paidAmount: bal.paidAmount, balanceAmount: bal.balanceAmount, kind: input.kind, orderId: input.orderId ?? null, orderNumber,
-    notes: input.notes ?? null, createdAt: nowISO(), updatedAt: nowISO(), version: 1 };
+    notes: input.notes ?? null, stockLines:stockLines.length ? stockLines : undefined,
+    createdAt: nowISO(), updatedAt: nowISO(), version: 1 };
   // Fail closed before creating the purchase's journal or changing payables.
   if (input.orderId) {
     const eligible = ordersStore.preflightOrderExpenseAddition(input.orderId, purchase.amount, purchase.id);
@@ -927,6 +962,12 @@ export function createPurchase(input: { date?: string; supplierId?: UUID | null;
   // consume the next purchase number or enqueue cloud master changes on null.
   if (!posting.commit()) {
     return { purchase: null, errors: ["Direct purchase accounting journal was not committed"] };
+  }
+  // No asynchronous gap between preflight, successful financial commit and
+  // updating exact variant stock. Existing WMS/POS sees the updated Product IDs.
+  for (const line of stockLines) {
+    const updated = mainStore.adjustStock(line.productId, "stock_in", line.quantity, `Supplier bill ${purchaseNumber}`);
+    if (!updated) throw new Error("Validated supplier stock receipt could not be committed");
   }
   if (input.orderId) ordersStore.addOrderExpense(input.orderId, input.description || "Order purchase", bal.amount, purchase.id);
   lastPurchaseNo = purchaseNumber;
