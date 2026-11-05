@@ -29,7 +29,7 @@ export function ProductVariantRows({
     {enabled && <>
       <p className="text-xs text-slate-600">
         Enter stock separately for each size + colour + material combination.
-        Every row has its own barcode and stock; leave Barcode blank to generate one.
+        Each variant has separate stock and its own barcode. Leave the variant barcode blank to auto-generate a unique code on Save.
         {editing ? " New rows can be added below; existing quantities are changed with Stock on the variant row." : ""}
       </p>
       {existing.length > 0 && <div className="rounded-lg bg-white p-3 text-sm">
@@ -45,14 +45,14 @@ export function ProductVariantRows({
       <datalist id="boutique-variant-colours">{options.color.map(value=><option key={value} value={value}/>)}</datalist>
       <datalist id="boutique-variant-fabrics">{options.fabric.map(value=><option key={value} value={value}/>)}</datalist>
       <div className="space-y-3">
-        {rows.map((row,index) => <div key={index} className="grid grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-7">
+        {rows.map((row,index) => <div key={index} className="grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-3">
           <FormField label="Brand"><input list="boutique-variant-brands" className={inputClass} placeholder="Brand" value={row.brand||""} onChange={e=>edit(index,{brand:e.target.value})}/></FormField>
           <FormField label="Size"><input className={inputClass} list="boutique-variant-sizes" placeholder="S / M / L / 38 / 40" value={row.size} onChange={e => edit(index,{size:e.target.value})}/></FormField>
           <FormField label="Colour"><input list="boutique-variant-colours" className={inputClass} placeholder="Red" value={row.color} onChange={e => edit(index,{color:e.target.value})}/></FormField>
           <FormField label="Fabric"><input list="boutique-variant-fabrics" className={inputClass} placeholder="Cotton" value={row.material} onChange={e => edit(index,{material:e.target.value})}/></FormField>
           <FormField label="Quantity (pcs) *"><input className={inputClass} inputMode="numeric" type="number" step="1" min="0" value={row.quantity} onChange={e => edit(index,{quantity:e.target.value})}/></FormField>
           <FormField label="SKU (optional)"><input className={inputClass} value={row.sku} onChange={e => edit(index,{sku:e.target.value})}/></FormField>
-          <FormField label="Barcode (optional)"><input className={inputClass} value={row.barcode} onChange={e => edit(index,{barcode:e.target.value})}/></FormField>
+          <FormField label="Barcode (auto if blank)"><input className={inputClass} value={row.barcode} onChange={e => edit(index,{barcode:e.target.value})}/></FormField>
           <div className="col-span-full flex justify-end"><Button type="button" size="sm" variant="outline" onClick={() => onRowsChange(rows.filter((_,i)=>i!==index))}>Remove row</Button></div>
         </div>)}
       </div>
