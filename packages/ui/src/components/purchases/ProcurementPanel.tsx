@@ -59,7 +59,7 @@ export function ProcurementPanel({
   onUpdateInvoice,
   onPostInvoice,
   onPayInvoice,
-  onCancelInvoice,
+  onCancelInvoice, onRfqChanged,
 }: {
   purchaseOrders: PurchaseOrder[];
   goodsReceipts: GoodsReceipt[];
@@ -109,6 +109,7 @@ export function ProcurementPanel({
     paymentMethod: PaymentMethod;
   }) => { success: boolean; error?: string };
   onCancelInvoice: (id: string, reason: string) => { success: boolean; error?: string };
+  onRfqChanged?: () => void | Promise<void>;
 }) {
   const supplierScorecard = React.useMemo(() => {
     try {
@@ -445,7 +446,7 @@ export function ProcurementPanel({
 
   return (
     <div className="space-y-4">
-      <RfqDraftPanel suppliers={suppliers} products={products} />
+      <RfqDraftPanel suppliers={suppliers} products={products} onChanged={onRfqChanged}/>
       <LandedCostPanel goodsReceipts={goodsReceipts} />
       <Card>
         <CardHeader>
@@ -506,7 +507,7 @@ export function ProcurementPanel({
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">Supplier purchase price history</CardTitle>
-          <p className="text-xs text-slate-500">Only posted supplier invoice costs, excluding tax. Historical prices are not a live quote, contractual rate or purchase order.</p>
+          <p className="text-xs text-slate-500">Posted supplier invoice costs (excl. tax). Not a current quote or contracted price.</p>
         </CardHeader>
         <CardContent className="space-y-3">
           <label className="block max-w-lg text-xs font-medium text-slate-600">
