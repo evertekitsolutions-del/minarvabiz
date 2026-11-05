@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// FIN-004/SAL-010 read-only scoped receipt allocation; no posting authority.
+export * from "./receivable-allocation";
