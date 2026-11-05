@@ -12,6 +12,7 @@ import { can, buildAuthorizedStockCountWorksheet, buildAuthorizedStockCountRevie
 
 export function ProductList({
   products,
+  allProducts = products,
   categories,
   onAdd,
   onAddCategory,
@@ -28,6 +29,7 @@ export function ProductList({
   onPrintBarcode,
 }: {
   products: Product[];
+  allProducts?: Product[];
   categories: Category[];
   onAdd?: () => void;
   onAddCategory?: () => void;
@@ -88,6 +90,9 @@ export function ProductList({
   }
 
   const catMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
+  const variantStocks = new Map<string,number>();
+  for(const product of allProducts) if(product.parentProductId&&!product.deletedAt)
+    variantStocks.set(product.parentProductId,(variantStocks.get(product.parentProductId)??0)+product.stockQuantity);
 
   const columns: Column<Product>[] = [
     {
@@ -120,7 +125,7 @@ export function ProductList({
       key: "stockQuantity",
       header: "Stock",
       render: (r) => {
-        if (r.hasVariants) return <span className="text-xs font-semibold text-indigo-700">Variant stock (see rows)</span>;
+        if (r.hasVariants) return <span className="text-xs font-semibold text-indigo-700">{variantStocks.get(r.id)??0} {r.unit} total · see individual variants</span>;
         const low = r.stockQuantity <= r.minimumStock;
         return (
           <span className={low ? "font-semibold text-rose-600" : "text-slate-700"}>
