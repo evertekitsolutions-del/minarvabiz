@@ -23,6 +23,7 @@ export * from "./laundry-service-receipt";
 export * from "./laundry-vendor-scorecard";
 export * from "./laundry-vendor-worklist";
 export * from "./laundry-rate-cards";
+export * from "./laundry-rate-cards-csv";
 export * from "./laundry-incidents";
 export * from "./laundry-handover";
 export * from "./tailor-job-card";
