@@ -555,8 +555,8 @@ export function updateLaundryItemWorkflow(
   qualityStatus?: LaundryQualityStatus,
 ): { order: LaundryOrder | null; errors: string[] } {
   assertPermission("orders.manage");
-  const order = laundryOrders.find((item) => item.id === orderId && !item.deletedAt);
-  if (!order || order.status === "cancelled") return { order: null, errors: ["Active laundry ticket not found"] };
+  const order = laundryOrders.find((item) => item.id === orderId && !item.deletedAt && laundryRecordInActiveBranch(item));
+  if (!order || order.status === "cancelled") return { order: null, errors: ["Active laundry ticket not found in active branch"] };
   const item = order.items?.find((entry) => entry.id === itemId);
   if (!item) return { order: null, errors: ["Laundry item not found"] };
   if (!canMoveLaundryItem(item, status)) {
