@@ -116,7 +116,7 @@ const twoStickers=m.exports.buildBarcodeLabelHtml(product,{copies:2,autoPrint:fa
 assert.match(twoStickers,/@page\\{size:80mm 25mm;margin:0\\}/,
   "Two CROMO stickers across must be ONE physical print row");
 assert.equal((twoStickers.match(/class="label-sheet"/g)||[]).length,1);
-assert.equal((twoStickers.match(/class="qr-svg"/g)||[]).length,2,
+assert.equal((twoStickers.match(/qr-svg/g)||[]).length,2,
   "Each of the two labels must include a QR");
 assert.doesNotMatch(twoStickers,/page-break-after:always|break-after:page/);
 try{
