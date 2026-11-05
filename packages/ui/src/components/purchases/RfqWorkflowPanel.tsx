@@ -2,7 +2,7 @@
 import * as React from "react";
 import type { Supplier } from "@minarvabiz/types";
 import {
-  awardProcurementRfq, cancelProcurementRfq, compareProcurementRfqQuotes,
+  awardProcurementRfq, buildSupplierRfqCsv, cancelProcurementRfq, compareProcurementRfqQuotes,
   issueProcurementRfq, listProcurementRfqs, recordProcurementRfqQuote,
   type ProcurementRfq,
 } from "@minarvabiz/business-logic";
@@ -62,6 +62,20 @@ export function RfqWorkflowPanel({ suppliers, onChanged }: Props) {
     })??[]);
     setConfirmAward("");
   }
+  function exportSupplierEnquiry(id: string) {
+    if(!selected) return;
+    setFeedback(null);
+    try {
+      const request=buildSupplierRfqCsv(selected.id,id);
+      const url=URL.createObjectURL(new Blob(["\uFEFF",request.csv],{type:"text/csv;charset=utf-8"}));
+      const link=document.createElement("a");
+      link.href=url;link.download=request.fileName;document.body.appendChild(link);
+      try{link.click();}finally{link.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000);}
+      setFeedback({ok:true,message:"Supplier-only enquiry exported. Send it manually to the selected vendor."});
+    }catch(cause){
+      setFeedback({ok:false,message:cause instanceof Error?cause.message:String(cause)});
+    }
+  }
   function submitBid() {
     if(!selected) return;
     run(()=>{
@@ -106,6 +120,12 @@ export function RfqWorkflowPanel({ suppliers, onChanged }: Props) {
           PO: {selected.purchaseOrderId}. Approve the draft in Purchase Orders below.
         </p>}
         {selected.status==="issued"&&<>
+          <div className="flex flex-wrap gap-2">
+            {selected.supplierIds.map(id=><Button key={id} size="sm" variant="outline" onClick={()=>exportSupplierEnquiry(id)}>
+              Export enquiry: {suppliers.find(s=>s.id===id)?.name??id}
+            </Button>)}
+          </div>
+          <p className="text-xs text-slate-500">Each vendor receives only its own RFQ sheet, never competitors or their prices.</p>
           <div className="grid gap-2 sm:grid-cols-3">
             <label className="text-xs">Supplier
               <select aria-label="Bid supplier" className={selectClass} value={supplierId} onChange={e=>chooseSupplier(e.target.value)}>
