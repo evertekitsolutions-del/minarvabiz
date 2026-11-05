@@ -74,7 +74,10 @@ export function calculateLaundryTicketTotals(input: {
     supplierMinor = addMinorUnits(supplierMinor, toMinorUnits(line.totalSupplierCost));
   }
   const ticketMilli = toQuantityMilli(input.quantity);
-  if (ticketMilli / 1000 !== input.quantity || quantityMilli !== ticketMilli) {
+  // A sum of representable milli-unit rows can have insignificant JS float residue.
+  // Reject material mismatches while preserving the exact integer quantity invariant.
+  if (quantityMilli !== ticketMilli
+    || Math.abs(input.quantity - quantityMilli / 1000) > 1e-9) {
     throw new Error("Laundry garment quantities do not reconcile");
   }
   return {
