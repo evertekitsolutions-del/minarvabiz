@@ -27,7 +27,7 @@ export const emptyProductVariantDraft = (): ProductVariantDraft => ({
   size: "", color: "", material: "", quantity: "0", sku: "", barcode: "",
 });
 
-export function variantIdentity(input: Pick<ProductVariantRow, "size" | "color" | "material">): string {
+export function variantIdentity(input: Pick<ProductVariantRow, "size" | "color" | "material"> & { brand?: string }): string {
   return JSON.stringify([input.size, input.color, input.material, input.brand || ""].map(x => x.trim().toLocaleLowerCase("en")));
 }
 
