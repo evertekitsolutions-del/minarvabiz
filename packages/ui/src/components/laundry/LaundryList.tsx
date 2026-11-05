@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { AuditLogEntry, Customer, LaundryOrder } from "@minarvabiz/types";
+import type { AuditLogEntry, Customer, LaundryOrder, PaymentMethod } from "@minarvabiz/types";
 import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
@@ -11,7 +11,7 @@ import { LaundryWhatsAppPanel } from "./LaundryWhatsAppPanel";
 import { LaundryRoutePanel } from "./LaundryRoutePanel";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
-import { buildLaundryVendorScorecard, exportLaundryTicketsCsv, printLaundryServiceReceipt } from "@minarvabiz/business-logic";
+import { buildLaundryVendorScorecard, can, exportLaundryTicketsCsv, printLaundryServiceReceipt } from "@minarvabiz/business-logic";
 
 type LaundryEditResult = { success: boolean; error?: string; order?: LaundryOrder };
 
@@ -68,6 +68,7 @@ export function LaundryList({
   onStatusChange,
   onCancel,
   onUpdateDetails,
+  onCollectPayment,
 }: {
   orders: LaundryOrder[];
   customers?: Pick<Customer,"id" | "name" | "phone" | "whatsapp" | "address" | "branchId" | "deletedAt">[];
@@ -80,6 +81,7 @@ export function LaundryList({
   onStatusChange?: (order: LaundryOrder, status: LaundryOrder["status"]) => void;
   onCancel?: (order: LaundryOrder) => void;
   onUpdateDetails?: (order: LaundryOrder, values: { garment: string; notes: string }) => LaundryEditResult;
+  onCollectPayment?: (order: LaundryOrder, amount: number, method: PaymentMethod) => LaundryEditResult;
 }) {
   const [q, setQ] = React.useState("");
   const [customerId, setCustomerId] = React.useState("");
@@ -89,6 +91,32 @@ export function LaundryList({
   const [dateFrom, setDateFrom] = React.useState("");
   const [dateTo, setDateTo] = React.useState("");
   const [detailTarget, setDetailTarget] = React.useState<LaundryOrder | null>(null);
+  const [collectTarget, setCollectTarget] = React.useState<LaundryOrder | null>(null);
+  const [collectAmount, setCollectAmount] = React.useState("");
+  const [collectMethod, setCollectMethod] = React.useState<PaymentMethod>("cash");
+  const [collectError, setCollectError] = React.useState<string | null>(null);
+  const [collectSuccess, setCollectSuccess] = React.useState<string | null>(null);
+  const openCollection = (ticket: LaundryOrder) => {
+    setCollectTarget(ticket);
+    setCollectAmount(String(ticket.balanceAmount));
+    setCollectMethod("cash");
+    setCollectError(null);
+  };
+  const collectTicketBalance = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!collectTarget || !onCollectPayment) return;
+    const amount = Number(collectAmount);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > collectTarget.balanceAmount) {
+      setCollectError("Enter an amount within the remaining ticket balance");
+      return;
+    }
+    const result = onCollectPayment(collectTarget, amount, collectMethod);
+    if (!result.success) { setCollectError(result.error || "Laundry collection failed"); return; }
+    if (result.order && detailTarget?.id === result.order.id) setDetailTarget(result.order);
+    setCollectSuccess("Receipt posted against " + collectTarget.orderNumber + ". Reprint the updated service receipt.");
+    setCollectTarget(null);
+    setCollectError(null);
+  };
   const [messageTarget, setMessageTarget] = React.useState<LaundryOrder | null>(null);
   const [editTarget, setEditTarget] = React.useState<LaundryOrder | null>(null);
   const [editGarment, setEditGarment] = React.useState("");
@@ -286,6 +314,8 @@ export function LaundryList({
           <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
             <Button size="sm" variant="outline" onClick={() => openDetails(r)}>Details</Button>
             <Button size="sm" variant="outline" onClick={() => void printServiceReceipt(r)}>Print receipt</Button>
+            {onCollectPayment && can("payments.collect") && r.status !== "cancelled" && r.balanceAmount > 0 &&
+              <Button size="sm" variant="outline" onClick={() => openCollection(r)}>Collect due</Button>}
             <Button size="sm" variant="outline" onClick={() => setMessageTarget(r)}>WhatsApp</Button>
             {r.status !== "cancelled" && onUpdateDetails && <Button size="sm" variant="outline" onClick={() => openEdit(r)}>Edit Details</Button>}
             {r.mode === "outsourced" && r.status === "received" && !allItemsPassedQc && <span className="self-center text-xs text-amber-700">Finish garment QC in Details before delivery</span>}
@@ -331,6 +361,7 @@ export function LaundryList({
         {csvFeedback && <p role={csvFeedback.failed ? "alert" : "status"} className={`text-sm ${csvFeedback.failed ? "text-rose-700" : "text-slate-600"}`}>{csvFeedback.message}</p>}
         {tagPrintFeedback && <p role="status" className="text-sm text-slate-600">{tagPrintFeedback}</p>}
         {receiptPrintFeedback && <p role={receiptPrintFeedback.failed ? "alert" : "status"} className={"text-sm " + (receiptPrintFeedback.failed?"text-rose-700":"text-slate-600")}>{receiptPrintFeedback.message}</p>}
+        {collectSuccess && <p role="status" className="text-sm text-emerald-700">{collectSuccess}</p>}
         <p className="text-xs text-slate-500">CSV includes displayed cancelled tickets for traceability. Use Reports for reconciled financial totals.</p>
         {vendorScores.length > 0 && <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3" aria-label="Laundry vendor comparison">
           <h3 className="text-sm font-semibold text-slate-900">Laundry supplier performance · In-house comparison</h3>
@@ -402,6 +433,24 @@ export function LaundryList({
         <DataTable columns={columns} rows={filtered} onRowClick={openDetails} emptyMessage="No laundry tickets match the selected filters" />
       </div>
 
+      <Modal open={Boolean(collectTarget)} title={collectTarget ? "Collect laundry due · " + collectTarget.orderNumber : "Collect laundry due"}
+        onClose={() => { setCollectTarget(null); setCollectError(null); }}>
+        {collectTarget && <form onSubmit={collectTicketBalance} className="space-y-3">
+          <p className="text-sm text-slate-600">Applies only to the selected laundry ticket. Remaining: {formatMoney(collectTarget.balanceAmount)}.</p>
+          <FormField label="Amount to collect">
+            <input className={inputClass} type="number" min="0.01" step="0.01" max={collectTarget.balanceAmount} required value={collectAmount}
+              onChange={event => setCollectAmount(event.target.value)} />
+          </FormField>
+          <FormField label="Payment method">
+            <select className={selectClass} value={collectMethod} onChange={event => setCollectMethod(event.target.value as PaymentMethod)}>
+              <option value="cash">Cash</option><option value="bank">Bank</option><option value="card">Card</option>
+              <option value="upi">UPI</option><option value="online">Online</option><option value="other">Other</option>
+            </select>
+          </FormField>
+          {collectError && <p role="alert" className="text-sm text-rose-700">{collectError}</p>}
+          <Button type="submit" disabled={!collectAmount || Number(collectAmount)<=0 || Number(collectAmount)>collectTarget.balanceAmount}>Post payment</Button>
+        </form>}
+      </Modal>
       <Modal
         open={Boolean(detailTarget)}
         title={detailTarget ? `Laundry ticket ${detailTarget.orderNumber}` : "Laundry ticket details"}
@@ -410,6 +459,8 @@ export function LaundryList({
         footer={detailTarget ? <>
           <Button variant="outline" onClick={() => setDetailTarget(null)}>Close</Button>
           <Button variant="outline" onClick={() => void printServiceReceipt(detailTarget)}>Print A4 service receipt</Button>
+          {onCollectPayment && can("payments.collect") && detailTarget.status !== "cancelled" && detailTarget.balanceAmount > 0 &&
+            <Button variant="outline" onClick={() => openCollection(detailTarget)}>Collect ticket balance</Button>}
           {detailTarget.status !== "cancelled" && onUpdateDetails && <Button variant="outline" onClick={() => openEdit(detailTarget)}>Edit Details</Button>}
           {detailTarget.status !== "cancelled" && onCancel && <Button variant="danger" onClick={() => { onCancel(detailTarget); setDetailTarget(null); }}>Cancel Ticket</Button>}
         </> : undefined}

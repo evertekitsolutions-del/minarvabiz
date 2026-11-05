@@ -76,6 +76,25 @@ export default function LaundryPage() {
     }
   }
 
+  function handleLaundryCollection(order: LaundryOrder, amount: number, method: PaymentMethod) {
+    try {
+      const result = store.recordCustomerPayment({
+        customerId: order.customerId,
+        amount,
+        method,
+        target: { sourceType: "laundry", id: order.id },
+      });
+      if (result.errors.length || !result.payment) {
+        return { success: false, error: result.errors.join("; ") || "Unable to collect laundry due" };
+      }
+      refresh();
+      const updated = phase5Store.listLaundryOrders().find(item => item.id === order.id);
+      return { success: true, order: updated };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Unable to collect laundry due" };
+    }
+  }
+
   function handleUpdateLaundryDetails(order: LaundryOrder, values: { garment: string; notes: string }) {
     try {
       const result = phase5Store.updateLaundryDetails(order.id, values);
@@ -160,6 +179,7 @@ export default function LaundryPage() {
         customers={customers}
         auditLogs={phase7Store.listAuditLogs(500)}
         onUpdateDetails={handleUpdateLaundryDetails}
+        onCollectPayment={handleLaundryCollection}
         onAddOutsourced={() => setMode("outsourced")}
         onAddIroning={() => setMode("in_house_ironing")}
         onStatusChange={handleStatusChange}
