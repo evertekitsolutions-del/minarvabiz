@@ -28,6 +28,7 @@ import * as serialCustody from "./serial-custody-register";
 import * as serviceWarranty from "./service-warranty-register";
 import * as siteVisits from "./service-site-visit-register";
 import * as procurementStore from "./procurement-store";
+import * as procurementRfqs from "./procurement-rfq";
 import * as accountingStore from "./accounting-store";
 import * as commerceTierDrafts from "./commerce-tier-drafts";
 import * as commerceKitRecipes from "./commerce-kit-recipes";
@@ -111,6 +112,7 @@ export interface DomainSnapshot {
   /** Offline field visits, not GPS or synced customer notifications. */
   serviceSiteVisits?: ReturnType<typeof siteVisits.exportServiceSiteVisits>;
   procurement?: ReturnType<typeof procurementStore.exportProcurementState>;
+  procurementRfqs?: ReturnType<typeof procurementRfqs.exportProcurementRfqState>;
   accounting?: ReturnType<typeof accountingStore.exportAccountingState>;
   /** Offline-only seller pricebook drafts. Never an authoritative checkout tariff. */
   commerceTierDrafts?: ReturnType<typeof commerceTierDrafts.exportCommerceTierDrafts>;
@@ -176,6 +178,7 @@ export function exportDomainSnapshot(): DomainSnapshot {
     serviceWarranty: serviceWarranty.exportServiceWarrantyState(),
     serviceSiteVisits: siteVisits.exportServiceSiteVisits(),
     procurement: procurementStore.exportProcurementState(),
+    procurementRfqs: procurementRfqs.exportProcurementRfqState(),
     accounting: accountingStore.exportAccountingState(),
     commerceTierDrafts: commerceTierDrafts.exportCommerceTierDrafts(),
     commerceKitRecipes: commerceKitRecipes.exportCommerceKitRecipes(),
@@ -346,6 +349,7 @@ function applyDomainSnapshot(snap: DomainSnapshot): void {
   serviceWarranty.hydrateServiceWarrantyState(snap.serviceWarranty ?? {warranties:[],claims:[]});
   siteVisits.hydrateServiceSiteVisits(snap.serviceSiteVisits ?? []);
   if (snap.procurement) procurementStore.hydrateProcurementState(snap.procurement);
+  procurementRfqs.hydrateProcurementRfqState(snap.procurementRfqs);
   if (snap.accounting) accountingStore.hydrateAccountingState(snap.accounting);
   commerceTierDrafts.hydrateCommerceTierDrafts(snap.commerceTierDrafts ?? []);
   commerceKitRecipes.hydrateCommerceKitRecipes(snap.commerceKitRecipes ?? []);
