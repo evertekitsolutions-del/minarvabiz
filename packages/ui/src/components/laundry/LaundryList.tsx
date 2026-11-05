@@ -11,7 +11,7 @@ import { LaundryWhatsAppPanel } from "./LaundryWhatsAppPanel";
 import { LaundryRoutePanel } from "./LaundryRoutePanel";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
-import { buildLaundryVendorScorecard, can, exportLaundryTicketsCsv, listLaundryIncidents, printLaundryServiceReceipt } from "@minarvabiz/business-logic";
+import { buildLaundryVendorScorecard, can, exportLaundryTicketsCsv, getShopProfile, listLaundryIncidents, printLaundryServiceReceipt } from "@minarvabiz/business-logic";
 
 type LaundryEditResult = { success: boolean; error?: string; order?: LaundryOrder };
 
@@ -241,9 +241,10 @@ export function LaundryList({
       setTagPrintFeedback("Print window was blocked. Allow pop-ups and try again.");
       return;
     }
+    const shopName = escapePrintHtml(getShopProfile().shopName || "Laundry");
     const labels = items.map((item) => `
       <article class="tag">
-        <div class="brand">MINARVA BIZ · LAUNDRY</div>
+        <div class="brand">${shopName} · LAUNDRY</div>
         <div class="ticket">${escapePrintHtml(order.orderNumber)}</div>
         <div class="garment">${escapePrintHtml(item.label)} × ${escapePrintHtml(String(item.quantity))}</div>
         ${code39Svg(item.tagCode)}
