@@ -3,6 +3,7 @@ import { generateId, nowISO, toMinorUnits } from "@minarvabiz/utils";
 import { assertPermission } from "./permissions";
 import { touchPersistence } from "./autosave";
 import { auditAction } from "./audit-actions";
+import { activeLaundryBranchId, laundryEffectiveBranchId, laundryRecordInActiveBranch } from "./laundry-branch-scope";
 
 export const LAUNDRY_SERVICES = [
   { code: "wash", label: "Wash" },
@@ -25,6 +26,7 @@ export interface LaundryRateCard {
   fabric: LaundryFabricCode;
   /** Supplier-specific garment rate; null is the default for this mode. */
   supplierId?: string | null;
+  branchId?: string | null;
   customerRate: number;
   supplierRate: number;
   tatHours: number;
@@ -36,7 +38,7 @@ const cards: LaundryRateCard[] = [];
 const serviceCodes = new Set<string>(LAUNDRY_SERVICES.map(s => s.code));
 const fabricCodes = new Set<string>(LAUNDRY_FABRICS);
 const key = (row: Pick<LaundryRateInput, "mode" | "serviceCode" | "garment" | "fabric" | "supplierId">) =>
-  [row.mode, row.mode === "outsourced" ? (row.supplierId || "*") : "in-house", row.serviceCode, row.garment.trim().toLocaleLowerCase("en"), row.fabric].join("|");
+  [laundryEffectiveBranchId(row), row.mode, row.mode === "outsourced" ? (row.supplierId || "*") : "in-house", row.serviceCode, row.garment.trim().toLocaleLowerCase("en"), row.fabric].join("|");
 
 export function validateLaundryRateCards(value: unknown): LaundryRateCard[] {
   if (!Array.isArray(value) || value.length > 10000) throw new Error("Invalid laundry rate catalog");
@@ -50,6 +52,7 @@ export function validateLaundryRateCards(value: unknown): LaundryRateCard[] {
       || typeof row.garment !== "string" || !row.garment.trim() || row.garment.length > 120
       || (row.supplierId != null && (typeof row.supplierId !== "string" || !row.supplierId.trim() || row.supplierId.length > 120 || row.supplierId.includes("|")))
       || (row.mode === "in_house_ironing" && !!row.supplierId)
+      || (row.branchId != null && (typeof row.branchId !== "string" || !row.branchId.trim() || row.branchId.length > 120))
       || !Number.isSafeInteger(row.tatHours) || row.tatHours < 1 || row.tatHours > 24 * 90
       || typeof row.customerRate !== "number" || typeof row.supplierRate !== "number"
       || row.customerRate < 0 || row.supplierRate < 0) throw new Error("Invalid laundry rate fields");
@@ -59,19 +62,22 @@ export function validateLaundryRateCards(value: unknown): LaundryRateCard[] {
     const uniqueKey = key(row);
     if (unique.has(uniqueKey)) throw new Error("Duplicate laundry service/garment/fabric rate");
     unique.add(uniqueKey);
-    return { ...row, garment: row.garment.trim(), supplierId: row.supplierId || null };
+    return { ...row, garment: row.garment.trim(), supplierId: row.supplierId || null, branchId: row.branchId || null };
   });
 }
 
 export function listLaundryRateCards(): LaundryRateCard[] {
-  return cards.map(row => ({ ...row })).sort((a, b) => a.serviceCode.localeCompare(b.serviceCode)
+  return cards.filter(laundryRecordInActiveBranch).map(row => ({ ...row })).sort((a, b) => a.serviceCode.localeCompare(b.serviceCode)
     || a.garment.localeCompare(b.garment) || a.fabric.localeCompare(b.fabric));
 }
 
 export function findLaundryRateCard(input: Pick<LaundryRateInput, "mode" | "serviceCode" | "garment" | "fabric" | "supplierId">): LaundryRateCard | null {
-  const matched = cards.find(item => key(item) === key(input));
+  const branchId = activeLaundryBranchId();
+  if (!branchId) return null;
+  const scopedInput = { ...input, branchId };
+  const matched = cards.find(item => key(item) === key(scopedInput));
   const generic = input.mode === "outsourced" && input.supplierId
-    ? cards.find(item => key(item) === key({ ...input, supplierId: null }))
+    ? cards.find(item => key(item) === key({ ...scopedInput, supplierId: null }))
     : null;
   const found = matched || generic;
   return found ? { ...found } : null;
@@ -79,7 +85,9 @@ export function findLaundryRateCard(input: Pick<LaundryRateInput, "mode" | "serv
 
 export function saveLaundryRateCard(input: LaundryRateInput): LaundryRateCard {
   assertPermission("settings.manage");
-  const checked = validateLaundryRateCards([{ ...input, id: "preflight", updatedAt: nowISO() }])[0];
+  const branchId = activeLaundryBranchId();
+  if (!branchId) throw new Error("No active branch selected");
+  const checked = validateLaundryRateCards([{ ...input, branchId, id: "preflight", updatedAt: nowISO() }])[0];
   const existing = cards.find(item => key(item) === key(checked));
   const next: LaundryRateCard = { ...checked, id: existing?.id || generateId(), updatedAt: nowISO() };
   const before = existing ? { ...existing } : null;
@@ -95,5 +103,5 @@ export function hydrateLaundryRateCards(input: unknown): void {
 }
 
 export function exportLaundryRateCards(): LaundryRateCard[] {
-  return listLaundryRateCards();
+  return cards.map(row => ({ ...row }));
 }
