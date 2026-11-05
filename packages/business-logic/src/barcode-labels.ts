@@ -8,7 +8,7 @@ import { getShopProfile } from "./shop-profile";
 import { formatMoney } from "@minarvabiz/utils";
 import { escapeHtml } from "./html";
 import { getPrintSettings } from "./print-settings";
-import { tryDesktopPrintHtml } from "./desktop-print";
+import { requestDesktopPrintHtml, tryDesktopPrintHtml } from "./desktop-print";
 import { qrSvg } from "./qr-code";
 
 const L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
@@ -184,6 +184,32 @@ export function buildBarcodeLabelHtml(
   @media print{.label{border:0}}
 </style></head><body>${blocks}
 ${autoPrint ? "<script>window.onload=function(){window.print()}</script>" : ""}</body></html>`;
+}
+
+/** The operator can review the exact two-up layout in the app before sending
+ * it straight to their chosen printer, bypassing unreliable Windows previews.
+ * This response confirms job acceptance only, not physical paper output. */
+export async function sendBarcodeLabelsToPrinter(
+  product: Product,
+  copies = 1,
+  categoryName?: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  if (typeof window === "undefined") return { ok: false, error: "Windows desktop printing is unavailable" };
+  const settings = getPrintSettings();
+  if (!(settings.labelPrinterName || settings.thermalPrinterName)) {
+    return { ok: false, error: "Select a barcode label printer in Settings → Printer settings before direct printing." };
+  }
+  try {
+    const html = buildBarcodeLabelHtml(product, { copies, categoryName, autoPrint: false });
+    const result = requestDesktopPrintHtml(html, "label", {
+      labelWidthMm: settings.labelColumns === 2 ? settings.labelRollWidthMm : settings.labelWidthMm,
+      labelHeightMm: settings.labelHeightMm + (settings.labelColumns === 2 ? settings.labelRowGapMm : 0),
+      silent: true,
+    });
+    return result ? await result : { ok: false, error: "Windows desktop printer bridge is unavailable" };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 export function printBarcodeLabels(product: Product, copies = 1, categoryName?: string | null) {

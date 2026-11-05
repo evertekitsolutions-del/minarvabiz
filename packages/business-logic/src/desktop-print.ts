@@ -38,14 +38,14 @@ export type DesktopPrintResult = { ok: boolean; error?: string };
 export function requestDesktopPrintHtml(
   html: string,
   paper: DesktopPrintPaper,
-  options?: { labelWidthMm?: number; labelHeightMm?: number },
+  options?: { labelWidthMm?: number; labelHeightMm?: number; silent?: boolean },
 ): Promise<DesktopPrintResult> | null {
   const api = bridge();
   if (!api?.printHtml) return null;
 
   const settings = getPrintSettings();
   const deviceName = configuredPrinter(paper);
-  const silent = Boolean(settings.silentDesktopPrint && deviceName);
+  const silent = Boolean((options?.silent ?? settings.silentDesktopPrint) && deviceName);
 
   try {
     return Promise.resolve(api.printHtml({

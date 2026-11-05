@@ -38,12 +38,12 @@ import { NAV_FEATURE, featuresForLicense, type CommercialLicenseState } from "./
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
 const errorMessage=(error:unknown):string=>error instanceof Error?error.message:String(error);
 export function App() {
-  const [dbReady, setDbReady] = React.useState(false);
-  const [dbError, setDbError] = React.useState<string | null>(null);
+  const [dbReady,setDbReady]=React.useState(false);
+  const [dbError,setDbError]=React.useState<string|null>(null);
   const [trialState, setTrialState] = React.useState<TrialState | null>(null);
   const [commercialLicense, setCommercialLicense] = React.useState<CommercialLicenseState | null>(null);
   const [deviceFingerprint, setDeviceFingerprint] = React.useState("");
-  const [activeNav, setActiveNav] = React.useState<NavItemId>("dashboard");
+  const [activeNav,setActiveNav]=React.useState<NavItemId>("dashboard");
   const [dash, setDash] = React.useState<DashboardData | null>(null);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [products, setProducts] = React.useState<Product[]>([]);
@@ -67,26 +67,26 @@ export function App() {
   const [createOpen, setCreateOpen] = React.useState(false);
   const [form, setForm] = React.useState<OrderFormValues>(emptyOrderForm());
   const [formError, setFormError] = React.useState<string | null>(null);
-  const [selectedOrder, setSelectedOrder] = React.useState<ServiceOrder | null>(null);
+  const [selectedOrder,setSelectedOrder]=React.useState<ServiceOrder|null>(null);
   const [crmCustomerId, setCrmCustomerId] = React.useState("");
   const [rosterOpen, setRosterOpen] = React.useState(false);
   const [staffDetailId, setStaffDetailId] = React.useState("");
   const [returnSaleId, setReturnSaleId] = React.useState("");
   const [productQuery, setProductQuery] = React.useState("");
   const [productCategoryId, setProductCategoryId] = React.useState<string | null>(null);
-  const [custOpen, setCustOpen] = React.useState(false);
+  const [custOpen,setCustOpen]=React.useState(false);
   const [custForm, setCustForm] = React.useState({ name: "", phone: "", whatsapp: "", email: "", address: "", birthday: "", notes: "" });
-  const [productOpen, setProductOpen] = React.useState(false);
-  const [editingProductId, setEditingProductId] = React.useState<string | null>(null);
-  const [stockAdjustProduct, setStockAdjustProduct] = React.useState<Product | null>(null);
-  const [stockAdjustQty, setStockAdjustQty] = React.useState("");
+  const [productOpen,setProductOpen]=React.useState(false);
+  const [editingProductId,setEditingProductId]=React.useState<string|null>(null);
+  const [stockAdjustProduct,setStockAdjustProduct]=React.useState<Product|null>(null);
+  const [stockAdjustQty,setStockAdjustQty]=React.useState("");
   const [variantRows, setVariantRows] = React.useState<ProductVariantDraft[]>([]);
-  const [labelProduct, setLabelProduct] = React.useState<Product | null>(null);
-  const [labelCopies, setLabelCopies] = React.useState("1");
+  const [labelProduct,setLabelProduct]=React.useState<Product|null>(null);
+  const [labelCopies,setLabelCopies]=React.useState("1");
   const [productForm, setProductForm] = React.useState({ name:"", sku:"", barcode:"", categoryId:"", brand:"", size:"", color:"", fabric:"", unit:"pcs", costPrice:"", sellingPrice:"", mrp:"", discount:"0", taxRate:"0", stockQuantity:"", minimumStock:"0", supplierId:"", imageUrl:"", notes:"", hasVariants:false });
-  const [categoryOpen, setCategoryOpen] = React.useState(false);
+  const [categoryOpen,setCategoryOpen]=React.useState(false);
   const [categoryForm, setCategoryForm] = React.useState({ name:"", description:"" });
-  const [supplierOpen, setSupplierOpen] = React.useState(false);
+  const [supplierOpen,setSupplierOpen]=React.useState(false);
   const [supplierForm, setSupplierForm] = React.useState({ name:"", company:"", phone:"", email:"", address:"", category:"", openingBalance:"", notes:"" });
   const [lowStockOnly, setLowStockOnly] = React.useState(false);
   const [moduleTick, setModuleTick] = React.useState(0);
@@ -95,11 +95,11 @@ export function App() {
   const [laundryError, setLaundryError] = React.useState<string | null>(null);
   const [laundryCancelOrder, setLaundryCancelOrder] = React.useState<LaundryOrder | null>(null);
   const [laundryCancelError, setLaundryCancelError] = React.useState<string | null>(null);
-  const [expenseOpen, setExpenseOpen] = React.useState(false);
-  const [purchaseOpen, setPurchaseOpen] = React.useState(false);
-  const [staffOpen, setStaffOpen] = React.useState(false);
+  const [expenseOpen,setExpenseOpen]=React.useState(false);
+  const [purchaseOpen,setPurchaseOpen]=React.useState(false);
+  const [staffOpen,setStaffOpen]=React.useState(false);
   const [editingStaffId, setEditingStaffId] = React.useState<string | null>(null);
-  const [moduleError, setModuleError] = React.useState<string | null>(null);
+  const [moduleError,setModuleError]=React.useState<string|null>(null);
   const [expenseForm, setExpenseForm] = React.useState({ date:todayLocal(), categoryId:"", amount:"", paymentMethod:"cash" as PaymentMethod, description:"", reference:"", receiptUrl:"", staffId:"", orderId:"" });
   const [stockPurchaseOpen, setStockPurchaseOpen] = React.useState(false);
   const [resumeStockPurchaseAfterProduct, setResumeStockPurchaseAfterProduct] = React.useState(false);
@@ -344,7 +344,7 @@ export function App() {
       onGenerateBarcode={()=>generateProductBarcode(store.listProducts().map(p=>p.barcode))}
     />
     <Modal open={!!stockAdjustProduct} title="Update Stock Quantity" onClose={()=>setStockAdjustProduct(null)} footer={<><Button type="button" variant="outline" onClick={()=>setStockAdjustProduct(null)}>Cancel</Button><Button type="button" onClick={handleAdjustStock}>Update Stock</Button></>}><div className="space-y-3"><p className="text-sm text-slate-600">{stockAdjustProduct?.name} · Current stock: <strong>{stockAdjustProduct?.stockQuantity}</strong></p><FormField label="New stock quantity"><input className={inputClass} type="number" min="0" step="0.001" value={stockAdjustQty} onChange={e=>setStockAdjustQty(e.target.value)}/></FormField></div></Modal>
-    <BarcodeLabelPrintModal product={labelProduct} categoryName={categories.find(cat=>cat.id===labelProduct?.categoryId)?.name||null} copies={labelCopies} onCopiesChange={setLabelCopies} onClose={()=>setLabelProduct(null)} onError={setModuleError} settings={printSettings}/>
+    <BarcodeLabelPrintModal product={labelProduct} categoryName={categories.find(cat=>cat.id===labelProduct?.categoryId)?.name||null} copies={labelCopies} onCopiesChange={setLabelCopies} onClose={()=>setLabelProduct(null)} onError={setModuleError} settings={printSettings} onUseTwoUp={saveSettings}/>
     <Modal open={expenseOpen} title="Add Expense" onClose={()=>setExpenseOpen(false)} footer={<><Button type="button" variant="outline" onClick={()=>setExpenseOpen(false)}>Cancel</Button><Button type="button" onClick={handleCreateExpense}>Save Expense</Button></>}><div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><FormField label="Date"><input className={inputClass} type="date" value={expenseForm.date} onChange={e=>setExpenseForm({...expenseForm,date:e.target.value})}/></FormField><FormField label="Category *"><select className={selectClass} value={expenseForm.categoryId} onChange={e=>setExpenseForm({...expenseForm,categoryId:e.target.value})}>{expenseCategories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></FormField><FormField label="Amount *"><input className={inputClass} type="number" min="0" value={expenseForm.amount} onChange={e=>setExpenseForm({...expenseForm,amount:e.target.value})}/></FormField><FormField label="Payment method"><select className={selectClass} value={expenseForm.paymentMethod} onChange={e=>setExpenseForm({...expenseForm,paymentMethod:e.target.value as PaymentMethod})}><option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="other">Other</option></select></FormField><FormField label="Staff / Paid to"><select className={selectClass} value={expenseForm.staffId} onChange={e=>setExpenseForm({...expenseForm,staffId:e.target.value})}><option value="">General</option>{staff.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></FormField><FormField label="Order link"><select className={selectClass} value={expenseForm.orderId} onChange={e=>setExpenseForm({...expenseForm,orderId:e.target.value})}><option value="">General</option>{orders.map(o=><option key={o.id} value={o.id}>{o.orderNumber}</option>)}</select></FormField><FormField label="Description"><textarea className={inputClass} value={expenseForm.description} onChange={e=>setExpenseForm({...expenseForm,description:e.target.value})}/></FormField><FormField label="Reference"><input className={inputClass} value={expenseForm.reference} onChange={e=>setExpenseForm({...expenseForm,reference:e.target.value})}/></FormField><FormField label="Receipt reference"><input className={inputClass} value={expenseForm.receiptUrl} onChange={e=>setExpenseForm({...expenseForm,receiptUrl:e.target.value})}/></FormField></div></Modal>
     <BoutiqueStockPurchaseModal open={stockPurchaseOpen} products={store.listProducts()} suppliers={suppliers}
       onChanged={async()=>{refreshAll();if(!await persistDomainToSqlite())throw new Error("SQLite did not confirm supplier bill and stock save");}} onClose={()=>setStockPurchaseOpen(false)}
