@@ -1,5 +1,6 @@
 import type { LaundryOrder, PaymentMethod } from "@minarvabiz/types";
 import { listJournalEntries, planAutomaticPosting, type AutomaticPostingPlan } from "./accounting-store";
+import { calculateLaundryTicketTotals } from "./laundry";
 
 const cents = (n: number) => Math.round((n + Number.EPSILON) * 100);
 const invalid = (message: string): AutomaticPostingPlan => ({ errors: [message], commit: () => null });
@@ -19,6 +20,15 @@ export function planLaundryPosting(order: LaundryOrder, paymentMethod: PaymentMe
     order.quantity, order.customerRate, order.supplierRate, order.totalCustomerCharge,
     order.totalSupplierCost, order.paidAmount, order.balanceAmount, order.profit,
   ];
+  let expected: ReturnType<typeof calculateLaundryTicketTotals>;
+  try {
+    expected = calculateLaundryTicketTotals({
+      mode:order.mode, quantity:order.quantity, customerRate:order.customerRate,
+      supplierRate:order.supplierRate, items:order.items,
+    });
+  } catch {
+    return invalid("Invalid mixed-garment laundry accounting amounts");
+  }
   if (values.some((value) => !Number.isFinite(value))
     || order.quantity <= 0
     || [order.customerRate, order.supplierRate, order.totalCustomerCharge, order.totalSupplierCost, order.paidAmount, order.balanceAmount]
@@ -26,8 +36,8 @@ export function planLaundryPosting(order: LaundryOrder, paymentMethod: PaymentMe
     || ![order.customerRate, order.supplierRate, order.totalCustomerCharge, order.totalSupplierCost, order.paidAmount, order.balanceAmount]
       .every((value) => Number.isSafeInteger(cents(value)))
     || cents(order.totalCustomerCharge) !== cents(order.paidAmount) + cents(order.balanceAmount)
-    || cents(order.totalCustomerCharge) !== cents(order.customerRate * order.quantity)
-    || cents(order.totalSupplierCost) !== cents(order.supplierRate * order.quantity)
+    || cents(order.totalCustomerCharge) !== cents(expected.totalCustomerCharge)
+    || cents(order.totalSupplierCost) !== cents(expected.totalSupplierCost)
     || cents(order.profit) !== cents(order.totalCustomerCharge) - cents(order.totalSupplierCost)) {
     return invalid("Invalid laundry accounting amounts");
   }
