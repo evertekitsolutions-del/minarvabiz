@@ -304,3 +304,6 @@ export * from "./industry-workspace-profile";
 
 // Advisory industry-specific workflow templates; no activation or persisted transitions.
 export * from "./industry-workflow-templates";
+
+// Pure scoped industry workflow reducer; persistence adapters must enforce CAS and RBAC.
+export * from "./industry-workflow-reducer";
