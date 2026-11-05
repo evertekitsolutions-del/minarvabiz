@@ -185,9 +185,9 @@ async function printHtmlDocument(input: {
     // the rendered invoice content. Keep multi-page invoices bounded.
     let thermalPageHeightMm = 297;
     if (paper === "thermal") {
-      const visibleText = html.replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, "")
-        .replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, "")
-        .replace(/<[^>]*>/g, " ").replace(/\\s+/g, " ").trim();
+      const visibleText = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
       if (visibleText.length < 5) return { ok: false, error: "Thermal invoice content is empty; nothing was sent to the cutter." };
       // Trusted DOM measurement is best; a text-based bound keeps printing
       // functional if this locked-down (javascript:false) print view denies it.
