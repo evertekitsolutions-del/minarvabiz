@@ -13,12 +13,13 @@ assert.equal(result.diagnostics?.length || 0,0,"Label TypeScript must transpile 
 let prefs = {labelWidthMm:38,labelHeightMm:38,labelColumns:2,labelRollWidthMm:101.6,
   labelGapMm:3,labelLeftMarginMm:11.3,labelRowGapMm:0,labelCodeMode:"barcode",labelLayout:"compact"};
 const m={exports:{}};
+const sent=[];
 const lookup=(id)=>{
   if(id==="./shop-profile")return {getShopProfile:()=>({shopName:"ERA WARDROBE"})};
   if(id==="@minarvabiz/utils")return {formatMoney:(n)=>"Rs."+Number(n).toFixed(2)};
   if(id==="./html")return {escapeHtml:(s)=>String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")};
   if(id==="./print-settings")return {getPrintSettings:()=>prefs};
-  if(id==="./desktop-print")return {tryDesktopPrintHtml:()=>true};
+  if(id==="./desktop-print")return {tryDesktopPrintHtml:()=>true,requestDesktopPrintHtml:(html,paper,opts)=>{sent.push({html,paper,opts});return Promise.resolve({ok:true});}};
   if(id==="./qr-code")return {qrSvg:()=>"<svg class='qr-svg'></svg>"};
   throw Error("unexpected import "+id);
 };
@@ -43,6 +44,32 @@ assert.match(single,/@page\{size:38mm 38mm;margin:0\}/);
 assert.match(single,/grid-template-columns:repeat\(1,38mm\)/);
 prefs={...prefs,labelColumns:2,labelRollWidthMm:70};
 assert.throws(()=>m.exports.buildBarcodeLabelHtml(product,{copies:1}),/exceed/);
+
+// Same document as the in-app preview must be submitted directly to the
+// configured Windows printer, bypassing the OS dialog's missing preview.
+const previousWindow=globalThis.window;
+try {
+  globalThis.window={};
+  prefs={...prefs,labelColumns:2,labelRollWidthMm:101.6,labelWidthMm:38,labelHeightMm:38,
+    labelPrinterName:"QA Label Printer",thermalPrinterName:""};
+  const direct=await m.exports.sendBarcodeLabelsToPrinter(product,3);
+  assert.deepEqual(direct,{ok:true});
+  assert.equal(sent.length,1);
+  assert.equal(sent[0].paper,"label");
+  assert.deepEqual(sent[0].opts,{labelWidthMm:101.6,labelHeightMm:38,silent:true});
+  assert.match(sent[0].html,/grid-template-columns:repeat\\(2,38mm\\)/);
+  assert.equal((sent[0].html.match(/class="label-sheet"/g)||[]).length,2);
+  prefs={...prefs,labelPrinterName:"",thermalPrinterName:""};
+  assert.match((await m.exports.sendBarcodeLabelsToPrinter(product,2)).error,/Select a barcode label printer/);
+  assert.equal(sent.length,1,"Refuse direct printing without a configured label printer");
+} finally {
+  if(previousWindow===undefined)delete globalThis.window;
+  else globalThis.window=previousWindow;
+}
+const modal=fs.readFileSync(new URL("../apps/desktop/src/components/BarcodeLabelPrintModal.tsx",import.meta.url),"utf8");
+assert.match(modal,/Use 4-inch roll — 2 stickers per row/);
+assert.match(modal,/srcDoc=\\{preview.html\\}/);
+assert.match(modal,/sendBarcodeLabelsToPrinter\\(product, count, categoryName\\)/);
 
 const settings=fs.readFileSync(new URL("../packages/ui/src/components/settings/SettingsPanel.tsx",import.meta.url),"utf8");
 assert.match(settings,/savedProfileKey = JSON\.stringify\(profile\)/);
