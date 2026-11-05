@@ -223,19 +223,44 @@ export function awardProcurementRfq(id:string,expectedVersion:number,supplierId:
     return {productId:line.productId,description:line.description,
       quantity:line.quantity,unitCost:q.unitCost,taxRate:q.taxRate};
   });
-  const created=procurement.createPurchaseOrder({
-    supplierId,expectedDeliveryDate:r.requiredBy,branchId:r.branchId,
-    lines,notes:"RFQ "+r.reference+" / Supplier quote "+quote.quoteReference+
-      (r.notes?" / "+r.notes:""),
-  });
-  if(created.errors.length||!created.purchaseOrder){
-    throw new Error(created.errors.join("; ")||"Could not create selected purchase order");
+  // The RFQ and PO are committed by the host's snapshot writer. If a crash
+  // persisted the PO but not the RFQ award link, recover the exact previous PO
+  // instead of issuing a second financially actionable order.
+  const marker="MINARVA-RFQ-ID:"+r.id;
+  const previous=procurement.listPurchaseOrders().filter(po=>
+    po.notes?.split(" / ").includes(marker));
+  if(previous.length>1)throw new Error("Duplicate RFQ purchase orders require reconciliation");
+  let purchaseOrder:PurchaseOrder;
+  if(previous.length===1){
+    const po=previous[0];
+    const matching=po.supplierId===supplierId && po.branchId===r.branchId &&
+      po.expectedDeliveryDate===r.requiredBy && po.status!=="cancelled" &&
+      po.lines.length===lines.length && po.lines.every((actual,i)=>{
+        const expected=lines[i];
+        return actual.productId===expected.productId &&
+          actual.description===expected.description &&
+          actual.orderedQuantity===expected.quantity &&
+          actual.unitCost===expected.unitCost &&
+          actual.taxRate===expected.taxRate;
+      });
+    if(!matching)throw new Error("RFQ purchase order already exists with a different supplier, price or status");
+    purchaseOrder=po;
+  }else{
+    const created=procurement.createPurchaseOrder({
+      supplierId,expectedDeliveryDate:r.requiredBy,branchId:r.branchId,
+      lines,notes:marker+" / RFQ "+r.reference+" / Supplier quote "+quote.quoteReference+
+        (r.notes?" / "+r.notes:""),
+    });
+    if(created.errors.length||!created.purchaseOrder){
+      throw new Error(created.errors.join("; ")||"Could not create selected purchase order");
+    }
+    purchaseOrder=created.purchaseOrder;
   }
   const before=clone(r);r.status="awarded";r.awardedSupplierId=supplierId;
-  r.purchaseOrderId=created.purchaseOrder.id;r.updatedAt=nowISO();r.version++;
+  r.purchaseOrderId=purchaseOrder.id;r.updatedAt=nowISO();r.version++;
   auditAction("procurement.rfq.award","procurement_rfqs",id,before,clone(r));
   touchPersistence();
-  return {rfq:clone(r),purchaseOrder:created.purchaseOrder};
+  return {rfq:clone(r),purchaseOrder};
 }
 export function cancelProcurementRfq(id:string,expectedVersion:number):ProcurementRfq {
   assertPermission("purchases.manage");
