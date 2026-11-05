@@ -4,7 +4,7 @@ import { parseDesktopPurchaseMoney } from "./lib/desktop-purchase-amount";
 import * as React from "react";
 import {
 AppShell, Dashboard, ProductList, PosBilling, NormalBilling, SalesList,
-OrderList, OrderForm, emptyOrderForm, OrderDetail, ProductionBoard, LaundryList, LaundryForm, LaundryCancellationForm,
+OrderList, OrderForm, emptyOrderForm, ProductionBoard, LaundryList, LaundryForm, LaundryCancellationForm,
 ExpenseList, PurchaseList, StaffList, NotificationCenter, ReportsPanel,
 BackupPanel, SettingsPanel, SupportCenter, WarehousePanel, AccountingPanel, QuotationsPanel, Modal, Button, FormField, inputClass, selectClass, GlobalSearchPalette,
 TrialGate, MAIN_NAV,
@@ -25,6 +25,8 @@ import { BarcodeLabelPrintModal } from "./components/BarcodeLabelPrintModal";
 import { ProductEditorModal } from "./components/ProductEditorModal";
 import { parseProductVariants, createProductVariantFamily, addProductVariants, type ProductVariantDraft } from "@minarvabiz/business-logic";
 import { DesktopCustomerMasterPanel } from "./components/DesktopCustomerMasterPanel";
+import { DesktopServiceOrderDetail } from "./components/DesktopServiceOrderDetail";
+import { insightTarget } from "./lib/insight-navigation";
 import { DesktopLicenseExpiryBanner, effectiveLicenseDaysRemaining } from "./components/DesktopLicenseExpiryBanner";
 import { DesktopEntitlementMonitor } from "./components/DesktopEntitlementMonitor";
 import { DesktopProcurementPanel } from "./components/DesktopProcurementPanel";
@@ -68,13 +70,6 @@ export function App() {
   const [form, setForm] = React.useState<OrderFormValues>(emptyOrderForm());
   const [formError, setFormError] = React.useState<string | null>(null);
   const [selectedOrder,setSelectedOrder]=React.useState<ServiceOrder|null>(null);
-  const [collectOrder,setCollectOrder]=React.useState<ServiceOrder|null>(null);
-  const [collectDueAmount,setCollectDueAmount]=React.useState("");
-  const [collectDueMethod,setCollectDueMethod]=React.useState<PaymentMethod>("cash");
-  const [collectDueError,setCollectDueError]=React.useState<string|null>(null);
-  const [collectDueBusy,setCollectDueBusy]=React.useState(false);
-  const [collectDueRetry,setCollectDueRetry]=React.useState(false);
-  const [collectionReceiptId,setCollectionReceiptId]=React.useState<string|null>(null);
   const [crmCustomerId, setCrmCustomerId] = React.useState("");
   const [rosterOpen, setRosterOpen] = React.useState(false);
   const [staffDetailId, setStaffDetailId] = React.useState("");
@@ -273,44 +268,6 @@ export function App() {
       setCreateOpen(false);setForm(emptyOrderForm());setFormError(null);setModuleError(null);void persistAndRefresh();setSelectedOrder(result.order);
     } catch(error){setFormError(errorMessage(error));}
   }
-  function openOrderDueCollection(order:ServiceOrder){
-    if(customerCollection.hasPending()){
-      setModuleError("An earlier customer payment is awaiting SQLite confirmation. Open Customers and retry that save before collecting another order.");
-      return;
-    }
-    setCollectOrder(order);setCollectDueAmount(order.balance.toFixed(2));setCollectDueMethod("cash");
-    setCollectDueError(null);setCollectDueRetry(false);setCollectionReceiptId(null);
-  }
-  async function handleCollectOrderDue(){
-    if(!collectOrder||collectDueBusy)return;
-    setCollectDueBusy(true);setCollectDueError(null);
-    try{
-      let result;
-      if(collectDueRetry){
-        result=await customerCollection.retryPending();
-      }else{
-        if(customerCollection.hasPending())throw new Error("Another customer payment requires SQLite retry first.");
-        const amount=parseDesktopPurchaseMoney(collectDueAmount,"Service order payment");
-        if(amount<=0)throw new Error("Enter a positive payment amount.");
-        const live=ordersStore.getOrder(collectOrder.id);
-        if(!live||live.customerId!==collectOrder.customerId||live.status==="cancelled")
-          throw new Error("Selected service order needs reconciliation.");
-        result=await customerCollection.collect({
-          customerId:collectOrder.customerId,amount,method:collectDueMethod,
-          target:{sourceType:"service_order",id:collectOrder.id},
-        });
-      }
-      if(!result.ok){
-        setCollectDueRetry(customerCollection.hasPending());setCollectDueError(result.error);
-        return;
-      }
-      const updated=ordersStore.getOrder(collectOrder.id);
-      if(updated)setSelectedOrder({...updated});
-      refreshAll();setCollectionReceiptId(result.paymentId);setCollectDueRetry(false);
-      setCollectOrder(null);setModuleError(null);
-    }catch(error){setCollectDueError(errorMessage(error));}
-    finally{setCollectDueBusy(false);}
-  }
   function handleOrderStatusChange(orderId:string,status:OrderStatus,options?:{refundPaymentMethod?:PaymentMethod;reason?:string}){try{const result=ordersStore.updateOrderStatus(orderId,status,options);if(result.error||!result.order){setModuleError(result.error||"Unable to change order status");return;}setModuleError(null);setSelectedOrder(result.order);void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
   function handleOrderOperationalUpdate(input:{deliveryDate:string|null;notes:string|null;materialDetails:string|null},reason:string){if(!selectedOrder)return;try{const result=ordersStore.updateOrderOperationalDetails(selectedOrder.id,input,reason);if(result.errors.length||!result.order){setModuleError(result.errors.join("; ")||"Unable to update service order");return;}setModuleError(null);setSelectedOrder({...result.order});void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
   function handleOrderDetailExpense(input:{description:string;amount:number;categoryId:string;paymentMethod:PaymentMethod}){if(!selectedOrder)return;try{const result=phase5Store.createExpense({categoryId:input.categoryId,amount:input.amount,paymentMethod:input.paymentMethod,description:input.description||null,orderId:selectedOrder.id});if(result.errors.length||!result.expense){setModuleError(result.errors.join("; ")||"Unable to record order expense");return;}const updated=ordersStore.getOrder(selectedOrder.id);if(updated)setSelectedOrder({...updated,expenses:[...updated.expenses]});setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
@@ -339,7 +296,7 @@ export function App() {
   function handleSaveStaff(){try{const payload={name:staffForm.name.trim(),phone:staffForm.phone||null,email:staffForm.email||null,role:staffForm.role,salary:parseDesktopPurchaseMoney(staffForm.salary,"Salary",true),joiningDate:staffForm.joiningDate||null,status:staffForm.status,notes:staffForm.notes||null};if(!payload.name)throw new Error("Staff name is required");editingStaffId?phase6Store.updateStaff(editingStaffId,payload):phase6Store.createStaff(payload);setStaffOpen(false);resetStaffForm();setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
   function saveSettings(){void persistAndRefresh();setModuleTick(v=>v+1);}
   const navTo=(id:NavItemId)=>{const feature=NAV_FEATURE[id];if(feature&&!licenseFeatures[feature]){setModuleError(`Feature not included in current license: ${feature}`);setActiveNav("dashboard");setSelectedOrder(null);return;}setModuleError(null);setActiveNav(id);setSelectedOrder(null);};
-  const handleInsightAction=(action:string)=>{const targets:Record<string,NavItemId>={"Review low stock":"products","Open outstanding payments":"payments","Review pending orders":"services","Open ready orders":"services","Open reports":"reports","Review expenses":"expenses"};const target=targets[action];if(target)navTo(target);};
+  const handleInsightAction=(action:string)=>{const target=insightTarget(action);if(target)navTo(target);};
   const laundry=phase5Store.listLaundryOrders(), expenses=phase5Store.listExpenses(), purchases=phase5Store.listPurchases(), staff=phase6Store.listStaff(), assignments=phase6Store.listAssignments(), notifications=phase6Store.listNotifications(), reportSales=phase7Store.salesReport(reportFrom||undefined,reportTo?`${reportTo}T23:59:59.999Z`:undefined), reportDayEnd=phase7Store.dayEndReport(), reportStock=phase7Store.stockReport(), reportOutstanding=phase7Store.outstandingPaymentsReport(), backups=phase7Store.listBackups(), suppliers=phase5Store.listSuppliers(), expenseCategories=phase5Store.listExpenseCategories(), profile=getShopProfile(), tax=getTaxConfig(), backupSettings=getAutoBackupSettings(), printSettings=getPrintSettings(), view=activeNav as string;
   const professionalReports=buildProfessionalReportData(reportFrom||undefined,reportTo||undefined);
   return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} desktopModuleContext={{customerId:crmCustomerId,staffId:staffDetailId,returnSaleId,onReturnSaleHandled:()=>setReturnSaleId("")}} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png",navItems:allowedNav}} header={{showSearch:view!=="dashboard",title:view==="services"?"Boutique & Tailoring Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:listCustomerCommunicationQueue().filter(row=>row.status==="pending"||row.status==="failed").length,onMessagesClick:()=>navTo("messages"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("agenda"),onSearch:setGlobalSearchQuery}}>
@@ -353,24 +310,7 @@ export function App() {
     {view==="accounting"&&<AccountingPanel/>}
         {view==="quotations"&&<QuotationsPanel/>}
     {view==="sales"&&<div className="space-y-4"><div className="flex flex-wrap gap-2"><Button variant={salesTab==="pos"?"primary":"outline"} onClick={()=>setSalesTab("pos")}>POS Billing</Button><Button variant={salesTab==="normal"?"primary":"outline"} onClick={()=>setSalesTab("normal")}>Normal Billing</Button><Button variant={salesTab==="history"?"primary":"outline"} onClick={()=>setSalesTab("history")}>Sales History</Button></div>{salesTab==="pos"?<PosBilling products={store.listProducts()} customers={customers} onFindByBarcode={store.getProductByBarcode} onAddCustomer={openCustomerCreator} onAddProduct={()=>{resetProductForm();setProductOpen(true);}} heldSales={heldSales} onHoldSale={payload=>{try{const result=store.holdSale(payload);if(result.errors.length||!result.heldSale)return{success:false,errors:result.errors.length?result.errors:["Unable to hold sale"]};void persistAndRefresh();return{success:true,holdNumber:result.heldSale.holdNumber};}catch(error){return{success:false,errors:[errorMessage(error)]};}}} onRemoveHeldSale={id=>{try{store.removeHeldSale(id);void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}} onCompleteSale={handleSale} onPrintSale={(id,paper)=>{const sale=store.getSale(id);if(sale)printSaleInvoice(sale,paper);}}/>:salesTab==="normal"?<NormalBilling products={store.listProducts()} customers={customers} onAddCustomer={openCustomerCreator} onAddProduct={()=>{resetProductForm();setProductOpen(true);}} onCompleteSale={handleSale} onPrintSale={(id,paper)=>{const sale=store.getSale(id);if(sale)printSaleInvoice(sale,paper);}}/>:<SalesList sales={sales} customers={customers} buildPreviewHtml={(sale,paper)=>buildSaleInvoiceHtml(sale,{paper,autoPrint:false})} onPrintA4={sale=>printSaleInvoice(sale,"a4")} onPrintThermal={sale=>printSaleInvoice(sale,"thermal")} onCreateReturn={sale=>{setReturnSaleId(sale.id);navTo("returns");}}/>}</div>}
-    {view==="services"&&<div className="space-y-4">{collectionReceiptId&&<p role="status" className="text-sm text-green-700">Service payment confirmed in SQLite. Receipt reference: {collectionReceiptId}. The payment ledger records its service order number.</p>}<div className="flex flex-wrap items-center gap-2"><Button variant={orderView==="table"?"primary":"outline"} onClick={()=>{setSelectedOrder(null);setOrderView("table");}}>Orders Table</Button><Button variant={orderView==="production"?"primary":"outline"} onClick={()=>setOrderView("production")}>Production Board</Button>{selectedOrder&&<Button onClick={()=>{setForm(emptyOrderForm());setCreateOpen(true);}}>+ New Order</Button>}</div>{orderView==="production"?<ProductionBoard orders={orders} staff={staff} assignments={assignments} onSelect={setSelectedOrder} onStatusChange={handleOrderStatusChange} onAssignStaff={handleAssignStaff}/>:<>{!selectedOrder&&<OrderList industryProfile="boutique_laundry" orders={orders} customers={customers} onSearch={setOrderQuery} onFilterStatus={setOrderStatus} onFilterType={setOrderType} onFilterCustomer={setOrderCustomerId} onFilterOrderDateFrom={setOrderDateFrom} onFilterOrderDateTo={setOrderDateTo} onFilterDeliveryDateFrom={setOrderDeliveryDateFrom} onFilterDeliveryDateTo={setOrderDeliveryDateTo} onAdd={()=>{setForm(emptyOrderForm());setCreateOpen(true);}} onSelect={order=>{setSelectedOrder(order);setProfiles(ordersStore.listMeasurementProfiles(order.customerId));}}/>}</>}{selectedOrder&&<OrderDetail onCollectBalance={openOrderDueCollection} onClose={()=>setSelectedOrder(null)} order={selectedOrder} measurementProfiles={profiles} expenseCategories={expenseCategories} onStatusChange={handleOrderStatusChange.bind(null,selectedOrder.id)} onQualityCheck={handleQualityCheck} onAddExpense={handleOrderDetailExpense} onUpdateOperationalDetails={handleOrderOperationalUpdate} auditHistory={phase7Store.listAuditLogs(500).filter(entry=>entry.tableName==="orders"&&entry.recordId===selectedOrder.id)}/>}<Modal open={!!collectOrder} title="Collect service order balance" onClose={()=>{if(!collectDueBusy)setCollectOrder(null);}}>
-      <div className="space-y-4">
-        <p className="text-sm text-slate-600">Order {collectOrder?.orderNumber} · Remaining: {collectOrder?.balance.toFixed(2)}</p>
-        <label className="block space-y-1 text-sm">Amount
-          <input aria-label="Service order collection amount" className={inputClass} inputMode="decimal" value={collectDueAmount} disabled={collectDueBusy||collectDueRetry} onChange={e=>setCollectDueAmount(e.target.value)}/>
-        </label>
-        <label className="block space-y-1 text-sm">Payment method
-          <select aria-label="Service order collection method" className={selectClass} value={collectDueMethod} disabled={collectDueBusy||collectDueRetry} onChange={e=>setCollectDueMethod(e.target.value as PaymentMethod)}>
-            <option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option><option value="bank">Bank</option><option value="online">Online</option><option value="other">Other</option>
-          </select>
-        </label>
-        {collectDueError&&<p role="alert" className="text-sm text-red-700">{collectDueError}</p>}
-        <div className="flex flex-wrap gap-2">
-          <Button disabled={collectDueBusy} onClick={()=>{void handleCollectOrderDue();}}>{collectDueRetry?"Retry SQLite save":"Collect and save"}</Button>
-          <Button variant="outline" disabled={collectDueBusy} onClick={()=>setCollectOrder(null)}>Close</Button>
-        </div>
-      </div>
-    </Modal><Modal open={createOpen} title="New Service Order" onClose={()=>setCreateOpen(false)}><OrderForm value={form} customers={customers} profiles={profiles} onChange={setForm} onLoadProfiles={customerId=>setProfiles(ordersStore.listMeasurementProfiles(customerId))} onAddCustomer={openCustomerCreator} onSubmit={handleCreateOrder} onCancel={()=>setCreateOpen(false)} error={formError}/></Modal></div>}
+    {view==="services"&&<div className="space-y-4"><div className="flex flex-wrap items-center gap-2"><Button variant={orderView==="table"?"primary":"outline"} onClick={()=>{setSelectedOrder(null);setOrderView("table");}}>Orders Table</Button><Button variant={orderView==="production"?"primary":"outline"} onClick={()=>setOrderView("production")}>Production Board</Button>{selectedOrder&&<Button onClick={()=>{setForm(emptyOrderForm());setCreateOpen(true);}}>+ New Order</Button>}</div>{orderView==="production"?<ProductionBoard orders={orders} staff={staff} assignments={assignments} onSelect={setSelectedOrder} onStatusChange={handleOrderStatusChange} onAssignStaff={handleAssignStaff}/>:<>{!selectedOrder&&<OrderList industryProfile="boutique_laundry" orders={orders} customers={customers} onSearch={setOrderQuery} onFilterStatus={setOrderStatus} onFilterType={setOrderType} onFilterCustomer={setOrderCustomerId} onFilterOrderDateFrom={setOrderDateFrom} onFilterOrderDateTo={setOrderDateTo} onFilterDeliveryDateFrom={setOrderDeliveryDateFrom} onFilterDeliveryDateTo={setOrderDeliveryDateTo} onAdd={()=>{setForm(emptyOrderForm());setCreateOpen(true);}} onSelect={order=>{setSelectedOrder(order);setProfiles(ordersStore.listMeasurementProfiles(order.customerId));}}/>}</>}{selectedOrder&&<DesktopServiceOrderDetail collection={customerCollection} onPaymentSaved={updated=>{setSelectedOrder(updated);refreshAll();}} onClose={()=>setSelectedOrder(null)} order={selectedOrder} measurementProfiles={profiles} expenseCategories={expenseCategories} onStatusChange={handleOrderStatusChange.bind(null,selectedOrder.id)} onQualityCheck={handleQualityCheck} onAddExpense={handleOrderDetailExpense} onUpdateOperationalDetails={handleOrderOperationalUpdate} auditHistory={phase7Store.listAuditLogs(500).filter(entry=>entry.tableName==="orders"&&entry.recordId===selectedOrder.id)}/>}<Modal open={createOpen} title="New Service Order" onClose={()=>setCreateOpen(false)}><OrderForm value={form} customers={customers} profiles={profiles} onChange={setForm} onLoadProfiles={customerId=>setProfiles(ordersStore.listMeasurementProfiles(customerId))} onAddCustomer={openCustomerCreator} onSubmit={handleCreateOrder} onCancel={()=>setCreateOpen(false)} error={formError}/></Modal></div>}
     {view==="laundry"&&<LaundryList orders={laundry} customers={customers} auditLogs={phase7Store.listAuditLogs(500)} onUpdateDetails={handleLaundryDetailsUpdate} onCollectPayment={handleLaundryCollection} onAddIroning={()=>setLaundryMode("in_house_ironing")} onAddOutsourced={()=>setLaundryMode("outsourced")} onStatusChange={handleLaundryStatusChange} onCancel={order=>{setLaundryCancelError(null);setLaundryCancelOrder(order);}}/>} 
     {view==="expenses"&&<ExpenseList expenses={expenses} categories={expenseCategories} onAdd={()=>{setModuleError(null);setExpenseForm(v=>({...v,date:v.date||todayLocal(),categoryId:v.categoryId||expenseCategories[0]?.id||""}));setExpenseOpen(true);}} onReverse={handleReverseExpense}/>} 
     {view==="purchases"&&<div className="space-y-4">
