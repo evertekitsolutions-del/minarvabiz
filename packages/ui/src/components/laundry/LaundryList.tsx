@@ -7,6 +7,7 @@ import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
 import { LaundryIncidentsPanel } from "./LaundryIncidentsPanel";
 import { LaundryOperationsPanel } from "./LaundryOperationsPanel";
+import { LaundryRateCatalogPanel } from "./LaundryRateCatalogPanel";
 import { LaundryWhatsAppPanel } from "./LaundryWhatsAppPanel";
 import { LaundryRoutePanel } from "./LaundryRoutePanel";
 import { Modal } from "../forms/Modal";
@@ -380,6 +381,7 @@ export function LaundryList({
 
         <LaundryRoutePanel orders={orders} customers={customers} />
         <LaundryOperationsPanel orders={orders} />
+        <LaundryRateCatalogPanel />
         <LaundryIncidentsPanel orders={orders} onChange={() => setIncidentRevision(count => count + 1)} />
         {csvFeedback && <p role={csvFeedback.failed ? "alert" : "status"} className={`text-sm ${csvFeedback.failed ? "text-rose-700" : "text-slate-600"}`}>{csvFeedback.message}</p>}
         {tagPrintFeedback && <p role="status" className="text-sm text-slate-600">{tagPrintFeedback}</p>}
