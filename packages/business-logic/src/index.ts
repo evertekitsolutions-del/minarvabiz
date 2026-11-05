@@ -301,3 +301,6 @@ export * from "./service-feedback-insights";
 export * from "./boutique-stock-purchase";
 
 export * from "./industry-workspace-profile";
+
+// Advisory industry-specific workflow templates; no activation or persisted transitions.
+export * from "./industry-workflow-templates";
