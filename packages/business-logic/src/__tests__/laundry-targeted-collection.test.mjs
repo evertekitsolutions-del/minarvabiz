@@ -82,6 +82,9 @@ test("shared Web and Windows laundry UI exposes explicit targeted collection pat
   assert.match(ui,/Collect ticket balance/);
   assert.match(ui,/onCollectPayment/);
   assert.match(web,/target:\s*\{\s*sourceType:\s*"laundry"/);
-  assert.match(win,/target:\{sourceType:"laundry"/);
+  const winCollection=fs.readFileSync(new URL("../../../../apps/desktop/src/components/DesktopLaundryList.tsx",import.meta.url),"utf8");
+  assert(win.includes("DesktopLaundryList collection={customerCollection}"));
+  assert(winCollection.includes('target: { sourceType: "laundry", id: ticket.id }'));
+  assert(winCollection.includes("collection.collect("));
   assert.match(ui,/can\("payments.collect"\)/);
 });

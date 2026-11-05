@@ -8,7 +8,8 @@ export function useDesktopCustomerCollection(persist: () => Promise<boolean>) {
   const persistRef = React.useRef(persist);
   persistRef.current = persist;
   const [collection] = React.useState(() => createDurableCustomerCollection(
-    (input: { customerId: string; amount: number; method: PaymentMethod; notes?: string }) =>
+    (input: { customerId: string; amount: number; method: PaymentMethod; notes?: string;
+      target?: { sourceType: "service_order" | "laundry"; id: string } }) =>
       store.recordCustomerPayment(input),
     () => persistRef.current(),
   ));
