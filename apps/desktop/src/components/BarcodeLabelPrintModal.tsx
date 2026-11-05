@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Modal, Button, FormField, inputClass } from "@minarvabiz/ui";
-import { buildBarcodeLabelHtml, printBarcodeLabels, sendBarcodeLabelsToPrinter, updatePrintSettings, type PrintSettings } from "@minarvabiz/business-logic";
+import { buildBarcodeLabelHtml, printBarcodeLabels, sendBarcodeLabelsToPrinter, updatePrintSettings, CROMO_38X25_2UP_NOGAP_PRESET, type PrintSettings } from "@minarvabiz/business-logic";
 import type { Product } from "@minarvabiz/types";
 
 type LabelSettings = Pick<PrintSettings, "labelWidthMm" | "labelHeightMm" | "labelCodeMode" | "labelLayout" | "labelColumns" | "labelRollWidthMm" | "labelGapMm" | "labelLeftMarginMm" | "labelRowGapMm" | "labelPrinterName" | "thermalPrinterName">;
@@ -84,6 +84,12 @@ export function BarcodeLabelPrintModal({
         </FormField>
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
           <Button type="button" size="sm" variant="outline" onClick={() => {
+            updatePrintSettings(CROMO_38X25_2UP_NOGAP_PRESET);
+            onUseTwoUp();
+            if (count < 2) onCopiesChange("2");
+            setMessage(null);
+          }}>Use CROMO 38×25 — 2-up / NO GAP</Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => {
             updatePrintSettings({labelColumns:2,labelRollWidthMm:101.6,labelWidthMm:38,labelHeightMm:38,labelGapMm:3,labelLeftMarginMm:11.3,labelRowGapMm:0});
             onUseTwoUp();
             if (count < 2) onCopiesChange("2");
@@ -94,7 +100,7 @@ export function BarcodeLabelPrintModal({
         {product && <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
           <p className="mb-2 text-sm font-semibold text-slate-800">In-app print preview — exact paper layout</p>
           <p className="mb-2 text-xs text-slate-600">
-            {pageWidth} mm roll × {pageHeight} mm feed · {settings.labelWidthMm} × {settings.labelHeightMm} mm stickers · {columns} across · {settings.labelCodeMode}
+            {pageWidth} mm page width × {pageHeight} mm feed · {settings.labelWidthMm} × {settings.labelHeightMm} mm stickers · {columns} across · {settings.labelCodeMode}{columns===2 ? ` · gap ${settings.labelGapMm} mm · left offset ${settings.labelLeftMarginMm} mm` : ""}
           </p>
           {preview.error ? <p role="alert" className="text-sm text-red-700">{preview.error}</p> : (
             <div className="max-w-full overflow-x-auto">
