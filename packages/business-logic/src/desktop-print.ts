@@ -24,7 +24,7 @@ function bridge(): DesktopPrintBridge | null {
 function configuredPrinter(paper: DesktopPrintPaper) {
   const settings = getPrintSettings();
   if (paper === "a4") return settings.a4PrinterName;
-  if (paper === "label") return settings.labelPrinterName || settings.thermalPrinterName;
+  if (paper === "label") return settings.labelPrinterName;
   return settings.thermalPrinterName;
 }
 
@@ -45,6 +45,8 @@ export function requestDesktopPrintHtml(
 
   const settings = getPrintSettings();
   const deviceName = configuredPrinter(paper);
+  // Never route sticker jobs to the POS receipt printer / Windows default.
+  if (paper === "label" && !deviceName) return Promise.resolve({ ok: false, error: "Select a dedicated Barcode label printer in Settings → Printer settings." });
   const silent = Boolean((options?.silent ?? settings.silentDesktopPrint) && deviceName);
 
   try {
