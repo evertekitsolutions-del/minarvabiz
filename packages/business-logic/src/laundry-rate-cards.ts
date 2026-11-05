@@ -37,7 +37,7 @@ export type LaundryRateInput = Omit<LaundryRateCard, "id" | "updatedAt">;
 const cards: LaundryRateCard[] = [];
 const serviceCodes = new Set<string>(LAUNDRY_SERVICES.map(s => s.code));
 const fabricCodes = new Set<string>(LAUNDRY_FABRICS);
-const key = (row: Pick<LaundryRateInput, "mode" | "serviceCode" | "garment" | "fabric" | "supplierId">) =>
+const key = (row: Pick<LaundryRateInput, "mode" | "serviceCode" | "garment" | "fabric" | "supplierId" | "branchId">) =>
   [laundryEffectiveBranchId(row), row.mode, row.mode === "outsourced" ? (row.supplierId || "*") : "in-house", row.serviceCode, row.garment.trim().toLocaleLowerCase("en"), row.fabric].join("|");
 
 export function validateLaundryRateCards(value: unknown): LaundryRateCard[] {
