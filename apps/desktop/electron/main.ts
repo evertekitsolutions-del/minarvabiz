@@ -195,7 +195,7 @@ async function printHtmlDocument(input: {
       thermalPageHeightMm = Math.min(290, Math.max(40, Math.ceil(documentMetrics.heightPx * 25.4 / 96 + 10)));
       await win.webContents.executeJavaScript(`(() => {
         const style = document.createElement('style');
-        style.textContent = '@page{size:${thermalWidthMm}mm ${thermalPageHeightMm}mm!important;margin:0!important}';
+        style.textContent = '@page{size:${thermalWidthMm}mm ${thermalPageHeightMm}mm;margin:0}';
         document.head.appendChild(style);
       })()`);
     }
