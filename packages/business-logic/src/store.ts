@@ -31,6 +31,7 @@ import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
 import { validateLiveSaleCheckout, costSaleLinesFromLiveProducts } from "./sale-checkout-guard";
 import { assertBusinessDayOpen } from "./business-day-state";
+import { targetedLaundryCollectionError } from "./customer-collection-target";
 
 const categories: Category[] = [];
 const customers: Customer[] = [];
@@ -870,13 +871,11 @@ export function hydrateCore(data: {
 
 export function recordCustomerPayment(input: {
   customerId: UUID; amount: number; method: PaymentMethod; reference?: string | null; notes?: string | null;
-  /** Restrict FIFO allocation to exactly one posted laundry ticket, rather than another invoice. */
   target?: { sourceType: "laundry"; id: UUID };
 }): { payment: Payment | null; customer: Customer | null; errors: string[] } {
   assertPermission("payments.collect");
   assertBusinessDayOpen();
   const errors: string[] = [];
-
   let inputAmountMinor: MoneyMinor = 0;
   try {
     inputAmountMinor = toMinorUnits(input.amount);
@@ -884,12 +883,9 @@ export function recordCustomerPayment(input: {
   } catch {
     errors.push("Amount must be positive and finite");
   }
-
   if (!["cash", "bank", "card", "upi", "online", "other"].includes(input.method)) errors.push("Invalid payment method");
-  if (input.target && (input.target.sourceType !== "laundry" || !input.target.id)) errors.push("Invalid receipt allocation target");
   const customer = getCustomer(input.customerId);
   if (!customer || customer.deletedAt) errors.push("Customer not found");
-
   let customerOutstandingMinor: MoneyMinor = 0;
   if (customer) {
     try {
@@ -900,7 +896,6 @@ export function recordCustomerPayment(input: {
     }
   }
   if (errors.length || !customer) return { payment: null, customer: null, errors };
-
   const appliedMinor = Math.min(inputAmountMinor, customerOutstandingMinor);
   if (appliedMinor <= 0) return { payment: null, customer: null, errors: ["No outstanding balance to collect"] };
   const applied = fromMinorUnits(appliedMinor);
@@ -909,23 +904,13 @@ export function recordCustomerPayment(input: {
     && sale.status !== "cancelled" && sale.status !== "returned" && sale.balanceAmount > 0)
     .map((sale) => ({ kind: "sale" as const, id: sale.id, date: sale.saleDate, sale, balance: sale.balanceAmount }));
   const externalCandidates = [...customerReceivableProviders.entries()].flatMap(([providerKey, provider]) =>
-    provider.list(customer.id)
-      .filter((item) => !input.target || (input.target.sourceType === "laundry" && providerKey === "laundry" && item.id === input.target.id))
-      .map((item) => ({
-        kind: "external" as const, id: item.id, date: item.date, item, balance: item.balance, providerKey,
-      }))
+    provider.list(customer.id).filter((item) => !input.target || (providerKey === "laundry" && item.id === input.target.id))
+      .map((item) => ({ kind: "external" as const, id: item.id, date: item.date, item, balance: item.balance, providerKey }))
   );
   const candidates = [...saleCandidates, ...externalCandidates]
     .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-  if (input.target) {
-    if (candidates.length !== 1) return { payment: null, customer: null, errors: ["Selected laundry ticket has no collectible balance"] };
-    let targetMinor: MoneyMinor;
-    try { targetMinor = toMinorUnits(candidates[0].balance); }
-    catch { return { payment: null, customer: null, errors: ["Selected laundry balance needs reconciliation"] }; }
-    if (targetMinor <= 0 || inputAmountMinor > targetMinor || inputAmountMinor > customerOutstandingMinor) {
-      return { payment: null, customer: null, errors: ["Payment cannot exceed the selected laundry or customer outstanding balance"] };
-    }
-  }
+  const targetError = targetedLaundryCollectionError(input.target, candidates, inputAmountMinor, customerOutstandingMinor);
+  if (targetError) return { payment: null, customer: null, errors: [targetError] };
 
   let remainingMinor: MoneyMinor = appliedMinor;
   const allocations: Array<{ sale: Sale; amount: number; amountMinor: MoneyMinor }> = [];
