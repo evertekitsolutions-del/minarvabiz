@@ -11,7 +11,7 @@ import { LaundryWhatsAppPanel } from "./LaundryWhatsAppPanel";
 import { LaundryRoutePanel } from "./LaundryRoutePanel";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
-import { buildLaundryVendorScorecard, exportLaundryTicketsCsv } from "@minarvabiz/business-logic";
+import { buildLaundryVendorScorecard, exportLaundryTicketsCsv, printLaundryServiceReceipt } from "@minarvabiz/business-logic";
 
 type LaundryEditResult = { success: boolean; error?: string; order?: LaundryOrder };
 
@@ -98,6 +98,20 @@ export function LaundryList({
   const [editError, setEditError] = React.useState<string | null>(null);
   const [csvFeedback, setCsvFeedback] = React.useState<{ failed: boolean; message: string } | null>(null);
   const [tagPrintFeedback, setTagPrintFeedback] = React.useState<string | null>(null);
+  const [receiptPrintFeedback, setReceiptPrintFeedback] = React.useState<{failed:boolean;message:string}|null>(null);
+  async function printServiceReceipt(ticket: LaundryOrder) {
+    setReceiptPrintFeedback(null);
+    try {
+      const result = await printLaundryServiceReceipt(ticket,{
+        customer:customers?.find(customer => customer.id === ticket.customerId) || null,
+      });
+      setReceiptPrintFeedback(result.ok
+        ? {failed:false,message:"A4 service receipt sent to the print dialog/printer. Verify physical output."}
+        : {failed:true,message:result.error || "Service receipt printing failed"});
+    } catch(error) {
+      setReceiptPrintFeedback({failed:true,message:error instanceof Error?error.message:"Service receipt printing failed"});
+    }
+  }
 
   const customerOptions = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -271,6 +285,7 @@ export function LaundryList({
         return (
           <div className="flex flex-wrap gap-1" onClick={(e) => e.stopPropagation()}>
             <Button size="sm" variant="outline" onClick={() => openDetails(r)}>Details</Button>
+            <Button size="sm" variant="outline" onClick={() => void printServiceReceipt(r)}>Print receipt</Button>
             <Button size="sm" variant="outline" onClick={() => setMessageTarget(r)}>WhatsApp</Button>
             {r.status !== "cancelled" && onUpdateDetails && <Button size="sm" variant="outline" onClick={() => openEdit(r)}>Edit Details</Button>}
             {r.mode === "outsourced" && r.status === "received" && !allItemsPassedQc && <span className="self-center text-xs text-amber-700">Finish garment QC in Details before delivery</span>}
@@ -315,6 +330,7 @@ export function LaundryList({
         <LaundryIncidentsPanel orders={orders} />
         {csvFeedback && <p role={csvFeedback.failed ? "alert" : "status"} className={`text-sm ${csvFeedback.failed ? "text-rose-700" : "text-slate-600"}`}>{csvFeedback.message}</p>}
         {tagPrintFeedback && <p role="status" className="text-sm text-slate-600">{tagPrintFeedback}</p>}
+        {receiptPrintFeedback && <p role={receiptPrintFeedback.failed ? "alert" : "status"} className={"text-sm " + (receiptPrintFeedback.failed?"text-rose-700":"text-slate-600")}>{receiptPrintFeedback.message}</p>}
         <p className="text-xs text-slate-500">CSV includes displayed cancelled tickets for traceability. Use Reports for reconciled financial totals.</p>
         {vendorScores.length > 0 && <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3" aria-label="Laundry vendor comparison">
           <h3 className="text-sm font-semibold text-slate-900">Laundry supplier performance · In-house comparison</h3>
@@ -393,6 +409,7 @@ export function LaundryList({
         className="max-w-3xl"
         footer={detailTarget ? <>
           <Button variant="outline" onClick={() => setDetailTarget(null)}>Close</Button>
+          <Button variant="outline" onClick={() => void printServiceReceipt(detailTarget)}>Print A4 service receipt</Button>
           {detailTarget.status !== "cancelled" && onUpdateDetails && <Button variant="outline" onClick={() => openEdit(detailTarget)}>Edit Details</Button>}
           {detailTarget.status !== "cancelled" && onCancel && <Button variant="danger" onClick={() => { onCancel(detailTarget); setDetailTarget(null); }}>Cancel Ticket</Button>}
         </> : undefined}
