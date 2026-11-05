@@ -1,6 +1,6 @@
 /** Branded A4 non-tax laundry service ticket / payment acknowledgment. */
 import type { Customer, LaundryOrder } from "@minarvabiz/types";
-import { calculateLaundryProfit } from "./laundry";
+import { calculateLaundryProfit, calculateLaundryTicketTotals } from "./laundry";
 import { escapeHtml } from "./html";
 import { getShopProfile, type ShopProfile } from "./shop-profile";
 import { requestDesktopPrintHtml } from "./desktop-print";
@@ -29,18 +29,23 @@ export function buildLaundryServiceReceiptHtml(order: LaundryOrder, opts: Laundr
   const name = customer?.name || order.customerName || order.customerId;
   const lines = order.items?.length ? order.items.map(item => ({
     label: item.label, tag: item.tagCode, service: item.serviceCode || "",
-    fabric: item.fabricType || "", quantity: item.quantity,
-  })) : [{label: order.garment || "Laundry service", tag: "", service: "", fabric: "", quantity: order.quantity}];
+    fabric: item.fabricType || "", quantity: item.quantity, customerRate: item.customerRate ?? order.customerRate,
+  })) : [{label: order.garment || "Laundry service", tag: "", service: "", fabric: "", quantity: order.quantity, customerRate: order.customerRate}];
   if (!lines.length || lines.some(item => !Number.isFinite(item.quantity) || item.quantity <= 0)) {
     throw new Error("Invalid laundry garment quantity");
   }
+  const totals = calculateLaundryTicketTotals({ mode:order.mode, quantity:order.quantity,
+    customerRate:order.customerRate, supplierRate:order.supplierRate, items:order.items });
+  if (Math.round(totals.totalCustomerCharge * 100) !== Math.round(order.totalCustomerCharge * 100)) {
+    throw new Error("Laundry receipt garment prices do not reconcile");
+  }
   const rows = lines.map((item,index) => {
-    const extended = calculateLaundryProfit({customerRate:order.customerRate,supplierRate:0,quantity:item.quantity}).totalCustomerCharge;
+    const extended = calculateLaundryProfit({customerRate:item.customerRate,supplierRate:0,quantity:item.quantity}).totalCustomerCharge;
     const detail = [item.service.replaceAll("_", " "),item.fabric.replaceAll("_", " ")].filter(Boolean).join(" / ");
     return "<tr><td>" + (index+1) + "</td><td><b>" + escapeHtml(item.label) + "</b>"
       + (detail ? '<div class="small">' + escapeHtml(detail) + "</div>" : "")
       + (item.tag ? '<div class="small">Tag ' + escapeHtml(item.tag) + "</div>" : "")
-      + '</td><td class="right">' + escapeHtml(item.quantity) + '</td><td class="right">' + money(order.customerRate,currency)
+      + '</td><td class="right">' + escapeHtml(item.quantity) + '</td><td class="right">' + money(item.customerRate,currency)
       + '</td><td class="right">' + money(extended,currency) + "</td></tr>";
   }).join("");
   const address = [shop.address,shop.addressLine2,shop.district,shop.state,shop.postalCode,shop.country]
