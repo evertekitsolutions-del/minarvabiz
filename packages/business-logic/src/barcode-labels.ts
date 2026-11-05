@@ -138,7 +138,7 @@ export function buildBarcodeLabelHtml(
   }
   const labels = Array.from({ length: copies })
     .map(() => `
-  <div class="label ${settings.labelLayout === "detailed" ? "detailed" : "compact"} ${labelHeightMm < 25 ? "short" : ""}">
+  <div class="label ${settings.labelLayout === "detailed" ? "detailed" : "compact"} ${labelHeightMm <= 25 ? "short" : ""}">
     <div class="shop">${escapeHtml(shop.shopName || "Minarva Biz")}</div>
     <div class="name">${escapeHtml(product.name)}</div>
     <div class="variant-attributes">
@@ -164,6 +164,7 @@ export function buildBarcodeLabelHtml(
   html,body{width:${rollWidthMm}mm;margin:0;padding:0}
   body{font-family:Arial,sans-serif;color:#111}
   .label-sheet{width:${rollWidthMm}mm;height:${pageHeightMm}mm;padding-left:${leftMarginMm}mm;display:grid;grid-template-columns:repeat(${columns},${labelWidthMm}mm);column-gap:${gapMm}mm;align-content:start;page-break-after:always;break-after:page;overflow:hidden}\n  .label-sheet:last-child{page-break-after:auto;break-after:auto}\n  .label{width:${labelWidthMm}mm;height:${labelHeightMm}mm;padding:1.1mm;text-align:center;border:1px dashed #bbb;display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:.3mm;overflow:hidden;break-inside:avoid}
+  .label.short{padding:.65mm .7mm;gap:.2mm}
 
   .shop,.name,.meta,.sku{display:block;flex:0 1 auto;min-height:0;line-height:1.08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .shop{font-size:9px;color:#475569}

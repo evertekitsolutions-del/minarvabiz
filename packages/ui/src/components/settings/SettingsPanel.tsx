@@ -1,4 +1,5 @@
 import * as React from "react";
+import { CROMO_38X25_2UP_NOGAP_PRESET } from "@minarvabiz/business-logic";
 import { Button } from "../Button";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { PrintTemplateManager } from "./PrintTemplateManager";
@@ -254,9 +255,9 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
       return;
     }
     const testLabels = Array.from({length: columns}, (_, i) =>
-      `<div class="label"><strong>${i === 0 ? "LEFT" : "RIGHT"} — 38×38</strong><div class="bars"></div><div>2900000000000</div></div>`).join("");
+      `<div class="label"><strong>${i === 0 ? "LEFT" : "RIGHT"} — ${width}×${height}</strong><div class="bars"></div><div>2900000000000</div></div>`).join("");
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Minarva Biz Label Test</title>
-<style>@page{size:${pageWidth}mm ${pageHeight}mm;margin:0}*{box-sizing:border-box}html,body{width:${pageWidth}mm;margin:0;padding:0;font-family:Arial,sans-serif}.sheet{width:${pageWidth}mm;height:${pageHeight}mm;padding-left:${margin}mm;display:grid;grid-template-columns:repeat(${columns},${width}mm);column-gap:${gap}mm;overflow:hidden}.label{width:${width}mm;height:${height}mm;padding:2mm;text-align:center;overflow:hidden;font-size:9px}.bars{height:12mm;margin:1mm 0;background:repeating-linear-gradient(90deg,#000 0,#000 1px,#fff 1px,#fff 3px)}</style>
+<style>@page{size:${pageWidth}mm ${pageHeight}mm;margin:0}*{box-sizing:border-box}html,body{width:${pageWidth}mm;margin:0;padding:0;font-family:Arial,sans-serif}.sheet{width:${pageWidth}mm;height:${pageHeight}mm;padding-left:${margin}mm;display:grid;grid-template-columns:repeat(${columns},${width}mm);column-gap:${gap}mm;overflow:hidden}.label{width:${width}mm;height:${height}mm;padding:1mm;text-align:center;overflow:hidden;font-size:9px;outline:.1mm solid #555;outline-offset:-.1mm}.bars{height:8mm;margin:.5mm 0;background:repeating-linear-gradient(90deg,#000 0,#000 1px,#fff 1px,#fff 3px)}</style>
 </head><body><div class="sheet">${testLabels}</div></body></html>`;
     try {
       const result = await api.printHtml({ html, deviceName, paper: "label", labelWidthMm: pageWidth, labelHeightMm: pageHeight, silent: true });
@@ -384,6 +385,10 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
         <FormField label="Barcode label printer"><select className={selectClass} value={draftPrinting.labelPrinterName} onChange={e => setDraftPrinting({ ...draftPrinting, labelPrinterName: e.target.value })}><option value="">Use thermal printer / Windows dialog</option>{printers.map(p => <option key={`label-${p.name}`} value={p.name}>{p.displayName}{p.isDefault ? " — Default" : ""}</option>)}</select></FormField>
         <FormField label="Label code"><select className={selectClass} value={draftPrinting.labelCodeMode} onChange={e => setDraftPrinting({ ...draftPrinting, labelCodeMode: e.target.value as "barcode" | "qr" | "both" })}><option value="both">Barcode + QR code</option><option value="barcode">Barcode only</option><option value="qr">QR code only</option></select></FormField>
         <FormField label="Sticker arrangement"><select className={selectClass} value={draftPrinting.labelColumns} onChange={e => setDraftPrinting({ ...draftPrinting, labelColumns: Number(e.target.value) === 2 ? 2 : 1 })}><option value={1}>One sticker per row</option><option value={2}>Two stickers per row (2-up)</option></select></FormField>
+        <FormField label="CROMO 38×25 mm — 2 UP / NO GAP">
+          <Button type="button" variant="outline" onClick={()=>setDraftPrinting({...draftPrinting,...CROMO_38X25_2UP_NOGAP_PRESET})}>Use CROMO 38×25 — 2-up / NO GAP</Button>
+          <p className="mt-1 text-xs text-slate-500">76 mm combined sticker width. Initial backing estimate: 80 mm with 2 mm left offset; measure the liner and calibrate if necessary. After selecting, click Save printer settings.</p>
+        </FormField>
         <FormField label="4-inch roll / 38×38 mm stickers">
           <Button type="button" variant="outline" onClick={()=>setDraftPrinting({...draftPrinting,labelRollWidthMm:101.6,labelWidthMm:38,labelHeightMm:38,labelColumns:2,labelGapMm:3,labelLeftMarginMm:11.3,labelRowGapMm:0})}>Use 4″ roll — 2 × 38 mm stickers</Button>
         </FormField>
