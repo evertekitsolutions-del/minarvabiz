@@ -408,16 +408,28 @@ export function deleteProduct(id: UUID): Product | null {
   return archiveProduct(id, "Legacy product archive").product;
 }
 
-export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "adjustment", quantity: number, notes?: string | null): Product | null {
+export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "adjustment", quantity: number, notes?: string | null, receivedUnitCost?: number): Product | null {
   assertPermission("inventory.adjust"); if (!Number.isFinite(quantity)) return null;
   const p = getProduct(productId); if (!p) return null;
   if (p.hasVariants) throw new Error("Adjust stock on a specific size/colour/material variant, not the group");
-  const before = p.stockQuantity;
+  const before = p.stockQuantity, oldCost=p.costPrice;
   const { next, reduction } = planManualStockAdjustment(p.id, p.branchId, before, type, quantity);
+  let weightedCost: number | undefined;
+  if (receivedUnitCost !== undefined) {
+    if (type !== "stock_in" || quantity <= 0 || !Number.isFinite(receivedUnitCost) || receivedUnitCost < 0 ||
+      !Number.isSafeInteger(Math.round(receivedUnitCost*100)) || !Number.isFinite(oldCost) || oldCost < 0) {
+      throw new Error("Purchase stock receipt requires a valid non-negative unit cost");
+    }
+    const total=(before*oldCost)+(quantity*receivedUnitCost);
+    if (!Number.isFinite(total) || !Number.isSafeInteger(Math.round(total*100))) throw new Error("Purchase stock valuation exceeds safe range");
+    weightedCost=Math.round(total/next*100)/100;
+  }
   if (reduction > 0) consumeWarehouseStock(p.id, reduction, p.branchId ?? null);
-  p.stockQuantity = next; touchProduct(p);
+  p.stockQuantity = next;
+  if(weightedCost!==undefined)p.costPrice=weightedCost;
+  touchProduct(p);
   void remoteAdjustStock({ ...p }, type, quantity, notes);
-  auditAction("inventory.adjust", "products", p.id, { stockQuantity: before }, { stockQuantity: next, type, quantity, notes: notes ?? null });
+  auditAction("inventory.adjust", "products", p.id, { stockQuantity: before, costPrice:oldCost }, { stockQuantity: next, costPrice:p.costPrice, type, quantity, notes: notes ?? null });
   return p;
 }
 
