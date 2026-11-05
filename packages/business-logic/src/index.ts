@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// Hierarchical product category creation, tree rendering and descendant-aware filters.
+export * from "./category-tree";

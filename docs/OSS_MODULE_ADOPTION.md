@@ -62,3 +62,21 @@ or whole-module acceptance is earned by this component reuse.
 ## Coverage gate follow-up
 
 The first rebased exact-head run failed the changed-code 80% coverage gate (49.30%) even though behavior tests passed. The bundled complete MIT license remains intact in THIRD_PARTY_NOTICES, while the source retains copyright attribution. Direct tests now execute input-type, negative, unsafe-range, optional-empty, wholesale/uniform, overflow and amount-limit branches. No coverage exclusions or threshold reductions were made. Confirm the next exact-head CI before merge.
+
+## Product categories: hierarchical CRUD and descendant filter — 2026-11-05
+
+- Reused Open Mercato MIT source `open-mercato/open-mercato` commit
+  `4374c48def1654927805c4b760f0e7f8648280f2`:
+  `packages/core/src/modules/catalog/lib/categoryTree.ts` verbatim.
+- Existing Minarva `Category.parentId`, branchId, category records,
+  product category FK, remote category upsert, audit hooks and local snapshot
+  remain the data authority. No competing catalog ORM or dependency.
+- Added parent/subcategory create, rename/reparent (cycle and duplicate guard),
+  archive only after product/child reassignment, hierarchical dropdown, and
+  descendant-inclusive product filtering in Windows + Web.
+- New categories scoped to active branch; global legacy categories visible,
+  with editing restricted to HQ in the shared UI.
+- Role/license checks, persistent local backup/restore and native SQLite ACK
+  retry wired; full multi-tenant Web RLS and installed customer UAT still
+  require exact-head acceptance evidence. No production migration, release,
+  customer data writes or extra paid service.

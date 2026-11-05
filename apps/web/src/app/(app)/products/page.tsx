@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv, exportShareableCatalogCsv, exportShareableCatalogHtml, exportShareableCatalogJson, parseCommerceQuoteDraft, createCommerceTierDraft, updateCommerceTierDraft, deleteCommerceTierDraft, listCommerceTierDrafts, can, getShopProfile } from "@minarvabiz/business-logic";
+import { ProductList, CategoryManagementPanel, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
+import { store, buildScopedCategoryTree, phase9Store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv, exportShareableCatalogCsv, exportShareableCatalogHtml, exportShareableCatalogJson, parseCommerceQuoteDraft, createCommerceTierDraft, updateCommerceTierDraft, deleteCommerceTierDraft, listCommerceTierDrafts, can, getShopProfile } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 import { parseProductPrice } from "../../../lib/parse-product-price";
@@ -22,9 +22,6 @@ export default function ProductsPage() {
   const [labelProduct, setLabelProduct] = React.useState<Product | null>(null);
   const [labelCopies, setLabelCopies] = React.useState("1");
   const [categoryOpen, setCategoryOpen] = React.useState(false);
-  const [categoryName, setCategoryName] = React.useState("");
-  const [categoryDescription, setCategoryDescription] = React.useState("");
-  const [categoryError, setCategoryError] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const productCsvInput = React.useRef<HTMLInputElement>(null);
   const [csvPreview, setCsvPreview] = React.useState<{
@@ -47,31 +44,16 @@ export default function ProductsPage() {
     costPrice: "0", sellingPrice: "0", stockQuantity: "0", minimumStock: "5",
   });
 
+  let categoryOptions: Array<{id:string;label:string}>;
+  try { categoryOptions=buildScopedCategoryTree(categories,phase9Store.getActiveBranch()?.id??null); }
+  catch { categoryOptions=categories.map(c=>({id:c.id,label:c.name})); }
+
   const refresh = React.useCallback(() => {
     setCategories(store.listCategories());
     setProducts(store.listProducts({ query, categoryId: categoryId ?? undefined, lowStockOnly }));
   }, [query, categoryId, lowStockOnly]);
 
   React.useEffect(() => { refresh(); }, [refresh]);
-
-  function handleCreateCategory() {
-    const name = categoryName.trim();
-    if (!name) {
-      setCategoryError("Category name is required");
-      return;
-    }
-    try {
-      const category = store.createCategory({ name, description: categoryDescription.trim() || null });
-      setForm((prev) => ({ ...prev, categoryId: category.id }));
-      setCategoryName("");
-      setCategoryDescription("");
-      setCategoryError(null);
-      setCategoryOpen(false);
-      refresh();
-    } catch (err) {
-      setCategoryError(err instanceof Error ? err.message : String(err));
-    }
-  }
 
   function resetForm() {
     setEditingId(null);
@@ -473,26 +455,9 @@ export default function ProductsPage() {
         onArchive={(product, reason) => { const result = store.archiveProduct(product.id, reason); if (result.error) return { error: result.error }; refresh(); return { success: true }; }}
         onPrintBarcode={(p) => { setLabelProduct(p); setLabelCopies("1"); }}
       />
-      <Modal
-        open={categoryOpen}
-        title="Add Category"
-        onClose={() => setCategoryOpen(false)}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setCategoryOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateCategory}>Save Category</Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <FormField label="Category name *">
-            <input className={inputClass} value={categoryName} onChange={(e) => setCategoryName(e.target.value)} />
-          </FormField>
-          <FormField label="Description">
-            <input className={inputClass} value={categoryDescription} onChange={(e) => setCategoryDescription(e.target.value)} />
-          </FormField>
-          {categoryError && <p className="text-sm text-rose-600">{categoryError}</p>}
-        </div>
+      <Modal open={categoryOpen} title="Manage Product Categories" onClose={() => setCategoryOpen(false)}>
+        <CategoryManagementPanel onChanged={refresh}
+          onCreated={id => { setForm(v => ({ ...v, categoryId: id })); setCategoryOpen(false); }} />
       </Modal>
       <Modal
         open={open}
@@ -519,7 +484,7 @@ export default function ProductsPage() {
           <FormField label="Category">
             <select className={selectClass} value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
               <option value="">Select</option>
-              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {categoryOptions.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
             </select>
           </FormField>
           <FormField label="Unit">

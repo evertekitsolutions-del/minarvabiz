@@ -1,4 +1,6 @@
 import { allowDemoSeed } from "./runtime-mode";
+import { categoryDescendantIds } from "./category-tree";
+import { createCategoryRepository, type CategoryCreateInput, type CategoryUpdatePatch } from "./category-crud";
 
 import type {
   Customer, Product, Category, Sale, SaleItem, Payment, CartLine, UUID, PaymentMethod, InventoryTransaction,
@@ -126,17 +128,10 @@ export function listCategories(): Category[] {
   return categories.filter((c) => !c.deletedAt);
 }
 
-export function createCategory(input: { name: string; description?: string | null }): Category {
-  assertPermission("products.manage");
-  const cat: Category = {
-    id: generateId(), name: input.name, description: input.description ?? null,
-    isActive: true, createdAt: nowISO(), updatedAt: nowISO(),
-  };
-  categories.push(cat);
-  touchPersistence();
-  void remoteUpsertCategory(cat);
-  return cat;
-}
+const categoryCrud=createCategoryRepository(categories,products);
+export function createCategory(input:CategoryCreateInput):Category { return categoryCrud.createCategory(input); }
+export function updateCategory(id:UUID,patch:CategoryUpdatePatch,expectedUpdatedAt:string) { return categoryCrud.updateCategory(id,patch,expectedUpdatedAt); }
+export function archiveCategory(id:UUID,expectedUpdatedAt:string) { return categoryCrud.archiveCategory(id,expectedUpdatedAt); }
 
 function applyProductionEmptyState() {
   if (allowDemoSeed()) return;
@@ -245,7 +240,10 @@ export function purgeArchivedCustomer(id: UUID): { purged: boolean; error?: stri
 
 export function listProducts(opts?: { query?: string; categoryId?: string; lowStockOnly?: boolean }): Product[] {
   let list = products.filter((p) => !p.deletedAt);
-  if (opts?.categoryId) list = list.filter((p) => p.categoryId === opts.categoryId);
+  if (opts?.categoryId) {
+    const ids=categoryDescendantIds(categories.filter(c=>!c.deletedAt),opts.categoryId);
+    list=list.filter(p=>p.categoryId!=null&&ids.has(p.categoryId));
+  }
   if (opts?.lowStockOnly) list = list.filter((p) => !p.hasVariants && isLowStock(p.stockQuantity, p.minimumStock));
   if (opts?.query?.trim()) {
     const q = opts.query.toLowerCase();

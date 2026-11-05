@@ -8,7 +8,7 @@ import { formatMoney } from "../customers/format";
 import { Modal } from "../forms/Modal";
 import { ProductGs1BarcodeAssistant } from "./ProductGs1BarcodeAssistant";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
-import { can, buildAuthorizedStockCountWorksheet, buildAuthorizedStockCountReview, type StockCountReview } from "@minarvabiz/business-logic";
+import { can, buildScopedCategoryTree, phase9Store, buildAuthorizedStockCountWorksheet, buildAuthorizedStockCountReview, type StockCountReview } from "@minarvabiz/business-logic";
 
 export function ProductList({
   products,
@@ -90,6 +90,9 @@ export function ProductList({
   }
 
   const catMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
+  let categoryOptions: Array<{id:string;label:string}>;
+  try { categoryOptions=buildScopedCategoryTree(categories, phase9Store.getActiveBranch()?.id??null); }
+  catch { categoryOptions=categories.map(c=>({id:c.id,label:c.name})); }
 
   const columns: Column<Product>[] = [
     {
@@ -188,8 +191,8 @@ export function ProductList({
             defaultValue=""
           >
             <option value="">All categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+            {categoryOptions.map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
             ))}
           </select>
           <select className={selectClass + " h-10 sm:w-32"} value={status} onChange={(e) => setStatus(e.target.value)}>
