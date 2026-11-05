@@ -42,7 +42,9 @@ export function ProductEditorModal({
       <datalist id={`boutique-product-${field}`}>{options[field].map(value=><option key={value} value={value}/>)}</datalist>
     </FormField>
   );
-  const categoryOptions=buildScopedCategoryTree(categories,phase9Store.getActiveBranch()?.id??null);
+  let categoryOptions: Array<{id:string;label:string}>;
+  try { categoryOptions=buildScopedCategoryTree(categories,phase9Store.getActiveBranch()?.id??null); }
+  catch { categoryOptions=categories.map(c=>({id:c.id,label:c.name})); }
   const existingStock = existingVariants.reduce((total,item)=>total+item.stockQuantity,0);
   const draftStock = variantRows.reduce((total,item)=>total+(Number.isSafeInteger(Number(item.quantity)) && Number(item.quantity)>=0?Number(item.quantity):0),0);
   const totalVariantStock = existingStock+draftStock;
