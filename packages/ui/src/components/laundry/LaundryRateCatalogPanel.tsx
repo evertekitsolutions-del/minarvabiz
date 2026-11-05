@@ -12,7 +12,7 @@ interface PendingRates { csv: string; branchId: string; count: number }
 export function LaundryRateCatalogPanel() {
   const [pending, setPending] = React.useState<PendingRates | null>(null);
   const [feedback, setFeedback] = React.useState<{ error: boolean; message: string } | null>(null);
-  const [revision, setRevision] = React.useState(0);
+  const [, refreshRates] = React.useState(0);
   const allowed = can("settings.manage");
   if (!allowed) return null;
 
@@ -64,14 +64,14 @@ export function LaundryRateCatalogPanel() {
       return;
     }
     setPending(null);
-    setRevision(n => n + 1);
+    refreshRates(n => n + 1);
     setFeedback({ error: false, message: "Rate catalog saved: " + result.created + " new, " + result.updated + " updated. Existing rate IDs preserved." });
   }
 
   return <section className="rounded-xl border border-slate-200 bg-white p-3" aria-label="Laundry rate catalog CSV">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h3 className="text-sm font-semibold text-slate-900">Garment & supplier rate catalog</h3>
-        <p className="text-xs text-slate-500">Active-branch tariffs · offline CSV template, preview and bulk import · {revision >= 0 ? listLaundryRateCards().length : 0} rates</p></div>
+        <p className="text-xs text-slate-500">Active-branch tariffs · offline CSV template, preview and bulk import · {listLaundryRateCards().length} rates</p></div>
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="outline" onClick={downloadCsv}>Export rates CSV / template</Button>
         <label className="cursor-pointer rounded-md border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700">
