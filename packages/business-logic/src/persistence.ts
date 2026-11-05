@@ -294,6 +294,7 @@ function normalizeSnapshot(input: DomainSnapshot): DomainSnapshot {
     serialCustody: serialCustody.validateSerialCustodyRecords(input.serialCustody ?? []),
     serviceWarranty: serviceWarranty.validateServiceWarrantyState(input.serviceWarranty ?? {warranties:[],claims:[]}),
     serviceSiteVisits: siteVisits.validateServiceSiteVisits(input.serviceSiteVisits ?? []),
+    procurementRfqs: procurementRfqs.validateProcurementRfqState(input.procurementRfqs),
   };
 }
 
