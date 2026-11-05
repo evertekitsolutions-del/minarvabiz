@@ -81,7 +81,7 @@ export function App() {
   const [variantRows, setVariantRows] = React.useState<ProductVariantDraft[]>([]);
   const [labelProduct, setLabelProduct] = React.useState<Product | null>(null);
   const [labelCopies, setLabelCopies] = React.useState("1");
-  const [productForm, setProductForm] = React.useState({ name:"", sku:"", barcode:"", categoryId:"", brand:"", size:"", color:"", fabric:"", unit:"pcs", costPrice:"", sellingPrice:"", discount:"0", taxRate:"0", stockQuantity:"", minimumStock:"0", supplierId:"", imageUrl:"", notes:"", hasVariants:false });
+  const [productForm, setProductForm] = React.useState({ name:"", sku:"", barcode:"", categoryId:"", brand:"", size:"", color:"", fabric:"", unit:"pcs", costPrice:"", sellingPrice:"", mrp:"", discount:"0", taxRate:"0", stockQuantity:"", minimumStock:"0", supplierId:"", imageUrl:"", notes:"", hasVariants:false });
   const [categoryOpen, setCategoryOpen] = React.useState(false);
   const [categoryForm, setCategoryForm] = React.useState({ name:"", description:"" });
   const [supplierOpen, setSupplierOpen] = React.useState(false);
@@ -167,8 +167,8 @@ export function App() {
   React.useEffect(() => { if(!trialState?.activated||trialState.synced||!trialState.registration)return; const apiUrl=import.meta.env.VITE_LICENSE_API_URL as string|undefined; if(!apiUrl||!window.minarvaDesktop)return; let cancelled=false; (async()=>{try{const deviceId=await window.minarvaDesktop!.getDeviceId!();const response=await fetch(`${apiUrl.replace(/\/$/,"")}/api/trial/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...trialState.registration,deviceId})});const payload=await response.json().catch(()=>({}));if(!cancelled&&response.ok&&payload.ok){await window.minarvaDesktop!.markTrialSynced();setTrialState(await window.minarvaDesktop!.getTrialState());}}catch{}})(); return()=>{cancelled=true;}; }, [trialState]);
   async function activateTrial(registration: TrialRegistration): Promise<{ok:boolean;error?:string}>{ if(!window.minarvaDesktop)return{ok:false,error:"Desktop security bridge is unavailable."}; const apiUrl=import.meta.env.VITE_LICENSE_API_URL as string|undefined; if(apiUrl){try{const deviceId=await window.minarvaDesktop.getDeviceId!();const response=await fetch(`${apiUrl.replace(/\/$/,"")}/api/trial/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...registration,deviceId})});const payload=await response.json().catch(()=>({}));if(!response.ok||!payload.ok)return{ok:false,error:payload.error||"Trial registration was not accepted."};const local=await window.minarvaDesktop.activateTrial(registration);if(!local.ok)return local;if(payload.ok&&window.minarvaDesktop.markTrialSynced)await window.minarvaDesktop.markTrialSynced();setTrialState(await window.minarvaDesktop.getTrialState());return{ok:true};}catch{/* offline activation below */}} const local=await window.minarvaDesktop.activateTrial(registration);if(!local.ok)return local;setTrialState(await window.minarvaDesktop.getTrialState());return{ok:true}; }
   function resetCustomerForm(){setCustForm({name:"",phone:"",whatsapp:"",email:"",address:"",birthday:"",notes:""});}
-  function resetProductForm(){setVariantRows([]);setEditingProductId(null);setProductForm({name:"",sku:"",barcode:"",categoryId:"",brand:"",size:"",color:"",fabric:"",unit:"pcs",costPrice:"",sellingPrice:"",discount:"0",taxRate:"0",stockQuantity:"0",minimumStock:"0",supplierId:"",imageUrl:"",notes:"",hasVariants:false});}
-  function openProductEditor(p:Product){setVariantRows([]);setEditingProductId(p.id);setProductForm({name:p.name,sku:p.sku||"",barcode:p.barcode||"",categoryId:p.categoryId||"",brand:p.brand||"",size:p.size||"",color:p.color||"",fabric:p.fabric||"",unit:p.unit||"pcs",costPrice:String(p.costPrice??0),sellingPrice:String(p.sellingPrice??0),discount:String(p.discount??0),taxRate:String(p.taxRate??0),stockQuantity:String(p.stockQuantity??0),minimumStock:String(p.minimumStock??0),supplierId:p.supplierId||"",imageUrl:p.imageUrl||"",notes:p.notes||"",hasVariants:Boolean(p.hasVariants)});setProductOpen(true);}
+  function resetProductForm(){setVariantRows([]);setEditingProductId(null);setProductForm({name:"",sku:"",barcode:"",categoryId:"",brand:"",size:"",color:"",fabric:"",unit:"pcs",costPrice:"",sellingPrice:"",mrp:"",discount:"0",taxRate:"0",stockQuantity:"0",minimumStock:"0",supplierId:"",imageUrl:"",notes:"",hasVariants:false});}
+  function openProductEditor(p:Product){setVariantRows([]);setEditingProductId(p.id);setProductForm({name:p.name,sku:p.sku||"",barcode:p.barcode||"",categoryId:p.categoryId||"",brand:p.brand||"",size:p.size||"",color:p.color||"",fabric:p.fabric||"",unit:p.unit||"pcs",costPrice:String(p.costPrice??0),sellingPrice:String(p.sellingPrice??0),mrp:String(p.mrp??p.sellingPrice??0),discount:String(p.discount??0),taxRate:String(p.taxRate??0),stockQuantity:String(p.stockQuantity??0),minimumStock:String(p.minimumStock??0),supplierId:p.supplierId||"",imageUrl:p.imageUrl||"",notes:p.notes||"",hasVariants:Boolean(p.hasVariants)});setProductOpen(true);}
   function openStockAdjust(p:Product){setStockAdjustProduct({...p});setStockAdjustQty(String(p.stockQuantity));setModuleError(null);}
   function openBarcodeLabel(p:Product){setLabelProduct(p);setLabelCopies(String(p.parentProductId ? Math.min(100,Math.max(1,p.stockQuantity)) : 1));}
   function openCustomerCreator(){setModuleError(null);setCustOpen(true);}
@@ -178,12 +178,19 @@ export function App() {
   function handleSaveProduct(){
     try {
       if(!productForm.name.trim())throw new Error("Product name is required");
+      const mrp=Number(productForm.mrp), offer=Number(productForm.sellingPrice);
+      if(!productForm.mrp.trim() || !productForm.sellingPrice.trim() ||
+         !Number.isFinite(mrp) || !Number.isFinite(offer) ||
+         mrp<0 || offer<0 || offer>mrp ||
+         Math.round(mrp*100)!==mrp*100 && Math.abs(mrp*100-Math.round(mrp*100))>1e-7 ||
+         Math.round(offer*100)!==offer*100 && Math.abs(offer*100-Math.round(offer*100))>1e-7)
+        throw new Error("Enter valid MRP and offer price (offer must not exceed MRP; max 2 decimals)");
       const payload={
         name:productForm.name.trim(),sku:productForm.sku||null,barcode:productForm.barcode||null,
         categoryId:productForm.categoryId||null,brand:productForm.brand||null,
         size:productForm.size||null,color:productForm.color||null,fabric:productForm.fabric||null,
         unit:productForm.unit||"pcs",costPrice:Number(productForm.costPrice)||0,
-        sellingPrice:Number(productForm.sellingPrice)||0,discount:Number(productForm.discount)||0,
+        sellingPrice:offer,mrp,discount:Number(productForm.discount)||0,
         taxRate:Number(productForm.taxRate)||0,
         stockQuantity:productForm.hasVariants?0:parseNonNegativeStockQuantity(productForm.stockQuantity),
         minimumStock:parseNonNegativeStockQuantity(productForm.minimumStock),
@@ -200,7 +207,7 @@ export function App() {
           if(variantRows.length) {
             const existing=store.listProducts().filter(p=>p.parentProductId===editingProductId);
             parseProductVariants(variantRows,existing.map(p=>({
-              size:p.size||"",color:p.color||"",material:p.fabric||"",sku:p.sku||null,barcode:p.barcode||null,
+              size:p.size||"",color:p.color||"",material:p.fabric||"",brand:p.brand||"",sku:p.sku||null,barcode:p.barcode||null,
             })));
           }
           const patch:Partial<Product>={...payload,hasVariants:true,barcode:null,size:null,color:null,fabric:null};
@@ -323,6 +330,7 @@ export function App() {
       categories={categories} suppliers={suppliers}
       variantRows={variantRows} setVariantRows={setVariantRows}
       existingVariants={editingProductId?store.listProducts().filter(p=>p.parentProductId===editingProductId):[]}
+      savedProducts={store.listProducts()}
       onClose={()=>{setProductOpen(false);resetProductForm();}}
       onSave={handleSaveProduct}
       onAddCategory={()=>{setCategoryForm({name:"",description:""});setCategoryOpen(true);}}
