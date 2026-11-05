@@ -307,3 +307,6 @@ export * from "./industry-workflow-templates";
 
 // Pure scoped industry workflow reducer; persistence adapters must enforce CAS and RBAC.
 export * from "./industry-workflow-reducer";
+
+// Explicit trusted RBAC grant boundary for optional industry workflow transitions.
+export * from "./industry-workflow-access";
