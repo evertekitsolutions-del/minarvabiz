@@ -77,7 +77,7 @@ export default function SettingsPage() {
         </a>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">\n        <a href="/settings/industry" className="text-sm font-medium text-indigo-700 underline">Configure industry workspace preferences</a>
         <h2 className="text-sm font-semibold text-slate-800">Business profile</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField label="Business / trade name"><input className={inputClass} value={shop.shopName} onChange={(e) => setShop({ ...shop, shopName: e.target.value })} /></FormField>
