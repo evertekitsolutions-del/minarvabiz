@@ -185,19 +185,25 @@ async function printHtmlDocument(input: {
     // the rendered invoice content. Keep multi-page invoices bounded.
     let thermalPageHeightMm = 297;
     if (paper === "thermal") {
-      const documentMetrics = await win.webContents.executeJavaScript(`(() => {
-        const content = document.querySelector('.sheet') || document.body;
-        return { heightPx: Math.ceil(content.getBoundingClientRect().height),
-          text: (document.body.innerText || '').trim().length };
-      })()`, true) as { heightPx: number; text: number };
-      if (!Number.isFinite(documentMetrics.heightPx) || documentMetrics.heightPx <= 0
-        || documentMetrics.text < 5) return { ok: false, error: "Thermal invoice content is empty; nothing was sent to the cutter." };
-      thermalPageHeightMm = Math.min(290, Math.max(40, Math.ceil(documentMetrics.heightPx * 25.4 / 96 + 10)));
-      await win.webContents.executeJavaScript(`(() => {
-        const style = document.createElement('style');
-        style.textContent = '@page{size:${thermalWidthMm}mm ${thermalPageHeightMm}mm;margin:0}';
-        document.head.appendChild(style);
-      })()`);
+      const visibleText = html.replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, "")
+        .replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, "")
+        .replace(/<[^>]*>/g, " ").replace(/\\s+/g, " ").trim();
+      if (visibleText.length < 5) return { ok: false, error: "Thermal invoice content is empty; nothing was sent to the cutter." };
+      // Trusted DOM measurement is best; a text-based bound keeps printing
+      // functional if this locked-down (javascript:false) print view denies it.
+      thermalPageHeightMm = Math.min(290, Math.max(55, Math.ceil(visibleText.length / 35 * 4 + 35)));
+      try {
+        const documentMetrics = await win.webContents.executeJavaScript(`(() => {
+          const content = document.querySelector('.sheet') || document.body;
+          return { heightPx: Math.ceil(content.getBoundingClientRect().height),
+            text: (document.body.innerText || '').trim().length };
+        })()`, true) as { heightPx: number; text: number };
+        if (documentMetrics.text >= 5 && Number.isFinite(documentMetrics.heightPx) && documentMetrics.heightPx > 0) {
+          thermalPageHeightMm = Math.min(290, Math.max(40, Math.ceil(documentMetrics.heightPx * 25.4 / 96 + 10)));
+        }
+      } catch {
+        runtimeSmokeLog("thermal-measurement-unavailable; using bounded safe receipt-length estimate");
+      }
     }
     const pageSize: Electron.WebContentsPrintOptions["pageSize"] =
       paper === "a4"
