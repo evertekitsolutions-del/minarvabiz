@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { Expense, Purchase, ExpenseCategory, ServiceOrder, Supplier } from "@minarvabiz/types";
+import type { Expense, Purchase, Product, ExpenseCategory, ServiceOrder, Supplier } from "@minarvabiz/types";
 import { DataTable, type Column } from "../data/DataTable";
 import { Button } from "../Button";
 import { formatMoney } from "../customers/format";
@@ -163,7 +163,7 @@ export function ExpenseList({
   );
 }
 
-export function PurchaseList({ purchases, suppliers = [], onAdd, onCreate }: { purchases: Purchase[]; suppliers?: Supplier[]; onAdd?: () => void; onCreate?: () => void }) {
+export function PurchaseList({ purchases, suppliers = [], products = [], onAdd, onCreate }: { purchases: Purchase[]; suppliers?: Supplier[]; products?: Product[]; onAdd?: () => void; onCreate?: () => void }) {
   const [query, setQuery] = React.useState("");
   const [supplierId, setSupplierId] = React.useState("");
   const [kind, setKind] = React.useState("");
@@ -204,7 +204,20 @@ export function PurchaseList({ purchases, suppliers = [], onAdd, onCreate }: { p
     setOutstandingOnly(false);
   };
 
+  const byProductId = new Map(products.map(p=>[p.id,p]));
   const columns: Column<Purchase>[] = [
+    { key: "stockLines", header: "Items Received", render: (purchase) => {
+      const lines=purchase.stockLines??[];
+      if(!lines.length)return <span className="text-xs text-slate-500">No stock intake</span>;
+      const sum=lines.reduce((total,line)=>total+line.quantity,0);
+      return <details className="min-w-32"><summary className="cursor-pointer text-sm font-semibold text-indigo-700">{lines.length} SKU(s) · {sum} units</summary>
+        <div className="mt-2 max-w-72 space-y-1 text-xs text-slate-700">
+          {lines.map((line,i)=>{const p=byProductId.get(line.productId);return <p key={i}>
+            {p?.name??line.productId} · {[p?.brand,p?.fabric,p?.size,p?.color].filter(Boolean).join(" / ")} · {line.quantity} {p?.unit??"pcs"} × {formatMoney(line.unitCost)}
+          </p>;})}
+        </div>
+      </details>;
+    } },
     { key: "purchaseNumber", header: "Purchase #", render: (r) => <span className="font-medium">{r.purchaseNumber}</span> },
     { key: "date", header: "Date", render: (r) => new Date(r.date).toLocaleDateString("en-IN") },
     { key: "description", header: "Description" },
