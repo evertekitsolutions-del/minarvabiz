@@ -10,7 +10,6 @@ const { calculateRetailReportMovement } = require("../sales-summary-reconciliati
 const store=require("../store.ts");
 const orders=require("../orders-store.ts");
 const phase5=require("../phase5-store.ts");
-const phase6=require("../phase6-store.ts");
 const phase7=require("../phase7-store.ts");
 const line=(quantity=2,taxRate=0,lineTotal=200)=>({
  id:"i1",saleId:"s1",productId:"p1",productName:"Dress",quantity,costPrice:60,
@@ -46,9 +45,9 @@ test("GST from original invoice is excluded from revenue and proportionally reve
 });
 test("the operational sales and day-end reports count a posted order-linked expense once",()=>{
  const savedCore=store.exportCoreState();
- const savedOrders=orders.exportOrdersState();
+ const savedOrders=orders.listOrders();
  const savedPhase5=phase5.exportPhase5State();
- const savedPhase7=phase7.exportPhase7State();
+ const savedPhase7=phase7.listReturns();
  try{
   store.hydrateCore({products:[],customers:[],sales:[],payments:[]});
   orders.hydrateOrders({orders:[{
@@ -68,9 +67,9 @@ test("the operational sales and day-end reports count a posted order-linked expe
   assert.equal(day.totalExpenses,100);
   assert.equal(day.netProfit,1400);
  }finally{
-  phase7.hydratePhase7(savedPhase7);
+  phase7.hydratePhase7({returns:savedPhase7});
   phase5.hydratePhase5(savedPhase5);
-  orders.hydrateOrders(savedOrders);
+  orders.hydrateOrders({orders:savedOrders});
   store.hydrateCore(savedCore);
  }
 });
