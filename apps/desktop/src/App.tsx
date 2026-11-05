@@ -27,6 +27,7 @@ import { parseProductVariants, createProductVariantFamily, addProductVariants, t
 import { DesktopCustomerMasterPanel } from "./components/DesktopCustomerMasterPanel";
 import { DesktopServiceOrderDetail } from "./components/DesktopServiceOrderDetail";
 import { insightTarget } from "./lib/insight-navigation";
+import { todayLocal } from "./lib/today-local";
 import { DesktopLicenseExpiryBanner, effectiveLicenseDaysRemaining } from "./components/DesktopLicenseExpiryBanner";
 import { DesktopEntitlementMonitor } from "./components/DesktopEntitlementMonitor";
 import { DesktopProcurementPanel } from "./components/DesktopProcurementPanel";
@@ -37,7 +38,7 @@ import { DesktopAttendancePanel } from "./components/DesktopAttendancePanel";
 import { DesktopRosterPanel } from "./components/DesktopRosterPanel";
 import { buildProfessionalReportData } from "./lib/report-data";
 import { NAV_FEATURE, featuresForLicense, type CommercialLicenseState } from "./lib/desktop-license-policy";
-function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
+
 const errorMessage=(error:unknown):string=>error instanceof Error?error.message:String(error);
 export function App() {
   const [dbReady,setDbReady]=React.useState(false);
