@@ -59,5 +59,12 @@
     "The Print Barcode Label window previews the exact selected sticker count and full two-column row layout before printing, including roll width, feed height and subsequent rows.",
     "Print directly sends the previewed sticker layout to a previously selected Windows label printer without the Windows print dialog that may show 'No preview available'; print submission errors are displayed.",
     "Existing Windows printer dialog printing remains an optional fallback; past invoices, barcodes, customer data and licensing are preserved."
+  ],
+  "1.0.23": [
+    "Sales Summary and Day-end calculations now deduct GST from revenue and reverse cost of goods when returned items are restocked, using the original invoice and dated return events.",
+    "Tailoring order-linked expenses are counted only once in the operational profit reports; the daily outstanding balance now includes unpaid Laundry tickets.",
+    "Supplier Purchase Bill preview and posting use identical line-by-line, cent-accurate tax rounding; exact full payments are accepted and overpayments are rejected before stock posting.",
+    "Windows Staff salary entry rejects malformed or negative amounts rather than silently accepting partial numbers.",
+    "Existing customer data, stock history, invoice numbers, trial registration and license activation are preserved; no database migration."
   ]
 }
