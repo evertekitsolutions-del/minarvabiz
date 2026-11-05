@@ -52,7 +52,7 @@ test("the operational sales and day-end reports count a posted order-linked expe
   store.hydrateCore({products:[],customers:[],sales:[],payments:[]});
   orders.hydrateOrders({orders:[{
    id:"o1",orderDate:new Date().toISOString().slice(0,10),status:"pending",
-   price:1500,externalMaterialCost:0,orderExpensesTotal:100,
+   price:1500,balance:1500,externalMaterialCost:0,orderExpensesTotal:100,
    expenses:[{id:"e1",description:"Tailoring material",amount:100}],branchId:null
   }]});
   phase5.hydratePhase5({expenses:[{id:"e1",orderId:"o1",date:new Date().toISOString().slice(0,10),
