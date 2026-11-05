@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Modal, Button, FormField, inputClass } from "@minarvabiz/ui";
-import { buildBarcodeLabelHtml, printBarcodeLabels, sendBarcodeLabelsToPrinter, type PrintSettings } from "@minarvabiz/business-logic";
+import { buildBarcodeLabelHtml, printBarcodeLabels, sendBarcodeLabelsToPrinter, updatePrintSettings, type PrintSettings } from "@minarvabiz/business-logic";
 import type { Product } from "@minarvabiz/types";
 
 type LabelSettings = Pick<PrintSettings, "labelWidthMm" | "labelHeightMm" | "labelCodeMode" | "labelLayout" | "labelColumns" | "labelRollWidthMm" | "labelGapMm" | "labelLeftMarginMm" | "labelRowGapMm" | "labelPrinterName" | "thermalPrinterName">;
@@ -84,6 +84,7 @@ export function BarcodeLabelPrintModal({
         </FormField>
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
           <Button type="button" size="sm" variant="outline" onClick={() => {
+            updatePrintSettings({labelColumns:2,labelRollWidthMm:101.6,labelWidthMm:38,labelHeightMm:38,labelGapMm:3,labelLeftMarginMm:11.3,labelRowGapMm:0});
             onUseTwoUp();
             if (count < 2) onCopiesChange("2");
             setMessage(null);
