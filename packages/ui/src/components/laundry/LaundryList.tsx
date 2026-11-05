@@ -11,7 +11,7 @@ import { LaundryWhatsAppPanel } from "./LaundryWhatsAppPanel";
 import { LaundryRoutePanel } from "./LaundryRoutePanel";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
-import { buildLaundryVendorScorecard, can, exportLaundryTicketsCsv, getShopProfile, listLaundryIncidents, printLaundryServiceReceipt } from "@minarvabiz/business-logic";
+import { buildLaundryVendorScorecard, can, exportLaundryTicketsCsv, exportLaundryVendorWorklistCsv, getShopProfile, listLaundryIncidents, printLaundryServiceReceipt } from "@minarvabiz/business-logic";
 
 type LaundryEditResult = { success: boolean; error?: string; order?: LaundryOrder };
 
@@ -291,6 +291,26 @@ export function LaundryList({
     }
   }
 
+  function downloadVendorWorklist() {
+    try {
+      const csv = exportLaundryVendorWorklistCsv(filtered);
+      const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff), csv], { type: "text/csv;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "minarvabiz-vendor-garment-worklist-" + new Date().toISOString().slice(0, 10) + ".csv";
+      document.body.appendChild(anchor);
+      try {
+        anchor.click();
+        setCsvFeedback({ failed: false, message: "Vendor garment worklist download requested. This is not supplier delivery or payment proof." });
+      } finally {
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch (error) {
+      setCsvFeedback({ failed: true, message: error instanceof Error ? error.message : "Vendor worklist export failed." });
+    }
+  }
+
   const columns: Column<LaundryOrder>[] = [
     { key: "orderNumber", header: "Order", render: (r) => <span className="font-medium">{r.orderNumber}</span> },
     { key: "customerName", header: "Customer", render: (r) => r.customerName || "—" },
@@ -351,6 +371,7 @@ export function LaundryList({
           </div>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" disabled={filtered.length === 0} onClick={downloadFilteredTickets}>Export filtered CSV</Button>
+            <Button size="sm" variant="outline" disabled={!filtered.some(o => o.mode === "outsourced" && ["pending", "sent", "received"].includes(o.status))} onClick={downloadVendorWorklist}>Export vendor worklist</Button>
             <Button size="sm" variant="outline" onClick={clearFilters}>Clear filters</Button>
             <Button variant="outline" onClick={ironing}>+ In-house Ironing</Button>
             <Button onClick={outsourced}>+ Outsourced Laundry</Button>
