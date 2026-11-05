@@ -870,6 +870,8 @@ export function hydrateCore(data: {
 
 export function recordCustomerPayment(input: {
   customerId: UUID; amount: number; method: PaymentMethod; reference?: string | null; notes?: string | null;
+  /** Restrict FIFO allocation to exactly one posted laundry ticket, rather than another invoice. */
+  target?: { sourceType: "laundry"; id: UUID };
 }): { payment: Payment | null; customer: Customer | null; errors: string[] } {
   assertPermission("payments.collect");
   assertBusinessDayOpen();
@@ -884,6 +886,7 @@ export function recordCustomerPayment(input: {
   }
 
   if (!["cash", "bank", "card", "upi", "online", "other"].includes(input.method)) errors.push("Invalid payment method");
+  if (input.target && (input.target.sourceType !== "laundry" || !input.target.id)) errors.push("Invalid receipt allocation target");
   const customer = getCustomer(input.customerId);
   if (!customer || customer.deletedAt) errors.push("Customer not found");
 
@@ -902,16 +905,27 @@ export function recordCustomerPayment(input: {
   if (appliedMinor <= 0) return { payment: null, customer: null, errors: ["No outstanding balance to collect"] };
   const applied = fromMinorUnits(appliedMinor);
 
-  const saleCandidates = sales.filter((sale) => sale.customerId === customer.id && !sale.deletedAt
+  const saleCandidates = sales.filter((sale) => !input.target && sale.customerId === customer.id && !sale.deletedAt
     && sale.status !== "cancelled" && sale.status !== "returned" && sale.balanceAmount > 0)
     .map((sale) => ({ kind: "sale" as const, id: sale.id, date: sale.saleDate, sale, balance: sale.balanceAmount }));
   const externalCandidates = [...customerReceivableProviders.entries()].flatMap(([providerKey, provider]) =>
-    provider.list(customer.id).map((item) => ({
-      kind: "external" as const, id: item.id, date: item.date, item, balance: item.balance, providerKey,
-    }))
+    provider.list(customer.id)
+      .filter((item) => !input.target || (input.target.sourceType === "laundry" && providerKey === "laundry" && item.id === input.target.id))
+      .map((item) => ({
+        kind: "external" as const, id: item.id, date: item.date, item, balance: item.balance, providerKey,
+      }))
   );
   const candidates = [...saleCandidates, ...externalCandidates]
     .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  if (input.target) {
+    if (candidates.length !== 1) return { payment: null, customer: null, errors: ["Selected laundry ticket has no collectible balance"] };
+    let targetMinor: MoneyMinor;
+    try { targetMinor = toMinorUnits(candidates[0].balance); }
+    catch { return { payment: null, customer: null, errors: ["Selected laundry balance needs reconciliation"] }; }
+    if (targetMinor <= 0 || inputAmountMinor > targetMinor || inputAmountMinor > customerOutstandingMinor) {
+      return { payment: null, customer: null, errors: ["Payment cannot exceed the selected laundry or customer outstanding balance"] };
+    }
+  }
 
   let remainingMinor: MoneyMinor = appliedMinor;
   const allocations: Array<{ sale: Sale; amount: number; amountMinor: MoneyMinor }> = [];
