@@ -2,15 +2,17 @@
 
 import * as React from "react";
 import type { Product, Supplier } from "@minarvabiz/types";
-import { buildRfqDraftPreview, normalizeLocalizedRfqQuantity, phase9Store, type RfqDraftPreview, type SupportedInputLocale } from "@minarvabiz/business-logic";
+import { buildRfqDraftPreview, createProcurementRfq, normalizeLocalizedRfqQuantity, phase9Store, type RfqDraftPreview, type SupportedInputLocale } from "@minarvabiz/business-logic";
+import { RfqWorkflowPanel } from "./RfqWorkflowPanel";
 import { Button } from "../Button";
 import { inputClass, selectClass } from "../forms/FormField";
 
 interface DraftLine { productId: string; quantity: string }
 
-export function RfqDraftPanel({ products, suppliers }: {
+export function RfqDraftPanel({ products, suppliers, onChanged }: {
   products: readonly Product[];
   suppliers: readonly Supplier[];
+  onChanged?: () => void | Promise<void>;
 }) {
   const [reference, setReference] = React.useState("");
   const [quantityLocale, setQuantityLocale] = React.useState<SupportedInputLocale>("en-IN");
@@ -46,6 +48,22 @@ export function RfqDraftPanel({ products, suppliers }: {
     }
   }
 
+  function saveRfq() {
+    setError(null);
+    if (!preview) return;
+    try {
+      createProcurementRfq({
+        reference, requiredBy, notes, supplierIds,
+        lines:lines.map(line=>({...line,quantity:normalizeLocalizedRfqQuantity(line.quantity,quantityLocale)})),
+      });
+      setPreview(null);
+      setReference("");setSupplierIds([]);setNotes("");setRequiredBy("");
+      setLines([{productId:"",quantity:"1"}]);
+      void onChanged?.();
+    } catch(cause) {
+      setError(cause instanceof Error ? cause.message:"RFQ save failed");
+    }
+  }
   function exportCsv() {
     if (!preview) return;
     setError(null);
@@ -66,13 +84,14 @@ export function RfqDraftPanel({ products, suppliers }: {
   }
 
   return (
+    <>
     <details className="rounded-xl border border-slate-200 bg-white p-4">
       <summary className="cursor-pointer text-base font-semibold text-slate-900">
         Request supplier quotations (RFQ)
       </summary>
       <p className="mt-2 text-xs text-slate-600">
         Prepare a multi-supplier enquiry with quantities and a requested delivery date.
-        Preview and export only: no purchase order, vendor message, payment or stock entry is created.
+        Preview / export the enquiry, then save it to record vendor quotes and select a Purchase Order. Enquiries must be sent manually.
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-xs font-medium text-slate-600">
@@ -150,6 +169,7 @@ export function RfqDraftPanel({ products, suppliers }: {
       <div className="mt-4 flex flex-wrap gap-2">
         <Button onClick={createPreview} size="sm">Preview RFQ</Button>
         {preview && <Button onClick={exportCsv} variant="outline" size="sm">Export RFQ CSV</Button>}
+        {preview && <Button onClick={saveRfq} size="sm">Save RFQ for supplier bids</Button>}
       </div>
       {error && <p role="alert" className="mt-2 text-sm text-rose-700">{error}</p>}
       {preview && (
@@ -175,5 +195,7 @@ export function RfqDraftPanel({ products, suppliers }: {
         </div>
       )}
     </details>
+    <RfqWorkflowPanel suppliers={suppliers} onChanged={onChanged}/>
+    </>
   );
 }
