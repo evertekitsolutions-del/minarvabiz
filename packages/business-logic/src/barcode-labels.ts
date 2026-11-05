@@ -127,6 +127,7 @@ export function buildBarcodeLabelHtml(
   const columns = settings.labelColumns === 2 ? 2 : 1;
   const rollWidthMm = columns === 2 ? settings.labelRollWidthMm : labelWidthMm;
   const pageHeightMm = labelHeightMm + (columns === 2 ? settings.labelRowGapMm : 0);
+  const printHeightMm = pageHeightMm * Math.ceil(copies / columns);
   const gapMm = columns === 2 ? settings.labelGapMm : 0;
   const availableMarginMm = rollWidthMm - (columns * labelWidthMm) - gapMm;
   if (availableMarginMm < 0) throw new Error("Sticker width + columns + gap exceed the configured roll width");
@@ -159,12 +160,12 @@ export function buildBarcodeLabelHtml(
   ).join("");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Product Labels</title>
 <style>
-  @page{size:${rollWidthMm}mm ${pageHeightMm}mm;margin:0}
+  @page{size:${rollWidthMm}mm ${printHeightMm}mm;margin:0}
   *{box-sizing:border-box}
-  html,body{width:${rollWidthMm}mm;margin:0;padding:0}
+  html,body{width:${rollWidthMm}mm;height:${printHeightMm}mm;margin:0;padding:0;overflow:hidden}
   body{font-family:Arial,sans-serif;color:#111}
-  .label-sheet{width:${rollWidthMm}mm;height:${pageHeightMm}mm;padding-left:${leftMarginMm}mm;display:grid;grid-template-columns:repeat(${columns},${labelWidthMm}mm);column-gap:${gapMm}mm;align-content:start;page-break-after:always;break-after:page;overflow:hidden}\n  .label-sheet:last-child{page-break-after:auto;break-after:auto}\n  .label{width:${labelWidthMm}mm;height:${labelHeightMm}mm;padding:1.1mm;text-align:center;border:1px dashed #bbb;display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:.3mm;overflow:hidden;break-inside:avoid}
-  .label.short{padding:.65mm .7mm;gap:.2mm}
+  .label-sheet{width:${rollWidthMm}mm;height:${pageHeightMm}mm;padding-left:${leftMarginMm}mm;display:grid;grid-template-columns:repeat(${columns},${labelWidthMm}mm);column-gap:${gapMm}mm;align-content:start;page-break-after:auto;break-after:auto;break-inside:avoid;overflow:hidden}\n  .label{width:${labelWidthMm}mm;height:${labelHeightMm}mm;padding:1.1mm;text-align:center;border:1px dashed #bbb;display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:.3mm;overflow:hidden;break-inside:avoid}
+  .label.short{padding:.65mm .7mm;gap:.2mm;min-height:0}
 
   .shop,.name,.meta,.sku{display:block;flex:0 1 auto;min-height:0;line-height:1.08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .shop{font-size:9px;color:#475569}
@@ -177,7 +178,10 @@ export function buildBarcodeLabelHtml(
   .codes{display:flex;flex:1 1 7mm;align-items:center;justify-content:center;gap:1mm;min-height:4mm;max-height:11mm;margin:0;overflow:hidden}
   .barcode,.qr{height:100%;min-height:0;min-width:0;display:flex;align-items:center;justify-content:center}
   .codes.barcode .barcode{width:100%}.codes.qr .qr{width:100%}
-  .codes.both .barcode{width:72%}.codes.both .qr{width:26%}
+  .codes.both .barcode{width:68%}.codes.both .qr{width:30%}
+  .label.short .codes.both{max-height:10mm;gap:.4mm}
+  .label.short .qr-svg{max-width:9.5mm;max-height:9.5mm}
+  .label.short .variant-attributes{font-size:8px;white-space:nowrap;flex-wrap:nowrap;overflow:hidden}
   .barcode-svg{display:block;max-width:100%;width:100%;height:100%;max-height:11mm;margin:0 auto}
   .qr-svg{display:block;width:100%;height:100%;max-width:11mm;max-height:11mm;margin:0 auto}
   .missing{font-size:8px;color:#b91c1c}
@@ -197,14 +201,14 @@ export async function sendBarcodeLabelsToPrinter(
 ): Promise<{ ok: boolean; error?: string }> {
   if (typeof window === "undefined") return { ok: false, error: "Windows desktop printing is unavailable" };
   const settings = getPrintSettings();
-  if (!(settings.labelPrinterName || settings.thermalPrinterName)) {
-    return { ok: false, error: "Select a barcode label printer in Settings → Printer settings before direct printing." };
+  if (!settings.labelPrinterName) {
+    return { ok: false, error: "Select the dedicated Barcode label printer in Settings → Printer settings (not the POS receipt printer)." };
   }
   try {
     const html = buildBarcodeLabelHtml(product, { copies, categoryName, autoPrint: false });
     const result = requestDesktopPrintHtml(html, "label", {
       labelWidthMm: settings.labelColumns === 2 ? settings.labelRollWidthMm : settings.labelWidthMm,
-      labelHeightMm: settings.labelHeightMm + (settings.labelColumns === 2 ? settings.labelRowGapMm : 0),
+      labelHeightMm: (settings.labelHeightMm + (settings.labelColumns === 2 ? settings.labelRowGapMm : 0)) * Math.ceil(Math.max(1, Math.min(100, copies)) / (settings.labelColumns === 2 ? 2 : 1)),
       silent: true,
     });
     return result ? await result : { ok: false, error: "Windows desktop printer bridge is unavailable" };
