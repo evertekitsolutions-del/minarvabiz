@@ -82,15 +82,28 @@ export function planPurchaseReturnPosting(input: { id: string; purchaseId?: stri
     ] });
 }
 
-/** Description-only purchases stay unclassified until reviewed; no stock or tax inference. */
+/** Description-only purchases remain unclassified. Explicit reconciled
+ * stock-line invoices debit inventory_asset, never generic purchase expense. */
 export function planDirectPurchasePosting(purchase: Purchase): AutomaticPostingPlan {
   if (![purchase.amount, purchase.paidAmount, purchase.balanceAmount].every(n => Number.isFinite(n) && n >= 0)
     || toMinorUnits(purchase.amount) <= 0 || toMinorUnits(purchase.amount) !== toMinorUnits(purchase.paidAmount) + toMinorUnits(purchase.balanceAmount)
     || (purchase.balanceAmount > 0 && !purchase.supplierId)) return invalid('Invalid direct purchase accounting amounts or supplier');
   if (!['cash', 'bank', 'card', 'upi', 'online', 'other'].includes(purchase.paymentMethod)) return invalid('Invalid payment method');
+  let stockMinor = 0;
+  if (purchase.stockLines?.length) {
+    try {
+      for (const line of purchase.stockLines) {
+        const unitMinor = toMinorUnits(line.unitCost);
+        if (!line.productId || line.quantity <= 0 || !Number.isFinite(line.quantity) || unitMinor < 0 ||
+          toMinorUnits(line.lineTotal) !== multiplyMinorByQuantity(unitMinor, line.quantity)) return invalid('Invalid direct purchase stock-line amount');
+        stockMinor = addMinorUnits(stockMinor, toMinorUnits(line.lineTotal));
+      }
+      if (stockMinor !== toMinorUnits(purchase.amount)) return invalid('Purchase stock lines must total the posted invoice amount');
+    } catch { return invalid('Purchase stock lines are not valid money or quantities'); }
+  }
   return planAutomaticPosting({ referenceType: 'auto_direct_purchase', referenceId: purchase.id, date: purchase.date,
     description: 'Direct purchase ' + purchase.purchaseNumber, lines: [
-      { key: 'unclassified_purchases', debit: purchase.amount },
+      { key: stockMinor > 0 ? 'inventory_asset' : 'unclassified_purchases', debit: purchase.amount },
       { key: purchase.paymentMethod === 'cash' ? 'cash' : purchase.paymentMethod === 'bank' ? 'bank' : 'payment_clearing', credit: purchase.paidAmount },
       { key: 'accounts_payable', credit: purchase.balanceAmount },
     ] });
