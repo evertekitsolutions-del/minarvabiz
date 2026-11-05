@@ -188,6 +188,13 @@ export function App() {
          Math.round(mrp*100)!==mrp*100 && Math.abs(mrp*100-Math.round(mrp*100))>1e-7 ||
          Math.round(offer*100)!==offer*100 && Math.abs(offer*100-Math.round(offer*100))>1e-7)
         throw new Error("Enter valid MRP and offer price (offer must not exceed MRP; max 2 decimals)");
+      if(productForm.hasVariants && !editingProductId) {
+        const rows=parseProductVariants(variantRows.map(row=>({...row,brand:row.brand?.trim()||productForm.brand})));
+        const total=rows.reduce((sum,row)=>sum+row.quantity,0);
+        if(!/^\\d+$/.test(productForm.stockQuantity) || !Number.isSafeInteger(Number(productForm.stockQuantity)) ||
+           Number(productForm.stockQuantity)!==total)
+          throw new Error(`Total stock must exactly match the sum of variant quantities (${total} pcs)`);
+      }
       const payload={
         name:productForm.name.trim(),sku:productForm.sku||null,barcode:productForm.barcode||null,
         categoryId:productForm.categoryId||null,brand:productForm.brand||null,
