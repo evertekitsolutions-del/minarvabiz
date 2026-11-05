@@ -152,7 +152,7 @@ export function buildBarcodeLabelHtml(
       ${labelCodeMode !== "qr" ? `<div class="barcode">${barcodeSvg(codeValue)}</div>` : ""}
       ${labelCodeMode !== "barcode" ? `<div class="qr">${qrHtml}</div>` : ""}
     </div>
-    <div class="price">${formatMoney(product.sellingPrice)}</div>
+    <div class="price"><span class="offer-price">Offer: ${formatMoney(product.sellingPrice)}</span>${product.mrp != null && product.mrp > 0 ? `<span class="mrp-price">MRP: ${formatMoney(product.mrp)}</span>` : `<span class="mrp-price">MRP: ${formatMoney(product.sellingPrice)}</span>`}</div>
   </div>`);
   const blocks = Array.from({ length: Math.ceil(labels.length / columns) }, (_, index) =>
     `<div class="label-sheet">${labels.slice(index * columns, (index + 1) * columns).join("")}</div>`
@@ -180,7 +180,7 @@ export function buildBarcodeLabelHtml(
   .barcode-svg{display:block;max-width:100%;width:100%;height:100%;max-height:11mm;margin:0 auto}
   .qr-svg{display:block;width:100%;height:100%;max-width:11mm;max-height:11mm;margin:0 auto}
   .missing{font-size:8px;color:#b91c1c}
-  .price{flex:0 0 auto;display:block;font-size:13px;line-height:1.1;font-weight:800;white-space:nowrap;overflow:visible}
+  .price{flex:0 0 auto;display:flex;flex-direction:column;gap:0;align-items:center;font-size:10px;line-height:1.05;font-weight:800;white-space:nowrap;overflow:hidden}\n  .offer-price{font-size:11px}.mrp-price{font-size:8px;font-weight:500}
   @media print{.label{border:0}}
 </style></head><body>${blocks}
 ${autoPrint ? "<script>window.onload=function(){window.print()}</script>" : ""}</body></html>`;
