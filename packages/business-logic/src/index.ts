@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// COM-010 optional abandoned-cart recovery eligibility; no automatic send.
+export * from "./commerce-cart-recovery-policy";
