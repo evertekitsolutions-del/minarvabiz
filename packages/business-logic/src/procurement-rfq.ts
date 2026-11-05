@@ -6,7 +6,7 @@
 import type { Product, PurchaseOrder, Supplier } from "@minarvabiz/types";
 import { addMinorUnits, fromMinorUnits, generateId, multiplyMinorByQuantity, nowISO, percentOfMinor, toMinorUnits } from "@minarvabiz/utils";
 import { validateCatalogPriceAmountInput } from "./vendor/open-mercato/priceValidation";
-import { buildRfqDraftPreview, type RfqDraftInput } from "./rfq-draft-preview";
+import { buildRfqDraftPreview, rfqCsvCell, type RfqDraftInput } from "./rfq-draft-preview";
 import { assertPermission } from "./permissions";
 import { auditAction } from "./audit-actions";
 import { touchPersistence } from "./autosave";
@@ -173,6 +173,25 @@ export function recordProcurementRfqQuote(id:string,expectedVersion:number,input
   r.version++;r.updatedAt=nowISO();
   auditAction("procurement.rfq.quote","procurement_rfqs",id,before,clone(r));
   touchPersistence();return clone(r);
+}
+/** Generates a single-vendor request sheet; never discloses other selected suppliers or their quotations. */
+export function buildSupplierRfqCsv(id: string, supplierId: string): { fileName: string; csv: string } {
+  assertPermission("purchases.manage");
+  const rfq = requireScopedRecord(id);
+  if (rfq.status !== "issued" && rfq.status !== "awarded") {
+    throw new Error("Issue this RFQ before preparing supplier requests");
+  }
+  if (!rfq.supplierIds.includes(supplierId)) throw new Error("Supplier was not invited to this RFQ");
+  const supplier = currentSupplier(supplierId);
+  const headings = ["RFQ reference","Required by","Supplier","Supplier email","Product ID",
+    "SKU","Product","Quantity","Unit","Supplier unit cost","Supplier tax %","Instructions"];
+  const values = rfq.lines.map(line=>[
+    rfq.reference,rfq.requiredBy,supplier.name,supplier.email??"",line.productId,line.sku,
+    line.description,String(line.quantity),line.unit,"","",rfq.notes
+  ]);
+  const csv = [headings,...values].map(row=>row.map(rfqCsvCell).join(",")).join("\r\n")+"\r\n";
+  return {fileName:"rfq-"+rfq.reference.replace(/[^a-zA-Z0-9_-]/g,"_").slice(0,80)
+    +"-"+supplierId.replace(/[^a-zA-Z0-9_-]/g,"_").slice(0,48)+".csv",csv};
 }
 export function compareProcurementRfqQuotes(id:string): RfqSupplierQuote[] {
   assertPermission("purchases.manage");
