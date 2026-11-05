@@ -60,7 +60,11 @@ export function calculateLaundryTicketTotals(input: {
   )) throw new Error("Every garment requires valid customer and supplier rates");
   let quantityMilli = 0, customerMinor = 0, supplierMinor = 0;
   for (const row of rows) {
-    quantityMilli += toQuantityMilli(row.quantity);
+    const lineMilli = toQuantityMilli(row.quantity);
+    if (lineMilli <= 0 || lineMilli / 1000 !== row.quantity) {
+      throw new Error("Laundry garment quantity must be positive with at most three decimal places");
+    }
+    quantityMilli += lineMilli;
     if (!Number.isSafeInteger(quantityMilli)) throw new Error("Laundry garment quantity exceeds supported range");
     const line = calculateLaundryProfit({
       quantity: row.quantity, customerRate: row.customerRate!,
@@ -69,7 +73,10 @@ export function calculateLaundryTicketTotals(input: {
     customerMinor = addMinorUnits(customerMinor, toMinorUnits(line.totalCustomerCharge));
     supplierMinor = addMinorUnits(supplierMinor, toMinorUnits(line.totalSupplierCost));
   }
-  if (quantityMilli !== toQuantityMilli(input.quantity)) throw new Error("Laundry garment quantities do not reconcile");
+  const ticketMilli = toQuantityMilli(input.quantity);
+  if (ticketMilli / 1000 !== input.quantity || quantityMilli !== ticketMilli) {
+    throw new Error("Laundry garment quantities do not reconcile");
+  }
   return {
     totalCustomerCharge: fromMinorUnits(customerMinor),
     totalSupplierCost: fromMinorUnits(supplierMinor),
