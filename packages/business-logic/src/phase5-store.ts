@@ -937,7 +937,7 @@ export function createPurchase(input: { date?: string; supplierId?: UUID | null;
   // No asynchronous gap between preflight, successful financial commit and
   // updating exact variant stock. Existing WMS/POS sees the updated Product IDs.
   for (const line of stockLines) {
-    const updated = mainStore.adjustStock(line.productId, "stock_in", line.quantity, `Supplier bill ${purchaseNumber}`);
+    const updated = mainStore.adjustStock(line.productId, "stock_in", line.quantity, `Supplier bill ${purchaseNumber}`, line.unitCost);
     if (!updated) throw new Error("Validated supplier stock receipt could not be committed");
   }
   if (input.orderId) ordersStore.addOrderExpense(input.orderId, input.description || "Order purchase", bal.amount, purchase.id);
