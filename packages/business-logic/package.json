@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "echo 'tests in later phase'"
+    "test": "node scripts/run-tests.mjs"
   },
   "dependencies": {
     "@minarvabiz/types": "workspace:*",
