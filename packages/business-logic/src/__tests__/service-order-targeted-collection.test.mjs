@@ -109,11 +109,11 @@ test("Windows order detail uses app-wide SQLite-acknowledged targeted payment fl
   const component = fs.readFileSync(new URL("../../../../apps/desktop/src/components/DesktopServiceOrderDetail.tsx", import.meta.url), "utf8");
   const hook = fs.readFileSync(new URL("../../../../apps/desktop/src/lib/use-desktop-customer-collection.ts", import.meta.url), "utf8");
   const detail = fs.readFileSync(new URL("../../../ui/src/components/orders/OrderDetail.tsx", import.meta.url), "utf8");
-  assert.match(detail, /Collect Customer Due/);
-  assert.match(app, /DesktopServiceOrderDetail collection=\\{customerCollection\\}/);
-  assert.match(component, /onCollectBalance=\\{openCollection\\}/);
-  assert.match(component, /target: \\{ sourceType: "service_order", id: order\\.id \\}/);
-  assert.match(component, /collection\\.collect\\(/);
-  assert.match(component, /collection\\.retryPending\\(\\)/);
-  assert.match(hook, /target\\?: \\{ sourceType: "service_order" \\| "laundry"/);
+  assert(detail.includes("Collect Customer Due"));
+  assert(app.includes("DesktopServiceOrderDetail collection={customerCollection}"));
+  assert(component.includes("onCollectBalance={openCollection}"));
+  assert(component.includes('target: { sourceType: "service_order", id: order.id }'));
+  assert(component.includes("collection.collect("));
+  assert(component.includes("collection.retryPending()"));
+  assert(hook.includes('target?: { sourceType: "service_order" | "laundry"'));
 });
