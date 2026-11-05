@@ -492,10 +492,21 @@ export interface Expense {
   version: number;
 }
 
+/** A direct supplier bill can post actual stock into an existing variant SKU. */
+export interface PurchaseStockLine {
+  productId: UUID;
+  quantity: number;
+  unitCost: number;
+  lineTotal: number;
+}
+
 export interface Purchase {
   id: UUID;
   purchaseNumber: string;
   date: ISODateString;
+  /** When present, these lines were received into the exact Product IDs and
+   * their cost was posted to inventory rather than unclassified purchases. */
+  stockLines?: PurchaseStockLine[];
   supplierId?: UUID | null;
   supplierName?: string | null;
   description: string;
