@@ -25,9 +25,21 @@ export function RfqWorkflowPanel({ suppliers, onChanged }: Props) {
   const [feedback, setFeedback] = React.useState<{ok: boolean; message: string} | null>(null);
   // The source of truth is the existing local-first business-logic store.
   void revision;
-  const rfqs = listProcurementRfqs();
+  // Some Web hosts have no authenticated procurement role. Do not crash the
+  // entire Purchases screen; the domain still enforces its own permission.
+  let rfqs: ProcurementRfq[] = [];
+  let accessError: string | null = null;
+  try {
+    rfqs = listProcurementRfqs();
+  } catch (cause) {
+    accessError = cause instanceof Error ? cause.message : String(cause);
+  }
   const selected = rfqs.find(r=>r.id===selectedId) ?? null;
-  const quotes = selected ? compareProcurementRfqQuotes(selected.id) : [];
+  let quotes: ReturnType<typeof compareProcurementRfqQuotes> = [];
+  if (selected) {
+    try { quotes = compareProcurementRfqQuotes(selected.id); }
+    catch (cause) { accessError = cause instanceof Error ? cause.message : String(cause); }
+  }
 
   function refresh() {
     setRevision(v=>v+1);
@@ -94,6 +106,7 @@ export function RfqWorkflowPanel({ suppliers, onChanged }: Props) {
       Sending the enquiry to suppliers is manual; no email is automatically dispatched.
     </p>
     {feedback&&<p role={feedback.ok?"status":"alert"} className={"my-2 text-sm "+(feedback.ok?"text-green-700":"text-red-700")}>{feedback.message}</p>}
+    {accessError&&<p role="alert" className="my-2 text-sm text-red-700">RFQ access unavailable: {accessError}</p>}
     <div className="grid gap-2 lg:grid-cols-3">
       <div className="max-h-64 space-y-1 overflow-y-auto rounded border border-slate-200 p-2">
         {rfqs.length===0&&<p className="text-sm text-slate-500">No RFQs saved yet. Create one from the enquiry form above.</p>}
