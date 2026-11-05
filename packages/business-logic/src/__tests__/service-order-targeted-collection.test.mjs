@@ -106,12 +106,14 @@ test("a settled order cannot accept stale replay, even when another order remain
 });
 test("Windows order detail uses app-wide SQLite-acknowledged targeted payment flow", () => {
   const app = fs.readFileSync(new URL("../../../../apps/desktop/src/App.tsx", import.meta.url), "utf8");
+  const component = fs.readFileSync(new URL("../../../../apps/desktop/src/components/DesktopServiceOrderDetail.tsx", import.meta.url), "utf8");
   const hook = fs.readFileSync(new URL("../../../../apps/desktop/src/lib/use-desktop-customer-collection.ts", import.meta.url), "utf8");
   const detail = fs.readFileSync(new URL("../../../ui/src/components/orders/OrderDetail.tsx", import.meta.url), "utf8");
   assert.match(detail, /Collect Customer Due/);
-  assert.match(app, /onCollectBalance=\{openOrderDueCollection\}/);
-  assert.match(app, /target:\{sourceType:"service_order",id:collectOrder\.id\}/);
-  assert.match(app, /customerCollection\.collect\(/);
-  assert.match(app, /customerCollection\.retryPending\(\)/);
-  assert.match(hook, /target\?: \{ sourceType: "service_order" \| "laundry"/);
+  assert.match(app, /DesktopServiceOrderDetail collection=\\{customerCollection\\}/);
+  assert.match(component, /onCollectBalance=\\{openCollection\\}/);
+  assert.match(component, /target: \\{ sourceType: "service_order", id: order\\.id \\}/);
+  assert.match(component, /collection\\.collect\\(/);
+  assert.match(component, /collection\\.retryPending\\(\\)/);
+  assert.match(hook, /target\\?: \\{ sourceType: "service_order" \\| "laundry"/);
 });
