@@ -39,6 +39,13 @@
     "Added a calibrated 4-inch (101.6mm) two-across 38 × 38mm sticker roll preset, adjustable gap/left margin, true two-column printing, and LEFT/RIGHT test label.",
     "A4 and thermal invoices and receipts now center the business name, address, and header contact details.",
     "Unsaved Business Settings and Printer Settings remain visible during desktop refreshes instead of resetting while typing.",
-    "License Activate / Renew now waits for completion, displays actual errors, and connects to the bundled production HTTPS licensing service."
+    "License Activate / Renew now waits for completion, displays actual errors, and connects to the bundled production HTTPS licensing service.",
+    "Boutique & Tailoring Orders now hide unrelated AMC visit planning, service warranties and field-service site visits; existing records are not deleted.",
+    "New laundry intake supports multiple garments with distinct service, fabric, turnaround time and unit price on the same ticket.",
+    "Laundry A4 receipts, supplier commitments, customer dues and posted journals use the reconciled garment-level prices.",
+    "Laundry dashboard includes garment stage/QC, supplier worklists, service-rate CSV import/export, operational reports and outstanding ageing.",
+    "Manual WhatsApp customer messages, pickup/delivery verification, route worksheets and damage/loss incident registers are available for laundry operations.",
+    "Customer CRM includes boutique design references and laundry history; customer statements unify tailoring, laundry and recorded receipts.",
+    "Existing 1.0.19 customer data is preserved; use the in-app verified Update & Restart flow, which checks installer authenticity and local SQLite backup before upgrade."
   ]
 }
