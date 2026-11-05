@@ -5,6 +5,7 @@ import type { CustomerCrmProfile } from "@minarvabiz/types";
 import { Button } from "../Button";
 import { Card, CardContent, CardHeader, CardTitle } from "../Card";
 import { formatMoney } from "../customers/format";
+import { BoutiquePortfolioPanel } from "./BoutiquePortfolioPanel";
 
 export function CustomerProfile({
   profile,
@@ -91,6 +92,8 @@ export function CustomerProfile({
           ))}
         </CardContent>
       </Card>
+
+      <BoutiquePortfolioPanel customerId={customer.id} />
 
       {customer.notes && (
         <p className="text-sm text-slate-600"><span className="font-medium">Notes:</span> {customer.notes}</p>
