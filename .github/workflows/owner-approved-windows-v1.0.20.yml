@@ -1,0 +1,243 @@
+name: Owner Approved Windows v1.0.20 One-Shot
+
+# Explicit owner approval: 2026-11-05. This one-time workflow publishes only
+# the prebuilt + tested immutable v1.0.20 artifact from approved source SHA.
+# The regular manual publisher remains unchanged and push-publishing disabled.
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/owner-approved-windows-v1.0.20.yml"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    if: github.repository == 'evertekitsolutions-del/minarvabiz'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify one-time release approval, exact source and green checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_SOURCE_SHA: b7adbf8f37cc7d883bb08628c209853c177a43e7
+          APPROVED_BUILD_RUN: "41976838098"
+          APPROVED_WORKFLOW_PATH: ".github/workflows/owner-approved-windows-v1.0.20.yml"
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$APPROVED_BUILD_RUN" --jq '.head_sha')" = "$APPROVED_SOURCE_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$APPROVED_BUILD_RUN" --jq '.conclusion')" = "success"
+          # Only this one-time authorization file may differ from approved code.
+          diff_files="$(gh api "repos/$GITHUB_REPOSITORY/compare/$APPROVED_SOURCE_SHA...$GITHUB_SHA" --jq '.files[].filename')"
+          test "$diff_files" = "$APPROVED_WORKFLOW_PATH"
+          check_data="$(gh api "repos/$GITHUB_REPOSITORY/commits/$APPROVED_SOURCE_SHA/check-runs?per_page=100")"
+          echo "$check_data" | jq -e '
+            ([.check_runs[] | select(.conclusion == "success")] | length) >= 26 and
+            ([.check_runs[] | select(.status != "completed" or (.conclusion != "success" and .conclusion != "skipped"))] | length) == 0
+          ' >/dev/null
+          if gh release view "v1.0.20" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v1.0.20 is already published; immutable release will not be replaced."
+            exit 1
+          fi
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')" = "v1.0.19"
+          echo "OWNER_APPROVED_RELEASE_PREFLIGHT PASS sha=$APPROVED_SOURCE_SHA version=1.0.20"
+
+      - name: Download verified Windows installer artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: "41976838098"
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" --jq '.artifacts[] | select(.name=="minarvabiz-windows-installer") | .id' | head -n 1)"
+          test "$artifact_id" = "13392575664"
+          gh api --method GET "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id/zip" > release-artifact.zip
+          mkdir -p release-artifact
+          unzip -q release-artifact.zip -d release-artifact
+          installer="$(find release-artifact -type f -name 'MinarvaBiz-Setup-*.exe' | head -n 1)"
+          test -n "$installer"
+          cp "$installer" ./MinarvaBiz-Setup.exe
+          echo "INSTALLER_NAME=$(basename "$installer")" >> "$GITHUB_ENV"
+          echo "INSTALLER_PATH=$installer" >> "$GITHUB_ENV"
+
+      - name: Publish immutable stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${INSTALLER_NAME#MinarvaBiz-Setup-}"
+          version="${version%.exe}"
+          test "$version" = "1.0.20"
+          tag="v$version"
+          hash="$(sha256sum "$INSTALLER_PATH" | awk '{print tolower($1)}')"
+          checksum="$INSTALLER_PATH.sha256"
+          printf '%s  %s' "$hash" "$INSTALLER_NAME" > "$checksum"
+
+          gh api \
+            -H "Accept: application/vnd.github.raw+json" \
+            "repos/$GITHUB_REPOSITORY/contents/release-notes.json?ref=b7adbf8f37cc7d883bb08628c209853c177a43e7" \
+            > release-notes.json
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; preserving immutable published assets."
+            exit 0
+          fi
+
+          node - "$version" "$hash" <<'NODE'
+          const fs = require("node:fs");
+          const version = process.argv[2];
+          const hash = process.argv[3];
+          const notes = JSON.parse(fs.readFileSync("release-notes.json", "utf8"));
+          const items = Array.isArray(notes[version])
+            ? notes[version].map((item) => String(item || "").trim()).filter(Boolean)
+            : [];
+          if (!items.length) {
+            throw new Error(`release-notes.json is missing customer-facing notes for v${version}`);
+          }
+          const markdown = [
+            `# Minarva Biz ${version}`,
+            "",
+            "## What's new",
+            "",
+            ...items.map((item) => `- ${item}`),
+            "",
+            `Installer SHA-256: ${hash}`,
+            "",
+          ].join("\n");
+          fs.writeFileSync("release-notes.md", markdown, "utf8");
+          NODE
+
+          gh release create "$tag" "$INSTALLER_PATH" "$checksum" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "b7adbf8f37cc7d883bb08628c209853c177a43e7" \
+            --title "Minarva Biz $version" \
+            --notes-file release-notes.md
+
+
+      - name: Verify production signed update channel
+        env:
+          # Only forwarded to the exact GitHub release API endpoint; never to the public worker.
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const { createPublicKey, verify } = require("node:crypto");
+
+          const base = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
+          const releaseApi = "https://api.github.com/repos/evertekitsolutions-del/minarvabiz/releases/latest";
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+          function publicKeyFromRawHex(hex) {
+            if (!/^[0-9a-f]{64}$/i.test(hex)) throw new Error("invalid production public key");
+            const prefix = Buffer.from("302a300506032b6570032100", "hex");
+            return createPublicKey({ key: Buffer.concat([prefix, Buffer.from(hex, "hex")]), format: "der", type: "spki" });
+          }
+
+          async function fetchJson(url) {
+            const headers = { accept: "application/json", "user-agent": "MinarvaBiz-Update-Channel-Smoke" };
+            if (url === releaseApi) {
+              // Unauthenticated GitHub API requests can hit shared runner rate limits (403).
+              // Never forward this token to the public Cloudflare update endpoints.
+              const token = process.env.GH_TOKEN;
+              if (!token) throw new Error("Missing GitHub Actions token for authenticated release verification");
+              headers.authorization = "Bearer " + token;
+              headers["X-GitHub-Api-Version"] = "2022-11-28";
+            }
+            const response = await fetch(url, { headers, cache: "no-store" });
+            if (!response.ok) {
+              const error = new Error(`${url} returned HTTP ${response.status}`);
+              // Auth configuration failures cannot be cured by thirty blind retries.
+              if (url === releaseApi && [401, 403].includes(response.status)) error.fatal = true;
+              throw error;
+            }
+            return response.json();
+          }
+
+          async function verifyOnce() {
+            const [keyData, manifest, release] = await Promise.all([
+              fetchJson(`${base}/api/public-key`),
+              fetchJson(`${base}/api/update/manifest`),
+              fetchJson(releaseApi),
+            ]);
+
+            const rawKey = String(keyData.publicKeyHex || "").toLowerCase();
+            if (!/^[0-9a-f]{64}$/.test(rawKey)) throw new Error("production public key payload is invalid");
+
+            if (manifest.product !== "minarvabiz") throw new Error("manifest product mismatch");
+            if (!/^\d+\.\d+\.\d+$/.test(String(manifest.version || ""))) throw new Error("manifest version is invalid");
+            if (!/^[0-9a-f]{64}$/i.test(String(manifest.sha256 || ""))) throw new Error("manifest SHA-256 is invalid");
+            if (!String(manifest.installerUrl || "").startsWith("https://github.com/evertekitsolutions-del/minarvabiz/releases/download/")) {
+              throw new Error("manifest installer URL is not pinned to the trusted GitHub release path");
+            }
+            if (!Number.isFinite(new Date(manifest.publishedAt).getTime())) throw new Error("manifest publishedAt is invalid");
+
+            const expectedVersion = String(release.tag_name || "").replace(/^v/, "");
+            if (manifest.version !== expectedVersion) throw new Error(`manifest version ${manifest.version} does not match latest release ${expectedVersion}`);
+
+            const expectedAssetName = `MinarvaBiz-Setup-${expectedVersion}.exe`;
+            const asset = Array.isArray(release.assets) ? release.assets.find((item) => item.name === expectedAssetName) : null;
+            if (!asset) throw new Error("latest release installer asset is missing");
+            const releaseDigest = String(asset.digest || "").replace(/^sha256:/i, "").toLowerCase();
+            if (releaseDigest !== String(manifest.sha256).toLowerCase()) throw new Error("manifest SHA-256 does not match GitHub release digest");
+            if (String(asset.browser_download_url || "") !== manifest.installerUrl) throw new Error("manifest installer URL does not match GitHub release asset");
+
+            const canonical = [
+              "minarvabiz-update-v1",
+              manifest.product,
+              manifest.version,
+              manifest.installerUrl,
+              String(manifest.sha256).toLowerCase(),
+              manifest.publishedAt,
+            ].join("\n");
+            const signature = Buffer.from(String(manifest.signature || ""), "base64url");
+            if (!verify(null, Buffer.from(canonical, "utf8"), publicKeyFromRawHex(rawKey), signature)) {
+              throw new Error("manifest Ed25519 signature verification failed");
+            }
+
+            fs.writeFileSync("MinarvaBiz-update-manifest.json", JSON.stringify(manifest, null, 2) + "\n", "utf8");
+            console.log(`PRODUCTION_UPDATE_CHANNEL PASS version=${manifest.version} sha256=${manifest.sha256}`);
+          }
+
+          (async () => {
+            let lastError;
+            for (let attempt = 1; attempt <= 30; attempt += 1) {
+              try {
+                await verifyOnce();
+                return;
+              } catch (error) {
+                lastError = error;
+                if (error.fatal) throw error;
+                console.log(`Update channel not ready (attempt ${attempt}/30): ${error.message}`);
+                if (attempt < 30) await sleep(10_000);
+              }
+            }
+            throw lastError;
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Publish signed fallback manifest asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${INSTALLER_NAME#MinarvaBiz-Setup-}"
+          version="${version%.exe}"
+          tag="v$version"
+          asset="MinarvaBiz-update-manifest.json"
+          test -s "$asset"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$asset"; then
+            echo "Signed fallback manifest already exists on $tag; preserving immutable asset."
+            exit 0
+          fi
+          gh release upload "$tag" "$asset" --repo "$GITHUB_REPOSITORY"
+          echo "SIGNED_FALLBACK_MANIFEST PASS tag=$tag asset=$asset"
