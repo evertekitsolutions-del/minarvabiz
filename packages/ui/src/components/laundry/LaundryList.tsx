@@ -513,7 +513,7 @@ export function LaundryList({
               <h3 className="text-sm font-semibold text-slate-900">Garment tracking & quality control</h3>
               <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-slate-500">Print one Code 39 label per garment item.</p><Button size="sm" variant="outline" onClick={() => printGarmentTags(detailTarget)}>Print garment tags</Button></div>
               {detailTarget.items.map((item) => <div key={item.id} className="grid gap-2 rounded-lg border border-slate-200 p-3 sm:grid-cols-[1fr_130px_150px] sm:items-center">
-                <div><div className="font-medium text-slate-900">{item.label} × {item.quantity}</div><div className="font-mono text-xs text-slate-500">Tag: {item.tagCode}</div><div className="text-xs text-slate-500">QC: {item.qualityStatus}</div>{item.serviceCode && <div className="text-xs text-slate-500">Service: {item.serviceCode.replaceAll("_", " ")} · Fabric: {item.fabricType || "regular"}{item.tatHours ? ` · TAT: ${item.tatHours}h` : ""}</div>}</div>
+                <div><div className="font-medium text-slate-900">{item.label} × {item.quantity}</div><div className="font-mono text-xs text-slate-500">Tag: {item.tagCode}</div><div className="text-xs text-slate-500">QC: {item.qualityStatus}</div>{item.serviceCode && <div className="text-xs text-slate-500">Service: {item.serviceCode.replaceAll("_", " ")} · Fabric: {item.fabricType || "regular"}{item.tatHours ? ` · TAT: ${item.tatHours}h` : ""}</div>}{item.customerRate != null && <div className="text-xs font-medium text-slate-700">Customer unit {formatMoney(item.customerRate)} · Supplier unit {formatMoney(item.supplierRate ?? 0)}</div>}</div>
                 <div className="text-sm capitalize text-slate-700">{item.processingStatus.replaceAll("_", " ")}</div>
                 {onUpdateDetails && detailTarget.status !== "cancelled" ? <div className="flex flex-col gap-1">
                   <select aria-label={`Workflow for ${item.tagCode}`} className={selectClass} value={item.processingStatus} onChange={(e) => saveItemWorkflow(item.id, { processingStatus: e.target.value })}>
@@ -533,8 +533,8 @@ export function LaundryList({
               {editError && <p role="alert" className="text-sm text-rose-600">{editError}</p>}
             </section> : null}
             <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-5">
-              <div><div className="text-xs text-slate-500">Customer rate</div><div className="font-semibold">{formatMoney(detailTarget.customerRate)}</div></div>
-              <div><div className="text-xs text-slate-500">Supplier rate</div><div className="font-semibold">{formatMoney(detailTarget.supplierRate)}</div></div>
+              {!detailTarget.items?.some(item => item.customerRate != null) && <><div><div className="text-xs text-slate-500">Customer rate</div><div className="font-semibold">{formatMoney(detailTarget.customerRate)}</div></div>
+              <div><div className="text-xs text-slate-500">Supplier rate</div><div className="font-semibold">{formatMoney(detailTarget.supplierRate)}</div></div></>}
               <div><div className="text-xs text-slate-500">Paid</div><div className="font-semibold">{formatMoney(detailTarget.paidAmount)}</div></div>
               <div><div className="text-xs text-slate-500">Balance</div><div className="font-semibold">{formatMoney(detailTarget.balanceAmount)}</div></div>
               <div><div className="text-xs text-slate-500">Profit</div><div className="font-semibold text-emerald-700">{formatMoney(detailTarget.profit)}</div></div>

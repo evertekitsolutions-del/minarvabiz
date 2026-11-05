@@ -414,7 +414,10 @@ export interface LaundryItem {
   label: string;
   quantity: number;
   tagCode: string;
-  /** Saved service classification and promise; billing price remains the ticket rate. */
+  /** Optional immutable per-garment posted unit prices on mixed-rate tickets; all items priced or all legacy. */
+  customerRate?: number | null;
+  supplierRate?: number | null;
+  /** Saved service classification and promised turnaround. */
   serviceCode?: string | null;
   fabricType?: string | null;
   tatHours?: number | null;
