@@ -48,7 +48,7 @@ test("duplicate immediate event is idempotent; stale or forged revisions fail cl
   assert.equal(go({ order: p.order, eventId: "evt1", expectedRevision: 0 }).applied, false);
   assert.throws(() => go({ order: p.order, eventId: "evt2", expectedRevision: 0 }), /Stale/);
   assert.throws(() => go({ order: p.order, eventId: "evt1", expectedRevision: 1 }), /replay/);
-  assert.throws(() => go({ order: order({ revision: Number.MAX_SAFE_INTEGER }) }), /revision/);
+  assert.throws(() => go({ order: order({ revision: Number.MAX_SAFE_INTEGER }), expectedRevision: Number.MAX_SAFE_INTEGER }), /revision/);
 });
 test("customer can cancel own order, never mark ready or hand over", () => {
   const cancel = go({ actorRole: "customer", actorCustomerId: "customer1", action: "cancel" });
