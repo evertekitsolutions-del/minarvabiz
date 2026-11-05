@@ -62,3 +62,12 @@ or whole-module acceptance is earned by this component reuse.
 ## Coverage gate follow-up
 
 The first rebased exact-head run failed the changed-code 80% coverage gate (49.30%) even though behavior tests passed. The bundled complete MIT license remains intact in THIRD_PARTY_NOTICES, while the source retains copyright attribution. Direct tests now execute input-type, negative, unsafe-range, optional-empty, wholesale/uniform, overflow and amount-limit branches. No coverage exclusions or threshold reductions were made. Confirm the next exact-head CI before merge.
+
+## PUR-002 — supplier RFQ to purchase order, 2026-11-05
+
+- Copied Open Mercato MIT catalog price validator verbatim from `open-mercato/open-mercato` commit `4374c48def1654927805c4b760f0e7f8648280f2`: `packages/core/src/modules/catalog/lib/priceValidation.ts`.
+- Bundled under `packages/business-logic/src/vendor/open-mercato/priceValidation.ts` with copyright and full existing MIT notice retained in `THIRD_PARTY_NOTICES.md`.
+- Reuses Minarva's existing RFQ enquiry CSV, shared supplier/product catalog, exact-cent accounting utilities, PO draft/approval, GRN, invoicing and audit/persistence paths.
+- Adds locally saved RFQ issue, vendor quotation capture/revisions, branch-restricted quote comparison and one-time conversion to the existing draft Purchase Order.
+- No extra framework, cloud service, subscription, data migration or donor enterprise dependency.
+- Caveats: requests are exported for manual supplier dispatch; hosted auth/RLS, cross-device RFQ sync, real customer UAT and release remain pending acceptance. This is not a claimed full-platform PUR-002 completion.
