@@ -460,7 +460,8 @@ export function dayEndReport(): DayEndReport {
   const other = inflow("bank") + inflow("other") + inflow("online") - refundOutflow("bank") - refundOutflow("other") - refundOutflow("online");
 
   const outstanding = allSales.filter(s => localDate(s.saleDate) === today && s.status !== "cancelled")
-    .reduce((a, s) => a + s.balanceAmount, 0) + orders.reduce((a, o) => a + o.balance, 0);
+    .reduce((a, s) => a + s.balanceAmount, 0) + orders.reduce((a, o) => a + o.balance, 0)
+    + laundry.reduce((a, ticket) => a + ticket.balanceAmount, 0);
   return buildDayEndReport({ productSales, serviceRevenue, laundryRevenue, costOfGoods: cogs, orderMaterialCosts: orderMat,
     orderSpecificExpenses: orderExp, generalExpenses: generalExp, staffIncentives, cashReceived: cash,
     cardPayments: card, otherPayments: other, outstandingAmount: outstanding });
