@@ -66,5 +66,12 @@
     "Supplier Purchase Bill preview and posting use identical line-by-line, cent-accurate tax rounding; exact full payments are accepted and overpayments are rejected before stock posting.",
     "Windows Staff salary entry rejects malformed or negative amounts rather than silently accepting partial numbers.",
     "Existing customer data, stock history, invoice numbers, trial registration and license activation are preserved; no database migration."
+  ],
+  "1.0.24": [
+    "Barcode Label Settings now include a one-click CROMO 38 × 25 mm, two-across, NO GAP paper preset for the 1-inch-core Chromo roll.",
+    "The CROMO preset uses 38 × 25 mm stickers, zero horizontal and feed gap, a 25 mm print feed, barcode-only compact layout, and an editable initial 80 mm backing/2 mm left-offset calibration.",
+    "The Product > Print Barcode Label dialog can apply and save the preset, preview exact copies in two columns, and print directly to the selected Windows label printer.",
+    "The label test print now shows the actual selected sticker dimensions. Other saved printer profiles, product barcodes, prices, stock, invoices, customer records and licensing are preserved.",
+    "Printer-specific backing width, sensor mode, paper alignment and ribbon compatibility still require a real two-label test print."
   ]
 }
