@@ -132,3 +132,23 @@ test("shared Web/Windows procurement UI exposes saved quote/PO workflow and back
   assert(persist.includes("procurementRfqs: procurementRfqs.exportProcurementRfqState()"));
   assert(persist.includes("procurementRfqs: procurementRfqs.validateProcurementRfqState(input.procurementRfqs)"));
 });
+
+
+test("single-supplier RFQ export protects competitors' details and spreadsheet formulas",()=>{
+  reset();
+  const created=rfq.createProcurementRfq({...request("RFQ-CSV"),notes:"=open a spreadsheet"});
+  const issued=rfq.issueProcurementRfq(created.id,created.version);
+  const quoted=rfq.recordProcurementRfqQuote(issued.id,issued.version,bid("s1","92.00"));
+  const exported=rfq.buildSupplierRfqCsv(quoted.id,"s2");
+  assert.match(exported.fileName,/^rfq-RFQ-CSV-s2\.csv$/);
+  assert.match(exported.csv,/Vendor s2/);
+  assert.match(exported.csv,/"'=open a spreadsheet"/);
+  assert(!exported.csv.includes("Vendor s1"));
+  assert(!exported.csv.includes("Q-s1"));
+  assert(!exported.csv.includes("92.00"));
+  assert.equal(exported.csv.split("\r\n").filter(Boolean).length,3);
+  assert.throws(()=>rfq.buildSupplierRfqCsv(quoted.id,"forged"),/not invited/);
+  assert.throws(()=>rfq.buildSupplierRfqCsv("unknown","s2"),/missing/i);
+  const after=rfq.getProcurementRfq(quoted.id);
+  assert.equal(after.quotes.length,1);
+});
