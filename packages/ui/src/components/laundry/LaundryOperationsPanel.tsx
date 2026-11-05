@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import type { LaundryOrder } from "@minarvabiz/types";
-import { buildLaundryOperationsReport } from "@minarvabiz/business-logic";
+import { buildLaundryOperationsReport, exportLaundryOperationsCsv } from "@minarvabiz/business-logic";
 import { formatMoney } from "../customers/format";
 import { inputClass } from "../forms/FormField";
 import { Button } from "../Button";
@@ -14,6 +14,7 @@ function monthNow(): string {
 export function LaundryOperationsPanel({ orders }: { orders: LaundryOrder[] }) {
   const [period, setPeriod] = React.useState(monthNow);
   const [expanded, setExpanded] = React.useState(false);
+  const [exportFeedback, setExportFeedback] = React.useState<{error:boolean;text:string}|null>(null);
   const report = React.useMemo(() => {
     if (!/^\d{4}-\d{2}$/.test(period)) return null;
     const [year, month] = period.split("-").map(Number);
@@ -25,15 +26,33 @@ export function LaundryOperationsPanel({ orders }: { orders: LaundryOrder[] }) {
     catch { return null; }
   }, [orders, period]);
 
+  function downloadMonthlyCsv() {
+    if (!report) { setExportFeedback({error:true,text:"Select a valid reporting month first."}); return; }
+    try {
+      const csv = exportLaundryOperationsCsv(report);
+      const url = URL.createObjectURL(new Blob([String.fromCharCode(0xfeff), csv],{type:"text/csv;charset=utf-8"}));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "minarvabiz-laundry-operations-" + period + ".csv";
+      document.body.appendChild(anchor);
+      try { anchor.click(); setExportFeedback({error:false,text:"Monthly operations CSV export requested."}); }
+      finally { anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
+    } catch (error) {
+      setExportFeedback({error:true,text:error instanceof Error ? error.message : "Unable to export operations report"});
+    }
+  }
+
   return <section className="rounded-xl border border-slate-200 bg-white p-3">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h3 className="text-sm font-semibold text-slate-900">Laundry operations & garment throughput</h3>
         <p className="text-xs text-slate-500">Month of ticket intake · active workload and service mix</p></div>
       <div className="flex gap-2">
         <input aria-label="Laundry reporting month" type="month" className={inputClass} value={period} onChange={e => setPeriod(e.target.value)} />
+        <Button variant="outline" size="sm" disabled={!report} onClick={downloadMonthlyCsv}>Export month CSV</Button>
         <Button variant="outline" size="sm" onClick={() => setExpanded(value => !value)}>{expanded ? "Hide report" : "View report"}</Button>
       </div>
     </div>
+    {exportFeedback && <p className={"mt-2 text-xs " + (exportFeedback.error ? "text-rose-700" : "text-slate-600")} role={exportFeedback.error ? "alert" : "status"}>{exportFeedback.text}</p>}
     {expanded && (report ? <div className="mt-3 space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {([
