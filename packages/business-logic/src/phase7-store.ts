@@ -13,6 +13,7 @@ import { calculateInvoiceTotals } from "@minarvabiz/billing";
 import { applyStockMovement } from "./inventory";
 import { buildDayEndReport, type DayEndReport } from "./reports";
 import { calculatePeriodSummary } from "./profit";
+import { calculateRetailReportMovement } from "./sales-summary-reconciliation";
 import * as mainStore from "./store";
 import * as phase5Store from "./phase5-store";
 import * as ordersStore from "./orders-store";
@@ -379,20 +380,25 @@ export function salesReport(from?: string, to?: string): SalesReportRow[] {
   const sales = mainStore.listSales(), orders = ordersStore.listOrders(), laundry = phase5Store.listLaundryOrders(), expenses = phase5Store.listExpenses();
   const inRange = (iso: string) => (!from || iso >= from) && (!to || iso <= to);
 
-  const periodSales = sales.filter((s) => inRange(s.saleDate) && s.status !== "cancelled");
+  const retail = calculateRetailReportMovement(sales, returns, inRange);
   const periodOrders = orders.filter((o) => inRange(o.orderDate) && o.status !== "cancelled");
   const periodLaundry = laundry.filter((l) => inRange(l.createdAt) && l.status !== "cancelled");
   const periodExpenses = expenses.filter((e) => inRange(e.date));
   const periodIncentives = phase6Store.listIncentivePayouts().filter((p) => inRange(p.calculatedAt));
 
-  const productSales = periodSales.reduce((a, s) => a + s.total, 0);
-  const inventoryCogs = periodSales.reduce((a, s) => a + s.items.reduce((sum, item) => sum + item.quantity * item.costPrice, 0), 0);
+  const { productSales, inventoryCogs } = retail;
   const serviceRevenue = periodOrders.reduce((a, o) => a + o.price, 0);
   const laundryRevenue = periodLaundry.reduce((a, l) => a + l.totalCustomerCharge, 0);
   const orderMaterialCosts = periodOrders.reduce((a, o) => a + o.externalMaterialCost, 0)
     + periodLaundry.reduce((a, l) => a + l.totalSupplierCost, 0);
-  const orderSpecificExpenses = periodOrders.reduce((a, o) => a + o.orderExpensesTotal, 0)
-    + periodExpenses.filter((e) => Boolean(e.orderId)).reduce((a, e) => a + e.amount, 0);
+  // Linked expenses already live in orderExpensesTotal. Deduplicate by the
+  // source expense ID and recognize each linked payment in its own date range.
+  const expenseIds = new Set(expenses.map(e => e.id));
+  const orderBaseExpenses = periodOrders.reduce((sum, order) =>
+    sum + order.orderExpensesTotal - order.expenses
+      .filter(item => expenseIds.has(item.id)).reduce((a, item) => a + item.amount, 0), 0);
+  const orderSpecificExpenses = orderBaseExpenses +
+    periodExpenses.filter(e => Boolean(e.orderId)).reduce((a, e) => a + e.amount, 0);
   const generalExpenses = periodExpenses.filter((e) => !e.orderId).reduce((a, e) => a + e.amount, 0);
   const staffIncentives = periodIncentives.reduce((a, p) => a + p.amount, 0);
 
@@ -426,17 +432,21 @@ export function dayEndReport(): DayEndReport {
     return new Date(parsed.getTime() - offset).toISOString().slice(0, 10);
   };
   const today = localDate(new Date().toISOString());
-  const sales = mainStore.listSales().filter((s) => localDate(s.saleDate) === today && s.status !== "cancelled");
+  const allSales = mainStore.listSales();
+  const retail = calculateRetailReportMovement(allSales, returns, date => localDate(date) === today);
   const orders = ordersStore.listOrders().filter((o) => localDate(o.orderDate) === today && o.status !== "cancelled");
   const laundry = phase5Store.listLaundryOrders().filter((l) => localDate(l.createdAt) === today && l.status !== "cancelled");
   const expenses = phase5Store.listExpenses().filter((e) => localDate(e.date) === today);
   const payments = mainStore.listPayments().filter((p) => localDate(p.paidAt) === today);
 
-  const productSales = sales.reduce((a, s) => a + s.total, 0);
-  const cogs = sales.reduce((a, s) => a + s.items.reduce((x, i) => x + i.quantity * i.costPrice, 0), 0);
+  const { productSales, inventoryCogs: cogs } = retail;
   const serviceRevenue = orders.reduce((a, o) => a + o.price, 0);
   const orderMat = orders.reduce((a, o) => a + o.externalMaterialCost, 0);
-  const orderExp = orders.reduce((a, o) => a + o.orderExpensesTotal, 0);
+  const allExpenseIds = new Set(phase5Store.listExpenses().map(e => e.id));
+  const orderExp = orders.reduce((sum, order) =>
+    sum + order.orderExpensesTotal - order.expenses
+      .filter(item => allExpenseIds.has(item.id)).reduce((a, item) => a + item.amount, 0), 0)
+    + expenses.filter(e => Boolean(e.orderId)).reduce((a, e) => a + e.amount, 0);
   const laundryRevenue = laundry.reduce((a, l) => a + l.totalCustomerCharge, 0);
   const generalExp = expenses.filter((e) => !e.orderId).reduce((a, e) => a + e.amount, 0);
   const staffIncentives = phase6Store.listIncentivePayouts()
@@ -449,7 +459,8 @@ export function dayEndReport(): DayEndReport {
   const card = inflow("card") + inflow("upi") - refundOutflow("card") - refundOutflow("upi");
   const other = inflow("bank") + inflow("other") + inflow("online") - refundOutflow("bank") - refundOutflow("other") - refundOutflow("online");
 
-  const outstanding = sales.reduce((a, s) => a + s.balanceAmount, 0) + orders.reduce((a, o) => a + o.balance, 0);
+  const outstanding = allSales.filter(s => localDate(s.saleDate) === today && s.status !== "cancelled")
+    .reduce((a, s) => a + s.balanceAmount, 0) + orders.reduce((a, o) => a + o.balance, 0);
   return buildDayEndReport({ productSales, serviceRevenue, laundryRevenue, costOfGoods: cogs, orderMaterialCosts: orderMat,
     orderSpecificExpenses: orderExp, generalExpenses: generalExp, staffIncentives, cashReceived: cash,
     cardPayments: card, otherPayments: other, outstandingAmount: outstanding });
