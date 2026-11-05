@@ -105,3 +105,43 @@ export function hydrateLaundryRateCards(input: unknown): void {
 export function exportLaundryRateCards(): LaundryRateCard[] {
   return cards.map(row => ({ ...row }));
 }
+
+
+/** All-or-nothing catalog preflight, preserving existing rate IDs and other branches. */
+export function saveLaundryRateCardsBatch(
+  inputs: readonly LaundryRateInput[], expectedBranchId: string,
+): { created: number; updated: number } {
+  assertPermission("settings.manage");
+  const branchId = activeLaundryBranchId();
+  if (!branchId || !expectedBranchId || branchId !== expectedBranchId) {
+    throw new Error("Active branch changed; review and import the rate file again");
+  }
+  if (!Array.isArray(inputs) || inputs.length < 1 || inputs.length > 1000) {
+    throw new Error("Import requires 1–1000 laundry rates");
+  }
+  const timestamp = nowISO();
+  const valid = validateLaundryRateCards(inputs.map((row, i) => ({
+    ...row, branchId, id: "bulk-preview-" + i, updatedAt: timestamp,
+  })));
+  const next = cards.map(row => ({ ...row }));
+  const audit: Array<{ before: LaundryRateCard | null; after: LaundryRateCard }> = [];
+  let created = 0, updated = 0;
+  for (const row of valid) {
+    const index = next.findIndex(item => key(item) === key(row));
+    const before = index < 0 ? null : { ...next[index] };
+    const after: LaundryRateCard = {
+      ...row, id: before?.id ?? generateId(), updatedAt: timestamp,
+    };
+    if (index < 0) { next.push(after); created++; }
+    else { next[index] = after; updated++; }
+    audit.push({ before, after });
+  }
+  // Validate the merged full snapshot before any state, persistence or audit changes.
+  const checked = validateLaundryRateCards(next);
+  cards.splice(0, cards.length, ...checked);
+  touchPersistence();
+  for (const { before, after } of audit) {
+    auditAction("laundry.rate_card_save", "laundry_rate_cards", after.id, before, { ...after });
+  }
+  return { created, updated };
+}
