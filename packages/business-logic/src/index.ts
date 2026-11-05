@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// MKT-016: opt-in/opt-out policy only; host owns durable consent and provider sends.
+export * from "./marketing-consent-policy";
