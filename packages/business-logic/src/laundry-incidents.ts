@@ -57,7 +57,8 @@ export function validateLaundryIncidents(input: unknown): LaundryIncident[] {
 }
 
 export function listLaundryIncidents(orderId?: string): LaundryIncident[] {
-  return incidents.filter(row => !orderId || row.orderId === orderId)
+  const visible = new Set(listLaundryOrders().map(order => order.id));
+  return incidents.filter(row => visible.has(row.orderId) && (!orderId || row.orderId === orderId))
     .map(row => ({ ...row })).sort((a,b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
 }
 
@@ -97,7 +98,7 @@ export function registerLaundryIncident(input: {
 export function decideLaundryIncident(input: { id: string; status: "resolved" | "rejected"; notes: string }): LaundryIncident {
   assertPermission("returns.manage");
   const incident = incidents.find(row => row.id === input.id);
-  if (!incident) throw new Error("Laundry incident not found");
+  if (!incident || !listLaundryOrders().some(order => order.id === incident.orderId)) throw new Error("Laundry incident not found in active branch");
   if (incident.status !== "open") throw new Error("Incident already finalized");
   const notes = input.notes?.trim();
   if (!notes || notes.length > 2000) throw new Error("Resolution explanation must be 1–2000 characters");
@@ -110,7 +111,8 @@ export function decideLaundryIncident(input: { id: string; status: "resolved" | 
   return { ...incident };
 }
 
-export const exportLaundryIncidents = (): LaundryIncident[] => listLaundryIncidents();
+/** Backups must preserve claims from all branches, including those not currently selected. */
+export const exportLaundryIncidents = (): LaundryIncident[] => incidents.map(incident => ({ ...incident }));
 export function hydrateLaundryIncidents(raw: unknown): void {
   const validated = validateLaundryIncidents(raw);
   incidents.splice(0, incidents.length, ...validated);
