@@ -10,7 +10,7 @@ import { Button } from "../Button";
 import { inputClass, selectClass } from "../forms/FormField";
 import { formatMoney } from "../customers/format";
 
-export function LaundryIncidentsPanel({ orders }: { orders: LaundryOrder[] }) {
+export function LaundryIncidentsPanel({ orders, onChange }: { orders: LaundryOrder[]; onChange?: () => void }) {
   const [visible, setVisible] = React.useState(false);
   const [records, setRecords] = React.useState(() => listLaundryIncidents());
   const [orderId, setOrderId] = React.useState("");
@@ -34,7 +34,7 @@ export function LaundryIncidentsPanel({ orders }: { orders: LaundryOrder[] }) {
         estimatedCustomerCompensation: Number(customerEstimate),
         estimatedVendorRecovery: selectedOrder?.mode === "outsourced" ? Number(vendorEstimate) : 0,
       });
-      refresh(); setDescription(""); setCustomerEstimate("0"); setVendorEstimate("0");
+      refresh(); onChange?.(); setDescription(""); setCustomerEstimate("0"); setVendorEstimate("0");
       setFeedback({ error: false, text: "Incident recorded. Estimate does not create a refund or journal entry." });
     } catch (error) {
       setFeedback({ error: true, text: error instanceof Error ? error.message : "Unable to record incident" });
@@ -43,7 +43,7 @@ export function LaundryIncidentsPanel({ orders }: { orders: LaundryOrder[] }) {
   function finalize(id: string, status: "resolved" | "rejected") {
     try {
       decideLaundryIncident({ id, status, notes: resolutionNotes[id] || "" });
-      refresh(); setFeedback({ error: false, text: "Incident decision saved. Post any actual refund separately." });
+      refresh(); onChange?.(); setFeedback({ error: false, text: "Incident decision saved. Post any actual refund separately." });
     } catch (error) {
       setFeedback({ error: true, text: error instanceof Error ? error.message : "Unable to resolve incident" });
     }

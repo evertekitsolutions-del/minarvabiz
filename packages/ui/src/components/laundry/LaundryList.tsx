@@ -11,7 +11,7 @@ import { LaundryWhatsAppPanel } from "./LaundryWhatsAppPanel";
 import { LaundryRoutePanel } from "./LaundryRoutePanel";
 import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
-import { buildLaundryVendorScorecard, can, exportLaundryTicketsCsv, printLaundryServiceReceipt } from "@minarvabiz/business-logic";
+import { buildLaundryVendorScorecard, can, exportLaundryTicketsCsv, listLaundryIncidents, printLaundryServiceReceipt } from "@minarvabiz/business-logic";
 
 type LaundryEditResult = { success: boolean; error?: string; order?: LaundryOrder };
 
@@ -332,11 +332,12 @@ export function LaundryList({
   const detailHistory = detailTarget
     ? auditLogs.filter((entry) => entry.tableName === "laundry_orders" && entry.recordId === detailTarget.id)
     : [];
+  const [incidentRevision, setIncidentRevision] = React.useState(0);
   const vendorScores = React.useMemo(() => {
     const now = new Date();
     const day = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
-    return buildLaundryVendorScorecard(orders, day);
-  }, [orders]);
+    return buildLaundryVendorScorecard(orders, day, listLaundryIncidents());
+  }, [orders, incidentRevision]);
 
   return (
     <>
@@ -357,7 +358,7 @@ export function LaundryList({
 
         <LaundryRoutePanel orders={orders} customers={customers} />
         <LaundryOperationsPanel orders={orders} />
-        <LaundryIncidentsPanel orders={orders} />
+        <LaundryIncidentsPanel orders={orders} onChange={() => setIncidentRevision(count => count + 1)} />
         {csvFeedback && <p role={csvFeedback.failed ? "alert" : "status"} className={`text-sm ${csvFeedback.failed ? "text-rose-700" : "text-slate-600"}`}>{csvFeedback.message}</p>}
         {tagPrintFeedback && <p role="status" className="text-sm text-slate-600">{tagPrintFeedback}</p>}
         {receiptPrintFeedback && <p role={receiptPrintFeedback.failed ? "alert" : "status"} className={"text-sm " + (receiptPrintFeedback.failed?"text-rose-700":"text-slate-600")}>{receiptPrintFeedback.message}</p>}
@@ -365,14 +366,14 @@ export function LaundryList({
         <p className="text-xs text-slate-500">CSV includes displayed cancelled tickets for traceability. Use Reports for reconciled financial totals.</p>
         {vendorScores.length > 0 && <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-3" aria-label="Laundry vendor comparison">
           <h3 className="text-sm font-semibold text-slate-900">Laundry supplier performance · In-house comparison</h3>
-          <p className="mb-2 mt-1 text-xs text-slate-500">Contribution excludes in-house wages, utilities and other overheads. Late counts only open tickets with a recorded due date.</p>
-          <table className="w-full min-w-[740px] text-left text-xs">
+          <p className="mb-2 mt-1 text-xs text-slate-500">Contribution excludes in-house wages, utilities, claims and other overheads. Claims/recovery are estimates, not posted refunds. Late counts only open tickets with a due date.</p>
+          <table className="w-full min-w-[1060px] text-left text-xs">
             <thead><tr className="border-b border-slate-200 text-slate-600">
-              <th className="py-2 pr-3">Supplier / mode</th><th className="py-2 pr-3">Tickets</th><th className="py-2 pr-3">Garments</th><th className="py-2 pr-3">Delivered</th><th className="py-2 pr-3">Overdue</th><th className="py-2 pr-3">QC issues</th><th className="py-2 pr-3">Vendor cost</th><th className="py-2">Contribution</th>
+              <th className="py-2 pr-3">Supplier / mode</th><th className="py-2 pr-3">Tickets</th><th className="py-2 pr-3">Garments</th><th className="py-2 pr-3">Delivered</th><th className="py-2 pr-3">Overdue</th><th className="py-2 pr-3">QC issues</th><th className="py-2 pr-3">Claims</th><th className="py-2 pr-3">Rework</th><th className="py-2 pr-3">Damage / lost</th><th className="py-2 pr-3">Est. recovery</th><th className="py-2 pr-3">Vendor cost</th><th className="py-2">Contribution</th>
             </tr></thead>
             <tbody>{vendorScores.map(score => <tr key={score.mode + ":" + (score.supplierId || "local")} className="border-b border-slate-100 last:border-0">
               <td className="py-2 pr-3 font-medium">{score.supplierName}</td>
-              <td className="py-2 pr-3">{score.orders}</td><td className="py-2 pr-3">{score.garments}</td><td className="py-2 pr-3">{score.delivered}</td><td className="py-2 pr-3">{score.overdueOpen}</td><td className="py-2 pr-3">{score.qcFailedItems}</td>
+              <td className="py-2 pr-3">{score.orders}</td><td className="py-2 pr-3">{score.garments}</td><td className="py-2 pr-3">{score.delivered}</td><td className="py-2 pr-3">{score.overdueOpen}</td><td className="py-2 pr-3">{score.qcFailedItems}</td><td className="py-2 pr-3">{score.incidentCases}</td><td className="py-2 pr-3">{score.reworkCases}</td><td className="py-2 pr-3">{score.damageLossCases}</td><td className="py-2 pr-3">{formatMoney(score.estimatedVendorRecovery)}</td>
               <td className="py-2 pr-3">{formatMoney(score.supplierCost)}</td><td className="py-2 font-medium">{formatMoney(score.contributionBeforeInternalCosts)}</td>
             </tr>)}</tbody>
           </table>
