@@ -129,7 +129,7 @@ export function listCategories(): Category[] {
 
 function validatedCategoryName(value: string): string {
   const normalized = value?.trim();
-  if (!normalized || normalized.length > 100 || /[\\r\\n\\u0000-\\u001f]/.test(normalized))
+  if (!normalized || normalized.length > 100 || /[\r\n\u0000-\u001f]/.test(normalized))
     throw new Error("Category name must be 1–100 characters without control characters");
   return normalized;
 }
