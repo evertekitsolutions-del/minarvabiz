@@ -1,4 +1,5 @@
 import { parseServiceOrderPriceDraft } from "@minarvabiz/business-logic";
+import { parseBoutiquePrices, verifyBoutiqueVariantStock } from "./lib/boutique-product-entry";
 import { parseDesktopPurchaseMoney } from "./lib/desktop-purchase-amount";
 import * as React from "react";
 import {
@@ -181,20 +182,8 @@ export function App() {
   function handleSaveProduct(){
     try {
       if(!productForm.name.trim())throw new Error("Product name is required");
-      const mrp=Number(productForm.mrp), offer=Number(productForm.sellingPrice);
-      if(!productForm.mrp.trim() || !productForm.sellingPrice.trim() ||
-         !Number.isFinite(mrp) || !Number.isFinite(offer) ||
-         mrp<0 || offer<0 || offer>mrp ||
-         Math.round(mrp*100)!==mrp*100 && Math.abs(mrp*100-Math.round(mrp*100))>1e-7 ||
-         Math.round(offer*100)!==offer*100 && Math.abs(offer*100-Math.round(offer*100))>1e-7)
-        throw new Error("Enter valid MRP and offer price (offer must not exceed MRP; max 2 decimals)");
-      if(productForm.hasVariants && !editingProductId) {
-        const rows=parseProductVariants(variantRows.map(row=>({...row,brand:row.brand?.trim()||productForm.brand})));
-        const total=rows.reduce((sum,row)=>sum+row.quantity,0);
-        if(!/^[0-9]+$/.test(productForm.stockQuantity) || !Number.isSafeInteger(Number(productForm.stockQuantity)) ||
-           Number(productForm.stockQuantity)!==total)
-          throw new Error(`Total stock must exactly match the sum of variant quantities (${total} pcs)`);
-      }
+      const {mrp,offer}=parseBoutiquePrices(productForm.mrp,productForm.sellingPrice);
+      if(productForm.hasVariants&&!editingProductId)verifyBoutiqueVariantStock(variantRows,productForm.brand,productForm.stockQuantity);
       const payload={
         name:productForm.name.trim(),sku:productForm.sku||null,barcode:productForm.barcode||null,
         categoryId:productForm.categoryId||null,brand:productForm.brand||null,
