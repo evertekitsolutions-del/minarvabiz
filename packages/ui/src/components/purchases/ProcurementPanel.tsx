@@ -772,7 +772,7 @@ export function ProcurementPanel({
         {editPo && (
           <div className="space-y-4">
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">
-              Only draft POs can be edited. Approval locks supplier, quantity and price.
+              Only draft purchase orders are editable. Approval locks supplier, quantity and price.
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <FormField label="Purchase order supplier *">
