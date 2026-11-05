@@ -27,6 +27,7 @@ import { planAutomaticPosting } from "./accounting-store";
 import { consumeWarehouseStock } from "./warehouse-store";
 import { prepareCheckoutFinancialSource } from "./financial-sync-checkout";
 import { planManualStockAdjustment, stockCountDelta } from "./stock-adjustment-guard";
+import { validateProductRetailPricing, calculateWeightedReceiptCost } from "./product-retail-pricing";
 import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
 import { validateLiveSaleCheckout, costSaleLinesFromLiveProducts } from "./sale-checkout-guard";
@@ -262,25 +263,9 @@ export function getProductByBarcode(barcode: string): Product | undefined {
   return products.find((p) => p.barcode === barcode && !p.deletedAt && p.isActive);
 }
 
-function assertFiniteProductNumerics(input: Partial<Product>): void {
-  for (const field of ["costPrice", "sellingPrice", "mrp", "specialOfferPrice", "discount", "taxRate", "stockQuantity", "minimumStock"] as const) {
-    const value = input[field];
-    if (value != null && !Number.isFinite(value)) {
-      throw new Error(`Product ${field} must be a finite number`);
-    }
-  }
-}
-
 export function createProduct(input: Omit<Product, "id" | "createdAt" | "updatedAt" | "deletedAt" | "version">): Product {
   assertPermission("products.manage");
-  assertFiniteProductNumerics(input);
-  const mrp = input.mrp ?? input.sellingPrice, offer = input.specialOfferPrice ?? input.sellingPrice;
-  if (mrp < 0 || offer < 0 || offer > mrp || offer !== input.sellingPrice ||
-      !Number.isSafeInteger(Math.round(mrp*100)) || !Number.isSafeInteger(Math.round(offer*100)) ||
-      Math.round(mrp*100)/100 !== mrp || Math.round(offer*100)/100 !== offer) {
-    throw new Error("Product MRP / special offer prices are inconsistent");
-  }
-
+  validateProductRetailPricing(input);
   const openingStock = Number(input.stockQuantity ?? 0);
   if (openingStock < 0 || !Number.isSafeInteger(Math.round(openingStock * 1000))) {
     throw new Error("Opening stock quantity must be a finite non-negative quantity");
@@ -334,14 +319,9 @@ export function createProduct(input: Omit<Product, "id" | "createdAt" | "updated
 
 export function updateProduct(id: UUID, patch: Partial<Product>): Product | null {
   assertPermission("products.manage");
-  assertFiniteProductNumerics(patch);
-  const p = getProduct(id);
-  if (!p) return null;
-  const candidate={...p,...patch};
-  const mrp=candidate.mrp??candidate.sellingPrice, offer=candidate.specialOfferPrice??candidate.sellingPrice;
-  if (!Number.isFinite(mrp)||!Number.isFinite(offer)||mrp<0||offer<0||offer>mrp||
-    offer!==candidate.sellingPrice||!Number.isSafeInteger(Math.round(mrp*100))||
-    !Number.isSafeInteger(Math.round(offer*100)))throw new Error("Product MRP / special offer prices are inconsistent");
+  const p=getProduct(id);
+  if(!p)return null;
+  validateProductRetailPricing({...p,...patch});
   if (patch.stockQuantity != null && patch.stockQuantity !== p.stockQuantity) {
     throw new Error("Product stock quantity must be changed through inventory adjustment");
   }
@@ -414,22 +394,17 @@ export function adjustStock(productId: UUID, type: "stock_in" | "stock_out" | "a
   if (p.hasVariants) throw new Error("Adjust stock on a specific size/colour/material variant, not the group");
   const before = p.stockQuantity, oldCost=p.costPrice;
   const { next, reduction } = planManualStockAdjustment(p.id, p.branchId, before, type, quantity);
-  let weightedCost: number | undefined;
-  if (receivedUnitCost !== undefined) {
-    if (type !== "stock_in" || quantity <= 0 || !Number.isFinite(receivedUnitCost) || receivedUnitCost < 0 ||
-      !Number.isSafeInteger(Math.round(receivedUnitCost*100)) || !Number.isFinite(oldCost) || oldCost < 0) {
-      throw new Error("Purchase stock receipt requires a valid non-negative unit cost");
-    }
-    const total=(before*oldCost)+(quantity*receivedUnitCost);
-    if (!Number.isFinite(total) || !Number.isSafeInteger(Math.round(total*100))) throw new Error("Purchase stock valuation exceeds safe range");
-    weightedCost=Math.round(total/next*100)/100;
+  let weightedCost:number|undefined;
+  if(receivedUnitCost!==undefined){
+    if(type!=="stock_in")throw new Error("Cost requires stock_in");
+    weightedCost=calculateWeightedReceiptCost(before,oldCost,quantity,receivedUnitCost,next);
   }
   if (reduction > 0) consumeWarehouseStock(p.id, reduction, p.branchId ?? null);
   p.stockQuantity = next;
   if(weightedCost!==undefined)p.costPrice=weightedCost;
   touchProduct(p);
   void remoteAdjustStock({ ...p }, type, quantity, notes);
-  auditAction("inventory.adjust", "products", p.id, { stockQuantity: before, costPrice:oldCost }, { stockQuantity: next, costPrice:p.costPrice, type, quantity, notes: notes ?? null });
+  auditAction("inventory.adjust","products",p.id,{stockQuantity:before,costPrice:oldCost},{stockQuantity:next,costPrice:p.costPrice,type,quantity,notes:notes??null});
   return p;
 }
 
@@ -445,7 +420,6 @@ export function adjustStockToQuantity(productId: UUID, rawTarget: string, expect
 }
 
 /**
- * Legacy product-record transfer entry point.
  *
  * Product-to-product transfers predate the WMS location model and can bypass the
  * warehouse approval/reservation/dispatch/receive lifecycle. Keep the API as a
