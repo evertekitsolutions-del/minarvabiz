@@ -904,17 +904,12 @@ export function recordCustomerPayment(input: {
     && sale.status !== "cancelled" && sale.status !== "returned" && sale.balanceAmount > 0)
     .map((sale) => ({ kind: "sale" as const, id: sale.id, date: sale.saleDate, sale, balance: sale.balanceAmount }));
   const externalCandidates = [...customerReceivableProviders.entries()].flatMap(([providerKey, provider]) =>
-    provider.list(customer.id).filter((item) => !input.target
-      || (item.sourceType === input.target.sourceType && item.id === input.target.id))
+    provider.list(customer.id).filter((item) => !input.target || (item.sourceType === input.target.sourceType && item.id === input.target.id))
       .map((item) => ({ kind: "external" as const, id: item.id, date: item.date, item, balance: item.balance, providerKey }))
   );
   const candidates = [...saleCandidates, ...externalCandidates]
     .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-  const targetError = targetedCustomerCollectionError(input.target,
-    candidates.map((candidate) => ({
-      id: candidate.id, balance: candidate.balance,
-      sourceType: candidate.kind === "external" ? candidate.item.sourceType : "sale",
-    })), inputAmountMinor, customerOutstandingMinor);
+  const targetError = targetedCustomerCollectionError(input.target, candidates.map((candidate) => ({ id: candidate.id, balance: candidate.balance, sourceType: candidate.kind === "external" ? candidate.item.sourceType : "sale" })), inputAmountMinor, customerOutstandingMinor);
   if (targetError) return { payment: null, customer: null, errors: [targetError] };
 
   let remainingMinor: MoneyMinor = appliedMinor;
