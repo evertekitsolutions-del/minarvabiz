@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { parseGoogleReviewUrl } from "@minarvabiz/business-logic";
+import { parseGoogleReviewUrl, formatWorkspaceDateTime, formatWorkspaceMoney } from "@minarvabiz/business-logic";
 import { SyncPanel, PersistencePanel, Button, FormField, inputClass, selectClass, PrintTemplateManager, TrashRecoveryPanel } from "@minarvabiz/ui";
 import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage, getShopProfile, updateShopProfile, updateTaxConfig, getPrintSettings, updatePrintSettings, getScopedMasterReplayStatus, retryScopedMasterOutbox } from "@minarvabiz/business-logic";
 
@@ -94,7 +94,27 @@ export default function SettingsPage() {
           <FormField label="Email"><input className={inputClass} type="email" value={shop.email} onChange={(e) => setShop({ ...shop, email: e.target.value })} /></FormField>
           <FormField label="Website"><input className={inputClass} value={shop.website} onChange={(e) => setShop({ ...shop, website: e.target.value })} /></FormField>
           <FormField label="Google review link"><input className={inputClass} type="url" value={shop.googleReviewUrl ?? ""} onChange={(e) => setShop({ ...shop, googleReviewUrl: e.target.value })} placeholder="https://g.page/r/.../review" /><p className="mt-1 text-xs text-slate-500">Optional. An official HTTPS Google link is included in post-delivery feedback WhatsApp messages.</p></FormField>
-          <FormField label="Currency"><select className={selectClass} value={shop.currency} onChange={(e) => setShop({ ...shop, currency: e.target.value })}><option value="INR">INR — Indian Rupee</option><option value="OMR">OMR — Omani Rial</option><option value="AED">AED — UAE Dirham</option><option value="USD">USD — US Dollar</option></select></FormField>
+          <FormField label="Currency (ISO 4217)">
+            <input className={inputClass} maxLength={3} value={shop.currency} onChange={(e) => setShop({ ...shop, currency: e.target.value.toUpperCase() })} placeholder="INR / OMR / USD" />
+          </FormField>
+          <FormField label="Display language / locale (BCP 47)">
+            <input className={inputClass} value={shop.locale ?? "en-IN"} onChange={(e) => setShop({ ...shop, locale: e.target.value })} placeholder="en-IN / ar-OM / en-US" />
+          </FormField>
+          <FormField label="Time zone (IANA)">
+            <input className={inputClass} value={shop.timeZone ?? "Asia/Kolkata"} onChange={(e) => setShop({ ...shop, timeZone: e.target.value })} placeholder="Asia/Kolkata / Asia/Muscat" />
+          </FormField>
+          <div className="sm:col-span-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-700" role="status">
+            <strong>Display preview (not a transaction): </strong>
+            {(() => {
+              try {
+                const preferences = { locale: shop.locale ?? "en-IN", timeZone: shop.timeZone ?? "Asia/Kolkata", currency: shop.currency };
+                return formatWorkspaceMoney(1234.5, preferences) + " · " + formatWorkspaceDateTime("2026-01-15T12:00:00Z", preferences);
+              } catch {
+                return "Enter a supported locale, time zone and currency to preview.";
+              }
+            })()}
+            <p className="mt-1 text-slate-500">These settings control display preferences only. Tax rules, accounting values and fiscal-year numbering remain unchanged.</p>
+          </div>
           <FormField label="Receipt footer" className="sm:col-span-2"><input className={inputClass} value={shop.receiptFooter} onChange={(e) => setShop({ ...shop, receiptFooter: e.target.value })} /></FormField>
         </div>
         <div className="flex items-center gap-2">
