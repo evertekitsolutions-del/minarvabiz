@@ -113,7 +113,7 @@ assert.match(chromoHtml,/.label.short\{padding:.65mm .7mm;gap:.2mm;min-height:0\
 for(const field of ["Size: M","Colour: Red","Material: Cotton","Offer: Rs.799.00","MRP: Rs.999.00"])
  assert.equal(chromoHtml.split(field).length-1,3,"Chromo short labels keep "+field);
 const twoStickers=m.exports.buildBarcodeLabelHtml(product,{copies:2,autoPrint:false});
-assert.match(twoStickers,/@page\\{size:80mm 25mm;margin:0\\}/,
+assert.match(twoStickers,/@page\{size:80mm 25mm;margin:0\}/,
   "Two CROMO stickers across must be ONE physical print row");
 assert.equal((twoStickers.match(/class="label-sheet"/g)||[]).length,1);
 assert.equal((twoStickers.match(/qr-svg/g)||[]).length,2,
