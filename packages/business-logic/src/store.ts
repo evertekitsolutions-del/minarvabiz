@@ -31,7 +31,7 @@ import { getShopProfile } from "./shop-profile";
 import { nextBusinessDocumentNumber } from "./document-numbering";
 import { validateLiveSaleCheckout, costSaleLinesFromLiveProducts } from "./sale-checkout-guard";
 import { assertBusinessDayOpen } from "./business-day-state";
-import { targetedLaundryCollectionError } from "./customer-collection-target";
+import { targetedCustomerCollectionError, type TargetedCustomerCollection } from "./customer-collection-target";
 
 const categories: Category[] = [];
 const customers: Customer[] = [];
@@ -871,7 +871,7 @@ export function hydrateCore(data: {
 
 export function recordCustomerPayment(input: {
   customerId: UUID; amount: number; method: PaymentMethod; reference?: string | null; notes?: string | null;
-  target?: { sourceType: "laundry"; id: UUID };
+  target?: TargetedCustomerCollection;
 }): { payment: Payment | null; customer: Customer | null; errors: string[] } {
   assertPermission("payments.collect");
   assertBusinessDayOpen();
@@ -904,12 +904,17 @@ export function recordCustomerPayment(input: {
     && sale.status !== "cancelled" && sale.status !== "returned" && sale.balanceAmount > 0)
     .map((sale) => ({ kind: "sale" as const, id: sale.id, date: sale.saleDate, sale, balance: sale.balanceAmount }));
   const externalCandidates = [...customerReceivableProviders.entries()].flatMap(([providerKey, provider]) =>
-    provider.list(customer.id).filter((item) => !input.target || (providerKey === "laundry" && item.id === input.target.id))
+    provider.list(customer.id).filter((item) => !input.target
+      || (item.sourceType === input.target.sourceType && item.id === input.target.id))
       .map((item) => ({ kind: "external" as const, id: item.id, date: item.date, item, balance: item.balance, providerKey }))
   );
   const candidates = [...saleCandidates, ...externalCandidates]
     .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-  const targetError = targetedLaundryCollectionError(input.target, candidates, inputAmountMinor, customerOutstandingMinor);
+  const targetError = targetedCustomerCollectionError(input.target,
+    candidates.map((candidate) => ({
+      id: candidate.id, balance: candidate.balance,
+      sourceType: candidate.kind === "external" ? candidate.item.sourceType : "sale",
+    })), inputAmountMinor, customerOutstandingMinor);
   if (targetError) return { payment: null, customer: null, errors: [targetError] };
 
   let remainingMinor: MoneyMinor = appliedMinor;
