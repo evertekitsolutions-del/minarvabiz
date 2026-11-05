@@ -19,6 +19,7 @@ export function BarcodeLabelPrintModal({
 }) {
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
+  const labelDevice = settings.labelPrinterName;
   const count = Math.max(1, Math.min(100, Number.parseInt(copies, 10) || 1));
   const columns = settings.labelColumns === 2 ? 2 : 1;
   const pageHeight = settings.labelHeightMm + (columns === 2 ? settings.labelRowGapMm : 0);
@@ -42,13 +43,14 @@ export function BarcodeLabelPrintModal({
   async function printDirect() {
     if (!product || busy) return;
     if (!product.barcode) return onError("Generate a barcode before printing the label.");
+    if (!labelDevice) { const error="Select the Barcode label printer in Settings; do not use the POS receipt printer."; setMessage(`Error: ${error}`); return onError(error); }
     if (preview.error) return onError(preview.error);
     setBusy(true);
     setMessage(null);
     onError(null);
     try {
       const result = await sendBarcodeLabelsToPrinter(product, count, categoryName);
-      if (!result.ok) onError(result.error || "Label printer rejected the job.");
+      if (!result.ok) { const error=result.error || "Label printer rejected the job."; setMessage(`Error: ${error}`); onError(error); }
       else setMessage("Label job accepted by the selected Windows printer. Verify the first printed row for alignment.");
     } catch (error) {
       onError(error instanceof Error ? error.message : String(error));
@@ -60,6 +62,7 @@ export function BarcodeLabelPrintModal({
   function printWithDialog() {
     if (!product || busy) return;
     if (!product.barcode) return onError("Generate a barcode before printing the label.");
+    if (!labelDevice) { const error="Select the Barcode label printer in Settings; do not use the POS receipt printer."; setMessage(`Error: ${error}`); return onError(error); }
     if (preview.error) return onError(preview.error);
     setMessage(null);
     onError(null);
@@ -116,13 +119,14 @@ export function BarcodeLabelPrintModal({
           <p className="mt-2 text-xs text-slate-600">
             Preview above shows the selected sticker count (scroll inside for more rows).
             Direct print sends this layout to the configured barcode printer without the Windows
-            dialog, whose preview may say "No preview available".
+            dialog, whose preview may say "No preview available". Adjust row/feed gap to the measured paper pitch if later sticker rows drift.
           </p>
           <p className="mt-1 text-xs text-slate-600">
-            Selected printer: {settings.labelPrinterName || settings.thermalPrinterName || "Not configured — select one in Settings → Printer settings"}.
+            Selected barcode printer: {settings.labelPrinterName || "Not configured — select one in Settings → Printer settings"}.
           </p>
         </div>}
-        {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
+        {product && !product.size && <p className="text-xs text-amber-700">Size is blank in this product record. Edit the specific size variant to include Size on the printed label.</p>}
+        {message && <p role={message.startsWith("Error:") ? "alert" : "status"} className={`text-sm ${message.startsWith("Error:") ? "text-red-700" : "text-emerald-700"}`}>{message}</p>}
       </div>
     </Modal>
   );
