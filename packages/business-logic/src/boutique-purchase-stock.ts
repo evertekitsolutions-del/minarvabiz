@@ -25,7 +25,7 @@ export function preflightSupplierStockLines(
     try {
       const product = getProduct(line.productId);
       if (!product || !product.isActive || product.hasVariants) throw new Error("Select an active product or individual size/colour variant");
-      if (product.branchId && activeBranch && product.branchId !== activeBranch) throw new Error("Product belongs to another branch");
+      if (product.branchId && product.branchId !== activeBranch) throw new Error("Product belongs to another branch");
       if (toQuantityMilli(line.quantity) <= 0 || toMinorUnits(line.unitCost) < 0) throw new Error("Quantity must be positive and unit cost non-negative");
       const priceMinor = multiplyMinorByQuantity(toMinorUnits(line.unitCost), line.quantity);
       lineTotalMinor = addMinorUnits(lineTotalMinor, priceMinor);
