@@ -53,5 +53,11 @@
     "One product supports independent Brand × Fabric × Size × Color variants, each with its own quantity, barcode and SKU; the entered total stock is checked against the variant totals.",
     "Products now retain MRP and Special Offer Price separately; billing uses the saved offer price and barcode labels show both MRP and offer price.",
     "Purchases now offers a supplier Purchase Bill to receive individual products and variants into stock, post the supplier payable once and record optional payment, while the existing non-stock Add Purchase workflow remains available."
+  ],
+  "1.0.22": [
+    "Product Barcode Label now includes a one-click 4-inch roll preset for two 38 × 38 mm stickers across each row; the 2-up calibration is saved to the shop's printer settings.",
+    "The Print Barcode Label window previews the exact selected sticker count and full two-column row layout before printing, including roll width, feed height and subsequent rows.",
+    "Print directly sends the previewed sticker layout to a previously selected Windows label printer without the Windows print dialog that may show 'No preview available'; print submission errors are displayed.",
+    "Existing Windows printer dialog printing remains an optional fallback; past invoices, barcodes, customer data and licensing are preserved."
   ]
 }
