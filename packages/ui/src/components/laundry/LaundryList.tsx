@@ -15,7 +15,7 @@ import { Modal } from "../forms/Modal";
 import { FormField, inputClass, selectClass } from "../forms/FormField";
 import { buildLaundryVendorScorecard, can, exportLaundryTicketsCsv, exportLaundryVendorWorklistCsv, getShopProfile, listLaundryIncidents, printLaundryServiceReceipt } from "@minarvabiz/business-logic";
 
-type LaundryEditResult = { success: boolean; error?: string; order?: LaundryOrder };
+type LaundryEditResult = { success: boolean; error?: string; order?: LaundryOrder; pendingSave?: boolean };
 
 function dateKey(value: string) {
   return String(value || "").slice(0, 10);
@@ -71,6 +71,7 @@ export function LaundryList({
   onCancel,
   onUpdateDetails,
   onCollectPayment,
+  onRetryPaymentSave,
 }: {
   orders: LaundryOrder[];
   customers?: Pick<Customer,"id" | "name" | "phone" | "whatsapp" | "address" | "branchId" | "deletedAt">[];
@@ -83,7 +84,8 @@ export function LaundryList({
   onStatusChange?: (order: LaundryOrder, status: LaundryOrder["status"]) => void;
   onCancel?: (order: LaundryOrder) => void;
   onUpdateDetails?: (order: LaundryOrder, values: { garment: string; notes: string }) => LaundryEditResult;
-  onCollectPayment?: (order: LaundryOrder, amount: number, method: PaymentMethod) => LaundryEditResult;
+  onCollectPayment?: (order: LaundryOrder, amount: number, method: PaymentMethod) => LaundryEditResult | Promise<LaundryEditResult>;
+  onRetryPaymentSave?: (order: LaundryOrder) => Promise<LaundryEditResult>;
 }) {
   const [q, setQ] = React.useState("");
   const [customerId, setCustomerId] = React.useState("");
@@ -98,26 +100,47 @@ export function LaundryList({
   const [collectMethod, setCollectMethod] = React.useState<PaymentMethod>("cash");
   const [collectError, setCollectError] = React.useState<string | null>(null);
   const [collectSuccess, setCollectSuccess] = React.useState<string | null>(null);
+  const [collectBusy, setCollectBusy] = React.useState(false);
+  const [collectRetry, setCollectRetry] = React.useState(false);
+  const collectInFlight = React.useRef(false);
   const openCollection = (ticket: LaundryOrder) => {
     setCollectTarget(ticket);
     setCollectAmount(String(ticket.balanceAmount));
     setCollectMethod("cash");
     setCollectError(null);
+    setCollectRetry(false);
   };
-  const collectTicketBalance = (event: React.FormEvent<HTMLFormElement>) => {
+  const collectTicketBalance = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!collectTarget || !onCollectPayment) return;
+    if (!collectTarget || !onCollectPayment || collectInFlight.current) return;
+    const ticket = collectTarget;
     const amount = Number(collectAmount);
-    if (!Number.isFinite(amount) || amount <= 0 || amount > collectTarget.balanceAmount) {
+    if (!collectRetry && (!Number.isFinite(amount) || amount <= 0 || amount > ticket.balanceAmount)) {
       setCollectError("Enter an amount within the remaining ticket balance");
       return;
     }
-    const result = onCollectPayment(collectTarget, amount, collectMethod);
-    if (!result.success) { setCollectError(result.error || "Laundry collection failed"); return; }
-    if (result.order && detailTarget?.id === result.order.id) setDetailTarget(result.order);
-    setCollectSuccess("Receipt posted against " + collectTarget.orderNumber + ". Reprint the updated service receipt.");
-    setCollectTarget(null);
+    collectInFlight.current = true;
+    setCollectBusy(true);
     setCollectError(null);
+    try {
+      const result = collectRetry && onRetryPaymentSave
+        ? await onRetryPaymentSave(ticket)
+        : await onCollectPayment(ticket, amount, collectMethod);
+      if (!result.success) {
+        setCollectRetry(Boolean(result.pendingSave && onRetryPaymentSave));
+        setCollectError(result.error || "Laundry collection failed");
+        return;
+      }
+      if (result.order && detailTarget?.id === result.order.id) setDetailTarget(result.order);
+      setCollectSuccess("Receipt saved against " + ticket.orderNumber + ". Reprint the updated service receipt.");
+      setCollectTarget(null);
+      setCollectRetry(false);
+    } catch (cause) {
+      setCollectError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      collectInFlight.current = false;
+      setCollectBusy(false);
+    }
   };
   const [messageTarget, setMessageTarget] = React.useState<LaundryOrder | null>(null);
   const [editTarget, setEditTarget] = React.useState<LaundryOrder | null>(null);
@@ -461,21 +484,21 @@ export function LaundryList({
       </div>
 
       <Modal open={Boolean(collectTarget)} title={collectTarget ? "Collect laundry due · " + collectTarget.orderNumber : "Collect laundry due"}
-        onClose={() => { setCollectTarget(null); setCollectError(null); }}>
+        onClose={() => { if (!collectBusy) { setCollectTarget(null); setCollectError(null); } }}>
         {collectTarget && <form onSubmit={collectTicketBalance} className="space-y-3">
           <p className="text-sm text-slate-600">Applies only to the selected laundry ticket. Remaining: {formatMoney(collectTarget.balanceAmount)}.</p>
           <FormField label="Amount to collect">
-            <input className={inputClass} type="number" min="0.01" step="0.01" max={collectTarget.balanceAmount} required value={collectAmount}
+            <input className={inputClass} type="number" min="0.01" step="0.01" max={collectTarget.balanceAmount} required value={collectAmount} disabled={collectBusy || collectRetry}
               onChange={event => setCollectAmount(event.target.value)} />
           </FormField>
           <FormField label="Payment method">
-            <select className={selectClass} value={collectMethod} onChange={event => setCollectMethod(event.target.value as PaymentMethod)}>
+            <select className={selectClass} value={collectMethod} disabled={collectBusy || collectRetry} onChange={event => setCollectMethod(event.target.value as PaymentMethod)}>
               <option value="cash">Cash</option><option value="bank">Bank</option><option value="card">Card</option>
               <option value="upi">UPI</option><option value="online">Online</option><option value="other">Other</option>
             </select>
           </FormField>
           {collectError && <p role="alert" className="text-sm text-rose-700">{collectError}</p>}
-          <Button type="submit" disabled={!collectAmount || Number(collectAmount)<=0 || Number(collectAmount)>collectTarget.balanceAmount}>Post payment</Button>
+          <Button type="submit" disabled={collectBusy || (!collectRetry && (!collectAmount || Number(collectAmount)<=0 || Number(collectAmount)>collectTarget.balanceAmount))}>{collectBusy ? "Saving..." : collectRetry ? "Retry SQLite save" : "Post payment"}</Button>
         </form>}
       </Modal>
       <Modal
