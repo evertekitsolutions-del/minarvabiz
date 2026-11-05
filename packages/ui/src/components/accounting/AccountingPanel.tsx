@@ -10,6 +10,7 @@ import { formatMoney } from "../customers/format";
 import { AccountBudgetVariancePanel } from "./AccountBudgetVariancePanel";
 import { LoanRepaymentPanel } from "./LoanRepaymentPanel";
 import { FixedAssetDepreciationPanel } from "./FixedAssetDepreciationPanel";
+import { TallyPrimeExportPanel } from "./TallyPrimeExportPanel";
 
 type DraftJournalLine = { accountId: string; debit: string; credit: string; memo: string };
 
@@ -217,6 +218,7 @@ export function AccountingPanel() {
 
       {tab === "journal" && (
         <div className="space-y-4">
+          <TallyPrimeExportPanel journals={journals} />
           <Card>
             <CardHeader><CardTitle className="text-base">New manual journal</CardTitle></CardHeader>
             <CardContent className="space-y-4">
