@@ -6,6 +6,7 @@ export type ProductVariantDraft = {
   size: string;
   color: string;
   material: string;
+  brand?: string;
   quantity: string;
   sku: string;
   barcode: string;
@@ -15,22 +16,23 @@ export type ProductVariantRow = {
   size: string;
   color: string;
   material: string;
+  brand: string;
   quantity: number;
   sku: string | null;
   barcode: string | null;
 };
 
 export const emptyProductVariantDraft = (): ProductVariantDraft => ({
-  size: "", color: "", material: "", quantity: "0", sku: "", barcode: "",
+  size: "", color: "", material: "", brand: "", quantity: "0", sku: "", barcode: "",
 });
 
-export function variantIdentity(input: Pick<ProductVariantRow, "size" | "color" | "material">): string {
-  return JSON.stringify([input.size, input.color, input.material].map(x => x.trim().toLocaleLowerCase("en")));
+export function variantIdentity(input: Pick<ProductVariantRow, "size" | "color" | "material"> & { brand?: string }): string {
+  return JSON.stringify([input.size, input.color, input.material, input.brand || ""].map(x => x.trim().toLocaleLowerCase("en")));
 }
 
 export function parseProductVariants(
   raw: readonly ProductVariantDraft[],
-  existing: ReadonlyArray<Pick<ProductVariantRow, "size" | "color" | "material" | "sku" | "barcode">> = [],
+  existing: ReadonlyArray<Pick<ProductVariantRow, "size" | "color" | "material" | "sku" | "barcode"> & { brand?: string }> = [],
 ): ProductVariantRow[] {
   if (!raw.length) throw new Error("Add at least one size / colour / material stock row");
   if (raw.length > 100) throw new Error("Maximum 100 variants per operation");
@@ -40,14 +42,15 @@ export function parseProductVariants(
     const size = String(draft.size ?? "").trim();
     const color = String(draft.color ?? "").trim();
     const material = String(draft.material ?? "").trim();
+    const brand = String(draft.brand ?? "").trim();
     const sku = String(draft.sku ?? "").trim() || null;
     const barcode = String(draft.barcode ?? "").trim() || null;
     const quantityText = String(draft.quantity ?? "").trim();
     const quantity = Number(quantityText);
-    if (![size, color, material].some(Boolean)) throw new Error(`Variant ${index + 1}: enter size, colour or material`);
+    if (![size, color, material, brand].some(Boolean)) throw new Error(`Variant ${index + 1}: enter size, colour or material`);
     if (!/^(?:0|[1-9]\d*)$/.test(quantityText) || !Number.isSafeInteger(quantity))
       throw new Error(`Variant ${index + 1}: quantity must be a whole number of pieces (0 or more)`);
-    const key = variantIdentity({ size, color, material });
+    const key = variantIdentity({ size, color, material, brand });
     if (combinations.has(key)) throw new Error(`Variant ${index + 1}: duplicate size / colour / material combination`);
     combinations.add(key);
     for (const field of [sku, barcode]) {
@@ -56,6 +59,6 @@ export function parseProductVariants(
       if (codes.has(code)) throw new Error(`Variant ${index + 1}: SKU/barcode is duplicated`);
       codes.add(code);
     }
-    return { size, color, material, quantity, sku, barcode };
+    return { size, color, material, brand, quantity, sku, barcode };
   });
 }
