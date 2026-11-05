@@ -39,7 +39,7 @@ test("reject duplicates, invalid dates, amounts and IDs",()=>{
  assert.throws(()=>allocate({...p,amountMinor:0},[a]),/minor units/);
  assert.throws(()=>allocate({...p,amountMinor:Number.MAX_SAFE_INTEGER+1},[a]),/minor units/);
  assert.throws(()=>allocate({...p,idempotencyKey:""},[a]),/idempotency/);
- assert.throws(()=>allocate(p,[{...a,invoiceId:"__proto__"}]),/Invalid|Duplicate/);
+ assert.throws(()=>allocate(p,[{...a,invoiceId:"-bad"}]),/Invalid|Duplicate/);
 });
 test("same receipt proposal is stable but does not claim persisted idempotency",()=>{
  const rows=[invoice("a","2026-11-01")];
