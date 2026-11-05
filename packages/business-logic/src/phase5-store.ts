@@ -399,13 +399,6 @@ export function createLaundryOrder(input: { customerId: UUID; garment?: string|n
       errors.push("Invalid garment turnaround time");
     }
     if (input.items.length !== itemInputs.length) errors.push("Invalid garment rows");
-    if (linePriced && itemInputs.some(item =>
-      item.customerRate == null || item.supplierRate == null
-      || moneyMinorOrNull(item.customerRate) == null || moneyMinorOrNull(item.customerRate)! < 0
-      || moneyMinorOrNull(item.supplierRate) == null || moneyMinorOrNull(item.supplierRate)! < 0
-      || (input.mode === "in_house_ironing" && item.supplierRate !== 0))) {
-      errors.push("Each mixed-priced garment needs valid non-negative customer/supplier rates");
-    }
   }
   if (input.pickupAt && Number.isNaN(Date.parse(input.pickupAt))) errors.push("Invalid pickup date");
   if (input.dueAt && Number.isNaN(Date.parse(input.dueAt))) errors.push("Invalid due date");
