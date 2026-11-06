@@ -41,7 +41,8 @@ REVOKE ALL ON public.marketing_consent_audit FROM PUBLIC, anon, authenticated;
 -- A future trusted transactional writer must atomically CAS current + append audit,
 -- validate actor permissions, and re-read consent immediately before provider send.
 
--- Trusted server-only atomic writer. EXECUTE grants are the database gate;\n-- SECURITY DEFINER changes current_user to the function owner. The host MUST authenticate the actor,
+-- Trusted server-only atomic writer. EXECUTE grants are the database gate;
+-- SECURITY DEFINER changes current_user to the function owner. The host MUST authenticate the actor,
 -- resolve tenant/company/branch/customer authorization, and derive all arguments
 -- from that trusted context before calling this service_role-only function.
 -- Never expose the service_role key in browser/desktop clients.
@@ -124,3 +125,18 @@ REVOKE ALL ON FUNCTION public.record_marketing_consent_event(
 GRANT EXECUTE ON FUNCTION public.record_marketing_consent_event(
   text,text,text,text,text,text,text,bigint,text,text,timestamptz
 ) TO service_role;
+
+-- Consent history is append-only, including for accidental service-role writes.
+-- Corrections must be new consent events, never rewritten history.
+CREATE OR REPLACE FUNCTION public.reject_marketing_consent_audit_mutation()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER
+SET search_path = pg_catalog, public AS $$
+BEGIN
+  RAISE EXCEPTION 'marketing consent audit is append-only' USING ERRCODE = '42501';
+END;
+$$;
+REVOKE ALL ON FUNCTION public.reject_marketing_consent_audit_mutation() FROM PUBLIC, anon, authenticated;
+DROP TRIGGER IF EXISTS marketing_consent_audit_immutable ON public.marketing_consent_audit;
+CREATE TRIGGER marketing_consent_audit_immutable
+BEFORE UPDATE OR DELETE ON public.marketing_consent_audit
+FOR EACH ROW EXECUTE FUNCTION public.reject_marketing_consent_audit_mutation();
