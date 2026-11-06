@@ -65,6 +65,19 @@ export function validatePrintLayout(config: PrintLayoutConfig): PrintLayoutConfi
   if (typeof config.footer !== "string" || config.footer.length > 500 ||
       /[<>\u0000-\u001f]/.test(config.footer))
     throw new Error("Invalid print footer");
+  // Treat layout text as plain printable content, never as bidirectional controls.
+  // These controls can visually reverse totals or invoice identifiers in previews.
+  const forbiddenBidi = /[\u202a-\u202e\u2066-\u2069\u200e\u200f]/u;
+  if (forbiddenBidi.test(config.title))
+    throw new Error("Unsafe bidirectional print title");
+  if (forbiddenBidi.test(config.footer))
+    throw new Error("Unsafe bidirectional print footer");
+  // Reject unpaired surrogates before persisting or printing malformed Unicode.
+  const malformedUnicode = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/u;
+  if (malformedUnicode.test(config.title))
+    throw new Error("Malformed print title");
+  if (malformedUnicode.test(config.footer))
+    throw new Error("Malformed print footer");
   if (!Array.isArray(config.fields) || config.fields.length > fields.size ||
       config.fields.some(f => !fields.has(f)) ||
       new Set(config.fields).size !== config.fields.length ||
