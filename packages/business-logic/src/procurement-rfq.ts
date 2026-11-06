@@ -291,9 +291,11 @@ export function validateProcurementRfqState(input:{records?:ProcurementRfq[]} | 
       throw new Error("Invalid RFQ snapshot record");
     }
     exactDay(item.requiredBy);
-    if(new Set(item.supplierIds).size!==item.supplierIds.length||
-       new Set(item.lines.map(l=>l.productId)).size!==item.lines.length||
-       !item.lines.every(l=>l&&typeof l.productId==="string"&&typeof l.description==="string"&&
+    if(!item.supplierIds.every(id=>typeof id==="string"&&id.trim().length>0)||
+       new Set(item.supplierIds).size!==item.supplierIds.length||
+       new Set(item.lines.map(l=>l?.productId)).size!==item.lines.length||
+       !item.lines.every(l=>l&&typeof l.productId==="string"&&l.productId.trim().length>0&&
+         typeof l.description==="string"&&typeof l.sku==="string"&&typeof l.unit==="string"&&
          Number.isFinite(l.quantity)&&l.quantity>0)){
       throw new Error("Invalid RFQ snapshot product/supplier identity");
     }
