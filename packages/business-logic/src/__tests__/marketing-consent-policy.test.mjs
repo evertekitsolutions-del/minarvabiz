@@ -116,3 +116,19 @@ test("consent authorization flags must be literal booleans, never truthy client 
     assert.equal(maySendMarketingMessage(send({ marketingEnabled }), event()), false);
   }
 });
+
+test("MKT-016 storage migration is registered and denies client consent writes", () => {
+  const root = new URL("../../../../", import.meta.url);
+  const migration = "20261106_mkt016_marketing_consent_storage.sql";
+  const manifest = fs.readFileSync(new URL("supabase/MIGRATION_ORDER.txt", root), "utf8");
+  const entries = manifest.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  assert.equal(entries.filter(line => line === migration).length, 1);
+  const sql = fs.readFileSync(new URL("supabase/migrations/" + migration, root), "utf8");
+  for (const table of ["marketing_consent_current", "marketing_consent_audit"]) {
+    assert.match(sql, new RegExp("ALTER TABLE public\\." + table + " FORCE ROW LEVEL SECURITY", "i"));
+    assert.match(sql, new RegExp("REVOKE ALL ON public\\." + table + " FROM PUBLIC, anon, authenticated", "i"));
+  }
+  assert.match(sql, /SECURITY DEFINER SET search_path = pg_catalog, public/i);
+  assert.match(sql, /REVOKE ALL ON FUNCTION public\.record_marketing_consent_event\(/i);
+  assert.match(sql, /TO service_role;/i);
+});
