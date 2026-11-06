@@ -593,7 +593,10 @@ async function main() {
     // empty DOM as a missing feature. Do not skip the persisted-data assertions.
     let attendanceNavigationReady = false;
     for (let attempt = 0; attempt < 40; attempt++) {
-      attendanceNavigationReady = await evalIn(ws, `(()=>[...document.querySelectorAll('aside button,aside a,aside [role="button"]')].some(e=>(e.innerText||e.textContent||'').toLowerCase().includes('attendance grid')))()`);
+      // Attendance lives in a collapsible navigation group after a fresh reload.
+      // Its child control can be absent until the group expands; the shared
+      // click() helper expands groups before locating the target.
+      attendanceNavigationReady = await evalIn(ws, `(()=>[...document.querySelectorAll('button,a,[role="button"]')].some(e=>((e.innerText||e.textContent||'')+' '+(e.getAttribute('aria-label')||'')).toLowerCase().includes('attendance grid')) || [...document.querySelectorAll('aside button[aria-expanded]')].some(e=>e.getBoundingClientRect().width>0))()`);
       if (attendanceNavigationReady) break;
       await sleep(500);
     }
