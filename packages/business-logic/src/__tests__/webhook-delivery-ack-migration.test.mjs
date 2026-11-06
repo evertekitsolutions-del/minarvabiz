@@ -30,3 +30,10 @@ test("fresh replay registers acknowledgement after lease claim exactly once", ()
   assert.equal(lines.filter((line) => line === name).length, 1);
   assert.ok(lines.indexOf(name) > lines.indexOf("20261107_int002_webhook_claim_leases.sql"));
 });
+
+test("revoked subscription or removed event cannot be acknowledged as delivered", () => {
+  assert.match(sql, /not p_succeeded or exists\s*\(/i);
+  assert.match(sql, /s\.tenant_id = o\.tenant_id and s\.company_id = o\.company_id/i);
+  assert.match(sql, /s\.branch_key = o\.branch_key and s\.subscription_id = o\.subscription_id/i);
+  assert.match(sql, /s\.enabled = true and o\.event_type = any\(s\.events\)/i);
+});
