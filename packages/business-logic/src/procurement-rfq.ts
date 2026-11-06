@@ -148,7 +148,7 @@ export function recordProcurementRfqQuote(id:string,expectedVersion:number,input
   if(!r.supplierIds.includes(input.supplierId))throw new Error("Quote supplier was not included in RFQ");
   currentSupplier(input.supplierId);
   if(typeof input.quoteReference!=="string"||input.quoteReference.trim().length<1||
-     input.quoteReference.trim().length>128||/[\r\n]/.test(input.quoteReference))throw new Error("Invalid supplier quotation reference");
+     input.quoteReference.trim().length>128||/[\x00-\x1f\x7f]/.test(input.quoteReference))throw new Error("Invalid supplier quotation reference");
   const validUntil=exactDay(input.validUntil);
   if(!Array.isArray(input.lines)||input.lines.length!==r.lines.length)throw new Error("Supplier quote must cover all requested products");
   const source=new Map(r.lines.map(x=>[x.productId,x]));
@@ -311,7 +311,7 @@ export function validateProcurementRfqState(input:{records?:ProcurementRfq[]} | 
        !item.quotes.every(q=>{
          if(!item.supplierIds.includes(q.supplierId)||
             typeof q.quoteReference!=="string"||!q.quoteReference.trim()||
-            q.quoteReference.length>128||/[\r\n]/.test(q.quoteReference)||
+            q.quoteReference.length>128||/[\x00-\x1f\x7f]/.test(q.quoteReference)||
             typeof q.recordedAt!=="string"||!Array.isArray(q.lines)||
             q.lines.length!==item.lines.length)return false;
          try{exactDay(q.validUntil);}catch{return false;}
