@@ -56,6 +56,14 @@ export function getShopProfile(): ShopProfile {
 }
 
 export function updateShopProfile(patch: Partial<ShopProfile>): ShopProfile {
+  // An explicit blank/null setting is invalid. Only omitted fields may inherit
+  // existing values; otherwise a stale client could silently reset the locale.
+  for (const field of ["locale", "timeZone", "currency"] as const) {
+    if (Object.prototype.hasOwnProperty.call(patch, field) &&
+        (typeof patch[field] !== "string" || !patch[field]!.trim())) {
+      throw new Error(`Invalid ${field}: enter a non-empty display preference.`);
+    }
+  }
   const next = { ...profile, ...patch };
   const display = validateWorkspaceDisplayPreferences({
     locale: next.locale || "en-IN",
