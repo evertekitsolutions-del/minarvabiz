@@ -38,12 +38,17 @@ export function applyAuthorizedIndustryWorkflowEvent(
   }
   if (!record || typeof record !== "object" || !validId(record.id) ||
       !validId(record.tenantId) || !validId(record.branchId) ||
-      !validId(record.templateId)) {
+      !validId(record.templateId) || !validId(record.stage) ||
+      !Number.isSafeInteger(record.revision) || record.revision < 0 ||
+      !Array.isArray(record.appliedEventIds)) {
     throw new Error("Invalid industry workflow record");
   }
   if (!access || !validId(access.actorId) || !validId(access.tenantId) ||
       !validId(access.branchId) || !Array.isArray(access.allowedTemplateIds) ||
-      !Array.isArray(access.allowedTransitions)) {
+      !Array.isArray(access.allowedTransitions) ||
+      access.allowedTemplateIds.some(id => !validId(id)) ||
+      access.allowedTransitions.some(grant => !grant || !validId(grant.templateId) ||
+        !validId(grant.from) || !validId(grant.to))) {
     throw new Error("Industry workflow authorization required");
   }
   if (access.tenantId !== record.tenantId || access.branchId !== record.branchId ||
