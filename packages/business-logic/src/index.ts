@@ -313,3 +313,6 @@ export * from "./industry-workflow-access";
 
 // Transactional commit acknowledgement contract; storage adapters remain required.
 export * from "./industry-workflow-commit";
+
+// Optional per-industry reference drafts; never authoritative transactions.
+export * from "./industry-intake-draft";
