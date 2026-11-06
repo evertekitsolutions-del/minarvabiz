@@ -73,6 +73,23 @@ export function updateShopProfile(patch: Partial<ShopProfile>): ShopProfile {
 
 export function hydrateShopProfile(data: ShopProfile | null | undefined) {
   if (data && data.shopName) {
-    profile = { ...defaultProfile, ...data };
+    // Imported/offline snapshots may contain invalid legacy display settings.
+    // Normalize on hydration so subsequent UI formatting cannot crash.
+    const restored = { ...defaultProfile, ...data };
+    try {
+      const display = validateWorkspaceDisplayPreferences({
+        locale: restored.locale || defaultProfile.locale!,
+        timeZone: restored.timeZone || defaultProfile.timeZone!,
+        currency: restored.currency || defaultProfile.currency,
+      });
+      profile = { ...restored, ...display };
+    } catch {
+      profile = {
+        ...restored,
+        locale: defaultProfile.locale,
+        timeZone: defaultProfile.timeZone,
+        currency: defaultProfile.currency,
+      };
+    }
   }
 }
