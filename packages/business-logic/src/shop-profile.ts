@@ -4,7 +4,7 @@
 
 import { nowISO } from "@minarvabiz/utils";
 import { touchPersistence } from "./autosave";
-import { validateWorkspaceDisplayPreferences } from "./workspace-display-preferences";
+import { validateWorkspaceDisplayPreferences, restoreWorkspaceDisplayPreferences } from "./workspace-display-preferences";
 
 export interface ShopProfile {
   shopName: string;
@@ -76,20 +76,11 @@ export function hydrateShopProfile(data: ShopProfile | null | undefined) {
     // Imported/offline snapshots may contain invalid legacy display settings.
     // Normalize on hydration so subsequent UI formatting cannot crash.
     const restored = { ...defaultProfile, ...data };
-    try {
-      const display = validateWorkspaceDisplayPreferences({
-        locale: restored.locale || defaultProfile.locale!,
-        timeZone: restored.timeZone || defaultProfile.timeZone!,
-        currency: restored.currency || defaultProfile.currency,
-      });
-      profile = { ...restored, ...display };
-    } catch {
-      profile = {
-        ...restored,
-        locale: defaultProfile.locale,
-        timeZone: defaultProfile.timeZone,
-        currency: defaultProfile.currency,
-      };
-    }
+    const display = restoreWorkspaceDisplayPreferences(restored, {
+      locale: defaultProfile.locale!,
+      timeZone: defaultProfile.timeZone!,
+      currency: defaultProfile.currency,
+    });
+    profile = { ...restored, ...display };
   }
 }
