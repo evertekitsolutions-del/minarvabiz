@@ -7,7 +7,7 @@ const ts = require("typescript");
 require.extensions[".ts"] = (mod, file) => mod._compile(ts.transpileModule(fs.readFileSync(file, "utf8"), {
   fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText, file);
-const { calculateProjectEstimate, saveProjectEstimate, exportProjectEstimateCsv } = require("../project-estimate-worksheet.ts");
+const { calculateProjectEstimate, saveProjectEstimate, exportProjectEstimateCsv, loadProjectEstimate } = require("../project-estimate-worksheet.ts");
 const scope = { tenantId:"t", companyId:"c", branchId:"b", projectId:"p", canViewCosts:true };
 const base = { ...scope, currency:"INR", revision:0, lines:[
   { id:"labor", description:"Technician", kind:"labor", quantity:"2.500", unitCost:"100.00", markupPercent:"20.00" },
@@ -88,4 +88,26 @@ test("CSV export includes exact totals, CRLF, BOM and spreadsheet formula protec
   assert.match(csv, /"TOTAL".*"26001","31001","INR"/);
   assert.ok(csv.endsWith("\r\n"));
   assert.throws(() => exportProjectEstimateCsv(injected, { ...scope, canViewCosts:false }), /permission/);
+});
+
+test("scoped read recomputes persisted estimate totals and returns immutable snapshot", async () => {
+  let captured;
+  const loaded = await loadProjectEstimate(scope, { async loadScoped(ids) {
+    captured = ids;
+    return { ...base, lines: base.lines.map(line => ({...line})), costMinor: 0 };
+  } });
+  assert.deepEqual(captured, { tenantId:"t", companyId:"c", branchId:"b", projectId:"p" });
+  assert.equal(loaded.totals.costMinor, 26001);
+  assert.equal(Object.isFrozen(loaded.worksheet.lines[0]), true);
+  assert.equal(Object.isFrozen(loaded.worksheet.lines), true);
+  assert.equal(loaded.worksheet.revision, 0);
+});
+test("scoped read fails closed on unauthorized, cross-tenant and corrupt storage", async () => {
+  let calls = 0;
+  const reader = { async loadScoped() { calls++; return base; } };
+  await assert.rejects(loadProjectEstimate({...scope,canViewCosts:false}, reader), /permission/);
+  assert.equal(calls, 0);
+  await assert.rejects(loadProjectEstimate(scope, {async loadScoped(){return {...base,tenantId:"other"};}}), /scope mismatch/);
+  await assert.rejects(loadProjectEstimate(scope, {async loadScoped(){return {...base,lines:[]};}}), /1–500/);
+  assert.equal(await loadProjectEstimate(scope, {async loadScoped(){return null;}}), null);
 });
