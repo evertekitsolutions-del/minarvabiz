@@ -11,6 +11,25 @@ import {
 const packs = listIndustryPacks();
 
 /**
+ * Industry-specific intake field examples are presentation-only. These do not
+ * write to shared catalog/customer tables or authorize an industry module.
+ * Each optional pack owns its own vocabulary and required input examples.
+ */
+const intakeFields: Record<IndustryPackId, readonly { key: string; label: string; hint: string }[]> = {
+  retail: [{ key: "returnReason", label: "Return reason", hint: "Damaged packaging" }],
+  wholesale: [{ key: "purchaseOrderRef", label: "Buyer PO reference", hint: "PO-2026-001" }],
+  restaurant: [{ key: "tableRef", label: "Table / takeaway reference", hint: "Table 4" }],
+  pharmacy: [{ key: "prescriptionRef", label: "Prescription reference", hint: "Reference only; no patient details" }],
+  garments: [{ key: "variantRef", label: "Size / colour variant reference", hint: "M / Navy" }],
+  salon: [{ key: "appointmentRef", label: "Appointment reference", hint: "Booking number" }],
+  professional: [{ key: "engagementRef", label: "Engagement reference", hint: "Client project code" }],
+  repair: [{ key: "deviceRef", label: "Device / service reference", hint: "Job card reference" }],
+  manufacturing: [{ key: "workOrderRef", label: "Work order reference", hint: "WO-001" }],
+  tailoring: [{ key: "measurementRef", label: "Measurement sheet reference", hint: "Sheet reference" }],
+  laundry: [{ key: "garmentTagRef", label: "Garment tag reference", hint: "Tag number" }],
+};
+
+/**
  * Operator-local industry workspace preferences. These do not activate licensed
  * modules, modify shared records, or imply the listed workflows are implemented.
  */
@@ -22,6 +41,7 @@ export default function IndustryWorkspacePage() {
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
   const [previewStages, setPreviewStages] = React.useState<Record<string, number>>({});
+  const [intakePreview, setIntakePreview] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => {
     function load() {
@@ -34,6 +54,7 @@ export default function IndustryWorkspacePage() {
       setScope(key);
       baselineRef.current = null;
       setPreviewStages({});
+      setIntakePreview({});
       setMessage("");
       try {
         const saved = key ? readIndustryProfile(window.localStorage, key) : { version: 1 as const, primary: null, enabled: [] };
@@ -61,6 +82,7 @@ export default function IndustryWorkspacePage() {
     setProfile(buildIndustryProfile(primary, enabled));
     setMessage("");
     setPreviewStages({});
+    setIntakePreview({});
   }
 
   function save() {
@@ -158,6 +180,21 @@ export default function IndustryWorkspacePage() {
               <li key={template.id} className="rounded-md bg-slate-50 p-3">
                 <div className="text-sm font-medium">{template.label}</div>
                 <div className="mt-1 text-xs text-slate-600">{template.stages.join(" → ")}</div>
+                <div className="mt-3 space-y-2">
+                  {intakeFields[template.industry].map(field => (
+                    <label key={field.key} className="block text-xs font-medium">
+                      {field.label} (preview only)
+                      <input type="text" maxLength={120} autoComplete="off"
+                        className="mt-1 block w-full rounded border border-slate-300 bg-white p-2"
+                        placeholder={field.hint}
+                        value={intakePreview[`${template.id}:${field.key}`] ?? ""}
+                        onChange={event => setIntakePreview(previous => ({
+                          ...previous, [`${template.id}:${field.key}`]: event.target.value,
+                        }))} />
+                    </label>
+                  ))}
+                  <p className="text-xs text-slate-500">Form preview only — values are not saved, submitted or used for transactions.</p>
+                </div>
                 <div className="mt-2 flex items-center gap-3 text-xs">
                   <span aria-live="polite">Preview stage: {template.stages[previewStages[template.id] ?? 0]}</span>
                   <button type="button" className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
