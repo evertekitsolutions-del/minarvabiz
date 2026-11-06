@@ -143,7 +143,7 @@ export function exportProjectEstimateCsv(input: ProjectEstimateInput, scope: Pro
   const totals = calculateProjectEstimate(input, scope);
   const cell = (value: string): string => {
     // Prefix formula-looking values, including after whitespace/control characters.
-    const safe = /^[\\s\\u0000-\\u001f]*[=+@-]/u.test(value) ? "'" + value : value;
+    const safe = /^[\s\u0000-\u001f]*[=+@-]/u.test(value) ? "'" + value : value;
     return '"' + safe.replace(/"/g, '""') + '"';
   };
   const rows: string[][] = [
