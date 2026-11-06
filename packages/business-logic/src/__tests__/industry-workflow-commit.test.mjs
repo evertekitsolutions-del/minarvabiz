@@ -62,5 +62,22 @@ test("rejects adapter mutation of the expected workflow acknowledgement", async 
       next.appliedEventIds[0] = "forged-event";
       return next;
     },
-  }), /acknowledgement mismatch/);
+  }), /read only|Cannot assign|acknowledgement mismatch/);
+});
+
+test("adapter cannot mutate caller records, events, or authorization grants", async () => {
+  const originalEvent = { ...event };
+  const originalAccess = structuredClone(access);
+  const originalRecord = structuredClone(record);
+  await assert.rejects(commitAuthorizedIndustryWorkflowBatch(profile, transaction, {
+    async commit({ original, events, access: grants }) {
+      original.appliedEventIds.push("forged");
+      events[0].eventId = "forged";
+      grants.allowedTemplateIds.push("foreign-template");
+      return original;
+    },
+  }));
+  assert.deepEqual(event, originalEvent);
+  assert.deepEqual(access, originalAccess);
+  assert.deepEqual(record, originalRecord);
 });
