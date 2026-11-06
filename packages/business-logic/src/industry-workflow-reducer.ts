@@ -43,6 +43,31 @@ export function createIndustryWorkflowRecord(
 }
 
 /**
+ * Rebuild a workflow from an ordered durable event log before accepting writes.
+ * Adapters should read the log and revision within the same transaction, then
+ * persist the next event with an atomic expected-revision check.
+ * A partial, reordered or forged log is rejected rather than silently repaired.
+ */
+export function replayIndustryWorkflowEvents(
+  profile: IndustryWorkspaceProfile,
+  args: { id: string; tenantId: string; branchId: string; templateId: string },
+  events: readonly IndustryWorkflowEvent[],
+): IndustryWorkflowRecord {
+  if (!Array.isArray(events) || events.length > 10000) {
+    throw new Error("Invalid industry workflow event log");
+  }
+  let record = createIndustryWorkflowRecord(profile, args);
+  for (const event of events) {
+    if (!event || typeof event !== "object" || !nonempty(event.eventId) ||
+        !nonempty(event.from) || !nonempty(event.to)) {
+      throw new Error("Invalid industry workflow event log");
+    }
+    record = applyIndustryWorkflowEvent(profile, record, event);
+  }
+  return record;
+}
+
+/**
  * Fail closed on cross-tenant/branch replay, stale revisions and skipped stages.
  * Duplicate event IDs are accepted ONLY when caller supplies the same committed
  * target stage; persistence adapters must retain event history for durable replay.
