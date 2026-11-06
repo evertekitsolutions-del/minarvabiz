@@ -13,6 +13,7 @@ require.extensions[".ts"] = (module, filename) => module._compile(
 
 const {
   validateWorkspaceDisplayPreferences,
+  restoreWorkspaceDisplayPreferences,
   formatWorkspaceMoney,
   formatWorkspaceDateTime,
 } = require("../workspace-display-preferences.ts");
@@ -55,4 +56,22 @@ test("formats one UTC instant in different time zones", () => {
   assert.match(inIndia, /17:30|5:30/);
   assert.match(inOman, /16:00|4:00/);
   assert.throws(() => formatWorkspaceDateTime("invalid", india));
+});
+
+test("offline restore isolates corrupt fields without discarding valid currency", () => {
+  const result = restoreWorkspaceDisplayPreferences(
+    { locale: "ar-OM", timeZone: "Not/A_Zone", currency: "omr" },
+    india,
+  );
+  assert.equal(result.locale, "ar-OM");
+  assert.equal(result.currency, "OMR");
+  assert.equal(result.timeZone, india.timeZone);
+});
+
+test("offline restore safely ignores non-string and blank legacy values", () => {
+  const result = restoreWorkspaceDisplayPreferences(
+    { locale: 123, timeZone: "", currency: "bad-code" },
+    india,
+  );
+  assert.deepEqual(result, india);
 });
