@@ -28,6 +28,8 @@ const newLine = (): ProjectEstimateLine => ({
 
 export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport = false, canEdit = false }: ProjectEstimateWorksheetProps) {
   const [worksheet, setWorksheet] = React.useState<ProjectEstimateInput | null>(null);
+  // Reject late load/save acknowledgements after a scope change or unmount.
+  const generation = React.useRef(0);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
@@ -35,6 +37,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
   const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
   React.useEffect(() => {
     let active = true;
+    const currentGeneration = ++generation.current;
     setWorksheet(null);
     setRequestKey(null);
     setHasUnsavedChanges(false);
@@ -43,13 +46,13 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     setBusy(true);
     load().then(row => {
       if (row) calculateProjectEstimate(row, scope);
-      if (active) setWorksheet(row ?? {
+      if (active && currentGeneration === generation.current) setWorksheet(row ?? {
         tenantId: scope.tenantId, companyId: scope.companyId, branchId: scope.branchId,
         projectId: scope.projectId, currency: "INR", revision: 0, lines: [newLine()],
       });
-    }).catch(err => { if (active) setError(err instanceof Error ? err.message : "Load failed"); })
-      .finally(() => { if (active) setBusy(false); });
-    return () => { active = false; };
+    }).catch(err => { if (active && currentGeneration === generation.current) setError(err instanceof Error ? err.message : "Load failed"); })
+      .finally(() => { if (active && currentGeneration === generation.current) setBusy(false); });
+    return () => { active = false; generation.current++; };
   }, [enabled, scope.tenantId, scope.companyId, scope.branchId, scope.projectId, scope.canViewCosts, load]);
 
   const updateLine = (id: string, patch: Partial<ProjectEstimateLine>) => {
@@ -68,6 +71,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canEdit || !worksheet || !totals || busy) return;
+    const currentGeneration = generation.current;
     const key = requestKey ?? crypto.randomUUID();
     setRequestKey(key);
     setBusy(true);
@@ -76,6 +80,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       await save(worksheet, key);
       // Never assume the adapter's acknowledgement contains the next authoritative revision.
       const current = await load();
+      if (currentGeneration !== generation.current) return;
       if (!current) throw new Error("Saved estimate could not be reloaded");
       calculateProjectEstimate(current, scope);
       if (current.revision <= worksheet.revision) throw new Error("Saved estimate revision not advanced");
@@ -84,16 +89,18 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       setHasUnsavedChanges(false);
       setMessage("Estimate saved");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-    } finally { setBusy(false); }
+      if (currentGeneration === generation.current) setError(err instanceof Error ? err.message : "Save failed");
+    } finally { if (currentGeneration === generation.current) setBusy(false); }
   }
 
   async function reloadCurrent() {
     if (busy || !scope.canViewCosts) return;
+    const currentGeneration = generation.current;
     setBusy(true);
     setError("");
     try {
       const current = await load();
+      if (currentGeneration !== generation.current) return;
       if (current) calculateProjectEstimate(current, scope);
       setWorksheet(current ?? {
         tenantId: scope.tenantId, companyId: scope.companyId, branchId: scope.branchId,
@@ -102,8 +109,8 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       setRequestKey(null);
       setHasUnsavedChanges(false);
       setMessage("Current estimate loaded");
-    } catch (err) { setError(err instanceof Error ? err.message : "Reload failed"); }
-    finally { setBusy(false); }
+    } catch (err) { if (currentGeneration === generation.current) setError(err instanceof Error ? err.message : "Reload failed"); }
+    finally { if (currentGeneration === generation.current) setBusy(false); }
   }
 
   function downloadCsv() {
