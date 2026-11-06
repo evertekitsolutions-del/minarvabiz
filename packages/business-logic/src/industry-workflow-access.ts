@@ -48,3 +48,36 @@ export function applyAuthorizedIndustryWorkflowEvent(
   }
   return applyIndustryWorkflowEvent(profile, record, event);
 }
+
+
+/**
+ * Preflight a bounded ordered batch without mutating the original record.
+ * Storage adapters MUST persist the entire batch in one transaction using a
+ * revision CAS, event-id uniqueness constraints, and the trusted RBAC context.
+ * A successful preview is not a durable commit or authorization token.
+ */
+export function preflightAuthorizedIndustryWorkflowBatch(
+  profile: IndustryWorkspaceProfile,
+  record: IndustryWorkflowRecord,
+  events: readonly IndustryWorkflowEvent[],
+  access: IndustryWorkflowAccess,
+): IndustryWorkflowRecord {
+  if (!Array.isArray(events) || events.length === 0 || events.length > 100) {
+    throw new Error("Invalid industry workflow batch size");
+  }
+  const seen = new Set<string>();
+  let next = record;
+  for (const event of events) {
+    if (!event || typeof event.eventId !== "string" || seen.has(event.eventId)) {
+      throw new Error("Duplicate or invalid industry workflow batch event");
+    }
+    seen.add(event.eventId);
+    // Never accept duplicate committed events in a fresh batch, even if
+    // a single-event retry could otherwise return an idempotent result.
+    if (next.appliedEventIds.includes(event.eventId)) {
+      throw new Error("Industry workflow batch contains committed event");
+    }
+    next = applyAuthorizedIndustryWorkflowEvent(profile, next, event, access);
+  }
+  return next;
+}
