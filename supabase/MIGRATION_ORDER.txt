@@ -99,3 +99,4 @@
 20261104_cloudflare_admin_offline_emergency_permission_restore.sql
 20261104_cloudflare_admin_trial_emergency_access.sql
 20261106_int002_webhook_subscriptions.sql
+20261106_int002_webhook_delivery_outbox.sql
