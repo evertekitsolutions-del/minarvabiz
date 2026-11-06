@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { parseGoogleReviewUrl, formatWorkspaceDateTime, formatWorkspaceMoney } from "@minarvabiz/business-logic";
+import { parseGoogleReviewUrl, formatWorkspaceDateTime, formatWorkspaceMoney, validateWorkspaceDisplayPreferences } from "@minarvabiz/business-logic";
 import { SyncPanel, PersistencePanel, Button, FormField, inputClass, selectClass, PrintTemplateManager, TrashRecoveryPanel } from "@minarvabiz/ui";
 import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage, getShopProfile, updateShopProfile, updateTaxConfig, getPrintSettings, updatePrintSettings, getScopedMasterReplayStatus, retryScopedMasterOutbox } from "@minarvabiz/business-logic";
 
@@ -65,6 +65,14 @@ export default function SettingsPage() {
     }
   }
 
+  const displayPreferences = { locale: shop.locale ?? "en-IN", timeZone: shop.timeZone ?? "Asia/Kolkata", currency: shop.currency };
+  let displayValidationError: string | null = null;
+  try {
+    validateWorkspaceDisplayPreferences(displayPreferences);
+  } catch (error) {
+    displayValidationError = error instanceof Error ? error.message : "Invalid display preferences.";
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -107,7 +115,7 @@ export default function SettingsPage() {
             <strong>Display preview (not a transaction): </strong>
             {(() => {
               try {
-                const preferences = { locale: shop.locale ?? "en-IN", timeZone: shop.timeZone ?? "Asia/Kolkata", currency: shop.currency };
+                const preferences = displayPreferences;
                 return formatWorkspaceMoney(1234.5, preferences) + " · " + formatWorkspaceDateTime("2026-01-15T12:00:00Z", preferences);
               } catch {
                 return "Enter a supported locale, time zone and currency to preview.";
@@ -117,8 +125,9 @@ export default function SettingsPage() {
           </div>
           <FormField label="Receipt footer" className="sm:col-span-2"><input className={inputClass} value={shop.receiptFooter} onChange={(e) => setShop({ ...shop, receiptFooter: e.target.value })} /></FormField>
         </div>
+        {displayValidationError && <p role="alert" className="text-sm text-red-700">Display preferences: {displayValidationError}</p>}
         <div className="flex items-center gap-2">
-          <Button onClick={() => {
+          <Button disabled={displayValidationError !== null} onClick={() => {
             try {
               const googleReviewUrl = parseGoogleReviewUrl(shop.googleReviewUrl ?? "");
               const next = updateShopProfile({ ...shop, googleReviewUrl });
