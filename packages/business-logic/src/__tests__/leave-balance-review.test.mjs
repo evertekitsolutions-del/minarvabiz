@@ -48,5 +48,5 @@ review(grants, requests);
 assert.deepEqual(grants, [grant]);
 assert.deepEqual(requests, [request]);
 const source = fs.readFileSync("packages/business-logic/src/leave-balance-review.ts", "utf8");
-assert.doesNotMatch(source, /fetch\\(|supabase|saveLeave|postPayroll|Date\\.now\\(/);
+assert.doesNotMatch(source, /fetch\(|supabase|saveLeave|postPayroll|Date\.now\(/);
 console.log("HR-006 leave balance scope, cutoff, approval, overflow, immutability PASS");
