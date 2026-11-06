@@ -61,13 +61,27 @@ export function industryPreferenceKey(userId: string | null, branchId: string | 
   return `minarva:industry-profile:v1:${demo ? "demo" : "live"}:${encodeURIComponent(userId)}:${encodeURIComponent(branchId)}`;
 }
 
+/** Accept only keys generated from non-empty scoped identities, not arbitrary prefix matches. */
+function isValidIndustryPreferenceKey(key: string): boolean {
+  const match = /^minarva:industry-profile:v1:(demo|live):([^:]+):([^:]+)$/.exec(key);
+  if (!match) return false;
+  try {
+    const user = decodeURIComponent(match[2]);
+    const branch = decodeURIComponent(match[3]);
+    return user.trim().length > 0 && branch.trim().length > 0 &&
+      encodeURIComponent(user) === match[2] && encodeURIComponent(branch) === match[3];
+  } catch {
+    return false;
+  }
+}
+
 export function readIndustryProfile(storage: Pick<Storage, "getItem">, key: string): IndustryWorkspaceProfile {
-  if (!key.startsWith("minarva:industry-profile:v1:")) throw new Error("Invalid industry preference scope");
+  if (!isValidIndustryPreferenceKey(key)) throw new Error("Invalid industry preference scope");
   const raw = storage.getItem(key);
   return raw === null ? { ...EMPTY_INDUSTRY_PROFILE, enabled: [] } : validateIndustryProfile(JSON.parse(raw));
 }
 
 export function writeIndustryProfile(storage: Pick<Storage, "setItem">, key: string, profile: IndustryWorkspaceProfile): void {
-  if (!key.startsWith("minarva:industry-profile:v1:")) throw new Error("Invalid industry preference scope");
+  if (!isValidIndustryPreferenceKey(key)) throw new Error("Invalid industry preference scope");
   storage.setItem(key, JSON.stringify(validateIndustryProfile(profile)));
 }
