@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// COM-002: opt-in channel catalog publication preflight (no network side effects).
+export * from "./commerce-channel-publication";
