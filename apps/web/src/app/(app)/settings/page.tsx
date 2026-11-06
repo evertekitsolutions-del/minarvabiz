@@ -18,6 +18,20 @@ export default function SettingsPage() {
 
   const [printMsg, setPrintMsg] = React.useState<string | null>(null);
 
+  // The domain snapshot is hydrated after the initial client render in some
+  // Offline/Hybrid sessions. Refresh the editor so saving does not overwrite
+  // restored business preferences with stale pre-hydration defaults.
+  React.useEffect(() => {
+    const onHydrated = () => {
+      setShop(getShopProfile());
+      setPrinting(getPrintSettings());
+      setShopMsg(null);
+      setShopMsgIsError(false);
+    };
+    window.addEventListener("minarva:data-hydrated", onHydrated);
+    return () => window.removeEventListener("minarva:data-hydrated", onHydrated);
+  }, []);
+
   function refresh() {
     setSnap(syncBridge.getSyncSnapshot());
   }
