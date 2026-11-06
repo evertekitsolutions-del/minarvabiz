@@ -17,6 +17,9 @@ const MAX_ZONE_LENGTH = 128;
 export function validateWorkspaceDisplayPreferences(
   input: WorkspaceDisplayPreferences,
 ): WorkspaceDisplayPreferences {
+  if (!input || typeof input.locale !== "string" || typeof input.timeZone !== "string" || typeof input.currency !== "string") {
+    throw new Error("Display preferences must contain string locale, time zone and currency.");
+  }
   const locale = input.locale.trim();
   const timeZone = input.timeZone.trim();
   const currency = input.currency.trim().toUpperCase();
@@ -80,7 +83,8 @@ export function restoreWorkspaceDisplayPreferences(
   input: Partial<WorkspaceDisplayPreferences>,
   defaults: WorkspaceDisplayPreferences,
 ): WorkspaceDisplayPreferences {
-  const result = { ...defaults };
+  const result = validateWorkspaceDisplayPreferences(defaults);
+  if (!input || typeof input !== "object" || Array.isArray(input)) return result;
   for (const field of ["locale", "timeZone", "currency"] as const) {
     const value = input[field];
     if (typeof value !== "string" || !value.trim()) continue;
