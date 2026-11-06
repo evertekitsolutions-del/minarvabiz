@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// HR-006 read-only leave balance review; no payroll or approval authority.
+export * from "./leave-balance-review";
