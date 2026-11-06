@@ -99,3 +99,20 @@ test("malformed runtime inputs fail closed without throwing; valid fractional UT
     assert.equal(applyMarketingConsentEvent(policy, null, event({ recordedAt })).reason, "invalid_event");
   }
 });
+
+test("consent authorization flags must be literal booleans, never truthy client values", () => {
+  for (const actorCanManageConsent of ["true", 1, {}, null, undefined]) {
+    assert.equal(applyMarketingConsentEvent(
+      { ...policy, actorCanManageConsent }, null, event(),
+    ).reason, "permission_denied");
+    assert.equal(applyMarketingConsentEvent(
+      { ...policy, actorCanManageConsent }, null, event({ action: "opt_out" }),
+    ).reason, "permission_denied");
+  }
+  for (const marketingEnabled of ["true", 1, {}, null, undefined]) {
+    assert.equal(applyMarketingConsentEvent(
+      { ...policy, marketingEnabled }, null, event(),
+    ).reason, "permission_denied");
+    assert.equal(maySendMarketingMessage(send({ marketingEnabled }), event()), false);
+  }
+});
