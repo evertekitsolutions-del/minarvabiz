@@ -20,6 +20,7 @@ export default function IndustryWorkspacePage() {
   const [loaded, setLoaded] = React.useState(false);
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
+  const [previewStages, setPreviewStages] = React.useState<Record<string, number>>({});
 
   React.useEffect(() => {
     function load() {
@@ -54,6 +55,7 @@ export default function IndustryWorkspacePage() {
     const primary = profile.primary && enabled.includes(profile.primary) ? profile.primary : null;
     setProfile(buildIndustryProfile(primary, enabled));
     setMessage("");
+    setPreviewStages({});
   }
 
   function save() {
@@ -69,6 +71,7 @@ export default function IndustryWorkspacePage() {
     if (currentScope !== scope) {
       setScope(currentScope);
       setProfile({ version: 1, primary: null, enabled: [] });
+      setPreviewStages({});
       setError("User, branch or runtime changed. Reload this page before saving.");
       setMessage("");
       return;
@@ -125,7 +128,7 @@ export default function IndustryWorkspacePage() {
       </fieldset>
       <section aria-label="Industry workflow examples" className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="font-semibold">Selected industry workflow examples</h2>
-        <p className="text-xs text-slate-600">Read-only planning templates. These do not create orders, enable modules, grant permissions or change customer records.</p>
+        <p className="text-xs text-slate-600">Interactive, in-memory workflow previews only. They do not create orders, persist events, enable modules, grant permissions or change customer records.</p>
         {listIndustryWorkflowTemplates(profile).length === 0 ? (
           <p className="text-sm text-slate-600">Select an optional industry to preview its typical workflow.</p>
         ) : (
@@ -134,6 +137,17 @@ export default function IndustryWorkspacePage() {
               <li key={template.id} className="rounded-md bg-slate-50 p-3">
                 <div className="text-sm font-medium">{template.label}</div>
                 <div className="mt-1 text-xs text-slate-600">{template.stages.join(" → ")}</div>
+                <div className="mt-2 flex items-center gap-3 text-xs">
+                  <span aria-live="polite">Preview stage: {template.stages[previewStages[template.id] ?? 0]}</span>
+                  <button type="button" className="rounded border border-slate-300 px-2 py-1 disabled:opacity-40"
+                    disabled={(previewStages[template.id] ?? 0) >= template.stages.length - 1}
+                    onClick={() => setPreviewStages(previous => ({ ...previous, [template.id]: Math.min((previous[template.id] ?? 0) + 1, template.stages.length - 1) }))}>
+                    Preview next stage
+                  </button>
+                  <button type="button" className="underline disabled:opacity-40"
+                    disabled={(previewStages[template.id] ?? 0) === 0}
+                    onClick={() => setPreviewStages(previous => ({ ...previous, [template.id]: 0 }))}>Reset preview</button>
+                </div>
               </li>
             ))}
           </ul>
