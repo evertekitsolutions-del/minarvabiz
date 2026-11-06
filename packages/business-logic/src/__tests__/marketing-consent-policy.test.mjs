@@ -145,3 +145,18 @@ test("MKT-016 audit history cannot be updated or deleted after recording", () =>
   assert.match(sql, /RAISE EXCEPTION 'marketing consent audit is append-only'/i);
   assert.match(sql, /REVOKE ALL ON FUNCTION public\.reject_marketing_consent_audit_mutation\(\) FROM PUBLIC, anon, authenticated/i);
 });
+
+
+test("MKT-016 SQL writer rejects noncanonical scoped identifiers and event metadata", () => {
+  const root = new URL("../../../../", import.meta.url);
+  const sql = fs.readFileSync(new URL(
+    "supabase/migrations/20261106_mkt016_marketing_consent_storage.sql", root,
+  ), "utf8");
+  for (const identifier of [
+    "p_tenant_id", "p_company_id", "p_branch_id",
+    "p_customer_id", "p_event_id", "p_source",
+  ]) {
+    assert.ok(sql.includes(identifier + " <> btrim(" + identifier + ")"),
+      "SQL writer must reject whitespace-padded " + identifier);
+  }
+});
