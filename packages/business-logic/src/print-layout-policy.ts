@@ -106,8 +106,20 @@ export function decidePrintLayoutMutation(
     return { status: "denied", reason: "Scope mismatch" };
   if (existing && existing.id !== mutation.value.id)
     return { status: "conflict", reason: "Layout identity mismatch" };
-  if (existing && lastOperationId === mutation.operationId)
-    return { status: "replay", next: validatePrintLayout(existing) };
+  if (existing && lastOperationId === mutation.operationId) {
+    // A reused idempotency key must not acknowledge a different payload.
+    const previous = validatePrintLayout(existing);
+    const requested = validatePrintLayout(mutation.value);
+    const samePayload = previous.id === requested.id &&
+      previous.document === requested.document && previous.paper === requested.paper &&
+      previous.title === requested.title && previous.footer === requested.footer &&
+      previous.revision === requested.revision && previous.enabled === requested.enabled &&
+      previous.fields.length === requested.fields.length &&
+      previous.fields.every((field, index) => field === requested.fields[index]);
+    return samePayload
+      ? { status: "replay", next: previous }
+      : { status: "conflict", reason: "Operation ID reused with different layout" };
+  }
   if (mutation.expectedRevision !== (existing?.revision ?? null))
     return { status: "conflict", reason: "Stale layout revision" };
   const next = validatePrintLayout(mutation.value);
