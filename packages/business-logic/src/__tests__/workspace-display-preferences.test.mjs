@@ -75,3 +75,13 @@ test("offline restore safely ignores non-string and blank legacy values", () => 
   );
   assert.deepEqual(result, india);
 });
+
+
+test("rejects three-letter non-ISO currency placeholders before persistence", () => {
+  if (typeof Intl.supportedValuesOf !== "function") return;
+  assert.equal(Intl.supportedValuesOf("currency").includes("ZZZ"), false);
+  assert.throws(() => validateWorkspaceDisplayPreferences({ ...india, currency: "ZZZ" }), /Unsupported ISO 4217/);
+  assert.deepEqual(restoreWorkspaceDisplayPreferences({ currency: "ZZZ", locale: "ar-OM" }, india), {
+    ...india, locale: "ar-OM",
+  });
+});
