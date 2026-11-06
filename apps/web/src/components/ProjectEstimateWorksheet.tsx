@@ -64,7 +64,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     }));
     setRequestKey(null);
     setHasUnsavedChanges(true);
-    setRevisionConflict(false);
+    // A revision conflict is sticky until an authoritative reload; editing must not unlock stale saves.
     setMessage("");
   };
   const totals = React.useMemo(() => {
@@ -74,7 +74,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canEdit || !worksheet || !totals || busy) return;
+    if (!canEdit || !worksheet || !totals || busy || revisionConflict || !hasUnsavedChanges) return;
     const currentGeneration = generation.current;
     const key = requestKey ?? crypto.randomUUID();
     setRequestKey(key);
