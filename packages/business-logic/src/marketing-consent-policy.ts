@@ -71,8 +71,9 @@ export function applyMarketingConsentEvent(
     ({ accepted: false as const, reason });
   if (!validEvent(next) || !validScope(policy)) return reject("invalid_event");
   if (!sameScope(policy, next)) return reject("scope_mismatch");
-  // Opt-out is always permitted, even after a merchant disables marketing.
-  if (next.action === "opt_in" && (!policy.marketingEnabled || !policy.actorCanManageConsent)) {
+  // Opt-out remains available when marketing is disabled, but never to an unauthenticated actor.
+  // The trusted host must authorize customer self-service or staff consent management.
+  if (!policy.actorCanManageConsent || (next.action === "opt_in" && !policy.marketingEnabled)) {
     return reject("permission_denied");
   }
   if (previous !== null) {
