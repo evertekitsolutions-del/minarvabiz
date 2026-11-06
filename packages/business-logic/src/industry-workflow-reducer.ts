@@ -62,6 +62,9 @@ export function replayIndustryWorkflowEvents(
         !nonempty(event.from) || !nonempty(event.to)) {
       throw new Error("Invalid industry workflow event log");
     }
+    if (record.appliedEventIds.includes(event.eventId)) {
+      throw new Error("Duplicate industry workflow event in durable log");
+    }
     record = applyIndustryWorkflowEvent(profile, record, event);
   }
   return record;
