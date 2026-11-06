@@ -81,11 +81,11 @@ test("CSV export includes exact totals, CRLF, BOM and spreadsheet formula protec
     { ...base.lines[1], description: "Quoted \"value\", line" },
   ] };
   const csv = exportProjectEstimateCsv(injected, scope);
-  assert.ok(csv.startsWith("\\uFEFF".replace("\\uFEFF", "\uFEFF")));
+  assert.ok(csv.charCodeAt(0) === 0xFEFF);
   assert.match(csv, /"'=HYPERLINK/);
-  assert.match(csv, /"'  \\+SUM/);
+  assert.match(csv, /"'  \+SUM/);
   assert.match(csv, /"Quoted ""value"", line"/);
   assert.match(csv, /"TOTAL".*"26001","31001","INR"/);
-  assert.ok(csv.endsWith("\\r\\n".replace("\\r\\n", "\r\n")));
+  assert.ok(csv.endsWith("\r\n"));
   assert.throws(() => exportProjectEstimateCsv(injected, { ...scope, canViewCosts:false }), /permission/);
 });
