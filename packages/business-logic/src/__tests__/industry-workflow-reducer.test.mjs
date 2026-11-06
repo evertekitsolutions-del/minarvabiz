@@ -79,3 +79,19 @@ test("revision history length cannot be forged", () => {
   assert.throws(() => applyIndustryWorkflowEvent(profile, { ...record, revision: 1 }, event), /revision history/);
   assert.throws(() => applyIndustryWorkflowEvent(profile, { ...record, appliedEventIds: ["ghost"] }, event), /revision history/);
 });
+
+test("durable event log replays deterministically without cross-tenant or duplicate events", () => {
+  const { replayIndustryWorkflowEvents } = require("../industry-workflow-reducer.ts");
+  const second = { ...event, eventId: "event-2", expectedRevision: 1, from: "preparing", to: "ready" };
+  const replayed = replayIndustryWorkflowEvents(profile, scope, [event, second]);
+  assert.equal(replayed.stage, "ready");
+  assert.equal(replayed.revision, 2);
+  assert.deepEqual(replayed.appliedEventIds, ["event-1", "event-2"]);
+  assert.equal(replayIndustryWorkflowEvents(profile, scope, []).stage, "placed");
+  assert.throws(() => replayIndustryWorkflowEvents(profile, scope, [event, event]), /Duplicate/);
+  assert.throws(() => replayIndustryWorkflowEvents(profile, scope, [second, event]), /Stale/);
+  assert.throws(() => replayIndustryWorkflowEvents(profile, scope, [{ ...event, tenantId: "tenant-B" }]), /scope mismatch/);
+  assert.throws(() => replayIndustryWorkflowEvents(profile, scope, [{ ...event, to: "served" }]), /Invalid industry/);
+  assert.throws(() => replayIndustryWorkflowEvents(profile, scope, [null]), /Invalid industry workflow event log/);
+  assert.throws(() => replayIndustryWorkflowEvents(profile, scope, "bad"), /Invalid industry workflow event log/);
+});
