@@ -45,7 +45,7 @@ export type MarketingConsentDecision =
 const filled = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0 && value === value.trim();
 const validScope = (scope: MarketingConsentScope): boolean =>
-  filled(scope.tenantId) && filled(scope.companyId) && filled(scope.branchId);
+  scope !== null && typeof scope === "object" && filled(scope.tenantId) && filled(scope.companyId) && filled(scope.branchId);
 const sameScope = (a: MarketingConsentScope, b: MarketingConsentScope): boolean =>
   a.tenantId === b.tenantId && a.companyId === b.companyId && a.branchId === b.branchId;
 const validEvent = (event: MarketingConsentEvent): boolean =>
@@ -59,7 +59,8 @@ const validEvent = (event: MarketingConsentEvent): boolean =>
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(event.recordedAt) &&
   Number.isFinite(Date.parse(event.recordedAt)) &&
   new Date(event.recordedAt).toISOString() ===
-    new Date(Date.parse(event.recordedAt)).toISOString();
+    event.recordedAt.replace(/(?:\.(\d{1,3}))?Z$/, (_, fraction: string | undefined) =>
+      `.${(fraction ?? "").padEnd(3, "0")}Z`);
 
 /** Apply one scoped CAS event. Persist accepted events in the host transaction. */
 export function applyMarketingConsentEvent(
