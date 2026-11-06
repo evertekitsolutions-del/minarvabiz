@@ -232,3 +232,18 @@ test("RFQ restore rejects malformed supplier IDs and incomplete product identity
   }
   assert.equal(rfq.getProcurementRfq(created.id).status,"draft");
 });
+
+test("RFQ recovery cannot be spoofed by another supplier quotation reference",()=>{
+  reset();
+  const first=rfq.createProcurementRfq(request("RFQ-MARKER-FIRST"));
+  const second=rfq.createProcurementRfq(request("RFQ-MARKER-SECOND"));
+  const issuedFirst=rfq.issueProcurementRfq(first.id,first.version);
+  const issuedSecond=rfq.issueProcurementRfq(second.id,second.version);
+  const malicious={...bid("s1"),quoteReference:"Q-1 / MINARVA-RFQ-ID:"+second.id};
+  const quotedFirst=rfq.recordProcurementRfqQuote(issuedFirst.id,issuedFirst.version,malicious);
+  const quotedSecond=rfq.recordProcurementRfqQuote(issuedSecond.id,issuedSecond.version,bid("s1"));
+  const firstAward=rfq.awardProcurementRfq(quotedFirst.id,quotedFirst.version,"s1");
+  const secondAward=rfq.awardProcurementRfq(quotedSecond.id,quotedSecond.version,"s1");
+  assert.notEqual(firstAward.purchaseOrder.id,secondAward.purchaseOrder.id);
+  assert.equal(procurement.listPurchaseOrders().length,2);
+});
