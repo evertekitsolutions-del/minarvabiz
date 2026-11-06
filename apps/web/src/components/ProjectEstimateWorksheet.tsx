@@ -129,7 +129,10 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       {worksheet && <>
         <p aria-label="Estimate revision">Revision: {worksheet.revision}{hasUnsavedChanges ? " · Unsaved changes" : ""}</p>
         <button type="button" disabled={busy || hasUnsavedChanges} onClick={reloadCurrent}>Reload current estimate</button>
-        {hasUnsavedChanges && <p role="status">Save or discard your edits before reloading. A revision conflict requires reloading the latest estimate.</p>}
+        {hasUnsavedChanges && <div role="status">
+          <p>Save or discard your edits before reloading. A revision conflict requires reloading the latest estimate.</p>
+          <button type="button" disabled={busy} onClick={reloadCurrent}>Discard edits and reload latest</button>
+        </div>
         <label>Currency <input aria-label="Currency" value={worksheet.currency} maxLength={3} disabled={!canEdit || busy}
           onChange={e => { setWorksheet({ ...worksheet, currency: e.target.value.toUpperCase() }); setRequestKey(null); setHasUnsavedChanges(true); setMessage(""); }} /></label>
         {worksheet.lines.map(line => (
@@ -155,7 +158,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
           setWorksheet({ ...worksheet, lines: [...worksheet.lines, newLine()] }); setRequestKey(null); setHasUnsavedChanges(true); setMessage("");
         }}>Add line</button>
         {totals && <p>Cost: {totals.costMinor / 100} · Proposed revenue: {totals.proposedRevenueMinor / 100} · Margin: {totals.grossMarginMinor / 100} {totals.currency}</p>}
-        {canEdit && <button type="submit" disabled={busy || !totals}>{busy ? "Working…" : "Save estimate"}</button>}
+        {canEdit && <button type="submit" disabled={busy || !totals || !hasUnsavedChanges}>{busy ? "Working…" : "Save estimate"}</button>}
         {canExport && <button type="button" disabled={busy || !totals} onClick={downloadCsv}>Export estimate CSV</button>}
       </>}
     </form>
