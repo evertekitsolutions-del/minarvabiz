@@ -39,6 +39,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     if (!enabled || !scope.canViewCosts) return;
     setBusy(true);
     load().then(row => {
+      if (row) calculateProjectEstimate(row, scope);
       if (active) setWorksheet(row ?? {
         tenantId: scope.tenantId, companyId: scope.companyId, branchId: scope.branchId,
         projectId: scope.projectId, currency: "INR", revision: 0, lines: [newLine()],
@@ -72,6 +73,8 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       // Never assume the adapter's acknowledgement contains the next authoritative revision.
       const current = await load();
       if (!current) throw new Error("Saved estimate could not be reloaded");
+      calculateProjectEstimate(current, scope);
+      if (current.revision <= worksheet.revision) throw new Error("Saved estimate revision not advanced");
       setWorksheet(current);
       setRequestKey(null);
       setMessage("Estimate saved");
