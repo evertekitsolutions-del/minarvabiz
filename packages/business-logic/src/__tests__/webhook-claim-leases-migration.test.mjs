@@ -24,3 +24,9 @@ test("fresh-instance migration replay orders lease after outbox and enqueue", ()
   assert.equal(lines.filter((line) => line === name).length, 1);
   assert.ok(lines.indexOf(name) > lines.indexOf("20261107_int002_webhook_atomic_enqueue.sql"));
 });
+
+test("expired final-attempt leases transition to dead-letter instead of staying leased", () => {
+  assert.match(sql, /update public\.integration_webhook_delivery_outbox o\s+set status = 'dead', lease_until = null/i);
+  assert.match(sql, /where o\.status = 'leased' and o\.lease_until <= now\(\)\s+and o\.attempt_count >= 20/i);
+  assert.ok(sql.indexOf("set status = 'dead'") < sql.indexOf("return query"));
+});
