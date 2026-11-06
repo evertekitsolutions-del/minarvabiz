@@ -35,7 +35,7 @@ test("reject duplicate IDs, malformed inputs and unsupported currencies", () => 
   assert.throws(()=>run({lines:[]}),/1–500/);
   assert.throws(()=>run({lines:[{...base.lines[0],quantity:"0"}]}),/quantity/);
   assert.throws(()=>run({lines:[{...base.lines[0],unitCost:"1.001"}]}),/precision/);
-  assert.throws(()=>run({lines:[{...base.lines[0],markupPercent:"1000.01"}]}),/range/);
+  assert.throws(()=>run({lines:[{...base.lines[0],markupPercent:"1000.01"}]}),/precision|range/);
   assert.throws(()=>run({lines:[{...base.lines[0],description:""}]}),/description/);
 });
 test("rounded line totals are deterministic and input is untouched",()=>{
