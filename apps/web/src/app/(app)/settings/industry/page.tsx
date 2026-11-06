@@ -141,6 +141,17 @@ export default function IndustryWorkspacePage() {
       return;
     }
     try {
+      // Drafts belong only to a saved, still-current workspace selection.
+      // An unsaved pack toggle must not create a draft for an uncommitted profile.
+      const savedProfile = readIndustryProfile(window.localStorage, scope);
+      const currentProfile = JSON.stringify(buildIndustryProfile(profile.primary, profile.enabled));
+      if (baselineRef.current === null ||
+          JSON.stringify(savedProfile) !== baselineRef.current ||
+          currentProfile !== baselineRef.current) {
+        setMessage("");
+        setError("Industry selection has unsaved or conflicting changes. Save or reload preferences before accessing drafts.");
+        return;
+      }
       if (restore) {
         const draft = readIndustryIntakeDraft(window.localStorage, scope, profile, templateId);
         if (!draft) { setMessage("No local reference draft found."); return; }
