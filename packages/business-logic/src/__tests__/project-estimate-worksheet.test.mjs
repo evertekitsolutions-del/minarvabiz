@@ -7,7 +7,7 @@ const ts = require("typescript");
 require.extensions[".ts"] = (mod, file) => mod._compile(ts.transpileModule(fs.readFileSync(file, "utf8"), {
   fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText, file);
-const { calculateProjectEstimate, saveProjectEstimate } = require("../project-estimate-worksheet.ts");
+const { calculateProjectEstimate, saveProjectEstimate, exportProjectEstimateCsv } = require("../project-estimate-worksheet.ts");
 const scope = { tenantId:"t", companyId:"c", branchId:"b", projectId:"p", canViewCosts:true };
 const base = { ...scope, currency:"INR", revision:0, lines:[
   { id:"labor", description:"Technician", kind:"labor", quantity:"2.500", unitCost:"100.00", markupPercent:"20.00" },
@@ -73,4 +73,19 @@ test("save rejects unauthorized edits, conflicts and missing storage acknowledge
   await assert.rejects(saveProjectEstimate(base, {...scope,canEditEstimates:true,actorId:"a"}, "key", {async saveAtomically(){return undefined;}}), /acknowledgement/);
   const replay = await saveProjectEstimate(base, {...scope,canEditEstimates:true,actorId:"a"}, "key", {async saveAtomically(){return "replayed";}});
   assert.equal(replay.status, "replayed");
+});
+
+test("CSV export includes exact totals, CRLF, BOM and spreadsheet formula protection", () => {
+  const injected = { ...base, lines: [
+    { ...base.lines[0], id: "=HYPERLINK(\"https://example.test\")", description: "  +SUM(1,1)" },
+    { ...base.lines[1], description: "Quoted \"value\", line" },
+  ] };
+  const csv = exportProjectEstimateCsv(injected, scope);
+  assert.ok(csv.startsWith("\\uFEFF".replace("\\uFEFF", "\uFEFF")));
+  assert.match(csv, /"'=HYPERLINK/);
+  assert.match(csv, /"'  \\+SUM/);
+  assert.match(csv, /"Quoted ""value"", line"/);
+  assert.match(csv, /"TOTAL".*"26001","31001","INR"/);
+  assert.ok(csv.endsWith("\\r\\n".replace("\\r\\n", "\r\n")));
+  assert.throws(() => exportProjectEstimateCsv(injected, { ...scope, canViewCosts:false }), /permission/);
 });
