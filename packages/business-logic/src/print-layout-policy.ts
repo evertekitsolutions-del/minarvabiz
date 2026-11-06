@@ -138,7 +138,13 @@ export function resolvePrintLayout(
   const matching = candidates.filter(c => c.enabled && c.document === document &&
     c.tenantId === scope.tenantId && c.companyId === scope.companyId &&
     (c.branchId === scope.branchId || c.branchId === null));
-  const selected = matching.find(c => scope.branchId !== null && c.branchId === scope.branchId)
-    ?? matching.find(c => c.branchId === null);
-  return selected ? validatePrintLayout(selected) : null;
+  // Duplicate layouts at the same precedence are ambiguous: fail closed
+  // rather than depending on database row ordering when printing invoices.
+  const branchMatches = scope.branchId === null ? [] :
+    matching.filter(c => c.branchId === scope.branchId);
+  const companyMatches = matching.filter(c => c.branchId === null);
+  const priorityMatches = branchMatches.length ? branchMatches : companyMatches;
+  if (priorityMatches.length > 1)
+    throw new Error("Ambiguous print layouts for authorized scope");
+  return priorityMatches.length ? validatePrintLayout(priorityMatches[0]) : null;
 }
