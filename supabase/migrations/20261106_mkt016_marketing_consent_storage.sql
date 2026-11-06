@@ -64,6 +64,12 @@ BEGIN
      p_customer_id IS NULL OR btrim(p_customer_id) = '' OR
      p_event_id IS NULL OR btrim(p_event_id) = '' OR
      p_source IS NULL OR btrim(p_source) = '' OR
+     p_tenant_id <> btrim(p_tenant_id) OR
+     p_company_id <> btrim(p_company_id) OR
+     p_branch_id <> btrim(p_branch_id) OR
+     p_customer_id <> btrim(p_customer_id) OR
+     p_event_id <> btrim(p_event_id) OR
+     p_source <> btrim(p_source) OR
      p_channel IS NULL OR p_channel NOT IN ('email','sms','whatsapp') OR
      p_purpose IS NULL OR p_purpose NOT IN ('promotional','loyalty') OR
      p_action IS NULL OR p_action NOT IN ('opt_in','opt_out') OR
