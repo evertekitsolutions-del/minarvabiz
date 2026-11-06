@@ -47,16 +47,16 @@ export async function commitAuthorizedIndustryWorkflowBatch(
   // Validate that persisted event history agrees with the supplied snapshot.
   // An adapter must load the history and record under the same database lock.
   const next = preflightAuthorizedIndustryWorkflowBatch(profile, record, events, access);
-  const persisted = await port.commit({ original: record, next, events, access });
-  if (!persisted || persisted.id !== next.id ||
-      persisted.tenantId !== next.tenantId ||
-      persisted.branchId !== next.branchId ||
-      persisted.templateId !== next.templateId ||
-      persisted.stage !== next.stage ||
-      persisted.revision !== next.revision ||
+  // Capture the expected acknowledgement before crossing an untrusted adapter boundary.\n  // A buggy adapter must not mutate the expected state to manufacture success.\n  const expected = { ...next, appliedEventIds: [...next.appliedEventIds] };\n  const persisted = await port.commit({ original: record, next, events, access });
+  if (!persisted || persisted.id !== expected.id ||
+      persisted.tenantId !== expected.tenantId ||
+      persisted.branchId !== expected.branchId ||
+      persisted.templateId !== expected.templateId ||
+      persisted.stage !== expected.stage ||
+      persisted.revision !== expected.revision ||
       !Array.isArray(persisted.appliedEventIds) ||
-      persisted.appliedEventIds.length !== next.appliedEventIds.length ||
-      persisted.appliedEventIds.some((id, i) => id !== next.appliedEventIds[i])) {
+      persisted.appliedEventIds.length !== expected.appliedEventIds.length ||
+      persisted.appliedEventIds.some((id, i) => id !== expected.appliedEventIds[i])) {
     throw new Error("Industry workflow storage acknowledgement mismatch");
   }
   return persisted;
