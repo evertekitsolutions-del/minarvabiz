@@ -100,6 +100,6 @@ test("offline restore tolerates missing or malformed snapshots without changing 
     assert.deepEqual(restoreWorkspaceDisplayPreferences(snapshot, india), canonicalIndia);
   }
   assert.deepEqual(restoreWorkspaceDisplayPreferences({ locale: "ar-OM", currency: 123 }, india), {
-    ...india, locale: "ar-OM",
+    ...canonicalIndia, locale: "ar-OM",
   });
 });
