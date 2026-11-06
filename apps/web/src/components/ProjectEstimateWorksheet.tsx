@@ -95,7 +95,8 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       setMessage("Estimate saved");
     } catch (err) {
       if (currentGeneration === generation.current) {
-        const conflict = typeof err === "object" && err !== null && "status" in err && (err.status === 409 || err.status === 412);
+        const conflict = (typeof err === "object" && err !== null && "status" in err && (err.status === 409 || err.status === 412)) ||
+          (err instanceof Error && err.message === "Project estimate revision conflict");
         setRevisionConflict(conflict);
         setError(conflict ? "Estimate changed elsewhere. Discard edits and reload the latest revision before saving." : err instanceof Error ? err.message : "Save failed");
       }
