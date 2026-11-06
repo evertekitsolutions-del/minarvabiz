@@ -88,3 +88,49 @@ export function calculateProjectEstimate(input: ProjectEstimateInput, scope: Pro
     grossMarginMinor: safeMinor(totalRevenue - totalCost), lines: Object.freeze(lines),
   });
 }
+
+/** Host adapter must atomically compare revision, persist the worksheet and append its audit event.
+ * Implementations may use SQLite or a tenant-scoped remote transaction; no financial posting.
+ */
+export interface ProjectEstimateStore {
+  saveAtomically(command: {
+    readonly scope: Pick<ProjectEstimateInput, "tenantId" | "companyId" | "branchId" | "projectId">;
+    readonly expectedRevision: number;
+    readonly nextRevision: number;
+    readonly idempotencyKey: string;
+    readonly worksheet: ProjectEstimateInput;
+    readonly totals: ProjectEstimateResult;
+    readonly audit: { readonly actorId: string; readonly action: "project.estimate.saved"; readonly revision: number };
+  }): Promise<"saved" | "replayed" | "conflict">;
+}
+export interface ProjectEstimateWriteScope extends ProjectEstimateScope {
+  readonly canEditEstimates: boolean;
+  readonly actorId: string;
+}
+export async function saveProjectEstimate(
+  input: ProjectEstimateInput,
+  scope: ProjectEstimateWriteScope,
+  idempotencyKey: string,
+  store: ProjectEstimateStore,
+): Promise<{ readonly status: "saved" | "replayed"; readonly result: ProjectEstimateResult }> {
+  if (!scope.canEditEstimates) throw new Error("Project estimate edit permission denied");
+  const actorId = required(scope.actorId, "actor ID");
+  const key = required(idempotencyKey, "idempotency key");
+  const result = calculateProjectEstimate(input, scope);
+  if (input.revision >= Number.MAX_SAFE_INTEGER) throw new Error("Estimate revision overflow");
+  // Clone before invoking an untrusted async adapter: caller mutations must not alter the write.
+  const worksheet: ProjectEstimateInput = {
+    tenantId: input.tenantId, companyId: input.companyId, branchId: input.branchId,
+    projectId: input.projectId, currency: input.currency, revision: input.revision,
+    lines: input.lines.map(line => ({ ...line })),
+  };
+  const outcome = await store.saveAtomically({
+    scope: { tenantId: input.tenantId, companyId: input.companyId, branchId: input.branchId, projectId: input.projectId },
+    expectedRevision: input.revision, nextRevision: input.revision + 1,
+    idempotencyKey: key, worksheet, totals: result,
+    audit: { actorId, action: "project.estimate.saved", revision: input.revision + 1 },
+  });
+  if (outcome === "conflict") throw new Error("Project estimate revision conflict");
+  if (outcome !== "saved" && outcome !== "replayed") throw new Error("Invalid estimate storage acknowledgement");
+  return { status: outcome, result };
+}
