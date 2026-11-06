@@ -43,7 +43,7 @@ const validTimestamp = (value: string): number => {
     throw new Error("Invalid UTC timestamp");
   }
   const ms = Date.parse(value);
-  if (!Number.isFinite(ms) || new Date(ms).toISOString().slice(0, 19) !== value.slice(0, 19)) {
+  if (!Number.isFinite(ms) || new Date(ms).toISOString() !== value.replace(/(\.\d{1,3})?Z$/, (_match, fraction: string | undefined) => `.${(fraction?.slice(1) ?? "").padEnd(3, "0")}Z`)) {
     throw new Error("Invalid UTC timestamp");
   }
   return ms;
