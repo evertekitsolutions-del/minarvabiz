@@ -7,7 +7,7 @@ const ts = require("typescript");
 require.extensions[".ts"] = (mod, file) => mod._compile(ts.transpileModule(fs.readFileSync(file, "utf8"), {
   fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText, file);
-const { calculateProjectEstimate } = require("../project-estimate-worksheet.ts");
+const { calculateProjectEstimate, saveProjectEstimate } = require("../project-estimate-worksheet.ts");
 const scope = { tenantId:"t", companyId:"c", branchId:"b", projectId:"p", canViewCosts:true };
 const base = { ...scope, currency:"INR", revision:0, lines:[
   { id:"labor", description:"Technician", kind:"labor", quantity:"2.500", unitCost:"100.00", markupPercent:"20.00" },
@@ -49,4 +49,28 @@ test("rounded line totals are deterministic and input is untouched",()=>{
 test("overflow cannot silently change money",()=>{
   const line={...base.lines[0],quantity:"999999.999",unitCost:"9999999999.99",markupPercent:"999.99"};
   assert.throws(()=>run({lines:[line]}),/overflow/);
+});
+
+test("save contract sends atomic audit and optimistic revision without posting", async () => {
+  let captured;
+  const writeScope = { ...scope, canEditEstimates:true, actorId:"manager" };
+  const saved = await saveProjectEstimate(base, writeScope, "request-001", {
+    async saveAtomically(command) { captured = command; return "saved"; }
+  });
+  assert.equal(saved.status, "saved");
+  assert.equal(captured.expectedRevision, 0);
+  assert.equal(captured.nextRevision, 1);
+  assert.equal(captured.audit.actorId, "manager");
+  assert.equal(captured.audit.action, "project.estimate.saved");
+  assert.equal(captured.totals.costMinor, 26001);
+  assert.equal(captured.scope.tenantId, "t");
+  assert.notEqual(captured.worksheet.lines[0], base.lines[0]);
+});
+test("save rejects unauthorized edits, conflicts and missing storage acknowledgement", async () => {
+  const store = { async saveAtomically() { return "conflict"; } };
+  await assert.rejects(saveProjectEstimate(base, {...scope,canEditEstimates:false,actorId:"a"}, "key", store), /edit permission/);
+  await assert.rejects(saveProjectEstimate(base, {...scope,canEditEstimates:true,actorId:"a"}, "key", store), /revision conflict/);
+  await assert.rejects(saveProjectEstimate(base, {...scope,canEditEstimates:true,actorId:"a"}, "key", {async saveAtomically(){return undefined;}}), /acknowledgement/);
+  const replay = await saveProjectEstimate(base, {...scope,canEditEstimates:true,actorId:"a"}, "key", {async saveAtomically(){return "replayed";}});
+  assert.equal(replay.status, "replayed");
 });
