@@ -65,3 +65,25 @@ export function formatWorkspaceDateTime(
     minute: "2-digit",
   }).format(date);
 }
+
+/**
+ * Restore legacy/offline preferences independently. A corrupt time zone must
+ * not silently reset a valid business currency or locale.
+ */
+export function restoreWorkspaceDisplayPreferences(
+  input: Partial<WorkspaceDisplayPreferences>,
+  defaults: WorkspaceDisplayPreferences,
+): WorkspaceDisplayPreferences {
+  const result = { ...defaults };
+  for (const field of ["locale", "timeZone", "currency"] as const) {
+    const value = input[field];
+    if (typeof value !== "string" || !value.trim()) continue;
+    try {
+      const validated = validateWorkspaceDisplayPreferences({ ...result, [field]: value });
+      result[field] = validated[field];
+    } catch {
+      // Keep only the invalid field at its safe default.
+    }
+  }
+  return result;
+}
