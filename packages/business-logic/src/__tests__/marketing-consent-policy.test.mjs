@@ -48,11 +48,18 @@ test("consent CAS accepts first opt-in, idempotent replay and later opt-out", ()
   assert.equal(applyMarketingConsentEvent(policy, first, event({ eventId: "e1", action: "opt_out" })).reason, "conflicting_event");
 });
 
-test("opt-in requires enabled merchant and trusted consent manager; opt-out remains possible", () => {
+test("consent changes require trusted actor; disabling marketing never blocks authorized opt-out", () => {
   const stopped = event({ action: "opt_out" });
-  for (const patch of [{ marketingEnabled: false }, { actorCanManageConsent: false }]) {
-    assert.equal(applyMarketingConsentEvent({ ...policy, ...patch }, null, event()).reason, "permission_denied");
-    assert.equal(applyMarketingConsentEvent({ ...policy, ...patch }, null, stopped).accepted, true);
+  assert.equal(applyMarketingConsentEvent({ ...policy, marketingEnabled: false }, null, event()).reason, "permission_denied");
+  assert.equal(applyMarketingConsentEvent({ ...policy, marketingEnabled: false }, null, stopped).accepted, true);
+  for (const action of ["opt_in", "opt_out"]) {
+    assert.equal(applyMarketingConsentEvent(
+      { ...policy, actorCanManageConsent: false }, null, event({ action }),
+    ).reason, "permission_denied");
+    assert.equal(applyMarketingConsentEvent(
+      { ...policy, marketingEnabled: false, actorCanManageConsent: false },
+      null, event({ action }),
+    ).reason, "permission_denied");
   }
 });
 
