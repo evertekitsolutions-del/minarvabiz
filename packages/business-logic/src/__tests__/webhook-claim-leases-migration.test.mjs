@@ -14,6 +14,7 @@ test("claim lease has concurrent worker safety and bounded retries", () => {
   assert.match(sql, /o\.attempt_count < 20/i);
   assert.match(sql, /o\.lease_until <= now\(\)/i);
   assert.match(sql, /s\.enabled = true/i);
+  assert.match(sql, /o\.event_type = any\(s\.events\)/i);
   assert.match(sql, /p_limit not between 1 and 100/i);
   assert.match(sql, /p_lease_seconds not between 10 and 300/i);
 });
