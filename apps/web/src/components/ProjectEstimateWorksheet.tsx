@@ -32,9 +32,12 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
   const [requestKey, setRequestKey] = React.useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
   React.useEffect(() => {
     let active = true;
     setWorksheet(null);
+    setRequestKey(null);
+    setHasUnsavedChanges(false);
     setError("");
     if (!enabled || !scope.canViewCosts) return;
     setBusy(true);
@@ -54,6 +57,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       ...previous, lines: previous.lines.map(line => line.id === id ? { ...line, ...patch } : line),
     }));
     setRequestKey(null);
+    setHasUnsavedChanges(true);
     setMessage("");
   };
   const totals = React.useMemo(() => {
@@ -77,10 +81,29 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       if (current.revision <= worksheet.revision) throw new Error("Saved estimate revision not advanced");
       setWorksheet(current);
       setRequestKey(null);
+      setHasUnsavedChanges(false);
       setMessage("Estimate saved");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally { setBusy(false); }
+  }
+
+  async function reloadCurrent() {
+    if (busy || !scope.canViewCosts) return;
+    setBusy(true);
+    setError("");
+    try {
+      const current = await load();
+      if (current) calculateProjectEstimate(current, scope);
+      setWorksheet(current ?? {
+        tenantId: scope.tenantId, companyId: scope.companyId, branchId: scope.branchId,
+        projectId: scope.projectId, currency: "INR", revision: 0, lines: [newLine()],
+      });
+      setRequestKey(null);
+      setHasUnsavedChanges(false);
+      setMessage("Current estimate loaded");
+    } catch (err) { setError(err instanceof Error ? err.message : "Reload failed"); }
+    finally { setBusy(false); }
   }
 
   function downloadCsv() {
@@ -104,8 +127,11 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       {error && <p role="alert" className="text-red-700">{error}</p>}
       {message && <p role="status">{message}</p>}
       {worksheet && <>
+        <p aria-label="Estimate revision">Revision: {worksheet.revision}{hasUnsavedChanges ? " · Unsaved changes" : ""}</p>
+        <button type="button" disabled={busy || hasUnsavedChanges} onClick={reloadCurrent}>Reload current estimate</button>
+        {hasUnsavedChanges && <p role="status">Save or discard your edits before reloading. A revision conflict requires reloading the latest estimate.</p>}
         <label>Currency <input aria-label="Currency" value={worksheet.currency} maxLength={3} disabled={!canEdit || busy}
-          onChange={e => { setWorksheet({ ...worksheet, currency: e.target.value.toUpperCase() }); setRequestKey(null); }} /></label>
+          onChange={e => { setWorksheet({ ...worksheet, currency: e.target.value.toUpperCase() }); setRequestKey(null); setHasUnsavedChanges(true); setMessage(""); }} /></label>
         {worksheet.lines.map(line => (
           <fieldset key={line.id} className="grid gap-2 rounded border p-3">
             <legend>Estimate line</legend>
@@ -120,11 +146,13 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
             <button type="button" disabled={!canEdit || busy || worksheet.lines.length <= 1} onClick={() => {
               setWorksheet({ ...worksheet, lines: worksheet.lines.filter(item => item.id !== line.id) });
               setRequestKey(null);
+              setHasUnsavedChanges(true);
+              setMessage("");
             }}>Remove line</button>
           </fieldset>
         ))}
         <button type="button" disabled={!canEdit || busy || worksheet.lines.length >= 500} onClick={() => {
-          setWorksheet({ ...worksheet, lines: [...worksheet.lines, newLine()] }); setRequestKey(null);
+          setWorksheet({ ...worksheet, lines: [...worksheet.lines, newLine()] }); setRequestKey(null); setHasUnsavedChanges(true); setMessage("");
         }}>Add line</button>
         {totals && <p>Cost: {totals.costMinor / 100} · Proposed revenue: {totals.proposedRevenueMinor / 100} · Margin: {totals.grossMarginMinor / 100} {totals.currency}</p>}
         {canEdit && <button type="submit" disabled={busy || !totals}>{busy ? "Working…" : "Save estimate"}</button>}
