@@ -82,3 +82,13 @@ test("preference storage rejects forged, empty and malformed scope keys", () => 
   const valid = industryPreferenceKey("tenant:user", "branch / 2", false);
   assert.equal(readIndustryProfile(storage, valid).primary, null);
 });
+
+
+test("industry preview stays in memory and never commits workflow events", () => {
+  const page = fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/settings/industry/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /previewStages/);
+  assert.match(page, /Preview next stage/);
+  assert.match(page, /Reset preview/);
+  assert.match(page, /in-memory workflow previews only/);
+  assert.doesNotMatch(page, /applyIndustryWorkflowEvent|persistIndustryWorkflow|createIndustryWorkflowRecord/);
+});
