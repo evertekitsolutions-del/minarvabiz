@@ -4,7 +4,7 @@
  * Pure validation/planning only: host must atomically persist the returned record,
  * enforce authoritative RBAC and compare-and-swap against the resource revision.
  */
-export type ResourceBookingStatus = "confirmed" | "cancelled";
+export type ProjectResourceBookingStatus = "confirmed" | "cancelled";
 export interface ProjectResourceBooking {
   readonly id: string;
   readonly tenantId: string;
@@ -16,7 +16,7 @@ export interface ProjectResourceBooking {
   readonly endAt: string;
   /** Integer percentage 1..100, where 100 means exclusive allocation. */
   readonly capacityPercent: number;
-  readonly status: ResourceBookingStatus;
+  readonly status: ProjectResourceBookingStatus;
 }
 export interface ResourceAllocationRequest {
   readonly booking: ProjectResourceBooking;
