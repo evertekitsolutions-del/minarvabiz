@@ -135,6 +135,38 @@ export async function saveProjectEstimate(
   return { status: outcome, result };
 }
 
+/** Retry only explicitly transient adapter failures. The same idempotency key and
+ * expected revision are reused; the durable adapter must deduplicate atomically.
+ * Unknown acknowledgements remain errors, never inferred successes.
+ */
+export async function saveProjectEstimateWithRetry(
+  input: ProjectEstimateInput,
+  scope: ProjectEstimateWriteScope,
+  idempotencyKey: string,
+  store: ProjectEstimateStore,
+  options: { readonly maxAttempts?: number; readonly isTransient: (error: unknown) => boolean },
+): Promise<{ readonly status: "saved" | "replayed"; readonly result: ProjectEstimateResult }> {
+  const maxAttempts = options.maxAttempts ?? 3;
+  if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 5) {
+    throw new Error("Invalid estimate retry limit");
+  }
+  if (typeof options.isTransient !== "function") throw new Error("Missing transient error classifier");
+  // Freeze the command inputs once so retries cannot accidentally change their meaning.
+  const snapshot: ProjectEstimateInput = {
+    tenantId: input.tenantId, companyId: input.companyId, branchId: input.branchId,
+    projectId: input.projectId, currency: input.currency, revision: input.revision,
+    lines: input.lines.map(line => ({ ...line })),
+  };
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await saveProjectEstimate(snapshot, scope, idempotencyKey, store);
+    } catch (error) {
+      if (attempt === maxAttempts || !options.isTransient(error)) throw error;
+    }
+  }
+  throw new Error("Unreachable estimate retry state");
+}
+
 /** Export a reviewed estimate as an Excel-safe, UTF-8 CSV proposal.
  * This is a non-posting export; caller must enforce document download permissions.
  * Every source value is revalidated using the same scoped calculator.
