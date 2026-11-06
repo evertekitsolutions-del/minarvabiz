@@ -85,3 +85,19 @@ test("rejects three-letter non-ISO currency placeholders before persistence", ()
     ...india, locale: "ar-OM",
   });
 });
+
+
+test("rejects malformed persisted display preferences with a controlled validation error", () => {
+  for (const value of [null, undefined, {}, { ...india, locale: null }, { ...india, currency: 123 }, { ...india, timeZone: [] }]) {
+    assert.throws(() => validateWorkspaceDisplayPreferences(value), /Display preferences must contain string/);
+  }
+});
+
+test("offline restore tolerates missing or malformed snapshots without changing defaults", () => {
+  for (const snapshot of [null, undefined, 0, "corrupt", [], false]) {
+    assert.deepEqual(restoreWorkspaceDisplayPreferences(snapshot, india), india);
+  }
+  assert.deepEqual(restoreWorkspaceDisplayPreferences({ locale: "ar-OM", currency: 123 }, india), {
+    ...india, locale: "ar-OM",
+  });
+});
