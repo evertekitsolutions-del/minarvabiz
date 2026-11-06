@@ -60,3 +60,25 @@ test("web selector is opt-in and does not call financial, licensing or module ac
   assert.match(page, /branch/);
   assert.doesNotMatch(page, /updateLicense|activateFeature|updateShopProfile|updateTaxConfig/);
 });
+
+test("preference storage rejects forged, empty and malformed scope keys", () => {
+  const storage = { getItem: () => null, setItem: () => { throw new Error("should not write"); } };
+  const profile = buildIndustryProfile(null, []);
+  const invalid = [
+    "minarva:industry-profile:v1:",
+    "minarva:industry-profile:v1:live::branch",
+    "minarva:industry-profile:v1:live:user:",
+    "minarva:industry-profile:v1:live:user:branch:extra",
+    "minarva:industry-profile:v1:admin:user:branch",
+    "minarva:industry-profile:v1:live:%ZZ:branch",
+    "minarva:industry-profile:v1:live:%20:branch",
+    "minarva:industry-profile:v1:live:user:%20",
+    "minarva:industry-profile:v1:live:%75ser:branch",
+  ];
+  for (const key of invalid) {
+    assert.throws(() => readIndustryProfile(storage, key), /scope/, key);
+    assert.throws(() => writeIndustryProfile(storage, key, profile), /scope/, key);
+  }
+  const valid = industryPreferenceKey("tenant:user", "branch / 2", false);
+  assert.equal(readIndustryProfile(storage, valid).primary, null);
+});
