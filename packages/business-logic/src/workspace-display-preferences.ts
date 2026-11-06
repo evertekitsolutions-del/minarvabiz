@@ -63,6 +63,10 @@ export function formatWorkspaceDateTime(
   preferences: WorkspaceDisplayPreferences,
 ): string {
   const settings = validateWorkspaceDisplayPreferences(preferences);
+  // Reject missing/blank legacy values rather than displaying Unix epoch.
+  if (timestamp == null || (typeof timestamp === "string" && !timestamp.trim())) {
+    throw new Error("Invalid date/time.");
+  }
   const date = new Date(timestamp);
   if (!Number.isFinite(date.getTime())) throw new Error("Invalid date/time.");
   return new Intl.DateTimeFormat(settings.locale, {
