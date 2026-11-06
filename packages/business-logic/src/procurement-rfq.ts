@@ -306,6 +306,10 @@ export function validateProcurementRfqState(input:{records?:ProcurementRfq[]} | 
     if(item.status!=="awarded"&&(item.awardedSupplierId||item.purchaseOrderId)){
       throw new Error("Unawarded RFQ has a purchase order link");
     }
+    if(item.status==="awarded" && (!item.supplierIds.includes(item.awardedSupplierId!) ||
+       !item.quotes.some(q=>q.supplierId===item.awardedSupplierId))){
+      throw new Error("Awarded RFQ supplier has no matching invited quotation");
+    }
     if(!item.quotes.every(q=>q&&typeof q.supplierId==="string")||
        new Set(item.quotes.map(q=>q.supplierId)).size!==item.quotes.length||
        !item.quotes.every(q=>{
