@@ -17,7 +17,8 @@ begin
     join public.integration_webhook_subscriptions s
       on s.tenant_id = o.tenant_id and s.company_id = o.company_id
       and s.branch_key = o.branch_key and s.subscription_id = o.subscription_id
-    where s.enabled = true and o.attempt_count < 20
+    where s.enabled = true and o.event_type = any(s.events)
+      and o.attempt_count < 20
       and ((o.status = 'pending' and o.next_attempt_at <= now())
         or (o.status = 'leased' and o.lease_until <= now()))
     order by o.next_attempt_at, o.created_at
