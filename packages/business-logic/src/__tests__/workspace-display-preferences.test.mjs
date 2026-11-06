@@ -20,6 +20,8 @@ const {
 
 const india = { locale: "en-IN", timeZone: "Asia/Kolkata", currency: "INR" };
 const oman = { locale: "ar-OM", timeZone: "Asia/Muscat", currency: "OMR" };
+// ICU versions may canonicalize Asia/Kolkata to its equivalent Asia/Calcutta alias.
+const canonicalIndia = validateWorkspaceDisplayPreferences(india);
 
 test("canonicalizes industry-neutral locale/time zone/currency", () => {
   assert.deepEqual(validateWorkspaceDisplayPreferences({ ...india, currency: "inr" }), {
@@ -65,7 +67,7 @@ test("offline restore isolates corrupt fields without discarding valid currency"
   );
   assert.equal(result.locale, "ar-OM");
   assert.equal(result.currency, "OMR");
-  assert.equal(result.timeZone, india.timeZone);
+  assert.equal(result.timeZone, canonicalIndia.timeZone);
 });
 
 test("offline restore safely ignores non-string and blank legacy values", () => {
@@ -73,7 +75,7 @@ test("offline restore safely ignores non-string and blank legacy values", () => 
     { locale: 123, timeZone: "", currency: "bad-code" },
     india,
   );
-  assert.deepEqual(result, india);
+  assert.deepEqual(result, canonicalIndia);
 });
 
 
@@ -82,7 +84,7 @@ test("rejects three-letter non-ISO currency placeholders before persistence", ()
   assert.equal(Intl.supportedValuesOf("currency").includes("ZZZ"), false);
   assert.throws(() => validateWorkspaceDisplayPreferences({ ...india, currency: "ZZZ" }), /Unsupported ISO 4217/);
   assert.deepEqual(restoreWorkspaceDisplayPreferences({ currency: "ZZZ", locale: "ar-OM" }, india), {
-    ...india, locale: "ar-OM",
+    ...canonicalIndia, locale: "ar-OM",
   });
 });
 
@@ -95,7 +97,7 @@ test("rejects malformed persisted display preferences with a controlled validati
 
 test("offline restore tolerates missing or malformed snapshots without changing defaults", () => {
   for (const snapshot of [null, undefined, 0, "corrupt", [], false]) {
-    assert.deepEqual(restoreWorkspaceDisplayPreferences(snapshot, india), india);
+    assert.deepEqual(restoreWorkspaceDisplayPreferences(snapshot, india), canonicalIndia);
   }
   assert.deepEqual(restoreWorkspaceDisplayPreferences({ locale: "ar-OM", currency: 123 }, india), {
     ...india, locale: "ar-OM",
