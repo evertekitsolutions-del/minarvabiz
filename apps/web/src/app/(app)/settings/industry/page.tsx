@@ -5,6 +5,7 @@ import { getRuntimeMode, getSessionUser, phase9Store } from "@minarvabiz/busines
 import {
   buildIndustryProfile, industryPreferenceKey, listIndustryPacks,
   readIndustryProfile, writeIndustryProfile, listIndustryWorkflowTemplates,
+  saveIndustryIntakeDraft, readIndustryIntakeDraft,
   type IndustryPackId, type IndustryWorkspaceProfile,
 } from "@minarvabiz/business-logic";
 
@@ -131,6 +132,31 @@ export default function IndustryWorkspacePage() {
     }
   }
 
+
+  function saveReference(templateId: string, fieldKey: string, restore: boolean) {
+    if (!scope) return;
+    const user = getSessionUser();
+    if (industryPreferenceKey(user?.id ?? null, phase9Store.getActiveBranch()?.id ?? null, getRuntimeMode() === "demo") !== scope) {
+      setError("Workspace changed. Reload before accessing drafts.");
+      return;
+    }
+    try {
+      if (restore) {
+        const draft = readIndustryIntakeDraft(window.localStorage, scope, profile, templateId);
+        if (!draft) { setMessage("No local reference draft found."); return; }
+        setIntakePreview(previous => ({ ...previous, [templateId + ":" + fieldKey]: draft.reference }));
+      } else {
+        saveIndustryIntakeDraft(window.localStorage, scope, profile, templateId,
+          intakePreview[templateId + ":" + fieldKey] ?? "", new Date().toISOString());
+      }
+      setError("");
+      setMessage(restore ? "Local reference restored." : "Local reference saved. No transaction created.");
+    } catch {
+      setMessage("");
+      setError("Draft unavailable. Use a reference code up to 64 characters and check browser storage.");
+    }
+  }
+
   return (
     <main className="mx-auto max-w-3xl space-y-5">
       <header className="space-y-2">
@@ -193,7 +219,11 @@ export default function IndustryWorkspacePage() {
                         }))} />
                     </label>
                   ))}
-                  <p className="text-xs text-slate-500">Form preview only — values are not saved, submitted or used for transactions.</p>
+                  <div className="flex gap-3 text-xs">
+                    <button type="button" disabled={!scope} onClick={() => saveReference(template.id, intakeFields[template.industry][0].key, false)} className="rounded border px-2 py-1">Save reference draft</button>
+                    <button type="button" disabled={!scope} onClick={() => saveReference(template.id, intakeFields[template.industry][0].key, true)} className="underline">Restore local draft</button>
+                  </div>
+                  <p className="text-xs text-slate-500">Browser-local reference draft only — no customer transaction, workflow event or server write.</p>
                 </div>
                 <div className="mt-2 flex items-center gap-3 text-xs">
                   <span aria-live="polite">Preview stage: {template.stages[previewStages[template.id] ?? 0]}</span>
