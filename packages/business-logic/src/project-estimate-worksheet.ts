@@ -156,3 +156,32 @@ export function exportProjectEstimateCsv(input: ProjectEstimateInput, scope: Pro
   ];
   return "\uFEFF" + rows.map(row => row.map(cell).join(",")).join("\r\n") + "\r\n";
 }
+
+/** Read-only loader for persisted estimates. The host must enforce RLS and return
+ * a complete scoped worksheet; no caller-supplied permissions are authoritative.
+ * Missing rows are represented by null, never by an empty invented estimate.
+ */
+export interface ProjectEstimateReader {
+  loadScoped(scope: Pick<ProjectEstimateInput, "tenantId" | "companyId" | "branchId" | "projectId">): Promise<ProjectEstimateInput | null>;
+}
+export async function loadProjectEstimate(
+  scope: ProjectEstimateScope,
+  reader: ProjectEstimateReader,
+): Promise<{ readonly worksheet: ProjectEstimateInput; readonly totals: ProjectEstimateResult } | null> {
+  if (!scope.canViewCosts) throw new Error("Project cost permission denied");
+  const ids = {
+    tenantId: required(scope.tenantId, "tenantId"),
+    companyId: required(scope.companyId, "companyId"),
+    branchId: required(scope.branchId, "branchId"),
+    projectId: required(scope.projectId, "projectId"),
+  };
+  const row = await reader.loadScoped(ids);
+  if (row === null) return null;
+  // Recompute totals; never trust cached monetary values or another tenant's row.
+  const totals = calculateProjectEstimate(row, scope);
+  const worksheet: ProjectEstimateInput = Object.freeze({
+    ...ids, currency: row.currency, revision: row.revision,
+    lines: Object.freeze(row.lines.map(line => Object.freeze({ ...line }))),
+  });
+  return Object.freeze({ worksheet, totals });
+}
