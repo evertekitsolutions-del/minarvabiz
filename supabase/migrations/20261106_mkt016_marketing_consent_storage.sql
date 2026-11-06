@@ -41,7 +41,7 @@ REVOKE ALL ON public.marketing_consent_audit FROM PUBLIC, anon, authenticated;
 -- A future trusted transactional writer must atomically CAS current + append audit,
 -- validate actor permissions, and re-read consent immediately before provider send.
 
--- Trusted server-only atomic writer. The host MUST authenticate the actor,
+-- Trusted server-only atomic writer. EXECUTE grants are the database gate;\n-- SECURITY DEFINER changes current_user to the function owner. The host MUST authenticate the actor,
 -- resolve tenant/company/branch/customer authorization, and derive all arguments
 -- from that trusted context before calling this service_role-only function.
 -- Never expose the service_role key in browser/desktop clients.
@@ -57,8 +57,7 @@ DECLARE
   prior public.marketing_consent_current%ROWTYPE;
   audit_prior public.marketing_consent_audit%ROWTYPE;
 BEGIN
-  IF current_user <> 'service_role' OR
-     p_tenant_id IS NULL OR btrim(p_tenant_id) = '' OR
+  IF p_tenant_id IS NULL OR btrim(p_tenant_id) = '' OR
      p_company_id IS NULL OR btrim(p_company_id) = '' OR
      p_branch_id IS NULL OR btrim(p_branch_id) = '' OR
      p_customer_id IS NULL OR btrim(p_customer_id) = '' OR
