@@ -172,3 +172,24 @@ test("interrupted RFQ award recovers its existing PO without creating a duplicat
   assert.throws(()=>rfq.awardProcurementRfq(quoted.id,quoted.version,"s2"),/quotation|different/i);
   assert.equal(procurement.listPurchaseOrders().length,1);
 });
+
+test("RFQ restore rejects forged supplier totals, duplicate products and invalid dates without mutation",()=>{
+  reset();
+  const created=rfq.createProcurementRfq(request("RFQ-RESTORE-GUARD"));
+  const issued=rfq.issueProcurementRfq(created.id,created.version);
+  rfq.recordProcurementRfqQuote(issued.id,issued.version,bid("s1"));
+  const original=rfq.exportProcurementRfqState();
+  const before=JSON.stringify(original);
+  const tamper=change=>{
+    const snapshot=JSON.parse(before);
+    change(snapshot.records[0].quotes[0]);
+    assert.throws(()=>rfq.hydrateProcurementRfqState(snapshot),/Invalid RFQ supplier quotations/);
+    assert.equal(JSON.stringify(rfq.exportProcurementRfqState()),before);
+  };
+  tamper(q=>{q.total+=1;});
+  tamper(q=>{q.subtotal-=0.01;});
+  tamper(q=>{q.lines[1].productId=q.lines[0].productId;});
+  tamper(q=>{q.lines[0].unitCost=-1;});
+  tamper(q=>{q.validUntil="2026-02-30";});
+  tamper(q=>{q.quoteReference="\\n";});
+});
