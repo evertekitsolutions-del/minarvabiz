@@ -39,6 +39,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     let active = true;
     const currentGeneration = ++generation.current;
     setWorksheet(null);
+    setBusy(false);
     setRequestKey(null);
     setHasUnsavedChanges(false);
     setError("");
