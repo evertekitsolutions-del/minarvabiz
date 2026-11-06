@@ -50,7 +50,18 @@ export async function commitAuthorizedIndustryWorkflowBatch(
   // Capture the expected acknowledgement before crossing an untrusted adapter boundary.
   // A buggy adapter must not mutate the expected state to manufacture success.
   const expected = { ...next, appliedEventIds: [...next.appliedEventIds] };
-  const persisted = await port.commit({ original: record, next, events, access });
+  // Do not hand caller-owned mutable references to a persistence plugin. A
+  // rejected/buggy adapter must not rewrite the caller's snapshot, event IDs,
+  // or authorization grants before retry or audit handling.
+  const originalSnapshot = Object.freeze({ ...record, appliedEventIds: Object.freeze([...record.appliedEventIds]) });
+  const nextSnapshot = Object.freeze({ ...next, appliedEventIds: Object.freeze([...next.appliedEventIds]) });
+  const eventSnapshot = Object.freeze(events.map(event => Object.freeze({ ...event })));
+  const accessSnapshot = Object.freeze({
+    ...access,
+    allowedTemplateIds: Object.freeze([...access.allowedTemplateIds]),
+    allowedTransitions: Object.freeze(access.allowedTransitions.map(grant => Object.freeze({ ...grant }))),
+  });
+  const persisted = await port.commit({ original: originalSnapshot, next: nextSnapshot, events: eventSnapshot, access: accessSnapshot });
   if (!persisted || persisted.id !== expected.id ||
       persisted.tenantId !== expected.tenantId ||
       persisted.branchId !== expected.branchId ||
