@@ -31,6 +31,16 @@ export function applyAuthorizedIndustryWorkflowEvent(
   event: IndustryWorkflowEvent,
   access: IndustryWorkflowAccess,
 ): IndustryWorkflowRecord {
+  if (!event || typeof event !== "object" || !validId(event.eventId) ||
+      !validId(event.tenantId) || !validId(event.branchId) ||
+      !validId(event.from) || !validId(event.to)) {
+    throw new Error("Invalid industry workflow command");
+  }
+  if (!record || typeof record !== "object" || !validId(record.id) ||
+      !validId(record.tenantId) || !validId(record.branchId) ||
+      !validId(record.templateId)) {
+    throw new Error("Invalid industry workflow record");
+  }
   if (!access || !validId(access.actorId) || !validId(access.tenantId) ||
       !validId(access.branchId) || !Array.isArray(access.allowedTemplateIds) ||
       !Array.isArray(access.allowedTransitions)) {
