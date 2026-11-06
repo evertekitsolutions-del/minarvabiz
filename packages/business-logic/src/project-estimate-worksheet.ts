@@ -134,3 +134,25 @@ export async function saveProjectEstimate(
   if (outcome !== "saved" && outcome !== "replayed") throw new Error("Invalid estimate storage acknowledgement");
   return { status: outcome, result };
 }
+
+/** Export a reviewed estimate as an Excel-safe, UTF-8 CSV proposal.
+ * This is a non-posting export; caller must enforce document download permissions.
+ * Every source value is revalidated using the same scoped calculator.
+ */
+export function exportProjectEstimateCsv(input: ProjectEstimateInput, scope: ProjectEstimateScope): string {
+  const totals = calculateProjectEstimate(input, scope);
+  const cell = (value: string): string => {
+    // Prefix formula-looking values, including after whitespace/control characters.
+    const safe = /^[\\s\\u0000-\\u001f]*[=+@-]/u.test(value) ? "'" + value : value;
+    return '"' + safe.replace(/"/g, '""') + '"';
+  };
+  const rows: string[][] = [
+    ["Line ID", "Description", "Type", "Quantity", "Unit cost", "Markup %", "Cost minor", "Proposed revenue minor", "Currency"],
+    ...input.lines.map((line, i) => [
+      line.id, line.description, line.kind, line.quantity, line.unitCost, line.markupPercent,
+      String(totals.lines[i].costMinor), String(totals.lines[i].proposedRevenueMinor), totals.currency,
+    ]),
+    ["TOTAL", "", "", "", "", "", String(totals.costMinor), String(totals.proposedRevenueMinor), totals.currency],
+  ];
+  return "\uFEFF" + rows.map(row => row.map(cell).join(",")).join("\r\n") + "\r\n";
+}
