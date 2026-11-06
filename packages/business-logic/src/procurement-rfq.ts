@@ -311,7 +311,7 @@ export function validateProcurementRfqState(input:{records?:ProcurementRfq[]} | 
        !item.quotes.every(q=>{
          if(!item.supplierIds.includes(q.supplierId)||
             typeof q.quoteReference!=="string"||!q.quoteReference.trim()||
-            q.quoteReference.length>128||/[\\r\\n]/.test(q.quoteReference)||
+            q.quoteReference.length>128||/[\r\n]/.test(q.quoteReference)||
             typeof q.recordedAt!=="string"||!Array.isArray(q.lines)||
             q.lines.length!==item.lines.length)return false;
          try{exactDay(q.validUntil);}catch{return false;}
