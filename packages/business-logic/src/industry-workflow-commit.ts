@@ -47,7 +47,10 @@ export async function commitAuthorizedIndustryWorkflowBatch(
   // Validate that persisted event history agrees with the supplied snapshot.
   // An adapter must load the history and record under the same database lock.
   const next = preflightAuthorizedIndustryWorkflowBatch(profile, record, events, access);
-  // Capture the expected acknowledgement before crossing an untrusted adapter boundary.\n  // A buggy adapter must not mutate the expected state to manufacture success.\n  const expected = { ...next, appliedEventIds: [...next.appliedEventIds] };\n  const persisted = await port.commit({ original: record, next, events, access });
+  // Capture the expected acknowledgement before crossing an untrusted adapter boundary.
+  // A buggy adapter must not mutate the expected state to manufacture success.
+  const expected = { ...next, appliedEventIds: [...next.appliedEventIds] };
+  const persisted = await port.commit({ original: record, next, events, access });
   if (!persisted || persisted.id !== expected.id ||
       persisted.tenantId !== expected.tenantId ||
       persisted.branchId !== expected.branchId ||
