@@ -79,7 +79,13 @@ export default function IndustryWorkspacePage() {
     try {
       const next = buildIndustryProfile(profile.primary, profile.enabled);
       writeIndustryProfile(window.localStorage, scope, next);
-      setProfile(next);
+      // A storage adapter can acknowledge setItem without retaining the value.
+      // Confirm a scoped readback before reporting a saved preference.
+      const persisted = readIndustryProfile(window.localStorage, scope);
+      if (JSON.stringify(persisted) !== JSON.stringify(next)) {
+        throw new Error("Industry preference readback mismatch");
+      }
+      setProfile(persisted);
       setError("");
       setMessage("Industry workspace preferences saved for this browser, user and branch.");
     } catch {
