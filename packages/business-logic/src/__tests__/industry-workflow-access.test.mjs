@@ -12,7 +12,7 @@ require.extensions[".ts"] = (module, filename) =>
 
 const { buildIndustryProfile } = require("../industry-workspace-profile.ts");
 const { createIndustryWorkflowRecord } = require("../industry-workflow-reducer.ts");
-const { applyAuthorizedIndustryWorkflowEvent } = require("../industry-workflow-access.ts");
+const { applyAuthorizedIndustryWorkflowEvent, preflightAuthorizedIndustryWorkflowBatch } = require("../industry-workflow-access.ts");
 
 const profile = buildIndustryProfile("restaurant", ["restaurant", "repair"]);
 const scope = { id: "ticket-1", tenantId: "tenant-A", branchId: "branch-1", templateId: "restaurant-ticket" };
@@ -50,4 +50,36 @@ test("grant cannot authorize a skipped transition or unselected pack", () => {
 test("authorization boundary contains no I/O, payments or entitlement side effects", () => {
   const src = fs.readFileSync(new URL("../industry-workflow-access.ts", import.meta.url), "utf8");
   assert.doesNotMatch(src, /localStorage|supabase|fetch\(|postJournal|insert\(|updateLicense/);
+});
+
+test("bounded ordered batch preflight advances without mutating source record", () => {
+  const initial = createIndustryWorkflowRecord(profile, scope);
+  const second = { ...event, eventId: "event-2", expectedRevision: 1, from: "preparing", to: "ready" };
+  const authorized = { ...grant, allowedTransitions: [
+    ...grant.allowedTransitions, { templateId: "restaurant-ticket", from: "preparing", to: "ready" },
+  ] };
+  const result = preflightAuthorizedIndustryWorkflowBatch(profile, initial, [event, second], authorized);
+  assert.equal(result.stage, "ready");
+  assert.equal(result.revision, 2);
+  assert.deepEqual(result.appliedEventIds, ["event-1", "event-2"]);
+  assert.equal(initial.stage, "placed");
+  assert.equal(initial.revision, 0);
+  assert.deepEqual(initial.appliedEventIds, []);
+});
+
+test("batch fails closed on stale, duplicate, unauthorized, and cross-branch events", () => {
+  const initial = createIndustryWorkflowRecord(profile, scope);
+  const second = { ...event, eventId: "event-2", expectedRevision: 1, from: "preparing", to: "ready" };
+  const authorized = { ...grant, allowedTransitions: [
+    ...grant.allowedTransitions, { templateId: "restaurant-ticket", from: "preparing", to: "ready" },
+  ] };
+  assert.throws(() => preflightAuthorizedIndustryWorkflowBatch(profile, initial, [], authorized), /batch size/);
+  assert.throws(() => preflightAuthorizedIndustryWorkflowBatch(profile, initial, Array(101).fill(event), authorized), /batch size/);
+  assert.throws(() => preflightAuthorizedIndustryWorkflowBatch(profile, initial, [event, event], authorized), /Duplicate/);
+  assert.throws(() => preflightAuthorizedIndustryWorkflowBatch(profile, initial, [event, { ...second, expectedRevision: 0 }], authorized), /Stale/);
+  assert.throws(() => preflightAuthorizedIndustryWorkflowBatch(profile, initial, [event, { ...second, branchId: "other" }], authorized), /scope mismatch/);
+  assert.throws(() => preflightAuthorizedIndustryWorkflowBatch(profile, initial, [event, second], grant), /not authorized/);
+  const committed = applyAuthorizedIndustryWorkflowEvent(profile, initial, event, grant);
+  assert.throws(() => preflightAuthorizedIndustryWorkflowBatch(profile, committed, [event], authorized), /committed event/);
+  assert.equal(initial.revision, 0);
 });
