@@ -7,7 +7,7 @@ const ts = require("typescript");
 require.extensions[".ts"] = (mod, file) => mod._compile(ts.transpileModule(fs.readFileSync(file, "utf8"), {
   fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText, file);
-const { calculateProjectEstimate, saveProjectEstimate, exportProjectEstimateCsv, loadProjectEstimate } = require("../project-estimate-worksheet.ts");
+const { calculateProjectEstimate, saveProjectEstimate, exportProjectEstimateCsv, loadProjectEstimate, saveProjectEstimateWithRetry } = require("../project-estimate-worksheet.ts");
 const scope = { tenantId:"t", companyId:"c", branchId:"b", projectId:"p", canViewCosts:true };
 const base = { ...scope, currency:"INR", revision:0, lines:[
   { id:"labor", description:"Technician", kind:"labor", quantity:"2.500", unitCost:"100.00", markupPercent:"20.00" },
@@ -110,4 +110,36 @@ test("scoped read fails closed on unauthorized, cross-tenant and corrupt storage
   await assert.rejects(loadProjectEstimate(scope, {async loadScoped(){return {...base,tenantId:"other"};}}), /scope mismatch/);
   await assert.rejects(loadProjectEstimate(scope, {async loadScoped(){return {...base,lines:[]};}}), /1–500/);
   assert.equal(await loadProjectEstimate(scope, {async loadScoped(){return null;}}), null);
+});
+
+test("transient estimate write retries preserve idempotency and revision", async () => {
+  const commands = [];
+  const auth = {...scope,canEditEstimates:true,actorId:"manager"};
+  const result = await saveProjectEstimateWithRetry(base, auth, "stable-key", {
+    async saveAtomically(command) {
+      commands.push(command);
+      if (commands.length === 1) throw Object.assign(new Error("timeout"), {code:"ETIMEDOUT"});
+      return "replayed";
+    }
+  }, {maxAttempts:3,isTransient:e=>e?.code==="ETIMEDOUT"});
+  assert.equal(result.status,"replayed");
+  assert.equal(commands.length,2);
+  assert.equal(commands[0].idempotencyKey,commands[1].idempotencyKey);
+  assert.equal(commands[0].expectedRevision,commands[1].expectedRevision);
+  assert.deepEqual(commands[0].worksheet,commands[1].worksheet);
+});
+test("estimate retries fail closed for conflicts, permanent failures and exhausted attempts", async () => {
+  const auth = {...scope,canEditEstimates:true,actorId:"manager"};
+  let calls=0;
+  const transient={async saveAtomically(){calls++;throw Object.assign(new Error("timeout"),{code:"ETIMEDOUT"});}};
+  await assert.rejects(saveProjectEstimateWithRetry(base,auth,"key",transient,
+    {maxAttempts:2,isTransient:e=>e?.code==="ETIMEDOUT"}),/timeout/);
+  assert.equal(calls,2);
+  calls=0;
+  await assert.rejects(saveProjectEstimateWithRetry(base,auth,"key",
+    {async saveAtomically(){calls++;return "conflict";}},
+    {maxAttempts:3,isTransient:()=>false}),/revision conflict/);
+  assert.equal(calls,1);
+  await assert.rejects(saveProjectEstimateWithRetry(base,auth,"key",transient,
+    {maxAttempts:0,isTransient:()=>true}),/retry limit/);
 });
