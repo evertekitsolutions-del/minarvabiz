@@ -306,10 +306,33 @@ export function validateProcurementRfqState(input:{records?:ProcurementRfq[]} | 
     if(item.status!=="awarded"&&(item.awardedSupplierId||item.purchaseOrderId)){
       throw new Error("Unawarded RFQ has a purchase order link");
     }
-    if(new Set(item.quotes.map(q=>q.supplierId)).size!==item.quotes.length||
-       !item.quotes.every(q=>q&&item.supplierIds.includes(q.supplierId)&&
-         Number.isSafeInteger(Math.round(q.total*100))&&q.total>=0&&
-         Array.isArray(q.lines)&&q.lines.length===item.lines.length)){
+    if(!item.quotes.every(q=>q&&typeof q.supplierId==="string")||
+       new Set(item.quotes.map(q=>q.supplierId)).size!==item.quotes.length||
+       !item.quotes.every(q=>{
+         if(!item.supplierIds.includes(q.supplierId)||
+            typeof q.quoteReference!=="string"||!q.quoteReference.trim()||
+            q.quoteReference.length>128||/[\\r\\n]/.test(q.quoteReference)||
+            typeof q.recordedAt!=="string"||!Array.isArray(q.lines)||
+            q.lines.length!==item.lines.length)return false;
+         try{exactDay(q.validUntil);}catch{return false;}
+         const products=new Map(item.lines.map(line=>[line.productId,line]));
+         const quoted=new Set<string>();
+         let subtotal=0,tax=0;
+         try{
+           for(const line of q.lines){
+             if(!line||typeof line.productId!=="string"||
+                quoted.has(line.productId)||!products.has(line.productId)||
+                !Number.isFinite(line.unitCost)||!Number.isFinite(line.taxRate))return false;
+             quoted.add(line.productId);
+             const cost=money(String(line.unitCost)),rate=taxRate(String(line.taxRate));
+             const base=multiplyMinorByQuantity(toMinorUnits(cost),products.get(line.productId)!.quantity);
+             subtotal=addMinorUnits(subtotal,base);
+             tax=addMinorUnits(tax,percentOfMinor(base,rate));
+           }
+           return toMinorUnits(q.subtotal)===subtotal&&toMinorUnits(q.taxAmount)===tax&&
+             toMinorUnits(q.total)===addMinorUnits(subtotal,tax);
+         }catch{return false;}
+       })){
       throw new Error("Invalid RFQ supplier quotations in snapshot");
     }
     return clone(item);
