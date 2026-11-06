@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// PRJ-005 tenant-scoped project resource capacity planner; host owns atomic persistence.
+export * from "./project-resource-allocation";
