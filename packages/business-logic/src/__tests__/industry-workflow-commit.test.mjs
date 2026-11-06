@@ -54,3 +54,13 @@ test("denied command never invokes the storage adapter", async () => {
     { commit: async () => { writes++; return record; } }), /scope mismatch/);
   assert.equal(writes, 0);
 });
+
+
+test("rejects adapter mutation of the expected workflow acknowledgement", async () => {
+  await assert.rejects(commitAuthorizedIndustryWorkflowBatch(profile, transaction, {
+    async commit({ next }) {
+      next.appliedEventIds[0] = "forged-event";
+      return next;
+    },
+  }), /acknowledgement mismatch/);
+});
