@@ -103,3 +103,11 @@ test("offline restore tolerates missing or malformed snapshots without changing 
     ...canonicalIndia, locale: "ar-OM",
   });
 });
+
+
+test("missing legacy timestamps never render as 1970 dates", () => {
+  for (const value of [null, undefined, "", "   "]) {
+    assert.throws(() => formatWorkspaceDateTime(value, india), /Invalid date\/time/);
+  }
+  assert.match(formatWorkspaceDateTime(0, india), /1970/);
+});
