@@ -192,4 +192,6 @@ test("RFQ restore rejects forged supplier totals, duplicate products and invalid
   tamper(q=>{q.lines[0].unitCost=-1;});
   tamper(q=>{q.validUntil="2026-02-30";});
   tamper(q=>{q.quoteReference="\\n";});
+  tamper(q=>{q.quoteReference="supplier\nforged";});
+  tamper(q=>{q.quoteReference="supplier\rforged";});
 });
