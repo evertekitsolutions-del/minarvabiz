@@ -22,6 +22,12 @@ export function validateWorkspaceDisplayPreferences(
   const currency = input.currency.trim().toUpperCase();
   if (!LOCALE.test(locale)) throw new Error("Enter a valid BCP 47 locale (for example en-IN).");
   if (!CURRENCY.test(currency)) throw new Error("Enter a three-letter ISO currency code.");
+  // Intl.NumberFormat accepts arbitrary three-letter placeholders (e.g. ZZZ).
+  // Reject them rather than persisting a non-ISO business currency.
+  if (typeof Intl.supportedValuesOf === "function" &&
+      !Intl.supportedValuesOf("currency").includes(currency)) {
+    throw new Error("Unsupported ISO 4217 currency code.");
+  }
   if (!timeZone || timeZone.length > MAX_ZONE_LENGTH) {
     throw new Error("Select a valid IANA time zone.");
   }
