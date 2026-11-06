@@ -83,3 +83,19 @@ test("marketing consent module is pure and does not auto-send or call a provider
   const source = fs.readFileSync(new URL("../marketing-consent-policy.ts", import.meta.url), "utf8");
   assert.doesNotMatch(source, /fetch\s*\(|axios|sendMail\s*\(|enqueueOutbox\s*\(/);
 });
+
+test("malformed runtime inputs fail closed without throwing; valid fractional UTC dates are accepted", () => {
+  for (const invalid of [null, undefined, {}, "not an event"]) {
+    assert.equal(applyMarketingConsentEvent(policy, null, invalid).reason, "invalid_event");
+    assert.equal(maySendMarketingMessage(send(), invalid), false);
+  }
+  assert.equal(applyMarketingConsentEvent(null, null, event()).reason, "invalid_event");
+  assert.equal(maySendMarketingMessage(null, event()), false);
+  for (const recordedAt of [
+    "2026-11-06T00:00:00Z", "2026-11-06T00:00:00.1Z",
+    "2026-11-06T00:00:00.12Z", "2026-11-06T00:00:00.123Z",
+  ]) assert.equal(applyMarketingConsentEvent(policy, null, event({ recordedAt })).accepted, true);
+  for (const recordedAt of ["2026-02-30T00:00:00Z", "2026-11-06T24:00:00Z"]) {
+    assert.equal(applyMarketingConsentEvent(policy, null, event({ recordedAt })).reason, "invalid_event");
+  }
+});
