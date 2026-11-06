@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   decidePrintLayoutMutation, resolvePrintLayout, validatePrintLayout,
   type PrintLayoutConfig,
-} from "../print-layout-policy.ts";
+} from "../print-layout-policy";
 
 const base: PrintLayoutConfig = {
   id: "invoice-default", tenantId: "tenant-1", companyId: "company-1",
