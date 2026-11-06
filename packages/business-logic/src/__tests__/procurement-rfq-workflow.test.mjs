@@ -211,3 +211,24 @@ test("RFQ restore rejects an award linked to an unquoted or uninvited supplier a
     assert.equal(JSON.stringify(rfq.exportProcurementRfqState()),original);
   }
 });
+
+test("RFQ restore rejects malformed supplier IDs and incomplete product identity atomically",()=>{
+  reset();
+  const created=rfq.createProcurementRfq(request("RFQ-IDENTITY-GUARD"));
+  const original=JSON.stringify(rfq.exportProcurementRfqState());
+  const invalid=[
+    record=>{record.supplierIds[0]=null;},
+    record=>{record.supplierIds[0]="";},
+    record=>{record.lines[0]=null;},
+    record=>{record.lines[0].productId="";},
+    record=>{delete record.lines[0].sku;},
+    record=>{delete record.lines[0].unit;},
+  ];
+  for(const change of invalid){
+    const snapshot=JSON.parse(original);
+    change(snapshot.records[0]);
+    assert.throws(()=>rfq.hydrateProcurementRfqState(snapshot),/Invalid RFQ snapshot product\/supplier identity/);
+    assert.equal(JSON.stringify(rfq.exportProcurementRfqState()),original);
+  }
+  assert.equal(rfq.getProcurementRfq(created.id).status,"draft");
+});
