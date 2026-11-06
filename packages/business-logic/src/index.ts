@@ -310,3 +310,6 @@ export * from "./industry-workflow-reducer";
 
 // Explicit trusted RBAC grant boundary for optional industry workflow transitions.
 export * from "./industry-workflow-access";
+
+// Transactional commit acknowledgement contract; storage adapters remain required.
+export * from "./industry-workflow-commit";
