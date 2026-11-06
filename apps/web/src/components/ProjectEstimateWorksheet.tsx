@@ -165,6 +165,17 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
             {(["quantity", "unitCost", "markupPercent"] as const).map(field =>
               <label key={field}>{field} <input inputMode="decimal" required disabled={!canEdit || busy} value={line[field]}
                 onChange={e => updateLine(line.id, { [field]: e.target.value })} /></label>)}
+            <button type="button" disabled={!canEdit || busy || worksheet.lines.length >= 500} onClick={() => {
+              // Copy a priced estimate item without reusing its identity; each line is independently auditable.
+              const index = worksheet.lines.findIndex(item => item.id === line.id);
+              if (index < 0) return;
+              const lines = [...worksheet.lines];
+              lines.splice(index + 1, 0, { ...line, id: crypto.randomUUID() });
+              setWorksheet({ ...worksheet, lines });
+              setRequestKey(null);
+              setHasUnsavedChanges(true);
+              setMessage("");
+            }}>Duplicate line</button>
             <button type="button" disabled={!canEdit || busy || worksheet.lines.length <= 1} onClick={() => {
               setWorksheet({ ...worksheet, lines: worksheet.lines.filter(item => item.id !== line.id) });
               setRequestKey(null);
