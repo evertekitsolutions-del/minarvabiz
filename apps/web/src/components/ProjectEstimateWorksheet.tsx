@@ -132,7 +132,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
         {hasUnsavedChanges && <div role="status">
           <p>Save or discard your edits before reloading. A revision conflict requires reloading the latest estimate.</p>
           <button type="button" disabled={busy} onClick={reloadCurrent}>Discard edits and reload latest</button>
-        </div>
+        </div>}
         <label>Currency <input aria-label="Currency" value={worksheet.currency} maxLength={3} disabled={!canEdit || busy}
           onChange={e => { setWorksheet({ ...worksheet, currency: e.target.value.toUpperCase() }); setRequestKey(null); setHasUnsavedChanges(true); setMessage(""); }} /></label>
         {worksheet.lines.map(line => (
