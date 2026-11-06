@@ -25,7 +25,15 @@ begin
   where o.tenant_id = p_tenant_id and o.company_id = p_company_id
     and o.branch_key = p_branch_key and o.delivery_id = p_delivery_id
     and o.status = 'leased' and o.lease_until = p_lease_until
-    and o.lease_until > now();
+    and o.lease_until > now()
+    -- Consent revocation must fence success: a disabled subscription or
+    -- removed event cannot be recorded as successfully delivered.
+    and (not p_succeeded or exists (
+      select 1 from public.integration_webhook_subscriptions s
+      where s.tenant_id = o.tenant_id and s.company_id = o.company_id
+        and s.branch_key = o.branch_key and s.subscription_id = o.subscription_id
+        and s.enabled = true and o.event_type = any(s.events)
+    ));
   get diagnostics v_updated = row_count;
   return v_updated = 1;
 end;
