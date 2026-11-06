@@ -104,8 +104,8 @@ test("replayed operation IDs cannot acknowledge modified print content", () => {
     mutate({ ...base, fields: [...base.fields, "tax"] }), base, "op-1").status, "conflict");
   assert.equal(decidePrintLayoutMutation(scope,
     mutate({ ...base, revision: 2 }), base, "op-1").status, "conflict");
-  assert.equal(decidePrintLayoutMutation(scope,
-    mutate({ ...base, title: "Bad\\u202e" }), base, "op-1").status, "conflict");
+  assert.throws(() => decidePrintLayoutMutation(scope,
+    mutate({ ...base, title: "Bad\\u202e" }), base, "op-1"));
   assert.equal(decidePrintLayoutMutation(scope,
     mutate({ ...base, fields: [...base.fields] }), base, "op-1").status, "replay");
 });
