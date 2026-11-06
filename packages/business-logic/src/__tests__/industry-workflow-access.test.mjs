@@ -83,3 +83,12 @@ test("batch fails closed on stale, duplicate, unauthorized, and cross-branch eve
   assert.throws(() => preflightAuthorizedIndustryWorkflowBatch(profile, committed, [event], authorized), /committed event/);
   assert.equal(initial.revision, 0);
 });
+
+test("malformed commands and records fail closed with explicit errors", () => {
+  const initial = createIndustryWorkflowRecord(profile, scope);
+  assert.throws(() => applyAuthorizedIndustryWorkflowEvent(profile, initial, null, grant), /Invalid industry workflow command/);
+  assert.throws(() => applyAuthorizedIndustryWorkflowEvent(profile, initial, { ...event, eventId: " " }, grant), /Invalid industry workflow command/);
+  assert.throws(() => applyAuthorizedIndustryWorkflowEvent(profile, null, event, grant), /Invalid industry workflow record/);
+  assert.throws(() => preflightAuthorizedIndustryWorkflowBatch(profile, initial, [null], grant), /Duplicate or invalid industry workflow batch event/);
+  assert.equal(initial.revision, 0);
+});
