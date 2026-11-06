@@ -58,6 +58,21 @@ export default function IndustryWorkspacePage() {
 
   function save() {
     if (!scope) return;
+    // A branch/session can change without a hydration event while this form is open.
+    // Never persist the previous operator's draft under a stale scope.
+    const user = getSessionUser();
+    const currentScope = industryPreferenceKey(
+      user?.id ?? null,
+      phase9Store.getActiveBranch()?.id ?? null,
+      getRuntimeMode() === "demo",
+    );
+    if (currentScope !== scope) {
+      setScope(currentScope);
+      setProfile({ version: 1, primary: null, enabled: [] });
+      setError("User, branch or runtime changed. Reload this page before saving.");
+      setMessage("");
+      return;
+    }
     try {
       const next = buildIndustryProfile(profile.primary, profile.enabled);
       writeIndustryProfile(window.localStorage, scope, next);
