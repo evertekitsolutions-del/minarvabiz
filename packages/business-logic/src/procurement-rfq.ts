@@ -228,7 +228,7 @@ export function awardProcurementRfq(id:string,expectedVersion:number,supplierId:
   // instead of issuing a second financially actionable order.
   const marker="MINARVA-RFQ-ID:"+r.id;
   const previous=procurement.listPurchaseOrders().filter(po=>
-    po.notes?.split(" / ").includes(marker));
+    po.notes?.startsWith(marker+" / RFQ "));
   if(previous.length>1)throw new Error("Duplicate RFQ purchase orders require reconciliation");
   let purchaseOrder:PurchaseOrder;
   if(previous.length===1){
