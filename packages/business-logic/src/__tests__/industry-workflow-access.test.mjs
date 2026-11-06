@@ -92,3 +92,23 @@ test("malformed commands and records fail closed with explicit errors", () => {
   assert.throws(() => preflightAuthorizedIndustryWorkflowBatch(profile, initial, [null], grant), /Duplicate or invalid industry workflow batch event/);
   assert.equal(initial.revision, 0);
 });
+
+test("malformed trusted grants and corrupted record snapshots fail closed", () => {
+  const initial = createIndustryWorkflowRecord(profile, scope);
+  for (const bad of [
+    { ...grant, allowedTemplateIds: [null, "restaurant-ticket"] },
+    { ...grant, allowedTransitions: [null] },
+    { ...grant, allowedTransitions: [{ templateId: "restaurant-ticket", from: "", to: "preparing" }] },
+    { ...grant, allowedTransitions: [{ templateId: null, from: "placed", to: "preparing" }] },
+  ]) {
+    assert.throws(() => applyAuthorizedIndustryWorkflowEvent(profile, initial, event, bad), /authorization required/);
+  }
+  for (const bad of [
+    { ...initial, revision: -1 },
+    { ...initial, stage: "" },
+    { ...initial, appliedEventIds: null },
+  ]) {
+    assert.throws(() => applyAuthorizedIndustryWorkflowEvent(profile, bad, event, grant), /Invalid industry workflow record/);
+  }
+  assert.equal(initial.revision, 0);
+});
