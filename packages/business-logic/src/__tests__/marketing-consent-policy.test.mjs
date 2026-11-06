@@ -132,3 +132,16 @@ test("MKT-016 storage migration is registered and denies client consent writes",
   assert.match(sql, /REVOKE ALL ON FUNCTION public\.record_marketing_consent_event\(/i);
   assert.match(sql, /TO service_role;/i);
 });
+
+
+test("MKT-016 audit history cannot be updated or deleted after recording", () => {
+  const root = new URL("../../../../", import.meta.url);
+  const sql = fs.readFileSync(new URL(
+    "supabase/migrations/20261106_mkt016_marketing_consent_storage.sql", root,
+  ), "utf8");
+  assert.match(sql, /CREATE TRIGGER marketing_consent_audit_immutable/i);
+  assert.match(sql, /BEFORE UPDATE OR DELETE ON public\.marketing_consent_audit/i);
+  assert.match(sql, /FOR EACH ROW EXECUTE FUNCTION public\.reject_marketing_consent_audit_mutation\(\)/i);
+  assert.match(sql, /RAISE EXCEPTION 'marketing consent audit is append-only'/i);
+  assert.match(sql, /REVOKE ALL ON FUNCTION public\.reject_marketing_consent_audit_mutation\(\) FROM PUBLIC, anon, authenticated/i);
+});
