@@ -195,3 +195,19 @@ test("RFQ restore rejects forged supplier totals, duplicate products and invalid
   tamper(q=>{q.quoteReference="supplier\nforged";});
   tamper(q=>{q.quoteReference="supplier\rforged";});
 });
+
+
+test("RFQ restore rejects an award linked to an unquoted or uninvited supplier atomically",()=>{
+  reset();
+  const created=rfq.createProcurementRfq(request("RFQ-AWARD-RESTORE"));
+  const issued=rfq.issueProcurementRfq(created.id,created.version);
+  const quoted=rfq.recordProcurementRfqQuote(issued.id,issued.version,bid("s1"));
+  rfq.awardProcurementRfq(quoted.id,quoted.version,"s1");
+  const original=JSON.stringify(rfq.exportProcurementRfqState());
+  for(const supplierId of ["s2","external-supplier"]){
+    const forged=JSON.parse(original);
+    forged.records[0].awardedSupplierId=supplierId;
+    assert.throws(()=>rfq.hydrateProcurementRfqState(forged),/matching invited quotation/);
+    assert.equal(JSON.stringify(rfq.exportProcurementRfqState()),original);
+  }
+});
