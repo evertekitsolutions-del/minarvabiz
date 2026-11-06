@@ -30,6 +30,10 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
   const [worksheet, setWorksheet] = React.useState<ProjectEstimateInput | null>(null);
   // Reject late load/save acknowledgements after a scope change or unmount.
   const generation = React.useRef(0);
+  // Hosts may create a new load callback on every render. Keep its latest implementation
+  // without treating callback identity as a scope change (which would discard edits).
+  const loadRef = React.useRef(load);
+  loadRef.current = load;
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
@@ -47,7 +51,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     setError("");
     if (!enabled || !scope.canViewCosts) return;
     setBusy(true);
-    load().then(row => {
+    loadRef.current().then(row => {
       if (row) calculateProjectEstimate(row, scope);
       if (active && currentGeneration === generation.current) setWorksheet(row ?? {
         tenantId: scope.tenantId, companyId: scope.companyId, branchId: scope.branchId,
@@ -56,7 +60,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     }).catch(err => { if (active && currentGeneration === generation.current) setError(err instanceof Error ? err.message : "Load failed"); })
       .finally(() => { if (active && currentGeneration === generation.current) setBusy(false); });
     return () => { active = false; generation.current++; };
-  }, [enabled, scope.tenantId, scope.companyId, scope.branchId, scope.projectId, scope.canViewCosts, load]);
+  }, [enabled, scope.tenantId, scope.companyId, scope.branchId, scope.projectId, scope.canViewCosts]);
 
   const updateLine = (id: string, patch: Partial<ProjectEstimateLine>) => {
     setWorksheet(previous => previous && ({
