@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   calculateProjectEstimate,
+  exportProjectEstimateCsv,
   type ProjectEstimateInput,
   type ProjectEstimateLine,
   type ProjectEstimateScope,
@@ -14,6 +15,8 @@ export interface ProjectEstimateWorksheetProps {
   load: () => Promise<ProjectEstimateInput | null>;
   save: (worksheet: ProjectEstimateInput, idempotencyKey: string) => Promise<void>;
   enabled: boolean;
+  /** Explicit host-authorized export; the host must check download permissions. */
+  canExport?: boolean;
 }
 
 const newLine = (): ProjectEstimateLine => ({
@@ -21,7 +24,7 @@ const newLine = (): ProjectEstimateLine => ({
   unitCost: "0.00", markupPercent: "0",
 });
 
-export function ProjectEstimateWorksheet({ scope, load, save, enabled }: ProjectEstimateWorksheetProps) {
+export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport = false }: ProjectEstimateWorksheetProps) {
   const [worksheet, setWorksheet] = React.useState<ProjectEstimateInput | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -75,6 +78,20 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled }: Project
     } finally { setBusy(false); }
   }
 
+  function downloadCsv() {
+    if (!canExport || !worksheet || !totals || busy) return;
+    try {
+      const csv = exportProjectEstimateCsv(worksheet, scope);
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `project-estimate-${worksheet.projectId.replace(/[^a-zA-Z0-9_-]/g, "_")}.csv`;
+      document.body.appendChild(anchor);
+      try { anchor.click(); } finally { anchor.remove(); URL.revokeObjectURL(url); }
+      setError("");
+    } catch (err) { setError(err instanceof Error ? err.message : "Export failed"); }
+  }
+
   if (!enabled || !scope.canViewCosts) return null;
   return (
     <form onSubmit={submit} aria-label="Project estimate worksheet" className="space-y-3">
@@ -106,6 +123,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled }: Project
         }}>Add line</button>
         {totals && <p>Cost: {totals.costMinor / 100} · Proposed revenue: {totals.proposedRevenueMinor / 100} · Margin: {totals.grossMarginMinor / 100} {totals.currency}</p>}
         <button type="submit" disabled={busy || !totals}>{busy ? "Working…" : "Save estimate"}</button>
+        {canExport && <button type="button" disabled={busy || !totals} onClick={downloadCsv}>Export estimate CSV</button>}
       </>}
     </form>
   );
