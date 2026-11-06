@@ -18,6 +18,7 @@ export default function IndustryWorkspacePage() {
   const [scope, setScope] = React.useState<string | null>(null);
   const [profile, setProfile] = React.useState<IndustryWorkspaceProfile>({ version: 1, primary: null, enabled: [] });
   const [loaded, setLoaded] = React.useState(false);
+  const baselineRef = React.useRef<string | null>(null);
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
   const [previewStages, setPreviewStages] = React.useState<Record<string, number>>({});
@@ -31,9 +32,13 @@ export default function IndustryWorkspacePage() {
         getRuntimeMode() === "demo",
       );
       setScope(key);
+      baselineRef.current = null;
+      setPreviewStages({});
       setMessage("");
       try {
-        setProfile(key ? readIndustryProfile(window.localStorage, key) : { version: 1, primary: null, enabled: [] });
+        const saved = key ? readIndustryProfile(window.localStorage, key) : { version: 1 as const, primary: null, enabled: [] };
+        setProfile(saved);
+        baselineRef.current = key ? JSON.stringify(saved) : null;
         setError(key ? "" : "Sign in and select a branch before saving preferences.");
       } catch {
         setProfile({ version: 1, primary: null, enabled: [] });
@@ -70,6 +75,7 @@ export default function IndustryWorkspacePage() {
     );
     if (currentScope !== scope) {
       setScope(currentScope);
+      baselineRef.current = null;
       setProfile({ version: 1, primary: null, enabled: [] });
       setPreviewStages({});
       setError("User, branch or runtime changed. Reload this page before saving.");
@@ -77,6 +83,14 @@ export default function IndustryWorkspacePage() {
       return;
     }
     try {
+      // Refuse to overwrite a newer preference written by another tab or host.
+      // Storage events can be delayed while a background tab is suspended.
+      const latest = JSON.stringify(readIndustryProfile(window.localStorage, scope));
+      if (baselineRef.current === null || latest !== baselineRef.current) {
+        setError("Preferences changed in another tab. Reload before saving to avoid overwriting them.");
+        setMessage("");
+        return;
+      }
       const next = buildIndustryProfile(profile.primary, profile.enabled);
       writeIndustryProfile(window.localStorage, scope, next);
       // A storage adapter can acknowledge setItem without retaining the value.
@@ -86,6 +100,7 @@ export default function IndustryWorkspacePage() {
         throw new Error("Industry preference readback mismatch");
       }
       setProfile(persisted);
+      baselineRef.current = JSON.stringify(persisted);
       setError("");
       setMessage("Industry workspace preferences saved for this browser, user and branch.");
     } catch {
