@@ -74,7 +74,8 @@ export function applyMarketingConsentEvent(
   if (!sameScope(policy, next)) return reject("scope_mismatch");
   // Opt-out remains available when marketing is disabled, but never to an unauthenticated actor.
   // The trusted host must authorize customer self-service or staff consent management.
-  if (!policy.actorCanManageConsent || (next.action === "opt_in" && !policy.marketingEnabled)) {
+  if (policy.actorCanManageConsent !== true ||
+      (next.action === "opt_in" && policy.marketingEnabled !== true)) {
     return reject("permission_denied");
   }
   if (previous !== null) {
