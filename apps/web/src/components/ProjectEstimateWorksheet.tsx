@@ -35,6 +35,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
   const [message, setMessage] = React.useState("");
   const [requestKey, setRequestKey] = React.useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
+  const [revisionConflict, setRevisionConflict] = React.useState(false);
   React.useEffect(() => {
     let active = true;
     const currentGeneration = ++generation.current;
@@ -42,6 +43,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     setBusy(false);
     setRequestKey(null);
     setHasUnsavedChanges(false);
+    setRevisionConflict(false);
     setError("");
     if (!enabled || !scope.canViewCosts) return;
     setBusy(true);
@@ -62,6 +64,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     }));
     setRequestKey(null);
     setHasUnsavedChanges(true);
+    setRevisionConflict(false);
     setMessage("");
   };
   const totals = React.useMemo(() => {
@@ -88,9 +91,14 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       setWorksheet(current);
       setRequestKey(null);
       setHasUnsavedChanges(false);
+      setRevisionConflict(false);
       setMessage("Estimate saved");
     } catch (err) {
-      if (currentGeneration === generation.current) setError(err instanceof Error ? err.message : "Save failed");
+      if (currentGeneration === generation.current) {
+        const conflict = typeof err === "object" && err !== null && "status" in err && (err.status === 409 || err.status === 412);
+        setRevisionConflict(conflict);
+        setError(conflict ? "Estimate changed elsewhere. Discard edits and reload the latest revision before saving." : err instanceof Error ? err.message : "Save failed");
+      }
     } finally { if (currentGeneration === generation.current) setBusy(false); }
   }
 
@@ -109,6 +117,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       });
       setRequestKey(null);
       setHasUnsavedChanges(false);
+      setRevisionConflict(false);
       setMessage("Current estimate loaded");
     } catch (err) { if (currentGeneration === generation.current) setError(err instanceof Error ? err.message : "Reload failed"); }
     finally { if (currentGeneration === generation.current) setBusy(false); }
@@ -138,7 +147,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       {worksheet && <>
         <p aria-label="Estimate revision">Revision: {worksheet.revision}{hasUnsavedChanges ? " · Unsaved changes" : ""}</p>
         <button type="button" disabled={busy || hasUnsavedChanges} onClick={reloadCurrent}>Reload current estimate</button>
-        {hasUnsavedChanges && <div role="status">
+        {(hasUnsavedChanges || revisionConflict) && <div role="status">
           <p>Save or discard your edits before reloading. A revision conflict requires reloading the latest estimate.</p>
           <button type="button" disabled={busy} onClick={() => { if (window.confirm("Discard unsaved estimate edits and load the latest saved revision?")) void reloadCurrent(); }}>Discard edits and reload latest</button>
         </div>}
@@ -167,7 +176,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
           setWorksheet({ ...worksheet, lines: [...worksheet.lines, newLine()] }); setRequestKey(null); setHasUnsavedChanges(true); setMessage("");
         }}>Add line</button>
         {totals && <p>Cost: {totals.costMinor / 100} · Proposed revenue: {totals.proposedRevenueMinor / 100} · Margin: {totals.grossMarginMinor / 100} {totals.currency}</p>}
-        {canEdit && <button type="submit" disabled={busy || !totals || !hasUnsavedChanges}>{busy ? "Working…" : "Save estimate"}</button>}
+        {canEdit && <button type="submit" disabled={busy || !totals || !hasUnsavedChanges || revisionConflict}>{busy ? "Working…" : "Save estimate"}</button>}
         {canExport && <button type="button" disabled={busy || !totals} onClick={downloadCsv}>Export estimate CSV</button>}
       </>}
     </form>
