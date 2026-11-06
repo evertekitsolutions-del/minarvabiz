@@ -51,3 +51,15 @@ test("zero is valid and input remains unchanged", () => {
   const input = Object.freeze(base({ sourceMinor: 0 }));
   assert.equal(previewScopedFxQuote(input).convertedMinor, 0);
 });
+
+test("reject impossible UTC calendar dates and preserve fractional precision", () => {
+  for (const quotedAt of [
+    "2026-02-30T00:00:00Z",
+    "2026-11-06T24:00:00Z",
+    "2026-11-06T00:00:00.9999Z",
+  ]) {
+    assert.throws(() => previewScopedFxQuote(base({ quotedAt })), /timestamp/);
+  }
+  assert.equal(previewScopedFxQuote(base({ quotedAt: "2026-11-06T00:00:00.001Z" })).convertedMinor, 4192);
+  assert.equal(previewScopedFxQuote(base({ quotedAt: "2026-11-06T00:00:00.1Z" })).convertedMinor, 4192);
+});
