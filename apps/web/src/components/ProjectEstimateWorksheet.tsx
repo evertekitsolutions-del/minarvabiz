@@ -134,12 +134,13 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       <h2 className="text-lg font-semibold">Project estimate</h2>
       {error && <p role="alert" className="text-red-700">{error}</p>}
       {message && <p role="status">{message}</p>}
+      {!worksheet && !busy && <button type="button" onClick={reloadCurrent}>Retry loading estimate</button>}
       {worksheet && <>
         <p aria-label="Estimate revision">Revision: {worksheet.revision}{hasUnsavedChanges ? " · Unsaved changes" : ""}</p>
         <button type="button" disabled={busy || hasUnsavedChanges} onClick={reloadCurrent}>Reload current estimate</button>
         {hasUnsavedChanges && <div role="status">
           <p>Save or discard your edits before reloading. A revision conflict requires reloading the latest estimate.</p>
-          <button type="button" disabled={busy} onClick={reloadCurrent}>Discard edits and reload latest</button>
+          <button type="button" disabled={busy} onClick={() => { if (window.confirm("Discard unsaved estimate edits and load the latest saved revision?")) void reloadCurrent(); }}>Discard edits and reload latest</button>
         </div>}
         <label>Currency <input aria-label="Currency" value={worksheet.currency} maxLength={3} disabled={!canEdit || busy}
           onChange={e => { setWorksheet({ ...worksheet, currency: e.target.value.toUpperCase() }); setRequestKey(null); setHasUnsavedChanges(true); setMessage(""); }} /></label>
