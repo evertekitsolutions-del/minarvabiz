@@ -15,6 +15,8 @@ export interface ProjectEstimateWorksheetProps {
   load: () => Promise<ProjectEstimateInput | null>;
   save: (worksheet: ProjectEstimateInput, idempotencyKey: string) => Promise<void>;
   enabled: boolean;
+  /** Server-authorized edit permission; read-only users may still inspect estimates. */
+  canEdit?: boolean;
   /** Explicit host-authorized export; the host must check download permissions. */
   canExport?: boolean;
 }
@@ -24,7 +26,7 @@ const newLine = (): ProjectEstimateLine => ({
   unitCost: "0.00", markupPercent: "0",
 });
 
-export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport = false }: ProjectEstimateWorksheetProps) {
+export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport = false, canEdit = false }: ProjectEstimateWorksheetProps) {
   const [worksheet, setWorksheet] = React.useState<ProjectEstimateInput | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -60,7 +62,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!worksheet || !totals || busy) return;
+    if (!canEdit || !worksheet || !totals || busy) return;
     const key = requestKey ?? crypto.randomUUID();
     setRequestKey(key);
     setBusy(true);
@@ -99,30 +101,30 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       {error && <p role="alert" className="text-red-700">{error}</p>}
       {message && <p role="status">{message}</p>}
       {worksheet && <>
-        <label>Currency <input aria-label="Currency" value={worksheet.currency} maxLength={3}
+        <label>Currency <input aria-label="Currency" value={worksheet.currency} maxLength={3} disabled={!canEdit || busy}
           onChange={e => { setWorksheet({ ...worksheet, currency: e.target.value.toUpperCase() }); setRequestKey(null); }} /></label>
         {worksheet.lines.map(line => (
           <fieldset key={line.id} className="grid gap-2 rounded border p-3">
             <legend>Estimate line</legend>
             <label>Description <input required value={line.description} maxLength={500}
-              onChange={e => updateLine(line.id, { description: e.target.value })} /></label>
-            <label>Type <select value={line.kind} onChange={e => updateLine(line.id, { kind: e.target.value as ProjectEstimateLine["kind"] })}>
+              disabled={!canEdit || busy} onChange={e => updateLine(line.id, { description: e.target.value })} /></label>
+            <label>Type <select value={line.kind} disabled={!canEdit || busy} onChange={e => updateLine(line.id, { kind: e.target.value as ProjectEstimateLine["kind"] })}>
               <option value="labor">Labor</option><option value="material">Material</option><option value="expense">Expense</option>
             </select></label>
             {(["quantity", "unitCost", "markupPercent"] as const).map(field =>
-              <label key={field}>{field} <input inputMode="decimal" required value={line[field]}
+              <label key={field}>{field} <input inputMode="decimal" required disabled={!canEdit || busy} value={line[field]}
                 onChange={e => updateLine(line.id, { [field]: e.target.value })} /></label>)}
-            <button type="button" disabled={busy || worksheet.lines.length <= 1} onClick={() => {
+            <button type="button" disabled={!canEdit || busy || worksheet.lines.length <= 1} onClick={() => {
               setWorksheet({ ...worksheet, lines: worksheet.lines.filter(item => item.id !== line.id) });
               setRequestKey(null);
             }}>Remove line</button>
           </fieldset>
         ))}
-        <button type="button" disabled={busy || worksheet.lines.length >= 500} onClick={() => {
+        <button type="button" disabled={!canEdit || busy || worksheet.lines.length >= 500} onClick={() => {
           setWorksheet({ ...worksheet, lines: [...worksheet.lines, newLine()] }); setRequestKey(null);
         }}>Add line</button>
         {totals && <p>Cost: {totals.costMinor / 100} · Proposed revenue: {totals.proposedRevenueMinor / 100} · Margin: {totals.grossMarginMinor / 100} {totals.currency}</p>}
-        <button type="submit" disabled={busy || !totals}>{busy ? "Working…" : "Save estimate"}</button>
+        {canEdit && <button type="submit" disabled={busy || !totals}>{busy ? "Working…" : "Save estimate"}</button>}
         {canExport && <button type="button" disabled={busy || !totals} onClick={downloadCsv}>Export estimate CSV</button>}
       </>}
     </form>
