@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// Read-only, tenant-scoped FX quote preview; never posts financial entries.
+export * from "./scoped-fx-quote";
