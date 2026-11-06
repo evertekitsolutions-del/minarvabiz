@@ -61,3 +61,16 @@ test("returned configuration is detached from caller's field array", () => {
   const result = validatePrintLayout({ ...base, fields });
   assert.notEqual(result.fields, fields);
 });
+
+test("duplicate exact-scope layouts fail closed without relying on row order", () => {
+  const branch = { ...base, id: "branch-layout", branchId: "b1" };
+  const branchScope = { ...scope, branchId: "b1" };
+  assert.throws(() => resolvePrintLayout(scope, "invoice", [base, { ...base, id: "duplicate" }]),
+    /Ambiguous print layouts/);
+  assert.throws(() => resolvePrintLayout(branchScope, "invoice",
+    [branch, { ...branch, id: "duplicate-branch" }, base]), /Ambiguous print layouts/);
+  assert.equal(resolvePrintLayout(branchScope, "invoice",
+    [branch, base, { ...base, id: "duplicate-company" }])?.id, "branch-layout");
+  assert.equal(resolvePrintLayout(branchScope, "invoice",
+    [{ ...branch, enabled: false }, base])?.id, "invoice-default");
+});
