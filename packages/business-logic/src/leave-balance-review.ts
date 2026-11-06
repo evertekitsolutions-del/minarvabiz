@@ -51,7 +51,7 @@ const minutes = (v: unknown): v is number =>
 const version = (v: unknown): v is number =>
   Number.isSafeInteger(v) && (v as number) > 0;
 const day = (v: unknown): v is string => {
-  if (typeof v !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(v)) return false;
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
   const [y, m, d] = v.split("-").map(Number);
   if (y < 1900 || y > 9999) return false;
   const date = new Date(0);
