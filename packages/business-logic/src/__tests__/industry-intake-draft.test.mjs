@@ -55,7 +55,7 @@ test("older tab cannot overwrite a newer scoped reference", () => {
   const values = new Map();
   const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
   saveIndustryIntakeDraft(storage, scope, profile, "repair-job", "NEW-REF", "2026-11-07T01:00:00.000Z");
-  assert.throws(() => saveIndustryIntakeDraft(storage, scope, profile, "repair-job", "STALE-REF", now), /newer saved revision/);
+  assert.throws(() => saveIndustryIntakeDraft(storage, scope, profile, "repair-job", "STALE-REF", now), /conflicting saved revision/);
   assert.equal(readIndustryIntakeDraft(storage, scope, profile, "repair-job")?.reference, "NEW-REF");
   assert.equal(readIndustryIntakeDraft(storage, scope, profile, "restaurant-ticket"), null);
 });
@@ -65,4 +65,14 @@ test("noncanonical and impossible timestamps are rejected", () => {
   for (const timestamp of ["2026-11-07T00:00:00Z", "2026-02-30T00:00:00.000Z", "2026-11-07T00:00:00.000+00:00"]) {
     assert.throws(() => saveIndustryIntakeDraft(storage, scope, profile, "repair-job", "JOB-1", timestamp), /timestamp/);
   }
+});
+
+
+test("same-millisecond conflicting tab save is rejected without overwriting reference", () => {
+  const values = new Map();
+  const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  saveIndustryIntakeDraft(storage, scope, profile, "repair-job", "FIRST", now);
+  assert.throws(() => saveIndustryIntakeDraft(storage, scope, profile, "repair-job", "SECOND", now), /conflicting saved revision/);
+  assert.equal(readIndustryIntakeDraft(storage, scope, profile, "repair-job")?.reference, "FIRST");
+  assert.equal(saveIndustryIntakeDraft(storage, scope, profile, "repair-job", "FIRST", now).reference, "FIRST");
 });
