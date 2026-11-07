@@ -8,7 +8,7 @@ require.extensions[".ts"] = (module, filename) =>
   module._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText, filename);
-const { readIndustrySqliteWorkflow } = require("../industry-workflow-sqlite-read.ts");
+const { readIndustrySqliteWorkflow, listIndustrySqliteWorkflows } = require("../industry-workflow-sqlite-read.ts");
 
 const profile = { version: 1, primary: "repair", enabled: ["repair"] };
 const access = { actorId: "staff-1", tenantId: "tenant-1", branchId: "branch-1",
@@ -60,5 +60,43 @@ test("rejects untrusted read scope before SQL", () => {
   let queries = 0;
   const db = { prepare() { queries++; throw Error("SQL executed"); }, transaction(fn) { return fn; } };
   assert.throws(() => readIndustrySqliteWorkflow(db, profile, { ...access, actorId: "" }, "job-1"), /authorization/);
+  assert.equal(queries, 0);
+});
+
+test("scoped inbox paginates and replays each authorized workflow", () => {
+  const queries = [];
+  const db = {
+    transaction(callback) { return () => callback(); },
+    prepare(sql) {
+      return {
+        all(...args) {
+          queries.push({ sql, args });
+          return [{ record_id: "job-1" }, { record_id: "job-2" }];
+        },
+        get(...args) {
+          queries.push({ sql, args });
+          return sql.includes("industry_workflow_events")
+            ? { event_id: "evt-" + args[2], actor_id: "staff-1", revision: 1, from_stage: "received", to_stage: "diagnosed" }
+            : { template_id: "repair-job", stage: "diagnosed", revision: 1 };
+        },
+      };
+    },
+  };
+  const result = listIndustrySqliteWorkflows(db, profile, access, { limit: 1 });
+  assert.equal(result.records.length, 1);
+  assert.equal(result.records[0].id, "job-1");
+  assert.equal(result.nextCursor, "job-1");
+  assert.deepEqual(queries[0].args, ["tenant-1", "branch-1", "", 2]);
+  assert.match(queries[0].sql, /tenant_id=\\? AND branch_id=\\?/);
+});
+test("scoped inbox rejects invalid scope and pagination before SQL", () => {
+  let queries = 0;
+  const db = {
+    transaction(fn) { return fn; },
+    prepare() { queries++; throw Error("unexpected SQL"); },
+  };
+  assert.throws(() => listIndustrySqliteWorkflows(db, profile, { ...access, actorId: "" }), /authorization/);
+  assert.throws(() => listIndustrySqliteWorkflows(db, profile, access, { limit: 51 }), /pagination/);
+  assert.throws(() => listIndustrySqliteWorkflows(db, profile, access, { afterId: "" }), /pagination/);
   assert.equal(queries, 0);
 });
