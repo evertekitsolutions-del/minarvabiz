@@ -47,6 +47,28 @@ export function createIndustrySqliteCommitPort(db: IndustrySqliteDatabase): Indu
           !access.actorId || events.length === 0) {
         throw new Error("Industry SQLite scope mismatch");
       }
+      // Never trust a direct port caller to have run the UI-side preflight.
+      // Validate the entire event chain before any database statement executes.
+      if (next.revision !== original.revision + events.length ||
+          next.appliedEventIds.length !== original.appliedEventIds.length + events.length ||
+          !original.appliedEventIds.every((id, index) => next.appliedEventIds[index] === id)) {
+        throw new Error("Industry SQLite invalid revision history");
+      }
+      let expectedStage = original.stage;
+      const seen = new Set(original.appliedEventIds);
+      for (const [index, event] of events.entries()) {
+        if (!event.eventId || seen.has(event.eventId) ||
+            event.expectedRevision !== original.revision + index ||
+            event.from !== expectedStage ||
+            next.appliedEventIds[original.appliedEventIds.length + index] !== event.eventId) {
+          throw new Error("Industry SQLite invalid event chain");
+        }
+        seen.add(event.eventId);
+        expectedStage = event.to;
+      }
+      if (expectedStage !== next.stage) {
+        throw new Error("Industry SQLite final stage mismatch");
+      }
       const execute = db.transaction(() => {
         const key = [original.tenantId, original.branchId, original.id];
         const current = db.prepare(
