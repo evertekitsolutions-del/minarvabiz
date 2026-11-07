@@ -55,7 +55,12 @@ export function getShopProfile(): ShopProfile {
   return { ...profile };
 }
 
-export function updateShopProfile(patch: Partial<ShopProfile>): ShopProfile {
+export function updateShopProfile(patch: Partial<ShopProfile>, expectedUpdatedAt?: string): ShopProfile {
+  // Reject a stale editor instead of overwriting a newer hydrated profile.
+  // The caller must reload the latest snapshot and resolve the conflict.
+  if (expectedUpdatedAt !== undefined && expectedUpdatedAt !== profile.updatedAt) {
+    throw new Error("Business profile changed since this form was opened. Reload settings before saving.");
+  }
   // An explicit blank/null setting is invalid. Only omitted fields may inherit
   // existing values; otherwise a stale client could silently reset the locale.
   for (const field of ["locale", "timeZone", "currency"] as const) {
