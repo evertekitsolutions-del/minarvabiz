@@ -90,3 +90,33 @@ test("direct SQLite port denies missing template and transition grants before SQ
     access: { ...access, allowedTemplateIds: [] } }), /authorization mismatch/);
   assert.equal(transactions, 0);
 });
+
+test("rejects unsafe, negative, and inconsistent SQLite revisions before SQL", async () => {
+  let transactions = 0;
+  const port = createIndustrySqliteCommitPort({
+    prepare() { throw new Error("unexpected SQL"); },
+    transaction() { transactions++; throw new Error("unexpected transaction"); },
+  });
+  const original = { id: "job-1", tenantId: "t1", branchId: "b1",
+    templateId: "repair-job", stage: "received", revision: 0, appliedEventIds: [] };
+  const event = { eventId: "e1", tenantId: "t1", branchId: "b1",
+    expectedRevision: 0, from: "received", to: "repairing" };
+  const access = { actorId: "u1", tenantId: "t1", branchId: "b1",
+    allowedTemplateIds: ["repair-job"], allowedTransitions: [
+      { templateId: "repair-job", from: "received", to: "repairing" },
+    ] };
+  for (const invalid of [
+    { original: { ...original, revision: -1 } },
+    { original: { ...original, revision: 0.5 } },
+    { original: { ...original, revision: Number.MAX_SAFE_INTEGER } },
+    { original: { ...original, appliedEventIds: ["fabricated"] } },
+    { event: { ...event, expectedRevision: Number.NaN } },
+  ]) {
+    await assert.rejects(port.commit({
+      original: invalid.original ?? original,
+      next: { ...original, stage: "repairing", revision: 1, appliedEventIds: ["e1"] },
+      events: [invalid.event ?? event], access,
+    }), /invalid revision history/);
+  }
+  assert.equal(transactions, 0);
+});
