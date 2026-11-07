@@ -201,7 +201,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
       <h2 className="text-lg font-semibold">Project estimate</h2>
       {error && <p role="alert" className="text-red-700">{error}</p>}
       {message && <p role="status">{message}</p>}
-      {validationError && <p role="alert" aria-label="Estimate validation error" className="text-red-700">{validationError}</p>
+      {validationError && <p role="alert" aria-label="Estimate validation error" className="text-red-700">{validationError}</p>}
       {!worksheet && !busy && <button type="button" onClick={reloadCurrent}>Retry loading estimate</button>}
       {worksheet && <>
         <p aria-label="Estimate revision">Revision: {worksheet.revision}{hasUnsavedChanges ? " · Unsaved changes" : ""}</p>
