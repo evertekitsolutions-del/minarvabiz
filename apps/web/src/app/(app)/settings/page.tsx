@@ -27,6 +27,7 @@ export default function SettingsPage() {
       setPrinting(getPrintSettings());
       setShopMsg(null);
       setShopMsgIsError(false);
+      setPrintMsg(null);
     };
     window.addEventListener("minarva:data-hydrated", onHydrated);
     return () => window.removeEventListener("minarva:data-hydrated", onHydrated);
@@ -192,9 +193,13 @@ export default function SettingsPage() {
               setPrintMsg("Printing defaults cannot be saved in this browser workspace. No changes were saved.");
               return;
             }
-            const next = updatePrintSettings({ defaultInvoicePaper: printing.defaultInvoicePaper, thermalWidthMm: printing.thermalWidthMm, labelCodeMode: printing.labelCodeMode });
-            setPrinting(next);
-            setPrintMsg("Printing defaults updated locally; verify persistence before restarting.");
+            try {
+              const next = updatePrintSettings({ defaultInvoicePaper: printing.defaultInvoicePaper, thermalWidthMm: printing.thermalWidthMm, labelCodeMode: printing.labelCodeMode });
+              setPrinting(next);
+              setPrintMsg("Printing defaults updated locally; verify persistence before restarting.");
+            } catch (error) {
+              setPrintMsg(error instanceof Error ? `Printing defaults were not updated: ${error.message}` : "Printing defaults could not be updated.");
+            }
           }}>Save printing defaults</Button>
           {printMsg && <span role="status" className="text-sm text-slate-700">{printMsg}</span>}
         </div>
