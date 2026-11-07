@@ -41,7 +41,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
   saveRef.current = save;
   const [busy, setBusy] = React.useState(false);
   // Synchronous guard: React state updates do not prevent two submits in one event turn.
-  const writeInFlight = React.useRef(false);
+  const writeInFlight = React.useRef<number | null>(null);
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
   const [requestKey, setRequestKey] = React.useState<string | null>(null);
@@ -53,6 +53,8 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
     let active = true;
     const currentGeneration = ++generation.current;
     setWorksheet(null);
+    // An old scope write must not block saving a newly authenticated scope.
+    writeInFlight.current = null;
     setBusy(false);
     setRequestKey(null);
     setHasUnsavedChanges(false);
@@ -89,16 +91,19 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canEdit || !worksheet || !totals || busy || writeInFlight.current || revisionConflict || saveAcknowledged || !hasUnsavedChanges) return;
-    writeInFlight.current = true;
+    if (!canEdit || !worksheet || !totals || busy || writeInFlight.current === generation.current || revisionConflict || saveAcknowledged || !hasUnsavedChanges) return;
     const currentGeneration = generation.current;
+    writeInFlight.current = currentGeneration;
+    // Bind the writer and scope to this request; a session/branch switch must not
+    // redirect an already-started write to a different authenticated adapter.
+    const write = saveRef.current;
     const key = requestKey ?? crypto.randomUUID();
     setRequestKey(key);
     setBusy(true);
     setError("");
     let writeAcknowledged = false;
     try {
-      await saveRef.current(worksheet, key);
+      await write(worksheet, key);
       writeAcknowledged = true;
       if (currentGeneration !== generation.current) return;
       setSaveAcknowledged(true);
@@ -133,7 +138,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
             : err instanceof Error ? err.message : "Save failed");
       }
     } finally {
-      writeInFlight.current = false;
+      if (writeInFlight.current === currentGeneration) writeInFlight.current = null;
       if (currentGeneration === generation.current) setBusy(false);
     }
   }
