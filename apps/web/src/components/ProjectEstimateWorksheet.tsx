@@ -169,6 +169,15 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
             {(["quantity", "unitCost", "markupPercent"] as const).map(field =>
               <label key={field}>{field} <input inputMode="decimal" required disabled={!canEdit || busy} value={line[field]}
                 onChange={e => updateLine(line.id, { [field]: e.target.value })} /></label>)}
+            {totals && (() => {
+              const calculated = totals.lines.find(item => item.id === line.id);
+              return calculated ? (
+                <output aria-label={`Calculated total for ${line.description || "estimate line"}`} className="text-sm">
+                  Cost: {(calculated.costMinor / 100).toFixed(2)} {totals.currency}
+                  {" · "}Proposed revenue: {(calculated.proposedRevenueMinor / 100).toFixed(2)} {totals.currency}
+                </output>
+              ) : null;
+            })()}
             <button type="button" disabled={!canEdit || busy || worksheet.lines.length >= 500} onClick={() => {
               // Copy a priced estimate item without reusing its identity; each line is independently auditable.
               const index = worksheet.lines.findIndex(item => item.id === line.id);
