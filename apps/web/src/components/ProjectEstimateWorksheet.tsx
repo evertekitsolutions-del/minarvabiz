@@ -245,7 +245,22 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
         <button type="button" disabled={!canEdit || busy || revisionConflict || saveAcknowledged || worksheet.lines.length >= 500} onClick={() => {
           setWorksheet({ ...worksheet, lines: [...worksheet.lines, newLine()] }); setRequestKey(null); setHasUnsavedChanges(true); setMessage("");
         }}>Add line</button>
-        {totals && <p>Cost: {totals.costMinor / 100} · Proposed revenue: {totals.proposedRevenueMinor / 100} · Margin: {totals.grossMarginMinor / 100} {totals.currency}</p>}
+        {totals && <>
+          <p>Cost: {(totals.costMinor / 100).toFixed(2)} · Proposed revenue: {(totals.proposedRevenueMinor / 100).toFixed(2)} · Margin: {(totals.grossMarginMinor / 100).toFixed(2)} {totals.currency}</p>
+          <table aria-label="Project estimate cost breakdown" className="w-full text-sm">
+            <thead><tr><th scope="col">Cost category</th><th scope="col">Cost</th><th scope="col">Proposed revenue</th></tr></thead>
+            <tbody>{(["labor", "material", "expense"] as const).map(kind => {
+              const categoryLines = totals.lines.filter(line => line.kind === kind);
+              const costMinor = categoryLines.reduce((sum, line) => sum + BigInt(line.costMinor), 0n);
+              const revenueMinor = categoryLines.reduce((sum, line) => sum + BigInt(line.proposedRevenueMinor), 0n);
+              return <tr key={kind}>
+                <th scope="row" className="text-left capitalize">{kind}</th>
+                <td className="text-right">{(Number(costMinor) / 100).toFixed(2)} {totals.currency}</td>
+                <td className="text-right">{(Number(revenueMinor) / 100).toFixed(2)} {totals.currency}</td>
+              </tr>;
+            })}</tbody>
+          </table>
+        </>}
         {canEdit && <button type="submit" disabled={busy || !totals || !hasUnsavedChanges || revisionConflict || saveAcknowledged}>{busy ? "Working…" : "Save estimate"}</button>}
         {canExport && <button type="button" disabled={busy || !totals} onClick={downloadCsv}>Export estimate CSV</button>}
       </>}
