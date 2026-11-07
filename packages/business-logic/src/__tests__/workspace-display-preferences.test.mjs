@@ -136,3 +136,30 @@ test("stale profile save is rejected without mutating the hydrated business prof
   assert.equal(api.getShopProfile().shopName, "Current tenant");
   assert.equal(api.updateShopProfile({ shopName: "Fresh write" }, "2026-11-07T01:00:00Z").shopName, "Fresh write");
 });
+
+test("rapid profile saves advance revision and reject a same-millisecond stale editor", () => {
+  const Module = require("node:module");
+  const source = fs.readFileSync(new URL("../shop-profile.ts", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const isolated = new Module("shop-profile-revision-test");
+  isolated.filename = "shop-profile-revision-test.js";
+  isolated.paths = [];
+  isolated.require = (name) => {
+    if (name === "@minarvabiz/utils") return { nowISO: () => "2026-11-07T01:00:00.000Z" };
+    if (name === "./autosave") return { touchPersistence: () => {} };
+    if (name === "./workspace-display-preferences") return require("../workspace-display-preferences.ts");
+    throw new Error("Unexpected dependency: " + name);
+  };
+  isolated._compile(compiled, isolated.filename);
+  const api = isolated.exports;
+  api.hydrateShopProfile({ ...api.getShopProfile(), updatedAt: "2026-11-07T01:00:00.000Z" });
+  const first = api.getShopProfile();
+  const saved = api.updateShopProfile({ shopName: "First save" }, first.updatedAt);
+  assert.ok(Date.parse(saved.updatedAt) > Date.parse(first.updatedAt));
+  assert.throws(() => api.updateShopProfile({ shopName: "Stale save" }, first.updatedAt), /changed since this form was opened/);
+  const second = api.updateShopProfile({ shopName: "Second save" }, saved.updatedAt);
+  assert.ok(Date.parse(second.updatedAt) > Date.parse(saved.updatedAt));
+  assert.equal(api.getShopProfile().shopName, "Second save");
+});
