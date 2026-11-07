@@ -146,7 +146,10 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       if (current) calculateProjectEstimate(current, scope);
       // A lost write acknowledgement may mean the server committed but a replica is stale.
       // Never clear the write lock on a stale read: a fresh key could duplicate the write.
-      if (saveAcknowledged && (!current || (worksheet && current.revision <= worksheet.revision))) {
+      // A 409/412 proves the submitted revision is obsolete even when the write was
+      // rejected. A lagging offline/replica read of that same revision must not
+      // clear the conflict lock and permit another stale write.
+      if ((saveAcknowledged || revisionConflict) && (!current || (worksheet && current.revision <= worksheet.revision))) {
         throw new Error("Authoritative estimate revision has not advanced. Retry reload after synchronization; editing remains locked.");
       }
       setWorksheet(current ?? {
