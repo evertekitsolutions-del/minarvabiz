@@ -10,7 +10,7 @@ require.extensions[".ts"] = (module, filename) => module._compile(
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText, filename,
 );
-const { signWebhookDelivery, verifyWebhookDelivery } = require("../webhook-signature.ts");
+const { signWebhookDelivery, verifyWebhookDelivery, verifyWebhookDeliveryWithRotation } = require("../webhook-signature.ts");
 // Deterministic synthetic HMAC key; never a production credential.
 const secret = "fixture-only-".repeat(4);
 const input = { eventId: "evt_123", eventType: "invoice.paid", timestamp: 1794000000,
@@ -48,4 +48,28 @@ test("receiver verifies signature, rejects tampering and stale or future timesta
     { secret: "invalid" },
     { toleranceSeconds: 3601 },
   ]) assert.equal(await verifyWebhookDelivery({ ...candidate, ...change }), false);
+});
+
+test("rotation accepts previous key only before explicit cutoff, rejects after expiry", async () => {
+  const signed = await signWebhookDelivery(input);
+  const candidate = {
+    body: signed.body, timestamp: signed.headers["x-minarva-timestamp"],
+    signature: signed.headers["x-minarva-signature"],
+    activeSecret: "new-fixture-".repeat(4), previousSecret: secret,
+    previousKeyValidUntilSeconds: input.timestamp + 100,
+    nowSeconds: input.timestamp, cryptoProvider: webcrypto,
+  };
+  assert.equal(await verifyWebhookDeliveryWithRotation(candidate), true);
+  assert.equal(await verifyWebhookDeliveryWithRotation({
+    ...candidate, nowSeconds: input.timestamp + 101,
+  }), false);
+  assert.equal(await verifyWebhookDeliveryWithRotation({
+    ...candidate, previousKeyValidUntilSeconds: undefined,
+  }), false);
+  assert.equal(await verifyWebhookDeliveryWithRotation({
+    ...candidate, previousSecret: undefined,
+  }), false);
+  assert.equal(await verifyWebhookDeliveryWithRotation({
+    ...candidate, activeSecret: secret, previousSecret: undefined,
+  }), true);
 });
