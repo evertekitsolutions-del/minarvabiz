@@ -181,7 +181,7 @@ export default function IndustryWorkspacePage() {
           Listed capabilities are planning labels and do not certify that every workflow is available.
         </p>
       </header>
-      {error && <p role="alert" className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+      {error && <div role="alert" className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">\n        <p>{error}</p>\n        <button type="button" className="mt-2 underline" onClick={() => window.location.reload()}>Reload scoped workspace</button>\n      </div>
       <fieldset disabled={!loaded || !scope} className="space-y-3">
         <legend className="mb-3 font-medium">Optional industry packs</legend>
         {packs.map(pack => (
@@ -224,7 +224,7 @@ export default function IndustryWorkspacePage() {
                   {intakeFields[template.industry].map(field => (
                     <label key={field.key} className="block text-xs font-medium">
                       {field.label} (preview only)
-                      <input type="text" maxLength={120} autoComplete="off"
+                      <input type="text" maxLength={64} autoComplete="off"
                         className="mt-1 block w-full rounded border border-slate-300 bg-white p-2"
                         placeholder={field.hint}
                         value={intakePreview[`${template.id}:${field.key}`] ?? ""}
