@@ -94,7 +94,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       if (currentGeneration !== generation.current) return;
       setSaveAcknowledged(true);
       // Never assume the adapter's acknowledgement contains the next authoritative revision.
-      const current = await load();
+      const current = await loadRef.current();
       if (currentGeneration !== generation.current) return;
       if (!current) throw new Error("Saved estimate could not be reloaded");
       calculateProjectEstimate(current, scope);
@@ -132,7 +132,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     setBusy(true);
     setError("");
     try {
-      const current = await load();
+      const current = await loadRef.current();
       if (currentGeneration !== generation.current) return;
       if (current) calculateProjectEstimate(current, scope);
       setWorksheet(current ?? {
@@ -176,7 +176,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
           <p>Save or discard your edits before reloading. A revision conflict requires reloading the latest estimate.</p>
           <button type="button" disabled={busy} onClick={() => { if (window.confirm("Discard unsaved estimate edits and load the latest saved revision?")) void reloadCurrent(); }}>Discard edits and reload latest</button>
         </div>}
-        <label>Currency <input aria-label="Currency" value={worksheet.currency} maxLength={3} disabled={!canEdit || busy}
+        <label>Currency <input aria-label="Currency" value={worksheet.currency} maxLength={3} disabled={!canEdit || busy || revisionConflict || saveAcknowledged}
           onChange={e => { setWorksheet({ ...worksheet, currency: e.target.value.toUpperCase() }); setRequestKey(null); setHasUnsavedChanges(true); setMessage(""); }} /></label>
         {worksheet.lines.map(line => (
           <fieldset key={line.id} className="grid gap-2 rounded border p-3">
@@ -198,7 +198,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
                 </output>
               ) : null;
             })()}
-            <button type="button" disabled={!canEdit || busy || worksheet.lines.length >= 500} onClick={() => {
+            <button type="button" disabled={!canEdit || busy || revisionConflict || saveAcknowledged || worksheet.lines.length >= 500} onClick={() => {
               // Copy a priced estimate item without reusing its identity; each line is independently auditable.
               const index = worksheet.lines.findIndex(item => item.id === line.id);
               if (index < 0) return;
