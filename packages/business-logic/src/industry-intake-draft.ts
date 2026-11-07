@@ -15,6 +15,7 @@ export type IndustryIntakeDraft = Readonly<{
 }>;
 
 const referencePattern = /^[A-Za-z0-9][A-Za-z0-9 ._\/-]{0,63}$/;
+const isoTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const scopedKeyPattern = /^minarva:industry-profile:v1:(?:demo|live):[^:]+:[^:]+$/;
 
 export function validateIndustryIntakeDraft(
@@ -27,8 +28,9 @@ export function validateIndustryIntakeDraft(
   const data = input as Record<string, unknown>;
   if (data.version !== 1 || data.templateId !== templateId || data.industry !== template.industry ||
       typeof data.reference !== "string" || !referencePattern.test(data.reference) ||
-      typeof data.updatedAt !== "string" || !/^\d{4}-\d{2}-\d{2}T/.test(data.updatedAt) ||
-      !Number.isFinite(Date.parse(data.updatedAt))) {
+      typeof data.updatedAt !== "string" || !isoTimestampPattern.test(data.updatedAt) ||
+      !Number.isFinite(Date.parse(data.updatedAt)) ||
+      new Date(data.updatedAt).toISOString() !== data.updatedAt) {
     throw new Error("Invalid industry intake reference or timestamp");
   }
   return { version: 1, templateId, industry: template.industry, reference: data.reference, updatedAt: data.updatedAt };
@@ -51,6 +53,14 @@ export function saveIndustryIntakeDraft(
   const draft = validateIndustryIntakeDraft({
     version: 1, templateId, industry: template.industry, reference, updatedAt: now,
   }, profile, templateId);
+  // Do not silently replace a newer reference written in another tab.
+  const previous = storage.getItem(key);
+  if (previous !== null) {
+    const existing = validateIndustryIntakeDraft(JSON.parse(previous), profile, templateId);
+    if (Date.parse(existing.updatedAt) > Date.parse(draft.updatedAt)) {
+      throw new Error("Industry intake draft has a newer saved revision");
+    }
+  }
   storage.setItem(key, JSON.stringify(draft));
   const readback = storage.getItem(key);
   if (readback === null) throw new Error("Draft storage did not persist");
