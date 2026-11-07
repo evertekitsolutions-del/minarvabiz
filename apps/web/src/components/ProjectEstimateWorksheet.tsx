@@ -182,12 +182,12 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
           <fieldset key={line.id} className="grid gap-2 rounded border p-3">
             <legend>Estimate line</legend>
             <label>Description <input required value={line.description} maxLength={500}
-              disabled={!canEdit || busy} onChange={e => updateLine(line.id, { description: e.target.value })} /></label>
-            <label>Type <select value={line.kind} disabled={!canEdit || busy} onChange={e => updateLine(line.id, { kind: e.target.value as ProjectEstimateLine["kind"] })}>
+              disabled={!canEdit || busy || revisionConflict || saveAcknowledged} onChange={e => updateLine(line.id, { description: e.target.value })} /></label>
+            <label>Type <select value={line.kind} disabled={!canEdit || busy || revisionConflict || saveAcknowledged} onChange={e => updateLine(line.id, { kind: e.target.value as ProjectEstimateLine["kind"] })}>
               <option value="labor">Labor</option><option value="material">Material</option><option value="expense">Expense</option>
             </select></label>
             {(["quantity", "unitCost", "markupPercent"] as const).map(field =>
-              <label key={field}>{field} <input inputMode="decimal" required disabled={!canEdit || busy} value={line[field]}
+              <label key={field}>{field} <input inputMode="decimal" required disabled={!canEdit || busy || revisionConflict || saveAcknowledged} value={line[field]}
                 onChange={e => updateLine(line.id, { [field]: e.target.value })} /></label>)}
             {totals && (() => {
               const calculated = totals.lines.find(item => item.id === line.id);
@@ -209,7 +209,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
               setHasUnsavedChanges(true);
               setMessage("");
             }}>Duplicate line</button>
-            <button type="button" disabled={!canEdit || busy || worksheet.lines.length <= 1} onClick={() => {
+            <button type="button" disabled={!canEdit || busy || revisionConflict || saveAcknowledged || worksheet.lines.length <= 1} onClick={() => {
               setWorksheet({ ...worksheet, lines: worksheet.lines.filter(item => item.id !== line.id) });
               setRequestKey(null);
               setHasUnsavedChanges(true);
@@ -217,7 +217,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
             }}>Remove line</button>
           </fieldset>
         ))}
-        <button type="button" disabled={!canEdit || busy || worksheet.lines.length >= 500} onClick={() => {
+        <button type="button" disabled={!canEdit || busy || revisionConflict || saveAcknowledged || worksheet.lines.length >= 500} onClick={() => {
           setWorksheet({ ...worksheet, lines: [...worksheet.lines, newLine()] }); setRequestKey(null); setHasUnsavedChanges(true); setMessage("");
         }}>Add line</button>
         {totals && <p>Cost: {totals.costMinor / 100} · Proposed revenue: {totals.proposedRevenueMinor / 100} · Margin: {totals.grossMarginMinor / 100} {totals.currency}</p>}
