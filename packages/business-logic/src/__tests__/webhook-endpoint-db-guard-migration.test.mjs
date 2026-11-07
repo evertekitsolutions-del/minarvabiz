@@ -13,6 +13,15 @@ test("service-role webhook writes require HTTPS and reject credentials, fragment
   assert.match(sql, /not valid;/i);
 });
 
+test("database guard rejects literal IPs and reserved DNS suffixes without activating dispatch", () => {
+  assert.ok(sql.includes("substring(endpoint from 9)"));
+  assert.ok(sql.includes("([.][A-Za-z0-9-]+)+"));
+  assert.ok(sql.includes("(localhost|local|internal|test|invalid|example|onion|arpa)"));
+  assert.ok(sql.includes("[0-9]+([.][0-9]+){3}"));
+  assert.ok(sql.includes("(:[0-9]{1,5})?"));
+  assert.doesNotMatch(sql, /validate constraint/i);
+});
+
 test("endpoint guard follows webhook subscription creation in migration order", () => {
   const entries = order.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const base = entries.indexOf("20261106_int002_webhook_subscriptions.sql");
