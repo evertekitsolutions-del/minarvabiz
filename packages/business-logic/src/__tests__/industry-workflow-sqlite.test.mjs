@@ -120,3 +120,31 @@ test("rejects unsafe, negative, and inconsistent SQLite revisions before SQL", a
   }
   assert.equal(transactions, 0);
 });
+
+test("rejects corrupt persisted stage history inside transaction before inserting events", async () => {
+  let inserts = 0;
+  const original = { id: "job-1", tenantId: "t1", branchId: "b1",
+    templateId: "repair-job", stage: "received", revision: 1, appliedEventIds: ["prior"] };
+  const port = createIndustrySqliteCommitPort({
+    transaction(callback) { return callback; },
+    prepare(sql) {
+      if (sql.startsWith("SELECT template_id")) return {
+        get() { return { template_id: "repair-job", stage: "received", revision: 1 }; },
+      };
+      if (sql.startsWith("SELECT event_id")) return {
+        get() { return { event_id: "prior", from_stage: "received", to_stage: "completed" }; },
+      };
+      return { run() { inserts++; return { changes: 1 }; } };
+    },
+  });
+  await assert.rejects(port.commit({
+    original,
+    next: { ...original, stage: "repairing", revision: 2, appliedEventIds: ["prior", "next"] },
+    events: [{ eventId: "next", tenantId: "t1", branchId: "b1",
+      expectedRevision: 1, from: "received", to: "repairing" }],
+    access: { actorId: "u1", tenantId: "t1", branchId: "b1",
+      allowedTemplateIds: ["repair-job"],
+      allowedTransitions: [{ templateId: "repair-job", from: "received", to: "repairing" }] },
+  }), /event stage history mismatch/);
+  assert.equal(inserts, 0);
+});
