@@ -109,8 +109,19 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       if (currentGeneration === generation.current) {
         const conflict = (typeof err === "object" && err !== null && "status" in err && (err.status === 409 || err.status === 412)) ||
           (err instanceof Error && err.message === "Project estimate revision conflict");
+        // An interrupted request can commit on the server even when the response is lost.
+        // Never mint another idempotency key for an uncertain write until a scoped read
+        // establishes the authoritative revision. Explicit 4xx validation failures are safe.
+        const status = typeof err === "object" && err !== null && "status" in err ? err.status : undefined;
+        const definiteRejection = status === 400 || status === 401 || status === 403 || status === 422;
+        const uncertainWrite = writeAcknowledged || (!conflict && !definiteRejection);
         setRevisionConflict(conflict);
-        setError(conflict ? "Estimate changed elsewhere. Discard edits and reload the latest revision before saving." : writeAcknowledged ? "Save was acknowledged but reload failed. Reload the authoritative revision before editing or saving again." : err instanceof Error ? err.message : "Save failed");
+        if (uncertainWrite) setSaveAcknowledged(true);
+        setError(conflict
+          ? "Estimate changed elsewhere. Discard edits and reload the latest revision before saving."
+          : uncertainWrite
+            ? "Save outcome is uncertain. Reload the authoritative revision before editing or saving again."
+            : err instanceof Error ? err.message : "Save failed");
       }
     } finally { if (currentGeneration === generation.current) setBusy(false); }
   }
