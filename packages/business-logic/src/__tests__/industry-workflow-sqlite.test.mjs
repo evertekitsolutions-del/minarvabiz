@@ -38,7 +38,7 @@ test("rejects cross-branch commit before SQL and transaction begins", async () =
       expectedRevision: 0, from: "received", to: "repairing" }],
     access: { actorId: "u1", tenantId: "t1", branchId: "b1",
       allowedTemplateIds: ["repair-job"], allowedTransitions: [] },
-  }), /scope mismatch/);
+  }), /scope or authorization mismatch/);
   assert.equal(queries, 0);
   assert.equal(transactions, 0);
 });
@@ -52,7 +52,10 @@ test("rejects forged event revisions and stages before opening SQLite transactio
   const original = { id: "job-1", tenantId: "t1", branchId: "b1",
     templateId: "repair-job", stage: "received", revision: 0, appliedEventIds: [] };
   const access = { actorId: "u1", tenantId: "t1", branchId: "b1",
-    allowedTemplateIds: ["repair-job"], allowedTransitions: [] };
+    allowedTemplateIds: ["repair-job"], allowedTransitions: [
+      { templateId: "repair-job", from: "received", to: "repairing" },
+      { templateId: "repair-job", from: "completed", to: "repairing" },
+    ] };
   const event = { eventId: "e1", tenantId: "t1", branchId: "b1",
     expectedRevision: 0, from: "received", to: "repairing" };
   for (const events of [[{ ...event, expectedRevision: 4 }], [{ ...event, from: "completed" }]]) {
@@ -65,5 +68,25 @@ test("rejects forged event revisions and stages before opening SQLite transactio
     original, next: { ...original, stage: "completed", revision: 1, appliedEventIds: ["e1"] },
     events: [event], access,
   }), /final stage mismatch/);
+  assert.equal(transactions, 0);
+});
+
+test("direct SQLite port denies missing template and transition grants before SQL", async () => {
+  let transactions = 0;
+  const port = createIndustrySqliteCommitPort({
+    prepare() { throw new Error("unexpected SQL"); },
+    transaction() { transactions++; throw new Error("unexpected transaction"); },
+  });
+  const original = { id: "job-1", tenantId: "t1", branchId: "b1",
+    templateId: "repair-job", stage: "received", revision: 0, appliedEventIds: [] };
+  const event = { eventId: "e1", tenantId: "t1", branchId: "b1",
+    expectedRevision: 0, from: "received", to: "repairing" };
+  const next = { ...original, stage: "repairing", revision: 1, appliedEventIds: ["e1"] };
+  const access = { actorId: "u1", tenantId: "t1", branchId: "b1",
+    allowedTemplateIds: ["repair-job"], allowedTransitions: [] };
+  await assert.rejects(port.commit({ original, next, events: [event], access }),
+    /transition not authorized/);
+  await assert.rejects(port.commit({ original, next, events: [event],
+    access: { ...access, allowedTemplateIds: [] } }), /authorization mismatch/);
   assert.equal(transactions, 0);
 });
