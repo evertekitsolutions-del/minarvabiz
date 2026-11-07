@@ -10,7 +10,7 @@ require.extensions[".ts"] = (module, filename) => module._compile(
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText, filename,
 );
-const { signWebhookDelivery } = require("../webhook-signature.ts");
+const { signWebhookDelivery, verifyWebhookDelivery } = require("../webhook-signature.ts");
 // Deterministic synthetic HMAC key; never a production credential.
 const secret = "fixture-only-".repeat(4);
 const input = { eventId: "evt_123", eventType: "invoice.paid", timestamp: 1794000000,
@@ -31,4 +31,21 @@ test("rejects weak secrets, invalid identifiers and oversized payloads", async (
 });
 test("rejects unavailable crypto rather than emitting unsigned payloads", async () => {
   await assert.rejects(signWebhookDelivery({ ...input, cryptoProvider: {} }));
+});
+
+test("receiver verifies signature, rejects tampering and stale or future timestamps", async () => {
+  const signed = await signWebhookDelivery(input);
+  const candidate = { body: signed.body, timestamp: signed.headers["x-minarva-timestamp"],
+    signature: signed.headers["x-minarva-signature"], secret,
+    nowSeconds: input.timestamp, cryptoProvider: webcrypto };
+  assert.equal(await verifyWebhookDelivery(candidate), true);
+  for (const change of [
+    { body: signed.body + " " },
+    { signature: "v1=" + "0".repeat(64) },
+    { timestamp: String(input.timestamp + 1) },
+    { nowSeconds: input.timestamp + 301 },
+    { nowSeconds: input.timestamp - 301 },
+    { secret: "invalid" },
+    { toleranceSeconds: 3601 },
+  ]) assert.equal(await verifyWebhookDelivery({ ...candidate, ...change }), false);
 });
