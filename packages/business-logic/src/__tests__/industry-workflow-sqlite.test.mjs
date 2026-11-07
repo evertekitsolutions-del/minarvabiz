@@ -42,3 +42,28 @@ test("rejects cross-branch commit before SQL and transaction begins", async () =
   assert.equal(queries, 0);
   assert.equal(transactions, 0);
 });
+
+test("rejects forged event revisions and stages before opening SQLite transaction", async () => {
+  let transactions = 0;
+  const port = createIndustrySqliteCommitPort({
+    prepare() { throw new Error("SQL must not execute"); },
+    transaction() { transactions++; throw new Error("transaction must not start"); },
+  });
+  const original = { id: "job-1", tenantId: "t1", branchId: "b1",
+    templateId: "repair-job", stage: "received", revision: 0, appliedEventIds: [] };
+  const access = { actorId: "u1", tenantId: "t1", branchId: "b1",
+    allowedTemplateIds: ["repair-job"], allowedTransitions: [] };
+  const event = { eventId: "e1", tenantId: "t1", branchId: "b1",
+    expectedRevision: 0, from: "received", to: "repairing" };
+  for (const events of [[{ ...event, expectedRevision: 4 }], [{ ...event, from: "completed" }]]) {
+    await assert.rejects(port.commit({
+      original, next: { ...original, stage: "repairing", revision: 1, appliedEventIds: ["e1"] },
+      events, access,
+    }), /invalid event chain/);
+  }
+  await assert.rejects(port.commit({
+    original, next: { ...original, stage: "completed", revision: 1, appliedEventIds: ["e1"] },
+    events: [event], access,
+  }), /final stage mismatch/);
+  assert.equal(transactions, 0);
+});
