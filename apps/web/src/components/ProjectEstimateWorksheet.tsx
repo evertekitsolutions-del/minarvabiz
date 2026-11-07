@@ -157,7 +157,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
       }
       setWorksheet(current ?? {
         tenantId: scope.tenantId, companyId: scope.companyId, branchId: scope.branchId,
-        projectId: scope.projectId, currency: "INR", revision: 0, lines: [newLine()],
+        projectId: scope.projectId, currency: defaultCurrency, revision: 0, lines: [newLine()],
       });
       setRequestKey(null);
       setHasUnsavedChanges(false);
