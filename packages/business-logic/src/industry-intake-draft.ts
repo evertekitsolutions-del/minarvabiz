@@ -57,8 +57,11 @@ export function saveIndustryIntakeDraft(
   const previous = storage.getItem(key);
   if (previous !== null) {
     const existing = validateIndustryIntakeDraft(JSON.parse(previous), profile, templateId);
-    if (Date.parse(existing.updatedAt) > Date.parse(draft.updatedAt)) {
-      throw new Error("Industry intake draft has a newer saved revision");
+    // Equal timestamps can occur across tabs (or within the same millisecond).
+    // Never use timestamp equality as permission to replace a different draft.
+    if (Date.parse(existing.updatedAt) > Date.parse(draft.updatedAt) ||
+        (existing.updatedAt === draft.updatedAt && existing.reference !== draft.reference)) {
+      throw new Error("Industry intake draft has a conflicting saved revision");
     }
   }
   storage.setItem(key, JSON.stringify(draft));
