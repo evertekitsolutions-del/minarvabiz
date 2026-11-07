@@ -5,7 +5,7 @@ import { getRuntimeMode, getSessionUser, phase9Store } from "@minarvabiz/busines
 import {
   buildIndustryProfile, industryPreferenceKey, listIndustryPacks,
   readIndustryProfile, writeIndustryProfile, listIndustryWorkflowTemplates,
-  saveIndustryIntakeDraft, readIndustryIntakeDraft,
+  saveIndustryIntakeDraft, readIndustryIntakeDraft, deleteIndustryIntakeDraft,
   type IndustryPackId, type IndustryWorkspaceProfile,
 } from "@minarvabiz/business-logic";
 
@@ -133,7 +133,7 @@ export default function IndustryWorkspacePage() {
   }
 
 
-  function saveReference(templateId: string, fieldKey: string, restore: boolean) {
+  function saveReference(templateId: string, fieldKey: string, action: "save" | "restore" | "delete") {
     if (!scope) return;
     const user = getSessionUser();
     if (industryPreferenceKey(user?.id ?? null, phase9Store.getActiveBranch()?.id ?? null, getRuntimeMode() === "demo") !== scope) {
@@ -152,7 +152,10 @@ export default function IndustryWorkspacePage() {
         setError("Industry selection has unsaved or conflicting changes. Save or reload preferences before accessing drafts.");
         return;
       }
-      if (restore) {
+      if (action === "delete") {
+        deleteIndustryIntakeDraft(window.localStorage, scope, profile, templateId);
+        setIntakePreview(previous => ({ ...previous, [templateId + ":" + fieldKey]: "" }));
+      } else if (action === "restore") {
         const draft = readIndustryIntakeDraft(window.localStorage, scope, profile, templateId);
         if (!draft) { setMessage("No local reference draft found."); return; }
         setIntakePreview(previous => ({ ...previous, [templateId + ":" + fieldKey]: draft.reference }));
@@ -161,7 +164,7 @@ export default function IndustryWorkspacePage() {
           intakePreview[templateId + ":" + fieldKey] ?? "", new Date().toISOString());
       }
       setError("");
-      setMessage(restore ? "Local reference restored." : "Local reference saved. No transaction created.");
+      setMessage(action === "delete" ? "Local reference deleted and verified." : action === "restore" ? "Local reference restored." : "Local reference saved. No transaction created.");
     } catch {
       setMessage("");
       setError("Draft unavailable. Use a reference code up to 64 characters and check browser storage.");
@@ -231,8 +234,9 @@ export default function IndustryWorkspacePage() {
                     </label>
                   ))}
                   <div className="flex gap-3 text-xs">
-                    <button type="button" disabled={!scope} onClick={() => saveReference(template.id, intakeFields[template.industry][0].key, false)} className="rounded border px-2 py-1">Save reference draft</button>
-                    <button type="button" disabled={!scope} onClick={() => saveReference(template.id, intakeFields[template.industry][0].key, true)} className="underline">Restore local draft</button>
+                    <button type="button" disabled={!scope} onClick={() => saveReference(template.id, intakeFields[template.industry][0].key, "save")} className="rounded border px-2 py-1">Save reference draft</button>
+                    <button type="button" disabled={!scope} onClick={() => saveReference(template.id, intakeFields[template.industry][0].key, "restore")} className="underline">Restore local draft</button>
+                    <button type="button" disabled={!scope} onClick={() => saveReference(template.id, intakeFields[template.industry][0].key, "delete")} className="underline">Delete local draft</button>
                   </div>
                   <p className="text-xs text-slate-500">Browser-local reference draft only — no customer transaction, workflow event or server write.</p>
                 </div>
