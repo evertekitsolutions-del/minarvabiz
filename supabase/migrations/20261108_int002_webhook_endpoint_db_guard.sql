@@ -5,7 +5,7 @@
 alter table public.integration_webhook_subscriptions
   add constraint integration_webhook_subscriptions_https_endpoint
   check (
-    endpoint ~ '^https://[^/?#@[:space:]]+(:[0-9]{1,5})?(/[^#[:space:]]*)?(\\?[^#[:space:]]*)?$'
+    endpoint ~ '^https://[^/?#@[:space:]]+'
     and endpoint !~ '[@#[:space:]]'
     and length(endpoint) <= 2048
   ) not valid;
