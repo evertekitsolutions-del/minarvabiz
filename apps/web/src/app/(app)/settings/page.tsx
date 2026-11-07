@@ -144,7 +144,7 @@ export default function SettingsPage() {
           <Button disabled={displayValidationError !== null} onClick={() => {
             try {
               const googleReviewUrl = parseGoogleReviewUrl(shop.googleReviewUrl ?? "");
-              const next = updateShopProfile({ ...shop, googleReviewUrl });
+              const next = updateShopProfile({ ...shop, googleReviewUrl }, shop.updatedAt);
               updateTaxConfig({ gstin: next.gstin });
               setShop(next);
               setShopMsgIsError(false);
