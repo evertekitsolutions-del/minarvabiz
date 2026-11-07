@@ -148,3 +148,29 @@ test("rejects corrupt persisted stage history inside transaction before insertin
   }), /event stage history mismatch/);
   assert.equal(inserts, 0);
 });
+
+
+test("rejects duplicate and malformed prior event IDs before opening SQLite transaction", async () => {
+  let transactions = 0;
+  const port = createIndustrySqliteCommitPort({
+    prepare() { throw new Error("unexpected SQL"); },
+    transaction() { transactions++; throw new Error("unexpected transaction"); },
+  });
+  const base = { id: "job-1", tenantId: "t1", branchId: "b1",
+    templateId: "repair-job", stage: "received", revision: 2,
+    appliedEventIds: ["prior-1", "prior-2"] };
+  const event = { eventId: "next", tenantId: "t1", branchId: "b1",
+    expectedRevision: 2, from: "received", to: "repairing" };
+  const access = { actorId: "u1", tenantId: "t1", branchId: "b1",
+    allowedTemplateIds: ["repair-job"],
+    allowedTransitions: [{ templateId: "repair-job", from: "received", to: "repairing" }] };
+  for (const appliedEventIds of [["prior-1", "prior-1"], ["prior-1", ""], ["prior-1", " ".repeat(3)]]) {
+    const original = { ...base, appliedEventIds };
+    await assert.rejects(port.commit({
+      original, next: { ...original, stage: "repairing", revision: 3,
+        appliedEventIds: [...appliedEventIds, "next"] },
+      events: [event], access,
+    }), /invalid revision history/);
+  }
+  assert.equal(transactions, 0);
+});
