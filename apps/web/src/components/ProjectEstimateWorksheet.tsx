@@ -15,6 +15,8 @@ export interface ProjectEstimateWorksheetProps {
   load: () => Promise<ProjectEstimateInput | null>;
   save: (worksheet: ProjectEstimateInput, idempotencyKey: string) => Promise<void>;
   enabled: boolean;
+  /** Host-selected ISO 4217 currency for a new estimate; never infer locale from a tenant. */
+  defaultCurrency: string;
   /** Server-authorized edit permission; read-only users may still inspect estimates. */
   canEdit?: boolean;
   /** Explicit host-authorized export; the host must check download permissions. */
@@ -26,7 +28,7 @@ const newLine = (): ProjectEstimateLine => ({
   unitCost: "0.00", markupPercent: "0",
 });
 
-export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport = false, canEdit = false }: ProjectEstimateWorksheetProps) {
+export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCurrency, canExport = false, canEdit = false }: ProjectEstimateWorksheetProps) {
   const [worksheet, setWorksheet] = React.useState<ProjectEstimateInput | null>(null);
   // Reject late load/save acknowledgements after a scope change or unmount.
   const generation = React.useRef(0);
@@ -58,17 +60,18 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     setSaveAcknowledged(false);
     setError("");
     if (!enabled || !scope.canViewCosts) return;
+    if (!/^[A-Z]{3}$/.test(defaultCurrency)) { setError("Invalid configured estimate currency"); return; }
     setBusy(true);
     loadRef.current().then(row => {
       if (row) calculateProjectEstimate(row, scope);
       if (active && currentGeneration === generation.current) setWorksheet(row ?? {
         tenantId: scope.tenantId, companyId: scope.companyId, branchId: scope.branchId,
-        projectId: scope.projectId, currency: "INR", revision: 0, lines: [newLine()],
+        projectId: scope.projectId, currency: defaultCurrency, revision: 0, lines: [newLine()],
       });
     }).catch(err => { if (active && currentGeneration === generation.current) setError(err instanceof Error ? err.message : "Load failed"); })
       .finally(() => { if (active && currentGeneration === generation.current) setBusy(false); });
     return () => { active = false; generation.current++; };
-  }, [enabled, scope.tenantId, scope.companyId, scope.branchId, scope.projectId, scope.canViewCosts]);
+  }, [enabled, scope.tenantId, scope.companyId, scope.branchId, scope.projectId, scope.canViewCosts, defaultCurrency]);
 
   const updateLine = (id: string, patch: Partial<ProjectEstimateLine>) => {
     setWorksheet(previous => previous && ({
