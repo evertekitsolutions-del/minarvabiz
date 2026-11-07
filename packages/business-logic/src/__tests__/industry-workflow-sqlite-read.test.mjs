@@ -88,7 +88,7 @@ test("scoped inbox paginates and replays each authorized workflow", () => {
   assert.equal(result.nextCursor, "job-1");
   assert.deepEqual(queries[0].args, ["tenant-1", "branch-1", "repair-job", "", 2]);
   assert.match(queries[0].sql, /template_id IN/);
-  assert.match(queries[0].sql, /tenant_id=\\? AND branch_id=\\?/);
+  assert.ok(queries[0].sql.includes("tenant_id=? AND branch_id=?"));
 });
 test("scoped inbox rejects invalid scope and pagination before SQL", () => {
   let queries = 0;
