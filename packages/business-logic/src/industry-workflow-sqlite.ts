@@ -32,7 +32,7 @@ export type IndustrySqliteDatabase = {
 };
 
 type Row = { template_id: string; stage: string; revision: number };
-type EventRow = { event_id: string };
+type EventRow = { event_id: string; from_stage: string; to_stage: string };
 
 /** Must only be called in a trusted process, with authenticated RBAC grants. */
 export function createIndustrySqliteCommitPort(db: IndustrySqliteDatabase): IndustryWorkflowCommitPort {
@@ -119,12 +119,22 @@ export function createIndustrySqliteCommitPort(db: IndustrySqliteDatabase): Indu
         }
         // The adapter must not accept a fabricated history or acknowledge a duplicate.
         const history: string[] = [];
+        let replayStage: string | undefined;
         for (let revision = 1; revision <= original.revision; revision++) {
           const found = db.prepare(
-            "SELECT event_id FROM industry_workflow_events WHERE tenant_id=? AND branch_id=? AND record_id=? AND revision=?"
+            "SELECT event_id, from_stage, to_stage FROM industry_workflow_events WHERE tenant_id=? AND branch_id=? AND record_id=? AND revision=?"
           ).get(...key, revision) as EventRow | undefined;
           if (!found) throw new Error("Industry SQLite event history incomplete");
+          if (!validId(found.event_id) || !validId(found.from_stage) ||
+              !validId(found.to_stage) ||
+              (replayStage !== undefined && found.from_stage !== replayStage)) {
+            throw new Error("Industry SQLite event stage history mismatch");
+          }
+          replayStage = found.to_stage;
           history.push(found.event_id);
+        }
+        if (replayStage !== undefined && replayStage !== original.stage) {
+          throw new Error("Industry SQLite event stage history mismatch");
         }
         if (history.length !== original.appliedEventIds.length ||
             history.some((id, i) => id !== original.appliedEventIds[i])) {
