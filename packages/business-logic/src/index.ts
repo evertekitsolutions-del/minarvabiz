@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// PRJ-006: non-posting scoped project cost and quote worksheet.
+export * from "./project-estimate-worksheet";
