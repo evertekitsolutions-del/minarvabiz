@@ -60,6 +60,7 @@ test("rejects non-HTTPS, credentials, fragments and literal/private destinations
     "https://hooks.example.org/#secret", "https://localhost", "https://127.0.0.1",
     "https://192.168.1.3", "https://8.8.8.8", "https://[::1]",
     "https://printer.local", "https://service.internal", "https://no-dot",
+    "https://private.onion", "https://router.home.arpa", "https://1.0.0.127.in-addr.arpa",
     "https://-bad.example.org", "invalid", "",
   ]) assert.throws(() => validateWebhookEndpoint(endpoint), undefined, endpoint);
   assert.equal(validateWebhookEndpoint("https://hooks.example.org/events"), "https://hooks.example.org/events");
