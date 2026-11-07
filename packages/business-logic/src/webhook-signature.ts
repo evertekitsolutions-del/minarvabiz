@@ -46,16 +46,22 @@ export async function verifyWebhookDelivery(input: {
   if (!Number.isSafeInteger(ts) || ts <= 0 || Math.abs(input.nowSeconds - ts) > tolerance) return false;
   const provider = input.cryptoProvider ?? globalThis.crypto;
   if (!provider?.subtle) return false;
-  const key = await provider.subtle.importKey("raw", encoder.encode(input.secret),
-    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const actual = new Uint8Array(await provider.subtle.sign("HMAC", key,
-    encoder.encode(`${input.timestamp}.${input.body}`)));
-  const supplied = input.signature.slice(3);
-  let mismatch = 0;
-  for (let i = 0; i < actual.length; i++) {
-    mismatch |= actual[i] ^ Number.parseInt(supplied.slice(i * 2, i * 2 + 2), 16);
+  try {
+    const key = await provider.subtle.importKey("raw", encoder.encode(input.secret),
+      { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const actual = new Uint8Array(await provider.subtle.sign("HMAC", key,
+      encoder.encode(`${input.timestamp}.${input.body}`)));
+    if (actual.length !== 32) return false;
+    const supplied = input.signature.slice(3);
+    let mismatch = 0;
+    for (let i = 0; i < actual.length; i++) {
+      mismatch |= actual[i] ^ Number.parseInt(supplied.slice(i * 2, i * 2 + 2), 16);
+    }
+    return mismatch === 0;
+  } catch {
+    // Receiver verification must fail closed if a crypto provider rejects.
+    return false;
   }
-  return mismatch === 0;
 }
 
 
