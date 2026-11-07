@@ -18,6 +18,19 @@ begin
   where o.status = 'leased' and o.lease_until <= now()
     and o.attempt_count >= 20;
 
+  -- Revoked consent must not leave pending/expired deliveries queued for a
+  -- later re-enable. Active leases remain fenced until expiry; acknowledgements
+  -- independently reject success after revocation.
+  update public.integration_webhook_delivery_outbox o
+  set status = 'dead', lease_until = null, updated_at = now()
+  where (o.status = 'pending' or (o.status = 'leased' and o.lease_until <= now()))
+    and not exists (
+      select 1 from public.integration_webhook_subscriptions s
+      where s.tenant_id = o.tenant_id and s.company_id = o.company_id
+        and s.branch_key = o.branch_key and s.subscription_id = o.subscription_id
+        and s.enabled = true and o.event_type = any(s.events)
+    );
+
   return query
   with eligible as (
     select o.tenant_id, o.company_id, o.branch_key, o.delivery_id
