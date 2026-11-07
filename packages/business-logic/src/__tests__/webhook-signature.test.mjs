@@ -11,7 +11,8 @@ require.extensions[".ts"] = (module, filename) => module._compile(
   }).outputText, filename,
 );
 const { signWebhookDelivery } = require("../webhook-signature.ts");
-const secret = "0123456789abcdef0123456789abcdef";
+// Deterministic synthetic HMAC key; never a production credential.
+const secret = "fixture-only-".repeat(4);
 const input = { eventId: "evt_123", eventType: "invoice.paid", timestamp: 1794000000,
   payload: { invoiceId: "inv_1" }, secret, cryptoProvider: webcrypto };
 test("signs exact serialized envelope with independently verifiable HMAC", async () => {
