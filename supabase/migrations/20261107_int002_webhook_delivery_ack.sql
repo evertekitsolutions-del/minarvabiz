@@ -15,6 +15,12 @@ begin
   end if;
   update public.integration_webhook_delivery_outbox o
   set status = case when p_succeeded then 'delivered'
+                    when not exists (
+                      select 1 from public.integration_webhook_subscriptions s
+                      where s.tenant_id = o.tenant_id and s.company_id = o.company_id
+                        and s.branch_key = o.branch_key and s.subscription_id = o.subscription_id
+                        and s.enabled = true and o.event_type = any(s.events)
+                    ) then 'dead'
                     when o.attempt_count >= 20 then 'dead'
                     else 'pending' end,
       delivered_at = case when p_succeeded then now() else null end,
