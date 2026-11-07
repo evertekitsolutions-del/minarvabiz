@@ -163,3 +163,11 @@ test("rapid profile saves advance revision and reject a same-millisecond stale e
   assert.ok(Date.parse(second.updatedAt) > Date.parse(saved.updatedAt));
   assert.equal(api.getShopProfile().shopName, "Second save");
 });
+
+
+test("settings UI does not claim a durable save before persistence acknowledgement", () => {
+  const settings = fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/settings/page.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(settings, /setShopMsg\\("Business profile saved"\\)/);
+  assert.match(settings, /Business profile updated locally; durable save and cloud sync are not yet verified/);
+  assert.match(settings, /Saving business settings is unavailable in this browser workspace/);
+});
