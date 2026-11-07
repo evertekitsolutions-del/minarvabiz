@@ -84,10 +84,18 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
     // A revision conflict is sticky until an authoritative reload; editing must not unlock stale saves.
     setMessage("");
   };
-  const totals = React.useMemo(() => {
-    if (!worksheet) return null;
-    try { return calculateProjectEstimate(worksheet, scope); } catch { return null; }
+  // Preserve domain validation errors in the UI instead of silently disabling Save.
+  // A worksheet can be partially edited (for example an empty numeric field) before
+  // it becomes valid again; do not treat that as a failed persistence operation.
+  const calculation = React.useMemo(() => {
+    if (!worksheet) return { totals: null, validationError: "" };
+    try {
+      return { totals: calculateProjectEstimate(worksheet, scope), validationError: "" };
+    } catch (err) {
+      return { totals: null, validationError: err instanceof Error ? err.message : "Invalid estimate values" };
+    }
   }, [worksheet, scope]);
+  const { totals, validationError } = calculation;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -193,6 +201,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
       <h2 className="text-lg font-semibold">Project estimate</h2>
       {error && <p role="alert" className="text-red-700">{error}</p>}
       {message && <p role="status">{message}</p>}
+      {validationError && <p role="alert" aria-label="Estimate validation error" className="text-red-700">{validationError}</p>
       {!worksheet && !busy && <button type="button" onClick={reloadCurrent}>Retry loading estimate</button>}
       {worksheet && <>
         <p aria-label="Estimate revision">Revision: {worksheet.revision}{hasUnsavedChanges ? " · Unsaved changes" : ""}</p>
