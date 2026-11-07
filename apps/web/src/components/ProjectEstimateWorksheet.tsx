@@ -38,6 +38,8 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
   const saveRef = React.useRef(save);
   saveRef.current = save;
   const [busy, setBusy] = React.useState(false);
+  // Synchronous guard: React state updates do not prevent two submits in one event turn.
+  const writeInFlight = React.useRef(false);
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
   const [requestKey, setRequestKey] = React.useState<string | null>(null);
@@ -84,7 +86,8 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canEdit || !worksheet || !totals || busy || revisionConflict || saveAcknowledged || !hasUnsavedChanges) return;
+    if (!canEdit || !worksheet || !totals || busy || writeInFlight.current || revisionConflict || saveAcknowledged || !hasUnsavedChanges) return;
+    writeInFlight.current = true;
     const currentGeneration = generation.current;
     const key = requestKey ?? crypto.randomUUID();
     setRequestKey(key);
@@ -126,7 +129,10 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
             ? "Save outcome is uncertain. Reload the authoritative revision before editing or saving again."
             : err instanceof Error ? err.message : "Save failed");
       }
-    } finally { if (currentGeneration === generation.current) setBusy(false); }
+    } finally {
+      writeInFlight.current = false;
+      if (currentGeneration === generation.current) setBusy(false);
+    }
   }
 
   async function reloadCurrent() {
