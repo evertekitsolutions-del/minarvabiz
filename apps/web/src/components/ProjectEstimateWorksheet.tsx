@@ -40,6 +40,8 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
   const [requestKey, setRequestKey] = React.useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
   const [revisionConflict, setRevisionConflict] = React.useState(false);
+  // Once the writer acknowledged a commit, never replay it just because the follow-up read failed.
+  const [saveAcknowledged, setSaveAcknowledged] = React.useState(false);
   React.useEffect(() => {
     let active = true;
     const currentGeneration = ++generation.current;
@@ -48,6 +50,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     setRequestKey(null);
     setHasUnsavedChanges(false);
     setRevisionConflict(false);
+    setSaveAcknowledged(false);
     setError("");
     if (!enabled || !scope.canViewCosts) return;
     setBusy(true);
@@ -78,7 +81,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canEdit || !worksheet || !totals || busy || revisionConflict || !hasUnsavedChanges) return;
+    if (!canEdit || !worksheet || !totals || busy || revisionConflict || saveAcknowledged || !hasUnsavedChanges) return;
     const currentGeneration = generation.current;
     const key = requestKey ?? crypto.randomUUID();
     setRequestKey(key);
@@ -86,6 +89,8 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     setError("");
     try {
       await save(worksheet, key);
+      if (currentGeneration !== generation.current) return;
+      setSaveAcknowledged(true);
       // Never assume the adapter's acknowledgement contains the next authoritative revision.
       const current = await load();
       if (currentGeneration !== generation.current) return;
@@ -96,13 +101,14 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       setRequestKey(null);
       setHasUnsavedChanges(false);
       setRevisionConflict(false);
+      setSaveAcknowledged(false);
       setMessage("Estimate saved");
     } catch (err) {
       if (currentGeneration === generation.current) {
         const conflict = (typeof err === "object" && err !== null && "status" in err && (err.status === 409 || err.status === 412)) ||
           (err instanceof Error && err.message === "Project estimate revision conflict");
         setRevisionConflict(conflict);
-        setError(conflict ? "Estimate changed elsewhere. Discard edits and reload the latest revision before saving." : err instanceof Error ? err.message : "Save failed");
+        setError(conflict ? "Estimate changed elsewhere. Discard edits and reload the latest revision before saving." : saveAcknowledged ? "Save was acknowledged but reload failed. Reload the authoritative revision before editing or saving again." : err instanceof Error ? err.message : "Save failed");
       }
     } finally { if (currentGeneration === generation.current) setBusy(false); }
   }
@@ -123,6 +129,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       setRequestKey(null);
       setHasUnsavedChanges(false);
       setRevisionConflict(false);
+      setSaveAcknowledged(false);
       setMessage("Current estimate loaded");
     } catch (err) { if (currentGeneration === generation.current) setError(err instanceof Error ? err.message : "Reload failed"); }
     finally { if (currentGeneration === generation.current) setBusy(false); }
@@ -151,8 +158,8 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       {!worksheet && !busy && <button type="button" onClick={reloadCurrent}>Retry loading estimate</button>}
       {worksheet && <>
         <p aria-label="Estimate revision">Revision: {worksheet.revision}{hasUnsavedChanges ? " · Unsaved changes" : ""}</p>
-        <button type="button" disabled={busy || hasUnsavedChanges} onClick={reloadCurrent}>Reload current estimate</button>
-        {(hasUnsavedChanges || revisionConflict) && <div role="status">
+        <button type="button" disabled={busy || hasUnsavedChanges || saveAcknowledged} onClick={reloadCurrent}>Reload current estimate</button>
+        {(hasUnsavedChanges || revisionConflict || saveAcknowledged) && <div role="status">
           <p>Save or discard your edits before reloading. A revision conflict requires reloading the latest estimate.</p>
           <button type="button" disabled={busy} onClick={() => { if (window.confirm("Discard unsaved estimate edits and load the latest saved revision?")) void reloadCurrent(); }}>Discard edits and reload latest</button>
         </div>}
@@ -201,7 +208,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
           setWorksheet({ ...worksheet, lines: [...worksheet.lines, newLine()] }); setRequestKey(null); setHasUnsavedChanges(true); setMessage("");
         }}>Add line</button>
         {totals && <p>Cost: {totals.costMinor / 100} · Proposed revenue: {totals.proposedRevenueMinor / 100} · Margin: {totals.grossMarginMinor / 100} {totals.currency}</p>}
-        {canEdit && <button type="submit" disabled={busy || !totals || !hasUnsavedChanges || revisionConflict}>{busy ? "Working…" : "Save estimate"}</button>}
+        {canEdit && <button type="submit" disabled={busy || !totals || !hasUnsavedChanges || revisionConflict || saveAcknowledged}>{busy ? "Working…" : "Save estimate"}</button>}
         {canExport && <button type="button" disabled={busy || !totals} onClick={downloadCsv}>Export estimate CSV</button>}
       </>}
     </form>
