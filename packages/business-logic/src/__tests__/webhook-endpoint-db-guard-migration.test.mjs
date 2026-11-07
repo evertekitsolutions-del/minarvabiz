@@ -8,8 +8,8 @@ const order = readFileSync(new URL("../../../../supabase/MIGRATION_ORDER.txt", i
 test("service-role webhook writes require HTTPS and reject credentials, fragments and whitespace", () => {
   assert.match(sql, /alter table public\.integration_webhook_subscriptions/);
   assert.match(sql, /add constraint integration_webhook_subscriptions_https_endpoint/);
-  assert.match(sql, /endpoint ~ '\^https:\/\//);
-  assert.match(sql, /endpoint !~ '\[@#\[:space:\]\]'/);
+  assert.ok(sql.includes("endpoint ~ '^https://"));
+  assert.ok(sql.includes("endpoint !~ '[@#[:space:]]'"));
   assert.match(sql, /not valid;/i);
 });
 
