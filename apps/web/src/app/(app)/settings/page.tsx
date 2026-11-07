@@ -150,7 +150,14 @@ export default function SettingsPage() {
                 throw new Error("Saving business settings is unavailable in this browser workspace. No changes were saved. Use a configured persistent workspace.");
               }
               const googleReviewUrl = parseGoogleReviewUrl(shop.googleReviewUrl ?? "");
-              const next = updateShopProfile({ ...shop, googleReviewUrl }, shop.updatedAt);
+              // Persist the validated canonical locale/zone/currency, not the raw
+              // editor strings (which may contain whitespace or IANA aliases).
+              const normalizedDisplay = validateWorkspaceDisplayPreferences({
+                locale: shop.locale ?? "en-IN",
+                timeZone: shop.timeZone ?? "Asia/Kolkata",
+                currency: shop.currency,
+              });
+              const next = updateShopProfile({ ...shop, ...normalizedDisplay, googleReviewUrl }, shop.updatedAt);
               updateTaxConfig({ gstin: next.gstin });
               setShop(next);
               setShopMsgIsError(false);
