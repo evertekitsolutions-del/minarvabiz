@@ -299,3 +299,26 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+export * from "./industry-workspace-profile";
+
+// Advisory industry-specific workflow templates; no activation or persisted transitions.
+export * from "./industry-workflow-templates";
+
+// Pure scoped industry workflow reducer; persistence adapters must enforce CAS and RBAC.
+export * from "./industry-workflow-reducer";
+
+// Explicit trusted RBAC grant boundary for optional industry workflow transitions.
+export * from "./industry-workflow-access";
+
+// Transactional commit acknowledgement contract; storage adapters remain required.
+export * from "./industry-workflow-commit";
+
+// Optional per-industry reference drafts; never authoritative transactions.
+export * from "./industry-intake-draft";
+
+// Trusted Windows-host SQLite transaction adapter; never call from renderer.
+export * from "./industry-workflow-sqlite";
+
+// Verified, scoped durable workflow read path for trusted SQLite hosts.
+export * from "./industry-workflow-sqlite-read";
