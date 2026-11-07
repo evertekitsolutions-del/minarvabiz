@@ -118,3 +118,12 @@ test("inbox binds deduplicated template grants as SQL parameters, not SQL text",
   assert.match(query, /template_id IN \(\?,\?\)/);
   assert.deepEqual(args, ["tenant-1", "branch-1", "repair-job", "salon-visit", "", 26]);
 });
+
+test("inbox rejects oversized grant sets before issuing SQL", () => {
+  let queries = 0;
+  const db = { transaction(fn) { return fn; }, prepare() { queries++; throw Error("unexpected SQL"); } };
+  const grants = Array.from({ length: 101 }, (_, index) => `industry-${index}`);
+  assert.throws(() => listIndustrySqliteWorkflows(db, profile,
+    { ...access, allowedTemplateIds: grants }), /Too many industry workflow template grants/);
+  assert.equal(queries, 0);
+});
