@@ -41,11 +41,32 @@ export function createIndustrySqliteCommitPort(db: IndustrySqliteDatabase): Indu
   }
   return {
     async commit({ original, next, events, access }): Promise<IndustryWorkflowRecord> {
-      if (access.tenantId !== original.tenantId || access.branchId !== original.branchId ||
+      // A direct port caller must not bypass the trusted host's scoped grants.
+      // Browser preferences and successful UI preflight are not authorization.
+      const validId = (value: unknown): value is string =>
+        typeof value === "string" && value.trim().length > 0 && value.length <= 128;
+      if (!access || !original || !next || !Array.isArray(events) ||
+          !validId(access.actorId) || !validId(access.tenantId) ||
+          !validId(access.branchId) || !validId(original.id) ||
+          !validId(original.templateId) || !validId(original.stage) ||
+          !Array.isArray(access.allowedTemplateIds) ||
+          !Array.isArray(access.allowedTransitions) ||
+          !access.allowedTemplateIds.includes(original.templateId) ||
+          access.tenantId !== original.tenantId || access.branchId !== original.branchId ||
           next.tenantId !== original.tenantId || next.branchId !== original.branchId ||
           next.id !== original.id || next.templateId !== original.templateId ||
-          !access.actorId || events.length === 0) {
-        throw new Error("Industry SQLite scope mismatch");
+          events.length === 0 || events.length > 100) {
+        throw new Error("Industry SQLite scope or authorization mismatch");
+      }
+      for (const event of events) {
+        if (!event || !validId(event.eventId) || !validId(event.from) ||
+            !validId(event.to) || event.tenantId !== access.tenantId ||
+            event.branchId !== access.branchId ||
+            !access.allowedTransitions.some(grant =>
+              grant?.templateId === original.templateId &&
+              grant.from === event.from && grant.to === event.to)) {
+          throw new Error("Industry SQLite transition not authorized");
+        }
       }
       // Never trust a direct port caller to have run the UI-side preflight.
       // Validate the entire event chain before any database statement executes.
