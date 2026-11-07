@@ -75,6 +75,8 @@ export function createIndustrySqliteCommitPort(db: IndustrySqliteDatabase): Indu
           !Array.isArray(original.appliedEventIds) ||
           !Array.isArray(next.appliedEventIds) ||
           original.appliedEventIds.length !== original.revision ||
+          original.appliedEventIds.some(id => !validId(id)) ||
+          new Set(original.appliedEventIds).size !== original.appliedEventIds.length ||
           original.revision > Number.MAX_SAFE_INTEGER - events.length ||
           !events.every(event => Number.isSafeInteger(event.expectedRevision) &&
             event.expectedRevision >= 0)) {
