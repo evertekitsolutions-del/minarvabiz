@@ -73,3 +73,24 @@ test("rotation accepts previous key only before explicit cutoff, rejects after e
     ...candidate, activeSecret: secret, previousSecret: undefined,
   }), true);
 });
+
+test("verification fails closed when WebCrypto rejects or returns a malformed MAC", async () => {
+  const signed = await signWebhookDelivery(input);
+  const candidate = {
+    body: signed.body, timestamp: signed.headers["x-minarva-timestamp"],
+    signature: signed.headers["x-minarva-signature"], secret,
+    nowSeconds: input.timestamp,
+  };
+  const rejecting = { subtle: {
+    importKey: async () => { throw new Error("crypto provider failure"); },
+  } };
+  assert.equal(await verifyWebhookDelivery({ ...candidate, cryptoProvider: rejecting }), false);
+  const malformed = { subtle: {
+    importKey: async () => ({}),
+    sign: async () => new Uint8Array(0).buffer,
+  } };
+  assert.equal(await verifyWebhookDelivery({ ...candidate, cryptoProvider: malformed }), false);
+  assert.equal(await verifyWebhookDeliveryWithRotation({
+    ...candidate, activeSecret: secret, cryptoProvider: rejecting,
+  }), false);
+});
