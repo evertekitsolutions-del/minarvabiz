@@ -22,3 +22,7 @@ apps/web/scripts/vercel-build.mjs:generic-api-key:10
 # Exact commit/file/rule fingerprints only; current code no longer contains an API-key-like symbol.
 7ec94c030e3056cf42a7a1b4e404dfe386313b0b:apps/web/src/app/TrialWelcomePopup.tsx:generic-api-key:13
 d054860179df7629c4944e9a40058a4308c82ff7:apps/web/src/app/TrialWelcomePopup.tsx:generic-api-key:11
+
+# Historical test-only HMAC fixture, independently inspected at commit 01d91593.
+# Fixed literal in webhook-signature.test.mjs; no production credential. Exact finding only.
+01d9159393a7f31deecdb582d91b3929e3727cb3:packages/business-logic/src/__tests__/webhook-signature.test.mjs:generic-api-key:14

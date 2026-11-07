@@ -80,6 +80,7 @@ export * from "./session";
 export * from "./autosave";
 export * from "./receipt";
 export * from "./shop-profile";
+export * from "./workspace-display-preferences";
 export * from "./live-dashboard";
 export * from "./day-end";
 export * from "./notification-templates";
