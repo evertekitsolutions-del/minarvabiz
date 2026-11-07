@@ -86,11 +86,18 @@ export function listIndustrySqliteWorkflows(
       (options.afterId !== undefined && !valid(options.afterId))) {
     throw new Error("Invalid industry workflow pagination");
   }
-  // Restrict the query to the authenticated branch before fetching any rows.
+  // Empty grants cannot expose workflow metadata, even to a scoped caller.
+  const templates = [...new Set(access.allowedTemplateIds)];
+  if (templates.some(template => !valid(template))) {
+    throw new Error("Invalid industry workflow template grant");
+  }
+  if (templates.length === 0) return { records: [], nextCursor: null };
+  // Filter by authorized templates before pagination: inaccessible records must
+  // neither block the inbox nor leak through cursors or page sizes.
   return db.transaction(() => {
     const rows = db.prepare(
-      "SELECT record_id FROM industry_workflow_records WHERE tenant_id=? AND branch_id=? AND record_id>? ORDER BY record_id LIMIT ?"
-    ).all(access.tenantId, access.branchId, options.afterId ?? "", limit + 1) as { record_id: string }[];
+      `SELECT record_id FROM industry_workflow_records WHERE tenant_id=? AND branch_id=? AND template_id IN (${templates.map(() => "?").join(",")}) AND record_id>? ORDER BY record_id LIMIT ?`
+    ).all(access.tenantId, access.branchId, ...templates, options.afterId ?? "", limit + 1) as { record_id: string }[];
     if (!Array.isArray(rows) || rows.some(row => !row || !valid(row.record_id))) {
       throw new Error("Industry workflow list corrupt records");
     }
