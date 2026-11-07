@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { parseGoogleReviewUrl, formatWorkspaceDateTime, formatWorkspaceMoney, validateWorkspaceDisplayPreferences } from "@minarvabiz/business-logic";
+import { parseGoogleReviewUrl, formatWorkspaceDateTime, formatWorkspaceMoney, validateWorkspaceDisplayPreferences, isProductionMode } from "@minarvabiz/business-logic";
 import { SyncPanel, PersistencePanel, Button, FormField, inputClass, selectClass, PrintTemplateManager, TrashRecoveryPanel } from "@minarvabiz/ui";
 import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage, getShopProfile, updateShopProfile, updateTaxConfig, getPrintSettings, updatePrintSettings, getScopedMasterReplayStatus, retryScopedMasterOutbox } from "@minarvabiz/business-logic";
 
@@ -143,6 +143,11 @@ export default function SettingsPage() {
         <div className="flex items-center gap-2">
           <Button disabled={displayValidationError !== null} onClick={() => {
             try {
+              // Production web has no durable profile writer in touchPersistence().
+              // Fail closed instead of showing a false saved confirmation.
+              if (isProductionMode() && typeof (window as Window & { __minarvaDesktopPersist?: () => void }).__minarvaDesktopPersist !== "function") {
+                throw new Error("Saving business settings is unavailable in this browser workspace. No changes were saved. Use a configured persistent workspace.");
+              }
               const googleReviewUrl = parseGoogleReviewUrl(shop.googleReviewUrl ?? "");
               const next = updateShopProfile({ ...shop, googleReviewUrl }, shop.updatedAt);
               updateTaxConfig({ gstin: next.gstin });
