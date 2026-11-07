@@ -91,6 +91,11 @@ export function listIndustrySqliteWorkflows(
   if (templates.some(template => !valid(template))) {
     throw new Error("Invalid industry workflow template grant");
   }
+  // Bound SQL bind parameters even when a trusted grant resolver returns an unexpectedly large set.
+  // Fail closed rather than risking a host-dependent SQLite variable-limit error.
+  if (templates.length > 100) {
+    throw new Error("Too many industry workflow template grants");
+  }
   if (templates.length === 0) return { records: [], nextCursor: null };
   // Filter by authorized templates before pagination: inaccessible records must
   // neither block the inbox nor leak through cursors or page sizes.
