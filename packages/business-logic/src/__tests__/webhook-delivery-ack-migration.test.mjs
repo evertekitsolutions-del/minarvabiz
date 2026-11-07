@@ -37,3 +37,9 @@ test("revoked subscription or removed event cannot be acknowledged as delivered"
   assert.match(sql, /s\.branch_key = o\.branch_key and s\.subscription_id = o\.subscription_id/i);
   assert.match(sql, /s\.enabled = true and o\.event_type = any\(s\.events\)/i);
 });
+
+test("failed acknowledgement after consent revocation is terminal, never requeued", () => {
+  assert.match(sql, /when not exists\s*\(\s*select 1 from public\.integration_webhook_subscriptions s/i);
+  assert.match(sql, /\) then 'dead'\s*when o\.attempt_count >= 20 then 'dead'/i);
+  assert.match(sql, /s\.enabled = true and o\.event_type = any\(s\.events\)/i);
+});
