@@ -9,7 +9,7 @@ require.extensions[".ts"] = (module, filename) =>
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText, filename);
 const { buildIndustryProfile } = require("../industry-workspace-profile.ts");
-const { saveIndustryIntakeDraft, readIndustryIntakeDraft } = require("../industry-intake-draft.ts");
+const { saveIndustryIntakeDraft, readIndustryIntakeDraft, deleteIndustryIntakeDraft } = require("../industry-intake-draft.ts");
 const profile = buildIndustryProfile("repair", ["repair", "restaurant"]);
 const scope = "minarva:industry-profile:v1:live:operator:branch";
 const now = "2026-11-07T00:00:00.000Z";
@@ -29,4 +29,24 @@ test("disabled pack, malformed references and invalid scopes fail closed", () =>
 });
 test("storage acknowledgement without durable readback is rejected", () => {
   assert.throws(() => saveIndustryIntakeDraft({ getItem: () => null, setItem: () => {} }, scope, profile, "repair-job", "JOB-1", now), /persist/);
+});
+
+test("operator can delete only selected scoped draft with verified readback", () => {
+  const values = new Map();
+  const storage = {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: key => values.delete(key),
+  };
+  saveIndustryIntakeDraft(storage, scope, profile, "repair-job", "JOB-19", now);
+  saveIndustryIntakeDraft(storage, scope, profile, "restaurant-ticket", "TABLE-4", now);
+  assert.equal(deleteIndustryIntakeDraft(storage, scope, profile, "repair-job"), true);
+  assert.equal(readIndustryIntakeDraft(storage, scope, profile, "repair-job"), null);
+  assert.equal(readIndustryIntakeDraft(storage, scope, profile, "restaurant-ticket")?.reference, "TABLE-4");
+  assert.equal(deleteIndustryIntakeDraft(storage, scope, profile, "repair-job"), false);
+  assert.throws(() => deleteIndustryIntakeDraft(storage, scope, profile, "laundry-ticket"));
+});
+test("failed local draft deletion never reports success", () => {
+  const storage = { getItem: () => "stale", removeItem: () => {} };
+  assert.throws(() => deleteIndustryIntakeDraft(storage, scope, profile, "repair-job"), /not confirmed/);
 });
