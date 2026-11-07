@@ -316,3 +316,6 @@ export * from "./industry-workflow-commit";
 
 // Optional per-industry reference drafts; never authoritative transactions.
 export * from "./industry-intake-draft";
+
+// Trusted Windows-host SQLite transaction adapter; never call from renderer.
+export * from "./industry-workflow-sqlite";
