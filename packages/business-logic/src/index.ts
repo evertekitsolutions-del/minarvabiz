@@ -319,3 +319,6 @@ export * from "./industry-intake-draft";
 
 // Trusted Windows-host SQLite transaction adapter; never call from renderer.
 export * from "./industry-workflow-sqlite";
+
+// Verified, scoped durable workflow read path for trusted SQLite hosts.
+export * from "./industry-workflow-sqlite-read";
