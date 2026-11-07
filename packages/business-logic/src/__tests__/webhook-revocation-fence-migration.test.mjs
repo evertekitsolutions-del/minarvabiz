@@ -11,7 +11,7 @@ test("revocation fence is installed after outbox and acknowledgement", () => {
   const name = "20261107_int002_webhook_revocation_fence.sql";
   assert.equal(lines.filter((line) => line === name).length, 1);
   assert.ok(lines.indexOf(name) > lines.indexOf("20261107_int002_webhook_delivery_ack.sql"));
-  assert.match(sql, /after update of enabled, events or delete on public\.integration_webhook_subscriptions/i);
+  assert.match(sql, /after update of enabled, events, endpoint or delete on public\.integration_webhook_subscriptions/i);
 });
 test("delete and disable fence only matching scoped undelivered deliveries", () => {
   for (const field of ["tenant_id", "company_id", "branch_key", "subscription_id"]) {
@@ -19,6 +19,7 @@ test("delete and disable fence only matching scoped undelivered deliveries", () 
   }
   assert.match(sql, /tg_op = 'DELETE'/);
   assert.match(sql, /not new\.enabled/);
+  assert.match(sql, /new\.endpoint is distinct from old\.endpoint/);
   assert.match(sql, /not \(o\.event_type = any\(new\.events\)\)/);
   assert.match(sql, /o\.status in \('pending', 'leased'\)/);
   assert.match(sql, /lease_until = null/);
