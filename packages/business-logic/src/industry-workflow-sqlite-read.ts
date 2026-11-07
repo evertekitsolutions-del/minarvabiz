@@ -63,3 +63,43 @@ export function readIndustrySqliteWorkflow(
     return rebuilt;
   })();
 }
+
+/**
+ * Bounded branch-scoped workflow inbox for a trusted host.
+ * Never expose unverified rows: each record is reloaded and replay-validated
+ * through the same authenticated read boundary as a single-record lookup.
+ * Cursor pagination is stable by record_id; callers must resolve grants anew.
+ */
+export function listIndustrySqliteWorkflows(
+  db: IndustrySqliteDatabase,
+  profile: IndustryWorkspaceProfile,
+  access: IndustryWorkflowAccess,
+  options: { afterId?: string; limit?: number } = {},
+): { records: IndustryWorkflowRecord[]; nextCursor: string | null } {
+  if (!db || typeof db.prepare !== "function" || typeof db.transaction !== "function" ||
+      !access || !valid(access.actorId) || !valid(access.tenantId) ||
+      !valid(access.branchId) || !Array.isArray(access.allowedTemplateIds)) {
+    throw new Error("Trusted industry workflow list authorization required");
+  }
+  const limit = options.limit ?? 25;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50 ||
+      (options.afterId !== undefined && !valid(options.afterId))) {
+    throw new Error("Invalid industry workflow pagination");
+  }
+  // Restrict the query to the authenticated branch before fetching any rows.
+  return db.transaction(() => {
+    const rows = db.prepare(
+      "SELECT record_id FROM industry_workflow_records WHERE tenant_id=? AND branch_id=? AND record_id>? ORDER BY record_id LIMIT ?"
+    ).all(access.tenantId, access.branchId, options.afterId ?? "", limit + 1) as { record_id: string }[];
+    if (!Array.isArray(rows) || rows.some(row => !row || !valid(row.record_id))) {
+      throw new Error("Industry workflow list corrupt records");
+    }
+    const selected = rows.slice(0, limit);
+    const records = selected.map(row => {
+      const record = readIndustrySqliteWorkflow(db, profile, access, row.record_id);
+      if (!record) throw new Error("Industry workflow list changed during read");
+      return record;
+    });
+    return { records, nextCursor: rows.length > limit ? selected[selected.length - 1].record_id : null };
+  })();
+}
