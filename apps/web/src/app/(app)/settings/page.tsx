@@ -186,8 +186,17 @@ export default function SettingsPage() {
           </FormField>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => { const next = updatePrintSettings({ defaultInvoicePaper: printing.defaultInvoicePaper, thermalWidthMm: printing.thermalWidthMm, labelCodeMode: printing.labelCodeMode }); setPrinting(next); setPrintMsg("Printing defaults saved"); }}>Save printing defaults</Button>
-          {printMsg && <span className="text-sm text-emerald-600">{printMsg}</span>}
+          <Button onClick={() => {
+            // Browser-only production sessions have no durable settings writer.
+            if (isProductionMode() && typeof (window as Window & { __minarvaDesktopPersist?: () => void }).__minarvaDesktopPersist !== "function") {
+              setPrintMsg("Printing defaults cannot be saved in this browser workspace. No changes were saved.");
+              return;
+            }
+            const next = updatePrintSettings({ defaultInvoicePaper: printing.defaultInvoicePaper, thermalWidthMm: printing.thermalWidthMm, labelCodeMode: printing.labelCodeMode });
+            setPrinting(next);
+            setPrintMsg("Printing defaults updated locally; verify persistence before restarting.");
+          }}>Save printing defaults</Button>
+          {printMsg && <span role="status" className="text-sm text-slate-700">{printMsg}</span>}
         </div>
       </div>
 
