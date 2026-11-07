@@ -86,7 +86,8 @@ test("scoped inbox paginates and replays each authorized workflow", () => {
   assert.equal(result.records.length, 1);
   assert.equal(result.records[0].id, "job-1");
   assert.equal(result.nextCursor, "job-1");
-  assert.deepEqual(queries[0].args, ["tenant-1", "branch-1", "", 2]);
+  assert.deepEqual(queries[0].args, ["tenant-1", "branch-1", "repair-job", "", 2]);
+  assert.match(queries[0].sql, /template_id IN/);
   assert.match(queries[0].sql, /tenant_id=\\? AND branch_id=\\?/);
 });
 test("scoped inbox rejects invalid scope and pagination before SQL", () => {
@@ -99,4 +100,21 @@ test("scoped inbox rejects invalid scope and pagination before SQL", () => {
   assert.throws(() => listIndustrySqliteWorkflows(db, profile, access, { limit: 51 }), /pagination/);
   assert.throws(() => listIndustrySqliteWorkflows(db, profile, access, { afterId: "" }), /pagination/);
   assert.equal(queries, 0);
+});
+
+test("inbox with no template grants returns no rows without querying storage", () => {
+  let queries = 0;
+  const db = { transaction(fn) { return fn; }, prepare() { queries++; throw Error("SQL should not run"); } };
+  assert.deepEqual(listIndustrySqliteWorkflows(db, profile, { ...access, allowedTemplateIds: [] }),
+    { records: [], nextCursor: null });
+  assert.equal(queries, 0);
+});
+test("inbox binds deduplicated template grants as SQL parameters, not SQL text", () => {
+  let query, args;
+  const db = { transaction(fn) { return fn; }, prepare(sql) { query = sql; return { all(...params) { args = params; return []; } }; } };
+  const grants = ["repair-job", "salon-visit", "repair-job"];
+  assert.deepEqual(listIndustrySqliteWorkflows(db, profile,
+    { ...access, allowedTemplateIds: grants }), { records: [], nextCursor: null });
+  assert.match(query, /template_id IN \(\?,\?\)/);
+  assert.deepEqual(args, ["tenant-1", "branch-1", "repair-job", "salon-visit", "", 26]);
 });
