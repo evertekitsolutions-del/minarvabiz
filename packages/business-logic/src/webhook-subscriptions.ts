@@ -49,7 +49,8 @@ export function validateWebhookEndpoint(input: string): string {
   const host = url.hostname.toLowerCase().replace(/\.$/, "");
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") ||
       host.endsWith(".internal") || host.endsWith(".test") || host.endsWith(".invalid") ||
-      host.endsWith(".example") || !host.includes(".") || host.includes(":") ||
+      host.endsWith(".example") || host.endsWith(".onion") || host.endsWith(".arpa") ||
+      host.endsWith(".home.arpa") || !host.includes(".") || host.includes(":") ||
       host.startsWith("[") || IPV4.test(host) || host === "0.0.0.0") {
     // Reject literal IPs, including public ones: delivery adapters must resolve
     // and pin vetted public DNS targets on every connection and redirect.
