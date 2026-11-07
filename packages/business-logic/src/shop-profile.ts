@@ -75,6 +75,7 @@ export function updateShopProfile(patch: Partial<ShopProfile>, expectedUpdatedAt
     timeZone: next.timeZone || "Asia/Kolkata",
     currency: next.currency,
   });
+  const previousProfile = profile;
   profile = {
     ...next,
     ...display,
@@ -88,7 +89,14 @@ export function updateShopProfile(patch: Partial<ShopProfile>, expectedUpdatedAt
       return new Date(next).toISOString();
     })(),
   };
-  touchPersistence();
+  try {
+    touchPersistence();
+  } catch (error) {
+    // Do not acknowledge a profile mutation if the persistence adapter
+    // rejected the write. The caller can retry without losing its revision.
+    profile = previousProfile;
+    throw error;
+  }
   return getShopProfile();
 }
 
