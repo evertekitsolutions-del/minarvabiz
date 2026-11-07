@@ -66,3 +66,26 @@ export function readIndustryIntakeDraft(
   const raw = storage.getItem(industryIntakeDraftKey(preferenceKey, templateId));
   return raw === null ? null : validateIndustryIntakeDraft(JSON.parse(raw), profile, templateId);
 }
+
+/**
+ * Explicitly forget an operator-local reference. Do not silently delete
+ * unrelated pack drafts or another branch's data. A failed removal is surfaced
+ * rather than claiming the reference has been erased.
+ */
+export function deleteIndustryIntakeDraft(
+  storage: Pick<Storage, "getItem" | "removeItem">,
+  preferenceKey: string,
+  profile: IndustryWorkspaceProfile,
+  templateId: string,
+): boolean {
+  if (!listIndustryWorkflowTemplates(profile).some(item => item.id === templateId)) {
+    throw new Error("Industry workflow is not selected");
+  }
+  const key = industryIntakeDraftKey(preferenceKey, templateId);
+  const existed = storage.getItem(key) !== null;
+  storage.removeItem(key);
+  if (storage.getItem(key) !== null) {
+    throw new Error("Industry intake draft deletion not confirmed");
+  }
+  return existed;
+}
