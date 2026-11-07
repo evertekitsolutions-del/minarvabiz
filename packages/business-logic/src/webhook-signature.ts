@@ -57,3 +57,26 @@ export async function verifyWebhookDelivery(input: {
   }
   return mismatch === 0;
 }
+
+
+/** Server-side rotation verifier: accepts the active key and, during a bounded
+ * overlap window, one previous key. Never expose these keys to browser clients.
+ * Replay protection remains the responsibility of the durable event-ID store. */
+export async function verifyWebhookDeliveryWithRotation(input: {
+  body: string; timestamp: string; signature: string;
+  activeSecret: string; previousSecret?: string;
+  previousKeyValidUntilSeconds?: number;
+  nowSeconds: number; toleranceSeconds?: number; cryptoProvider?: Crypto;
+}): Promise<boolean> {
+  const common = {
+    body: input.body, timestamp: input.timestamp, signature: input.signature,
+    nowSeconds: input.nowSeconds, toleranceSeconds: input.toleranceSeconds,
+    cryptoProvider: input.cryptoProvider,
+  };
+  if (await verifyWebhookDelivery({ ...common, secret: input.activeSecret })) return true;
+  if (!input.previousSecret ||
+      !Number.isSafeInteger(input.previousKeyValidUntilSeconds) ||
+      !Number.isSafeInteger(input.nowSeconds) ||
+      input.nowSeconds > input.previousKeyValidUntilSeconds!) return false;
+  return verifyWebhookDelivery({ ...common, secret: input.previousSecret });
+}
