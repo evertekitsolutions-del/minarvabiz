@@ -171,3 +171,31 @@ test("settings UI does not claim a durable save before persistence acknowledgeme
   assert.match(settings, /Business profile updated locally; durable save and cloud sync are not yet verified/);
   assert.match(settings, /Saving business settings is unavailable in this browser workspace/);
 });
+
+
+test("failed persistence does not acknowledge or retain an unsaved business profile", () => {
+  const Module = require("node:module");
+  const source = fs.readFileSync(new URL("../shop-profile.ts", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  let reject = true;
+  const isolated = new Module("shop-profile-persistence-failure-test");
+  isolated.filename = "shop-profile-persistence-failure-test.js";
+  isolated.paths = [];
+  isolated.require = (name) => {
+    if (name === "@minarvabiz/utils") return { nowISO: () => "2026-11-08T00:00:00Z" };
+    if (name === "./autosave") return { touchPersistence: () => { if (reject) throw new Error("Storage unavailable"); } };
+    if (name === "./workspace-display-preferences") return require("../workspace-display-preferences.ts");
+    throw new Error("Unexpected dependency: " + name);
+  };
+  isolated._compile(compiled, isolated.filename);
+  const api = isolated.exports;
+  const before = api.getShopProfile();
+  assert.throws(() => api.updateShopProfile({ shopName: "Unpersisted change" }, before.updatedAt), /Storage unavailable/);
+  assert.deepEqual(api.getShopProfile(), before);
+  reject = false;
+  const saved = api.updateShopProfile({ shopName: "Retried change" }, before.updatedAt);
+  assert.equal(saved.shopName, "Retried change");
+  assert.notEqual(saved.updatedAt, before.updatedAt);
+});
