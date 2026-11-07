@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS industry_workflow_events (
 );
 `;
 
-type Statement = { get(...params: unknown[]): unknown; run(...params: unknown[]): unknown };
+type Statement = { get(...params: unknown[]): unknown; run(...params: unknown[]): unknown; all(...params: unknown[]): unknown };
 export type IndustrySqliteDatabase = {
   prepare(sql: string): Statement;
   /** Synchronous SQLite transaction wrapper; MUST rollback on throw. */
