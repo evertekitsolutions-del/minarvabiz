@@ -111,3 +111,28 @@ test("missing legacy timestamps never render as 1970 dates", () => {
   }
   assert.match(formatWorkspaceDateTime(0, india), /1970/);
 });
+
+test("stale profile save is rejected without mutating the hydrated business profile", () => {
+  // Isolate the module to avoid touching global snapshot persistence.
+  const Module = require("node:module");
+  const source = fs.readFileSync(new URL("../shop-profile.ts", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const isolated = new Module("shop-profile-test");
+  isolated.filename = "shop-profile-test.js";
+  isolated.paths = [];
+  isolated.require = (name) => {
+    if (name === "@minarvabiz/utils") return { nowISO: () => "2026-11-07T00:00:00Z" };
+    if (name === "./autosave") return { touchPersistence: () => {} };
+    if (name === "./workspace-display-preferences") return require("../workspace-display-preferences.ts");
+    throw new Error("Unexpected dependency: " + name);
+  };
+  isolated._compile(compiled, isolated.filename);
+  const api = isolated.exports;
+  const opened = api.getShopProfile();
+  api.hydrateShopProfile({ ...opened, shopName: "Current tenant", updatedAt: "2026-11-07T01:00:00Z" });
+  assert.throws(() => api.updateShopProfile({ shopName: "Stale write" }, opened.updatedAt), /changed since this form was opened/);
+  assert.equal(api.getShopProfile().shopName, "Current tenant");
+  assert.equal(api.updateShopProfile({ shopName: "Fresh write" }, "2026-11-07T01:00:00Z").shopName, "Fresh write");
+});
