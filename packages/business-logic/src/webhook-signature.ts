@@ -28,3 +28,32 @@ export async function signWebhookDelivery(input: {
     "x-minarva-signature": `v1=${HEX(mac)}`,
   } };
 }
+
+/** Verify a webhook at a receiving integration boundary. The caller must persist
+ * event IDs for replay prevention; timestamp tolerance alone is not deduplication. */
+export async function verifyWebhookDelivery(input: {
+  body: string; timestamp: string; signature: string; secret: string;
+  nowSeconds: number; toleranceSeconds?: number; cryptoProvider?: Crypto;
+}): Promise<boolean> {
+  const tolerance = input.toleranceSeconds ?? 300;
+  if (!Number.isSafeInteger(tolerance) || tolerance < 0 || tolerance > 3600 ||
+      !/^[0-9]{1,16}$/.test(input.timestamp) ||
+      !/^v1=[a-f0-9]{64}$/.test(input.signature) ||
+      typeof input.body !== "string" || encoder.encode(input.body).length > 262144 ||
+      typeof input.secret !== "string" || input.secret.length < 32 ||
+      !Number.isSafeInteger(input.nowSeconds)) return false;
+  const ts = Number(input.timestamp);
+  if (!Number.isSafeInteger(ts) || ts <= 0 || Math.abs(input.nowSeconds - ts) > tolerance) return false;
+  const provider = input.cryptoProvider ?? globalThis.crypto;
+  if (!provider?.subtle) return false;
+  const key = await provider.subtle.importKey("raw", encoder.encode(input.secret),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const actual = new Uint8Array(await provider.subtle.sign("HMAC", key,
+    encoder.encode(`${input.timestamp}.${input.body}`)));
+  const supplied = input.signature.slice(3);
+  let mismatch = 0;
+  for (let i = 0; i < actual.length; i++) {
+    mismatch |= actual[i] ^ Number.parseInt(supplied.slice(i * 2, i * 2 + 2), 16);
+  }
+  return mismatch === 0;
+}
