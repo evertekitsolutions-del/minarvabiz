@@ -62,9 +62,6 @@ export function createIndustrySqliteCommitPort(db: IndustrySqliteDatabase): Indu
                    current.stage !== original.stage || current.revision !== original.revision) {
           throw new Error("Industry SQLite revision conflict");
         }
-        const committed = db.prepare(
-          "SELECT event_id FROM industry_workflow_events WHERE tenant_id=? AND branch_id=? AND record_id=? ORDER BY revision"
-        );
         // The adapter must not accept a fabricated history or acknowledge a duplicate.
         const history: string[] = [];
         for (let revision = 1; revision <= original.revision; revision++) {
@@ -78,7 +75,6 @@ export function createIndustrySqliteCommitPort(db: IndustrySqliteDatabase): Indu
             history.some((id, i) => id !== original.appliedEventIds[i])) {
           throw new Error("Industry SQLite event history mismatch");
         }
-        void committed;
         const insert = db.prepare(
           "INSERT INTO industry_workflow_events (tenant_id, branch_id, record_id, event_id, actor_id, revision, from_stage, to_stage) VALUES (?,?,?,?,?,?,?,?)"
         );
