@@ -78,7 +78,15 @@ export function updateShopProfile(patch: Partial<ShopProfile>, expectedUpdatedAt
   profile = {
     ...next,
     ...display,
-    updatedAt: nowISO(),
+    // Keep the optimistic-concurrency token unique even for two writes in one
+    // millisecond or when the device clock moves backwards after hydration.
+    updatedAt: (() => {
+      const clock = Date.parse(nowISO());
+      const previous = Date.parse(profile.updatedAt);
+      const next = Math.max(Number.isFinite(clock) ? clock : Date.now(),
+        Number.isFinite(previous) ? previous + 1 : 0);
+      return new Date(next).toISOString();
+    })(),
   };
   touchPersistence();
   return getShopProfile();
