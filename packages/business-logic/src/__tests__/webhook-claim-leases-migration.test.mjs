@@ -30,3 +30,12 @@ test("expired final-attempt leases transition to dead-letter instead of staying 
   assert.match(sql, /where o\.status = 'leased' and o\.lease_until <= now\(\)\s+and o\.attempt_count >= 20/i);
   assert.ok(sql.indexOf("set status = 'dead'") < sql.indexOf("return query"));
 });
+
+test("revoked subscriptions and removed events cannot be resurrected from queued backlog", () => {
+  assert.match(sql, /where \(o\.status = 'pending' or \(o\.status = 'leased' and o\.lease_until <= now\(\)\)\)/i);
+  assert.match(sql, /and not exists \(\s*select 1 from public\.integration_webhook_subscriptions s/i);
+  assert.match(sql, /s\.tenant_id = o\.tenant_id and s\.company_id = o\.company_id/i);
+  assert.match(sql, /s\.branch_key = o\.branch_key and s\.subscription_id = o\.subscription_id/i);
+  assert.match(sql, /s\.enabled = true and o\.event_type = any\(s\.events\)/i);
+  assert.ok(sql.indexOf("and not exists (") < sql.indexOf("return query"));
+});
