@@ -153,7 +153,7 @@ export default function SettingsPage() {
               updateTaxConfig({ gstin: next.gstin });
               setShop(next);
               setShopMsgIsError(false);
-              setShopMsg("Business profile saved");
+              setShopMsg("Business profile updated locally; durable save and cloud sync are not yet verified.");
             } catch (error) {
               setShopMsgIsError(true);
               setShopMsg(error instanceof Error ? error.message : "Unable to save business profile.");
