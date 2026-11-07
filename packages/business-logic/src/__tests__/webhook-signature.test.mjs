@@ -94,3 +94,27 @@ test("verification fails closed when WebCrypto rejects or returns a malformed MA
     ...candidate, activeSecret: secret, cryptoProvider: rejecting,
   }), false);
 });
+
+test("rotation cutoff is inclusive and cannot bypass signature freshness", async () => {
+  const signed = await signWebhookDelivery(input);
+  const candidate = {
+    body: signed.body, timestamp: signed.headers["x-minarva-timestamp"],
+    signature: signed.headers["x-minarva-signature"],
+    activeSecret: "replacement-fixture-".repeat(3), previousSecret: secret,
+    previousKeyValidUntilSeconds: input.timestamp + 300,
+    nowSeconds: input.timestamp + 300, cryptoProvider: webcrypto,
+  };
+  assert.equal(await verifyWebhookDeliveryWithRotation(candidate), true);
+  assert.equal(await verifyWebhookDeliveryWithRotation({
+    ...candidate, nowSeconds: input.timestamp + 301,
+  }), false);
+  assert.equal(await verifyWebhookDeliveryWithRotation({
+    ...candidate, previousKeyValidUntilSeconds: Number.POSITIVE_INFINITY,
+  }), false);
+  assert.equal(await verifyWebhookDeliveryWithRotation({
+    ...candidate, previousKeyValidUntilSeconds: input.timestamp + 0.5,
+  }), false);
+  assert.equal(await verifyWebhookDeliveryWithRotation({
+    ...candidate, signature: "v1=" + "f".repeat(64),
+  }), false);
+});
