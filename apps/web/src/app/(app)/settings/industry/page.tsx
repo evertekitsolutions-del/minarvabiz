@@ -184,7 +184,7 @@ export default function IndustryWorkspacePage() {
       {error && <div role="alert" className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">
         <p>{error}</p>
         <button type="button" className="mt-2 underline" onClick={() => window.location.reload()}>Reload scoped workspace</button>
-      </div>
+      </div>}
       <fieldset disabled={!loaded || !scope} className="space-y-3">
         <legend className="mb-3 font-medium">Optional industry packs</legend>
         {packs.map(pack => (
