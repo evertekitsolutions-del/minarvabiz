@@ -34,6 +34,9 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
   // without treating callback identity as a scope change (which would discard edits).
   const loadRef = React.useRef(load);
   loadRef.current = load;
+  // Keep the current authenticated writer when the host refreshes its session.
+  const saveRef = React.useRef(save);
+  saveRef.current = save;
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
@@ -89,7 +92,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     setError("");
     let writeAcknowledged = false;
     try {
-      await save(worksheet, key);
+      await saveRef.current(worksheet, key);
       writeAcknowledged = true;
       if (currentGeneration !== generation.current) return;
       setSaveAcknowledged(true);
