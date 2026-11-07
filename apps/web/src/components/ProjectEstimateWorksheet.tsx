@@ -138,6 +138,11 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
       const current = await loadRef.current();
       if (currentGeneration !== generation.current) return;
       if (current) calculateProjectEstimate(current, scope);
+      // A lost write acknowledgement may mean the server committed but a replica is stale.
+      // Never clear the write lock on a stale read: a fresh key could duplicate the write.
+      if (saveAcknowledged && (!current || (worksheet && current.revision <= worksheet.revision))) {
+        throw new Error("Authoritative estimate revision has not advanced. Retry reload after synchronization; editing remains locked.");
+      }
       setWorksheet(current ?? {
         tenantId: scope.tenantId, companyId: scope.companyId, branchId: scope.branchId,
         projectId: scope.projectId, currency: "INR", revision: 0, lines: [newLine()],
