@@ -50,3 +50,19 @@ test("failed local draft deletion never reports success", () => {
   const storage = { getItem: () => "stale", removeItem: () => {} };
   assert.throws(() => deleteIndustryIntakeDraft(storage, scope, profile, "repair-job"), /not confirmed/);
 });
+
+test("older tab cannot overwrite a newer scoped reference", () => {
+  const values = new Map();
+  const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  saveIndustryIntakeDraft(storage, scope, profile, "repair-job", "NEW-REF", "2026-11-07T01:00:00.000Z");
+  assert.throws(() => saveIndustryIntakeDraft(storage, scope, profile, "repair-job", "STALE-REF", now), /newer saved revision/);
+  assert.equal(readIndustryIntakeDraft(storage, scope, profile, "repair-job")?.reference, "NEW-REF");
+  assert.equal(readIndustryIntakeDraft(storage, scope, profile, "restaurant-ticket"), null);
+});
+
+test("noncanonical and impossible timestamps are rejected", () => {
+  const storage = { getItem: () => null, setItem: () => {} };
+  for (const timestamp of ["2026-11-07T00:00:00Z", "2026-02-30T00:00:00.000Z", "2026-11-07T00:00:00.000+00:00"]) {
+    assert.throws(() => saveIndustryIntakeDraft(storage, scope, profile, "repair-job", "JOB-1", timestamp), /timestamp/);
+  }
+});
