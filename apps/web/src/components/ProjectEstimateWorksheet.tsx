@@ -87,8 +87,10 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
     setRequestKey(key);
     setBusy(true);
     setError("");
+    let writeAcknowledged = false;
     try {
       await save(worksheet, key);
+      writeAcknowledged = true;
       if (currentGeneration !== generation.current) return;
       setSaveAcknowledged(true);
       // Never assume the adapter's acknowledgement contains the next authoritative revision.
@@ -108,7 +110,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, canExport
         const conflict = (typeof err === "object" && err !== null && "status" in err && (err.status === 409 || err.status === 412)) ||
           (err instanceof Error && err.message === "Project estimate revision conflict");
         setRevisionConflict(conflict);
-        setError(conflict ? "Estimate changed elsewhere. Discard edits and reload the latest revision before saving." : saveAcknowledged ? "Save was acknowledged but reload failed. Reload the authoritative revision before editing or saving again." : err instanceof Error ? err.message : "Save failed");
+        setError(conflict ? "Estimate changed elsewhere. Discard edits and reload the latest revision before saving." : writeAcknowledged ? "Save was acknowledged but reload failed. Reload the authoritative revision before editing or saving again." : err instanceof Error ? err.message : "Save failed");
       }
     } finally { if (currentGeneration === generation.current) setBusy(false); }
   }
