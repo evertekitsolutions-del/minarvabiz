@@ -7,7 +7,6 @@ const publicDefaults = {
   NEXT_PUBLIC_MINARVA_MODE: "production",
   NEXT_PUBLIC_REQUIRE_AUTH: "true",
   NEXT_PUBLIC_SUPABASE_URL: "https://wmjgefbaliuwmaxyzxkq.supabase.co",
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_5jIjE_KhGJD9k6GDkeo-Xw_riNs-BWG",
 };
 
 for (const [key, value] of Object.entries(publicDefaults)) {
