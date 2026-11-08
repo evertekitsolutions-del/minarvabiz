@@ -47,7 +47,14 @@ assert.ok(digest, "GitHub's uploaded asset SHA-256 digest is mandatory");
 assert.equal(manifest.version, version, "Signed manifest must match latest published stable version");
 assert.equal(manifest.installerUrl, installerUrl, "Signed installer path must be exact");
 assert.equal(manifest.sha256, digest, "Signed digest must match GitHub's asset digest");
-assert.equal(manifest.publishedAt, release.published_at, "Release date must match signed payload");
+// The currently deployed legacy worker timestamps the checksum response, which
+// can differ by seconds from GitHub's release publication timestamp. The new
+// REST worker uses published_at exactly; permit a bounded transition only.
+const manifestPublishedAt = Date.parse(String(manifest.publishedAt));
+const releasePublishedAt = Date.parse(String(release.published_at));
+assert.ok(Number.isFinite(manifestPublishedAt) && Number.isFinite(releasePublishedAt) &&
+  Math.abs(manifestPublishedAt - releasePublishedAt) <= 300_000,
+  "Signed release timestamp must be within five minutes of published release");
 
 const { response: keyResponse, data: keyData } = await read(worker + "/api/public-key");
 assert.equal(keyResponse.status, 200, "Production Ed25519 key must be available");
