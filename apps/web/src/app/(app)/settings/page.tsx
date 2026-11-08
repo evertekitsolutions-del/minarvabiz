@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { parseGoogleReviewUrl } from "@minarvabiz/business-logic";
+import { parseGoogleReviewUrl, formatWorkspaceDateTime, formatWorkspaceMoney, validateWorkspaceDisplayPreferences, isProductionMode, awaitDesktopPersistence } from "@minarvabiz/business-logic";
 import { SyncPanel, PersistencePanel, Button, FormField, inputClass, selectClass, PrintTemplateManager, TrashRecoveryPanel } from "@minarvabiz/ui";
 import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage, getShopProfile, updateShopProfile, updateTaxConfig, getPrintSettings, updatePrintSettings, getScopedMasterReplayStatus, retryScopedMasterOutbox } from "@minarvabiz/business-logic";
 
@@ -11,12 +11,28 @@ export default function SettingsPage() {
   const [shop, setShop] = React.useState(() => getShopProfile());
   const [shopMsg, setShopMsg] = React.useState<string | null>(null);
   const [shopMsgIsError, setShopMsgIsError] = React.useState(false);
+  const [shopSaving, setShopSaving] = React.useState(false);
   const [printing, setPrinting] = React.useState(() => getPrintSettings());
   const [masterReplay, setMasterReplay] = React.useState(() => getScopedMasterReplayStatus());
   const [masterRetrying, setMasterRetrying] = React.useState(false);
   const [masterReplayMessage, setMasterReplayMessage] = React.useState<string | null>(null);
 
   const [printMsg, setPrintMsg] = React.useState<string | null>(null);
+
+  // The domain snapshot is hydrated after the initial client render in some
+  // Offline/Hybrid sessions. Refresh the editor so saving does not overwrite
+  // restored business preferences with stale pre-hydration defaults.
+  React.useEffect(() => {
+    const onHydrated = () => {
+      setShop(getShopProfile());
+      setPrinting(getPrintSettings());
+      setShopMsg(null);
+      setShopMsgIsError(false);
+      setPrintMsg(null);
+    };
+    window.addEventListener("minarva:data-hydrated", onHydrated);
+    return () => window.removeEventListener("minarva:data-hydrated", onHydrated);
+  }, []);
 
   function refresh() {
     setSnap(syncBridge.getSyncSnapshot());
@@ -65,6 +81,14 @@ export default function SettingsPage() {
     }
   }
 
+  const displayPreferences = { locale: shop.locale ?? "en-IN", timeZone: shop.timeZone ?? "Asia/Kolkata", currency: shop.currency };
+  let displayValidationError: string | null = null;
+  try {
+    validateWorkspaceDisplayPreferences(displayPreferences);
+  } catch (error) {
+    displayValidationError = error instanceof Error ? error.message : "Invalid display preferences.";
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -94,23 +118,68 @@ export default function SettingsPage() {
           <FormField label="Email"><input className={inputClass} type="email" value={shop.email} onChange={(e) => setShop({ ...shop, email: e.target.value })} /></FormField>
           <FormField label="Website"><input className={inputClass} value={shop.website} onChange={(e) => setShop({ ...shop, website: e.target.value })} /></FormField>
           <FormField label="Google review link"><input className={inputClass} type="url" value={shop.googleReviewUrl ?? ""} onChange={(e) => setShop({ ...shop, googleReviewUrl: e.target.value })} placeholder="https://g.page/r/.../review" /><p className="mt-1 text-xs text-slate-500">Optional. An official HTTPS Google link is included in post-delivery feedback WhatsApp messages.</p></FormField>
-          <FormField label="Currency"><select className={selectClass} value={shop.currency} onChange={(e) => setShop({ ...shop, currency: e.target.value })}><option value="INR">INR — Indian Rupee</option><option value="OMR">OMR — Omani Rial</option><option value="AED">AED — UAE Dirham</option><option value="USD">USD — US Dollar</option></select></FormField>
+          <FormField label="Currency (ISO 4217)">
+            <input className={inputClass} maxLength={3} value={shop.currency} onChange={(e) => setShop({ ...shop, currency: e.target.value.toUpperCase() })} placeholder="INR / OMR / USD" />
+          </FormField>
+          <FormField label="Display language / locale (BCP 47)">
+            <input className={inputClass} value={shop.locale ?? "en-IN"} onChange={(e) => setShop({ ...shop, locale: e.target.value })} placeholder="en-IN / ar-OM / en-US" />
+          </FormField>
+          <FormField label="Time zone (IANA)">
+            <input className={inputClass} value={shop.timeZone ?? "Asia/Kolkata"} onChange={(e) => setShop({ ...shop, timeZone: e.target.value })} placeholder="Asia/Kolkata / Asia/Muscat" />
+          </FormField>
+          <div className="sm:col-span-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-700" role="status">
+            <strong>Display preview (not a transaction): </strong>
+            {(() => {
+              try {
+                const preferences = displayPreferences;
+                return formatWorkspaceMoney(1234.5, preferences) + " · " + formatWorkspaceDateTime("2026-01-15T12:00:00Z", preferences);
+              } catch {
+                return "Enter a supported locale, time zone and currency to preview.";
+              }
+            })()}
+            <p className="mt-1 text-slate-500">These settings control display preferences only. Tax rules, accounting values and fiscal-year numbering remain unchanged.</p>
+          </div>
           <FormField label="Receipt footer" className="sm:col-span-2"><input className={inputClass} value={shop.receiptFooter} onChange={(e) => setShop({ ...shop, receiptFooter: e.target.value })} /></FormField>
         </div>
+        {displayValidationError && <p role="alert" className="text-sm text-red-700">Display preferences: {displayValidationError}</p>}
         <div className="flex items-center gap-2">
-          <Button onClick={() => {
+          <Button disabled={displayValidationError !== null || shopSaving} onClick={async () => {
+            if (shopSaving) return;
+            setShopSaving(true);
             try {
+              // Production web has no durable profile writer in touchPersistence().
+              // Fail closed instead of showing a false saved confirmation.
+              if (isProductionMode() && typeof (window as Window & { __minarvaDesktopPersist?: () => void }).__minarvaDesktopPersist !== "function") {
+                throw new Error("Saving business settings is unavailable in this browser workspace. No changes were saved. Use a configured persistent workspace.");
+              }
               const googleReviewUrl = parseGoogleReviewUrl(shop.googleReviewUrl ?? "");
-              const next = updateShopProfile({ ...shop, googleReviewUrl });
+              // Persist the validated canonical locale/zone/currency, not the raw
+              // editor strings (which may contain whitespace or IANA aliases).
+              const normalizedDisplay = validateWorkspaceDisplayPreferences({
+                locale: shop.locale ?? "en-IN",
+                timeZone: shop.timeZone ?? "Asia/Kolkata",
+                currency: shop.currency,
+              });
+              const next = updateShopProfile({ ...shop, ...normalizedDisplay, googleReviewUrl }, shop.updatedAt);
               updateTaxConfig({ gstin: next.gstin });
               setShop(next);
-              setShopMsgIsError(false);
-              setShopMsg("Business profile saved");
+              // A desktop adapter must resolve only after its SQLite transaction commits.
+              // Browser snapshots are never represented as durable cloud writes.
+              if (typeof (window as Window & { __minarvaDesktopPersist?: () => unknown }).__minarvaDesktopPersist === "function") {
+                await awaitDesktopPersistence();
+                setShopMsgIsError(false);
+                setShopMsg("Desktop persistence acknowledged; cloud sync is not verified.");
+              } else {
+                setShopMsgIsError(false);
+                setShopMsg("Business profile updated locally; durable save and cloud sync are not verified.");
+              }
             } catch (error) {
               setShopMsgIsError(true);
               setShopMsg(error instanceof Error ? error.message : "Unable to save business profile.");
+            } finally {
+              setShopSaving(false);
             }
-          }}>Save shop profile</Button>
+          }}>{shopSaving ? "Saving…" : "Save shop profile"}</Button>
           {shopMsg && <span role={shopMsgIsError ? "alert" : "status"} className={shopMsgIsError ? "text-sm text-rose-700" : "text-sm text-emerald-600"}>{shopMsg}</span>}
         </div>
       </div>
@@ -138,8 +207,21 @@ export default function SettingsPage() {
           </FormField>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => { const next = updatePrintSettings({ defaultInvoicePaper: printing.defaultInvoicePaper, thermalWidthMm: printing.thermalWidthMm, labelCodeMode: printing.labelCodeMode }); setPrinting(next); setPrintMsg("Printing defaults saved"); }}>Save printing defaults</Button>
-          {printMsg && <span className="text-sm text-emerald-600">{printMsg}</span>}
+          <Button onClick={() => {
+            // Browser-only production sessions have no durable settings writer.
+            if (isProductionMode() && typeof (window as Window & { __minarvaDesktopPersist?: () => void }).__minarvaDesktopPersist !== "function") {
+              setPrintMsg("Printing defaults cannot be saved in this browser workspace. No changes were saved.");
+              return;
+            }
+            try {
+              const next = updatePrintSettings({ defaultInvoicePaper: printing.defaultInvoicePaper, thermalWidthMm: printing.thermalWidthMm, labelCodeMode: printing.labelCodeMode });
+              setPrinting(next);
+              setPrintMsg("Printing defaults updated locally; verify persistence before restarting.");
+            } catch (error) {
+              setPrintMsg(error instanceof Error ? `Printing defaults were not updated: ${error.message}` : "Printing defaults could not be updated.");
+            }
+          }}>Save printing defaults</Button>
+          {printMsg && <span role="status" className="text-sm text-slate-700">{printMsg}</span>}
         </div>
       </div>
 

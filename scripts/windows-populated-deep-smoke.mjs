@@ -588,6 +588,22 @@ async function main() {
     const flushed = await evalIn(ws,`window.__minarvaDesktopFlush?.()`);
     if (flushed !== true) throw new Error(`Attendance SQLite flush failed before reload: ${String(flushed)}`);
     await evalIn(ws,`(()=>{location.reload();return true})()`);await sleep(1200);await ready(ws);
+    // Renderer-ready can precede the sidebar mount after a native SQLite reload.
+    // Wait for the actual navigation control rather than treating a transient
+    // empty DOM as a missing feature. Do not skip the persisted-data assertions.
+    let attendanceNavigationReady = false;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      // Attendance lives in a collapsible navigation group after a fresh reload.
+      // Its child control can be absent until the group expands; the shared
+      // click() helper expands groups before locating the target.
+      attendanceNavigationReady = await evalIn(ws, `(()=>[...document.querySelectorAll('button,a,[role="button"]')].some(e=>((e.innerText||e.textContent||'')+' '+(e.getAttribute('aria-label')||'')).toLowerCase().includes('attendance grid')) || [...document.querySelectorAll('aside button[aria-expanded]')].some(e=>e.getBoundingClientRect().width>0))()`);
+      if (attendanceNavigationReady) break;
+      await sleep(500);
+    }
+    if (!attendanceNavigationReady) {
+      const diagnostic = await evalIn(ws, `JSON.stringify({ready:document.documentElement.dataset.minarvaRendererReady,error:document.documentElement.dataset.minarvaRendererError,body:(document.body?.innerText||'').slice(0,1200)})`);
+      throw new Error(`Attendance navigation did not mount after reload: ${diagnostic}`);
+    }
     await click(ws,"ATTENDANCE_RESTORED",["attendance grid"]);
     await setByAriaLabel(ws,"Attendance month",attendanceMonth);await sleep(300);
     // Renderer-ready precedes React hydration; wait for the persisted staff and totals, not just the page heading.
