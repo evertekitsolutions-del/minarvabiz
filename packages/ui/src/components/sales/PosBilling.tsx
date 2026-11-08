@@ -35,6 +35,8 @@ export interface HeldPosSale {
 }
 
 export interface PosBillingProps {
+  /** Boutique customer Price is GST-inclusive; other ERP deployments retain exclusive pricing. */
+  pricesIncludeTax?: boolean;
   products: Product[];
   customers: Customer[];
   onCompleteSale?: (payload: {
@@ -82,6 +84,7 @@ function parsedTenderAmount(value: string): number {
 export function PosBilling({
   products,
   customers,
+  pricesIncludeTax = false,
   onCompleteSale,
   onComplete,
   onFindByBarcode,
@@ -155,7 +158,8 @@ export function PosBilling({
         sku: p.sku,
         barcode: p.barcode,
         quantity: qty,
-        unitPrice: p.sellingPrice,
+        unitPrice: pricesIncludeTax ? (p.mrp ?? p.sellingPrice) : p.sellingPrice,
+        taxInclusive: pricesIncludeTax,
         costPrice: p.costPrice,
         discountPercent: p.discount ?? 0,
         taxRate: p.taxRate ?? 0,
@@ -204,8 +208,11 @@ export function PosBilling({
       return;
     }
     try {
-      const next = appendPosMeasuredCut(cart, product, measurement, generateId());
-      setCart(next);
+      const priceProduct = pricesIncludeTax ? { ...product, sellingPrice: product.mrp ?? product.sellingPrice } : product;
+      const next = appendPosMeasuredCut(cart, priceProduct, measurement, generateId());
+      setCart(pricesIncludeTax ? next.map((line, index) =>
+        index === next.length - 1 ? { ...line, taxInclusive: true } : line,
+      ) : next);
       setAreaProductId(null);
       setAreaDraft(newAreaDraft(product.unit));
       setMessage(null);
@@ -442,7 +449,7 @@ export function PosBilling({
                 <div className="truncate text-sm font-medium text-slate-900">{p.name}</div>
                 {(p.size||p.color||p.fabric)&&<div className="mt-1 truncate text-xs text-slate-600">{[p.size,p.color,p.fabric].filter(Boolean).join(" · ")}</div>}
                 <div className="mt-1 text-xs text-slate-500">Stock: {p.stockQuantity}</div>
-                <div className="mt-1 text-sm font-semibold text-indigo-600">{formatMoney(p.sellingPrice)}</div>
+                <div className="mt-1 text-sm font-semibold text-indigo-600">{formatMoney(pricesIncludeTax ? (p.mrp ?? p.sellingPrice) : p.sellingPrice)}</div>
                 {p.stockQuantity <= 0 && <div className="mt-1 text-xs font-medium text-rose-600">Out of stock</div>}
               </button>
             ))}
@@ -508,11 +515,11 @@ export function PosBilling({
                   <div className="w-20 text-right text-sm font-semibold">
                     {formatMoney(calculateCartTotals([line]).grandTotal)}
                   </div>
-                  <button type="button" className="text-xs text-indigo-700"
+                  {!pricesIncludeTax && <button type="button" className="text-xs text-indigo-700"
                     aria-label={`Set tax-inclusive MRP for ${line.productName}`}
                     onClick={() => setMrpCartRowId(posCartRowKey(line))}>
                     MRP
-                  </button>
+                  </button>}
                   <button type="button" className="text-xs text-rose-700"
                     aria-label={`Remove ${line.productName} cut`}
                     onClick={() => {
@@ -526,7 +533,7 @@ export function PosBilling({
               ))}
             </div>
 
-            {mrpCartRowId && cart.find((line) => posCartRowKey(line) === mrpCartRowId) && (
+            {!pricesIncludeTax && mrpCartRowId && cart.find((line) => posCartRowKey(line) === mrpCartRowId) && (
               <InclusiveMrpEditor
                 key={mrpCartRowId}
                 line={cart.find((line) => posCartRowKey(line) === mrpCartRowId)!}
