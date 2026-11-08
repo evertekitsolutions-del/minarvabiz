@@ -537,6 +537,8 @@ jobs:
         run: |
           node scripts/desktop-38mm-dual-roll-and-customer-fixes-smoke.mjs
           node scripts/desktop-label-layout-regression.mjs
+      - name: Prevent thermal blank-cut and long-receipt truncation
+        run: node --experimental-strip-types --test apps/desktop/electron/__tests__/thermal-receipt-layout.test.mjs
       - name: Static production quality smoke
         shell: bash
         run: |
