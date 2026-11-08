@@ -34,6 +34,7 @@ const token = read("packages/licensing/src/token.ts");
 const licenseConfigWriter = read("apps/desktop/scripts/write-license-config.mjs");
 const updateConfigWriter = read("apps/desktop/scripts/write-update-config.mjs");
 const updater = read("apps/desktop/electron/updater.ts");
+const resumableDownloader = read("apps/desktop/electron/resumable-download.ts");
 const workflow = read(".github/workflows/ci.yml");
 const releaseWorkflow = read(".github/workflows/release-windows.yml");
 const windowsPackageFallback = read("scripts/windows-package-resilient.mjs");
@@ -131,8 +132,8 @@ assert(businessLogicPackage.scripts?.typecheck === "tsc --noEmit", "Business-log
 assert(desktopPackage.scripts?.["package:win"]?.includes("electron-builder --win"), "Windows packaging script is missing");
 assert(updateConfigWriter.includes("MINARVA_UPDATE_MANIFEST_URL") && updateConfigWriter.includes("MINARVA_UPDATE_PUBLIC_KEY_HEX") && updateConfigWriter.includes("https:"), "Secure updater build configuration is incomplete");
 assert(updater.includes("verifyManifestSignature") && updater.includes("createPublicKey") && updater.includes("verify(null"), "Secure updater manifest signature verification is missing");
-assert(updater.includes('createHash("sha256")') && updater.includes("Installer SHA-256 verification failed"), "Secure updater installer hash verification is missing");
-assert(updater.includes("500 * 1024 * 1024") && updater.includes("AbortSignal.timeout"), "Secure updater download guards are incomplete");
+assert(updater.includes("fetchVerifiedInstaller") && resumableDownloader.includes('createHash("sha256")') && resumableDownloader.includes("Downloaded installer failed SHA-256 verification."), "Secure updater installer hash verification is missing");
+assert(resumableDownloader.includes("500 * 1024 * 1024") && resumableDownloader.includes("IDLE_TIMEOUT_MS") && resumableDownloader.includes("content-range") && resumableDownloader.includes("Range:") && workflow.includes("windows-update-resume.test.mjs"), "Resumable updater download guards are incomplete");
 assert(desktopSource.includes('ipcMain.handle("update:install"') && desktopSource.includes('await createLocalBackup("pre-update")') && desktopSource.includes("if (!backup.ok)"), "Updater must require a verified Minarva Biz pre-update SQLite backup");
 assert(preloadSource.includes("checkForUpdates") && preloadSource.includes("downloadUpdate") && preloadSource.includes("installUpdate"), "Updater IPC preload bridge is incomplete");
 assert(settingsPanel.includes("Software updates") && settingsPanel.includes("Updates are never forced"), "Customer-facing secure updater controls are missing");
