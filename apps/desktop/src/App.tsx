@@ -150,6 +150,19 @@ export function App() {
   React.useEffect(() => { let cancelled=false; (async()=>{ for(let i=0;i<50&&!window.minarvaDesktop;i++) await new Promise(r=>setTimeout(r,20)); if(!window.minarvaDesktop){if(!cancelled)setDbError("Electron bridge missing. Reinstall Minarva Biz desktop.");return;} const result=await bootstrapDesktopSqlite(); if(cancelled)return; if(!result.ok){setDbError(result.error||"SQLite failed to initialize");return;} const [state, license, deviceId] = await Promise.all([window.minarvaDesktop.getTrialState(), window.minarvaDesktop.getLicenseState(), window.minarvaDesktop.getDeviceId?.() ?? Promise.resolve("")]); if(cancelled)return; setTrialState(state); setCommercialLicense(license as CommercialLicenseState); setDeviceFingerprint(deviceId || ""); setDbReady(true); fetchDashboardData().then(setDash); })(); return()=>{cancelled=true;}; }, []);
   React.useEffect(() => {
     if (!dbReady) return;
+    return window.minarvaDesktop?.onUpdateFlushRequested?.(async () => {
+      try {
+        // Export the latest domain state, including any queued product mutations,
+        // and wait for the native SQLite persistence acknowledgment.
+        return (await persistDomainToSqlite()) === true;
+      } catch (error) {
+        console.error("[minarvabiz] Update blocked: pending business data could not be saved", error);
+        return false;
+      }
+    });
+  }, [dbReady]);
+  React.useEffect(() => {
+    if (!dbReady) return;
     refreshAll();
     phase6Store.refreshOperationalNotifications({
       licenseDaysRemaining: effectiveLicenseDaysRemaining(commercialLicense, trialState),
