@@ -3,10 +3,13 @@ import fs from "node:fs";
 const port = Number(process.env.MINARVA_CDP_PORT || 9224);
 const base = `http://127.0.0.1:${port}`;
 const mode = process.argv[2] || "prepare";
-const expectedFrom = process.env.MINARVA_UPDATE_FROM || "1.0.13";
-const expectedTo = process.env.MINARVA_UPDATE_TO || "1.0.14";
+const expectedFrom = String(process.env.MINARVA_UPDATE_FROM || "").trim();
+const expectedTo = String(process.env.MINARVA_UPDATE_TO || "").trim();
+if (!/^\d+\.\d+\.\d+$/.test(expectedFrom) || !/^\d+\.\d+\.\d+$/.test(expectedTo)) {
+  throw new Error("Explicit source/target stable versions are required; refusing implicit historic upgrade.");
+}
 const marker = process.env.MINARVA_UPDATE_E2E_CUSTOMER || "Upgrade E2E Customer";
-const expectedNoteFragment = process.env.MINARVA_UPDATE_E2E_NOTE_FRAGMENT || "dashboard opens";
+const expectedNoteFragment = process.env.MINARVA_UPDATE_E2E_NOTE_FRAGMENT || "Minarva Biz";
 const stateFile = process.env.MINARVA_UPDATE_E2E_STATE_FILE || "update-e2e-state.json";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
