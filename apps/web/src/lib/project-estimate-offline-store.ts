@@ -71,7 +71,7 @@ export function createOfflineProjectEstimateStore(databaseName: string): Project
     async loadScoped(scope) {
       // Never return locally cached cost data to a principal without the host-issued view grant.
       // This is defense-in-depth; the authenticated host must still enforce access and isolation.
-      if (scope.canViewCosts !== true) throw new Error("Project cost permission denied");
+      if (!("canViewCosts" in scope) || scope.canViewCosts !== true) throw new Error("Project cost permission denied");
       const id = scopedKey(scope);
       const db = await openDatabase(databaseName);
       try {
