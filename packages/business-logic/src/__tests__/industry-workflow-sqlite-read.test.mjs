@@ -155,3 +155,14 @@ test("inbox rejects duplicate, unordered, out-of-cursor and oversized database p
     assert.equal(fixture.recordReads, 0);
   }
 });
+
+test("single-record reads fail closed on malformed or excessive template grants before SQL", () => {
+  let queries = 0;
+  const db = { prepare() { queries++; throw Error("unexpected SQL"); }, transaction(fn) { return fn; } };
+  for (const allowedTemplateIds of [["repair-job", ""], ["repair-job", 42],
+    Array.from({ length: 101 }, (_, i) => `template-${i}`)]) {
+    assert.throws(() => readIndustrySqliteWorkflow(db, profile,
+      { ...access, allowedTemplateIds }, "job-1"), /authorization/);
+  }
+  assert.equal(queries, 0);
+});
