@@ -36,7 +36,7 @@ const ALLOWED_ROUTES = new Map([
 const DEFAULT_SUPABASE_URL = "https://wmjgefbaliuwmaxyzxkq.supabase.co";
 const DEFAULT_ONLINE_APP_URL = "https://minarvabiz-steel.vercel.app";
 const GITHUB_LATEST_RELEASE =
-  "https://github.com/evertekitsolutions-del/minarvabiz/releases/latest";
+  "https://api.github.com/repos/evertekitsolutions-del/minarvabiz/releases/latest";
 const GITHUB_RELEASE_DOWNLOAD_BASE =
   "https://github.com/evertekitsolutions-del/minarvabiz/releases/download";
 const SIGNING_KDF_DOMAIN = "minarvabiz-ed25519-authority-v1\0";
@@ -2473,55 +2473,46 @@ async function updateManifestNatively(authority) {
   }
 
   try {
+    // GitHub release asset redirects can fail with HTTP 504. The official REST API
+    // provides the published asset digest without downloading release binaries.
     const latest = await fetch(GITHUB_LATEST_RELEASE, {
-      headers: { "user-agent": "MinarvaBiz-License-Edge" },
-      redirect: "manual",
+      headers: {
+        accept: "application/vnd.github+json",
+        "user-agent": "MinarvaBiz-License-Edge",
+        "x-github-api-version": "2022-11-28",
+      },
       signal: AbortSignal.timeout(20_000),
     });
-    const location = String(latest.headers.get("location") || "");
-    const match = location.match(/\/releases\/tag\/v(\d+\.\d+\.\d+)(?:$|[?#])/);
-    const version = match?.[1] || "";
-    if (!version) {
+    if (!latest.ok) {
       return json(
-        { error: "Stable release version is unavailable.", stage: "latest-release", status: latest.status },
+        { error: "Stable release metadata is unavailable.", stage: "latest-release", status: latest.status },
         503,
       );
+    }
+
+    const release = await latest.json();
+    const version = /^v(\d+\.\d+\.\d+)$/.exec(String(release?.tag_name || ""))?.[1] || "";
+    if (!version || release?.draft !== false || release?.prerelease !== false) {
+      return json({ error: "Stable release is invalid.", stage: "release-validate" }, 503);
     }
 
     const installerName = `MinarvaBiz-Setup-${version}.exe`;
-    const checksumUrl = `${GITHUB_RELEASE_DOWNLOAD_BASE}/v${version}/${installerName}.sha256`;
-    const checksumResponse = await fetch(checksumUrl, {
-      headers: {
-        accept: "text/plain",
-        "user-agent": "MinarvaBiz-License-Edge",
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!checksumResponse.ok) {
-      return json(
-        { error: "Stable installer checksum is unavailable.", stage: "checksum", status: checksumResponse.status },
-        503,
-      );
-    }
-
-    const checksumText = (await checksumResponse.text()).trim();
-    const checksumMatch = checksumText.match(/^([0-9a-f]{64})\s+\*?(.+)$/i);
-    const sha256 = String(checksumMatch?.[1] || "").toLowerCase();
-    const declaredName = String(checksumMatch?.[2] || "").trim();
-    if (!/^[0-9a-f]{64}$/.test(sha256) || declaredName !== installerName) {
-      return json({ error: "Stable installer checksum is malformed.", stage: "checksum-parse" }, 503);
-    }
-
+    const checksumName = `${installerName}.sha256`;
+    const assets = Array.isArray(release.assets) ? release.assets : [];
+    const installer = assets.find((a) => a?.name === installerName && a?.state === "uploaded");
+    const checksum = assets.find((a) => a?.name === checksumName && a?.state === "uploaded");
     const installerUrl = `${GITHUB_RELEASE_DOWNLOAD_BASE}/v${version}/${installerName}`;
-    const timestampHeader =
-      checksumResponse.headers.get("last-modified") ||
-      checksumResponse.headers.get("date") ||
-      "";
-    const timestamp = new Date(timestampHeader);
-    const publishedAt = Number.isFinite(timestamp.getTime())
-      ? timestamp.toISOString()
-      : new Date().toISOString();
+    if (!installer || !checksum || !Number.isSafeInteger(installer.size) || installer.size <= 0 ||
+        installer.browser_download_url !== installerUrl || checksum.browser_download_url !==
+        `${GITHUB_RELEASE_DOWNLOAD_BASE}/v${version}/${checksumName}`) {
+      return json({ error: "Published installer assets are unavailable.", stage: "assets" }, 503);
+    }
+
+    const sha256 = /^sha256:([0-9a-f]{64})$/i.exec(String(installer.digest || ""))?.[1]?.toLowerCase() || "";
+    const publishedAt = String(release.published_at || "");
+    if (!sha256 || !Number.isFinite(Date.parse(publishedAt)) || !publishedAt.endsWith("Z")) {
+      return json({ error: "Published installer metadata is invalid.", stage: "digest" }, 503);
+    }
 
     const unsigned = {
       product: "minarvabiz",
