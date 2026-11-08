@@ -101,6 +101,12 @@ export function updateShopProfile(patch: Partial<ShopProfile>, expectedUpdatedAt
 }
 
 export function hydrateShopProfile(data: ShopProfile | null | undefined) {
+  // A missing profile is a scope boundary (logout, tenant switch or reset).
+  // Never keep the previous tenant's branding in the process-wide cache.
+  if (!data || !data.shopName) {
+    profile = { ...defaultProfile };
+    return;
+  }
   if (data && data.shopName) {
     // Imported/offline snapshots may contain invalid legacy display settings.
     // Normalize on hydration so subsequent UI formatting cannot crash.
