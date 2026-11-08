@@ -46,5 +46,10 @@ export async function awaitDesktopPersistence(): Promise<void> {
   if (!acknowledgement || typeof (acknowledgement as PromiseLike<unknown>).then !== "function") {
     throw new Error("Desktop persistence adapter did not return a durable-write acknowledgement.");
   }
-  await acknowledgement;
+  const committed = await acknowledgement;
+  // Some host bridges resolve failed transactions with false rather than rejecting.
+  // Never report a failed SQLite transaction as a durable save.
+  if (committed === false) {
+    throw new Error("Desktop persistence adapter reported an unsuccessful commit.");
+  }
 }
