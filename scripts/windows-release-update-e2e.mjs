@@ -5,7 +5,7 @@ const base = `http://127.0.0.1:${port}`;
 const mode = process.argv[2] || "prepare";
 const expectedFrom = String(process.env.MINARVA_UPDATE_FROM || "").trim();
 const expectedTo = String(process.env.MINARVA_UPDATE_TO || "").trim();
-if (!/^\\d+\\.\\d+\\.\\d+$/.test(expectedFrom) || !/^\\d+\\.\\d+\\.\\d+$/.test(expectedTo)) {
+if (!/^\d+\.\d+\.\d+$/.test(expectedFrom) || !/^\d+\.\d+\.\d+$/.test(expectedTo)) {
   throw new Error("Explicit source/target stable versions are required; refusing implicit historic upgrade.");
 }
 const marker = process.env.MINARVA_UPDATE_E2E_CUSTOMER || "Upgrade E2E Customer";
