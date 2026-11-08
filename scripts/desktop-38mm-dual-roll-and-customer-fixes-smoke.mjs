@@ -32,8 +32,9 @@ assert.match(html,/column-gap:3mm/);
 assert.match(html,/padding-left:11\.3mm/);
 assert.equal((html.match(/class="label-sheet"/g)||[]).length,2);
 assert.equal((html.match(/class="label compact/g)||[]).length,3);
-for (const field of ["Size: M","Colour: Red","Material: Cotton","Offer: Rs.799.00","MRP: Rs.999.00"])
+for (const field of ["Size: M","Colour: Red","Material: Cotton","Price: Rs.999.00"])
   assert.equal(html.split(field).length - 1,3,field+" on all labels");
+assert.doesNotMatch(html,/Offer:|MRP:/);
 assert.doesNotMatch(html,/window\.print\(\)/);
 assert.doesNotMatch(html,/page-break-after:always|break-after:page/);
 prefs={...prefs,labelRowGapMm:2};
@@ -110,8 +111,9 @@ assert.match(chromoHtml,/padding-left:2mm/);
 assert.equal((chromoHtml.match(/class="label-sheet"/g)||[]).length,2);
 assert.equal((chromoHtml.match(/label compact short/g)||[]).length,3);
 assert.match(chromoHtml,/.label.short\{padding:.65mm .7mm;gap:.2mm;min-height:0\}/);
-for(const field of ["Size: M","Colour: Red","Material: Cotton","Offer: Rs.799.00","MRP: Rs.999.00"])
+for(const field of ["Size: M","Colour: Red","Material: Cotton","Price: Rs.999.00"])
  assert.equal(chromoHtml.split(field).length-1,3,"Chromo short labels keep "+field);
+assert.doesNotMatch(chromoHtml,/Offer:|MRP:/);
 const twoStickers=m.exports.buildBarcodeLabelHtml(product,{copies:2,autoPrint:false});
 assert.match(twoStickers,/@page\{size:80mm 25mm;margin:0\}/,
   "Two CROMO stickers across must be ONE physical print row");
