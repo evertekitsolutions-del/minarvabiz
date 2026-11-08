@@ -57,7 +57,7 @@ export function useVerifiedDesktopAutoBackup(
   }, [ready, check]);
 
   React.useEffect(() => {
-    if (!ready) return;
+    if (!ready || lastAttemptAt.current === 0) return;
     void check();
   }, [ready, changeSerial, check]);
 }
