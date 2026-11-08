@@ -40,7 +40,7 @@ export function assertHydratedProductsPreserved(
  */
 export function assertHydratedCoreRecordsPreserved(
   persisted: unknown,
-  hydrated: Record<string, unknown>,
+  hydrated: { customers?: unknown; sales?: unknown; payments?: unknown },
 ): void {
   if (!persisted || typeof persisted !== "object") return;
   const previous = persisted as Record<string, unknown>;
