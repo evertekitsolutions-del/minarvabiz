@@ -299,3 +299,8 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+export * from "./webhook-subscriptions";
+
+// INT-002 server-only signing primitive; no HTTP dispatch or secret storage.
+export * from "./webhook-signature";
