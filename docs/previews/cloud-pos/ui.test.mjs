@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+const root=process.env.POS_TEST_MODULES;
+if(!root)throw Error('Set POS_TEST_MODULES (see README).');
+const {JSDOM}=await import(pathToFileURL(`${root}/jsdom/lib/api.js`));
+const {indexedDB}=await import(pathToFileURL(`${root}/fake-indexeddb/build/esm/index.js`));
+const dom=new JSDOM(await readFile(new URL('./index.html',import.meta.url),'utf8'),{url:'https://local.test/'});
+Object.assign(globalThis,{window:dom.window,document:dom.window.document,FormData:dom.window.FormData,indexedDB,confirm:()=>true});
+let printed=false;window.print=()=>{printed=true;};
+await import('./app.mjs');
+const $=id=>document.getElementById(id);
+const wait=async predicate=>{for(let i=0;i<100;i++){if(predicate())return;await new Promise(r=>setTimeout(r,10));}throw Error('UI condition timeout: '+$('notice').textContent);};
+const submit=(id,fields)=>{for(const [name,value] of Object.entries(fields))$(id).elements.namedItem(name).value=value;$(id).dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));};
+const change=(id,value)=>{$(id).value=value;$(id).dispatchEvent(new window.Event('change',{bubbles:true}));};
+test('HTML UI: create business, product, +1, customer, partial sale, history and receipt',async()=>{
+ submit('businessForm',{name:'Shop <safe>',currency:'INR',taxNumber:'TEST'});await wait(()=>$('businessName').textContent==='Shop <safe>');
+ submit('itemForm',{name:'Camera <img src=x onerror=alert(1)>',sku:'SKU',price:'118',stock:'2',taxRate:'18'});await wait(()=>document.querySelector('[data-stock]'));
+ document.querySelector('[data-stock]').click();await wait(()=>$('products').textContent.includes('3'));
+ submit('partyForm',{name:'Alice',phone:'',taxNo:''});await wait(()=>$('customer').options.length===2);
+ change('customer',$('customer').options[1].value);change('picker',$('picker').options[1].value);$('paid').value='50';
+ $('save').click();await wait(()=>$('history').textContent.includes('MBZ-000001'));
+ assert.equal($('cart').children.length,0);assert.match($('history').textContent,/118.00/);assert.match($('history').textContent,/68.00/);assert.equal($('customer').selectedIndex,1);
+ $('history').querySelector('[data-print]').click();assert(printed);assert.match($('receipt').textContent,/CGST/);assert.match($('receipt').textContent,/SGST/);assert.match($('receipt').textContent,/Balance due/);assert.equal($('receipt').querySelectorAll('img').length,0);
+ assert.match($('products').textContent,/2/);assert.match($('customers').textContent,/68.00/);
+ // Immediate second save after cart cleared must never duplicate the invoice.
+ $('save').click();await wait(()=>$('notice').textContent.includes('Add bill items'));assert.equal($('history').querySelectorAll('tbody tr').length,1);
+ submit('businessForm',{name:'Empty Oman',currency:'OMR',taxNumber:''});await wait(()=>$('businessName').textContent==='Empty Oman');assert.equal($('cart').children.length,0);assert.equal($('picker').options.length,1);assert.equal($('interstate').disabled,true);
+});
