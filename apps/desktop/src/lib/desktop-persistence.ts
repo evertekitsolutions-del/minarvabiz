@@ -17,7 +17,7 @@ export function createDesktopPersistence(refreshAll: Refresh, reportError: Repor
     }
   };
   return {
-    persistAndRefresh: async (): Promise<void> => { await persist("domain"); },
+    persistAndRefresh: (): Promise<boolean> => persist("domain"),
     persistCustomerCollection: (): Promise<boolean> => persist("customer payment"),
   };
 }
