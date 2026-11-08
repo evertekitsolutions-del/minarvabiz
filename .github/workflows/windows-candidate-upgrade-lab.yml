@@ -53,7 +53,12 @@ jobs:
       - name: Configure independent public key for UNPUBLISHED test candidate
         shell: pwsh
         run: |
-          if ("$env:MINARVA_LICENSE_PUBLIC_KEY_HEX" -notmatch '^[0-9a-fA-F]{64}
+          $key = "$env:MINARVA_LICENSE_PUBLIC_KEY_HEX".Trim()
+          if ($key.Length -ne 64 -or $key -notmatch '^[0-9a-fA-F]+$') {
+            throw "Production public verification key is unavailable"
+          }
+          "MINARVA_UPDATE_PUBLIC_KEY_HEX=$key" | Out-File $env:GITHUB_ENV -Append
+
       - name: Build an UNPUBLISHED ephemeral 1.0.27 lab candidate
         shell: pwsh
         run: |
