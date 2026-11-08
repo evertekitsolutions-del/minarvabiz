@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// PRJ-003 scoped milestone transition contract; host owns durable CAS and audit persistence.
+export * from "./project-milestone-transitions";
