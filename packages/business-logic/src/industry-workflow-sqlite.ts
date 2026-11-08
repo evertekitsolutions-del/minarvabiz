@@ -75,6 +75,8 @@ export function createIndustrySqliteCommitPort(db: IndustrySqliteDatabase): Indu
           !Array.isArray(original.appliedEventIds) ||
           !Array.isArray(next.appliedEventIds) ||
           original.appliedEventIds.length !== original.revision ||
+          // Match the bounded trusted read path; never commit an unreadable history.
+          original.revision + events.length > 10000 ||
           original.appliedEventIds.some(id => !validId(id)) ||
           new Set(original.appliedEventIds).size !== original.appliedEventIds.length ||
           original.revision > Number.MAX_SAFE_INTEGER - events.length ||
