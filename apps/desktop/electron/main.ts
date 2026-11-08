@@ -18,6 +18,7 @@ import { beginSqliteRestoreJournal, clearSqliteRestoreJournal, recoverSqliteRest
 import { reconcileFailedSqliteRestore } from "./sqlite-restore-failure";
 import { claimPrimaryDesktopInstance } from "./single-instance-owner";
 import { validateSupportPacketForExport } from "./support-packet";
+import { planThermalReceiptFallback, validateThermalReceiptDomMetrics } from "./thermal-receipt-layout";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 const runtimeSmoke = process.env.MINARVA_RUNTIME_SMOKE === "1";
@@ -185,24 +186,26 @@ async function printHtmlDocument(input: {
     // the rendered invoice content. Keep multi-page invoices bounded.
     let thermalPageHeightMm = 297;
     if (paper === "thermal") {
-      const visibleText = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-        .replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-      if (visibleText.length < 5) return { ok: false, error: "Thermal invoice content is empty; nothing was sent to the cutter." };
-      // Trusted DOM measurement is best; a text-based bound keeps printing
-      // functional if this locked-down (javascript:false) print view denies it.
-      thermalPageHeightMm = Math.min(290, Math.max(55, Math.ceil(visibleText.length / 35 * 4 + 35)));
+      // A too-short browser estimate previously let the Windows cutter fire
+      // after a tiny strip while the rest of the receipt was silently clipped.
+      const fallback = planThermalReceiptFallback(html, thermalWidthMm);
+      thermalPageHeightMm = Math.min(290, Math.max(55, fallback.ok ? fallback.heightMm : 290));
       try {
         const documentMetrics = await win.webContents.executeJavaScript(`(() => {
           const content = document.querySelector('.sheet') || document.body;
           return { heightPx: Math.ceil(content.getBoundingClientRect().height),
             text: (document.body.innerText || '').trim().length };
         })()`, true) as { heightPx: number; text: number };
-        if (documentMetrics.text >= 5 && Number.isFinite(documentMetrics.heightPx) && documentMetrics.heightPx > 0) {
-          thermalPageHeightMm = Math.min(290, Math.max(40, Math.ceil(documentMetrics.heightPx * 25.4 / 96 + 10)));
-        }
+        const checked = validateThermalReceiptDomMetrics(documentMetrics);
+        if (!checked.ok) return { ok: false, error: checked.error };
+        // Do not clamp a genuinely overlong layout: it must fail before
+        // reaching the printer, rather than silently cutting off invoice rows.
+        thermalPageHeightMm = Math.min(290, Math.max(40,
+          Math.ceil(documentMetrics.heightPx * 25.4 / 96 + 10)));
       } catch {
-        runtimeSmokeLog("thermal-measurement-unavailable; using bounded safe receipt-length estimate");
+        runtimeSmokeLog("thermal-measurement-unavailable; using conservative receipt-length estimate");
+        if (!fallback.ok) return { ok: false, error: fallback.error };
+        thermalPageHeightMm = fallback.heightMm;
       }
     }
     const pageSize: Electron.WebContentsPrintOptions["pageSize"] =
