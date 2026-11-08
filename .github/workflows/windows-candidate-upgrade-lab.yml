@@ -128,9 +128,22 @@ jobs:
             node scripts/windows-candidate-upgrade-cdp.mjs activate
             if ($LASTEXITCODE -ne 0) { throw "Source activation/bootstrap failed" }
           } finally {
-            Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-              Where-Object { $_.ExecutablePath -eq $env:LAB_APP_EXE } |
-              ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            # A forced TerminateProcess can lose Chromium's encrypted Local State
+            # key despite a valid trial-state.bin; it is NOT a real upgrade.
+            # Prove normal app/window shutdown and DPAPI persistence first.
+            $windowReady = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              $app.Refresh()
+              if ($app.HasExited) { break }
+              if ($app.MainWindowHandle -ne 0) { $windowReady = $true; break }
+              Start-Sleep -Milliseconds 200
+            }
+            if (-not $windowReady -or -not $app.CloseMainWindow()) {
+              throw "Electron main window could not close normally; refusing unsafe forced upgrade"
+            }
+            if (-not $app.WaitForExit(20000)) {
+              throw "Electron failed to flush and exit normally; refusing unsafe upgrade"
+            }
             Start-Sleep -Seconds 2
           }
 
@@ -169,9 +182,22 @@ jobs:
             node scripts/windows-candidate-upgrade-cdp.mjs verify
             if ($LASTEXITCODE -ne 0) { throw "Published source could not hydrate 51 synthetic products" }
           } finally {
-            Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-              Where-Object { $_.ExecutablePath -eq $env:LAB_APP_EXE } |
-              ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            # A forced TerminateProcess can lose Chromium's encrypted Local State
+            # key despite a valid trial-state.bin; it is NOT a real upgrade.
+            # Prove normal app/window shutdown and DPAPI persistence first.
+            $windowReady = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              $app.Refresh()
+              if ($app.HasExited) { break }
+              if ($app.MainWindowHandle -ne 0) { $windowReady = $true; break }
+              Start-Sleep -Milliseconds 200
+            }
+            if (-not $windowReady -or -not $app.CloseMainWindow()) {
+              throw "Electron main window could not close normally; refusing unsafe forced upgrade"
+            }
+            if (-not $app.WaitForExit(20000)) {
+              throw "Electron failed to flush and exit normally; refusing unsafe upgrade"
+            }
             Start-Sleep -Seconds 2
           }
           Copy-Item -LiteralPath $env:LAB_SOURCE_DB -Destination $env:LAB_WORK_DB -Force
@@ -213,9 +239,22 @@ jobs:
             node scripts/windows-candidate-upgrade-cdp.mjs verify
             if ($LASTEXITCODE -ne 0) { throw "Candidate renderer/trial regression" }
           } finally {
-            Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-              Where-Object { $_.ExecutablePath -eq $env:LAB_APP_EXE } |
-              ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            # A forced TerminateProcess can lose Chromium's encrypted Local State
+            # key despite a valid trial-state.bin; it is NOT a real upgrade.
+            # Prove normal app/window shutdown and DPAPI persistence first.
+            $windowReady = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              $app.Refresh()
+              if ($app.HasExited) { break }
+              if ($app.MainWindowHandle -ne 0) { $windowReady = $true; break }
+              Start-Sleep -Milliseconds 200
+            }
+            if (-not $windowReady -or -not $app.CloseMainWindow()) {
+              throw "Electron main window could not close normally; refusing unsafe forced upgrade"
+            }
+            if (-not $app.WaitForExit(20000)) {
+              throw "Electron failed to flush and exit normally; refusing unsafe upgrade"
+            }
             Start-Sleep -Seconds 2
           }
           Copy-Item -LiteralPath $env:LAB_SOURCE_DB -Destination $env:LAB_WORK_DB -Force
