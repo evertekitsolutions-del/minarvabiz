@@ -42,7 +42,7 @@ jobs:
       - name: Require published, newer, signed stable target
         shell: pwsh
         run: |
-          if ($env:MINARVA_UPDATE_FROM -notmatch '^\\d+\\.\\d+\\.\\d+$' -or $env:MINARVA_UPDATE_TO -notmatch '^\\d+\\.\\d+\\.\\d+$') { throw "Stable source/target versions required." }
+          if ($env:MINARVA_UPDATE_FROM -notmatch '^\d+\.\d+\.\d+$' -or $env:MINARVA_UPDATE_TO -notmatch '^\d+\.\d+\.\d+$') { throw "Stable source/target versions required." }
           if ([version]$env:MINARVA_UPDATE_FROM -ge [version]$env:MINARVA_UPDATE_TO) { throw "Target must be newer than source." }
           $manifest = Invoke-RestMethod -Uri $env:MINARVA_UPDATE_MANIFEST_URL -Headers @{ "Cache-Control" = "no-cache" }
           if ($manifest.product -ne "minarvabiz" -or $manifest.version -ne $env:MINARVA_UPDATE_TO) { throw "Target not advertised in signed stable update manifest." }
