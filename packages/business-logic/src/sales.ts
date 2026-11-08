@@ -32,6 +32,7 @@ export function calculateCartTotals(lines: CartLine[]): CartTotals {
     unitPrice: l.unitPrice,
     discountPercent: l.discountPercent,
     taxRate: l.taxRate,
+    taxInclusive: l.taxInclusive === true,
   }));
   const totals = calculateInvoiceTotals({ items });
   return {
@@ -59,6 +60,7 @@ export function cartLineToSaleItem(line: CartLine, saleId: string, itemId: strin
     unitPrice: line.unitPrice,
     discountPercent: line.discountPercent,
     taxRate: line.taxRate,
+    taxInclusive: line.taxInclusive === true,
   });
   const dimensionMetadata = line.dimensionMetadata == null ? undefined
     : parseDimensionLineMetadata(line.dimensionMetadata, exactDimensionQuantityMilli(line.quantity));
@@ -73,6 +75,7 @@ export function cartLineToSaleItem(line: CartLine, saleId: string, itemId: strin
     costPrice: line.costPrice,
     discountPercent: line.discountPercent,
     taxRate: line.taxRate,
+    ...(line.taxInclusive ? { taxInclusive: true } : {}),
     lineTotal: calc.total,
     ...(dimensionMetadata ? { dimensionMetadata } : {}),
   };
