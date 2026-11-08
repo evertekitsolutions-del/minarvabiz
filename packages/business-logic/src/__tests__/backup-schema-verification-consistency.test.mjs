@@ -8,7 +8,7 @@ assert.match(
   /async function minarvaSqliteValidationError\(file: string\): Promise<string \| null> \{ return sqliteValidationError\(file\) \|\| await minarvaBackupSchemaError\(file\); \}/
 );
 assert.match(main, /type LocalBackupKind = "manual" \| "automatic" \| "pre-restore" \| "pre-update"/);
-assert.match(main, /async function createLocalBackup\(kind: LocalBackupKind\)/);
+assert.match(main, /async function createLocalBackup\(kind: LocalBackupKind, destinationOverride\?: string\)/);
 assert.match(main, /const sourceError = await minarvaSqliteValidationError\(source\)/);
 assert.match(main, /const validationError = await minarvaSqliteValidationError\(destination\)/);
 assert.match(main, /async function listBackupFiles\(\)/);
