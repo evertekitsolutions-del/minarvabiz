@@ -343,13 +343,13 @@ function resolveBackupId(id: unknown): { file: string; filename: string } | null
   const base = automaticStorage ? backupDestinationDir() : backupDir();
   return { file: path.join(base, filename), filename };
 }
-async function createLocalBackup(kind: LocalBackupKind): Promise<LocalBackupResult> {
+async function createLocalBackup(kind: LocalBackupKind, destinationOverride?: string): Promise<LocalBackupResult> {
   const source = sqlitePath();
   if (!fs.existsSync(source)) return { ok: false, error: "SQLite database does not exist" };
   const sourceError = await minarvaSqliteValidationError(source);
   if (sourceError) return { ok: false, error: `Current Minarva Biz database failed validation: ${sourceError}` };
 
-  const targetDir = kind === "automatic" ? backupDestinationDir() : backupDir();
+  const targetDir = destinationOverride ?? (kind === "automatic" ? backupDestinationDir() : backupDir());
   fs.mkdirSync(targetDir, { recursive: true });
   const destination = path.join(targetDir, uniqueSqliteBackupFilename(kind, timestamp()));
   let createdByThisCall = false;
@@ -801,6 +801,18 @@ ipcMain.handle("update:install", async (event) => {
   const backup = await createLocalBackup("pre-update");
   if (!backup.ok) {
     return { ok: false, error: `Update blocked: a verified Minarva Biz pre-update database backup could not be created. ${backup.error}` };
+  }
+
+  // A daily D-drive automatic backup is NOT a pre-update backup. Always write
+  // a second verified pre-update image to the customer's configured backup
+  // destination, regardless of the 24-hour automatic-backup schedule. Never
+  // silently install when the configured separate backup drive is unavailable.
+  const externalBackupDir = backupDestinationDir();
+  if (path.resolve(externalBackupDir) !== path.resolve(backupDir())) {
+    const externalBackup = await createLocalBackup("pre-update", externalBackupDir);
+    if (!externalBackup.ok) {
+      return { ok: false, error: `Update blocked: the separate pre-update database backup could not be verified. ${externalBackup.error}` };
+    }
   }
 
   try {
