@@ -31,6 +31,7 @@ export * from "./laundry-operations-report";
 export * from "./laundry-receivables-ageing";
 export * from "./laundry-operations-csv";
 export * from "./tally-voucher-export";
+export * from "./bigcapital-journal-preview";
 export * from "./incentives";
 export * from "./dashboard";
 export * from "./sales";
