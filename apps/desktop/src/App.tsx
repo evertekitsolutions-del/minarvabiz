@@ -19,6 +19,8 @@ import { createDesktopPersistence } from "./lib/desktop-persistence";
 import { useDesktopCustomerCollection } from "./lib/use-desktop-customer-collection";
 import { useDurableSaleCommit } from "./lib/use-durable-sale-commit";
 import { DesktopPendingInvoiceSaveBanner } from "./components/DesktopPendingInvoiceSaveBanner";
+import { DesktopBackupHealthBanner } from "./components/DesktopBackupHealthBanner";
+import { createProductRecoveryCheckpoint } from "./lib/product-recovery-checkpoint";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
 import { DesktopStaffEditorModal } from "./components/DesktopStaffEditorModal";
 import { BarcodeLabelPrintModal } from "./components/BarcodeLabelPrintModal";
@@ -215,8 +217,12 @@ export function App() {
       }
       productMutationAwaitingPersistenceRef.current = false;
       setProductSavePending(false);
+      // A successful native Save is only the first recovery layer. Make a
+      // separately verified D-drive checkpoint before showing success.
+      const checkpoint = await createProductRecoveryCheckpoint(window.minarvaDesktop);
       setProducts(store.listProducts({query:productQuery||undefined,categoryId:productCategoryId||undefined,lowStockOnly}));
-      setProductOpen(false);resetProductForm();setModuleError(null);
+      setProductOpen(false);resetProductForm();
+      setModuleError(checkpoint.ok ? null : "Product saved to SQLite, but recovery backup failed: " + checkpoint.error);
       if(resumeStockPurchaseAfterProduct){setStockPurchaseOpen(true);setResumeStockPurchaseAfterProduct(false);}
     }catch(error){
       setProductSaveError(errorMessage(error));
@@ -298,6 +304,7 @@ export function App() {
   return <AppShell activeNav={activeNav} onNavigate={(_href,id)=>navTo(id)} desktopModuleContext={{customerId:crmCustomerId,staffId:staffDetailId,returnSaleId,onReturnSaleHandled:()=>setReturnSaleId("")}} sidebar={{user:{name:"Admin",role:"Super Admin"},logoSrc:"logo-mark.png",navItems:allowedNav}} header={{showSearch:view!=="dashboard",title:view==="services"?"Boutique & Tailoring Orders":view,subtitle:"Welcome back, Admin!",notificationCount:phase6Store.unreadNotificationCount(),messageCount:listCustomerCommunicationQueue().filter(row=>row.status==="pending"||row.status==="failed").length,onMessagesClick:()=>navTo("messages"),onNotificationsClick:()=>navTo("notifications"),onCalendarClick:()=>navTo("agenda"),onSearch:setGlobalSearchQuery}}>
     <DesktopEntitlementMonitor enabled={dbReady} onTrialStateChange={setTrialState} onLicenseStateChange={setCommercialLicense}/>
     {saleCommit.hasPending() && <DesktopPendingInvoiceSaveBanner onRetry={async()=>{const r=await saleCommit.retryPending();refreshAll();setModuleError(r.success?null:r.errors?.join("; ")||"SQLite save failed");}}/>}
+    <DesktopBackupHealthBanner error={backupSettings.lastError} onOpenBackups={()=>navTo("backup")}/>
     {view==="dashboard"&&dash&&<div className="space-y-4"><DesktopLicenseExpiryBanner commercialActive={commercialActive} trialState={trialState} daysRemaining={licenseDaysForDashboard} onManage={()=>navTo("license")}/><Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/></div>}
     {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery("")} onNavigate={(_href,id)=>{setGlobalSearchQuery("");navTo(id);}}/>}
     {view==="customers"&&<DesktopCustomerMasterPanel onAdd={openCustomerCreator} onPersist={persistCustomerCollection} collection={customerCollection} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}
