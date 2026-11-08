@@ -7,6 +7,7 @@ import { pathToFileURL } from "url";
 import { registerDesktopLicenseIpc, getDesktopLicenseState } from "./license";
 import { resetLegacyShowcaseBusinessData } from "./customer-demo-reset";
 import { checkForSecureUpdate, downloadVerifiedUpdate, getDownloadedVerifiedUpdate } from "./updater";
+import { confirmRendererPersistenceBeforeUpdate } from "./update-persistence-barrier";
 import { minarvaBackupSchemaError } from "./sqlite-backup-validation";
 import { copySqliteBackupExclusive, sqliteBackupCopyError, uniqueSqliteBackupFilename } from "./sqlite-backup-copy";
 import { pruneVerifiedAutomaticBackups } from "./sqlite-backup-retention";
@@ -787,6 +788,13 @@ ipcMain.handle("update:install", async (event) => {
   if (process.platform !== "win32") return { ok: false, error: "Installer updates are supported on Windows only." };
   const update = getDownloadedVerifiedUpdate();
   if (!update) return { ok: false, error: "No verified downloaded update is available." };
+
+  // P0: a validated backup can still be stale while product edits live only
+  // in renderer memory or a queued SQLite IPC write. Ask the active renderer to
+  // take a fresh domain snapshot and await the native write acknowledgement.
+  if (!await confirmRendererPersistenceBeforeUpdate(ipcMain, event.sender)) {
+    return { ok: false, error: "Update blocked: some business changes are not confirmed saved to SQLite. Keep Minarva Biz open and contact support; no installer was started." };
+  }
 
   // Upgrade safety gate: never start an updater unless a fresh, separately classified,
   // fully validated pre-update SQLite backup exists.
