@@ -64,6 +64,14 @@ test("the real installer cannot spawn before the validated pre-update SQLite sna
     handler.indexOf('await createLocalBackup("pre-update")'));
   assert.ok(handler.indexOf('await createLocalBackup("pre-update")') < handler.indexOf("spawn(update.path"));
   assert.ok(handler.includes("if (!backup.ok)"));
+  // A 24-hour D-drive scheduler must never replace an on-demand pre-update
+  // mirrored backup; both copies are validated before NSIS can start.
+  assert.ok(handler.includes('const externalBackupDir = backupDestinationDir()'));
+  assert.ok(handler.includes('await createLocalBackup("pre-update", externalBackupDir)'));
+  assert.ok(handler.includes("if (!externalBackup.ok)"));
+  assert.ok(handler.indexOf('await createLocalBackup("pre-update", externalBackupDir)') <
+    handler.indexOf("spawn(update.path"));
+  assert.ok(main.includes('destinationOverride ?? (kind === "automatic" ? backupDestinationDir() : backupDir())'));
 
   const renderer = fs.readFileSync("apps/desktop/src/App.tsx", "utf8");
   const preload = fs.readFileSync("apps/desktop/electron/preload.ts", "utf8");
