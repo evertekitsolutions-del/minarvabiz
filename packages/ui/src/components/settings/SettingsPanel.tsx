@@ -414,7 +414,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
       {printTestMessage && <p className={`mt-3 text-sm ${printTestState === "error" ? "text-red-600" : printTestState === "done" ? "text-emerald-600" : "text-slate-600"}`}>{printTestMessage}</p>}
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <Button type="button" variant="outline" onClick={testSelectedPrinter} disabled={printTestState === "working"}>{printTestState === "working" ? "Printing test…" : "Test invoice printer"}</Button>
-        <Button type="button" variant="outline" onClick={testLabelPrinter} disabled={printTestState === "working"}>Test 3-row label alignment</Button>
+        <Button type="button" variant="outline" onClick={testLabelPrinter} disabled={printTestState === "working"}>Test label printer — 3-row alignment</Button>
         <Button onClick={() => onSavePrinting({ defaultInvoicePaper: draftPrinting.defaultInvoicePaper, thermalWidthMm: draftPrinting.thermalWidthMm, a4PrinterName: draftPrinting.a4PrinterName, thermalPrinterName: draftPrinting.thermalPrinterName, labelPrinterName: draftPrinting.labelPrinterName, labelWidthMm: draftPrinting.labelWidthMm, labelHeightMm: draftPrinting.labelHeightMm, labelCodeMode: draftPrinting.labelCodeMode, labelLayout: draftPrinting.labelLayout, labelColumns: draftPrinting.labelColumns, labelRollWidthMm: draftPrinting.labelRollWidthMm, labelGapMm: draftPrinting.labelGapMm, labelLeftMarginMm: draftPrinting.labelLeftMarginMm, labelRowGapMm: draftPrinting.labelRowGapMm, silentDesktopPrint: draftPrinting.silentDesktopPrint })}>Save printer settings</Button>
       </div>
     </section>
