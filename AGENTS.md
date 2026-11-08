@@ -1,5 +1,9 @@
 # Minarva Biz — Instructions for coding agents
 
+> **MANDATORY FIRST READ — OWNER'S LATEST HOSTING AND DATA RULES**  
+> Read [docs/OWNER_NON_NEGOTIABLE_RULES.md](docs/OWNER_NON_NEGOTIABLE_RULES.md) **before using any tool, designing a feature, or deploying Minarva Biz**. The owner has explicitly banned **all Vercel and Render use for Minarva Biz** (build, preview, deployment, hosting, Git integration and runtime). **Cloudflare on the connected owner account is the approved platform**; keep future self-host portability. Historical Vercel URLs and integrations are evidence of incomplete cutover, **never permission to deploy there**. This overrides weaker older wording such as "not a mandatory dependency." Preserve Windows Offline, browser Online, Hybrid, mobile, tenant data, customer SQLite/backup/license and paid-service restrictions. The same rule governs scheduled agents and reviewers.  
+>
+
 ## Mission and source of truth
 - Implement the existing **full** Minarva Biz master vision without silently removing capabilities. Customer-facing Windows Offline, browser Online and Windows + Online Hybrid must share correct business logic; a mobile-accessible experience is also in scope.
 - Start each task by verifying the **live** `main` SHA, open PRs, issue #325 and current GitHub checks. Never assume an old conversation's branch, SHA, CI status or progress estimate is current.
