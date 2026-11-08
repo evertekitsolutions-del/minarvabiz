@@ -121,3 +121,37 @@ test("desktop upgrade cannot rewrite a SQLite snapshot after product hydration d
   assert.ok(start >= 0 && barrier > start && firstSave > barrier,
     "Hydrated product IDs must be validated before the first native SQLite overwrite");
 });
+
+
+test("P0 customer, sale and payment IDs survive hydration before SQLite startup can persist", () => {
+  const guard = loadTypeScript(source("apps/desktop/src/lib/product-hydration-guard.ts"), {});
+  const verify = guard.assertHydratedCoreRecordsPreserved;
+  const before = {
+    customers: [{ id: "customer-1" }, { id: "customer-2" }],
+    sales: [{ id: "invoice-1" }, { id: "invoice-2" }],
+    payments: [{ id: "receipt-1" }, { id: "receipt-2" }],
+  };
+  assert.doesNotThrow(() => verify(before, {
+    customers: [...before.customers].reverse(),
+    sales: [...before.sales].reverse(),
+    payments: [...before.payments].reverse(),
+  }));
+  for (const field of ["customers", "sales", "payments"]) {
+    const bad = { ...before, [field]: before[field].slice(0, 1) };
+    assert.throws(() => verify(before, bad), new RegExp("hydrated " + field + " IDs differ"));
+    const duplicate = { ...before, [field]: [before[field][0], before[field][0]] };
+    assert.throws(() => verify(before, duplicate), new RegExp("hydrated " + field + " IDs differ"));
+  }
+  assert.throws(
+    () => verify({ ...before, payments: "corrupt" }, before),
+    /persisted payments records are malformed/,
+  );
+  assert.doesNotThrow(() => verify({ products: [] }, {}), "Absent historical keys must be allowed");
+
+  const bootstrap = source("apps/desktop/src/lib/sqlite-bootstrap.ts");
+  const initialLoad = bootstrap.indexOf("const snap = loadSnap(db)");
+  const safety = bootstrap.indexOf("assertHydratedCoreRecordsPreserved(snap, store.exportCoreState())");
+  const firstWrite = bootstrap.indexOf("const persisted = await persistDomainToSqlite()", initialLoad);
+  assert.ok(initialLoad >= 0 && safety > initialLoad && firstWrite > safety,
+    "Core ledger safety check must run before the first full SQLite overwrite");
+});
