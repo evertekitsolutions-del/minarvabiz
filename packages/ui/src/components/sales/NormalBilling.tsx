@@ -65,7 +65,7 @@ export function NormalBilling({
   const totals = React.useMemo(() => calculateCartTotals(lines), [lines]);
 
   React.useEffect(() => {
-    setUnitPrice(selectedProduct ? String(pricesIncludeTax ? (selectedProduct.mrp ?? selectedProduct.sellingPrice) : selectedProduct.sellingPrice) : "");
+    setUnitPrice(selectedProduct ? String(pricesIncludeTax ? ((selectedProduct.mrp != null && selectedProduct.mrp > 0 ? selectedProduct.mrp : selectedProduct.sellingPrice)) : selectedProduct.sellingPrice) : "");
   }, [selectedProduct?.id, selectedProduct?.mrp, selectedProduct?.sellingPrice, pricesIncludeTax]);
 
   function addLine() {
