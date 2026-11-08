@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// COM-007 opt-in click-and-collect state transition; persistence integration pending.
+export * from "./commerce-click-collect";
