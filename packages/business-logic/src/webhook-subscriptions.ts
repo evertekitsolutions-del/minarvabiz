@@ -56,7 +56,8 @@ export function validateWebhookEndpoint(input: string): string {
     // and pin vetted public DNS targets on every connection and redirect.
     throw new Error("Webhook endpoint must use a public DNS hostname");
   }
-  if (!/^[a-z0-9.-]+$/.test(host) || host.split(".").some((part) => !part || part.startsWith("-") || part.endsWith("-"))) {
+  if (host.length > 253 || !/^[a-z0-9.-]+$/.test(host) ||
+      host.split(".").some((part) => !part || part.length > 63 || part.startsWith("-") || part.endsWith("-"))) {
     throw new Error("Invalid webhook hostname");
   }
   return url.toString();
