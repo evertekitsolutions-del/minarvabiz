@@ -158,7 +158,7 @@ export function PosBilling({
         sku: p.sku,
         barcode: p.barcode,
         quantity: qty,
-        unitPrice: pricesIncludeTax ? (p.mrp ?? p.sellingPrice) : p.sellingPrice,
+        unitPrice: pricesIncludeTax ? ((p.mrp != null && p.mrp > 0 ? p.mrp : p.sellingPrice)) : p.sellingPrice,
         taxInclusive: pricesIncludeTax,
         costPrice: p.costPrice,
         discountPercent: p.discount ?? 0,
@@ -208,7 +208,7 @@ export function PosBilling({
       return;
     }
     try {
-      const priceProduct = pricesIncludeTax ? { ...product, sellingPrice: product.mrp ?? product.sellingPrice } : product;
+      const priceProduct = pricesIncludeTax ? { ...product, sellingPrice: (product.mrp != null && product.mrp > 0 ? product.mrp : product.sellingPrice) } : product;
       const next = appendPosMeasuredCut(cart, priceProduct, measurement, generateId());
       setCart(pricesIncludeTax ? next.map((line, index) =>
         index === next.length - 1 ? { ...line, taxInclusive: true } : line,
@@ -359,7 +359,7 @@ export function PosBilling({
       if (!product) return { ...line, taxInclusive: true };
       return {
         ...line,
-        unitPrice: product.mrp ?? product.sellingPrice,
+        unitPrice: (product.mrp != null && product.mrp > 0 ? product.mrp : product.sellingPrice),
         taxInclusive: true,
       };
     }));
@@ -461,7 +461,7 @@ export function PosBilling({
                 <div className="truncate text-sm font-medium text-slate-900">{p.name}</div>
                 {(p.size||p.color||p.fabric)&&<div className="mt-1 truncate text-xs text-slate-600">{[p.size,p.color,p.fabric].filter(Boolean).join(" · ")}</div>}
                 <div className="mt-1 text-xs text-slate-500">Stock: {p.stockQuantity}</div>
-                <div className="mt-1 text-sm font-semibold text-indigo-600">{formatMoney(pricesIncludeTax ? (p.mrp ?? p.sellingPrice) : p.sellingPrice)}</div>
+                <div className="mt-1 text-sm font-semibold text-indigo-600">{formatMoney(pricesIncludeTax ? ((p.mrp != null && p.mrp > 0 ? p.mrp : p.sellingPrice)) : p.sellingPrice)}</div>
                 {p.stockQuantity <= 0 && <div className="mt-1 text-xs font-medium text-rose-600">Out of stock</div>}
               </button>
             ))}
