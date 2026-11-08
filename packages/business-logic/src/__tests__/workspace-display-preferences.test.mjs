@@ -233,3 +233,44 @@ test("missing scoped snapshot clears cached business identity before tenant swit
   assert.equal(api.getShopProfile().shopName, "Tenant B");
   assert.equal(api.getShopProfile().legalName, "");
 });
+
+
+test("durable desktop persistence requires a committed asynchronous acknowledgement", async () => {
+  const Module = require("node:module");
+  const source = fs.readFileSync(new URL("../autosave.ts", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const isolated = new Module("autosave-ack-test");
+  isolated.filename = "autosave-ack-test.js";
+  isolated.paths = [];
+  isolated.require = (name) => {
+    if (name === "./runtime-mode") return { isProductionMode: () => true };
+    throw new Error("Unexpected dependency: " + name);
+  };
+  isolated._compile(compiled, isolated.filename);
+  const { awaitDesktopPersistence } = isolated.exports;
+  const previousWindow = globalThis.window;
+  try {
+    delete globalThis.window;
+    await assert.rejects(awaitDesktopPersistence(), /authenticated desktop host/);
+    globalThis.window = {};
+    await assert.rejects(awaitDesktopPersistence(), /No durable desktop persistence adapter/);
+    globalThis.window.__minarvaDesktopPersist = () => undefined;
+    await assert.rejects(awaitDesktopPersistence(), /did not return a durable-write acknowledgement/);
+    let commit;
+    globalThis.window.__minarvaDesktopPersist = () => new Promise((resolve) => { commit = resolve; });
+    let acknowledged = false;
+    const pending = awaitDesktopPersistence().then(() => { acknowledged = true; });
+    await Promise.resolve();
+    assert.equal(acknowledged, false);
+    commit();
+    await pending;
+    assert.equal(acknowledged, true);
+    globalThis.window.__minarvaDesktopPersist = () => Promise.reject(new Error("SQLite commit failed"));
+    await assert.rejects(awaitDesktopPersistence(), /SQLite commit failed/);
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+});
