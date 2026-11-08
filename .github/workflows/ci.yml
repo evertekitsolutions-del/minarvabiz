@@ -614,6 +614,8 @@ jobs:
         run: node --experimental-strip-types --test scripts/desktop-update-product-durability.test.mjs
       - name: Prevent stale, unapproved or Render-dependent Windows upgrade E2E
         run: node scripts/windows-upgrade-e2e-safety-contract.mjs
+      - name: Guard unpublished Windows candidate lab from customer data, public releases and deployment
+        run: node --test scripts/windows-candidate-upgrade-lab-contract.test.mjs
       - name: Verify hourly backups and product recovery checkpoints
         run: node --test scripts/p0-backup-checkpoints.test.mjs
       - name: Verify resumable installer download and signed SHA-256 safety
