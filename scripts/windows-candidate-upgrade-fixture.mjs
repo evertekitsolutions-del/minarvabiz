@@ -89,7 +89,14 @@ function canonical(snap) {
     outbox:(snap.outbox||[]).map(o => ({id:o.id,tableName:o.tableName,recordId:o.recordId,operation:o.operation})),
   };
   for (const rows of Object.values(project)) rows.sort((a,b) => String(a.id).localeCompare(String(b.id)));
-  return { digest:SHA(JSON.stringify(project)), counts:Object.fromEntries(Object.entries(project).map(([key, rows])=>[key,rows.length])) };
+  // Audit and backup hooks legitimately enqueue extra events on startup.
+  // Keep exact immutable business/finance fingerprints while requiring every
+  // original pending outbox event to survive (append-only sync queue).
+  return {
+    digest: SHA(JSON.stringify({ ...project, outbox: [] })),
+    counts: Object.fromEntries(Object.entries(project).map(([key, rows])=>[key,rows.length])),
+    expectedOutbox: project.outbox,
+  };
 }
 function inspect() {
   assert.equal(value("PRAGMA quick_check"), "ok", "SQLite integrity must pass");
@@ -197,7 +204,14 @@ try {
   } else {
     const state = JSON.parse(fs.readFileSync(stateFile,"utf8"));
     const observed = inspect();
-    assert.deepEqual(observed.counts,state.counts,"Entity counts changed during upgrade");
+    const { outbox: oldOutbox, ...oldCoreCounts } = state.counts;
+    const { outbox: currentOutbox, ...currentCoreCounts } = observed.counts;
+    assert.deepEqual(currentCoreCounts,oldCoreCounts,"Core entity counts changed during upgrade");
+    assert.ok(currentOutbox >= oldOutbox,"Pending sync outbox lost records");
+    for (const original of state.expectedOutbox) {
+      const retained = observed.expectedOutbox.find((event)=>event.id===original.id);
+      assert.deepEqual(retained,original,"A pre-upgrade pending outbox event was changed or deleted");
+    }
     assert.equal(observed.digest,state.digest,"Core product/stock/price/ledger fingerprints changed");
     console.log("ISOLATED_WINDOWS_FIXTURE_VERIFY PASS "+JSON.stringify(observed.counts));
   }
