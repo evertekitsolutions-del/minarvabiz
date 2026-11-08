@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// Optional merchant-scoped COD shipping prepayment dispatch guard (no payment capture).
+export * from "./commerce-cod-shipping-policy";
