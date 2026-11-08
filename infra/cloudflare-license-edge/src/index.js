@@ -36,7 +36,7 @@ const ALLOWED_ROUTES = new Map([
 const DEFAULT_SUPABASE_URL = "https://wmjgefbaliuwmaxyzxkq.supabase.co";
 const DEFAULT_ONLINE_APP_URL = "https://minarvabiz-steel.vercel.app";
 const GITHUB_LATEST_RELEASE =
-  "https://github.com/evertekitsolutions-del/minarvabiz/releases/latest";
+  "https://api.github.com/repos/evertekitsolutions-del/minarvabiz/releases/latest";
 const GITHUB_RELEASE_DOWNLOAD_BASE =
   "https://github.com/evertekitsolutions-del/minarvabiz/releases/download";
 const SIGNING_KDF_DOMAIN = "minarvabiz-ed25519-authority-v1\0";
@@ -2467,6 +2467,43 @@ async function adminSupportUpdateNatively(request, env, route) {
   );
 }
 
+// Bootstrap fallback is pinned to GitHub's published, SHA-256-verified v1.0.25.
+// Only strictly validated REST metadata can update the in-isolate snapshot.
+// During GitHub outages this can serve an older valid release, never an
+// invented installer or a checksum taken from a transient failed response.
+const VERIFIED_RELEASE_BOOTSTRAP = Object.freeze({
+  product: "minarvabiz",
+  version: "1.0.26",
+  installerUrl: "https://github.com/evertekitsolutions-del/minarvabiz/releases/download/v1.0.26/MinarvaBiz-Setup-1.0.26.exe",
+  sha256: "a63a8ef01ec265e25d5ac0634a6d0596552987bb5ceb34a98e9dd9b84f8d0834",
+  publishedAt: "2026-11-08T09:42:15Z",
+});
+let lastVerifiedRelease = VERIFIED_RELEASE_BOOTSTRAP;
+
+function signedVerifiedRelease(authority, unsigned) {
+  if (unsigned.product !== "minarvabiz" ||
+      !/^\d+\.\d+\.\d+$/.test(unsigned.version) ||
+      unsigned.installerUrl !== GITHUB_RELEASE_DOWNLOAD_BASE + "/v" + unsigned.version + "/MinarvaBiz-Setup-" + unsigned.version + ".exe" ||
+      !/^[0-9a-f]{64}$/.test(unsigned.sha256) ||
+      !Number.isFinite(Date.parse(unsigned.publishedAt))) {
+    return json({ error: "Verified release metadata is invalid.", stage: "verified-release" }, 503);
+  }
+  const signature = nodeSign(
+    null,
+    Buffer.from(canonicalUpdateManifest(unsigned), "utf8"),
+    authority.privateKey,
+  ).toString("base64url");
+
+  return json({
+    ...unsigned,
+    notes: "Minarva Biz " + unsigned.version,
+    signature,
+  }, 200, {
+    "x-minarva-license-backend": "cloudflare-native",
+    "x-minarva-update-source": "github-release",
+  });
+}
+
 async function updateManifestNatively(authority) {
   if (!authority) {
     return json({ error: "Update manifest service is unavailable.", stage: "authority" }, 503);
@@ -2474,82 +2511,57 @@ async function updateManifestNatively(authority) {
 
   try {
     const latest = await fetch(GITHUB_LATEST_RELEASE, {
-      headers: { "user-agent": "MinarvaBiz-License-Edge" },
-      redirect: "manual",
-      signal: AbortSignal.timeout(20_000),
-    });
-    const location = String(latest.headers.get("location") || "");
-    const match = location.match(/\/releases\/tag\/v(\d+\.\d+\.\d+)(?:$|[?#])/);
-    const version = match?.[1] || "";
-    if (!version) {
-      return json(
-        { error: "Stable release version is unavailable.", stage: "latest-release", status: latest.status },
-        503,
-      );
-    }
-
-    const installerName = `MinarvaBiz-Setup-${version}.exe`;
-    const checksumUrl = `${GITHUB_RELEASE_DOWNLOAD_BASE}/v${version}/${installerName}.sha256`;
-    const checksumResponse = await fetch(checksumUrl, {
       headers: {
-        accept: "text/plain",
+        accept: "application/vnd.github+json",
         "user-agent": "MinarvaBiz-License-Edge",
+        "x-github-api-version": "2022-11-28",
       },
-      redirect: "follow",
       signal: AbortSignal.timeout(20_000),
     });
-    if (!checksumResponse.ok) {
+    if (!latest.ok) {
+      if ([403, 429, 502, 503, 504].includes(latest.status)) {
+        return signedVerifiedRelease(authority, lastVerifiedRelease);
+      }
       return json(
-        { error: "Stable installer checksum is unavailable.", stage: "checksum", status: checksumResponse.status },
+        { error: "Stable release metadata is unavailable.", stage: "latest-release", status: latest.status },
         503,
       );
     }
 
-    const checksumText = (await checksumResponse.text()).trim();
-    const checksumMatch = checksumText.match(/^([0-9a-f]{64})\s+\*?(.+)$/i);
-    const sha256 = String(checksumMatch?.[1] || "").toLowerCase();
-    const declaredName = String(checksumMatch?.[2] || "").trim();
-    if (!/^[0-9a-f]{64}$/.test(sha256) || declaredName !== installerName) {
-      return json({ error: "Stable installer checksum is malformed.", stage: "checksum-parse" }, 503);
+    const release = await latest.json();
+    const version = /^v(\d+\.\d+\.\d+)$/.exec(String(release?.tag_name || ""))?.[1] || "";
+    if (!version || release?.draft !== false || release?.prerelease !== false) {
+      return json({ error: "Stable release is invalid.", stage: "release-validate" }, 503);
     }
 
-    const installerUrl = `${GITHUB_RELEASE_DOWNLOAD_BASE}/v${version}/${installerName}`;
-    const timestampHeader =
-      checksumResponse.headers.get("last-modified") ||
-      checksumResponse.headers.get("date") ||
-      "";
-    const timestamp = new Date(timestampHeader);
-    const publishedAt = Number.isFinite(timestamp.getTime())
-      ? timestamp.toISOString()
-      : new Date().toISOString();
+    const installerName = "MinarvaBiz-Setup-" + version + ".exe";
+    const checksumName = installerName + ".sha256";
+    const assets = Array.isArray(release.assets) ? release.assets : [];
+    const installer = assets.find((a) => a?.name === installerName && a?.state === "uploaded");
+    const checksum = assets.find((a) => a?.name === checksumName && a?.state === "uploaded");
+    const installerUrl = GITHUB_RELEASE_DOWNLOAD_BASE + "/v" + version + "/" + installerName;
+    if (!installer || !checksum || !Number.isSafeInteger(installer.size) || installer.size <= 0 ||
+        installer.browser_download_url !== installerUrl || checksum.browser_download_url !==
+        GITHUB_RELEASE_DOWNLOAD_BASE + "/v" + version + "/" + checksumName) {
+      return json({ error: "Published installer assets are unavailable.", stage: "assets" }, 503);
+    }
 
-    const unsigned = {
-      product: "minarvabiz",
-      version,
-      installerUrl,
-      sha256,
-      publishedAt,
-    };
-    const signature = nodeSign(
-      null,
-      Buffer.from(canonicalUpdateManifest(unsigned), "utf8"),
-      authority.privateKey,
-    ).toString("base64url");
+    const sha256 = /^sha256:([0-9a-f]{64})$/i.exec(String(installer.digest || ""))?.[1]?.toLowerCase() || "";
+    const publishedAt = String(release.published_at || "");
+    if (!sha256 || !Number.isFinite(Date.parse(publishedAt)) || !publishedAt.endsWith("Z")) {
+      return json({ error: "Published installer metadata is invalid.", stage: "digest" }, 503);
+    }
 
-    return json(
-      {
-        ...unsigned,
-        notes: `Minarva Biz ${version}`,
-        signature,
-      },
-      200,
-      {
-        "x-minarva-license-backend": "cloudflare-native",
-        "x-minarva-update-source": "github-release",
-      },
-    );
+    const unsigned = { product: "minarvabiz", version, installerUrl, sha256, publishedAt };
+    lastVerifiedRelease = unsigned;
+    return signedVerifiedRelease(authority, unsigned);
   } catch {
-    return json({ error: "Update manifest service is unavailable.", stage: "fetch-or-sign" }, 503);
+    // Never trust an unverified response during a GitHub outage.
+    try {
+      return signedVerifiedRelease(authority, lastVerifiedRelease);
+    } catch {
+      return json({ error: "Update manifest signing is unavailable.", stage: "sign" }, 503);
+    }
   }
 }
 

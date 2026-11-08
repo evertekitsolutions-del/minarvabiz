@@ -33,5 +33,11 @@ jobs:
       - name: Verify signed activation certificate expiry regression
         run: node scripts/license-activation-certificate-expiry-regression.mjs
 
+      - name: Verify GitHub asset digest and signed update manifest
+        run: node scripts/cloudflare-license-edge-update-manifest-smoke.mjs
+
       - name: Verify Cloudflare license edge
         run: node scripts/cloudflare-license-edge-live-smoke.mjs
+
+      - name: Verify Windows publisher update endpoint
+        run: node scripts/cloudflare-release-publisher-endpoint-smoke.mjs
