@@ -15,7 +15,7 @@ import {
   store,
 } from "@minarvabiz/business-logic";
 import { runStartupAutomaticBackup } from "./startup-auto-backup";
-import { assertHydratedProductsPreserved } from "./product-hydration-guard";
+import { assertHydratedProductsPreserved, assertHydratedCoreRecordsPreserved } from "./product-hydration-guard";
 
 type SqliteDatabase = {
   save: () => void;
@@ -200,6 +200,9 @@ async function initializeDesktopSqlite(): Promise<{ ok: boolean; error?: string 
       // IMPORTANT: the first save after a version upgrade must never rewrite
       // a full SQLite image whose product set was silently truncated.
       assertHydratedProductsPreserved(snap, store.exportCoreState().products);
+      // Customer / sale / payment IDs are as critical as product IDs. Refuse
+      // the FIRST post-upgrade SQLite write if import silently drops any.
+      assertHydratedCoreRecordsPreserved(snap, store.exportCoreState());
     }
 
     ready = true;
