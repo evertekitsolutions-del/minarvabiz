@@ -127,3 +127,31 @@ test("inbox rejects oversized grant sets before issuing SQL", () => {
     { ...access, allowedTemplateIds: grants }), /Too many industry workflow template grants/);
   assert.equal(queries, 0);
 });
+
+test("inbox rejects duplicate, unordered, out-of-cursor and oversized database pages", () => {
+  const makeDb = (rows) => {
+    let recordReads = 0;
+    return {
+      db: {
+        transaction(fn) { return fn; },
+        prepare(sql) {
+          if (sql.includes("SELECT record_id")) return { all() { return rows; } };
+          recordReads++;
+          throw Error("must not read corrupt page records");
+        },
+      },
+      get recordReads() { return recordReads; },
+    };
+  };
+  for (const rows of [
+    [{ record_id: "job-2" }, { record_id: "job-2" }],
+    [{ record_id: "job-3" }, { record_id: "job-2" }],
+    [{ record_id: "job-1" }],
+    [{ record_id: "job-2" }, { record_id: "job-3" }, { record_id: "job-4" }],
+  ]) {
+    const fixture = makeDb(rows);
+    assert.throws(() => listIndustrySqliteWorkflows(fixture.db, profile, access,
+      { afterId: "job-1", limit: 1 }), /corrupt records/);
+    assert.equal(fixture.recordReads, 0);
+  }
+});
