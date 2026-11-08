@@ -26,3 +26,7 @@ d054860179df7629c4944e9a40058a4308c82ff7:apps/web/src/app/TrialWelcomePopup.tsx:
 # Historical test-only HMAC fixture, independently inspected at commit 01d91593.
 # Fixed literal in webhook-signature.test.mjs; no production credential. Exact finding only.
 01d9159393a7f31deecdb582d91b3929e3727cb3:packages/business-logic/src/__tests__/webhook-signature.test.mjs:generic-api-key:14
+
+# Historical scanner false positive: explanatory comment in an earlier ignore-file revision.
+# No credential is present; restrict suppression to the single historical finding.
+ea391279ca98e6e5a20bcb507f9ab5871ccd3474:.gitleaksignore:generic-api-key:27
