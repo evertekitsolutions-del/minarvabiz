@@ -73,8 +73,11 @@ test("the real installer cannot spawn before the validated pre-update SQLite sna
   assert.ok(renderer.includes("return (await persistDomainToSqlite()) === true"));
   assert.ok(preload.includes('ipcRenderer.send("update:flush-result", requestId, ok === true)'));
   assert.ok(saveFn.includes("productMutationAwaitingPersistenceRef.current"));
-  assert.ok(saveFn.includes("if (!await persistAndRefresh())"));
-  assert.ok(saveFn.indexOf("if (!await persistAndRefresh())") < saveFn.indexOf("setProductOpen(false)"));
+  assert.ok(saveFn.includes("if (!await persistProductAndRefresh())"));
+  const mutation = fs.readFileSync("apps/desktop/src/lib/boutique-product-commit.ts", "utf8");
+  assert.ok(saveFn.includes("commitBoutiqueProductDraft(productForm, editingProductId, variantRows)"));
+  assert.ok(mutation.includes("createProductVariantFamily(payload,variants)"));
+  assert.ok(saveFn.indexOf("if (!await persistProductAndRefresh())") < saveFn.indexOf("setProductOpen(false)"));
   assert.ok(productModal.includes('pendingDurability?"Retry save to disk"'));
   assert.ok(productModal.includes("disabled={saving||pendingDurability}"));
 });
