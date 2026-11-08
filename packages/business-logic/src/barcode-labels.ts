@@ -160,12 +160,13 @@ export function buildBarcodeLabelHtml(
   ).join("");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Product Labels</title>
 <style>
-  @page{size:${rollWidthMm}mm ${printHeightMm}mm;margin:0}
+  /* Each physical two-up row is one printer page; a single tall page made the feed drift. */
+  @page{size:${rollWidthMm}mm ${pageHeightMm}mm;margin:0}
   *{box-sizing:border-box}
   html,body{width:${rollWidthMm}mm;height:${printHeightMm}mm;margin:0;padding:0;overflow:hidden}
   body{font-family:Arial,sans-serif;color:#111}
   .label-sheet{width:${rollWidthMm}mm;height:${pageHeightMm}mm;padding-left:${leftMarginMm}mm;display:grid;grid-template-columns:repeat(${columns},${labelWidthMm}mm);column-gap:${gapMm}mm;align-content:start;page-break-after:auto;break-after:auto;break-inside:avoid;overflow:hidden}\n  .label{width:${labelWidthMm}mm;height:${labelHeightMm}mm;padding:1.1mm;text-align:center;border:1px dashed #bbb;display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:.3mm;overflow:hidden;break-inside:avoid}
-  .label.short{padding:.65mm .7mm;gap:.2mm;min-height:0}
+  .label.short{padding:1.1mm .85mm 1.2mm;gap:.1mm;min-height:0}
 
   .shop,.name,.meta,.sku{display:block;flex:0 1 auto;min-height:0;line-height:1.08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .shop{font-size:9px;color:#475569}
@@ -179,14 +180,24 @@ export function buildBarcodeLabelHtml(
   .barcode,.qr{height:100%;min-height:0;min-width:0;display:flex;align-items:center;justify-content:center}
   .codes.barcode .barcode{width:100%}.codes.qr .qr{width:100%}
   .codes.both .barcode{width:68%}.codes.both .qr{width:30%}
-  .label.short .codes.both{max-height:10mm;gap:.4mm}
-  .label.short .qr-svg{max-width:9.5mm;max-height:9.5mm}
-  .label.short .variant-attributes{font-size:8px;white-space:nowrap;flex-wrap:nowrap;overflow:hidden}
+  .label.short .codes.both{max-height:8mm;gap:.35mm}
+  .label.short .qr-svg{max-width:7.6mm;max-height:7.6mm}
+  .label.short .variant-attributes{font-size:6.7px;line-height:1.04;white-space:nowrap;flex-wrap:nowrap;gap:.25mm;overflow:hidden;max-height:3.2mm}
   .barcode-svg{display:block;max-width:100%;width:100%;height:100%;max-height:11mm;margin:0 auto}
+  .label.short .barcode-svg{max-height:8mm}
   .qr-svg{display:block;width:100%;height:100%;max-width:11mm;max-height:11mm;margin:0 auto}
   .missing{font-size:8px;color:#b91c1c}
   .price{flex:0 0 auto;display:flex;flex-direction:column;gap:0;align-items:center;font-size:10px;line-height:1.05;font-weight:800;white-space:nowrap;overflow:hidden}\n  .retail-price{font-size:11px;font-weight:800}
-  @media print{.label{border:0}}
+  .label.short .name{font-size:8.7px;line-height:1.0}
+  .label.short .price{font-size:9.6px;line-height:1;min-height:3.3mm;justify-content:center}
+  .label.short .retail-price{font-size:10px}
+  .label.short .codes{flex:0 1 8mm;max-height:8mm;min-height:5.5mm}
+  @media print{
+    .label{border:0}
+    /* Explicit media feed at EACH label row, never one long scaled page. */
+    .label-sheet{break-after:page;page-break-after:always}
+    .label-sheet:last-child{break-after:auto;page-break-after:auto}
+  }
 </style></head><body>${blocks}
 ${autoPrint ? "<script>window.onload=function(){window.print()}</script>" : ""}</body></html>`;
 }
@@ -208,7 +219,7 @@ export async function sendBarcodeLabelsToPrinter(
     const html = buildBarcodeLabelHtml(product, { copies, categoryName, autoPrint: false });
     const result = requestDesktopPrintHtml(html, "label", {
       labelWidthMm: settings.labelColumns === 2 ? settings.labelRollWidthMm : settings.labelWidthMm,
-      labelHeightMm: (settings.labelHeightMm + (settings.labelColumns === 2 ? settings.labelRowGapMm : 0)) * Math.ceil(Math.max(1, Math.min(100, copies)) / (settings.labelColumns === 2 ? 2 : 1)),
+      labelHeightMm: settings.labelHeightMm + (settings.labelColumns === 2 ? settings.labelRowGapMm : 0),
       silent: true,
     });
     return result ? await result : { ok: false, error: "Windows desktop printer bridge is unavailable" };
@@ -229,7 +240,7 @@ export function printBarcodeLabels(product: Product, copies = 1, categoryName?: 
   });
   if (tryDesktopPrintHtml(directHtml, "label", {
     labelWidthMm: settings.labelColumns === 2 ? settings.labelRollWidthMm : settings.labelWidthMm,
-    labelHeightMm: (settings.labelHeightMm + (settings.labelColumns === 2 ? settings.labelRowGapMm : 0)) * Math.ceil(Math.max(1, Math.min(100, copies)) / (settings.labelColumns === 2 ? 2 : 1)),
+    labelHeightMm: settings.labelHeightMm + (settings.labelColumns === 2 ? settings.labelRowGapMm : 0),
   })) return;
 
   const w = window.open("", "_blank", "width=500,height=700");
