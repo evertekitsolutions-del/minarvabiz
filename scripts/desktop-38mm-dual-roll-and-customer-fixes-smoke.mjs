@@ -26,7 +26,7 @@ const lookup=(id)=>{
 vm.runInThisContext(`(function(require,module,exports){\n${result.outputText}\n})`)(lookup,m,m.exports);
 const product={id:"p1",name:"Kurti",barcode:"2907885160674",size:"M",color:"Red",fabric:"Cotton",mrp:999,sellingPrice:799};
 const html=m.exports.buildBarcodeLabelHtml(product,{copies:3,autoPrint:false});
-assert.match(html,/@page\{size:101\.6mm 76mm;margin:0\}/);
+assert.match(html,/@page\{size:101\.6mm 38mm;margin:0\}/);
 assert.match(html,/grid-template-columns:repeat\(2,38mm\)/);
 assert.match(html,/column-gap:3mm/);
 assert.match(html,/padding-left:11\.3mm/);
@@ -36,7 +36,7 @@ for (const field of ["Size: M","Colour: Red","Material: Cotton","Price: Rs.999.0
   assert.equal(html.split(field).length - 1,3,field+" on all labels");
 assert.doesNotMatch(html,/Offer:|MRP:/);
 assert.doesNotMatch(html,/window\.print\(\)/);
-assert.doesNotMatch(html,/page-break-after:always|break-after:page/);
+assert.match(html,/\.label-sheet:last-child\{break-after:auto;page-break-after:auto\}/);
 prefs={...prefs,labelRowGapMm:2};
 const withGap=m.exports.buildBarcodeLabelHtml(product,{copies:2,autoPrint:false});
 assert.match(withGap,/@page\{size:101\.6mm 40mm;margin:0\}/);
@@ -58,7 +58,7 @@ try {
   assert.deepEqual(direct,{ok:true});
   assert.equal(sent.length,1);
   assert.equal(sent[0].paper,"label");
-  assert.deepEqual(sent[0].opts,{labelWidthMm:101.6,labelHeightMm:76,silent:true});
+  assert.deepEqual(sent[0].opts,{labelWidthMm:101.6,labelHeightMm:38,silent:true});
   assert.match(sent[0].html,/grid-template-columns:repeat\(2,38mm\)/);
   assert.equal((sent[0].html.match(/class="label-sheet"/g)||[]).length,2);
   prefs={...prefs,labelPrinterName:"",thermalPrinterName:""};
@@ -104,13 +104,13 @@ assert.equal(actual.labelGapMm,0);
 assert.equal(actual.labelPrinterName,"","A label preset must never guess or overwrite the device");
 prefs={...prefs,...cromo,labelPrinterName:"QA CROMO printer",thermalPrinterName:""};
 const chromoHtml=m.exports.buildBarcodeLabelHtml(product,{copies:3,autoPrint:false});
-assert.match(chromoHtml,/@page\{size:80mm 50mm;margin:0\}/);
+assert.match(chromoHtml,/@page\{size:80mm 25mm;margin:0\}/);
 assert.match(chromoHtml,/grid-template-columns:repeat\(2,38mm\)/);
 assert.match(chromoHtml,/column-gap:0mm/);
 assert.match(chromoHtml,/padding-left:2mm/);
 assert.equal((chromoHtml.match(/class="label-sheet"/g)||[]).length,2);
 assert.equal((chromoHtml.match(/label compact short/g)||[]).length,3);
-assert.match(chromoHtml,/.label.short\{padding:.65mm .7mm;gap:.2mm;min-height:0\}/);
+assert.match(chromoHtml,/\.label.short\{padding:1.1mm .85mm 1.2mm;gap:.1mm;min-height:0\}/);
 for(const field of ["Size: M","Colour: Red","Material: Cotton","Price: Rs.999.00"])
  assert.equal(chromoHtml.split(field).length-1,3,"Chromo short labels keep "+field);
 assert.doesNotMatch(chromoHtml,/Offer:|MRP:/);
@@ -120,12 +120,12 @@ assert.match(twoStickers,/@page\{size:80mm 25mm;margin:0\}/,
 assert.equal((twoStickers.match(/class="label-sheet"/g)||[]).length,1);
 assert.equal((twoStickers.match(/<svg class=['"]qr-svg/g)||[]).length,2,
   "Each of the two labels must include a QR");
-assert.doesNotMatch(twoStickers,/page-break-after:always|break-after:page/);
+assert.match(twoStickers,/\.label-sheet:last-child\{break-after:auto;page-break-after:auto\}/);
 try{
  globalThis.window={};
  const result=await m.exports.sendBarcodeLabelsToPrinter(product,3);
  assert.deepEqual(result,{ok:true});
- assert.deepEqual(sent.at(-1).opts,{labelWidthMm:80,labelHeightMm:50,silent:true});
+ assert.deepEqual(sent.at(-1).opts,{labelWidthMm:80,labelHeightMm:25,silent:true});
  assert.equal(sent.at(-1).html,chromoHtml,"WYSIWYG preview and print payload must be identical");
 }finally{
  if(previousWindow===undefined)delete globalThis.window;
@@ -134,9 +134,10 @@ try{
 const modalSource=fs.readFileSync(new URL("../apps/desktop/src/components/BarcodeLabelPrintModal.tsx",import.meta.url),"utf8");
 const settingsSource=fs.readFileSync(new URL("../packages/ui/src/components/settings/SettingsPanel.tsx",import.meta.url),"utf8");
 assert.match(modalSource,/Use CROMO 38×25 — 2-up \/ NO GAP/);
-assert.match(modalSource,/updatePrintSettings\(CROMO_38X25_2UP_NOGAP_PRESET\)/);
+assert.match(modalSource,/\.\.\.CROMO_38X25_2UP_NOGAP_PRESET/);
+assert.match(modalSource,/previouslyCalibrated/);
 assert.match(settingsSource,/CROMO_38X25_2UP_NOGAP_PRESET/);
-assert.match(settingsSource,/LEFT" : "RIGHT"} —/);
+assert.match(settingsSource,/col === 0 \? "LEFT" : "RIGHT"/);
 
 const printDocument=read("print-document-render.ts");
 assert.match(printDocument,/\.top\{display:block;text-align:center/);

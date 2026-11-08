@@ -28,8 +28,8 @@ const product = { id: "test", sku: "SKU-123", barcode: "2907885160674", name: "T
 const build = module.exports.buildBarcodeLabelHtml;
 
 const html = build(product, { copies: 3, categoryName: "Dresses", autoPrint: false });
-assert.match(html, /@page\{size:50mm 90mm;margin:0\}/);
-assert.equal((html.match(/class="label compact/g) || []).length, 3, "Expected three stickers on a single continuous 90mm print strip");
+assert.match(html, /@page\{size:50mm 30mm;margin:0\}/);
+assert.equal((html.match(/class="label compact/g) || []).length, 3, "Expected three stickers as independent 30mm physical print pages");
 assert.equal((html.match(/class="retail-price">Price: Rs\.399\.00/g) || []).length, 3, "Customer Price must appear exactly once per sticker");
 assert.doesNotMatch(html, /Offer:|MRP:/, "Removed price categories must not appear");
 assert.match(html, /\.price\{flex:0 0 auto;/, "Price row must not shrink under barcodes");
@@ -37,7 +37,7 @@ assert.match(html, /\.label\.compact \.meta,\.label\.compact \.sku/, "Compact la
 assert.doesNotMatch(html, /window\.print\(\)/, "In-app preview must never invoke Windows preview");
 assert.match(html, /class="codes both"/);
 assert.equal((html.match(/class="label-sheet"/g)||[]).length,3);
-assert.doesNotMatch(html, /page-break-after:always|break-after:page/);
+assert.match(html, /\.label-sheet\{break-after:page;page-break-after:always\}/);
 
 layout = "detailed";
 const detailed = build(product, { copies: 1, autoPrint: false, labelWidthMm: 40, labelHeightMm: 20 });

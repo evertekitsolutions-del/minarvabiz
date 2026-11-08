@@ -456,6 +456,18 @@ app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(
 
 ipcMain.handle("app:getVersion", (event) => { requireTrustedRenderer(event); return app.getVersion(); });
 ipcMain.handle("app:getDeviceId", (event) => { requireTrustedRenderer(event); return getDeviceId(); });
+// The renderer uses sql.js WebAssembly to avoid the fixed ASM.js heap that
+// can abort with OOM during customer SQLite snapshot exports. Only the trusted
+// packaged renderer can request this bundled, immutable runtime binary.
+ipcMain.handle("db:sqliteWasmBinary", (event) => {
+  requireTrustedRenderer(event);
+  const binaryPath = require.resolve("sql.js/dist/sql-wasm.wasm");
+  const stat = fs.statSync(binaryPath);
+  if (!stat.isFile() || stat.size <= 0 || stat.size > 5 * 1024 * 1024) {
+    throw new Error("The bundled SQLite WebAssembly runtime is missing or invalid.");
+  }
+  return new Uint8Array(fs.readFileSync(binaryPath));
+});
 ipcMain.handle("db:readBinary", (event) => {
   requireTrustedRenderer(event);
   return sqliteGate.read(() => {

@@ -527,6 +527,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify desktop SQLite WASM compatibility and repeated snapshot exports
+        run: node scripts/desktop-sqlite-wasm-smoke.mjs
       - name: Static production quality smoke
         shell: bash
         run: |

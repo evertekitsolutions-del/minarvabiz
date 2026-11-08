@@ -87,7 +87,19 @@ export function BarcodeLabelPrintModal({
         </FormField>
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
           <Button type="button" size="sm" variant="outline" onClick={() => {
-            updatePrintSettings(CROMO_38X25_2UP_NOGAP_PRESET);
+            // Reapplying the CROMO preset must not erase row-pitch/edge
+            // calibration saved after a successful three-row printer test.
+            const previouslyCalibrated = settings.labelColumns === 2
+              && settings.labelWidthMm === 38 && settings.labelHeightMm === 25;
+            updatePrintSettings({
+              ...CROMO_38X25_2UP_NOGAP_PRESET,
+              ...(previouslyCalibrated ? {
+                labelRowGapMm: settings.labelRowGapMm,
+                labelLeftMarginMm: settings.labelLeftMarginMm,
+                labelRollWidthMm: settings.labelRollWidthMm,
+                labelGapMm: settings.labelGapMm,
+              } : {}),
+            });
             onUseTwoUp();
             if (count < 2) onCopiesChange("2");
             setMessage(null);
@@ -119,7 +131,7 @@ export function BarcodeLabelPrintModal({
           <p className="mt-2 text-xs text-slate-600">
             Preview above shows the selected sticker count (scroll inside for more rows).
             Direct print sends this layout to the configured barcode printer without the Windows
-            dialog, whose preview may say "No preview available". Adjust row/feed gap to the measured paper pitch if later sticker rows drift.
+            dialog, whose preview may say "No preview available". Each 2-up sticker row prints as a separate page. Set Row gap / feed gap in Settings to measured row pitch minus sticker height (for example 27 − 25 = 2 mm). Test THREE rows before printing products; a printer driver must use 100% / actual size. Reapplying this CROMO preset preserves your calibrated gap.
           </p>
           <p className="mt-1 text-xs text-slate-600">
             Selected barcode printer: {settings.labelPrinterName || "Not configured — select one in Settings → Printer settings"}.
