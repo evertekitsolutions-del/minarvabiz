@@ -117,8 +117,8 @@ export function ProductList({
       key: "sellingPrice",
       header: singlePrice ? "Price" : "MRP / Offer",
       render: (r) => singlePrice
-        ? <div className="font-semibold text-slate-900">{formatMoney(r.mrp ?? r.sellingPrice)}</div>
-        : <div><div className="text-xs text-slate-500">MRP: {formatMoney(r.mrp ?? r.sellingPrice)}</div><div className="font-semibold text-slate-900">Offer: {formatMoney(r.sellingPrice)}</div></div>,
+        ? <div className="font-semibold text-slate-900">{formatMoney(r.mrp != null && r.mrp > 0 ? r.mrp : r.sellingPrice)}</div>
+        : <div><div className="text-xs text-slate-500">MRP: {formatMoney(r.mrp != null && r.mrp > 0 ? r.mrp : r.sellingPrice)}</div><div className="font-semibold text-slate-900">Offer: {formatMoney(r.sellingPrice)}</div></div>,
     },
     {
       key: "stockQuantity",
