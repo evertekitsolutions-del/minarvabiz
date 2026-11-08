@@ -84,5 +84,12 @@
     "Barcode labels no longer fallback to the thermal bill printer. Select the actual barcode printer separately in Settings and use direct print to that device.",
     "Two 38 × 25 mm stickers print as one 2-up row without forced extra page breaks. Further copies use a continuous strip with a configured physical row pitch.",
     "CROMO 38 × 25 preset includes barcode and QR together; compact labels preserve product size, colour, material and prices when recorded. Sensor calibration/driver paper pitch still requires a physical test."
+  ],
+  "1.0.26": [
+    "Product Add/Edit now has one Price (GST included) field. The separate Special Offer Price field is removed and MRP is presented simply as Price.",
+    "Product list and barcode stickers show Price once, without MRP or Offer. Existing saved garments and size/colour/fabric variants use the already recorded MRP amount as the displayed Price; existing barcodes and stock are unchanged.",
+    "POS and Normal Billing now treat Boutique Price as GST-inclusive: entering ₹100 at 18% GST bills exactly ₹100 with GST correctly separated inside the same total, not ₹118.",
+    "Past invoices and customer data remain untouched. No database migration or license reset is required. Older products with no recorded MRP use their saved selling price; verify their displayed amount before the first new sale.",
+    "Existing explicit discounts continue to reduce the entered price where configured. A backup and sample receipt/label check are recommended before customer rollout."
   ]
 }
