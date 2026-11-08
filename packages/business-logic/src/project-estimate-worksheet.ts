@@ -194,7 +194,7 @@ export function exportProjectEstimateCsv(input: ProjectEstimateInput, scope: Pro
  * Missing rows are represented by null, never by an empty invented estimate.
  */
 export interface ProjectEstimateReader {
-  loadScoped(scope: Pick<ProjectEstimateInput, "tenantId" | "companyId" | "branchId" | "projectId">): Promise<ProjectEstimateInput | null>;
+  loadScoped(scope: ProjectEstimateScope): Promise<ProjectEstimateInput | null>;
 }
 export async function loadProjectEstimate(
   scope: ProjectEstimateScope,
