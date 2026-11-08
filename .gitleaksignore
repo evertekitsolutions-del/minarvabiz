@@ -24,6 +24,10 @@ apps/web/scripts/vercel-build.mjs:generic-api-key:10
 d054860179df7629c4944e9a40058a4308c82ff7:apps/web/src/app/TrialWelcomePopup.tsx:generic-api-key:11
 
 # Historical webhook HMAC *test fixture*, NOT an API key: this exact SHA has
-# const secret = "0123456789abcdef0123456789abcdef" for deterministic tests.
+# Deterministic dummy test-only HMAC key appeared in this exact historical commit.
 # Keep this allowlist restricted to one fingerprint; all actual secrets are scanned.
 01d9159393a7f31deecdb582d91b3929e3727cb3:packages/business-logic/src/__tests__/webhook-signature.test.mjs:generic-api-key:14
+
+# This historical commit accidentally quoted that *dummy fixture* in this ignore-file comment.
+# Only its exact one-time history finding is excluded; current-tree key detection remains enabled.
+ea391279ca98e6e5a20bcb507f9ab5871ccd3474:.gitleaksignore:generic-api-key:27
