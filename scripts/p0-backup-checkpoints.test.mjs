@@ -102,3 +102,22 @@ test("backup is only attempted after SQLite Save acknowledgement; failures remai
   assert.match(hook, /recordBackupFailure/);
   assert.match(hook, /refreshAll\(\)/);
 });
+
+
+test("desktop upgrade cannot rewrite a SQLite snapshot after product hydration drops IDs", () => {
+  const guard = loadTypeScript(source("apps/desktop/src/lib/product-hydration-guard.ts"), {});
+  const check = guard.assertHydratedProductsPreserved;
+  const valid = { products: [{ id: "old-a" }, { id: "old-b" }] };
+  assert.doesNotThrow(() => check(valid, [{ id: "old-b" }, { id: "old-a" }]));
+  assert.throws(() => check(valid, [{ id: "old-a" }]), /SQLite startup blocked/);
+  assert.throws(() => check(valid, [{ id: "old-a" }, { id: "wrong" }]), /SQLite startup blocked/);
+  assert.throws(() => check(valid, [{ id: "old-a" }, { id: "old-a" }]), /SQLite startup blocked/);
+  assert.throws(() => check({ products: [null] }, []), /SQLite startup blocked/);
+  assert.doesNotThrow(() => check({ products: [] }, []));
+  const bootstrap = source("apps/desktop/src/lib/sqlite-bootstrap.ts");
+  const start = bootstrap.indexOf("const snap = loadSnap(db)");
+  const barrier = bootstrap.indexOf("assertHydratedProductsPreserved(snap, store.exportCoreState().products)");
+  const firstSave = bootstrap.indexOf("const persisted = await persistDomainToSqlite()", start);
+  assert.ok(start >= 0 && barrier > start && firstSave > barrier,
+    "Hydrated product IDs must be validated before the first native SQLite overwrite");
+});
