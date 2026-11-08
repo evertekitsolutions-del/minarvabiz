@@ -47,7 +47,7 @@ export interface Product {
   parentProductId?: UUID | null;
   hasVariants?: boolean;
   unit: string; costPrice: number; sellingPrice: number;
-  /** Printed maximum retail price; sellingPrice is the automatic POS offer price. */
+  /** Legacy MRP field; Boutique treats this as the customer-facing GST-inclusive Price. */
   mrp?: number | null;
   discount?: number | null; taxRate?: number | null; stockQuantity: number;
   minimumStock: number; supplierId?: UUID | null; imageUrl?: string | null;
@@ -147,6 +147,8 @@ export interface SaleItem {
   costPrice: number;
   discountPercent: number;
   taxRate: number;
+  /** Immutable sale-item evidence that its unitPrice was GST-inclusive. */
+  taxInclusive?: boolean;
   lineTotal: number;
   dimensionMetadata?: DimensionLineMetadataV1 | null;
 }
@@ -203,6 +205,8 @@ export interface CartLine {
   costPrice: number;
   discountPercent: number;
   taxRate: number;
+  /** GST is split from unitPrice, never added on top. */
+  taxInclusive?: boolean;
   stockQuantity: number;
   dimensionMetadata?: DimensionLineMetadataV1 | null;
 }
