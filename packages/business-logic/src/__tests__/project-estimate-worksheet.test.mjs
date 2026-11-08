@@ -96,7 +96,7 @@ test("scoped read recomputes persisted estimate totals and returns immutable sna
     captured = ids;
     return { ...base, lines: base.lines.map(line => ({...line})), costMinor: 0 };
   } });
-  assert.deepEqual(captured, { tenantId:"t", companyId:"c", branchId:"b", projectId:"p" });
+  assert.deepEqual(captured, { tenantId:"t", companyId:"c", branchId:"b", projectId:"p", canViewCosts:true });
   assert.equal(loaded.totals.costMinor, 26001);
   assert.equal(Object.isFrozen(loaded.worksheet.lines[0]), true);
   assert.equal(Object.isFrozen(loaded.worksheet.lines), true);
