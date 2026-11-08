@@ -30,6 +30,11 @@ export function readIndustrySqliteWorkflow(
       access.allowedTemplateIds.length > 100) {
     throw new Error("Trusted industry workflow read authorization required");
   }
+  // Empty grants must fail before touching storage: even scoped record existence
+  // and query timing are not available to an actor with no template access.
+  if (access.allowedTemplateIds.length === 0) {
+    throw new Error("Industry workflow read denied");
+  }
   return db.transaction(() => {
     const key = [access.tenantId, access.branchId, recordId];
     const row = db.prepare(
