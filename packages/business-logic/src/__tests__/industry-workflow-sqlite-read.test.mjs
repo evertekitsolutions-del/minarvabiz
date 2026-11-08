@@ -56,6 +56,19 @@ test("rejects missing history, fabricated stage and invalid actor", () => {
     event_id: "event-1", actor_id: "", revision: 1, from_stage: "received", to_stage: "diagnosed",
   }).db, profile, access, "job-1"), /corrupt/);
 });
+test("rejects malformed persisted event stages before replay", () => {
+  const row = { template_id: "repair-job", stage: "diagnosed", revision: 1 };
+  const event = { event_id: "event-1", actor_id: "staff-1", revision: 1,
+    from_stage: "received", to_stage: "diagnosed" };
+  for (const field of ["from_stage", "to_stage"]) {
+    for (const value of ["", " ".repeat(3), "x".repeat(129), null]) {
+      const { db } = database(row, { ...event, [field]: value });
+      assert.throws(() => readIndustrySqliteWorkflow(db, profile, access, "job-1"),
+        /corrupt event history/);
+    }
+  }
+});
+
 test("rejects untrusted read scope before SQL", () => {
   let queries = 0;
   const db = { prepare() { queries++; throw Error("SQL executed"); }, transaction(fn) { return fn; } };
