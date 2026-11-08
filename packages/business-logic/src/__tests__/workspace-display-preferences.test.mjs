@@ -267,6 +267,10 @@ test("durable desktop persistence requires a committed asynchronous acknowledgem
     commit();
     await pending;
     assert.equal(acknowledged, true);
+    globalThis.window.__minarvaDesktopPersist = () => Promise.resolve(false);
+    await assert.rejects(awaitDesktopPersistence(), /unsuccessful commit/);
+    globalThis.window.__minarvaDesktopPersist = () => Promise.resolve(true);
+    await assert.doesNotReject(awaitDesktopPersistence());
     globalThis.window.__minarvaDesktopPersist = () => Promise.reject(new Error("SQLite commit failed"));
     await assert.rejects(awaitDesktopPersistence(), /SQLite commit failed/);
   } finally {
