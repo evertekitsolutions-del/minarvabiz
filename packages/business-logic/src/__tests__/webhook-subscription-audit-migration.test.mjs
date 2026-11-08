@@ -17,7 +17,10 @@ test("subscription mutations record scope, revisions, state and operation withou
   }
   assert.match(sql, /after insert or update or delete/i);
   assert.match(sql, /for each row execute function/i);
-  assert.match(sql, /coalesce\(new\.tenant_id,old\.tenant_id\)/i);
+  assert.match(sql, /if tg_op = 'DELETE' then[\s\S]*?old\.tenant_id[\s\S]*?return old;/i);
+  assert.match(sql, /if tg_op = 'INSERT' then[\s\S]*?new\.tenant_id[\s\S]*?return new;/i);
+  assert.match(sql, /tg_op, old\.revision, new\.revision, old\.enabled, new\.enabled/i);
+  assert.doesNotMatch(sql, /coalesce\(new\./i);
   assert.doesNotMatch(sql, /\b(endpoint|secret|payload|signature)\s+text\b/i);
 });
 test("audit storage is not writable by application roles", () => {
