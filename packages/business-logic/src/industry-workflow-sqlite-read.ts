@@ -25,7 +25,9 @@ export function readIndustrySqliteWorkflow(
   if (!db || typeof db.prepare !== "function" || typeof db.transaction !== "function" ||
       !access || !valid(access.actorId) || !valid(access.tenantId) ||
       !valid(access.branchId) || !valid(recordId) ||
-      !Array.isArray(access.allowedTemplateIds)) {
+      !Array.isArray(access.allowedTemplateIds) ||
+      access.allowedTemplateIds.some(template => !valid(template)) ||
+      access.allowedTemplateIds.length > 100) {
     throw new Error("Trusted industry workflow read authorization required");
   }
   return db.transaction(() => {
