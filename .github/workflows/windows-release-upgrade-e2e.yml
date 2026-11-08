@@ -1,12 +1,19 @@
 name: Windows Release Upgrade E2E
 
+# Never run the historical upgrade test against customer machines.
+# Manual-only isolated Windows test; source/target MUST already be published.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "scripts/windows-release-update-e2e.mjs"
-      - ".github/workflows/windows-release-upgrade-e2e.yml"
   workflow_dispatch:
+    inputs:
+      from_version:
+        description: "Published source version"
+        required: true
+        default: "1.0.26"
+        type: string
+      to_version:
+        description: "Published target version advertised by production signed manifest"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -16,14 +23,14 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 25
     env:
-      MINARVA_UPDATE_FROM: "1.0.13"
-      MINARVA_UPDATE_TO: "1.0.14"
+      MINARVA_UPDATE_FROM: "${{ inputs.from_version }}"
+      MINARVA_UPDATE_TO: "${{ inputs.to_version }}"
       MINARVA_CDP_PORT: "9224"
       MINARVA_UPDATE_E2E_CUSTOMER: "Upgrade E2E Customer"
       MINARVA_UPDATE_E2E_STATE_FILE: "minarva-update-e2e-state.json"
-      MINARVA_UPDATE_E2E_NOTE_FRAGMENT: "dashboard opens"
-      VITE_LICENSE_API_URL: "https://minarvabiz-license-admin.onrender.com"
-      MINARVA_UPDATE_MANIFEST_URL: "https://minarvabiz-license-admin.onrender.com/api/update/manifest"
+      MINARVA_UPDATE_E2E_NOTE_FRAGMENT: "Minarva Biz"
+      VITE_LICENSE_API_URL: "https://minarva-biz-license-edge.minarva-biz.workers.dev"
+      MINARVA_UPDATE_MANIFEST_URL: "https://minarva-biz-license-edge.minarva-biz.workers.dev/api/update/manifest"
       MINARVA_RUNTIME_SMOKE: "1"
 
     steps:
@@ -33,8 +40,10 @@ jobs:
         with:
           node-version: 24
 
-      - name: Configure production update verification key
+      - name: Require newer published signed stable update target
         shell: pwsh
+        run: |
+          if ($env:MINARVA_UPDATE_FROM -notmatch '^\\d+\\.\\d+\\.\\d+        shell: pwsh
         run: |
           $response = Invoke-RestMethod -Uri "$env:VITE_LICENSE_API_URL/api/public-key"
           $key = "$($response.publicKeyHex)".Trim().ToLower()
@@ -42,23 +51,24 @@ jobs:
             throw "Production update verification key is unavailable."
           }
           "MINARVA_UPDATE_PUBLIC_KEY_HEX=$key" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Download and verify v1.0.13 installer
+      - name: Download and verify source version installer
         shell: pwsh
         run: |
-          $base = "https://github.com/evertekitsolutions-del/minarvabiz/releases/download/v1.0.13"
-          $installer = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Setup-1.0.13.exe"
-          $checksum = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Setup-1.0.13.exe.sha256"
-          Invoke-WebRequest -UseBasicParsing "$base/MinarvaBiz-Setup-1.0.13.exe" -OutFile $installer
-          Invoke-WebRequest -UseBasicParsing "$base/MinarvaBiz-Setup-1.0.13.exe.sha256" -OutFile $checksum
+          $installerName = "MinarvaBiz-Setup-$($env:MINARVA_UPDATE_FROM).exe"
+          $base = "https://github.com/evertekitsolutions-del/minarvabiz/releases/download/v$($env:MINARVA_UPDATE_FROM)"
+          $installer = Join-Path $env:RUNNER_TEMP $installerName
+          $checksum = Join-Path $env:RUNNER_TEMP "$installerName.sha256"
+          Invoke-WebRequest -UseBasicParsing "$base/$installerName" -OutFile $installer
+          Invoke-WebRequest -UseBasicParsing "$base/$installerName.sha256" -OutFile $checksum
           $expected = ((Get-Content -Raw $checksum).Trim() -split '\s+')[0].ToLower()
           $actual = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLower()
           if ($expected -notmatch '^[0-9a-f]{64}$' -or $actual -ne $expected) {
-            throw "v1.0.13 release checksum verification failed."
+            throw "source version release checksum verification failed."
           }
           "OLD_INSTALLER=$installer" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "OLD_RELEASE_CHECKSUM PASS $actual"
 
-      - name: Clean install v1.0.13
+      - name: Clean install source version
         shell: pwsh
         run: |
           $installRoot = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Release-Upgrade-UAT"
@@ -67,7 +77,7 @@ jobs:
 
           $exitCode = $null
           for ($attempt = 1; $attempt -le 4; $attempt++) {
-            $copy = Join-Path $env:RUNNER_TEMP ("MinarvaBiz-1.0.13-attempt-{0}.exe" -f $attempt)
+            $copy = Join-Path $env:RUNNER_TEMP ("MinarvaBiz-{0}-attempt-{1}.exe" -f $env:MINARVA_UPDATE_FROM, $attempt)
             Copy-Item -LiteralPath $env:OLD_INSTALLER -Destination $copy -Force
             Unblock-File -LiteralPath $copy -ErrorAction SilentlyContinue
             $proc = Start-Process -FilePath $copy -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
@@ -75,18 +85,18 @@ jobs:
             Remove-Item -LiteralPath $copy -Force -ErrorAction SilentlyContinue
             if ($exitCode -eq 0) { break }
             if ($exitCode -ne -1073741819 -or $attempt -eq 4) {
-              throw "v1.0.13 installer exited with code $exitCode on attempt $attempt."
+              throw "source version installer exited with code $exitCode on attempt $attempt."
             }
             Start-Sleep -Seconds (2 * $attempt)
           }
 
           $exe = Join-Path $installRoot "Minarva Biz.exe"
-          if (-not (Test-Path $exe)) { throw "v1.0.13 installed executable was not found." }
+          if (-not (Test-Path $exe)) { throw "source version installed executable was not found." }
           "INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
           "INSTALLED_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "OLD_RELEASE_INSTALL PASS"
 
-      - name: Launch installed v1.0.13
+      - name: Launch installed source version
         shell: pwsh
         run: |
           $proc = Start-Process -FilePath $env:INSTALLED_EXE -ArgumentList "--remote-debugging-port=$env:MINARVA_CDP_PORT" -PassThru
@@ -99,10 +109,10 @@ jobs:
             Start-Sleep -Milliseconds 750
           }
           if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port ([int]$env:MINARVA_CDP_PORT) -InformationLevel Quiet)) {
-            throw "v1.0.13 Electron CDP port did not open."
+            throw "source version Electron CDP port did not open."
           }
 
-      - name: Check, download and start v1.0.14 update from v1.0.13
+      - name: Check, download and start target version update from source version
         shell: pwsh
         run: node scripts/windows-release-update-e2e.mjs prepare
 
@@ -111,11 +121,11 @@ jobs:
         run: |
           if (-not (Test-Path $env:MINARVA_UPDATE_E2E_STATE_FILE)) { throw "Update E2E state file is missing." }
           $state = Get-Content -Raw $env:MINARVA_UPDATE_E2E_STATE_FILE | ConvertFrom-Json
-          if (-not (Test-Path $state.installerPath)) { throw "Verified downloaded v1.0.14 installer is missing." }
-          if (-not (Test-Path $state.backupPath)) { throw "Verified v1.0.13 update safety backup is missing." }
+          if (-not (Test-Path $state.installerPath)) { throw "Verified downloaded target version installer is missing." }
+          if (-not (Test-Path $state.backupPath)) { throw "Verified source version update safety backup is missing." }
 
           $manifest = Invoke-RestMethod -Uri $env:MINARVA_UPDATE_MANIFEST_URL -Headers @{ "Cache-Control" = "no-cache" }
-          if ($manifest.version -ne "1.0.14") { throw "Production update manifest does not report v1.0.14." }
+          if ($manifest.version -ne $env:MINARVA_UPDATE_TO) { throw "Production update manifest does not report target version." }
           $actual = (Get-FileHash -Algorithm SHA256 $state.installerPath).Hash.ToLower()
           if ($actual -ne "$($manifest.sha256)".ToLower()) {
             throw "Downloaded installer hash does not match production signed manifest."
@@ -124,7 +134,7 @@ jobs:
           Write-Host "UPDATE_DOWNLOAD_HASH PASS $actual"
           Write-Host "UPDATE_SAFETY_BACKUP_FILE PASS $($state.backupPath)"
 
-      - name: Verify automatic v1.0.14 install and relaunch
+      - name: Verify automatic target version install and relaunch
         shell: pwsh
         run: |
           for ($i = 1; $i -le 60; $i++) {
@@ -132,7 +142,7 @@ jobs:
             Start-Sleep -Milliseconds 500
           }
           if (Get-Process -Id ([int]$env:SOURCE_APP_PID) -ErrorAction SilentlyContinue) {
-            throw "v1.0.13 did not close after starting the automatic update."
+            throw "source version did not close after starting the automatic update."
           }
 
           $auto = $null
@@ -147,7 +157,7 @@ jobs:
             Start-Sleep -Seconds 1
           }
           if (-not $auto) {
-            throw "v1.0.14 did not relaunch automatically after the silent installer completed."
+            throw "target version did not relaunch automatically after the silent installer completed."
           }
           "AUTO_RELAUNCHED_PID=$($auto.ProcessId)" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "AUTO_RELAUNCH PASS pid=$($auto.ProcessId)"
@@ -156,7 +166,7 @@ jobs:
           Start-Sleep -Seconds 2
           if (-not (Test-Path $env:INSTALLED_EXE)) { throw "Upgraded executable is missing." }
 
-      - name: Launch upgraded v1.0.14 under CDP for verification
+      - name: Launch upgraded target version under CDP for verification
         shell: pwsh
         run: |
           $proc = Start-Process -FilePath $env:INSTALLED_EXE -ArgumentList "--remote-debugging-port=$env:MINARVA_CDP_PORT" -PassThru
@@ -169,10 +179,10 @@ jobs:
             Start-Sleep -Milliseconds 750
           }
           if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port ([int]$env:MINARVA_CDP_PORT) -InformationLevel Quiet)) {
-            throw "v1.0.14 Electron CDP port did not open."
+            throw "target version Electron CDP port did not open."
           }
 
-      - name: Verify v1.0.14 and preserved business data
+      - name: Verify target version and preserved business data
         shell: pwsh
         run: node scripts/windows-release-update-e2e.mjs verify
 
@@ -192,7 +202,501 @@ jobs:
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: minarvabiz-v1.0.13-to-v1.0.14-auto-update-e2e
+          name: minarvabiz-isolated-stable-upgrade-e2e
+          path: minarva-update-e2e-state.json
+          if-no-files-found: ignore
+          retention-days: 14
+ -or $env:MINARVA_UPDATE_TO -notmatch '^\\d+\\.\\d+\\.\\d+        shell: pwsh
+        run: |
+          $response = Invoke-RestMethod -Uri "$env:VITE_LICENSE_API_URL/api/public-key"
+          $key = "$($response.publicKeyHex)".Trim().ToLower()
+          if ($key.Length -ne 64 -or $key -notmatch '^[0-9a-f]+') {
+            throw "Production update verification key is unavailable."
+          }
+          "MINARVA_UPDATE_PUBLIC_KEY_HEX=$key" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Download and verify source version installer
+        shell: pwsh
+        run: |
+          $base = "https://github.com/evertekitsolutions-del/minarvabiz/releases/download/source version"
+          $installer = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Setup-$($env:MINARVA_UPDATE_FROM).exe"
+          $checksum = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Setup-$($env:MINARVA_UPDATE_FROM).exe.sha256"
+          Invoke-WebRequest -UseBasicParsing "$base/MinarvaBiz-Setup-$($env:MINARVA_UPDATE_FROM).exe" -OutFile $installer
+          Invoke-WebRequest -UseBasicParsing "$base/MinarvaBiz-Setup-$($env:MINARVA_UPDATE_FROM).exe.sha256" -OutFile $checksum
+          $expected = ((Get-Content -Raw $checksum).Trim() -split '\s+')[0].ToLower()
+          $actual = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLower()
+          if ($expected -notmatch '^[0-9a-f]{64}$' -or $actual -ne $expected) {
+            throw "source version release checksum verification failed."
+          }
+          "OLD_INSTALLER=$installer" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "OLD_RELEASE_CHECKSUM PASS $actual"
+
+      - name: Clean install source version
+        shell: pwsh
+        run: |
+          $installRoot = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Release-Upgrade-UAT"
+          if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot }
+          New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
+
+          $exitCode = $null
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            $copy = Join-Path $env:RUNNER_TEMP ("MinarvaBiz-$($env:MINARVA_UPDATE_FROM)-attempt-{0}.exe" -f $attempt)
+            Copy-Item -LiteralPath $env:OLD_INSTALLER -Destination $copy -Force
+            Unblock-File -LiteralPath $copy -ErrorAction SilentlyContinue
+            $proc = Start-Process -FilePath $copy -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
+            $exitCode = $proc.ExitCode
+            Remove-Item -LiteralPath $copy -Force -ErrorAction SilentlyContinue
+            if ($exitCode -eq 0) { break }
+            if ($exitCode -ne -1073741819 -or $attempt -eq 4) {
+              throw "source version installer exited with code $exitCode on attempt $attempt."
+            }
+            Start-Sleep -Seconds (2 * $attempt)
+          }
+
+          $exe = Join-Path $installRoot "Minarva Biz.exe"
+          if (-not (Test-Path $exe)) { throw "source version installed executable was not found." }
+          "INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "INSTALLED_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "OLD_RELEASE_INSTALL PASS"
+
+      - name: Launch installed source version
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath $env:INSTALLED_EXE -ArgumentList "--remote-debugging-port=$env:MINARVA_CDP_PORT" -PassThru
+          "SOURCE_APP_PID=$($proc.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          for ($i = 1; $i -le 40; $i++) {
+            try {
+              $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$env:MINARVA_CDP_PORT/json/list" -TimeoutSec 2
+              if ($r.StatusCode -eq 200) { break }
+            } catch {}
+            Start-Sleep -Milliseconds 750
+          }
+          if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port ([int]$env:MINARVA_CDP_PORT) -InformationLevel Quiet)) {
+            throw "source version Electron CDP port did not open."
+          }
+
+      - name: Check, download and start target version update from source version
+        shell: pwsh
+        run: node scripts/windows-release-update-e2e.mjs prepare
+
+      - name: Verify downloaded installer and update safety backup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path $env:MINARVA_UPDATE_E2E_STATE_FILE)) { throw "Update E2E state file is missing." }
+          $state = Get-Content -Raw $env:MINARVA_UPDATE_E2E_STATE_FILE | ConvertFrom-Json
+          if (-not (Test-Path $state.installerPath)) { throw "Verified downloaded target version installer is missing." }
+          if (-not (Test-Path $state.backupPath)) { throw "Verified source version update safety backup is missing." }
+
+          $manifest = Invoke-RestMethod -Uri $env:MINARVA_UPDATE_MANIFEST_URL -Headers @{ "Cache-Control" = "no-cache" }
+          if ($manifest.version -ne "$($env:MINARVA_UPDATE_TO)") { throw "Production update manifest does not report target version." }
+          $actual = (Get-FileHash -Algorithm SHA256 $state.installerPath).Hash.ToLower()
+          if ($actual -ne "$($manifest.sha256)".ToLower()) {
+            throw "Downloaded installer hash does not match production signed manifest."
+          }
+          "DOWNLOADED_INSTALLER=$($state.installerPath)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "UPDATE_DOWNLOAD_HASH PASS $actual"
+          Write-Host "UPDATE_SAFETY_BACKUP_FILE PASS $($state.backupPath)"
+
+      - name: Verify automatic target version install and relaunch
+        shell: pwsh
+        run: |
+          for ($i = 1; $i -le 60; $i++) {
+            if (-not (Get-Process -Id ([int]$env:SOURCE_APP_PID) -ErrorAction SilentlyContinue)) { break }
+            Start-Sleep -Milliseconds 500
+          }
+          if (Get-Process -Id ([int]$env:SOURCE_APP_PID) -ErrorAction SilentlyContinue) {
+            throw "source version did not close after starting the automatic update."
+          }
+
+          $auto = $null
+          for ($i = 1; $i -le 120; $i++) {
+            $auto = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.ExecutablePath -eq $env:INSTALLED_EXE -and
+                $_.ProcessId -ne ([int]$env:SOURCE_APP_PID)
+              } |
+              Select-Object -First 1
+            if ($auto) { break }
+            Start-Sleep -Seconds 1
+          }
+          if (-not $auto) {
+            throw "target version did not relaunch automatically after the silent installer completed."
+          }
+          "AUTO_RELAUNCHED_PID=$($auto.ProcessId)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "AUTO_RELAUNCH PASS pid=$($auto.ProcessId)"
+
+          Stop-Process -Id ([int]$auto.ProcessId) -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+          if (-not (Test-Path $env:INSTALLED_EXE)) { throw "Upgraded executable is missing." }
+
+      - name: Launch upgraded target version under CDP for verification
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath $env:INSTALLED_EXE -ArgumentList "--remote-debugging-port=$env:MINARVA_CDP_PORT" -PassThru
+          "TARGET_APP_PID=$($proc.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          for ($i = 1; $i -le 40; $i++) {
+            try {
+              $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$env:MINARVA_CDP_PORT/json/list" -TimeoutSec 2
+              if ($r.StatusCode -eq 200) { break }
+            } catch {}
+            Start-Sleep -Milliseconds 750
+          }
+          if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port ([int]$env:MINARVA_CDP_PORT) -InformationLevel Quiet)) {
+            throw "target version Electron CDP port did not open."
+          }
+
+      - name: Verify target version and preserved business data
+        shell: pwsh
+        run: node scripts/windows-release-update-e2e.mjs verify
+
+      - name: Cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          foreach ($name in @("SOURCE_APP_PID", "TARGET_APP_PID")) {
+            $value = [Environment]::GetEnvironmentVariable($name)
+            if ($value) { Stop-Process -Id ([int]$value) -Force -ErrorAction SilentlyContinue }
+          }
+          Get-Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.Path -like "*MinarvaBiz-Release-Upgrade-UAT*" -or $_.ProcessName -like "MinarvaBiz-Setup-*" } |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+
+      - name: Upload update E2E state
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: minarvabiz-source version-to-target version-auto-update-e2e
+          path: minarva-update-e2e-state.json
+          if-no-files-found: ignore
+          retention-days: 14
+) { throw "Stable source and target versions required." }
+          if ([version]$env:MINARVA_UPDATE_FROM -ge [version]$env:MINARVA_UPDATE_TO) { throw "Target must be newer than source." }
+          $manifest = Invoke-RestMethod -Uri $env:MINARVA_UPDATE_MANIFEST_URL -Headers @{ "Cache-Control" = "no-cache" }
+          if ($manifest.product -ne "minarvabiz" -or $manifest.version -ne $env:MINARVA_UPDATE_TO) { throw "Target is not advertised in signed stable manifest." }
+          if ("$($manifest.sha256)" -notmatch '^[0-9a-fA-F]{64}        shell: pwsh
+        run: |
+          $response = Invoke-RestMethod -Uri "$env:VITE_LICENSE_API_URL/api/public-key"
+          $key = "$($response.publicKeyHex)".Trim().ToLower()
+          if ($key.Length -ne 64 -or $key -notmatch '^[0-9a-f]+') {
+            throw "Production update verification key is unavailable."
+          }
+          "MINARVA_UPDATE_PUBLIC_KEY_HEX=$key" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Download and verify source version installer
+        shell: pwsh
+        run: |
+          $base = "https://github.com/evertekitsolutions-del/minarvabiz/releases/download/source version"
+          $installer = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Setup-$($env:MINARVA_UPDATE_FROM).exe"
+          $checksum = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Setup-$($env:MINARVA_UPDATE_FROM).exe.sha256"
+          Invoke-WebRequest -UseBasicParsing "$base/MinarvaBiz-Setup-$($env:MINARVA_UPDATE_FROM).exe" -OutFile $installer
+          Invoke-WebRequest -UseBasicParsing "$base/MinarvaBiz-Setup-$($env:MINARVA_UPDATE_FROM).exe.sha256" -OutFile $checksum
+          $expected = ((Get-Content -Raw $checksum).Trim() -split '\s+')[0].ToLower()
+          $actual = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLower()
+          if ($expected -notmatch '^[0-9a-f]{64}$' -or $actual -ne $expected) {
+            throw "source version release checksum verification failed."
+          }
+          "OLD_INSTALLER=$installer" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "OLD_RELEASE_CHECKSUM PASS $actual"
+
+      - name: Clean install source version
+        shell: pwsh
+        run: |
+          $installRoot = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Release-Upgrade-UAT"
+          if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot }
+          New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
+
+          $exitCode = $null
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            $copy = Join-Path $env:RUNNER_TEMP ("MinarvaBiz-$($env:MINARVA_UPDATE_FROM)-attempt-{0}.exe" -f $attempt)
+            Copy-Item -LiteralPath $env:OLD_INSTALLER -Destination $copy -Force
+            Unblock-File -LiteralPath $copy -ErrorAction SilentlyContinue
+            $proc = Start-Process -FilePath $copy -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
+            $exitCode = $proc.ExitCode
+            Remove-Item -LiteralPath $copy -Force -ErrorAction SilentlyContinue
+            if ($exitCode -eq 0) { break }
+            if ($exitCode -ne -1073741819 -or $attempt -eq 4) {
+              throw "source version installer exited with code $exitCode on attempt $attempt."
+            }
+            Start-Sleep -Seconds (2 * $attempt)
+          }
+
+          $exe = Join-Path $installRoot "Minarva Biz.exe"
+          if (-not (Test-Path $exe)) { throw "source version installed executable was not found." }
+          "INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "INSTALLED_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "OLD_RELEASE_INSTALL PASS"
+
+      - name: Launch installed source version
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath $env:INSTALLED_EXE -ArgumentList "--remote-debugging-port=$env:MINARVA_CDP_PORT" -PassThru
+          "SOURCE_APP_PID=$($proc.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          for ($i = 1; $i -le 40; $i++) {
+            try {
+              $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$env:MINARVA_CDP_PORT/json/list" -TimeoutSec 2
+              if ($r.StatusCode -eq 200) { break }
+            } catch {}
+            Start-Sleep -Milliseconds 750
+          }
+          if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port ([int]$env:MINARVA_CDP_PORT) -InformationLevel Quiet)) {
+            throw "source version Electron CDP port did not open."
+          }
+
+      - name: Check, download and start target version update from source version
+        shell: pwsh
+        run: node scripts/windows-release-update-e2e.mjs prepare
+
+      - name: Verify downloaded installer and update safety backup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path $env:MINARVA_UPDATE_E2E_STATE_FILE)) { throw "Update E2E state file is missing." }
+          $state = Get-Content -Raw $env:MINARVA_UPDATE_E2E_STATE_FILE | ConvertFrom-Json
+          if (-not (Test-Path $state.installerPath)) { throw "Verified downloaded target version installer is missing." }
+          if (-not (Test-Path $state.backupPath)) { throw "Verified source version update safety backup is missing." }
+
+          $manifest = Invoke-RestMethod -Uri $env:MINARVA_UPDATE_MANIFEST_URL -Headers @{ "Cache-Control" = "no-cache" }
+          if ($manifest.version -ne "$($env:MINARVA_UPDATE_TO)") { throw "Production update manifest does not report target version." }
+          $actual = (Get-FileHash -Algorithm SHA256 $state.installerPath).Hash.ToLower()
+          if ($actual -ne "$($manifest.sha256)".ToLower()) {
+            throw "Downloaded installer hash does not match production signed manifest."
+          }
+          "DOWNLOADED_INSTALLER=$($state.installerPath)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "UPDATE_DOWNLOAD_HASH PASS $actual"
+          Write-Host "UPDATE_SAFETY_BACKUP_FILE PASS $($state.backupPath)"
+
+      - name: Verify automatic target version install and relaunch
+        shell: pwsh
+        run: |
+          for ($i = 1; $i -le 60; $i++) {
+            if (-not (Get-Process -Id ([int]$env:SOURCE_APP_PID) -ErrorAction SilentlyContinue)) { break }
+            Start-Sleep -Milliseconds 500
+          }
+          if (Get-Process -Id ([int]$env:SOURCE_APP_PID) -ErrorAction SilentlyContinue) {
+            throw "source version did not close after starting the automatic update."
+          }
+
+          $auto = $null
+          for ($i = 1; $i -le 120; $i++) {
+            $auto = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.ExecutablePath -eq $env:INSTALLED_EXE -and
+                $_.ProcessId -ne ([int]$env:SOURCE_APP_PID)
+              } |
+              Select-Object -First 1
+            if ($auto) { break }
+            Start-Sleep -Seconds 1
+          }
+          if (-not $auto) {
+            throw "target version did not relaunch automatically after the silent installer completed."
+          }
+          "AUTO_RELAUNCHED_PID=$($auto.ProcessId)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "AUTO_RELAUNCH PASS pid=$($auto.ProcessId)"
+
+          Stop-Process -Id ([int]$auto.ProcessId) -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+          if (-not (Test-Path $env:INSTALLED_EXE)) { throw "Upgraded executable is missing." }
+
+      - name: Launch upgraded target version under CDP for verification
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath $env:INSTALLED_EXE -ArgumentList "--remote-debugging-port=$env:MINARVA_CDP_PORT" -PassThru
+          "TARGET_APP_PID=$($proc.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          for ($i = 1; $i -le 40; $i++) {
+            try {
+              $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$env:MINARVA_CDP_PORT/json/list" -TimeoutSec 2
+              if ($r.StatusCode -eq 200) { break }
+            } catch {}
+            Start-Sleep -Milliseconds 750
+          }
+          if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port ([int]$env:MINARVA_CDP_PORT) -InformationLevel Quiet)) {
+            throw "target version Electron CDP port did not open."
+          }
+
+      - name: Verify target version and preserved business data
+        shell: pwsh
+        run: node scripts/windows-release-update-e2e.mjs verify
+
+      - name: Cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          foreach ($name in @("SOURCE_APP_PID", "TARGET_APP_PID")) {
+            $value = [Environment]::GetEnvironmentVariable($name)
+            if ($value) { Stop-Process -Id ([int]$value) -Force -ErrorAction SilentlyContinue }
+          }
+          Get-Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.Path -like "*MinarvaBiz-Release-Upgrade-UAT*" -or $_.ProcessName -like "MinarvaBiz-Setup-*" } |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+
+      - name: Upload update E2E state
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: minarvabiz-source version-to-target version-auto-update-e2e
+          path: minarva-update-e2e-state.json
+          if-no-files-found: ignore
+          retention-days: 14
+) { throw "Missing trusted target digest." }
+          Write-Host "STABLE_UPGRADE_PREFLIGHT PASS source=$env:MINARVA_UPDATE_FROM target=$env:MINARVA_UPDATE_TO"
+
+      - name: Configure production update verification key
+        shell: pwsh
+        run: |
+          $response = Invoke-RestMethod -Uri "$env:VITE_LICENSE_API_URL/api/public-key"
+          $key = "$($response.publicKeyHex)".Trim().ToLower()
+          if ($key.Length -ne 64 -or $key -notmatch '^[0-9a-f]+') {
+            throw "Production update verification key is unavailable."
+          }
+          "MINARVA_UPDATE_PUBLIC_KEY_HEX=$key" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Download and verify source version installer
+        shell: pwsh
+        run: |
+          $base = "https://github.com/evertekitsolutions-del/minarvabiz/releases/download/source version"
+          $installer = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Setup-$($env:MINARVA_UPDATE_FROM).exe"
+          $checksum = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Setup-$($env:MINARVA_UPDATE_FROM).exe.sha256"
+          Invoke-WebRequest -UseBasicParsing "$base/MinarvaBiz-Setup-$($env:MINARVA_UPDATE_FROM).exe" -OutFile $installer
+          Invoke-WebRequest -UseBasicParsing "$base/MinarvaBiz-Setup-$($env:MINARVA_UPDATE_FROM).exe.sha256" -OutFile $checksum
+          $expected = ((Get-Content -Raw $checksum).Trim() -split '\s+')[0].ToLower()
+          $actual = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLower()
+          if ($expected -notmatch '^[0-9a-f]{64}$' -or $actual -ne $expected) {
+            throw "source version release checksum verification failed."
+          }
+          "OLD_INSTALLER=$installer" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "OLD_RELEASE_CHECKSUM PASS $actual"
+
+      - name: Clean install source version
+        shell: pwsh
+        run: |
+          $installRoot = Join-Path $env:RUNNER_TEMP "MinarvaBiz-Release-Upgrade-UAT"
+          if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot }
+          New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
+
+          $exitCode = $null
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            $copy = Join-Path $env:RUNNER_TEMP ("MinarvaBiz-$($env:MINARVA_UPDATE_FROM)-attempt-{0}.exe" -f $attempt)
+            Copy-Item -LiteralPath $env:OLD_INSTALLER -Destination $copy -Force
+            Unblock-File -LiteralPath $copy -ErrorAction SilentlyContinue
+            $proc = Start-Process -FilePath $copy -ArgumentList "/S", "/D=$installRoot" -PassThru -Wait
+            $exitCode = $proc.ExitCode
+            Remove-Item -LiteralPath $copy -Force -ErrorAction SilentlyContinue
+            if ($exitCode -eq 0) { break }
+            if ($exitCode -ne -1073741819 -or $attempt -eq 4) {
+              throw "source version installer exited with code $exitCode on attempt $attempt."
+            }
+            Start-Sleep -Seconds (2 * $attempt)
+          }
+
+          $exe = Join-Path $installRoot "Minarva Biz.exe"
+          if (-not (Test-Path $exe)) { throw "source version installed executable was not found." }
+          "INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "INSTALLED_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "OLD_RELEASE_INSTALL PASS"
+
+      - name: Launch installed source version
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath $env:INSTALLED_EXE -ArgumentList "--remote-debugging-port=$env:MINARVA_CDP_PORT" -PassThru
+          "SOURCE_APP_PID=$($proc.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          for ($i = 1; $i -le 40; $i++) {
+            try {
+              $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$env:MINARVA_CDP_PORT/json/list" -TimeoutSec 2
+              if ($r.StatusCode -eq 200) { break }
+            } catch {}
+            Start-Sleep -Milliseconds 750
+          }
+          if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port ([int]$env:MINARVA_CDP_PORT) -InformationLevel Quiet)) {
+            throw "source version Electron CDP port did not open."
+          }
+
+      - name: Check, download and start target version update from source version
+        shell: pwsh
+        run: node scripts/windows-release-update-e2e.mjs prepare
+
+      - name: Verify downloaded installer and update safety backup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path $env:MINARVA_UPDATE_E2E_STATE_FILE)) { throw "Update E2E state file is missing." }
+          $state = Get-Content -Raw $env:MINARVA_UPDATE_E2E_STATE_FILE | ConvertFrom-Json
+          if (-not (Test-Path $state.installerPath)) { throw "Verified downloaded target version installer is missing." }
+          if (-not (Test-Path $state.backupPath)) { throw "Verified source version update safety backup is missing." }
+
+          $manifest = Invoke-RestMethod -Uri $env:MINARVA_UPDATE_MANIFEST_URL -Headers @{ "Cache-Control" = "no-cache" }
+          if ($manifest.version -ne "$($env:MINARVA_UPDATE_TO)") { throw "Production update manifest does not report target version." }
+          $actual = (Get-FileHash -Algorithm SHA256 $state.installerPath).Hash.ToLower()
+          if ($actual -ne "$($manifest.sha256)".ToLower()) {
+            throw "Downloaded installer hash does not match production signed manifest."
+          }
+          "DOWNLOADED_INSTALLER=$($state.installerPath)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "UPDATE_DOWNLOAD_HASH PASS $actual"
+          Write-Host "UPDATE_SAFETY_BACKUP_FILE PASS $($state.backupPath)"
+
+      - name: Verify automatic target version install and relaunch
+        shell: pwsh
+        run: |
+          for ($i = 1; $i -le 60; $i++) {
+            if (-not (Get-Process -Id ([int]$env:SOURCE_APP_PID) -ErrorAction SilentlyContinue)) { break }
+            Start-Sleep -Milliseconds 500
+          }
+          if (Get-Process -Id ([int]$env:SOURCE_APP_PID) -ErrorAction SilentlyContinue) {
+            throw "source version did not close after starting the automatic update."
+          }
+
+          $auto = $null
+          for ($i = 1; $i -le 120; $i++) {
+            $auto = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.ExecutablePath -eq $env:INSTALLED_EXE -and
+                $_.ProcessId -ne ([int]$env:SOURCE_APP_PID)
+              } |
+              Select-Object -First 1
+            if ($auto) { break }
+            Start-Sleep -Seconds 1
+          }
+          if (-not $auto) {
+            throw "target version did not relaunch automatically after the silent installer completed."
+          }
+          "AUTO_RELAUNCHED_PID=$($auto.ProcessId)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "AUTO_RELAUNCH PASS pid=$($auto.ProcessId)"
+
+          Stop-Process -Id ([int]$auto.ProcessId) -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+          if (-not (Test-Path $env:INSTALLED_EXE)) { throw "Upgraded executable is missing." }
+
+      - name: Launch upgraded target version under CDP for verification
+        shell: pwsh
+        run: |
+          $proc = Start-Process -FilePath $env:INSTALLED_EXE -ArgumentList "--remote-debugging-port=$env:MINARVA_CDP_PORT" -PassThru
+          "TARGET_APP_PID=$($proc.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          for ($i = 1; $i -le 40; $i++) {
+            try {
+              $r = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$env:MINARVA_CDP_PORT/json/list" -TimeoutSec 2
+              if ($r.StatusCode -eq 200) { break }
+            } catch {}
+            Start-Sleep -Milliseconds 750
+          }
+          if (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port ([int]$env:MINARVA_CDP_PORT) -InformationLevel Quiet)) {
+            throw "target version Electron CDP port did not open."
+          }
+
+      - name: Verify target version and preserved business data
+        shell: pwsh
+        run: node scripts/windows-release-update-e2e.mjs verify
+
+      - name: Cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          foreach ($name in @("SOURCE_APP_PID", "TARGET_APP_PID")) {
+            $value = [Environment]::GetEnvironmentVariable($name)
+            if ($value) { Stop-Process -Id ([int]$value) -Force -ErrorAction SilentlyContinue }
+          }
+          Get-Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.Path -like "*MinarvaBiz-Release-Upgrade-UAT*" -or $_.ProcessName -like "MinarvaBiz-Setup-*" } |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+
+      - name: Upload update E2E state
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: minarvabiz-source version-to-target version-auto-update-e2e
           path: minarva-update-e2e-state.json
           if-no-files-found: ignore
           retention-days: 14
