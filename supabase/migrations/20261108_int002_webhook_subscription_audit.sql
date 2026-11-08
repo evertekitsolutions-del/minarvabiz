@@ -41,6 +41,16 @@ begin
             tg_op, null, new.revision, null, new.enabled);
     return new;
   end if;
+  -- An UPDATE must never silently move a subscription or its audit history
+  -- between tenants/companies/branches, even for privileged API writers.
+  if (old.tenant_id, old.company_id, old.branch_key, old.subscription_id)
+     is distinct from
+     (new.tenant_id, new.company_id, new.branch_key, new.subscription_id) then
+    raise exception 'Webhook subscription scope is immutable' using errcode = '23514';
+  end if;
+  if new.revision <= old.revision then
+    raise exception 'Webhook subscription revision must increase' using errcode = '23514';
+  end if;
   insert into public.integration_webhook_subscription_audit
     (tenant_id, company_id, branch_key, subscription_id, operation,
      old_revision, new_revision, old_enabled, new_enabled)
