@@ -50,7 +50,7 @@ test("two 38x25 2-UP labels are exactly one print page, with QR and size",async(
   assert.equal((html.match(/Size: XL/g)||[]).length,2);
   assert.equal((html.match(/Colour: GREEN/g)||[]).length,2);
   assert.equal((html.match(/Material: COTTON/g)||[]).length,2);
-  assert.doesNotMatch(html,/page-break-after:always|break-after:page/);
+  assert.match(html,/\.label-sheet:last-child\{break-after:auto;page-break-after:auto\}/);
   const before=calls.length;
   const sent=await labels.sendBarcodeLabelsToPrinter(product,2);
   assert.deepEqual(sent,{ok:true});
@@ -64,11 +64,11 @@ test("two 38x25 2-UP labels are exactly one print page, with QR and size",async(
 test("longer requests use one continuous strip and preserve physical row pitch",async()=>{
   settings.updatePrintSettings({labelRowGapMm:2});
   const html=labels.buildBarcodeLabelHtml(product,{copies:4,autoPrint:false});
-  assert.match(html,/@page\{size:80mm 54mm;margin:0\}/);
+  assert.match(html,/@page\{size:80mm 27mm;margin:0\}/);
   assert.equal((html.match(/class="label-sheet"/g)||[]).length,2);
   assert.equal((html.match(/class="qr-svg"/g)||[]).length,4);
   assert.deepEqual(await labels.sendBarcodeLabelsToPrinter(product,4),{ok:true});
-  assert.equal(calls.at(-1).labelHeightMm,54);
+  assert.equal(calls.at(-1).labelHeightMm,27);
 });
 
 test("thermal invoices do not force 297 mm CSS or route to default printer",()=>{
