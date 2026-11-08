@@ -2467,14 +2467,49 @@ async function adminSupportUpdateNatively(request, env, route) {
   );
 }
 
+// Bootstrap fallback is pinned to GitHub's published, SHA-256-verified v1.0.25.
+// Only strictly validated REST metadata can update the in-isolate snapshot.
+// During GitHub outages this can serve an older valid release, never an
+// invented installer or a checksum taken from a transient failed response.
+const VERIFIED_RELEASE_BOOTSTRAP = Object.freeze({
+  product: "minarvabiz",
+  version: "1.0.25",
+  installerUrl: "https://github.com/evertekitsolutions-del/minarvabiz/releases/download/v1.0.25/MinarvaBiz-Setup-1.0.25.exe",
+  sha256: "a1807b8ce62f26436600cb26e66b359860882b551b66c1ff2f0aea421ae7330d",
+  publishedAt: "2026-11-05T12:56:01Z",
+});
+let lastVerifiedRelease = VERIFIED_RELEASE_BOOTSTRAP;
+
+function signedVerifiedRelease(authority, unsigned) {
+  if (unsigned.product !== "minarvabiz" ||
+      !/^\d+\.\d+\.\d+$/.test(unsigned.version) ||
+      unsigned.installerUrl !== GITHUB_RELEASE_DOWNLOAD_BASE + "/v" + unsigned.version + "/MinarvaBiz-Setup-" + unsigned.version + ".exe" ||
+      !/^[0-9a-f]{64}$/.test(unsigned.sha256) ||
+      !Number.isFinite(Date.parse(unsigned.publishedAt))) {
+    return json({ error: "Verified release metadata is invalid.", stage: "verified-release" }, 503);
+  }
+  const signature = nodeSign(
+    null,
+    Buffer.from(canonicalUpdateManifest(unsigned), "utf8"),
+    authority.privateKey,
+  ).toString("base64url");
+
+  return json({
+    ...unsigned,
+    notes: "Minarva Biz " + unsigned.version,
+    signature,
+  }, 200, {
+    "x-minarva-license-backend": "cloudflare-native",
+    "x-minarva-update-source": "github-release",
+  });
+}
+
 async function updateManifestNatively(authority) {
   if (!authority) {
     return json({ error: "Update manifest service is unavailable.", stage: "authority" }, 503);
   }
 
   try {
-    // GitHub release asset redirects can fail with HTTP 504. The official REST API
-    // provides the published asset digest without downloading release binaries.
     const latest = await fetch(GITHUB_LATEST_RELEASE, {
       headers: {
         accept: "application/vnd.github+json",
@@ -2484,6 +2519,9 @@ async function updateManifestNatively(authority) {
       signal: AbortSignal.timeout(20_000),
     });
     if (!latest.ok) {
+      if ([403, 429, 502, 503, 504].includes(latest.status)) {
+        return signedVerifiedRelease(authority, lastVerifiedRelease);
+      }
       return json(
         { error: "Stable release metadata is unavailable.", stage: "latest-release", status: latest.status },
         503,
@@ -2496,15 +2534,15 @@ async function updateManifestNatively(authority) {
       return json({ error: "Stable release is invalid.", stage: "release-validate" }, 503);
     }
 
-    const installerName = `MinarvaBiz-Setup-${version}.exe`;
-    const checksumName = `${installerName}.sha256`;
+    const installerName = "MinarvaBiz-Setup-" + version + ".exe";
+    const checksumName = installerName + ".sha256";
     const assets = Array.isArray(release.assets) ? release.assets : [];
     const installer = assets.find((a) => a?.name === installerName && a?.state === "uploaded");
     const checksum = assets.find((a) => a?.name === checksumName && a?.state === "uploaded");
-    const installerUrl = `${GITHUB_RELEASE_DOWNLOAD_BASE}/v${version}/${installerName}`;
+    const installerUrl = GITHUB_RELEASE_DOWNLOAD_BASE + "/v" + version + "/" + installerName;
     if (!installer || !checksum || !Number.isSafeInteger(installer.size) || installer.size <= 0 ||
         installer.browser_download_url !== installerUrl || checksum.browser_download_url !==
-        `${GITHUB_RELEASE_DOWNLOAD_BASE}/v${version}/${checksumName}`) {
+        GITHUB_RELEASE_DOWNLOAD_BASE + "/v" + version + "/" + checksumName) {
       return json({ error: "Published installer assets are unavailable.", stage: "assets" }, 503);
     }
 
@@ -2514,33 +2552,16 @@ async function updateManifestNatively(authority) {
       return json({ error: "Published installer metadata is invalid.", stage: "digest" }, 503);
     }
 
-    const unsigned = {
-      product: "minarvabiz",
-      version,
-      installerUrl,
-      sha256,
-      publishedAt,
-    };
-    const signature = nodeSign(
-      null,
-      Buffer.from(canonicalUpdateManifest(unsigned), "utf8"),
-      authority.privateKey,
-    ).toString("base64url");
-
-    return json(
-      {
-        ...unsigned,
-        notes: `Minarva Biz ${version}`,
-        signature,
-      },
-      200,
-      {
-        "x-minarva-license-backend": "cloudflare-native",
-        "x-minarva-update-source": "github-release",
-      },
-    );
+    const unsigned = { product: "minarvabiz", version, installerUrl, sha256, publishedAt };
+    lastVerifiedRelease = unsigned;
+    return signedVerifiedRelease(authority, unsigned);
   } catch {
-    return json({ error: "Update manifest service is unavailable.", stage: "fetch-or-sign" }, 503);
+    // Never trust an unverified response during a GitHub outage.
+    try {
+      return signedVerifiedRelease(authority, lastVerifiedRelease);
+    } catch {
+      return json({ error: "Update manifest signing is unavailable.", stage: "sign" }, 503);
+    }
   }
 }
 
