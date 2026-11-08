@@ -2473,10 +2473,10 @@ async function adminSupportUpdateNatively(request, env, route) {
 // invented installer or a checksum taken from a transient failed response.
 const VERIFIED_RELEASE_BOOTSTRAP = Object.freeze({
   product: "minarvabiz",
-  version: "1.0.25",
-  installerUrl: "https://github.com/evertekitsolutions-del/minarvabiz/releases/download/v1.0.25/MinarvaBiz-Setup-1.0.25.exe",
-  sha256: "a1807b8ce62f26436600cb26e66b359860882b551b66c1ff2f0aea421ae7330d",
-  publishedAt: "2026-11-05T12:56:01Z",
+  version: "1.0.26",
+  installerUrl: "https://github.com/evertekitsolutions-del/minarvabiz/releases/download/v1.0.26/MinarvaBiz-Setup-1.0.26.exe",
+  sha256: "a63a8ef01ec265e25d5ac0634a6d0596552987bb5ceb34a98e9dd9b84f8d0834",
+  publishedAt: "2026-11-08T09:42:15Z",
 });
 let lastVerifiedRelease = VERIFIED_RELEASE_BOOTSTRAP;
 
