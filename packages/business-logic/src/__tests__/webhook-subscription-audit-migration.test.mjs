@@ -30,3 +30,9 @@ test("audit storage is not writable by application roles", () => {
   assert.match(sql, /grant select on public\.integration_webhook_subscription_audit to service_role/i);
   assert.doesNotMatch(sql, /grant (insert|update|delete|all) on public\.integration_webhook_subscription_audit to service_role/i);
 });
+
+test("subscription audit trigger rejects cross-scope moves and stale revisions", () => {
+  assert.match(sql, /\(old\.tenant_id, old\.company_id, old\.branch_key, old\.subscription_id\)[\s\S]*?is distinct from[\s\S]*?\(new\.tenant_id, new\.company_id, new\.branch_key, new\.subscription_id\)/i);
+  assert.match(sql, /raise exception 'Webhook subscription scope is immutable'/i);
+  assert.match(sql, /if new\.revision <= old\.revision then[\s\S]*?raise exception 'Webhook subscription revision must increase'/i);
+});
