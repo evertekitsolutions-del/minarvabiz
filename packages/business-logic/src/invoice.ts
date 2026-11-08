@@ -48,7 +48,7 @@ export function buildSaleInvoiceHtml(
       <td class="c">${index + 1}</td>
       <td>${escapeHtml(item.productName)}${template.showSku && item.sku ? `<div class="meta">SKU: ${escapeHtml(item.sku)}</div>` : ""}${dimensionalInvoiceMeta(item)}</td>
       <td class="r">${item.quantity}</td>
-      <td class="r nowrap">${formatMoney(item.unitPrice)}</td>
+      <td class="r nowrap">${formatMoney(item.unitPrice)}${item.taxInclusive ? '<span class="meta">incl. GST</span>' : ""}</td>
       ${template.showTax ? `<td class="r">${discount ? `${discount}%` : "—"}</td><td class="r">${tax ? `${tax}%` : "—"}</td>` : ""}
       <td class="r nowrap">${formatMoney(item.lineTotal)}</td>
     </tr>`;
