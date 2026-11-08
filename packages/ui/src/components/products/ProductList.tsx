@@ -112,8 +112,8 @@ export function ProductList({
     },
     {
       key: "sellingPrice",
-      header: "MRP / Offer",
-      render: (r) => <div><div className="text-xs text-slate-500">MRP: {formatMoney(r.mrp ?? r.sellingPrice)}</div><div className="font-semibold text-slate-900">Offer: {formatMoney(r.sellingPrice)}</div></div>,
+      header: "Price",
+      render: (r) => <div className="font-semibold text-slate-900">{formatMoney(r.mrp ?? r.sellingPrice)}</div>,
     },
     {
       key: "stockQuantity",
