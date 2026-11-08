@@ -103,7 +103,10 @@ export function listIndustrySqliteWorkflows(
     const rows = db.prepare(
       `SELECT record_id FROM industry_workflow_records WHERE tenant_id=? AND branch_id=? AND template_id IN (${templates.map(() => "?").join(",")}) AND record_id>? ORDER BY record_id LIMIT ?`
     ).all(access.tenantId, access.branchId, ...templates, options.afterId ?? "", limit + 1) as { record_id: string }[];
-    if (!Array.isArray(rows) || rows.some(row => !row || !valid(row.record_id))) {
+    if (!Array.isArray(rows) || rows.length > limit + 1 ||
+        rows.some((row, index) => !row || !valid(row.record_id) ||
+          (index > 0 && row.record_id <= rows[index - 1].record_id) ||
+          (options.afterId !== undefined && row.record_id <= options.afterId))) {
       throw new Error("Industry workflow list corrupt records");
     }
     const selected = rows.slice(0, limit);
