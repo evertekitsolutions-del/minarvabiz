@@ -35,7 +35,7 @@ export function readIndustrySqliteWorkflow(
     ).get(...key) as RecordRow | undefined;
     if (!row) return null;
     if (!valid(row.template_id) || !access.allowedTemplateIds.includes(row.template_id) ||
-        !Number.isSafeInteger(row.revision) || row.revision < 0 || !valid(row.stage)) {
+        !Number.isSafeInteger(row.revision) || row.revision < 0 || row.revision > 10000 || !valid(row.stage)) {
       throw new Error("Industry workflow read denied or corrupt record");
     }
     const events: IndustryWorkflowEvent[] = [];
