@@ -10,13 +10,13 @@ begin
      p_lease_seconds is null or p_lease_seconds not between 10 and 300 then
     raise exception 'Invalid webhook lease parameters' using errcode = '22023';
   end if;
-  -- A worker can crash after claiming its final permitted attempt. Without
-  -- this transition such rows remain leased forever and never enter the
-  -- dead-letter queue. Keep the terminal transition fenced by lease expiry.
+  -- A worker can crash after its final permitted attempt, or an acknowledgement
+  -- may schedule a pending retry at the attempt limit. Both must become dead
+  -- letters; do not steal an unexpired lease from an active worker.
   update public.integration_webhook_delivery_outbox o
   set status = 'dead', lease_until = null, updated_at = now()
-  where o.status = 'leased' and o.lease_until <= now()
-    and o.attempt_count >= 20;
+  where o.attempt_count >= 20
+    and (o.status = 'pending' or (o.status = 'leased' and o.lease_until <= now()));
 
   -- Revoked consent must not leave pending/expired deliveries queued for a
   -- later re-enable. Active leases remain fenced until expiry; acknowledgements
