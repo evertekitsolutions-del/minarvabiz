@@ -16,7 +16,9 @@ export function touchPersistence() {
     }
     if (isProductionMode()) return;
     void import("./persistence").then((m) => { m.scheduleAutoSave(600); });
-  } catch {
-    /* ignore */
+  } catch (error) {
+    // A synchronous desktop persistence failure must reach the domain mutation
+    // so its optimistic state can be rolled back rather than falsely saved.
+    throw error;
   }
 }
