@@ -254,11 +254,15 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
       setPrintTestMessage("Roll width does not fit the two stickers, gap and left margin. Correct the geometry first.");
       return;
     }
-    const testLabels = Array.from({length: columns}, (_, i) =>
-      `<div class="label"><strong>${i === 0 ? "LEFT" : "RIGHT"} — ${width}×${height}</strong><div class="bars"></div><div>2900000000000</div></div>`).join("");
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Minarva Biz Label Test</title>
-<style>@page{size:${pageWidth}mm ${pageHeight}mm;margin:0}*{box-sizing:border-box}html,body{width:${pageWidth}mm;margin:0;padding:0;font-family:Arial,sans-serif}.sheet{width:${pageWidth}mm;height:${pageHeight}mm;padding-left:${margin}mm;display:grid;grid-template-columns:repeat(${columns},${width}mm);column-gap:${gap}mm;overflow:hidden}.label{width:${width}mm;height:${height}mm;padding:1mm;text-align:center;overflow:hidden;font-size:9px;outline:.1mm solid #555;outline-offset:-.1mm}.bars{height:8mm;margin:.5mm 0;background:repeating-linear-gradient(90deg,#000 0,#000 1px,#fff 1px,#fff 3px)}</style>
-</head><body><div class="sheet">${testLabels}</div></body></html>`;
+    // Test the SECOND and THIRD rows too: a one-row calibration test cannot
+    // detect cumulative paper-feed drift on two-across sticker rolls.
+    const testRows = Array.from({length: 3}, (_, row) =>
+      `<div class="sheet">${Array.from({length: columns}, (_, col) =>
+        `<div class="label"><strong>ROW ${row + 1} — ${col === 0 ? "LEFT" : "RIGHT"}</strong><div class="bars"></div><div>${width}×${height} mm</div></div>`).join("")}</div>`
+    ).join("");
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Minarva Biz Label Calibration</title>
+<style>@page{size:${pageWidth}mm ${pageHeight}mm;margin:0}*{box-sizing:border-box}html,body{width:${pageWidth}mm;margin:0;padding:0;font-family:Arial,sans-serif}.sheet{width:${pageWidth}mm;height:${pageHeight}mm;padding-left:${margin}mm;display:grid;grid-template-columns:repeat(${columns},${width}mm);column-gap:${gap}mm;overflow:hidden}.label{width:${width}mm;height:${height}mm;padding:1mm;text-align:center;overflow:hidden;font-size:9px;outline:.1mm solid #555;outline-offset:-.1mm}.bars{height:8mm;margin:.5mm 0;background:repeating-linear-gradient(90deg,#000 0,#000 1px,#fff 1px,#fff 3px)}@media print{.sheet{break-after:page;page-break-after:always}.sheet:last-child{break-after:auto;page-break-after:auto}}</style>
+</head><body>${testRows}</body></html>`;
     try {
       const result = await api.printHtml({ html, deviceName, paper: "label", labelWidthMm: pageWidth, labelHeightMm: pageHeight, silent: true });
       if (!result.ok) {
@@ -267,7 +271,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
         return;
       }
       setPrintTestState("done");
-      setPrintTestMessage(`Test label sent successfully to ${deviceName}.`);
+      setPrintTestMessage(`Three-row calibration sent to ${deviceName}. Check alignment on rows 1, 2 and 3 before printing product stickers.`);
     } catch (error) {
       setPrintTestState("error");
       setPrintTestMessage(error instanceof Error ? error.message : "Unable to print the label test.");
@@ -397,7 +401,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
           <FormField label="Gap between stickers (mm)"><input type="number" className={inputClass} min="0" max="30" step="0.1" value={draftPrinting.labelGapMm} onChange={e=>setDraftPrinting({...draftPrinting,labelGapMm:Number(e.target.value)})}/></FormField>
           <FormField label="Left margin / offset (mm)"><input type="number" className={inputClass} min="0" max="50" step="0.1" value={draftPrinting.labelLeftMarginMm} onChange={e=>setDraftPrinting({...draftPrinting,labelLeftMarginMm:Number(e.target.value)})}/></FormField>
           <FormField label="Row gap / feed gap (mm)"><input type="number" className={inputClass} min="0" max="20" step="0.1" value={draftPrinting.labelRowGapMm} onChange={e=>setDraftPrinting({...draftPrinting,labelRowGapMm:Number(e.target.value)})}/></FormField>
-          <p className="text-xs text-slate-600 md:col-span-2">Two columns print together across the roll. Measure the actual gap and left edge of your stickers; adjust offsets after a test print. Roll width must fit both stickers plus the gap.</p>
+          <p className="text-xs text-slate-600 md:col-span-2">Two columns print together. Set Row gap / feed gap to <strong>measured top-edge-to-top-edge distance minus label height</strong> (example: 27 mm pitch − 25 mm label = 2 mm). Print the 3-row calibration strip; inspect rows 2 and 3 for cumulative drift. Set Windows printer scaling to Actual size / 100%, with matching roll width and row pitch. Save printer settings before printing products.</p>
         </>}
         <FormField label="Label layout"><select className={selectClass} value={draftPrinting.labelLayout} onChange={e => setDraftPrinting({ ...draftPrinting, labelLayout: e.target.value as "compact" | "detailed" })}><option value="compact">Compact — prominent price, no extra details</option><option value="detailed">Detailed — category and SKU when space allows</option></select></FormField>
         <div className="grid grid-cols-2 gap-3">
@@ -410,7 +414,7 @@ export function SettingsPanel({ profile, tax, backup, printing, onSaveProfile, o
       {printTestMessage && <p className={`mt-3 text-sm ${printTestState === "error" ? "text-red-600" : printTestState === "done" ? "text-emerald-600" : "text-slate-600"}`}>{printTestMessage}</p>}
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <Button type="button" variant="outline" onClick={testSelectedPrinter} disabled={printTestState === "working"}>{printTestState === "working" ? "Printing test…" : "Test invoice printer"}</Button>
-        <Button type="button" variant="outline" onClick={testLabelPrinter} disabled={printTestState === "working"}>Test label printer</Button>
+        <Button type="button" variant="outline" onClick={testLabelPrinter} disabled={printTestState === "working"}>Test 3-row label alignment</Button>
         <Button onClick={() => onSavePrinting({ defaultInvoicePaper: draftPrinting.defaultInvoicePaper, thermalWidthMm: draftPrinting.thermalWidthMm, a4PrinterName: draftPrinting.a4PrinterName, thermalPrinterName: draftPrinting.thermalPrinterName, labelPrinterName: draftPrinting.labelPrinterName, labelWidthMm: draftPrinting.labelWidthMm, labelHeightMm: draftPrinting.labelHeightMm, labelCodeMode: draftPrinting.labelCodeMode, labelLayout: draftPrinting.labelLayout, labelColumns: draftPrinting.labelColumns, labelRollWidthMm: draftPrinting.labelRollWidthMm, labelGapMm: draftPrinting.labelGapMm, labelLeftMarginMm: draftPrinting.labelLeftMarginMm, labelRowGapMm: draftPrinting.labelRowGapMm, silentDesktopPrint: draftPrinting.silentDesktopPrint })}>Save printer settings</Button>
       </div>
     </section>
