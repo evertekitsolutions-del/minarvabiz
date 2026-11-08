@@ -111,7 +111,7 @@ export function SoftwareUpdateNotice() {
     return () => {
       cancelled = true;
       retryCheckRef.current = null;
-      retries.forEach(window.clearTimeout);
+      retries.forEach((timer) => window.clearTimeout(timer));
       window.clearInterval(periodic);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibility);
