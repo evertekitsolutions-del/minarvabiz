@@ -36,6 +36,7 @@ const updateConfigWriter = read("apps/desktop/scripts/write-update-config.mjs");
 const updater = read("apps/desktop/electron/updater.ts");
 const workflow = read(".github/workflows/ci.yml");
 const releaseWorkflow = read(".github/workflows/release-windows.yml");
+const windowsPackageFallback = read("scripts/windows-package-resilient.mjs");
 const builder = read("apps/desktop/electron-builder.yml");
 const desktopPackage = JSON.parse(read("apps/desktop/package.json"));
 const businessLogicPackage = JSON.parse(read("packages/business-logic/package.json"));
@@ -109,7 +110,7 @@ assert(phase10.includes("createMaterialRoll") && phase10.includes("reserveMateri
 assert(phase10.includes('enqueueOutbox("production_workflows"') && phase10.includes('enqueueOutbox("material_rolls"'), "Phase-10 mutations must enter the sync outbox");
 assert(phase10.includes("touchPersistence()"), "Phase-10 mutations must trigger persistence");
 assert(nav.includes("dashboard") && nav.includes("sales") && nav.includes("products") && nav.includes("laundry") && nav.includes("reports") && nav.includes("backup"), "Core navigation modules are missing");
-assert(workflow.includes("Guard against legacy JSON persistence") && workflow.includes("package:win") && workflow.includes("MINARVA_RUNTIME_SMOKE"), "CI desktop verification guards are incomplete");
+assert(workflow.includes("Guard against legacy JSON persistence") && workflow.includes("node scripts/windows-package-resilient.mjs") && windowsPackageFallback.includes("package:win") && windowsPackageFallback.includes("ELECTRON_MIRROR") && windowsPackageFallback.includes("ELECTRON_BUILDER_BINARIES_MIRROR") && workflow.includes("MINARVA_RUNTIME_SMOKE"), "CI desktop verification guards are incomplete");
 assert(/actions\/checkout@[0-9a-f]{40}/i.test(workflow) && /actions\/setup-node@[0-9a-f]{40}/i.test(workflow) && /pnpm\/action-setup@[0-9a-f]{40}/i.test(workflow) && /actions\/upload-artifact@[0-9a-f]{40}/i.test(workflow), "CI action pins are incomplete");
 assert(/actions\/checkout@[0-9a-f]{40}/i.test(releaseWorkflow) && /actions\/setup-node@[0-9a-f]{40}/i.test(releaseWorkflow) && /pnpm\/action-setup@[0-9a-f]{40}/i.test(releaseWorkflow) && /actions\/upload-artifact@[0-9a-f]{40}/i.test(releaseWorkflow), "Release action pins are incomplete");
 assert(releaseWorkflow.includes("MINARVA_RUNTIME_SMOKE") && releaseWorkflow.includes("MINARVA_LICENSE_PUBLIC_KEY_HEX"), "Release licensing/runtime verification is incomplete");
