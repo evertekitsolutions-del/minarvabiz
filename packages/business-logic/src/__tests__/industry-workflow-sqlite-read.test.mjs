@@ -46,6 +46,18 @@ test("rejects unauthorized templates without querying event history", () => {
     { ...access, allowedTemplateIds: [] }, "job-1"), /denied/);
   assert.equal(calls.length, 1);
 });
+test("single-record read with empty grants denies before any SQLite access", () => {
+  let transactions = 0;
+  let queries = 0;
+  const db = {
+    transaction(fn) { transactions++; return fn; },
+    prepare() { queries++; throw Error("unauthorized SQL"); },
+  };
+  assert.throws(() => readIndustrySqliteWorkflow(db, profile,
+    { ...access, allowedTemplateIds: [] }, "job-1"), /read denied/);
+  assert.equal(transactions, 0);
+  assert.equal(queries, 0);
+});
 test("rejects missing history, fabricated stage and invalid actor", () => {
   const row = { template_id: "repair-job", stage: "diagnosed", revision: 1 };
   assert.throws(() => readIndustrySqliteWorkflow(database(row, undefined).db, profile, access, "job-1"), /corrupt/);
