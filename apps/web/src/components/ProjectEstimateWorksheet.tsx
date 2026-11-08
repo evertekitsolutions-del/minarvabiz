@@ -182,7 +182,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
   }
 
   function downloadCsv() {
-    if (!canExport || !worksheet || !totals || busy) return;
+    if (!canExport || !worksheet || !totals || busy || hasUnsavedChanges || revisionConflict || saveAcknowledged) return;
     try {
       const csv = exportProjectEstimateCsv(worksheet, scope);
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -271,7 +271,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
           </table>
         </>}
         {canEdit && <button type="submit" disabled={busy || !totals || !hasUnsavedChanges || revisionConflict || saveAcknowledged}>{busy ? "Working…" : "Save estimate"}</button>}
-        {canExport && <button type="button" disabled={busy || !totals} onClick={downloadCsv}>Export estimate CSV</button>}
+        {canExport && <button type="button" disabled={busy || !totals || hasUnsavedChanges || revisionConflict || saveAcknowledged} onClick={downloadCsv}>Export saved estimate CSV</button>}
       </>}
     </form>
   );
