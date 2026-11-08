@@ -30,7 +30,9 @@ export function NormalBilling({
   onAddCustomer,
   onAddProduct,
   onPrintSale,
+  pricesIncludeTax = false,
 }: {
+  pricesIncludeTax?: boolean;
   products: Product[];
   customers: Customer[];
   onCompleteSale: (payload: { customerId: string | null; lines: CartLine[]; paidAmount: number; paymentMethod: PaymentMethod; notes?: string }) => SaleResult | Promise<SaleResult>;
@@ -63,8 +65,8 @@ export function NormalBilling({
   const totals = React.useMemo(() => calculateCartTotals(lines), [lines]);
 
   React.useEffect(() => {
-    setUnitPrice(selectedProduct ? String(selectedProduct.sellingPrice) : "");
-  }, [selectedProduct?.id]);
+    setUnitPrice(selectedProduct ? String(pricesIncludeTax ? (selectedProduct.mrp ?? selectedProduct.sellingPrice) : selectedProduct.sellingPrice) : "");
+  }, [selectedProduct?.id, selectedProduct?.mrp, selectedProduct?.sellingPrice, pricesIncludeTax]);
 
   function addLine() {
     const p = selectedProduct;
@@ -88,7 +90,7 @@ export function NormalBilling({
       const item: CartLine = {
         productId: p.id, productName: p.name, sku: p.sku, barcode: p.barcode,
         quantity, unitPrice: price, costPrice: p.costPrice,
-        discountPercent: p.discount ?? 0, taxRate: p.taxRate ?? 0, stockQuantity: p.stockQuantity,
+        discountPercent: p.discount ?? 0, taxRate: p.taxRate ?? 0, taxInclusive: pricesIncludeTax, stockQuantity: p.stockQuantity,
       };
       const next = areaMode
         ? { ...attachNormalAreaMeasurement(item, p, areaApplied), cartLineId: generateId() }
@@ -235,7 +237,7 @@ export function NormalBilling({
                   <td className="px-3 py-2"><input className="h-8 w-28 rounded border border-slate-200 px-2" type="number" min="0" step="0.01" value={line.unitPrice} onChange={(e) => updateLine(line.cartLineId ?? line.productId, { unitPrice: Number(e.target.value) })} /></td>
                   <td className="px-3 py-2 text-right font-semibold">{formatMoney(line.quantity * line.unitPrice)}</td>
                   <td className="px-3 py-2 text-right"><div className="flex justify-end gap-1">
-                    <Button size="sm" variant="outline" onClick={() => setMrpLineId(line.cartLineId ?? line.productId)}>MRP incl. tax</Button>
+                    {!pricesIncludeTax && <Button size="sm" variant="outline" onClick={() => setMrpLineId(line.cartLineId ?? line.productId)}>MRP incl. tax</Button>}
                     <Button size="sm" variant="outline" onClick={() => {
                       const id = line.cartLineId ?? line.productId;
                       setLines((prev) => removeNormalBillingLine(prev, id));
@@ -247,7 +249,7 @@ export function NormalBilling({
             </table>
           </div>
 
-          {mrpLineId && lines.find((line) => (line.cartLineId ?? line.productId) === mrpLineId) && (
+          {!pricesIncludeTax && mrpLineId && lines.find((line) => (line.cartLineId ?? line.productId) === mrpLineId) && (
             <InclusiveMrpEditor
               key={mrpLineId}
               line={lines.find((line) => (line.cartLineId ?? line.productId) === mrpLineId)!}
