@@ -600,6 +600,8 @@ jobs:
       - run: pnpm --filter @minarvabiz/desktop typecheck
       - name: Block Windows update unless product writes are durably saved
         run: node --experimental-strip-types --test scripts/desktop-update-product-durability.test.mjs
+      - name: Verify hourly backups and product recovery checkpoints
+        run: node --test scripts/p0-backup-checkpoints.test.mjs
       - name: Verify resumable installer download and signed SHA-256 safety
         run: node --experimental-strip-types --test scripts/windows-update-resume.test.mjs
       - name: Verify offline support packet serialization and native export policy
