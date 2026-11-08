@@ -92,9 +92,8 @@ for (const failure of [false, new Error("disk full"), "native IPC disconnected"]
   assert.equal(await callbacks.persistCustomerCollection(), false);
   assert.match(messages.at(-1), /SQLite customer payment save failed/);
   assert.match(messages.at(-1), /retry/i);
-  // Product Save now consumes the durable write result instead of silently
-  // discarding it. A rejected native write must report false.
-  assert.equal(await callbacks.persistAndRefresh(), false);
+  assert.equal(await callbacks.persistAndRefresh(), undefined);
+  assert.equal(await callbacks.persistProductAndRefresh(), false);
   assert.match(messages.at(-1), /SQLite domain save failed/);
 }
 assert.equal(messages.length, 6, "Every rejected write must be visible");
