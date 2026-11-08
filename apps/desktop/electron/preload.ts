@@ -80,6 +80,19 @@ contextBridge.exposeInMainWorld("minarvaDesktop", {
   checkForUpdates: () => ipcRenderer.invoke("update:check") as Promise<UpdateCheckResult>,
   downloadUpdate: () => ipcRenderer.invoke("update:download") as Promise<UpdateDownloadResult>,
   installUpdate: () => ipcRenderer.invoke("update:install") as Promise<{ ok: boolean; version?: string; backupPath?: string; restartExpected?: boolean; error?: string }>,
+  onUpdateFlushRequested: (callback: () => Promise<boolean>): (() => void) => {
+    // No renderer-side database access is exposed to the main process.
+    // A fresh snapshot must pass the existing native SQLite IPC write.
+    const listener = (_event: unknown, requestId: unknown) => {
+      if (typeof requestId !== "string" || !/^[0-9a-f-]{36}$/.test(requestId)) return;
+      void Promise.resolve().then(callback).then(
+        (ok) => { ipcRenderer.send("update:flush-result", requestId, ok === true); },
+        () => { ipcRenderer.send("update:flush-result", requestId, false); },
+      );
+    };
+    ipcRenderer.on("update:flush-request", listener);
+    return () => ipcRenderer.off("update:flush-request", listener);
+  },
   relaunch: () => ipcRenderer.invoke("app:relaunch") as Promise<boolean>,
 });
 
@@ -126,6 +139,7 @@ export type MinarvaDesktopApi = {
   checkForUpdates: () => Promise<UpdateCheckResult>;
   downloadUpdate: () => Promise<UpdateDownloadResult>;
   installUpdate: () => Promise<{ ok: boolean; version?: string; backupPath?: string; restartExpected?: boolean; error?: string }>;
+  onUpdateFlushRequested?: (callback: () => Promise<boolean>) => (() => void);
   relaunch: () => Promise<boolean>;
 };
 
