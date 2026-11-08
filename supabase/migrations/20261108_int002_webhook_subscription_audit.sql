@@ -23,19 +23,30 @@ create or replace function public.audit_integration_webhook_subscription()
 returns trigger language plpgsql security definer set search_path = ''
 as $$
 begin
+  -- DELETE has no NEW row and INSERT has no OLD row. Never dereference
+  -- an unassigned trigger record or silently mix scope across revisions.
+  if tg_op = 'DELETE' then
+    insert into public.integration_webhook_subscription_audit
+      (tenant_id, company_id, branch_key, subscription_id, operation,
+       old_revision, new_revision, old_enabled, new_enabled)
+    values (old.tenant_id, old.company_id, old.branch_key, old.subscription_id,
+            tg_op, old.revision, null, old.enabled, null);
+    return old;
+  end if;
+  if tg_op = 'INSERT' then
+    insert into public.integration_webhook_subscription_audit
+      (tenant_id, company_id, branch_key, subscription_id, operation,
+       old_revision, new_revision, old_enabled, new_enabled)
+    values (new.tenant_id, new.company_id, new.branch_key, new.subscription_id,
+            tg_op, null, new.revision, null, new.enabled);
+    return new;
+  end if;
   insert into public.integration_webhook_subscription_audit
     (tenant_id, company_id, branch_key, subscription_id, operation,
      old_revision, new_revision, old_enabled, new_enabled)
-  values (coalesce(new.tenant_id,old.tenant_id),
-          coalesce(new.company_id,old.company_id),
-          coalesce(new.branch_key,old.branch_key),
-          coalesce(new.subscription_id,old.subscription_id),
-          tg_op,
-          case when tg_op = 'INSERT' then null else old.revision end,
-          case when tg_op = 'DELETE' then null else new.revision end,
-          case when tg_op = 'INSERT' then null else old.enabled end,
-          case when tg_op = 'DELETE' then null else new.enabled end);
-  return coalesce(new,old);
+  values (new.tenant_id, new.company_id, new.branch_key, new.subscription_id,
+          tg_op, old.revision, new.revision, old.enabled, new.enabled);
+  return new;
 end;
 $$;
 revoke all on function public.audit_integration_webhook_subscription()
