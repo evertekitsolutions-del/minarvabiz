@@ -1,5 +1,5 @@
 import { parseServiceOrderPriceDraft } from "@minarvabiz/business-logic";
-import { parseBoutiquePrice, verifyBoutiqueVariantStock } from "./lib/boutique-product-entry";
+import { commitBoutiqueProductDraft } from "./lib/boutique-product-commit";
 import { parseDesktopPurchaseMoney } from "./lib/desktop-purchase-amount";
 import * as React from "react";
 import {
@@ -11,7 +11,7 @@ TrialGate, MAIN_NAV,
 type QuickAction, type NavItemId, type DashboardData, type OrderFormValues, type LaundryCancellationValues,
 type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue, can, purgeExpiredRecycleBinItems  ,parseNonNegativeStockQuantity } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue, can, purgeExpiredRecycleBinItems } from "@minarvabiz/business-logic";
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
@@ -23,7 +23,7 @@ import { DesktopLicenseView } from "./components/DesktopLicenseView";
 import { DesktopStaffEditorModal } from "./components/DesktopStaffEditorModal";
 import { BarcodeLabelPrintModal } from "./components/BarcodeLabelPrintModal";
 import { ProductEditorModal } from "./components/ProductEditorModal";
-import { parseProductVariants, createProductVariantFamily, addProductVariants, type ProductVariantDraft } from "@minarvabiz/business-logic";
+import type { ProductVariantDraft } from "@minarvabiz/business-logic";
 import { DesktopCustomerMasterPanel } from "./components/DesktopCustomerMasterPanel";
 import { DesktopLicenseExpiryBanner, effectiveLicenseDaysRemaining } from "./components/DesktopLicenseExpiryBanner";
 import { DesktopEntitlementMonitor } from "./components/DesktopEntitlementMonitor";
@@ -131,7 +131,7 @@ export function App() {
     setProfiles(selectedOrder ? ordersStore.listMeasurementProfiles(selectedOrder.customerId) : []);
     setModuleTick((v) => v + 1);
   }, [lowStockOnly, productQuery, productCategoryId, orderQuery, orderStatus, orderType, orderCustomerId, orderDateFrom, orderDateTo, orderDeliveryDateFrom, orderDeliveryDateTo, selectedOrder]);
-  const { persistAndRefresh, persistCustomerCollection } = React.useMemo(
+  const { persistAndRefresh, persistProductAndRefresh, persistCustomerCollection } = React.useMemo(
     () => createDesktopPersistence(refreshAll, setModuleError),
     [refreshAll],
   );
@@ -204,53 +204,13 @@ export function App() {
     setProductSaveError(null);
     try {
       if (!productMutationAwaitingPersistenceRef.current) {
-      if(!productForm.name.trim())throw new Error("Product name is required");
-      const price=parseBoutiquePrice(productForm.mrp);
-      if(productForm.hasVariants&&!editingProductId)verifyBoutiqueVariantStock(variantRows,productForm.brand,productForm.stockQuantity);
-      const payload={
-        name:productForm.name.trim(),sku:productForm.sku||null,barcode:productForm.barcode||null,
-        categoryId:productForm.categoryId||null,brand:productForm.brand||null,
-        size:productForm.size||null,color:productForm.color||null,fabric:productForm.fabric||null,
-        unit:productForm.unit||"pcs",costPrice:Number(productForm.costPrice)||0,
-        sellingPrice:price,mrp:price,discount:Number(productForm.discount)||0,
-        taxRate:Number(productForm.taxRate)||0,
-        stockQuantity:productForm.hasVariants?0:parseNonNegativeStockQuantity(productForm.stockQuantity),
-        minimumStock:parseNonNegativeStockQuantity(productForm.minimumStock),
-        supplierId:productForm.supplierId||null,imageUrl:productForm.imageUrl||null,
-        notes:productForm.notes||null,isActive:true,
-      };
-      if(productForm.hasVariants) {
-        if(editingProductId) {
-          const previous=store.getProduct(editingProductId);
-          if(!previous || previous.parentProductId)throw new Error("Edit individual variant stock separately");
-          if(!previous.hasVariants && previous.stockQuantity!==0)
-            throw new Error("First adjust existing single-product stock to zero before converting to variants");
-          // Validate ALL new rows before mutating an existing parent.
-          if(variantRows.length) {
-            const existing=store.listProducts().filter(p=>p.parentProductId===editingProductId);
-            parseProductVariants(variantRows,existing.map(p=>({
-              size:p.size||"",color:p.color||"",material:p.fabric||"",brand:p.brand||"",sku:p.sku||null,barcode:p.barcode||null,
-            })));
-          }
-          const patch:Partial<Product>={...payload,hasVariants:true,barcode:null,size:null,color:null,fabric:null};
-          delete patch.stockQuantity;
-          store.updateProduct(editingProductId,patch);
-          if(variantRows.length)addProductVariants(editingProductId,variantRows);
-        } else createProductVariantFamily(payload,variantRows);
-      } else {
-        if(editingProductId){
-          const previous=store.getProduct(editingProductId);
-          if(previous?.hasVariants)throw new Error("This product already has variants; edit individual stock rows instead");
-          const patch:Partial<Product>={...payload};delete patch.stockQuantity;
-          store.updateProduct(editingProductId,patch);
-        } else store.createProduct(payload);
-      }
+      commitBoutiqueProductDraft(productForm, editingProductId, variantRows);
         // The in-memory product mutation is NOT a successful Save until the
         // native SQLite write has acknowledged completion.
         productMutationAwaitingPersistenceRef.current = true;
         setProductSavePending(true);
       }
-      if (!await persistAndRefresh()) {
+      if (!await persistProductAndRefresh()) {
         throw new Error("Product is pending and was NOT saved to SQLite. Keep Minarva Biz open and press Retry save.");
       }
       productMutationAwaitingPersistenceRef.current = false;
