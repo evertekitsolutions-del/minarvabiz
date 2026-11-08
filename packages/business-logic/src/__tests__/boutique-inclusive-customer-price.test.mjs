@@ -91,7 +91,7 @@ test("Boutique price entry, saved legacy MRP display and thermal labels have one
   assert.match(app, /<ProductList singlePrice/);
   assert.match(app, /<PosBilling pricesIncludeTax/);
   assert.match(app, /<NormalBilling pricesIncludeTax/);
-  assert.match(label, /Price: \$\{formatMoney\(product\.mrp \?\? product\.sellingPrice\)\}/);
+  assert.match(label, /Price: \\$\\{formatMoney\\(product\\.mrp != null && product\\.mrp > 0 \\? product\\.mrp : product\\.sellingPrice\\)\\}/);
   assert.doesNotMatch(label, /Offer:|MRP:/);
   assert.match(productList, /header: singlePrice \? "Price"/);
   assert.match(productList, /singlePrice \? "Price"/);
