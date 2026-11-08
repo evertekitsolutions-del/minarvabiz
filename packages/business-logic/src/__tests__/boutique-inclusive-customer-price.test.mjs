@@ -85,7 +85,7 @@ test("Boutique price entry, saved legacy MRP display and thermal labels have one
   const productList = read("packages/ui/src/components/products/ProductList.tsx");
   const pos = read("packages/ui/src/components/sales/PosBilling.tsx");
   const normal = read("packages/ui/src/components/sales/NormalBilling.tsx");
-  assert.match(editor, /Price \(GST included\) \*/);
+  assert.match(editor, /label="Price \*"/);
   assert.doesNotMatch(editor, /Special offer price|label="MRP/);
   assert.match(app, /sellingPrice:price,mrp:price/);
   assert.match(app, /<ProductList singlePrice/);
