@@ -40,11 +40,11 @@ test("reads an authorized scoped durable snapshot with reconstructed event ids",
 test("returns null for absent scoped record", () => {
   assert.equal(readIndustrySqliteWorkflow(database(undefined).db, profile, access, "missing"), null);
 });
-test("rejects unauthorized templates without querying event history", () => {
+test("rejects unauthorized templates before any SQLite query", () => {
   const { db, calls } = database({ template_id: "repair-job", stage: "received", revision: 0 });
   assert.throws(() => readIndustrySqliteWorkflow(db, profile,
     { ...access, allowedTemplateIds: [] }, "job-1"), /denied/);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 0);
 });
 test("single-record read with empty grants denies before any SQLite access", () => {
   let transactions = 0;
