@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { createHash, createPublicKey, verify } from "crypto";
 import { BUNDLED_UPDATE_MANIFEST_URL, BUNDLED_UPDATE_PUBLIC_KEY_HEX } from "./update-config";
+import { fetchVerifiedInstaller } from "./resumable-download";
 
 export type UpdateManifest = {
   product: "minarvabiz";
@@ -167,27 +168,18 @@ export async function downloadVerifiedUpdate(userDataDir: string): Promise<Updat
   const manifest = verifiedManifest;
   if (!manifest) return { ok: false, error: "Check for updates before downloading." };
   try {
-    const response = await fetch(manifest.installerUrl, { signal: AbortSignal.timeout(120000) });
-    if (!response.ok || !response.body) return { ok: false, error: `Installer download failed with HTTP ${response.status}.` };
-    const declared = Number(response.headers.get("content-length") || 0);
-    const maxBytes = 500 * 1024 * 1024;
-    if (declared > maxBytes) return { ok: false, error: "Installer is larger than the allowed update size." };
-    const arrayBuffer = await response.arrayBuffer();
-    if (arrayBuffer.byteLength <= 0 || arrayBuffer.byteLength > maxBytes) return { ok: false, error: "Downloaded installer size is invalid." };
-    const bytes = Buffer.from(arrayBuffer);
-    const digest = createHash("sha256").update(bytes).digest("hex");
-    if (digest !== manifest.sha256.toLowerCase()) return { ok: false, error: "Installer SHA-256 verification failed." };
-
-    const updateDir = path.join(userDataDir, "updates");
-    fs.mkdirSync(updateDir, { recursive: true });
-    const target = path.join(updateDir, `MinarvaBiz-Setup-${manifest.version}.exe`);
-    const temp = `${target}.tmp-${process.pid}-${Date.now()}`;
-    fs.writeFileSync(temp, bytes);
-    fs.renameSync(temp, target);
-    downloadedInstaller = { version: manifest.version, path: target, sha256: digest };
-    return { ok: true, version: manifest.version, installerPath: target };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    const target = path.join(userDataDir, "updates", `MinarvaBiz-Setup-${manifest.version}.exe`);
+    // Preserve partial bytes after a slow or disconnected session and retry
+    // HTTP Range downloads instead of aborting every customer at 120 seconds.
+    const verifiedPath = await fetchVerifiedInstaller(manifest.installerUrl, target, manifest.sha256);
+    downloadedInstaller = {
+      version: manifest.version,
+      path: verifiedPath,
+      sha256: manifest.sha256.toLowerCase(),
+    };
+    return { ok: true, version: manifest.version, installerPath: verifiedPath };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
