@@ -77,7 +77,7 @@ export function updatePrintSettings(patch: Partial<PrintSettings>): PrintSetting
   const labelHeightMm = Number.isFinite(Number(patch.labelHeightMm))
     ? Math.max(15, Math.min(150, Number(patch.labelHeightMm)))
     : settings.labelHeightMm;
-  settings = {
+  const next: PrintSettings = {
     ...settings,
     ...patch,
     thermalWidthMm: width,
@@ -93,6 +93,12 @@ export function updatePrintSettings(patch: Partial<PrintSettings>): PrintSetting
     templates: patch.templates ? normalizePrintTemplates(patch.templates) : settings.templates,
     updatedAt: nowISO(),
   };
+  // Repeatedly clicking a preset must not export the entire customer SQLite
+  // database when no actual printer preference changed.
+  const unchanged = (Object.keys(next) as Array<keyof PrintSettings>)
+    .every((key) => key === "updatedAt" || Object.is(next[key], settings[key]));
+  if (unchanged) return getPrintSettings();
+  settings = next;
   touchPersistence();
   return getPrintSettings();
 }
