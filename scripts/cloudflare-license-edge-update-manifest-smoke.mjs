@@ -63,9 +63,18 @@ test("metadata-only release lookup signs exact published SHA-256 and version", a
   assert.ok(verify(null, Buffer.from(canonical), publicKey, Buffer.from(result.data.signature, "base64url")));
 });
 
-test("upstream GitHub API downtime is fail closed", async () => {
+test("GitHub transient outages only serve previously SHA-256-verified signed releases", async () => {
+  const healthy = await invoke(release());
+  assert.equal(healthy.status, 200);
   for (const status of [403, 429, 502, 503, 504]) {
     const result = await invoke({ message: "unavailable" }, status);
+    assert.equal(result.status, 200);
+    assert.equal(result.data.sha256, healthy.data.sha256);
+    assert.equal(result.data.installerUrl, healthy.data.installerUrl);
+    assert.equal(result.data.signature, healthy.data.signature);
+  }
+  for (const status of [401, 404]) {
+    const result = await invoke({ message: "not allowed" }, status);
     assert.equal(result.status, 503);
     assert.equal(result.data.stage, "latest-release");
   }
