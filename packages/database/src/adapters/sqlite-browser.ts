@@ -28,8 +28,20 @@ type SqlJsStatic = { Database: new (data?: ArrayLike<number>) => SqlJsDb };
 
 let SQL: SqlJsStatic | null = null;
 
-async function loadSqlJs(): Promise<SqlJsStatic> {
+async function loadSqlJs(wasmBinary?: Uint8Array): Promise<SqlJsStatic> {
   if (SQL) return SQL;
+  if (wasmBinary?.byteLength) {
+    // Bundled binary comes from the trusted Electron main process, without
+    // file:// fetches or external network. WASM grows memory dynamically;
+    // sql-asm.js may Abort(OOM) on repeated SQLite image exports.
+    // @ts-expect-error sql.js dist path has no types
+    const module = await import("sql.js/dist/sql-wasm.js");
+    const initializer = (module as { default?: (c?: object) => Promise<SqlJsStatic> }).default ?? module;
+    SQL = await (initializer as (c?: object) => Promise<SqlJsStatic>)({ wasmBinary });
+    return SQL;
+  }
+  // Retain ASM only for non-Electron tooling/isolated unit tests.
+
   // ASM.js build is self-contained — no locateFile / wasm network or file fetch
   // @ts-expect-error sql.js dist path has no types
   const mod = await import("sql.js/dist/sql-asm.js");
@@ -62,9 +74,10 @@ export interface SqliteDatabase {
 
 export async function openSqliteDatabase(
   dbPath: string,
-  io: BrowserSqliteFileIO
+  io: BrowserSqliteFileIO,
+  wasmBinary?: Uint8Array,
 ): Promise<SqliteDatabase> {
-  const sqlJs = await loadSqlJs();
+  const sqlJs = await loadSqlJs(wasmBinary);
   try {
     io.mkdirp("");
   } catch {
