@@ -529,6 +529,10 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Verify desktop SQLite WASM compatibility and repeated snapshot exports
         run: node scripts/desktop-sqlite-wasm-smoke.mjs
+      - name: Verify boutique 38x25 two-up long-run labels, QR and calibrated row pitch
+        run: |
+          node scripts/desktop-38mm-dual-roll-and-customer-fixes-smoke.mjs
+          node scripts/desktop-label-layout-regression.mjs
       - name: Static production quality smoke
         shell: bash
         run: |

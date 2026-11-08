@@ -121,12 +121,39 @@ assert.equal((twoStickers.match(/class="label-sheet"/g)||[]).length,1);
 assert.equal((twoStickers.match(/<svg class=['"]qr-svg/g)||[]).length,2,
   "Each of the two labels must include a QR");
 assert.match(twoStickers,/\.label-sheet:last-child\{break-after:auto;page-break-after:auto\}/);
+// Long-run regression: 40 stickers on a 38x25 2-up roll form 20
+// independent 27 mm physical row-pitch pages, not one scaled 540 mm page.
+// Driver payload assertions do NOT substitute for hardware feed testing.
+prefs={...prefs,labelRowGapMm:2};
+const forty=m.exports.buildBarcodeLabelHtml(product,{copies:40,autoPrint:false});
+assert.match(forty,/@page\{size:80mm 27mm;margin:0\}/);
+assert.match(forty,/grid-template-columns:repeat\(2,38mm\)/);
+assert.equal((forty.match(/class="label-sheet"/g)||[]).length,20,"40 stickers must have 20 media pages");
+assert.equal((forty.match(/class="label compact short"/g)||[]).length,40,"All stickers must be present");
+assert.equal((forty.match(/<svg class=['"]qr-svg/g)||[]).length,40,"QR on every sticker");
+assert.equal((forty.match(/class="barcode-svg"/g)||[]).length,40,"Barcode on every sticker");
+for(const field of ["Size: M","Colour: Red","Material: Cotton","Price: Rs.999.00"])
+  assert.equal(forty.split(field).length-1,40,"All 40 stickers preserve "+field);
+assert.doesNotMatch(forty,/Offer:|MRP:|window\.print\(\)/);
+assert.match(forty,/\.label-sheet\{break-after:page;page-break-after:always\}/);
+const odd=m.exports.buildBarcodeLabelHtml(product,{copies:41,autoPrint:false});
+assert.equal((odd.match(/class="label-sheet"/g)||[]).length,21,"Last unpaired sticker must form a row");
+assert.equal((odd.match(/class="label compact short"/g)||[]).length,41);
+prefs={...prefs,labelRowGapMm:0};
+
 try{
  globalThis.window={};
  const result=await m.exports.sendBarcodeLabelsToPrinter(product,3);
  assert.deepEqual(result,{ok:true});
  assert.deepEqual(sent.at(-1).opts,{labelWidthMm:80,labelHeightMm:25,silent:true});
  assert.equal(sent.at(-1).html,chromoHtml,"WYSIWYG preview and print payload must be identical");
+ prefs={...prefs,labelRowGapMm:2};
+ const fortyResult=await m.exports.sendBarcodeLabelsToPrinter(product,40);
+ assert.deepEqual(fortyResult,{ok:true});
+ assert.deepEqual(sent.at(-1).opts,{labelWidthMm:80,labelHeightMm:27,silent:true},
+   "Native printer must receive single-row calibrated media height, not 20-row strip height");
+ assert.equal(sent.at(-1).html,forty,"All 20 physical rows go in one unmodified print job");
+ prefs={...prefs,labelRowGapMm:0};
 }finally{
  if(previousWindow===undefined)delete globalThis.window;
  else globalThis.window=previousWindow;
