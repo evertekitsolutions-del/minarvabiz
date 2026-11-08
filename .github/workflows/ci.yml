@@ -598,6 +598,8 @@ jobs:
       - name: Verify accountant opening balance exception CSV report and reversible party identity
         run: node --test packages/ui/src/components/desktop/__tests__/opening-balance-exception-report.test.mjs
       - run: pnpm --filter @minarvabiz/desktop typecheck
+      - name: Block Windows update unless product writes are durably saved
+        run: node --experimental-strip-types --test scripts/desktop-update-product-durability.test.mjs
       - name: Verify resumable installer download and signed SHA-256 safety
         run: node --experimental-strip-types --test scripts/windows-update-resume.test.mjs
       - name: Verify offline support packet serialization and native export policy
