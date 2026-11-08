@@ -216,7 +216,7 @@ async function run(){const ws=await connect();try{
   await setMainField(ws,'Profit and loss from',''); await waitFor(ws,['Balance sheet balanced']); await assertStatementProfit(ws, 125);
   await clickText(ws,'REPORTS',['reports & analytics']); await waitFor(ws,['Reports & Analytics','Export Excel','Download PDF','Refresh']);
   await clickText(ws,'NOTIFICATIONS',['messages & notifications','notifications']); await waitFor(ws,['Notifications']);
-  await clickText(ws,'SETTINGS',['settings']); await waitFor(ws,['Settings','Business profile','Browser printing defaults']); await setMainField(ws,'Business / trade name','QA Minarva Web'); await clickText(ws,'SAVE_SHOP',['save shop profile']); await waitFor(ws,['Business profile updated locally; durable save and cloud sync are not yet verified.']);
+  await clickText(ws,'SETTINGS',['settings']); await waitFor(ws,['Settings','Business profile','Browser printing defaults']); await setMainField(ws,'Business / trade name','QA Minarva Web'); await clickText(ws,'SAVE_SHOP',['save shop profile']); await waitFor(ws,['Business profile updated locally; durable save and cloud sync are not verified.']);
   await verifyPrintTemplates(expression => evalIn(ws, expression));
   await clickText(ws,'BACKUP',['backup & restore']); await verifyWebLocalSnapshotDownload(ws);
 
