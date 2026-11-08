@@ -26,3 +26,7 @@ d054860179df7629c4944e9a40058a4308c82ff7:apps/web/src/app/TrialWelcomePopup.tsx:
 # Replaced in current tree by a non-key-shaped generated fixture; this exact historical
 # commit/path/rule/line fingerprint is the sole exception (no wildcard suppression).
 01d9159393a7f31deecdb582d91b3929e3727cb3:packages/business-logic/src/__tests__/webhook-signature.test.mjs:generic-api-key:14
+
+# Historical comment quoting a synthetic test fixture was itself flagged by Gitleaks.
+# Scope strictly to the one historical commit/path/rule/line; no current-tree bypass.
+ea391279ca98e6e5a20bcb507f9ab5871ccd3474:.gitleaksignore:generic-api-key:27
