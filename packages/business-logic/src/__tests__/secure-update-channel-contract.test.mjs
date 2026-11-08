@@ -47,7 +47,7 @@ assert.equal(route.includes("GITHUB_LATEST_RELEASE"), true);
 assert.equal(route.includes("releases/latest"), true);
 assert.equal(route.includes("releases/download"), true);
 assert.equal(route.includes(".sha256"), true);
-assert.match(route, /api\\.github\\.com\\/repos\\/evertekitsolutions-del\\/minarvabiz\\/releases\\/latest/);
+assert.ok(route.includes("https://api.github.com/repos/evertekitsolutions-del/minarvabiz/releases/latest"));
 assert.match(route, /release\\.assets/);
 assert.match(route, /installer\\.digest/);
 assert.match(route, /nodeSign/);
