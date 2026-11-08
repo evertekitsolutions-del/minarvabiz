@@ -174,3 +174,30 @@ test("rejects duplicate and malformed prior event IDs before opening SQLite tran
   }
   assert.equal(transactions, 0);
 });
+
+test("refuses commits that would exceed the trusted read replay limit before SQL", async () => {
+  let transactions = 0;
+  const port = createIndustrySqliteCommitPort({
+    prepare() { throw new Error("SQL must not execute"); },
+    transaction() { transactions++; throw new Error("transaction must not start"); },
+  });
+  const original = {
+    id: "job-1", tenantId: "t1", branchId: "b1",
+    templateId: "repair-job", stage: "received", revision: 10000,
+    appliedEventIds: Array.from({ length: 10000 }, (_, i) => "prior-" + i),
+  };
+  const event = {
+    eventId: "next", tenantId: "t1", branchId: "b1",
+    expectedRevision: 10000, from: "received", to: "repairing",
+  };
+  await assert.rejects(port.commit({
+    original,
+    next: { ...original, stage: "repairing", revision: 10001,
+      appliedEventIds: [...original.appliedEventIds, "next"] },
+    events: [event],
+    access: { actorId: "u1", tenantId: "t1", branchId: "b1",
+      allowedTemplateIds: ["repair-job"],
+      allowedTransitions: [{ templateId: "repair-job", from: "received", to: "repairing" }] },
+  }), /invalid revision history/);
+  assert.equal(transactions, 0);
+});
