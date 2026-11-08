@@ -8,7 +8,7 @@ import { auditAction } from "./audit-actions";
 
 export interface AutoBackupSettings {
   enabled: boolean;
-  intervalHours: number; // 24 = daily
+  intervalHours: number; // recovery-safe default: hourly
   retentionCount: number;
   destinationPath: string;
   lastBackupAt: string | null;
@@ -26,8 +26,8 @@ export interface BackupMeta {
 
 const settings: AutoBackupSettings = {
   enabled: true,
-  intervalHours: 24,
-  retentionCount: 14,
+  intervalHours: 1,
+  retentionCount: 48,
   destinationPath: "",
   lastBackupAt: null,
   lastBackupPath: null,
@@ -85,7 +85,18 @@ export function hydrateAutoBackup(data: {
   settings?: AutoBackupSettings;
   history?: BackupMeta[];
 }) {
-  if (data.settings) Object.assign(settings, data.settings);
+  if (data.settings) {
+    // Previous desktop releases shipped a daily/14-copy default. Migrate only
+    // that exact legacy policy to hourly/48-copy coverage; preserve custom
+    // schedules and all historic backup metadata.
+    const legacyDailyDefault = data.settings.intervalHours === 24 &&
+      data.settings.retentionCount === 14;
+    Object.assign(settings, data.settings);
+    if (legacyDailyDefault) {
+      settings.intervalHours = 1;
+      settings.retentionCount = 48;
+    }
+  }
   if (data.history) {
     history.length = 0;
     history.push(...data.history);

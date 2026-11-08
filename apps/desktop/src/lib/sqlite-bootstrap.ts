@@ -12,8 +12,10 @@ import {
   getAutoBackupSettings,
   recordBackupSuccess,
   recordBackupFailure,
+  store,
 } from "@minarvabiz/business-logic";
 import { runStartupAutomaticBackup } from "./startup-auto-backup";
+import { assertHydratedProductsPreserved } from "./product-hydration-guard";
 
 type SqliteDatabase = {
   save: () => void;
@@ -186,6 +188,9 @@ async function initializeDesktopSqlite(): Promise<{ ok: boolean; error?: string 
       if (!imported.ok) {
         throw new Error(`SQLite domain snapshot restore failed: ${imported.error || "unknown import error"}`);
       }
+      // IMPORTANT: the first save after a version upgrade must never rewrite
+      // a full SQLite image whose product set was silently truncated.
+      assertHydratedProductsPreserved(snap, store.exportCoreState().products);
     }
 
     ready = true;
