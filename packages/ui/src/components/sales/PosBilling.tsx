@@ -350,7 +350,19 @@ export function PosBilling({
       setMessage({ type: "err", text: "Select a held sale first." });
       return;
     }
-    setCart(held.lines.map((line) => ({ ...line })));
+    // Held carts saved by an older Windows version used exclusive unit prices.
+    // On resume use the currently saved customer Price and retain item discounts.
+    // Preserve measured-cut metadata and original inventory/cost snapshots.
+    setCart(held.lines.map((line) => {
+      if (!pricesIncludeTax) return { ...line };
+      const product = products.find((candidate) => candidate.id === line.productId);
+      if (!product) return { ...line, taxInclusive: true };
+      return {
+        ...line,
+        unitPrice: product.mrp ?? product.sellingPrice,
+        taxInclusive: true,
+      };
+    }));
     setAppliedMrp({}); setMrpCartRowId(null);
     setAreaProductId(null);
     setCustomerId(held.customerId || "");
