@@ -15,6 +15,7 @@ require.extensions[".ts"] = (mod, path) => mod._compile(
 const { parseNonNegativeStockQuantity } = require("../inventory.ts");
 const web = fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/products/page.tsx", import.meta.url), "utf8");
 const desktop = fs.readFileSync(new URL("../../../../apps/desktop/src/App.tsx", import.meta.url), "utf8");
+const desktopCommit = fs.readFileSync(new URL("../../../../apps/desktop/src/lib/boutique-product-commit.ts", import.meta.url), "utf8");
 const validation = fs.readFileSync(new URL("../../../validation/src/index.ts", import.meta.url), "utf8");
 
 test("shared quantity parser retains fractional inventory to 3 decimal places", () => {
@@ -29,10 +30,10 @@ test("shared parser rejects blank, truncation, exponent, negatives and unsafe in
   }
 });
 test("web and Windows use the same parser and safe target adjustment", () => {
-  for (const [platform, content, prefix] of [["web", web, "form"], ["desktop", desktop, "productForm"]]) {
+  for (const [platform, content, prefix] of [["web", web, "form"], ["desktop", desktopCommit, "form"]]) {
     assert.match(content, new RegExp("parseNonNegativeStockQuantity\\("+prefix+"\\.stockQuantity\\)"), platform+" opening stock");
     assert.match(content, new RegExp("parseNonNegativeStockQuantity\\("+prefix+"\\.minimumStock\\)"), platform+" low-stock threshold");
-    assert.match(content, /store\.adjustStockToQuantity\(/, platform+" safe target correction");
+    assert.match(platform === "desktop" ? desktop : content, /store\.adjustStockToQuantity\(/, platform+" safe target correction");
   }
   assert.match(validation, /stockQuantity:\s*stockQuantitySchema/, "Zod product schema must accept safe decimal stock");
   assert.match(validation, /minimumStock:\s*stockQuantitySchema/, "Zod minimum stock must match shared quantity precision");

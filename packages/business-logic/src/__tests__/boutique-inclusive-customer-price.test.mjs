@@ -81,13 +81,15 @@ test("Boutique price entry, saved legacy MRP display and thermal labels have one
   const read = (path) => fs.readFileSync(new URL(path, root), "utf8");
   const editor = read("apps/desktop/src/components/ProductEditorModal.tsx");
   const app = read("apps/desktop/src/App.tsx");
+  const productCommit = read("apps/desktop/src/lib/boutique-product-commit.ts");
   const label = read("packages/business-logic/src/barcode-labels.ts");
   const productList = read("packages/ui/src/components/products/ProductList.tsx");
   const pos = read("packages/ui/src/components/sales/PosBilling.tsx");
   const normal = read("packages/ui/src/components/sales/NormalBilling.tsx");
   assert.match(editor, /label="Price \*"/);
   assert.doesNotMatch(editor, /Special offer price|label="MRP/);
-  assert.match(app, /sellingPrice:price,mrp:price/);
+  assert.match(productCommit, /sellingPrice:price,mrp:price/);
+  assert.match(app, /commitBoutiqueProductDraft\(productForm, editingProductId, variantRows\)/);
   assert.match(app, /<ProductList singlePrice/);
   assert.match(app, /<PosBilling pricesIncludeTax/);
   assert.match(app, /<NormalBilling pricesIncludeTax/);

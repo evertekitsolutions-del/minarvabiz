@@ -97,7 +97,13 @@ for (const failure of [false, new Error("disk full"), "native IPC disconnected"]
 }
 assert.equal(messages.length, 6, "Every rejected write must be visible");
 assert.equal(domainRefreshes, 7);
+// Product mutation requires an explicit native acknowledgement, not Promise<void>.
+write = async () => false;
+assert.equal(await callbacks.persistProductAndRefresh(), false);
+assert.match(messages.at(-1), /SQLite product save failed/);
+assert.equal(messages.length, 7);
+assert.equal(domainRefreshes, 8);
 write = async () => true;
 assert.equal(await callbacks.persistCustomerCollection(), true, "A later native retry can succeed");
-assert.equal(messages.length, 6, "Successful retry must not report a new error");
+assert.equal(messages.length, 7, "Successful retry must not report a new error");
 console.log("Attendance SQLite confirmation/failure behavior PASS");

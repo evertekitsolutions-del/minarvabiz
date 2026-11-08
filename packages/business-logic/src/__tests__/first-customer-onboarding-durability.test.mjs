@@ -153,7 +153,7 @@ test("first-customer supplier payable correction is permission-gated and ledger-
 test("Windows supplier setup refuses malformed amounts rather than posting a silent zero", () => {
   const app = fs.readFileSync("apps/desktop/src/App.tsx", "utf8");
   const start = app.indexOf("  function handleCreateSupplier()");
-  const end = app.indexOf("\n  function handleSaveProduct()", start);
+  const end = app.indexOf("\n  async function handleSaveProduct()", start);
   assert.ok(start > 0 && end > start, "desktop create supplier handler present");
   const handler = app.slice(start, end);
   assert.match(handler, /openingBalance:Number\(supplierForm\.openingBalance\)/);

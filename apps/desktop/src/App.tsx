@@ -1,5 +1,5 @@
 import { parseServiceOrderPriceDraft } from "@minarvabiz/business-logic";
-import { parseBoutiquePrice, verifyBoutiqueVariantStock } from "./lib/boutique-product-entry";
+import { commitBoutiqueProductDraft } from "./lib/boutique-product-commit";
 import { parseDesktopPurchaseMoney } from "./lib/desktop-purchase-amount";
 import * as React from "react";
 import {
@@ -11,7 +11,7 @@ TrialGate, MAIN_NAV,
 type QuickAction, type NavItemId, type DashboardData, type OrderFormValues, type LaundryCancellationValues,
 type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue, can, purgeExpiredRecycleBinItems  ,parseNonNegativeStockQuantity } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue, can, purgeExpiredRecycleBinItems } from "@minarvabiz/business-logic";
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
@@ -23,7 +23,7 @@ import { DesktopLicenseView } from "./components/DesktopLicenseView";
 import { DesktopStaffEditorModal } from "./components/DesktopStaffEditorModal";
 import { BarcodeLabelPrintModal } from "./components/BarcodeLabelPrintModal";
 import { ProductEditorModal } from "./components/ProductEditorModal";
-import { parseProductVariants, createProductVariantFamily, addProductVariants, type ProductVariantDraft } from "@minarvabiz/business-logic";
+import type { ProductVariantDraft } from "@minarvabiz/business-logic";
 import { DesktopCustomerMasterPanel } from "./components/DesktopCustomerMasterPanel";
 import { DesktopLicenseExpiryBanner, effectiveLicenseDaysRemaining } from "./components/DesktopLicenseExpiryBanner";
 import { DesktopEntitlementMonitor } from "./components/DesktopEntitlementMonitor";
@@ -77,6 +77,11 @@ export function App() {
   const [custOpen,setCustOpen]=React.useState(false);
   const [custForm, setCustForm] = React.useState({ name: "", phone: "", whatsapp: "", email: "", address: "", birthday: "", notes: "" });
   const [productOpen,setProductOpen]=React.useState(false);
+  const [productSaving, setProductSaving] = React.useState(false);
+  const [productSavePending, setProductSavePending] = React.useState(false);
+  const [productSaveError, setProductSaveError] = React.useState<string | null>(null);
+  const productSaveBusyRef = React.useRef(false);
+  const productMutationAwaitingPersistenceRef = React.useRef(false);
   const [editingProductId,setEditingProductId]=React.useState<string|null>(null);
   const [stockAdjustProduct,setStockAdjustProduct]=React.useState<Product|null>(null);
   const [stockAdjustQty,setStockAdjustQty]=React.useState("");
@@ -126,7 +131,7 @@ export function App() {
     setProfiles(selectedOrder ? ordersStore.listMeasurementProfiles(selectedOrder.customerId) : []);
     setModuleTick((v) => v + 1);
   }, [lowStockOnly, productQuery, productCategoryId, orderQuery, orderStatus, orderType, orderCustomerId, orderDateFrom, orderDateTo, orderDeliveryDateFrom, orderDeliveryDateTo, selectedOrder]);
-  const { persistAndRefresh, persistCustomerCollection } = React.useMemo(
+  const { persistAndRefresh, persistProductAndRefresh, persistCustomerCollection } = React.useMemo(
     () => createDesktopPersistence(refreshAll, setModuleError),
     [refreshAll],
   );
@@ -148,6 +153,19 @@ export function App() {
     }
   }, [refreshAll]);
   React.useEffect(() => { let cancelled=false; (async()=>{ for(let i=0;i<50&&!window.minarvaDesktop;i++) await new Promise(r=>setTimeout(r,20)); if(!window.minarvaDesktop){if(!cancelled)setDbError("Electron bridge missing. Reinstall Minarva Biz desktop.");return;} const result=await bootstrapDesktopSqlite(); if(cancelled)return; if(!result.ok){setDbError(result.error||"SQLite failed to initialize");return;} const [state, license, deviceId] = await Promise.all([window.minarvaDesktop.getTrialState(), window.minarvaDesktop.getLicenseState(), window.minarvaDesktop.getDeviceId?.() ?? Promise.resolve("")]); if(cancelled)return; setTrialState(state); setCommercialLicense(license as CommercialLicenseState); setDeviceFingerprint(deviceId || ""); setDbReady(true); fetchDashboardData().then(setDash); })(); return()=>{cancelled=true;}; }, []);
+  React.useEffect(() => {
+    if (!dbReady) return;
+    return window.minarvaDesktop?.onUpdateFlushRequested?.(async () => {
+      try {
+        // Export the latest domain state, including any queued product mutations,
+        // and wait for the native SQLite persistence acknowledgment.
+        return (await persistDomainToSqlite()) === true;
+      } catch (error) {
+        console.error("[minarvabiz] Update blocked: pending business data could not be saved", error);
+        return false;
+      }
+    });
+  }, [dbReady]);
   React.useEffect(() => {
     if (!dbReady) return;
     refreshAll();
@@ -172,61 +190,41 @@ export function App() {
   async function activateTrial(registration: TrialRegistration): Promise<{ok:boolean;error?:string}>{ if(!window.minarvaDesktop)return{ok:false,error:"Desktop security bridge is unavailable."}; const apiUrl=import.meta.env.VITE_LICENSE_API_URL as string|undefined; if(apiUrl){try{const deviceId=await window.minarvaDesktop.getDeviceId!();const response=await fetch(`${apiUrl.replace(/\/$/,"")}/api/trial/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...registration,deviceId})});const payload=await response.json().catch(()=>({}));if(!response.ok||!payload.ok)return{ok:false,error:payload.error||"Trial registration was not accepted."};const local=await window.minarvaDesktop.activateTrial(registration);if(!local.ok)return local;if(payload.ok&&window.minarvaDesktop.markTrialSynced)await window.minarvaDesktop.markTrialSynced();setTrialState(await window.minarvaDesktop.getTrialState());return{ok:true};}catch{/* offline activation below */}} const local=await window.minarvaDesktop.activateTrial(registration);if(!local.ok)return local;setTrialState(await window.minarvaDesktop.getTrialState());return{ok:true}; }
   function resetCustomerForm(){setCustForm({name:"",phone:"",whatsapp:"",email:"",address:"",birthday:"",notes:""});}
   function resetProductForm(){setVariantRows([]);setEditingProductId(null);setProductForm({name:"",sku:"",barcode:"",categoryId:"",brand:"",size:"",color:"",fabric:"",unit:"pcs",costPrice:"",mrp:"",discount:"0",taxRate:"0",stockQuantity:"0",minimumStock:"0",supplierId:"",imageUrl:"",notes:"",hasVariants:false});}
-  function openProductEditor(p:Product){setVariantRows([]);setEditingProductId(p.id);setProductForm({name:p.name,sku:p.sku||"",barcode:p.barcode||"",categoryId:p.categoryId||"",brand:p.brand||"",size:p.size||"",color:p.color||"",fabric:p.fabric||"",unit:p.unit||"pcs",costPrice:String(p.costPrice??0),mrp:String(p.mrp != null && p.mrp > 0 ? p.mrp : p.sellingPrice??0),discount:String(p.discount??0),taxRate:String(p.taxRate??0),stockQuantity:String(p.stockQuantity??0),minimumStock:String(p.minimumStock??0),supplierId:p.supplierId||"",imageUrl:p.imageUrl||"",notes:p.notes||"",hasVariants:Boolean(p.hasVariants)});setProductOpen(true);}
+  function openProductEditor(p:Product){setProductSaveError(null);setVariantRows([]);setEditingProductId(p.id);setProductForm({name:p.name,sku:p.sku||"",barcode:p.barcode||"",categoryId:p.categoryId||"",brand:p.brand||"",size:p.size||"",color:p.color||"",fabric:p.fabric||"",unit:p.unit||"pcs",costPrice:String(p.costPrice??0),mrp:String(p.mrp != null && p.mrp > 0 ? p.mrp : p.sellingPrice??0),discount:String(p.discount??0),taxRate:String(p.taxRate??0),stockQuantity:String(p.stockQuantity??0),minimumStock:String(p.minimumStock??0),supplierId:p.supplierId||"",imageUrl:p.imageUrl||"",notes:p.notes||"",hasVariants:Boolean(p.hasVariants)});setProductOpen(true);}
   function openStockAdjust(p:Product){setStockAdjustProduct({...p});setStockAdjustQty(String(p.stockQuantity));setModuleError(null);}
   function openBarcodeLabel(p:Product){setLabelProduct(p);setLabelCopies(String(p.parentProductId ? Math.min(100,Math.max(1,p.stockQuantity)) : 1));}
   function openCustomerCreator(){setModuleError(null);setCustOpen(true);}
   function handleCreateCustomer(){try{if(!custForm.name.trim())throw new Error("Customer name is required");store.createCustomer({name:custForm.name.trim(),phone:custForm.phone||null,whatsapp:custForm.whatsapp||null,email:custForm.email||null,address:custForm.address||null,birthday:custForm.birthday||null,notes:custForm.notes||null});setCustomers(store.listCustomers());setCustOpen(false);resetCustomerForm();setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
   function handleCreateCategory(){try{if(!categoryForm.name.trim())throw new Error("Category name is required");const category=store.createCategory({name:categoryForm.name.trim(),description:categoryForm.description.trim()||null});setCategories(store.listCategories());setProductForm(v=>({...v,categoryId:category.id}));setCategoryForm({name:"",description:""});setCategoryOpen(false);setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
   function handleCreateSupplier(){try{if(!supplierForm.name.trim())throw new Error("Supplier name is required");const supplier=phase5Store.createSupplier({name:supplierForm.name.trim(),company:supplierForm.company.trim()||null,phone:supplierForm.phone.trim()||null,email:supplierForm.email.trim()||null,address:supplierForm.address.trim()||null,category:supplierForm.category.trim()||null,openingBalance:Number(supplierForm.openingBalance),notes:supplierForm.notes.trim()||null});setPurchaseForm(v=>({...v,supplierId:supplier.id}));setProductForm(v=>({...v,supplierId:supplier.id}));setSupplierForm({name:"",company:"",phone:"",email:"",address:"",category:"",openingBalance:"",notes:""});setSupplierOpen(false);setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
-  function handleSaveProduct(){
+  async function handleSaveProduct() {
+    if (productSaveBusyRef.current) return;
+    productSaveBusyRef.current = true;
+    setProductSaving(true);
+    setProductSaveError(null);
     try {
-      if(!productForm.name.trim())throw new Error("Product name is required");
-      const price=parseBoutiquePrice(productForm.mrp);
-      if(productForm.hasVariants&&!editingProductId)verifyBoutiqueVariantStock(variantRows,productForm.brand,productForm.stockQuantity);
-      const payload={
-        name:productForm.name.trim(),sku:productForm.sku||null,barcode:productForm.barcode||null,
-        categoryId:productForm.categoryId||null,brand:productForm.brand||null,
-        size:productForm.size||null,color:productForm.color||null,fabric:productForm.fabric||null,
-        unit:productForm.unit||"pcs",costPrice:Number(productForm.costPrice)||0,
-        sellingPrice:price,mrp:price,discount:Number(productForm.discount)||0,
-        taxRate:Number(productForm.taxRate)||0,
-        stockQuantity:productForm.hasVariants?0:parseNonNegativeStockQuantity(productForm.stockQuantity),
-        minimumStock:parseNonNegativeStockQuantity(productForm.minimumStock),
-        supplierId:productForm.supplierId||null,imageUrl:productForm.imageUrl||null,
-        notes:productForm.notes||null,isActive:true,
-      };
-      if(productForm.hasVariants) {
-        if(editingProductId) {
-          const previous=store.getProduct(editingProductId);
-          if(!previous || previous.parentProductId)throw new Error("Edit individual variant stock separately");
-          if(!previous.hasVariants && previous.stockQuantity!==0)
-            throw new Error("First adjust existing single-product stock to zero before converting to variants");
-          // Validate ALL new rows before mutating an existing parent.
-          if(variantRows.length) {
-            const existing=store.listProducts().filter(p=>p.parentProductId===editingProductId);
-            parseProductVariants(variantRows,existing.map(p=>({
-              size:p.size||"",color:p.color||"",material:p.fabric||"",brand:p.brand||"",sku:p.sku||null,barcode:p.barcode||null,
-            })));
-          }
-          const patch:Partial<Product>={...payload,hasVariants:true,barcode:null,size:null,color:null,fabric:null};
-          delete patch.stockQuantity;
-          store.updateProduct(editingProductId,patch);
-          if(variantRows.length)addProductVariants(editingProductId,variantRows);
-        } else createProductVariantFamily(payload,variantRows);
-      } else {
-        if(editingProductId){
-          const previous=store.getProduct(editingProductId);
-          if(previous?.hasVariants)throw new Error("This product already has variants; edit individual stock rows instead");
-          const patch:Partial<Product>={...payload};delete patch.stockQuantity;
-          store.updateProduct(editingProductId,patch);
-        } else store.createProduct(payload);
+      if (!productMutationAwaitingPersistenceRef.current) {
+      commitBoutiqueProductDraft(productForm, editingProductId, variantRows);
+        // The in-memory product mutation is NOT a successful Save until the
+        // native SQLite write has acknowledged completion.
+        productMutationAwaitingPersistenceRef.current = true;
+        setProductSavePending(true);
       }
+      if (!await persistProductAndRefresh()) {
+        throw new Error("Product is pending and was NOT saved to SQLite. Keep Minarva Biz open and press Retry save.");
+      }
+      productMutationAwaitingPersistenceRef.current = false;
+      setProductSavePending(false);
       setProducts(store.listProducts({query:productQuery||undefined,categoryId:productCategoryId||undefined,lowStockOnly}));
       setProductOpen(false);resetProductForm();setModuleError(null);
       if(resumeStockPurchaseAfterProduct){setStockPurchaseOpen(true);setResumeStockPurchaseAfterProduct(false);}
-      void persistAndRefresh();
-    }catch(error){setModuleError(errorMessage(error));}
+    }catch(error){
+      setProductSaveError(errorMessage(error));
+      setModuleError(errorMessage(error));
+    } finally {
+      productSaveBusyRef.current = false;
+      setProductSaving(false);
+    }
   }
   function handleAdjustStock(){try{if(!stockAdjustProduct)return;store.adjustStockToQuantity(stockAdjustProduct.id,stockAdjustQty,stockAdjustProduct.stockQuantity,"Manual stock correction");setStockAdjustProduct(null);setModuleError(null);void persistAndRefresh();}catch(error){setModuleError(errorMessage(error));}}
   function handleArchiveProduct(p:Product,reason:string){try{const r=store.archiveProduct(p.id,reason);if(r.error)return{error:r.error};setModuleError(null);void persistAndRefresh();return{success:true};}catch(error){return{error:errorMessage(error)};}}
@@ -303,7 +301,7 @@ export function App() {
     {view==="dashboard"&&dash&&<div className="space-y-4"><DesktopLicenseExpiryBanner commercialActive={commercialActive} trialState={trialState} daysRemaining={licenseDaysForDashboard} onManage={()=>navTo("license")}/><Dashboard data={dash} quickActions={actions} onInsightAction={handleInsightAction}/></div>}
     {globalSearchQuery&&<GlobalSearchPalette query={globalSearchQuery} onClose={()=>setGlobalSearchQuery("")} onNavigate={(_href,id)=>{setGlobalSearchQuery("");navTo(id);}}/>}
     {view==="customers"&&<DesktopCustomerMasterPanel onAdd={openCustomerCreator} onPersist={persistCustomerCollection} collection={customerCollection} onSelect={customer=>{setCrmCustomerId(customer.id);navTo("customer-crm");}}/>}
-    {view==="products"&&<ProductList singlePrice products={products} allProducts={store.listProducts()} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={()=>setLowStockOnly(v=>!v)} onSearch={setProductQuery} onFilterCategory={setProductCategoryId} onAddCategory={()=>{setCategoryForm({name:"",description:""});setCategoryOpen(true);}} onAdd={()=>{resetProductForm();setProductOpen(true);}} onEdit={openProductEditor} onAdjustStock={openStockAdjust} onArchive={handleArchiveProduct} onPrintBarcode={openBarcodeLabel}/>} 
+    {view==="products"&&<ProductList singlePrice products={products} allProducts={store.listProducts()} categories={categories} lowStockOnly={lowStockOnly} onToggleLowStock={()=>setLowStockOnly(v=>!v)} onSearch={setProductQuery} onFilterCategory={setProductCategoryId} onAddCategory={()=>{setCategoryForm({name:"",description:""});setCategoryOpen(true);}} onAdd={()=>{setProductSaveError(null);resetProductForm();setProductOpen(true);}} onEdit={openProductEditor} onAdjustStock={openStockAdjust} onArchive={handleArchiveProduct} onPrintBarcode={openBarcodeLabel}/>} 
     {view==="warehouse"&&<WarehousePanel/>}
     {view==="accounting"&&<AccountingPanel/>}
         {view==="quotations"&&<QuotationsPanel/>}
@@ -332,12 +330,21 @@ export function App() {
     <Modal open={custOpen} title="Add Customer" onClose={()=>setCustOpen(false)} footer={<><Button type="button" variant="outline" onClick={()=>setCustOpen(false)}>Cancel</Button><Button type="button" onClick={handleCreateCustomer}>Save Customer</Button></>}><div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><FormField label="Name *"><input className={inputClass} value={custForm.name} onChange={e=>setCustForm({...custForm,name:e.target.value})}/></FormField><FormField label="Phone"><input className={inputClass} value={custForm.phone} onChange={e=>setCustForm({...custForm,phone:e.target.value})}/></FormField><FormField label="WhatsApp"><input className={inputClass} value={custForm.whatsapp} onChange={e=>setCustForm({...custForm,whatsapp:e.target.value})}/></FormField><FormField label="Email"><input className={inputClass} type="email" value={custForm.email} onChange={e=>setCustForm({...custForm,email:e.target.value})}/></FormField><FormField label="Address"><textarea className={inputClass} value={custForm.address} onChange={e=>setCustForm({...custForm,address:e.target.value})}/></FormField><FormField label="Birthday"><input className={inputClass} type="date" value={custForm.birthday} onChange={e=>setCustForm({...custForm,birthday:e.target.value})}/></FormField><FormField label="Notes"><textarea className={inputClass} value={custForm.notes} onChange={e=>setCustForm({...custForm,notes:e.target.value})}/></FormField></div></Modal>
     <ProductEditorModal
       productOpen={productOpen} editingProductId={editingProductId}
+      saving={productSaving} pendingDurability={productSavePending} saveError={productSaveError}
       productForm={productForm} setProductForm={setProductForm}
       categories={categories} suppliers={suppliers}
       variantRows={variantRows} setVariantRows={setVariantRows}
       existingVariants={editingProductId?store.listProducts().filter(p=>p.parentProductId===editingProductId):[]}
       savedProducts={store.listProducts()}
-      onClose={()=>{setProductOpen(false);resetProductForm();if(resumeStockPurchaseAfterProduct){setStockPurchaseOpen(true);setResumeStockPurchaseAfterProduct(false);}}}
+      onClose={()=>{
+        if(productSaveBusyRef.current || productMutationAwaitingPersistenceRef.current) {
+          setProductSaveError("Product data has not been confirmed saved to SQLite. Retry saving before closing.");
+          return;
+        }
+        setProductSaveError(null);
+        setProductOpen(false);resetProductForm();
+        if(resumeStockPurchaseAfterProduct){setStockPurchaseOpen(true);setResumeStockPurchaseAfterProduct(false);}
+      }}
       onSave={handleSaveProduct}
       onAddCategory={()=>{setCategoryForm({name:"",description:""});setCategoryOpen(true);}}
       onAddSupplier={()=>{setSupplierForm({name:"",company:"",phone:"",email:"",address:"",category:"",openingBalance:"",notes:""});setSupplierOpen(true);}}
