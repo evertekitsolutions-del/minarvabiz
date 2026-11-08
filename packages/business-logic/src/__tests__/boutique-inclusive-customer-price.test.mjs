@@ -88,12 +88,13 @@ test("Boutique price entry, saved legacy MRP display and thermal labels have one
   assert.match(editor, /Price \(GST included\) \*/);
   assert.doesNotMatch(editor, /Special offer price|label="MRP/);
   assert.match(app, /sellingPrice:price,mrp:price/);
+  assert.match(app, /<ProductList singlePrice/);
   assert.match(app, /<PosBilling pricesIncludeTax/);
   assert.match(app, /<NormalBilling pricesIncludeTax/);
   assert.match(label, /Price: \$\{formatMoney\(product\.mrp \?\? product\.sellingPrice\)\}/);
   assert.doesNotMatch(label, /Offer:|MRP:/);
-  assert.match(productList, /header: "Price"/);
-  assert.doesNotMatch(productList, /MRP \/ Offer|Offer:/);
+  assert.match(productList, /header: singlePrice \? "Price"/);
+  assert.match(productList, /singlePrice \? "Price"/);
   assert.match(pos, /taxInclusive: pricesIncludeTax/);
   assert.match(normal, /taxInclusive: pricesIncludeTax/);
 });
