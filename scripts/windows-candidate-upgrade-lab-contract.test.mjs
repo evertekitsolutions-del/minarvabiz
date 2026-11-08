@@ -38,7 +38,9 @@ test("synthetic fixture is >=40 products with variants and finance + laundry; gu
     "assert.equal(Array.isArray(snap[key])", "length:8", "length:42",
     "parentProductId", "sellingPrice", "stockQuantity", "payments", "outbox",
     "orders", "laundry", "balanceAmount", "PRAGMA quick_check", "domain_snapshot_v2",
-    "Normalized table must agree", "Entity counts changed during upgrade", "Core product/stock/price/ledger fingerprints changed"]) {
+    "Normalized table must agree", "Core entity counts changed during upgrade",
+    "A pre-upgrade pending outbox event was changed or deleted",
+    "Pending sync outbox lost records", "Core product/stock/price/ledger fingerprints changed"]) {
     assert.ok(fixture.includes(term),"Missing immutable fixture requirement: "+term);
   }
   assert.ok(fixture.includes('String(i).padStart(2,"0")'));
