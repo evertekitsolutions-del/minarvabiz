@@ -289,8 +289,7 @@ async function main() {
     await typeFieldLikeUser(ws, "Add Product", "Product name", "QA POS Product");
     await setField(ws, "Add Product", "Barcode", "QA1001");
     await setField(ws, "Add Product", "Cost price", "60");
-    await setField(ws, "Add Product", "MRP", "120");
-    await setField(ws, "Add Product", "Special offer price", "100");
+    await setField(ws, "Add Product", "Price *", "100");
     await setField(ws, "Add Product", "Opening stock", "5");
     await setField(ws, "Add Product", "Minimum stock", "1");
     await click(ws, "PRODUCT_SAVE", ["save product"]);

@@ -40,6 +40,8 @@ assert.deepEqual(activeIgnores, [
   "95e80d0d948bf2166cac2af65f645a3929ea38a3:PROJECT_CONTINUATION.md:generic-api-key:163",
   "7ec94c030e3056cf42a7a1b4e404dfe386313b0b:apps/web/src/app/TrialWelcomePopup.tsx:generic-api-key:13",
   "d054860179df7629c4944e9a40058a4308c82ff7:apps/web/src/app/TrialWelcomePopup.tsx:generic-api-key:11",
+  "01d9159393a7f31deecdb582d91b3929e3727cb3:packages/business-logic/src/__tests__/webhook-signature.test.mjs:generic-api-key:14",
+  "ea391279ca98e6e5a20bcb507f9ab5871ccd3474:.gitleaksignore:generic-api-key:27",
 ]);
 
 console.log("Secret scan gate contract smoke PASS");

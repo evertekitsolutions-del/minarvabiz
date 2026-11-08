@@ -50,7 +50,7 @@ jobs:
       - name: Verify commercial fallback refusal
         shell: pwsh
         run: node scripts/verify-production-license-config.mjs
-      - run: pnpm --filter @minarvabiz/desktop run package:win
+      - run: node scripts/windows-package-resilient.mjs
       - name: Verify bundled key has no private key
         shell: pwsh
         run: |

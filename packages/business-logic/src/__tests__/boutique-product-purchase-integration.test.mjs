@@ -29,7 +29,7 @@ function reset(){
 const draft=(brand,size,color,material,quantity)=>({
  brand,size,color,material,quantity:String(quantity),sku:"",barcode:""
 });
-test("four-dimensional brand/size/colour/fabric stock, accurate MRP + offer labels, and persisted variants",()=>{
+test("four-dimensional brand/size/colour/fabric stock, single customer Price label from stored legacy products, and persisted variants",()=>{
  reset();
  const all=family.createProductVariantFamily({
   name:"Dress",sku:"DRESS",barcode:null,brand:"Brand A",fabric:null,size:null,color:null,
@@ -47,8 +47,8 @@ test("four-dimensional brand/size/colour/fabric stock, accurate MRP + offer labe
  assert.equal(new Set(all.variants.map(p=>p.barcode)).size,3);
  assert.throws(()=>planner.parseProductVariants([draft("B","M","Red","Cotton",1),draft("b","m","red","cotton",2)]),/duplicate/i);
  const html=labels.buildBarcodeLabelHtml(all.variants[0],{copies:1,autoPrint:false,labelWidthMm:38,labelHeightMm:38});
- assert.match(html,/MRP:\s*(?:INR|₹)\s*499\.00/);
- assert.match(html,/Offer:\s*(?:INR|₹)\s*349\.00/);
+ assert.match(html,/Price:\s*(?:INR|₹)\s*499\.00/);
+ assert.doesNotMatch(html, /(?:MRP|Offer):/);
  const persisted=JSON.parse(JSON.stringify(store.exportCoreState()));
  store.hydrateCore(persisted);
  assert.equal(store.getProduct(all.variants[0].id).mrp,499);

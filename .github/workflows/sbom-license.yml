@@ -35,6 +35,8 @@ jobs:
         run: node scripts/dependency-license-policy.mjs --inventory-output artifacts/dependency-licenses.json
 
       - name: Generate CycloneDX SBOM
+        id: anchore_sbom
+        continue-on-error: true
         uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           path: .
@@ -44,6 +46,21 @@ jobs:
           dependency-snapshot: false
           upload-artifact: false
           upload-release-assets: false
+
+      # Only used when GitHub release-asset downloads fail (e.g. HTTP 504).
+      # The image is locked to a known Syft v1.52.0 registry digest; still validate SBOM.
+      - name: Generate CycloneDX SBOM from pinned container (download fallback)
+        if: steps.anchore_sbom.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/workspace,readonly" \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/artifacts,dst=/output" \
+            ghcr.io/anchore/syft:v1.52.0@sha256:500e2d872ac019436926e8322b4fc1f39441d94d21f6f4046c6ff29b30e8cb02 \
+            dir:/workspace -o cyclonedx-json=/output/minarvabiz.cdx.json
 
       - name: Validate generated CycloneDX SBOM
         run: node scripts/sbom-validate.mjs artifacts/minarvabiz.cdx.json

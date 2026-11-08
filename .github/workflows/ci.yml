@@ -755,7 +755,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - run: pnpm --filter @minarvabiz/desktop run package:win
+      - run: node scripts/windows-package-resilient.mjs
       - name: Verify installer exists
         shell: pwsh
         run: |

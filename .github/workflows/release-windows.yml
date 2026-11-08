@@ -71,7 +71,7 @@ jobs:
       - run: pnpm --filter @minarvabiz/business-logic typecheck
       - run: pnpm --filter @minarvabiz/ui typecheck
       - run: pnpm --filter @minarvabiz/desktop typecheck
-      - run: pnpm --filter @minarvabiz/desktop run package:win
+      - run: node scripts/windows-package-resilient.mjs
 
       - name: Verify production installer
         shell: pwsh

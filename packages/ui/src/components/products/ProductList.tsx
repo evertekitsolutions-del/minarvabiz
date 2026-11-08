@@ -27,6 +27,7 @@ export function ProductList({
   onAdjustStock,
   onArchive,
   onPrintBarcode,
+  singlePrice = false,
 }: {
   products: Product[];
   allProducts?: Product[];
@@ -44,6 +45,8 @@ export function ProductList({
   onAdjustStock?: (p: Product) => void;
   onArchive?: (p: Product, reason: string) => { success?: boolean; error?: string } | void;
   onPrintBarcode?: (p: Product) => void;
+  /** Boutique Windows shows one GST-inclusive Price; universal ERP retains dual pricing. */
+  singlePrice?: boolean;
 }) {
   const [q, setQ] = React.useState("");
   const [status, setStatus] = React.useState("");
@@ -112,8 +115,10 @@ export function ProductList({
     },
     {
       key: "sellingPrice",
-      header: "MRP / Offer",
-      render: (r) => <div><div className="text-xs text-slate-500">MRP: {formatMoney(r.mrp ?? r.sellingPrice)}</div><div className="font-semibold text-slate-900">Offer: {formatMoney(r.sellingPrice)}</div></div>,
+      header: singlePrice ? "Price" : "MRP / Offer",
+      render: (r) => singlePrice
+        ? <div className="font-semibold text-slate-900">{formatMoney(r.mrp != null && r.mrp > 0 ? r.mrp : r.sellingPrice)}</div>
+        : <div><div className="text-xs text-slate-500">MRP: {formatMoney(r.mrp != null && r.mrp > 0 ? r.mrp : r.sellingPrice)}</div><div className="font-semibold text-slate-900">Offer: {formatMoney(r.sellingPrice)}</div></div>,
     },
     {
       key: "stockQuantity",
