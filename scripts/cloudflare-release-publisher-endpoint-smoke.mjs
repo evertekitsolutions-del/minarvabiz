@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 import { createPublicKey, verify } from "node:crypto";
 
-const base = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
-async function read(path) {
-  const response = await fetch(base + path, {
-    headers: { accept: "application/json", "user-agent": "MinarvaBiz-Publisher-Parity-Smoke" },
+const worker = "https://minarva-biz-license-edge.minarva-biz.workers.dev";
+const releaseApi = "https://api.github.com/repos/evertekitsolutions-del/minarvabiz/releases/latest";
+const releaseBase = "https://github.com/evertekitsolutions-del/minarvabiz/releases/download";
+
+async function read(url) {
+  const response = await fetch(url, {
+    headers: {
+      accept: "application/vnd.github+json",
+      "user-agent": "MinarvaBiz-Publisher-Parity-Smoke",
+    },
     signal: AbortSignal.timeout(25_000),
     cache: "no-store",
   });
@@ -12,19 +18,39 @@ async function read(path) {
   return { response, data };
 }
 
-const { response: manifestResponse, data: manifest } = await read("/api/update/manifest");
+const { response: manifestResponse, data: manifest } = await read(worker + "/api/update/manifest");
 console.log("Windows publisher manifest", JSON.stringify({
   status: manifestResponse.status,
   stage: manifest.stage || "ok",
-  upstreamStatus: manifest.status || null,
   version: manifest.version || null,
 }));
-assert.equal(manifestResponse.status, 200, "workers.dev manifest endpoint must be healthy");
-assert.equal(manifest.version, "1.0.26", "Customer installer release must be v1.0.26");
-assert.equal(manifest.sha256, "a63a8ef01ec265e25d5ac0634a6d0596552987bb5ceb34a98e9dd9b84f8d0834");
+assert.equal(manifestResponse.status, 200, "Production signed update endpoint must be healthy");
+assert.equal(manifest.product, "minarvabiz");
+assert.match(String(manifest.version), /^\d+\.\d+\.\d+$/);
+assert.match(String(manifest.sha256), /^[0-9a-f]{64}$/);
 
-const { response: keyResponse, data: keyData } = await read("/api/public-key");
-assert.equal(keyResponse.status, 200, "workers.dev public key must be healthy");
+const { response: releaseResponse, data: release } = await read(releaseApi);
+assert.equal(releaseResponse.status, 200, "Cannot attest latest published GitHub installer digest");
+const version = /^v(\d+\.\d+\.\d+)$/.exec(String(release.tag_name))?.[1];
+assert.ok(version && release.draft === false && release.prerelease === false,
+  "Only a published stable release may be advertised to customers");
+const installerName = "MinarvaBiz-Setup-" + version + ".exe";
+const installerUrl = releaseBase + "/v" + version + "/" + installerName;
+const assets = Array.isArray(release.assets) ? release.assets : [];
+const installer = assets.find((item) => item.name === installerName && item.state === "uploaded");
+const checksum = assets.find((item) => item.name === installerName + ".sha256" && item.state === "uploaded");
+assert.ok(installer && checksum && installer.size > 0, "Published installer and checksum must exist");
+assert.equal(installer.browser_download_url, installerUrl);
+assert.equal(checksum.browser_download_url, installerUrl + ".sha256");
+const digest = /^sha256:([0-9a-f]{64})$/i.exec(String(installer.digest))?.[1]?.toLowerCase();
+assert.ok(digest, "GitHub's uploaded asset SHA-256 digest is mandatory");
+assert.equal(manifest.version, version, "Signed manifest must match latest published stable version");
+assert.equal(manifest.installerUrl, installerUrl, "Signed installer path must be exact");
+assert.equal(manifest.sha256, digest, "Signed digest must match GitHub's asset digest");
+assert.equal(manifest.publishedAt, release.published_at, "Release date must match signed payload");
+
+const { response: keyResponse, data: keyData } = await read(worker + "/api/public-key");
+assert.equal(keyResponse.status, 200, "Production Ed25519 key must be available");
 assert.match(String(keyData.publicKeyHex), /^[0-9a-f]{64}$/);
 const publicKey = createPublicKey({
   key: Buffer.concat([
@@ -34,7 +60,7 @@ const publicKey = createPublicKey({
   format: "der",
   type: "spki",
 });
-const payload = [
+const canonical = [
   "minarvabiz-update-v1",
   manifest.product,
   manifest.version,
@@ -42,8 +68,8 @@ const payload = [
   manifest.sha256,
   manifest.publishedAt,
 ].join("\n");
-assert.ok(
-  verify(null, Buffer.from(payload, "utf8"), publicKey, Buffer.from(manifest.signature, "base64url")),
-  "Production Ed25519 signature must verify",
-);
-console.log("WINDOWS_PUBLISHER_UPDATE_ENDPOINT PASS v1.0.26");
+assert.ok(verify(
+  null, Buffer.from(canonical, "utf8"), publicKey,
+  Buffer.from(String(manifest.signature), "base64url"),
+), "Production Ed25519 signature verification failed");
+console.log("WINDOWS_PUBLISHER_UPDATE_ENDPOINT PASS version=" + version + " sha256=" + digest);
