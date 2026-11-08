@@ -147,6 +147,13 @@ try{
  assert.deepEqual(result,{ok:true});
  assert.deepEqual(sent.at(-1).opts,{labelWidthMm:80,labelHeightMm:25,silent:true});
  assert.equal(sent.at(-1).html,chromoHtml,"WYSIWYG preview and print payload must be identical");
+ prefs={...prefs,labelRowGapMm:2};
+ const fortyResult=await m.exports.sendBarcodeLabelsToPrinter(product,40);
+ assert.deepEqual(fortyResult,{ok:true});
+ assert.deepEqual(sent.at(-1).opts,{labelWidthMm:80,labelHeightMm:27,silent:true},
+   "Native printer must receive single-row calibrated media height, not 20-row strip height");
+ assert.equal(sent.at(-1).html,forty,"All 20 physical rows go in one unmodified print job");
+ prefs={...prefs,labelRowGapMm:0};
 }finally{
  if(previousWindow===undefined)delete globalThis.window;
  else globalThis.window=previousWindow;
