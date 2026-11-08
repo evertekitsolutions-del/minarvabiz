@@ -33,7 +33,7 @@ jobs:
       - run: node scripts/desktop-boutique-variant-stock-smoke.mjs
       - run: node scripts/desktop-customer-demo-reset-smoke.mjs
       - run: pnpm --filter @minarvabiz/desktop typecheck
-      - run: pnpm --filter @minarvabiz/desktop run package:win
+      - run: node scripts/windows-package-resilient.mjs
 
       - name: Clean install
         shell: pwsh
