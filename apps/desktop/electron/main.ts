@@ -5,7 +5,6 @@ import { createHash, randomUUID } from "crypto";
 import { execFileSync, spawn } from "child_process";
 import { pathToFileURL } from "url";
 import { registerDesktopLicenseIpc, getDesktopLicenseState } from "./license";
-import { resetLegacyShowcaseBusinessData } from "./customer-demo-reset";
 import { checkForSecureUpdate, downloadVerifiedUpdate, getDownloadedVerifiedUpdate } from "./updater";
 import { confirmRendererPersistenceBeforeUpdate } from "./update-persistence-barrier";
 import { minarvaBackupSchemaError } from "./sqlite-backup-validation";
@@ -430,22 +429,10 @@ if (isPrimaryDesktopInstance) app.whenReady().then(async () => {
     app.quit();
     return;
   }
-  // The installer already made a validated pre-update backup. For this one
-  // customer only, make another verified backup and archive the original DB
-  // before the renderer can hydrate legacy demo records.
-  const showcaseReset = await resetLegacyShowcaseBusinessData({
-    userDataDir: app.getPath("userData"),
-    trial: readTrial(),
-    backupDatabase: () => createLocalBackup("pre-update"),
-  });
-  if (showcaseReset.status === "reset") {
-    runtimeSmokeLog("customer-legacy-demo-reset-applied backup-and-original-retained");
-  } else if (showcaseReset.status === "blocked") {
-    dialog.showErrorBox("Minarva Biz demo cleanup could not finish",
-      `Your business database was not intentionally deleted. ${showcaseReset.error}\n\nBackup folder: ${backupDir()}\nPlease contact support if this repeats.`);
-    // If filesystem recovery also failed, never launch against a missing DB.
-    if (!fs.existsSync(sqlitePath())) { app.quit(); return; }
-  }
+  // P0 DATA PRESERVATION: startup must never archive, delete or replace a customer's
+  // SQLite image based on organization name, trial activation date or version.
+  // Historical demo-reset archives remain on disk for manual read-only recovery.
+  // Only a user-initiated, separately verified restore flow may change databases.
 
   configureDesktopSession();
   registerDesktopLicenseIpc(getDeviceId, requireTrustedRenderer);
