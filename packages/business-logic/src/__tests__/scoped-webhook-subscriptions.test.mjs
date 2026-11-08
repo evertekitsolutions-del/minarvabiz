@@ -65,3 +65,14 @@ test("rejects non-HTTPS, credentials, fragments and literal/private destinations
   ]) assert.throws(() => validateWebhookEndpoint(endpoint), undefined, endpoint);
   assert.equal(validateWebhookEndpoint("https://hooks.example.org/events"), "https://hooks.example.org/events");
 });
+
+test("rejects DNS labels and hostnames exceeding DNS wire limits", () => {
+  const longLabel = "a".repeat(64);
+  const longHost = ["a".repeat(63), "b".repeat(63), "c".repeat(63), "d".repeat(62)].join(".");
+  assert.equal(longHost.length, 254);
+  for (const host of [`${longLabel}.example.org`, longHost]) {
+    assert.throws(() => validateWebhookEndpoint(`https://${host}/hook`), /hostname/);
+  }
+  assert.equal(validateWebhookEndpoint(`https://${"a".repeat(63)}.example.org/hook`),
+    `https://${"a".repeat(63)}.example.org/hook`);
+});
