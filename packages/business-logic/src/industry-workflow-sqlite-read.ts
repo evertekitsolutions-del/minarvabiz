@@ -47,6 +47,7 @@ export function readIndustrySqliteWorkflow(
         "SELECT event_id, revision, from_stage, to_stage, actor_id FROM industry_workflow_events WHERE tenant_id=? AND branch_id=? AND record_id=? AND revision=?"
       ).get(...key, revision) as EventRow | undefined;
       if (!event || !valid(event.event_id) || !valid(event.actor_id) ||
+          !valid(event.from_stage) || !valid(event.to_stage) ||
           event.revision !== revision || seen.has(event.event_id)) {
         throw new Error("Industry workflow read corrupt event history");
       }
