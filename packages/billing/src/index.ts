@@ -5,10 +5,11 @@ import {
   percentOfMinor,
   subtractMinorUnits,
   toMinorUnits,
+  toPercentBasisPoints,
   type MoneyMinor,
 } from "@minarvabiz/utils";
 
-export interface LineItem { quantity: number; unitPrice: number; discountPercent?: number; taxRate?: number; }
+export interface LineItem { quantity: number; unitPrice: number; discountPercent?: number; taxRate?: number; /** Customer-facing unitPrice already includes tax. */ taxInclusive?: boolean; }
 export interface LineItemResult { subtotal: number; discountAmount: number; taxableAmount: number; taxAmount: number; total: number; }
 
 type LineItemMinorResult = {
@@ -19,9 +20,33 @@ type LineItemMinorResult = {
   total: MoneyMinor;
 };
 
+/** Split GST out of a tax-inclusive gross, rounding exactly once in paise. */
+function includedTaxMinor(grossMinor: MoneyMinor, ratePercent: number): MoneyMinor {
+  const basisPoints = toPercentBasisPoints(ratePercent);
+  if (basisPoints < 0 || basisPoints > 10_000) throw new Error("Inclusive tax rate must be between 0 and 100%");
+  const magnitude = BigInt(Math.abs(grossMinor)) * BigInt(basisPoints);
+  const denominator = 10_000n + BigInt(basisPoints);
+  const rounded = (magnitude + denominator / 2n) / denominator;
+  const value = Number(rounded) * Math.sign(grossMinor);
+  if (!Number.isSafeInteger(value)) throw new Error("Inclusive tax exceeds safe money range");
+  return value;
+}
+
 function calculateLineItemMinor(item: LineItem): LineItemMinorResult {
   const unitPriceMinor = toMinorUnits(item.unitPrice);
-  const subtotal = multiplyMinorByQuantity(unitPriceMinor, item.quantity);
+  const enteredSubtotal = multiplyMinorByQuantity(unitPriceMinor, item.quantity);
+  if (item.taxInclusive) {
+    // Gross price is authoritative: never add GST on top of customer-entered Price.
+    const grossDiscount = item.discountPercent ? percentOfMinor(enteredSubtotal, item.discountPercent) : 0;
+    const grossAfterDiscount = subtractMinorUnits(enteredSubtotal, grossDiscount);
+    const taxBeforeDiscount = includedTaxMinor(enteredSubtotal, item.taxRate ?? 0);
+    const taxAmount = includedTaxMinor(grossAfterDiscount, item.taxRate ?? 0);
+    const subtotal = subtractMinorUnits(enteredSubtotal, taxBeforeDiscount);
+    const taxableAmount = subtractMinorUnits(grossAfterDiscount, taxAmount);
+    const discountAmount = subtractMinorUnits(subtotal, taxableAmount);
+    return { subtotal, discountAmount, taxableAmount, taxAmount, total: grossAfterDiscount };
+  }
+  const subtotal = enteredSubtotal;
   const discountAmount = item.discountPercent ? percentOfMinor(subtotal, item.discountPercent) : 0;
   const taxableAmount = subtractMinorUnits(subtotal, discountAmount);
   const taxAmount = item.taxRate ? percentOfMinor(taxableAmount, item.taxRate) : 0;
