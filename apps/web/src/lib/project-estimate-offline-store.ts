@@ -100,13 +100,14 @@ export function createOfflineProjectEstimateStore(databaseName: string): Project
         const estimates = tx.objectStore("estimates");
         const audit = tx.objectStore("audit");
         const receiptId = JSON.stringify([id, command.idempotencyKey]);
+        const fingerprint = JSON.stringify([command.worksheet, command.audit.actorId]);
         const result = await new Promise<"saved" | "replayed" | "conflict">((resolve, reject) => {
           const receiptRequest = receipts.get(receiptId);
           receiptRequest.onerror = () => reject(receiptRequest.error);
           receiptRequest.onsuccess = () => {
             if (receiptRequest.result) {
-              const previous = receiptRequest.result as { revision: number };
-              resolve(previous.revision === command.nextRevision ? "replayed" : "conflict");
+              const previous = receiptRequest.result as { revision: number; fingerprint: string };
+              resolve(previous.revision === command.nextRevision && previous.fingerprint === fingerprint ? "replayed" : "conflict");
               return;
             }
             const currentRequest = estimates.get(id);
@@ -119,7 +120,7 @@ export function createOfflineProjectEstimateStore(databaseName: string): Project
               }
               const worksheet = structuredClone({ ...command.worksheet, revision: command.nextRevision });
               estimates.put({ id, worksheet } satisfies StoredEstimate);
-              receipts.put({ id: receiptId, revision: command.nextRevision });
+              receipts.put({ id: receiptId, revision: command.nextRevision, fingerprint });
               audit.add({
                 id: receiptId, estimateId: id, actorId: command.audit.actorId,
                 revision: command.nextRevision, action: command.audit.action,
