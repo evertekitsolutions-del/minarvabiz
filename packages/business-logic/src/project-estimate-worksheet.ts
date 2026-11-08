@@ -207,7 +207,9 @@ export async function loadProjectEstimate(
     branchId: required(scope.branchId, "branchId"),
     projectId: required(scope.projectId, "projectId"),
   };
-  const row = await reader.loadScoped(ids);
+  // Forward the host-validated view grant to device-local readers. The offline
+  // adapter fails closed without it; remote readers must still enforce RLS.
+  const row = await reader.loadScoped({ ...ids, canViewCosts: true });
   if (row === null) return null;
   // Recompute totals; never trust cached monetary values or another tenant's row.
   const totals = calculateProjectEstimate(row, scope);
