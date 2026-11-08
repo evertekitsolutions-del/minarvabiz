@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { parseGoogleReviewUrl, formatWorkspaceDateTime, formatWorkspaceMoney, validateWorkspaceDisplayPreferences, isProductionMode } from "@minarvabiz/business-logic";
+import { parseGoogleReviewUrl, formatWorkspaceDateTime, formatWorkspaceMoney, validateWorkspaceDisplayPreferences, isProductionMode, awaitDesktopPersistence } from "@minarvabiz/business-logic";
 import { SyncPanel, PersistencePanel, Button, FormField, inputClass, selectClass, PrintTemplateManager, TrashRecoveryPanel } from "@minarvabiz/ui";
 import { syncBridge, exportDomainSnapshotJson, importDomainSnapshotJson, saveToLocalStorage, loadFromLocalStorage, getShopProfile, updateShopProfile, updateTaxConfig, getPrintSettings, updatePrintSettings, getScopedMasterReplayStatus, retryScopedMasterOutbox } from "@minarvabiz/business-logic";
 
@@ -11,6 +11,7 @@ export default function SettingsPage() {
   const [shop, setShop] = React.useState(() => getShopProfile());
   const [shopMsg, setShopMsg] = React.useState<string | null>(null);
   const [shopMsgIsError, setShopMsgIsError] = React.useState(false);
+  const [shopSaving, setShopSaving] = React.useState(false);
   const [printing, setPrinting] = React.useState(() => getPrintSettings());
   const [masterReplay, setMasterReplay] = React.useState(() => getScopedMasterReplayStatus());
   const [masterRetrying, setMasterRetrying] = React.useState(false);
@@ -142,7 +143,9 @@ export default function SettingsPage() {
         </div>
         {displayValidationError && <p role="alert" className="text-sm text-red-700">Display preferences: {displayValidationError}</p>}
         <div className="flex items-center gap-2">
-          <Button disabled={displayValidationError !== null} onClick={() => {
+          <Button disabled={displayValidationError !== null || shopSaving} onClick={async () => {
+            if (shopSaving) return;
+            setShopSaving(true);
             try {
               // Production web has no durable profile writer in touchPersistence().
               // Fail closed instead of showing a false saved confirmation.
@@ -160,13 +163,23 @@ export default function SettingsPage() {
               const next = updateShopProfile({ ...shop, ...normalizedDisplay, googleReviewUrl }, shop.updatedAt);
               updateTaxConfig({ gstin: next.gstin });
               setShop(next);
-              setShopMsgIsError(false);
-              setShopMsg("Business profile updated locally; durable save and cloud sync are not yet verified.");
+              // A desktop adapter must resolve only after its SQLite transaction commits.
+              // Browser snapshots are never represented as durable cloud writes.
+              if (typeof (window as Window & { __minarvaDesktopPersist?: () => unknown }).__minarvaDesktopPersist === "function") {
+                await awaitDesktopPersistence();
+                setShopMsgIsError(false);
+                setShopMsg("Desktop persistence acknowledged; cloud sync is not verified.");
+              } else {
+                setShopMsgIsError(false);
+                setShopMsg("Business profile updated locally; durable save and cloud sync are not verified.");
+              }
             } catch (error) {
               setShopMsgIsError(true);
               setShopMsg(error instanceof Error ? error.message : "Unable to save business profile.");
+            } finally {
+              setShopSaving(false);
             }
-          }}>Save shop profile</Button>
+          }}>{shopSaving ? "Saving…" : "Save shop profile"}</Button>
           {shopMsg && <span role={shopMsgIsError ? "alert" : "status"} className={shopMsgIsError ? "text-sm text-rose-700" : "text-sm text-emerald-600"}>{shopMsg}</span>}
         </div>
       </div>
