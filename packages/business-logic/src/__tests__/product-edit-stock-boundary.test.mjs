@@ -64,13 +64,14 @@ assert.match(web, /disabled=\{!!editingId\}/);
 assert.match(web, /Stock qty \(use Adjust Stock\)/);
 
 const desktop = fs.readFileSync(new URL("../../../../apps/desktop/src/App.tsx", import.meta.url), "utf8");
-assert.match(desktop, /const patch:Partial<Product>=\{\.\.\.payload\};\s*delete patch\.stockQuantity;\s*store\.updateProduct\(editingProductId,patch\)/);
+const productCommit = fs.readFileSync(new URL("../../../../apps/desktop/src/lib/boutique-product-commit.ts", import.meta.url), "utf8");
+assert.match(productCommit, /const patch:Partial<Product>=\{\.\.\.payload\};\s*delete patch\.stockQuantity;\s*store\.updateProduct\(editingId,patch\)/);
 const editor = fs.readFileSync(new URL("../../../../apps/desktop/src/components/ProductEditorModal.tsx", import.meta.url), "utf8");
 assert.match(editor, /disabled=\{Boolean\(editingProductId\)\}/);
 assert.match(editor, /productForm\.hasVariants\?"Total stock \(verify against variants\)"/);
-assert.match(desktop, /verifyBoutiqueVariantStock\(variantRows,productForm\.brand,productForm\.stockQuantity\)/);
+assert.match(productCommit, /verifyBoutiqueVariantStock\(variants,form\.brand,form\.stockQuantity\)/);
 assert.match(editor, /Stock \(use Adjust Stock\)/);
-assert.match(desktop, /createProductVariantFamily\(payload,variantRows\)/);
-assert.match(desktop, /addProductVariants\(editingProductId,variantRows\)/);
+assert.match(productCommit, /createProductVariantFamily\(payload,variants\)/);
+assert.match(productCommit, /addProductVariants\(editingId,variants\)/);
 
 console.log("Product edit stock-bypass guard tests passed");
