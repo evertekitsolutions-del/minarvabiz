@@ -46,6 +46,8 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
   const [message, setMessage] = React.useState("");
   const [requestKey, setRequestKey] = React.useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
+  // A new unsaved worksheet is not a persisted estimate and must not be exported.
+  const [hasPersistedRevision, setHasPersistedRevision] = React.useState(false);
   const [revisionConflict, setRevisionConflict] = React.useState(false);
   // Once the writer acknowledged a commit, never replay it just because the follow-up read failed.
   const [saveAcknowledged, setSaveAcknowledged] = React.useState(false);
@@ -58,6 +60,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
     setBusy(false);
     setRequestKey(null);
     setHasUnsavedChanges(false);
+    setHasPersistedRevision(false);
     setRevisionConflict(false);
     setSaveAcknowledged(false);
     setError("");
@@ -66,10 +69,13 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
     setBusy(true);
     loadRef.current().then(row => {
       if (row) calculateProjectEstimate(row, scope);
-      if (active && currentGeneration === generation.current) setWorksheet(row ?? {
+      if (active && currentGeneration === generation.current) {
+        setHasPersistedRevision(row !== null);
+        setWorksheet(row ?? {
         tenantId: scope.tenantId, companyId: scope.companyId, branchId: scope.branchId,
         projectId: scope.projectId, currency: defaultCurrency, revision: 0, lines: [newLine()],
       });
+      }
     }).catch(err => { if (active && currentGeneration === generation.current) setError(err instanceof Error ? err.message : "Load failed"); })
       .finally(() => { if (active && currentGeneration === generation.current) setBusy(false); });
     return () => { active = false; generation.current++; };
@@ -122,6 +128,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
       calculateProjectEstimate(current, scope);
       if (current.revision <= worksheet.revision) throw new Error("Saved estimate revision not advanced");
       setWorksheet(current);
+      setHasPersistedRevision(true);
       setRequestKey(null);
       setHasUnsavedChanges(false);
       setRevisionConflict(false);
@@ -168,6 +175,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
       if ((saveAcknowledged || revisionConflict) && (!current || (worksheet && current.revision <= worksheet.revision))) {
         throw new Error("Authoritative estimate revision has not advanced. Retry reload after synchronization; editing remains locked.");
       }
+      setHasPersistedRevision(current !== null);
       setWorksheet(current ?? {
         tenantId: scope.tenantId, companyId: scope.companyId, branchId: scope.branchId,
         projectId: scope.projectId, currency: defaultCurrency, revision: 0, lines: [newLine()],
@@ -182,7 +190,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
   }
 
   function downloadCsv() {
-    if (!canExport || !worksheet || !totals || busy || hasUnsavedChanges || revisionConflict || saveAcknowledged) return;
+    if (!canExport || !hasPersistedRevision || !worksheet || !totals || busy || hasUnsavedChanges || revisionConflict || saveAcknowledged) return;
     try {
       const csv = exportProjectEstimateCsv(worksheet, scope);
       const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -271,7 +279,7 @@ export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCu
           </table>
         </>}
         {canEdit && <button type="submit" disabled={busy || !totals || !hasUnsavedChanges || revisionConflict || saveAcknowledged}>{busy ? "Working…" : "Save estimate"}</button>}
-        {canExport && <button type="button" disabled={busy || !totals || hasUnsavedChanges || revisionConflict || saveAcknowledged} onClick={downloadCsv}>Export saved estimate CSV</button>}
+        {canExport && <button type="button" disabled={busy || !hasPersistedRevision || !totals || hasUnsavedChanges || revisionConflict || saveAcknowledged} onClick={downloadCsv}>Export saved estimate CSV</button>}
       </>}
     </form>
   );
