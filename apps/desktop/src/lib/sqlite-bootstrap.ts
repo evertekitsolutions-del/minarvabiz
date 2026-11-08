@@ -170,7 +170,16 @@ async function initializeDesktopSqlite(): Promise<{ ok: boolean; error?: string 
       },
     };
 
-    const db = await openSqliteDatabase(dbPath, io);
+    // Load WebAssembly from packaged application resources (not a remote URL).
+    // If unavailable, block initialization before writing any customer data.
+    if (!api.readSqliteWasmBinary) {
+      throw new Error("SQLite WebAssembly runtime bridge is unavailable; no database changes were made.");
+    }
+    const wasmBinary = await api.readSqliteWasmBinary();
+    if (!(wasmBinary instanceof Uint8Array) || wasmBinary.byteLength === 0) {
+      throw new Error("SQLite WebAssembly runtime could not be verified; no database changes were made.");
+    }
+    const db = await openSqliteDatabase(dbPath, io, wasmBinary);
     sqlite = db;
 
     const integrity = checkSqliteIntegrity(db);
