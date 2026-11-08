@@ -38,3 +38,6 @@ jobs:
 
       - name: Verify Cloudflare license edge
         run: node scripts/cloudflare-license-edge-live-smoke.mjs
+
+      - name: Verify Windows publisher update endpoint
+        run: node scripts/cloudflare-release-publisher-endpoint-smoke.mjs
