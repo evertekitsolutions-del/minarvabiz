@@ -11,7 +11,7 @@ TrialGate, MAIN_NAV,
 type QuickAction, type NavItemId, type DashboardData, type OrderFormValues, type LaundryCancellationValues,
 type TrialRegistration, type TrialState,
 } from "@minarvabiz/ui";
-import { store, ordersStore, phase5Store, phase6Store, phase7Store, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordBackupSuccess, recordBackupFailure, shouldRunAutoBackup, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue, can, purgeExpiredRecycleBinItems } from "@minarvabiz/business-logic";
+import { store, ordersStore, phase5Store, phase6Store, phase7Store, getShopProfile, updateShopProfile, getTaxConfig, updateTaxConfig, getAutoBackupSettings, setAutoBackupSettings, getPrintSettings, updatePrintSettings, recordOrderQualityCheck, runAutomatedCustomerReminders, setRuntimeFeaturePolicy, generateProductBarcode, printSaleInvoice, buildSaleInvoiceHtml, listCustomerCommunicationQueue, can, purgeExpiredRecycleBinItems } from "@minarvabiz/business-logic";
 import type { Customer, Product, Category, Sale, CartLine, PaymentMethod, ServiceOrder, LaundryOrder, MeasurementProfile, ServiceType, OrderStatus, RoleName } from "@minarvabiz/types";
 import { fetchDashboardData } from "./lib/dashboard-data";
 import { bootstrapDesktopSqlite, persistDomainToSqlite } from "./lib/sqlite-bootstrap";
@@ -21,6 +21,7 @@ import { useDurableSaleCommit } from "./lib/use-durable-sale-commit";
 import { DesktopPendingInvoiceSaveBanner } from "./components/DesktopPendingInvoiceSaveBanner";
 import { DesktopBackupHealthBanner } from "./components/DesktopBackupHealthBanner";
 import { createProductRecoveryCheckpoint } from "./lib/product-recovery-checkpoint";
+import { useVerifiedDesktopAutoBackup } from "./lib/use-verified-auto-backup";
 import { DesktopLicenseView } from "./components/DesktopLicenseView";
 import { DesktopStaffEditorModal } from "./components/DesktopStaffEditorModal";
 import { BarcodeLabelPrintModal } from "./components/BarcodeLabelPrintModal";
@@ -112,7 +113,6 @@ export function App() {
   const [resumeStockPurchaseAfterProduct, setResumeStockPurchaseAfterProduct] = React.useState(false);
   const [purchaseForm, setPurchaseForm] = React.useState({ date:todayLocal(), supplierId:"", description:"", amount:"", paidAmount:"", paymentMethod:"cash" as PaymentMethod, kind:"general" as "general"|"order_specific", orderId:"", notes:"" });
   const [staffForm, setStaffForm] = React.useState({ name:"", phone:"", email:"", role:"staff" as RoleName, salary:"", joiningDate:todayLocal(), status:"active" as "active"|"inactive"|"on_leave", notes:"" });
-  const autoBackupInFlight = React.useRef(false);
   const saleCommit = useDurableSaleCommit();
   const refreshAll = React.useCallback(() => {
     setCustomers(store.listCustomers());
@@ -133,6 +133,7 @@ export function App() {
     setProfiles(selectedOrder ? ordersStore.listMeasurementProfiles(selectedOrder.customerId) : []);
     setModuleTick((v) => v + 1);
   }, [lowStockOnly, productQuery, productCategoryId, orderQuery, orderStatus, orderType, orderCustomerId, orderDateFrom, orderDateTo, orderDeliveryDateFrom, orderDeliveryDateTo, selectedOrder]);
+  useVerifiedDesktopAutoBackup(dbReady, moduleTick, refreshAll);
   const { persistAndRefresh, persistProductAndRefresh, persistCustomerCollection } = React.useMemo(
     () => createDesktopPersistence(refreshAll, setModuleError),
     [refreshAll],
@@ -187,7 +188,15 @@ export function App() {
     setRuntimeFeaturePolicy(featuresForLicense(commercialLicense, trialState));
   }, [commercialLicense, trialState]);
   React.useEffect(() => { if(!dbReady)return; try { const result=purgeExpiredRecycleBinItems(); if(result.purged>0)void persistDomainToSqlite(); } catch {} }, [dbReady]);
-  React.useEffect(() => { if(!dbReady)return; fetchDashboardData().then(setDash); const reminders=runAutomatedCustomerReminders(); if(reminders.deliveryRemindersQueued||reminders.paymentRemindersQueued)void persistDomainToSqlite(); if(!window.minarvaDesktop||!shouldRunAutoBackup()||autoBackupInFlight.current)return; autoBackupInFlight.current=true; let cancelled=false; (async()=>{try{const settings=getAutoBackupSettings();const result=await window.minarvaDesktop!.createAutomaticBackup(settings.retentionCount);if(cancelled||result.cancelled)return;if(!result.ok){recordBackupFailure(result.error||"Automatic backup failed");return;}if(result.path)recordBackupSuccess(result.path,"auto",result.sizeBytes);await window.minarvaDesktop!.pruneAutomaticBackups(settings.retentionCount);if(!cancelled)void persistDomainToSqlite();}catch(error){if(!cancelled)recordBackupFailure(errorMessage(error));}finally{autoBackupInFlight.current=false;}})(); return()=>{cancelled=true;}; }, [dbReady,moduleTick]);
+  React.useEffect(() => {
+    if (!dbReady) return;
+    fetchDashboardData().then(setDash);
+    const reminders = runAutomatedCustomerReminders();
+    if (reminders.deliveryRemindersQueued || reminders.paymentRemindersQueued) {
+      void persistDomainToSqlite();
+    }
+  }, [dbReady, moduleTick]);
+
   React.useEffect(() => { if(!trialState?.activated||trialState.synced||!trialState.registration)return; const apiUrl=import.meta.env.VITE_LICENSE_API_URL as string|undefined; if(!apiUrl||!window.minarvaDesktop)return; let cancelled=false; (async()=>{try{const deviceId=await window.minarvaDesktop!.getDeviceId!();const response=await fetch(`${apiUrl.replace(/\/$/,"")}/api/trial/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...trialState.registration,deviceId})});const payload=await response.json().catch(()=>({}));if(!cancelled&&response.ok&&payload.ok){await window.minarvaDesktop!.markTrialSynced();setTrialState(await window.minarvaDesktop!.getTrialState());}}catch{}})(); return()=>{cancelled=true;}; }, [trialState]);
   async function activateTrial(registration: TrialRegistration): Promise<{ok:boolean;error?:string}>{ if(!window.minarvaDesktop)return{ok:false,error:"Desktop security bridge is unavailable."}; const apiUrl=import.meta.env.VITE_LICENSE_API_URL as string|undefined; if(apiUrl){try{const deviceId=await window.minarvaDesktop.getDeviceId!();const response=await fetch(`${apiUrl.replace(/\/$/,"")}/api/trial/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...registration,deviceId})});const payload=await response.json().catch(()=>({}));if(!response.ok||!payload.ok)return{ok:false,error:payload.error||"Trial registration was not accepted."};const local=await window.minarvaDesktop.activateTrial(registration);if(!local.ok)return local;if(payload.ok&&window.minarvaDesktop.markTrialSynced)await window.minarvaDesktop.markTrialSynced();setTrialState(await window.minarvaDesktop.getTrialState());return{ok:true};}catch{/* offline activation below */}} const local=await window.minarvaDesktop.activateTrial(registration);if(!local.ok)return local;setTrialState(await window.minarvaDesktop.getTrialState());return{ok:true}; }
   function resetCustomerForm(){setCustForm({name:"",phone:"",whatsapp:"",email:"",address:"",birthday:"",notes:""});}
