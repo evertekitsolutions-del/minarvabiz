@@ -154,14 +154,23 @@ export default function IndustryWorkspacePage() {
       }
       if (action === "delete") {
         deleteIndustryIntakeDraft(window.localStorage, scope, profile, templateId);
+        // Storage adapters may silently refuse deletion; never claim success without readback.
+        if (readIndustryIntakeDraft(window.localStorage, scope, profile, templateId) !== null) {
+          throw new Error("Industry draft deletion readback mismatch");
+        }
         setIntakePreview(previous => ({ ...previous, [templateId + ":" + fieldKey]: "" }));
       } else if (action === "restore") {
         const draft = readIndustryIntakeDraft(window.localStorage, scope, profile, templateId);
         if (!draft) { setMessage("No local reference draft found."); return; }
         setIntakePreview(previous => ({ ...previous, [templateId + ":" + fieldKey]: draft.reference }));
       } else {
+        const reference = intakePreview[templateId + ":" + fieldKey] ?? "";
         saveIndustryIntakeDraft(window.localStorage, scope, profile, templateId,
-          intakePreview[templateId + ":" + fieldKey] ?? "", new Date().toISOString());
+          reference, new Date().toISOString());
+        // An acknowledged browser write is not proof of persistence.
+        if (readIndustryIntakeDraft(window.localStorage, scope, profile, templateId)?.reference !== reference) {
+          throw new Error("Industry draft save readback mismatch");
+        }
       }
       setError("");
       setMessage(action === "delete" ? "Local reference deleted and verified." : action === "restore" ? "Local reference restored." : "Local reference saved. No transaction created.");
