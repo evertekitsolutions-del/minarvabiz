@@ -199,3 +199,37 @@ test("failed persistence does not acknowledge or retain an unsaved business prof
   assert.equal(saved.shopName, "Retried change");
   assert.notEqual(saved.updatedAt, before.updatedAt);
 });
+
+
+test("missing scoped snapshot clears cached business identity before tenant switch", () => {
+  const Module = require("node:module");
+  const source = fs.readFileSync(new URL("../shop-profile.ts", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const isolated = new Module("shop-profile-scope-reset-test");
+  isolated.filename = "shop-profile-scope-reset-test.js";
+  isolated.paths = [];
+  isolated.require = (name) => {
+    if (name === "@minarvabiz/utils") return { nowISO: () => "2026-11-08T00:00:00Z" };
+    if (name === "./autosave") return { touchPersistence: () => {} };
+    if (name === "./workspace-display-preferences") return require("../workspace-display-preferences.ts");
+    throw new Error("Unexpected dependency: " + name);
+  };
+  isolated._compile(compiled, isolated.filename);
+  const api = isolated.exports;
+  api.hydrateShopProfile({
+    ...api.getShopProfile(), shopName: "Tenant A", legalName: "Private A",
+    email: "private@example.test", currency: "OMR", locale: "ar-OM",
+  });
+  assert.equal(api.getShopProfile().legalName, "Private A");
+  api.hydrateShopProfile(null);
+  const reset = api.getShopProfile();
+  assert.equal(reset.shopName, "Minarva Biz");
+  assert.equal(reset.legalName, "");
+  assert.equal(reset.email, "");
+  assert.equal(reset.currency, "INR");
+  api.hydrateShopProfile({ ...reset, shopName: "Tenant B" });
+  assert.equal(api.getShopProfile().shopName, "Tenant B");
+  assert.equal(api.getShopProfile().legalName, "");
+});
