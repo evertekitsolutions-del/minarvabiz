@@ -1,5 +1,7 @@
 # Minarva Biz — Coding agent instructions
 
+> **MOST RECENT OWNER MASTER DIRECTIVE (25-GATE SCORECARD, 2026-11-09):** Mandatory: [docs/OWNER_MASTER_DIRECTIVE_2026-11-09_25_MILESTONES.md](docs/OWNER_MASTER_DIRECTIVE_2026-11-09_25_MILESTONES.md). 25 milestones × 4%; 4 gates ALL mandatory: merged main PR, exact-main SHA CI, live Cloudflare/Supabase durability, independent QA zero P0/P1. Initial verified 0/25. Five role owners: Agent 1 Director; Agent 2 Online Core; Agent 3 Verticals+Store+Marketing; Agent 4 Onboarding+Cloud+PWA; Agent 5 independent QA-only. Pinned MIT donors only; no desktop/offline development.
+
 > **CURRENT OWNER BINDING OVERRIDE — 2026-11-09:** The **entire project** is now **ONLINE SaaS + Mobile ONLY**. Read [docs/OWNER_DIRECTIVE_2026-11-09_SAAS_ONLY.md](docs/OWNER_DIRECTIVE_2026-11-09_SAAS_ONLY.md) first. Any older instruction requiring Windows Offline, Electron, SQLite local-first or Hybrid is superseded. Preserve historical customer data and backups without modification.
 
 ## Mission and source of truth
@@ -12,7 +14,7 @@
 ## Priority and assignments
 1. Public customer website **Register -> Plan/Subscribe -> Email verification -> Tenant provisioning -> Tenant login URL -> authenticated ERP**, secure on smartphone/PWA.
 2. Durable server-acknowledged stock/product/Sales/POS/payments and full boutique/tailoring/laundry/ironing journeys. Do not report "saved" before committed; no duplicate financial effect or stock count.
-3. Agent A: online SaaS core, RLS and finance; Agent B: industry modules; Agent C: public website, signup, subscription and mobile; QA agent: **find/reproduce/report errors only**; Director: independent coordination, priority and acceptance.
+3. **Active roles:** Agent 1 Director (#325/#735), Agent 2 SaaS Core (M1,M6–M12), Agent 3 Verticals+Store+Marketing (M13–M19), Agent 4 Onboarding/Cloud/PWA (M2,M4,M5,M20–M23), Agent 5 QA-only (M3,M24,M25 and Gate D across ALL).
 4. Finish relevant existing web/Supabase PRs before new foundations. Prefer audited permissive OSS with pinned donor and attribution; never copy GPL/AGPL/proprietary code.
 
 ## Engineering safety
