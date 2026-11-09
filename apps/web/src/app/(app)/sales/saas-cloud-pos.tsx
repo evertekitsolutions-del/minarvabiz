@@ -3,7 +3,7 @@
 import * as React from "react";
 import { configFromEnv, pgRpc, pgSelect } from "@minarvabiz/database";
 import {
-  can, getOutboxScope, getSessionToken, getSessionUser, store,
+  can, getOutboxScope, getSessionToken, getSessionUser,
 } from "@minarvabiz/business-logic";
 import { resolveOnlineAuthorization } from "../../../lib/data-source";
 
