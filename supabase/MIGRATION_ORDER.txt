@@ -110,3 +110,5 @@
 20261110_saas_purchase_orders_grn.sql
 20261110_saas_unified_party_ledger.sql
 20261110_saas_tailoring_ledger_followon.sql
+20261110_saas_tenant_public_storefront.sql
+20261110_saas_store_guest_order_throttle.sql
