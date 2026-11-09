@@ -114,3 +114,4 @@
 20261110_saas_store_guest_order_throttle.sql
 20261110_saas_supplier_payables_unified_ledger.sql
 20261110_saas_marketing_leads.sql
+20261110_saas_branch_stock_atomic_transfers.sql
