@@ -5,6 +5,8 @@ import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "
 import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv, exportShareableCatalogCsv, exportShareableCatalogHtml, exportShareableCatalogJson, parseCommerceQuoteDraft, createCommerceTierDraft, updateCommerceTierDraft, deleteCommerceTierDraft, listCommerceTierDrafts, can, getShopProfile } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
+import { getRuntimeMode } from "@minarvabiz/business-logic";
+import { saveProductOnline } from "../../../lib/online-product-save";
 import { parseProductPrice } from "../../../lib/parse-product-price";
 import { KitRecipeManager } from "./kit-recipe-manager";
 
@@ -26,6 +28,9 @@ export default function ProductsPage() {
   const [categoryDescription, setCategoryDescription] = React.useState("");
   const [categoryError, setCategoryError] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [saveBusy, setSaveBusy] = React.useState(false);
+  const saveInFlight = React.useRef(false);
+  const pendingCreateId = React.useRef<string | null>(null);
   const productCsvInput = React.useRef<HTMLInputElement>(null);
   const [csvPreview, setCsvPreview] = React.useState<{
     name: string; content: string; rows: ReturnType<typeof parseProductCsv>["rows"]; errors: string[];
@@ -55,6 +60,10 @@ export default function ProductsPage() {
   React.useEffect(() => { refresh(); }, [refresh]);
 
   function handleCreateCategory() {
+    if (getRuntimeMode() !== "demo") {
+      setCategoryError("Online category creation is disabled until a confirmed Supabase write is implemented.");
+      return;
+    }
     const name = categoryName.trim();
     if (!name) {
       setCategoryError("Category name is required");
@@ -74,17 +83,24 @@ export default function ProductsPage() {
   }
 
   function resetForm() {
+    pendingCreateId.current = null;
     setEditingId(null);
     setForm({ name: "", sku: "", barcode: "", categoryId: "", unit: "pcs", costPrice: "0", sellingPrice: "0", stockQuantity: "0", minimumStock: "5" });
   }
 
   function openEdit(product: Product) {
+    if (saveInFlight.current) return;
+    pendingCreateId.current = null;
     setEditingId(product.id);
     setForm({ name: product.name, sku: product.sku || "", barcode: product.barcode || "", categoryId: product.categoryId || "", unit: product.unit, costPrice: String(product.costPrice), sellingPrice: String(product.sellingPrice), stockQuantity: String(product.stockQuantity), minimumStock: String(product.minimumStock) });
     setOpen(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (saveInFlight.current) return;
+    saveInFlight.current = true;
+    setSaveBusy(true);
+    setError(null);
     try {
       const parsed = productSchema.safeParse({
         name: form.name,
@@ -98,18 +114,46 @@ export default function ProductsPage() {
         minimumStock: parseNonNegativeStockQuantity(form.minimumStock),
         isActive: true,
       });
-      if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Invalid input"); return; }
-      if (editingId) {
-        const patch: Partial<Product> = { ...parsed.data };
-        delete patch.stockQuantity;
-        store.updateProduct(editingId, patch);
+      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
+
+      if (getRuntimeMode() === "demo") {
+        if (editingId) {
+          const patch: Partial<Product> = { ...parsed.data };
+          delete patch.stockQuantity;
+          store.updateProduct(editingId, patch);
+        } else {
+          store.createProduct(parsed.data as Parameters<typeof store.createProduct>[0]);
+        }
       } else {
-        store.createProduct(parsed.data as Parameters<typeof store.createProduct>[0]);
+        const editing = editingId ? store.getProduct(editingId) : undefined;
+        if (editingId && !editing) throw new Error("Product changed or is no longer available; reload.");
+        // Reuse this ID on every ambiguous timeout/retry, never mint a second
+        // product when a network response was lost after PostgreSQL commit.
+        if (!editing) pendingCreateId.current ??= crypto.randomUUID();
+        await saveProductOnline(parsed.data, { editing, createId: pendingCreateId.current ?? undefined });
       }
-      setOpen(false); setError(null); resetForm(); refresh();
+      setOpen(false);
+      setError(null);
+      resetForm();
+      refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      // Fail closed: the original form and its stable create ID remain for retry.
+      setError(err instanceof Error ? err.message : "Product was NOT confirmed in Supabase.");
+    } finally {
+      saveInFlight.current = false;
+      setSaveBusy(false);
     }
+  }
+
+  function closeProductForm() {
+    if (saveInFlight.current) return;
+    // Retain the stable retry ID after an uncertain network outcome.
+    if (getRuntimeMode() !== "demo" && pendingCreateId.current) {
+      setError("Cloud confirmation is pending or failed. Retry Save on this form to avoid a duplicate product. Do not start another product yet.");
+      return;
+    }
+    setOpen(false);
+    resetForm();
   }
 
   function previewB2BQuote() {
@@ -241,6 +285,10 @@ export default function ProductsPage() {
   }
 
   function confirmCsvImport() {
+    if (getRuntimeMode() !== "demo") {
+      setCsvMessage("Online CSV import is blocked until every row has a verified cloud receipt.");
+      return;
+    }
     if (!csvPreview || csvPreview.errors.length || !csvPreview.rows.length || csvBusy) return;
     // The import function preflights the CSV again against the latest live
     // SKUs/barcodes and fails without posting partial opening inventory.
@@ -261,6 +309,10 @@ export default function ProductsPage() {
   }
 
   function adjustStock() {
+    if (getRuntimeMode() !== "demo") {
+      setStockError("Online stock correction is blocked until the atomic Supabase receipt is verified.");
+      return;
+    }
     if (!stockProduct) return;
     try {
       store.adjustStockToQuantity(stockProduct.id, stockQty, stockProduct.stockQuantity, "Manual stock correction");
@@ -470,7 +522,7 @@ export default function ProductsPage() {
         onAdd={() => { resetForm(); setOpen(true); }}
         onEdit={openEdit}
         onAdjustStock={(p) => { setStockProduct({ ...p }); setStockQty(String(p.stockQuantity)); setStockError(null); }}
-        onArchive={(product, reason) => { const result = store.archiveProduct(product.id, reason); if (result.error) return { error: result.error }; refresh(); return { success: true }; }}
+        onArchive={(product, reason) => { if (getRuntimeMode() !== "demo") return { error: "Online product archive is unavailable until cloud confirmation is implemented." }; const result = store.archiveProduct(product.id, reason); if (result.error) return { error: result.error }; refresh(); return { success: true }; }}
         onPrintBarcode={(p) => { setLabelProduct(p); setLabelCopies("1"); }}
       />
       <Modal
@@ -497,12 +549,12 @@ export default function ProductsPage() {
       <Modal
         open={open}
         title={editingId ? "Edit Product" : "Add Product"}
-        onClose={() => { setOpen(false); resetForm(); }}
+        onClose={closeProductForm}
         className="max-w-xl"
         footer={
           <>
-            <Button variant="outline" onClick={() => { setOpen(false); resetForm(); }}>Cancel</Button>
-            <Button onClick={handleSave}>{editingId ? "Update Product" : "Save Product"}</Button>
+            <Button variant="outline" onClick={closeProductForm} disabled={saveBusy}>Cancel</Button>
+            <Button onClick={() => { void handleSave(); }} disabled={saveBusy}>{saveBusy ? "Confirming in Supabase…" : editingId ? "Update Product" : "Save Product"}</Button>
           </>
         }
       >
@@ -537,7 +589,8 @@ export default function ProductsPage() {
           <FormField label="Min stock">
             <input className={inputClass} type="number" min="0" step="0.001" value={form.minimumStock} onChange={(e) => setForm({ ...form, minimumStock: e.target.value })} />
           </FormField>
-          {error && <p className="sm:col-span-2 text-sm text-rose-600">{error}</p>}
+          {saveBusy && <p role="status" className="sm:col-span-2 text-sm text-blue-700">Saving to Supabase. The form will close only after the server record is verified.</p>}
+          {error && <p role="alert" className="sm:col-span-2 text-sm text-rose-600">{error}</p>}
         </div>
       </Modal>
       <Modal open={!!stockProduct} title="Update Stock Quantity" onClose={() => { setStockProduct(null); setStockError(null); }} footer={<><Button variant="outline" onClick={() => { setStockProduct(null); setStockError(null); }}>Cancel</Button><Button onClick={adjustStock}>Update Stock</Button></>}>
