@@ -63,7 +63,14 @@ export default function ProductsPage() {
     setProducts(store.listProducts({ query, categoryId: categoryId ?? undefined, lowStockOnly }));
   }, [query, categoryId, lowStockOnly]);
 
-  React.useEffect(() => { refresh(); }, [refresh]);
+  React.useEffect(() => {
+    refresh();
+    // Supabase hydration is asynchronous; the first render may precede the
+    // verified tenant snapshot. Keep the visible catalog aligned with it.
+    const onCloudHydrated = () => refresh();
+    window.addEventListener("minarva:data-hydrated", onCloudHydrated);
+    return () => window.removeEventListener("minarva:data-hydrated", onCloudHydrated);
+  }, [refresh]);
 
   async function handleCreateCategory() {
     if (categoryInFlight.current) return;
