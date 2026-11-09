@@ -6,6 +6,7 @@
  */
 import type {
   ProjectEstimateInput, ProjectEstimateStore, ProjectEstimateReader,
+  calculateProjectEstimate,
 } from "@minarvabiz/business-logic";
 
 type SaveCommand = Parameters<ProjectEstimateStore["saveAtomically"]>[0];
@@ -92,6 +93,14 @@ export function createOfflineProjectEstimateStore(databaseName: string): Project
           command.audit.action !== "project.estimate.saved" ||
           !command.audit.actorId.trim() || !command.idempotencyKey.trim()) {
         throw new Error("Invalid estimate storage command");
+      }
+      // Validate the complete scoped proposal before opening a write transaction.
+      // An adapter invoked directly must not persist forged totals or malformed lines.
+      const validated = calculateProjectEstimate(command.worksheet, {
+        ...command.scope, canViewCosts: true,
+      });
+      if (JSON.stringify(validated) !== JSON.stringify(command.totals)) {
+        throw new Error("Project estimate totals mismatch");
       }
       const db = await openDatabase(databaseName);
       try {
