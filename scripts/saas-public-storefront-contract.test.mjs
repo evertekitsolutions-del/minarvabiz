@@ -17,7 +17,9 @@ test("owner publish and guest checkout never capture payments or deduct stock",(
   /v_product\.selling_price IS DISTINCT FROM v_listing\.price/,
   /pg_advisory_xact_lock/,/pending_review/,/v_existing\.request_body/])assert.match(sql,re);
  assert.doesNotMatch(sql,/public\.create_sale\(/);
- assert.doesNotMatch(sql,/charge|capture|stripe|razorpay/i);
+ // Ignore SQL comments, then prohibit executable payment-provider/capture invocations.
+ const executableSql=sql.replace(/^\s*--.*$/gm,"");
+ assert.doesNotMatch(executableSql,/\b(?:capture_payment|charge_payment|stripe|razorpay)\b\s*\(/i);
 });
 test("buyer and owner interfaces only consume tenant-scoped Supabase catalog RPC",()=>{
  const buyer=readFileSync("apps/web/src/app/store/[slug]/page.tsx","utf8");

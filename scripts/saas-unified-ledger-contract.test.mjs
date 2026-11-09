@@ -14,7 +14,7 @@ test("reports SaaS view blocks local-only report rendering and readbacks org",()
  const cloud=readFileSync("apps/web/src/app/(app)/reports/saas-ledger-panel.tsx","utf8");
  assert.match(page,/getRuntimeMode\(\) !== "demo"\) return <SaasLedgerPanel\s*\/>/);
  assert.match(cloud,/resolveOnlineAuthorization/);
- assert.match(cloud,/"saas_party_ledger"/);
+ assert.match(cloud,/"saas_party_ledger_v2"/);
  assert.match(cloud,/"saas_gst_sales_summary"/);
  assert.match(cloud,/a\.token!==getSessionToken\(\)/);
 });

@@ -3,6 +3,7 @@
 import * as React from "react";
 import {useParams} from "next/navigation";
 import {configFromEnv,pgRpc,pgSelect} from "@minarvabiz/database";
+import {LeadCapture} from "./lead-capture";
 
 type Store={id:string;title:string;slug:string;published:boolean};
 type Listing={id:string;product_id:string;name:string;sku:string|null;price:number};
