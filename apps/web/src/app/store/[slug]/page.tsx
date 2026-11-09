@@ -61,13 +61,15 @@ export default function PublicTenantStorePage(){
     const p=pending.current;if(!p)throw new Error("No pending online order.");
     const cfg=configFromEnv();
     if(!cfg)throw new Error("Store API unavailable.");
-    const receipt=await pgRpc<Record<string,unknown>>(cfg,"saas_storefront_place_order",{
+    const receipt=await pgRpc<Record<string,unknown>>(cfg,"saas_storefront_checkout_reserved",{
       p_order_id:p.id,p_slug:p.slug,p_buyer_name:p.name,
       p_buyer_phone:p.phone,p_items:p.items,
     });
-    if(receipt.error||receipt.data?.order_id!==p.id||receipt.data?.status!=="pending_review")
+    if(receipt.error||receipt.data?.order_id!==p.id||(receipt.data?.status!=="pending_review"||receipt.data?.reservation_status!=="held"))
       throw new Error(receipt.error?.message||"Order receipt not confirmed. Retry same order.");
-    setSuccess("Order "+p.id+" saved in "+store.title+". Pending staff confirmation; no money charged.");
+    const expires=String(receipt.data?.reservation_expires_at||"");
+    if(!Number.isFinite(Date.parse(expires)))throw new Error("Stock reservation expiry not confirmed; retry same order.");
+    setSuccess("Order "+p.id+" saved in "+store.title+". Stock held until "+new Date(expires).toLocaleTimeString()+". Pending staff confirmation; no money charged.");
     pending.current=null;setCart({});setName("");setPhone("");
   }catch(e){setError(e instanceof Error?e.message:"Order was not confirmed.");}
   finally{inFlight.current=false;setBusy(false);}
@@ -99,7 +101,7 @@ export default function PublicTenantStorePage(){
    <section className="rounded-lg border p-4">
      <h2 className="text-lg font-semibold">Order summary</h2>
      <p className="text-sm">{basket.length} products · Total ₹{total.toFixed(2)} (GST included)</p>
-     <p className="mb-3 text-xs text-slate-600">This places an ERP draft order. Final availability, delivery charges and payment will be confirmed by the merchant. No payment is collected here.</p>
+     <p className="mb-3 text-xs text-slate-600">This saves an ERP draft order with a temporary 15-minute stock hold. Delivery charges and payment require merchant confirmation. No payment is collected here.</p>
      <div className="grid gap-2 sm:grid-cols-3">
        <label className="text-sm">Buyer name
          <input className="mt-1 w-full rounded border p-2" value={name} disabled={busy||!!pending.current}
