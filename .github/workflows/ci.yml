@@ -172,6 +172,8 @@ jobs:
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
       - name: Verify GRN supplier payable unified SaaS ledger
         run: node --test scripts/saas-grn-ledger-reconciliation-contract.test.mjs
+      - name: Verify M17 online stock reservation contract
+        run: node --test scripts/saas-store-reservation-contract.test.mjs
       - name: Verify store guest throttle
         run: node --test scripts/saas-store-guest-throttle.test.mjs
       - name: Verify M18 marketing CRM capture contract

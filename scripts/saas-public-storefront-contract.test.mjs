@@ -24,7 +24,7 @@ test("owner publish and guest checkout never capture payments or deduct stock",(
 test("buyer and owner interfaces only consume tenant-scoped Supabase catalog RPC",()=>{
  const buyer=readFileSync("apps/web/src/app/store/[slug]/page.tsx","utf8");
  const seller=readFileSync("apps/web/src/app/(app)/storefront/page.tsx","utf8");
- assert.match(buyer,/"saas_storefront_place_order"/);
+ assert.match(buyer,/"saas_storefront_checkout_reserved"/);
  assert.match(buyer,/pending_review/);
  assert.match(seller,/"saas_publish_storefront"/);
  assert.match(seller,/resolveOnlineAuthorization/);
