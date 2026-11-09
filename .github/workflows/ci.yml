@@ -170,6 +170,8 @@ jobs:
       - name: Verify cross-app security header baseline
         run: node --experimental-strip-types scripts/security-header-baseline-smoke.mjs
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
+      - name: Verify durable SaaS product save cloud receipts
+        run: node --experimental-strip-types --test scripts/online-product-save-contract.test.mjs
       - name: Verify Attendance Grid contract
         run: node packages/business-logic/src/__tests__/attendance-grid-contract.test.mjs
       - name: Verify provider-neutral web hosting contract
