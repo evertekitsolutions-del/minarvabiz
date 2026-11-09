@@ -170,8 +170,12 @@ jobs:
       - name: Verify cross-app security header baseline
         run: node --experimental-strip-types scripts/security-header-baseline-smoke.mjs
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
-      - name: Verify SaaS thermal and fixed-pitch two-up barcode labels
-        run: node --test scripts/saas-two-up-label-thermal-contract.test.mjs
+      - name: Verify thermal and 38x25 two-up label contracts
+        run: node --experimental-strip-types --test scripts/saas-two-up-label-thermal-contract.test.mjs
+      - name: Verify SaaS customer/vendor and GST ledger contracts
+        run: node --test scripts/saas-unified-ledger-contract.test.mjs
+      - name: Verify tenant PO, GRN and payables cloud contract
+        run: node --test scripts/saas-purchase-grn-cloud-contract.test.mjs
       - name: Verify SaaS garment lifecycle and QR receipts
         run: node --experimental-strip-types --test scripts/saas-laundry-garment-contract.test.mjs
       - name: Verify SaaS inventory and atomic checkout receipt contracts

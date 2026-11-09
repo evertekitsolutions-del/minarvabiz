@@ -306,5 +306,4 @@ export * from "./boutique-stock-purchase";
 export * from "./stock-adjustment-guard";
 // Pure QR encoder for cloud garment tag printing.
 export * from "./qr-code";
-// M11: browser/cloud print documents — no desktop bridge.
 export * from "./saas-print-documents";
