@@ -101,3 +101,4 @@
 20261109_saas_atomic_product_opening_stock.sql
 20261109_saas_atomic_product_opening_stock_auth_scope_fix.sql
 20261109_saas_boutique_variant_family.sql
+20261109_saas_laundry_service_rate_cards.sql

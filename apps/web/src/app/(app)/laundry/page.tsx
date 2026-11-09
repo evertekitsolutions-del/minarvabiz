@@ -3,7 +3,8 @@
 import * as React from "react";
 import { isDashboardCreateIntent } from "@/lib/dashboard-quick-create";
 import { LaundryList, LaundryForm, LaundryCancellationForm, Modal, Button, FormField, inputClass, selectClass, type LaundryCancellationValues } from "@minarvabiz/ui";
-import { store, phase5Store, phase7Store, assertLimit } from "@minarvabiz/business-logic";
+import { store, phase5Store, phase7Store, assertLimit, getRuntimeMode, getSessionToken } from "@minarvabiz/business-logic";
+import { saveLaundryRateOnline, loadLaundryRateCardsOnline } from "../../../lib/online-laundry-rate-save";
 import type { LaundryOrder, Customer, PaymentMethod, Supplier } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
@@ -29,7 +30,22 @@ export default function LaundryPage() {
     setSuppliers(phase5Store.listSuppliers());
   }, []);
 
-  React.useEffect(() => { refresh(); }, [refresh]);
+  React.useEffect(() => {
+    refresh();
+    if (getRuntimeMode() === "demo") return;
+    let mounted = true;
+    const load = () => {
+      if (!getSessionToken()) return;
+      void loadLaundryRateCardsOnline()
+        .then(() => { if (mounted) refresh(); })
+        .catch(error => {
+          if (mounted) setError(error instanceof Error ? error.message : "Laundry rate catalog NOT loaded from Supabase.");
+        });
+    };
+    load();
+    window.addEventListener("minarva:data-hydrated", load);
+    return () => { mounted = false; window.removeEventListener("minarva:data-hydrated", load); };
+  }, [refresh]);
   React.useEffect(() => {
     if (isDashboardCreateIntent(window.location.search)) {
       setError(null);
@@ -49,6 +65,10 @@ export default function LaundryPage() {
     notes: string;
   }) {
     if (!mode) return;
+    if (getRuntimeMode() !== "demo") {
+      setError("Online laundry order submission is blocked until an atomic Supabase receipt is implemented.");
+      return;
+    }
     const result = phase5Store.createLaundryOrder({
       ...data,
       mode,
@@ -63,6 +83,7 @@ export default function LaundryPage() {
   }
 
   function handleStatusChange(order: LaundryOrder, status: LaundryOrder["status"]) {
+    if (getRuntimeMode() !== "demo") { setStatusError("Cloud-confirmed laundry status writes are not yet available."); return; }
     try {
       const result = phase5Store.updateLaundryStatus(order.id, status);
       if (!result.order) {
@@ -77,6 +98,7 @@ export default function LaundryPage() {
   }
 
   function handleLaundryCollection(order: LaundryOrder, amount: number, method: PaymentMethod) {
+    if (getRuntimeMode() !== "demo") return { success: false, error: "Cloud-confirmed laundry payment writes are not yet available." };
     try {
       const result = store.recordCustomerPayment({
         customerId: order.customerId,
@@ -96,6 +118,7 @@ export default function LaundryPage() {
   }
 
   function handleUpdateLaundryDetails(order: LaundryOrder, values: { garment: string; notes: string }) {
+    if (getRuntimeMode() !== "demo") return { success: false, error: "Cloud-confirmed laundry ticket edits are not yet available." };
     try {
       const result = phase5Store.updateLaundryDetails(order.id, values);
       if (result.errors.length || !result.order) {
@@ -110,6 +133,7 @@ export default function LaundryPage() {
 
   function handleCancelLaundry(values: LaundryCancellationValues) {
     if (!cancelOrder) return;
+    if (getRuntimeMode() !== "demo") { setCancelError("Cloud-confirmed laundry cancellation is not yet available."); return; }
     try {
       const result = phase5Store.cancelLaundryOrder({
         orderId: cancelOrder.id,
@@ -131,6 +155,7 @@ export default function LaundryPage() {
   }
 
   function saveCustomer() {
+    if (getRuntimeMode() !== "demo") { setCustomerError("Cloud-confirmed customer saving is not yet available from laundry intake."); return; }
     const limit = assertLimit("customers");
     if (!limit.allowed) { setCustomerError(limit.reason ?? "Customer limit reached"); return; }
     const parsed = customerSchema.safeParse({
@@ -153,6 +178,7 @@ export default function LaundryPage() {
   }
 
   function saveSupplier() {
+    if (getRuntimeMode() !== "demo") { setSupplierError("Cloud-confirmed supplier saving is not yet available from laundry intake."); return; }
     if (!supplierForm.name.trim()) { setSupplierError("Supplier name is required"); return; }
     try {
       phase5Store.createSupplier({
@@ -197,6 +223,7 @@ export default function LaundryPage() {
             customers={customers}
             suppliers={suppliers}
             onSubmit={handleSubmit}
+            onSaveRateOnline={saveLaundryRateOnline}
             onCancel={() => setMode(null)}
             onAddCustomer={() => { setCustomerError(null); setCustomerOpen(true); }}
             onAddSupplier={() => { setSupplierError(null); setSupplierOpen(true); }}
