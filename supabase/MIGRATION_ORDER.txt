@@ -116,3 +116,4 @@
 20261110_saas_marketing_leads.sql
 20261110_saas_branch_stock_atomic_transfers.sql
 20261110_saas_storefront_atomic_stock_reservations.sql
+20261110_saas_storefront_close_unreserved_guest_checkout.sql
