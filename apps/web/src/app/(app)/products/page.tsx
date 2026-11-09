@@ -7,6 +7,7 @@ import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 import { parseProductPrice } from "../../../lib/parse-product-price";
 import { KitRecipeManager } from "./kit-recipe-manager";
+import { BoutiqueVariantMatrix } from "./boutique-variant-matrix";
 
 export default function ProductsPage() {
   const [products, setProducts] = React.useState<Product[]>([]);
@@ -93,7 +94,7 @@ export default function ProductsPage() {
         categoryId: form.categoryId || null,
         unit: form.unit,
         costPrice: parseProductPrice(form.costPrice, "Cost price"),
-        sellingPrice: parseProductPrice(form.sellingPrice, "Selling price"),
+        sellingPrice: parseProductPrice(form.sellingPrice, "Price"),
         stockQuantity: parseNonNegativeStockQuantity(form.stockQuantity),
         minimumStock: parseNonNegativeStockQuantity(form.minimumStock),
         isActive: true,
@@ -459,6 +460,7 @@ export default function ProductsPage() {
           </div>}
         </div>
       </Modal>
+      <BoutiqueVariantMatrix products={products} categories={categories} onSaved={refresh} />
       <ProductList
         products={products}
         categories={categories}
@@ -528,7 +530,7 @@ export default function ProductsPage() {
           <FormField label="Cost price">
             <input className={inputClass} type="number" min="0" step="any" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} />
           </FormField>
-          <FormField label="Selling price">
+          <FormField label="Price (GST inclusive)">
             <input className={inputClass} type="number" min="0" step="any" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} />
           </FormField>
           <FormField label={editingId ? "Stock qty (use Adjust Stock)" : "Opening stock"}>
