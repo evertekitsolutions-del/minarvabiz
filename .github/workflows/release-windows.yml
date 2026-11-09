@@ -1,16 +1,15 @@
 name: Release Windows
 
+# SaaS-only retirement: no automatic or manual desktop execution.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
 
 jobs:
   release-windows:
+    if: false # Retired 2026-11-09 SaaS-only Owner Directive
     runs-on: windows-latest
     env:
       MINARVA_RUNTIME_SMOKE: "1"
