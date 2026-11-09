@@ -6,7 +6,7 @@ import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStoc
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 import { getRuntimeMode } from "@minarvabiz/business-logic";
-import { saveProductOnline } from "../../../lib/online-product-save";
+import { saveProductOnline, saveCategoryOnline } from "../../../lib/online-product-save";
 import { parseProductPrice } from "../../../lib/parse-product-price";
 import { KitRecipeManager } from "./kit-recipe-manager";
 
@@ -27,6 +27,9 @@ export default function ProductsPage() {
   const [categoryName, setCategoryName] = React.useState("");
   const [categoryDescription, setCategoryDescription] = React.useState("");
   const [categoryError, setCategoryError] = React.useState<string | null>(null);
+  const [categoryBusy, setCategoryBusy] = React.useState(false);
+  const categoryInFlight = React.useRef(false);
+  const pendingCategoryId = React.useRef<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [saveBusy, setSaveBusy] = React.useState(false);
   const saveInFlight = React.useRef(false);
@@ -59,27 +62,49 @@ export default function ProductsPage() {
 
   React.useEffect(() => { refresh(); }, [refresh]);
 
-  function handleCreateCategory() {
-    if (getRuntimeMode() !== "demo") {
-      setCategoryError("Online category creation is disabled until a confirmed Supabase write is implemented.");
-      return;
-    }
+  async function handleCreateCategory() {
+    if (categoryInFlight.current) return;
     const name = categoryName.trim();
-    if (!name) {
-      setCategoryError("Category name is required");
+    if (!name || name.length > 500) {
+      setCategoryError("Category name must be between 1 and 500 characters.");
       return;
     }
+    categoryInFlight.current = true;
+    setCategoryBusy(true);
+    setCategoryError(null);
     try {
-      const category = store.createCategory({ name, description: categoryDescription.trim() || null });
-      setForm((prev) => ({ ...prev, categoryId: category.id }));
+      const category = getRuntimeMode() === "demo"
+        ? store.createCategory({ name, description: categoryDescription.trim() || null })
+        : await (async () => {
+            pendingCategoryId.current ??= crypto.randomUUID();
+            return saveCategoryOnline(
+              { name, description: categoryDescription.trim() || null },
+              pendingCategoryId.current
+            );
+          })();
+      setForm(prev => ({ ...prev, categoryId: category.id }));
       setCategoryName("");
       setCategoryDescription("");
       setCategoryError(null);
       setCategoryOpen(false);
+      pendingCategoryId.current = null;
       refresh();
     } catch (err) {
-      setCategoryError(err instanceof Error ? err.message : String(err));
+      setCategoryError(err instanceof Error ? err.message : "Category NOT confirmed in Supabase.");
+    } finally {
+      categoryInFlight.current = false;
+      setCategoryBusy(false);
     }
+  }
+
+  function closeCategoryForm() {
+    if (categoryInFlight.current) return;
+    if (getRuntimeMode() !== "demo" && pendingCategoryId.current) {
+      setCategoryError("Category cloud status is uncertain. Retry with the same form before creating another.");
+      return;
+    }
+    setCategoryOpen(false);
+    setCategoryError(null);
   }
 
   function resetForm() {
@@ -518,7 +543,7 @@ export default function ProductsPage() {
         onToggleLowStock={() => setLowStockOnly((v) => !v)}
         onSearch={(q) => setQuery(q)}
         onFilterCategory={setCategoryId}
-        onAddCategory={() => setCategoryOpen(true)}
+        onAddCategory={() => { if (categoryInFlight.current) return; pendingCategoryId.current = null; setCategoryError(null); setCategoryOpen(true); }}
         onAdd={() => { resetForm(); setOpen(true); }}
         onEdit={openEdit}
         onAdjustStock={(p) => { setStockProduct({ ...p }); setStockQty(String(p.stockQuantity)); setStockError(null); }}
@@ -528,11 +553,11 @@ export default function ProductsPage() {
       <Modal
         open={categoryOpen}
         title="Add Category"
-        onClose={() => setCategoryOpen(false)}
+        onClose={closeCategoryForm}
         footer={
           <>
-            <Button variant="outline" onClick={() => setCategoryOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateCategory}>Save Category</Button>
+            <Button variant="outline" onClick={closeCategoryForm} disabled={categoryBusy}>Cancel</Button>
+            <Button onClick={() => { void handleCreateCategory(); }} disabled={categoryBusy}>{categoryBusy ? "Confirming in Supabase…" : "Save Category"}</Button>
           </>
         }
       >
@@ -543,7 +568,7 @@ export default function ProductsPage() {
           <FormField label="Description">
             <input className={inputClass} value={categoryDescription} onChange={(e) => setCategoryDescription(e.target.value)} />
           </FormField>
-          {categoryError && <p className="text-sm text-rose-600">{categoryError}</p>}
+          {categoryError && <p role="alert" className="text-sm text-rose-600">{categoryError}</p>}
         </div>
       </Modal>
       <Modal
