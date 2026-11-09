@@ -96,6 +96,7 @@ export function SaasCloudPos() {
         pending.current={id,product,quantity:qty,invoice,gross,tax,net,itemId,payload};
       }
       const p=pending.current;
+      if(!p)throw new Error("No pending cloud transaction.");
       const ctx=await context();
       const commit=await pgRpc<Record<string,unknown>>(ctx.cfg,"saas_checkout_once",{
         p_mutation_id:p.id,p_sale:p.payload,p_payments:[],
