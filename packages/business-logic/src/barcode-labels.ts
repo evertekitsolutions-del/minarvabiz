@@ -127,7 +127,6 @@ export function buildBarcodeLabelHtml(
   const columns = settings.labelColumns === 2 ? 2 : 1;
   const rollWidthMm = columns === 2 ? settings.labelRollWidthMm : labelWidthMm;
   const pageHeightMm = labelHeightMm + (columns === 2 ? settings.labelRowGapMm : 0);
-  const printHeightMm = pageHeightMm * Math.ceil(copies / columns);
   const gapMm = columns === 2 ? settings.labelGapMm : 0;
   const availableMarginMm = rollWidthMm - (columns * labelWidthMm) - gapMm;
   if (availableMarginMm < 0) throw new Error("Sticker width + columns + gap exceed the configured roll width");
@@ -160,12 +159,16 @@ export function buildBarcodeLabelHtml(
   ).join("");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Product Labels</title>
 <style>
-  /* Each physical two-up row is one printer page; a single tall page made the feed drift. */
+  /* One physical row per page. Do NOT size the body to the total roll length:
+     fixed-height body clipping + explicit page breaks can create phantom pages
+     in Chromium and shift every subsequent thermal label row. */
   @page{size:${rollWidthMm}mm ${pageHeightMm}mm;margin:0}
   *{box-sizing:border-box}
-  html,body{width:${rollWidthMm}mm;height:${printHeightMm}mm;margin:0;padding:0;overflow:hidden}
+  html,body{width:${rollWidthMm}mm;height:auto;min-height:0;margin:0;padding:0;overflow:visible}
   body{font-family:Arial,sans-serif;color:#111}
-  .label-sheet{width:${rollWidthMm}mm;height:${pageHeightMm}mm;padding-left:${leftMarginMm}mm;display:grid;grid-template-columns:repeat(${columns},${labelWidthMm}mm);column-gap:${gapMm}mm;align-content:start;page-break-after:auto;break-after:auto;break-inside:avoid;overflow:hidden}\n  .label{width:${labelWidthMm}mm;height:${labelHeightMm}mm;padding:1.1mm;text-align:center;border:1px dashed #bbb;display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:.3mm;overflow:hidden;break-inside:avoid}
+  /* A sub-millimetre printable-area guard avoids fractional-pixel overflow
+     introducing an extra page at the exact media-size boundary. */
+  .label-sheet{width:${rollWidthMm}mm;height:calc(${pageHeightMm}mm - .25mm);padding-left:${leftMarginMm}mm;display:grid;grid-template-columns:repeat(${columns},${labelWidthMm}mm);column-gap:${gapMm}mm;align-content:start;page-break-after:auto;break-after:auto;break-inside:avoid;page-break-inside:avoid;overflow:hidden}\n  .label{width:${labelWidthMm}mm;height:calc(${labelHeightMm}mm - .25mm);padding:1.1mm;text-align:center;border:1px dashed #bbb;display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;gap:.3mm;overflow:hidden;break-inside:avoid}
   .label.short{padding:1.1mm .85mm 1.2mm;gap:.1mm;min-height:0}
 
   .shop,.name,.meta,.sku{display:block;flex:0 1 auto;min-height:0;line-height:1.08;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

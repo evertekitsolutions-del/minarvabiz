@@ -171,7 +171,9 @@ test("invoice, receipt and barcode builders produce printable HTML", () => {
     labelHeightMm: 30,
   });
   assert.match(labelHtml, /width:50mm/);
-  assert.match(labelHtml, /height:30mm/);
+  assert.match(labelHtml, /@page\{size:50mm 30mm;margin:0\}/);
+  assert.match(labelHtml, /height:calc\(30mm - \.25mm\)/);
+  assert.match(labelHtml, /height:auto;min-height:0;margin:0;padding:0;overflow:visible/);
   assert.match(labelHtml, /EAN-13/);
   assert.doesNotMatch(labelHtml, /window\.print/);
 
