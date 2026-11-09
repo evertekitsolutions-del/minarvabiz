@@ -6,7 +6,7 @@ assert.equal(response.status, 200, "Public homepage must respond 200 without aut
 assert.match(response.headers.get("content-type") || "", /text\/html/i);
 assert.ok(response.headers.get("content-security-policy"), "Public homepage must keep the nonce CSP");
 const html = await response.text();
-for (const fragment of ['Minarva Biz', 'id="features"', 'id="industries"', 'id="editions"', 'id="download"', 'id="faq"', 'href="/login"', 'href=\"/register\"']) {
+for (const fragment of ['Minarva Biz', 'id="features"', 'id="industries"', 'id="editions"', 'id="get-started"', 'id="faq"', 'href="/login"', 'href=\"/register\"']) {
   assert.ok(html.includes(fragment), `Missing public homepage contract: ${fragment}`);
 }
 for (const fragment of ['aria-label="Mobile navigation"', 'aria-label="Main navigation"', '<summary', 'Browse sections']) {
