@@ -90,6 +90,7 @@ export { parseDefaultTaxRateInput } from "./tax-rate-validation";
 export * from "./barcode-labels";
 export { requestDesktopPrintHtml } from "./desktop-print";
 export * from "./product-variant-planner";
+export * from "./open-mercato-boutique-options";
 export * from "./product-variant-family";
 export * from "./whatsapp";
 export * from "./manual-service-whatsapp";
