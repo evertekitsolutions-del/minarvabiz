@@ -1,9 +1,0 @@
-{
-  "schema": "minarva-owner-release-authorization-v1",
-  "authorized": true,
-  "version": "1.0.27",
-  "channel": "GitHub Windows installer",
-  "approval": "Owner expressly requested immediate release in chat on 2026-11-09",
-  "oneTime": true,
-  "notes": "No Vercel/Render usage, no production SQLite modification, no release of other versions"
-}
