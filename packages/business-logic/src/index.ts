@@ -88,6 +88,7 @@ export * from "./customer-reminders";
 export * from "./tax-config";
 export { parseDefaultTaxRateInput } from "./tax-rate-validation";
 export * from "./barcode-labels";
+export { requestDesktopPrintHtml } from "./desktop-print";
 export * from "./product-variant-planner";
 export * from "./product-variant-family";
 export * from "./whatsapp";
