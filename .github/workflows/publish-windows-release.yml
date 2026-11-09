@@ -10,10 +10,63 @@ permissions:
   contents: write
 
 jobs:
-  publish:
+  authorize:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'workflow_dispatch' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.repository.full_name == github.repository &&
+      (github.event.workflow_run.event == 'workflow_dispatch' || github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      approved: ${{ steps.gate.outputs.approved }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+      - name: Permit manual dispatch or an exact owner-authorized release commit
+        id: gate
+        shell: bash
+        env:
+          RELEASE_SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+          RELEASE_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [ "$RELEASE_SOURCE_EVENT" = "workflow_dispatch" ]; then
+            echo "approved=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Only the exact main commit which CHANGED the one-time approval can
+          # publish. Later main commits merely retaining the file cannot.
+          if ! git diff-tree --no-commit-id --name-only -r "$RELEASE_SOURCE_SHA" | grep -Fxq "release-authorization.json"; then
+            echo "approved=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node <<'NODE'
+          const fs = require("node:fs");
+          const approval = JSON.parse(fs.readFileSync("release-authorization.json","utf8"));
+          const pkg = JSON.parse(fs.readFileSync("apps/desktop/package.json","utf8"));
+          const root = JSON.parse(fs.readFileSync("package.json","utf8"));
+          const notes = JSON.parse(fs.readFileSync("release-notes.json","utf8"));
+          if (approval.schema !== "minarva-owner-release-authorization-v1"
+              || approval.authorized !== true || approval.oneTime !== true
+              || approval.channel !== "GitHub Windows installer"
+              || approval.version !== "1.0.27"
+              || pkg.version !== approval.version || root.version !== approval.version
+              || !Array.isArray(notes[approval.version]) || notes[approval.version].length < 2) {
+            throw new Error("Release authorization/version/notes mismatch; publication blocked");
+          }
+          console.log("OWNER_RELEASE_AUTHORIZED version=" + approval.version);
+          NODE
+          echo "approved=true" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: authorize
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      needs.authorize.outputs.approved == 'true' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.repository.full_name == github.repository
     runs-on: ubuntu-latest
@@ -35,6 +88,28 @@ jobs:
           cp "$installer" ./MinarvaBiz-Setup.exe
           echo "INSTALLER_NAME=$(basename "$installer")" >> "$GITHUB_ENV"
           echo "INSTALLER_PATH=$installer" >> "$GITHUB_ENV"
+
+      - name: Require same-SHA Windows and data-safety CI before public release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 50); do
+            checks="$(gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA/check-runs?per_page=100")"
+            if jq -e '.check_runs as $runs | ["desktop","windows-package","windows-deep-smoke","core-coverage"] | any(.[]; . as $name | any($runs[]; .name==$name and .conclusion=="failure"))' <<< "$checks" >/dev/null; then
+              echo "A required same-SHA regression check failed; no release"
+              exit 1
+            fi
+            if jq -e '.check_runs as $runs | ["desktop","windows-package","windows-deep-smoke","core-coverage"] | all(.[]; . as $name | any($runs[]; .name==$name and .conclusion=="success"))' <<< "$checks" >/dev/null; then
+              echo "SAME_SHA_RELEASE_GATES_PASS $SOURCE_SHA"
+              exit 0
+            fi
+            sleep 12
+          done
+          echo "Timed out waiting for same-SHA regression acceptance; no release"
+          exit 1
 
       - name: Publish immutable stable release
         env:
