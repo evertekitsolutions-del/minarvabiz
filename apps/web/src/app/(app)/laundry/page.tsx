@@ -5,6 +5,7 @@ import { isDashboardCreateIntent } from "@/lib/dashboard-quick-create";
 import { LaundryList, LaundryForm, LaundryCancellationForm, Modal, Button, FormField, inputClass, selectClass, type LaundryCancellationValues } from "@minarvabiz/ui";
 import { store, phase5Store, phase7Store, assertLimit, getRuntimeMode, getSessionToken } from "@minarvabiz/business-logic";
 import { saveLaundryRateOnline, loadLaundryRateCardsOnline } from "../../../lib/online-laundry-rate-save";
+import { SaasGarmentWorkflow } from "./saas-garment-workflow";
 import type { LaundryOrder, Customer, PaymentMethod, Supplier } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
 
@@ -199,6 +200,7 @@ export default function LaundryPage() {
 
   return (
     <>
+      <SaasGarmentWorkflow />
       {statusError && <p role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{statusError}</p>}
       <LaundryList
         orders={orders}
