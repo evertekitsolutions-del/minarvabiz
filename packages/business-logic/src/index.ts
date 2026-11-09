@@ -302,3 +302,5 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+// SaaS cloud-save stock adjustment preflight; never bypass warehouse reservation checks.
+export * from "./stock-adjustment-guard";
