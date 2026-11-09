@@ -13,7 +13,7 @@ WHERE barcode IS NOT NULL AND deleted_at IS NULL;
 -- inventory without reconciling the actual independently-stocked child SKUs.
 CREATE OR REPLACE FUNCTION public.boutique_prevent_parent_stock_drift()
 RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
-AS $
+AS $$
 DECLARE
   v_sum numeric;
 BEGIN
@@ -29,9 +29,9 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
-DO $
+DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_trigger
      WHERE tgrelid = 'public.products'::regclass
@@ -40,7 +40,7 @@ BEGIN
       BEFORE UPDATE OF stock_quantity ON public.products
       FOR EACH ROW EXECUTE FUNCTION public.boutique_prevent_parent_stock_drift();
   END IF;
-END $;
+END $$;
 
 CREATE OR REPLACE FUNCTION public.boutique_refresh_parent_stock(p_parent_id uuid)
 RETURNS void LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
