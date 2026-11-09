@@ -10,6 +10,7 @@ import { saveProductOnline, saveCategoryOnline, saveStockAdjustmentOnline } from
 import { parseProductPrice } from "../../../lib/parse-product-price";
 import { KitRecipeManager } from "./kit-recipe-manager";
 import { BoutiqueVariantMatrix } from "./boutique-variant-matrix";
+import { SaasLabelPrintPanel } from "./saas-label-print-panel";
 
 export default function ProductsPage() {
   const [products, setProducts] = React.useState<Product[]>([]);
@@ -567,6 +568,7 @@ export default function ProductsPage() {
         </div>
       </Modal>
       <BoutiqueVariantMatrix products={products} categories={categories} onSaved={refresh} />
+      <SaasLabelPrintPanel products={products} />
       <ProductList
         products={products}
         categories={categories}
