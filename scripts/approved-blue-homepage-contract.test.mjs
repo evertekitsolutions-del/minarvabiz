@@ -23,7 +23,7 @@ assert.match(page,/lg:grid-cols/,"Desktop two-column hero and layout");
 assert.match(page,/grid-cols-2|sm:grid-cols-2/,"Responsive grid");
 assert.match(page,/aria-label="Mobile navigation"/);
 assert.match(page,/href="\/login"/);
-assert.match(page,/releases\/tag\/v1\.0\.15/);
+assert.match(page,/href="\/register"/,"SaaS registration CTA must remain");
 assert.match(page, /<TrialWelcomePopup\s*\/>/, "Show the 30-day campaign on the public homepage");
 assert.match(page, /Subscription payments and full customer acceptance remain pending verification/, "Do not imply paid activation");
 assert.ok(!page.includes("GST compliant"),"No unverified blanket compliance claims");
