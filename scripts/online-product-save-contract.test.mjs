@@ -54,5 +54,8 @@ test("web route awaits Supabase and never closes on unconfirmed save", () => {
   assert.match(service, /await pgRpc<Record<string, unknown>>\(authCfg, "adjust_stock"/);
   assert.match(service, /"inventory_transactions"/);
   assert.match(service, /p_reference_id: referenceId/);
+  assert.match(service, /String\(fields\.stockQuantity\), id, "opening_stock"/);
+  assert.match(service, /reference_type=eq\.opening_stock/);
+  assert.match(service, /postedProduct = toProduct\(confirmedRow\)/);
   assert.match(service, /movement\.created_by !== user\.id/);
 });
