@@ -220,7 +220,7 @@ export async function saveStockAdjustmentOnline(
   }
   if (original.hasVariants) throw new Error("Adjust a specific variant, not its product group.");
   const delta = stockCountDelta(rawTarget, original.stockQuantity, original.stockQuantity);
-  if (delta === 0) return original;
+  if (delta === 0) throw new Error("No stock change to save. Refresh the product to verify its current cloud balance.");
   const plan = planManualStockAdjustment(original.id, original.branchId, original.stockQuantity, "adjustment", delta);
   const expectedQuantity = plan.next;
   const expectedVersion = (original.version ?? 1) + 1;
