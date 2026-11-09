@@ -96,7 +96,7 @@ function ean13Bits(code: string): string {
   return bits + "101";
 }
 
-function barcodeSvg(code: string): string {
+export function barcodeSvg(code: string): string {
   if (!isValidEan13(code)) return code128BSvg(code);
   const bits = ean13Bits(code);
   const quiet = 9;
