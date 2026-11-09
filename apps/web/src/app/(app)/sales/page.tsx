@@ -6,6 +6,8 @@ import { PosBilling, NormalBilling, SalesList, Button, Modal, FormField, inputCl
 import { store, requestSaleInvoicePrint, buildSaleInvoiceHtml, assertLimit, can, readAuthorizedInvoiceGrossProfit } from "@minarvabiz/business-logic";
 import type { Product, Customer, Sale, CartLine, PaymentMethod } from "@minarvabiz/types";
 import { customerSchema } from "@minarvabiz/validation";
+import { getRuntimeMode } from "@minarvabiz/business-logic";
+import { SaasCloudPos } from "./saas-cloud-pos";
 
 export default function SalesPage() {
   const router = useRouter();
@@ -75,6 +77,7 @@ export default function SalesPage() {
     paymentSplits?: Array<{ method: PaymentMethod; amount: number; reference?: string | null }>;
     notes?: string;
   }) {
+    if (getRuntimeMode() !== "demo") return { success: false, errors: ["Use cloud POS for an atomic Supabase sale."] };
     const result = store.createSale({
       customerId: payload.customerId,
       lines: payload.lines,
@@ -97,6 +100,10 @@ export default function SalesPage() {
   }
 
   function saveCustomer() {
+    if(getRuntimeMode() !== "demo") {
+      setCustomerError("Cloud customer registration requires an authoritative Supabase receipt.");
+      return;
+    }
     const limit = assertLimit("customers");
     if (!limit.allowed) {
       setCustomerError(limit.reason ?? "Customer limit reached");
@@ -152,7 +159,8 @@ export default function SalesPage() {
           </div>
         </div>
       )}
-      {tab === "pos" && (
+      {getRuntimeMode() !== "demo" && tab !== "history" && <SaasCloudPos />}
+      {getRuntimeMode() === "demo" && tab === "pos" && (
         <PosBilling
           products={products}
           customers={customers}
@@ -176,8 +184,9 @@ export default function SalesPage() {
           onPrintSale={printExistingInvoice}
         />
       )}
-      {tab === "normal" && <NormalBilling products={products} customers={customers} onCompleteSale={handleComplete} onAddCustomer={openCustomerQuickAdd} onPrintSale={printExistingInvoice} />}
-      {tab === "history" && <SalesList sales={sales} customers={customers} onShowProfit={can("accounting.view") ? (sale) => readAuthorizedInvoiceGrossProfit(sale.id) : undefined} buildPreviewHtml={(sale, paper) => buildSaleInvoiceHtml(sale, { paper, autoPrint: false })} onPrintA4={(sale) => printExistingInvoice(sale.id, "a4")} onPrintThermal={(sale) => printExistingInvoice(sale.id, "thermal")} onCreateReturn={(sale) => router.push(`/returns?saleId=${encodeURIComponent(sale.id)}`)} onCollectCustomerDue={(sale) => { if (sale.customerId) router.push(`/payments?customerId=${encodeURIComponent(sale.customerId)}`); }} />}
+      {getRuntimeMode() === "demo" && tab === "normal" && <NormalBilling products={products} customers={customers} onCompleteSale={handleComplete} onAddCustomer={openCustomerQuickAdd} onPrintSale={printExistingInvoice} />}
+      {getRuntimeMode() !== "demo" && tab === "history" && <p role="status" className="rounded border p-3 text-sm">Cloud sales history must be loaded with tenant-scoped Supabase readback before it can be displayed. Use the cloud receipt shown after checkout.</p>}
+      {getRuntimeMode() === "demo" && tab === "history" && <SalesList sales={sales} customers={customers} onShowProfit={can("accounting.view") ? (sale) => readAuthorizedInvoiceGrossProfit(sale.id) : undefined} buildPreviewHtml={(sale, paper) => buildSaleInvoiceHtml(sale, { paper, autoPrint: false })} onPrintA4={(sale) => printExistingInvoice(sale.id, "a4")} onPrintThermal={(sale) => printExistingInvoice(sale.id, "thermal")} onCreateReturn={(sale) => router.push(`/returns?saleId=${encodeURIComponent(sale.id)}`)} onCollectCustomerDue={(sale) => { if (sale.customerId) router.push(`/payments?customerId=${encodeURIComponent(sale.customerId)}`); }} />}
 
       <Modal
         open={customerOpen}

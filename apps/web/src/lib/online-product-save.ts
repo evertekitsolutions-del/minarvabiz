@@ -241,16 +241,16 @@ export async function saveStockAdjustmentOnline(
   }
 
   const authCfg = { ...cfg, accessToken: token };
-  const receipt = await pgRpc<Record<string, unknown>>(authCfg, "adjust_stock", {
+  if (referenceType !== "inventory_adjustment") {
+    throw new Error("Opening stock must be created through the atomic Product RPC.");
+  }
+  const receipt = await pgRpc<Record<string, unknown>>(authCfg, "saas_adjust_stock_once", {
+    p_mutation_id: referenceId,
     p_product_id: original.id,
     p_movement_type: "adjustment",
     p_quantity: delta,
     p_expected_version: original.version,
-    p_reference_type: referenceType,
-    p_reference_id: referenceId,
-    p_notes: "Manual stock correction",
     p_branch_id: original.branchId ?? null,
-    p_device_id: null,
   });
   // Both the committed balance AND the immutable transaction must be
   // independently confirmed. A timeout may occur after the RPC committed.
@@ -262,7 +262,7 @@ export async function saveStockAdjustmentOnline(
     pgSelect<Record<string, unknown>>(
       authCfg, "inventory_transactions",
       "select=*&reference_id=eq." + referenceId +
-      "&reference_type=eq." + referenceType + "&org_id=eq." + auth.orgId + "&limit=2",
+      "&reference_type=eq.saas_inventory&org_id=eq." + auth.orgId + "&limit=2",
     ),
   ]);
   const row = productRead.data?.[0];
