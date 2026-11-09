@@ -80,7 +80,7 @@ async function ensureUser(email, shopName) {
   ), "tenant headquarters");
   assert.ok(branches?.some(branch => branch.is_headquarters), "No default branch was created.");
   return { id: login.user.id, orgId: auth[0].auth_org_id, token: login.access_token,
-    branchId: branches.find(branch => branch.is_headquarters).id, email };
+    branchId: branches.find(branch => branch.is_headquarters).id, email, password };
 }
 async function rows(account, table, filters) {
   return check(await request(`/rest/v1/${table}?select=*&${filters}`, {
@@ -158,9 +158,14 @@ assert.equal((await rows(a, "categories", `id=eq.${categoryId}`)).length, 1,
 // Signed-in re-authenticated sessions, not a local in-memory snapshot.
 const repeatedLoginA = check(await request("/auth/v1/token?grant_type=password", {
   method: "POST", key: pub,
-  body: { email: a.email, password: process.env.MINARVA_QA_TEST_PASSWORD_A },
+  body: { email: a.email, password: a.password },
 }), "fresh session login");
 if (!repeatedLoginA.access_token) throw new Error("No signed JWT on re-login.");
+const reloadedA = await request(`/rest/v1/products?select=*&id=eq.${productId}&org_id=eq.${a.orgId}`, {
+  key: pub, token: repeatedLoginA.access_token,
+});
+assert.ok(reloadedA.ok && Array.isArray(reloadedA.data) && reloadedA.data.length === 1,
+  "P0: Test product missing after fresh authenticated session.");
 
 console.log(JSON.stringify({
   status: "LIVE_AUTH_REST_RLS_PASS",
