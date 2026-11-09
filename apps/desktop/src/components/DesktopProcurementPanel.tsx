@@ -21,6 +21,7 @@ export function DesktopProcurementPanel({
       suppliers={suppliers}
       products={products}
       warehouseLocations={warehouseStore.listWarehouseLocations()}
+      onRfqChanged={refresh}
       onCreate={(payload) => {
         const result = procurementStore.createPurchaseOrder(payload);
         refresh();

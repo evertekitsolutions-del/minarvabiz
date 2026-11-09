@@ -59,7 +59,7 @@ export function ProcurementPanel({
   onUpdateInvoice,
   onPostInvoice,
   onPayInvoice,
-  onCancelInvoice,
+  onCancelInvoice, onRfqChanged,
 }: {
   purchaseOrders: PurchaseOrder[];
   goodsReceipts: GoodsReceipt[];
@@ -109,6 +109,7 @@ export function ProcurementPanel({
     paymentMethod: PaymentMethod;
   }) => { success: boolean; error?: string };
   onCancelInvoice: (id: string, reason: string) => { success: boolean; error?: string };
+  onRfqChanged?: () => void | Promise<void>;
 }) {
   const supplierScorecard = React.useMemo(() => {
     try {
@@ -445,14 +446,14 @@ export function ProcurementPanel({
 
   return (
     <div className="space-y-4">
-      <RfqDraftPanel suppliers={suppliers} products={products} />
+      <RfqDraftPanel suppliers={suppliers} products={products} onChanged={onRfqChanged}/>
       <LandedCostPanel goodsReceipts={goodsReceipts} />
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">Supplier performance</CardTitle>
           <p className="text-xs text-slate-500">
             Approved purchase orders and actual goods receipts, as of today's UTC date.
-            Draft/cancelled orders are excluded. This report does not change stock or supplier accounts.
+            Only active orders count. No inventory/account changes.
           </p>
         </CardHeader>
         <CardContent>
@@ -506,7 +507,7 @@ export function ProcurementPanel({
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">Supplier purchase price history</CardTitle>
-          <p className="text-xs text-slate-500">Only posted supplier invoice costs, excluding tax. Historical prices are not a live quote, contractual rate or purchase order.</p>
+          <p className="text-xs text-slate-500">Only posted supplier invoice costs (excl. tax). Not a current quote or contracted price.</p>
         </CardHeader>
         <CardContent className="space-y-3">
           <label className="block max-w-lg text-xs font-medium text-slate-600">
@@ -660,7 +661,7 @@ export function ProcurementPanel({
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">Goods Receipts</CardTitle>
-          <p className="text-xs text-slate-500">GRNs update physical stock. Supplier invoices post AP separately, preventing double stock movement.</p>
+          <p className="text-xs text-slate-500">GRNs update stock. Supplier invoices post payables separately.</p>
         </CardHeader>
         <CardContent className="space-y-2">
           {!goodsReceipts.length && <p className="py-4 text-center text-sm text-slate-400">No goods receipts yet</p>}
@@ -687,7 +688,7 @@ export function ProcurementPanel({
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-semibold">Supplier Invoices / Accounts Payable</CardTitle>
-          <p className="text-xs text-slate-500">Invoice only quantities already received by GRN. Posting creates supplier payable; it never increases stock again.</p>
+          <p className="text-xs text-slate-500">Invoice received GRN quantity only. Posting creates payables, not stock.</p>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-6">
@@ -771,7 +772,7 @@ export function ProcurementPanel({
         {editPo && (
           <div className="space-y-4">
             <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">
-              Only draft purchase orders are editable. Approval locks supplier, quantities and commercial values before receiving begins.
+              Only draft purchase orders are editable. Approval locks supplier, quantity and price.
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <FormField label="Purchase order supplier *">

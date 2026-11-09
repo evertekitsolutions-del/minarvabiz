@@ -109,3 +109,13 @@ Local copy: `packages/business-logic/src/vendor/open-mercato/gtin.ts` (only the 
 Open Mercato upstream MIT Core: https://github.com/open-mercato/open-mercato/blob/eb3193df03b9ce0b196be417fe265c1dc47c0868/packages/core/src/modules/wms/lib/expiry.ts
 
 Copied verbatim with an attribution header into `packages/business-logic/src/vendor/open-mercato/expiry.ts`. Copyright (c) 2025-2026 Open Mercato contributors. Full MIT copyright notice, permission grant and disclaimer are reproduced above in the Open Mercato license text section of this file. The proprietary Minarva offline batch-expiry register uses the upstream `startOfUtcDay`, `addUtcDays`, and `EXPIRING_SOON_DAYS` helpers. It does not import upstream cloud framework, Enterprise code, or bundled database/stock modules.
+
+### PUR-002 supplier RFQ price parsing
+
+The verbatim MIT Open Mercato validator in
+`packages/business-logic/src/vendor/open-mercato/priceValidation.ts`
+comes from commit `4374c48def1654927805c4b760f0e7f8648280f2`,
+`packages/core/src/modules/catalog/lib/priceValidation.ts`.
+It retains Open Mercato contributors' copyright. The full MIT permission and warranty
+notice in the Open Mercato section above applies unchanged. This does not import
+`@open-mercato/enterprise` or other commercially licensed modules.

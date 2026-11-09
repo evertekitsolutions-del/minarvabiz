@@ -117,6 +117,7 @@ export default function PurchasesPage() {
       <PurchaseList purchases={purchases} suppliers={suppliers} onAdd={() => { setError(null); setOpen(true); }} />
 
       <ProcurementPanel
+        onRfqChanged={refresh}
         purchaseOrders={purchaseOrders}
         goodsReceipts={goodsReceipts}
         purchaseInvoices={purchaseInvoices}

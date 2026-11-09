@@ -39,7 +39,7 @@ export interface RfqDraftPreview {
 const MAX_SUPPLIERS = 25;
 const MAX_LINES = 50;
 const MAX_ROWS = 1000;
-function csvCell(value: string | number): string {
+export function rfqCsvCell(value: string | number): string {
   const valueString = String(value);
   const protectedValue = /^[\s\uFEFF]*[=+\-@\t\r]/u.test(valueString) ? "'" + valueString : valueString;
   return '"' + protectedValue.replace(/"/g, '""') + '"';
@@ -128,7 +128,7 @@ export function buildRfqDraftPreview(
   const csv = [header, ...rows.map(row => [
     reference, requiredBy, row.supplierId, row.supplierName, row.supplierEmail, row.productId,
     row.sku, row.productName, row.unit, String(row.quantity), notes,
-  ])].map(row => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
+  ])].map(row => row.map(rfqCsvCell).join(",")).join("\r\n") + "\r\n";
   return {
     reference, requiredBy, supplierCount: selectedSuppliers.length,
     productCount: selectedLines.length, rows, csv,
