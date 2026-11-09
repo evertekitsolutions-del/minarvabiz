@@ -4,7 +4,8 @@
  * Adapted toCatalog function from api/src/http/serializers.ts with local row typings.
  * Full MIT notice: ./LICENSE
  */
-import { money } from './money.js';
+// Inlined from the donor api/src/http/money.ts to keep this module pure and portable.
+const money = (amount: number, currency = 'INR') => ({ amount, currency });
 export type PriceUnit = 'piece' | 'bag' | 'kg';
 export type ServiceId = 'wash-fold' | 'wash-iron' | 'dry-cleaning' | 'premium-care';
 export type CatalogRow = {
