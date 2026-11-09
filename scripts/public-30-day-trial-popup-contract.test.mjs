@@ -40,7 +40,7 @@ assert.match(popup, /maxHeight: "calc\(100dvh - 24px\)"/, "Fit small screens");
 assert.match(popup, /\/minarva-biz-mark\.svg/);
 assert.match(popup, /\/marketing-dashboard\.jpg/, "Use Minarva-owned illustrative interface, not Vyapar imagery");
 assert.match(popup, /30<\/span>[\s\S]*Days Free Trial/, "Trial duration is 30 days");
-assert.match(popup, /v1\.0\.15/, "Link only official published installer");
+assert.match(popup, /SIGNUP_URL = "\/register"/, "SaaS registration replaces retired Windows installer");
 assert.match(popup, /trial eligibility and paid plan activation still require verification/i, "Do not imply automatic paid activation");
 assert.doesNotMatch(popup, /applyTrial\(|signUp\(|createUser\(|grantLicense\(/, "Popup may never alter commercial entitlement");
 assert.doesNotMatch(popup, /91%|crore|185K|5X more profits|4\.8/, "Never copy unverifiable competitor statistics");
