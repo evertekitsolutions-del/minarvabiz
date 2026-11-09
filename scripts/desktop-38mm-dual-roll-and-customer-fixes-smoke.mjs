@@ -136,6 +136,22 @@ for(const field of ["Size: M","Colour: Red","Material: Cotton","Price: Rs.999.00
   assert.equal(forty.split(field).length-1,40,"All 40 stickers preserve "+field);
 assert.doesNotMatch(forty,/Offer:|MRP:|window\.print\(\)/);
 assert.match(forty,/\.label-sheet\{break-after:page;page-break-after:always\}/);
+
+// Chromium must NOT combine a roll-length body with forced row page breaks.
+// That combination can clip or create phantom feed pages after the first pair.
+assert.match(forty,/html,body\{width:80mm;height:auto;min-height:0;margin:0;padding:0;overflow:visible\}/);
+assert.doesNotMatch(forty,/html,body\{[^}]*height:540mm/);
+assert.match(forty,/\.label-sheet\{width:80mm;height:calc\(27mm - \.25mm\)/);
+assert.match(forty,/\.label\{width:38mm;height:calc\(25mm - \.25mm\)/);
+assert.match(forty,/\.label-sheet:last-child\{break-after:auto;page-break-after:auto\}/);
+for (const copies of [1,2,3,4,39,40,41,99,100]) {
+  const candidate=m.exports.buildBarcodeLabelHtml(product,{copies,autoPrint:false});
+  assert.equal((candidate.match(/class="label-sheet"/g)||[]).length,Math.ceil(copies/2),
+    "Every two stickers must occupy exactly one independent native media page");
+  assert.equal((candidate.match(/class="label compact short"/g)||[]).length,copies);
+  assert.match(candidate,/height:auto;min-height:0;margin:0;padding:0;overflow:visible/,
+    "No total-roll body height can interfere with native Chromium pagination");
+}
 const odd=m.exports.buildBarcodeLabelHtml(product,{copies:41,autoPrint:false});
 assert.equal((odd.match(/class="label-sheet"/g)||[]).length,21,"Last unpaired sticker must form a row");
 assert.equal((odd.match(/class="label compact short"/g)||[]).length,41);
