@@ -56,8 +56,14 @@ test("web route awaits Supabase and never closes on unconfirmed save", () => {
   assert.match(service, /await pgRpc<Record<string, unknown>>\(authCfg, "adjust_stock"/);
   assert.match(service, /"inventory_transactions"/);
   assert.match(service, /p_reference_id: referenceId/);
-  assert.match(service, /String\(fields\.stockQuantity\), id, "opening_stock"/);
-  assert.match(service, /reference_type=eq\.opening_stock/);
-  assert.match(service, /postedProduct = toProduct\(confirmedRow\)/);
+  const atomicSql = readFileSync("supabase/migrations/20261109_saas_atomic_product_opening_stock.sql", "utf8");
+  assert.match(service, /"create_product_with_opening_stock"/);
+  assert.match(service, /p_stock_quantity: fields\.stockQuantity/);
+  assert.doesNotMatch(service, /return saveStockAdjustmentOnline\(/, "opening stock cannot split into a second write");
+  assert.match(atomicSql, /SECURITY INVOKER/);
+  assert.match(atomicSql, /ON CONFLICT \(id\) DO NOTHING/);
+  assert.match(atomicSql, /INSERT INTO public\.inventory_transactions/);
+  assert.match(atomicSql, /RAISE EXCEPTION 'Atomic opening stock receipt missing or duplicated'/);
+  assert.match(atomicSql, /CREATE UNIQUE INDEX IF NOT EXISTS inventory_one_opening_receipt_per_product/);
   assert.match(service, /movement\.created_by !== user\.id/);
 });
