@@ -6,7 +6,7 @@ import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStoc
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
 import { getRuntimeMode } from "@minarvabiz/business-logic";
-import { saveProductOnline, saveCategoryOnline } from "../../../lib/online-product-save";
+import { saveProductOnline, saveCategoryOnline, saveStockAdjustmentOnline } from "../../../lib/online-product-save";
 import { parseProductPrice } from "../../../lib/parse-product-price";
 import { KitRecipeManager } from "./kit-recipe-manager";
 
@@ -21,6 +21,9 @@ export default function ProductsPage() {
   const [stockProduct, setStockProduct] = React.useState<Product | null>(null);
   const [stockQty, setStockQty] = React.useState("");
   const [stockError, setStockError] = React.useState<string | null>(null);
+  const [stockBusy, setStockBusy] = React.useState(false);
+  const stockInFlight = React.useRef(false);
+  const pendingStockReference = React.useRef<string | null>(null);
   const [labelProduct, setLabelProduct] = React.useState<Product | null>(null);
   const [labelCopies, setLabelCopies] = React.useState("1");
   const [categoryOpen, setCategoryOpen] = React.useState(false);
@@ -333,20 +336,38 @@ export default function ProductsPage() {
     }
   }
 
-  function adjustStock() {
-    if (getRuntimeMode() !== "demo") {
-      setStockError("Online stock correction is blocked until the atomic Supabase receipt is verified.");
-      return;
-    }
-    if (!stockProduct) return;
+  async function adjustStock() {
+    if (!stockProduct || stockInFlight.current) return;
+    stockInFlight.current = true;
+    setStockBusy(true);
+    setStockError(null);
     try {
-      store.adjustStockToQuantity(stockProduct.id, stockQty, stockProduct.stockQuantity, "Manual stock correction");
-      setStockError(null);
+      if (getRuntimeMode() === "demo") {
+        store.adjustStockToQuantity(stockProduct.id, stockQty, stockProduct.stockQuantity, "Manual stock correction");
+      } else {
+        pendingStockReference.current ??= crypto.randomUUID();
+        await saveStockAdjustmentOnline(stockProduct, stockQty, pendingStockReference.current);
+      }
+      pendingStockReference.current = null;
       setStockProduct(null);
+      setStockError(null);
       refresh();
     } catch (err) {
-      setStockError(err instanceof Error ? err.message : String(err));
+      setStockError(err instanceof Error ? err.message : "Stock correction NOT confirmed in Supabase.");
+    } finally {
+      stockInFlight.current = false;
+      setStockBusy(false);
     }
+  }
+
+  function closeStockForm() {
+    if (stockInFlight.current) return;
+    if (getRuntimeMode() !== "demo" && pendingStockReference.current) {
+      setStockError("Stock correction is not confirmed. Retry the same reference to avoid a duplicate adjustment.");
+      return;
+    }
+    setStockProduct(null);
+    setStockError(null);
   }
 
   return (
@@ -546,7 +567,7 @@ export default function ProductsPage() {
         onAddCategory={() => { if (categoryInFlight.current) return; pendingCategoryId.current = null; setCategoryError(null); setCategoryOpen(true); }}
         onAdd={() => { resetForm(); setOpen(true); }}
         onEdit={openEdit}
-        onAdjustStock={(p) => { setStockProduct({ ...p }); setStockQty(String(p.stockQuantity)); setStockError(null); }}
+        onAdjustStock={(p) => { if (stockInFlight.current) return; pendingStockReference.current = null; setStockProduct({ ...p }); setStockQty(String(p.stockQuantity)); setStockError(null); }}
         onArchive={(product, reason) => { if (getRuntimeMode() !== "demo") return { error: "Online product archive is unavailable until cloud confirmation is implemented." }; const result = store.archiveProduct(product.id, reason); if (result.error) return { error: result.error }; refresh(); return { success: true }; }}
         onPrintBarcode={(p) => { setLabelProduct(p); setLabelCopies("1"); }}
       />
@@ -618,7 +639,7 @@ export default function ProductsPage() {
           {error && <p role="alert" className="sm:col-span-2 text-sm text-rose-600">{error}</p>}
         </div>
       </Modal>
-      <Modal open={!!stockProduct} title="Update Stock Quantity" onClose={() => { setStockProduct(null); setStockError(null); }} footer={<><Button variant="outline" onClick={() => { setStockProduct(null); setStockError(null); }}>Cancel</Button><Button onClick={adjustStock}>Update Stock</Button></>}>
+      <Modal open={!!stockProduct} title="Update Stock Quantity" onClose={closeStockForm} footer={<><Button variant="outline" onClick={closeStockForm} disabled={stockBusy}>Cancel</Button><Button onClick={() => { void adjustStock(); }} disabled={stockBusy}>{stockBusy ? "Confirming Stock…" : "Update Stock"}</Button></>}>
         <div className="space-y-3"><p className="text-sm text-slate-600">{stockProduct?.name} · Current stock: <strong>{stockProduct?.stockQuantity}</strong></p><FormField label="New stock quantity"><input className={inputClass} type="number" min="0" step="0.001" value={stockQty} onChange={(e) => { setStockQty(e.target.value); setStockError(null); }} /></FormField>{stockError && <p role="alert" className="text-sm text-rose-600">{stockError}</p>}</div>
       </Modal>
       <Modal open={!!labelProduct} title="Print Barcode Label" onClose={() => setLabelProduct(null)} footer={<><Button variant="outline" onClick={() => setLabelProduct(null)}>Cancel</Button><Button onClick={() => { if (!labelProduct?.barcode) { setError("Generate a barcode before printing."); return; } const category = categories.find((cat) => cat.id === labelProduct.categoryId); printBarcodeLabels(labelProduct, Math.max(1, parseInt(labelCopies, 10) || 1), category?.name || null); }}>Print Label</Button></>}>
