@@ -53,9 +53,9 @@ test("web route awaits Supabase and never closes on unconfirmed save", () => {
   assert.match(route, /await saveCategoryOnline\(/);
   assert.match(service, /Category NOT confirmed in Supabase/);
   assert.match(route, /await saveStockAdjustmentOnline\(/);
-  assert.match(service, /await pgRpc<Record<string, unknown>>\(authCfg, "adjust_stock"/);
+  assert.match(service, /await pgRpc<Record<string, unknown>>\(authCfg, "saas_adjust_stock_once"/);
   assert.match(service, /"inventory_transactions"/);
-  assert.match(service, /p_reference_id: referenceId/);
+  assert.match(service, /p_mutation_id: referenceId/);
   const atomicSql = readFileSync("supabase/migrations/20261109_saas_atomic_product_opening_stock.sql", "utf8");
   assert.match(service, /"create_product_with_opening_stock"/);
   assert.match(service, /p_stock_quantity: fields\.stockQuantity/);
