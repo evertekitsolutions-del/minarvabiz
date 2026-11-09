@@ -35,7 +35,7 @@ export function BoutiqueVariantMatrix({
   const [sku, setSku] = React.useState("");
   const [categoryId, setCategoryId] = React.useState("");
   const [minimumStock, setMinimumStock] = React.useState("0");
-  const [variants, setVariants] = React.useState<EditableVariant[]>(() => [newVariant("",1)]);
+  const [variants, setVariants] = React.useState<EditableVariant[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [confirmation, setConfirmation] = React.useState<string | null>(null);
 
@@ -53,7 +53,7 @@ export function BoutiqueVariantMatrix({
   function reset() {
     pendingParentId.current = null;
     setName(""); setSku(""); setCategoryId(""); setMinimumStock("0");
-    setVariants([newVariant("",1)]); setError(null);
+    setVariants([]); setError(null);
   }
   function close() {
     if (inFlight.current) return;
@@ -104,7 +104,7 @@ export function BoutiqueVariantMatrix({
         <strong className="text-sm">Boutique Variant Matrix</strong>
         <p className="text-xs text-slate-500">Brand · Fabric · Color · Size · independent SKU, barcode and GST-inclusive Price.</p>
       </div>
-      <Button type="button" onClick={() => { setConfirmation(null); setOpen(true); }}>Add Variant Product</Button>
+      <Button type="button" onClick={() => { setConfirmation(null); setVariants([newVariant("", 1)]); setOpen(true); }}>Add Variant Product</Button>
     </div>
     {confirmation && <p role="status" className="mt-2 text-sm text-emerald-700">{confirmation}</p>}
     <Modal open={open} title="Create Boutique Variant Family" className="max-w-5xl" onClose={close}
