@@ -170,6 +170,8 @@ jobs:
       - name: Verify cross-app security header baseline
         run: node --experimental-strip-types scripts/security-header-baseline-smoke.mjs
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
+      - name: Verify online laundry donor rate catalog uses Supabase receipts
+        run: node --experimental-strip-types --test scripts/saas-laundry-rate-cloud-contract.test.mjs
       - name: Verify SaaS tenant login link isolation
         run: node --experimental-strip-types --test apps/web/src/lib/__tests__/tenant-login-link.test.mjs
       - name: Verify online-only mobile PWA shell never caches business data
