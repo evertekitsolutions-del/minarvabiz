@@ -4,20 +4,19 @@ import TrialWelcomePopup from "./TrialWelcomePopup";
 
 export const metadata: Metadata = {
   title: "Minarva Biz | Business Management, Beautifully Connected",
-  description: "Minarva Biz connects billing, inventory, GST and accounts, CRM, staff attendance and services, with business websites, e-commerce and marketing integrations on the roadmap. Windows Offline, Online and Hybrid.",
+  description: "Minarva Biz connects billing, inventory, GST and accounts, CRM, staff attendance and services, with business websites, e-commerce and marketing integrations on the roadmap. Online SaaS and mobile-first business access.",
   robots: { index: true, follow: true },
 };
 
-const releaseUrl = "https://github.com/evertekitsolutions-del/minarvabiz/releases/tag/v1.0.15";
 const navigation = [
   { title: "Product tour", href: "#product-tour" },
   { title: "Features", href: "#features" },
   { title: "Solutions", href: "/solutions" },
   { title: "Industries", href: "#industries" },
-  { title: "Editions", href: "#editions" },
+  { title: "Online access", href: "#editions" },
   { title: "Pricing", href: "/pricing" },
   { title: "Partner with us", href: "/partners" },
-  { title: "Download", href: "#download" },
+  { title: "Register", href: "/register" },
   { title: "FAQ", href: "#faq" },
 ] as const;
 
@@ -68,13 +67,13 @@ const industries: {title:string;description:string;icon:IconName;accent:string;s
   {title:"Wholesale",slug:"wholesale",description:"Bulk sales, purchase orders and supplier records",icon:"warehouse",accent:"from-[#ffeedc] via-[#f8dfc5] to-[#e6ae76]",scene:"Bulk stock"},
 ];
 const faqs = [
-  { question: "Can Minarva Biz work without the internet?", answer: "The Windows edition is designed for local-first workflows. Online operations and synchronization require connectivity. Real customer Offline/Hybrid acceptance is still in progress." },
+  { question: "Can Minarva Biz work without the internet?", answer: "Minarva Biz is an online-only SaaS service. An internet connection is required." },
   { question: "Does this website show real customer business data?", answer: "No. The hero dashboard is a design-reference image, not a live application screenshot; the product walkthrough is illustrative. Real customer data is not published here." },
-  { question: "How long is the free trial?", answer: "The Minarva Biz trial period is 30 days. Self-service signup and automatic trial activation are still in progress; trial access requires supported activation." },
+  { question: "How long is the free trial?", answer: "The Minarva Biz trial period is 30 days. Online registration is available in the current development source; trial and paid entitlements still require supported activation." },
   { question: "Are all features available for every business?", answer: "Availability depends on edition, module readiness, location-specific requirements and verification. The product direction is broad, but this website does not claim universal readiness." },
-  { question: "Are e-commerce websites and business websites included?", answer: "They are part of Minarva Biz's complete platform roadmap. A customer website builder, integrated online checkout and marketing automation are in development, not yet active in the Windows release or 30-day trial." },
+  { question: "Are e-commerce websites and business websites included?", answer: "They are part of Minarva Biz's complete platform roadmap. A customer website builder, integrated online checkout and marketing automation are in development, not yet included in an activated subscription." },
   { question: "Can I earn by referring Minarva Biz?", answer: "We are preparing a referral programme with a proposed one-time 10% commission on eligible first paid subscriptions. It is not yet an active automatic payout programme. See Partner with us for draft conditions." },
-  { question: "How do I download the Windows edition?", answer: "The Download button links to the official v1.0.15 GitHub release. Review the available installer assets and release notes before installing." },
+  { question: "How do I register my business?", answer: "Use Register to create an online account, verify your email and obtain your business login link. Subscription activation still requires verification." },
 ] as const;
 export default function PublicHomePage() {
   return <div className="min-h-screen overflow-x-clip bg-white text-[#10243e]">
@@ -88,7 +87,7 @@ export default function PublicHomePage() {
         </nav>
         <div className="ml-auto flex items-center gap-2">
           <a href="/login" className="inline-flex min-h-10 items-center justify-center rounded-xl border border-[#bcd2fc] bg-white px-4 text-xs font-bold text-[#1254dc] transition hover:bg-[#eff5ff] sm:text-sm">Customer login</a>
-          <a href={releaseUrl} target="_blank" rel="noopener noreferrer" className="hidden min-h-10 items-center justify-center gap-2 rounded-xl bg-[#165fee] px-4 text-xs font-extrabold text-white shadow-[0_7px_18px_rgba(27,101,232,.2)] transition hover:bg-[#084bc9] sm:inline-flex"><Icon name="monitor" className="size-4"/>Windows download</a>
+          <a href="/register" className="hidden min-h-10 items-center justify-center gap-2 rounded-xl bg-[#165fee] px-4 text-xs font-extrabold text-white shadow-[0_7px_18px_rgba(27,101,232,.2)] transition hover:bg-[#084bc9] sm:inline-flex"><Icon name="cloud" className="size-4"/>Register online</a>
         </div>
         <details className="group w-full xl:hidden">
           <summary className="flex cursor-pointer list-none items-center justify-between rounded-xl border border-[#d6e3fc] bg-[#f8fbff] px-4 py-3 text-sm font-bold text-[#243e6c] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1760ef] [&::-webkit-details-marker]:hidden">
@@ -116,15 +115,15 @@ export default function PublicHomePage() {
               {["Built around real workflows","Windows local-first","Flexible business modules"].map(x=><span key={x} className="inline-flex items-center gap-1.5 rounded-full border border-[#dbeaf8] bg-white/90 px-3 py-2"><Icon name="check" className="size-4 text-[#0ca569]"/>{x}</span>)}
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
-              <a href={releaseUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#1260f1] px-6 py-3.5 text-sm font-extrabold text-white shadow-[0_15px_32px_rgba(21,93,220,.23)] transition hover:-translate-y-0.5 hover:bg-[#0e4fca]">
-                <Icon name="monitor" className="size-[18px]"/> Download for Windows <Icon name="arrow" className="size-4"/>
+              <a href="/register" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#1260f1] px-6 py-3.5 text-sm font-extrabold text-white shadow-[0_15px_32px_rgba(21,93,220,.23)] transition hover:-translate-y-0.5 hover:bg-[#0e4fca]">
+                <Icon name="cloud" className="size-[18px]"/> Register online <Icon name="arrow" className="size-4"/>
               </a>
               <a href="#product-tour" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#b9cff4] bg-white px-6 py-3.5 text-sm font-bold text-[#154ba6] transition hover:bg-[#eaf2ff]">
                 <span aria-hidden="true" className="grid size-6 place-items-center rounded-full bg-[#e7f0ff] text-[#135dec]">▶</span> Explore product tour
               </a>
             </div>
             <p className="mt-3 max-w-[670px] text-[11px] leading-5 text-[#6d8199]">
-              Official published Windows release: v1.0.15. Self-service signup and some cross-edition acceptance steps are still in progress.
+              Online account registration and tenant access are being introduced. Subscription payments and full customer acceptance remain pending verification.
             </p>
           </div>
           <div className="relative min-w-0 pb-3">
@@ -277,12 +276,12 @@ export default function PublicHomePage() {
         <div className="mx-auto max-w-[1720px] px-5 py-14 sm:py-16 lg:px-9">
           <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#a8d2ff]">One platform. Your way.</p>
           <h2 className="mt-3 text-[clamp(1.75rem,2.65vw,2.8rem)] font-black tracking-[-0.04em] sm:text-5xl">Choose how you work.</h2>
-          <p className="mt-5 max-w-2xl text-sm leading-8 text-[#c8dcf4]">A connected core designed for the different ways your business runs. Cross-edition acceptance remains ongoing.</p>
+          <p className="mt-5 max-w-2xl text-sm leading-8 text-[#c8dcf4]">A connected core designed for the different ways your business runs. Multi-tenant and mobile acceptance remain ongoing.</p>
           <div className="mt-11 grid gap-4 lg:grid-cols-3">
             {[
               {name:"Online",sub:"WORK IN YOUR BROWSER",desc:"Reach your authenticated business workspace in a supported browser.",details:["Connected business modules","Role-based access","Account-based workflows"],icon:"cloud" as IconName},
-              {name:"Windows Offline",sub:"LOCAL-FIRST DESKTOP",desc:"Use supported local workflows even when the connection is unavailable.",details:["Windows desktop application","Local operational records","Published installer releases"],icon:"monitor" as IconName},
-              {name:"Hybrid",sub:"WORK ACROSS BOTH",desc:"Bring supported local-first processes and cloud synchronization together.",details:["Shared product foundation","Online and offline workflows","Sync acceptance in progress"],icon:"smartphone" as IconName},
+              {name:"Mobile App",sub:"PHONE AND TABLET",desc:"Use an authenticated mobile-first web application while the installable PWA is prepared.",details:["Responsive browser interface","Secure account login","Installable PWA in development"],icon:"smartphone" as IconName},
+              {name:"Cloud Teams",sub:"ONE ONLINE WORKSPACE",desc:"Support company users and branches through tenant-isolated cloud access.",details:["Supabase tenant isolation","Role-scoped access","Cross-device acceptance in progress"],icon:"cloud" as IconName},
             ].map((ed,i)=><article key={ed.name} className={"flex flex-col rounded-[22px] border p-7 sm:p-8 "+(i===1?"border-[#66a7f9] bg-white text-[#12365d] shadow-[0_20px_55px_rgba(0,0,0,.19)]":"border-white/20 bg-white/10 text-white")}>
               <span className={"grid size-12 place-items-center rounded-2xl "+(i===1?"bg-[#e3efff] text-[#1260e5]":"bg-white/15 text-white")}><Icon name={ed.icon} className="size-6"/></span>
               <p className={"mt-6 text-[10px] font-black uppercase tracking-widest "+(i===1?"text-[#1466dc]":"text-[#bcdcff]")}>{ed.sub}</p>
@@ -293,17 +292,17 @@ export default function PublicHomePage() {
               </ul>
             </article>)}
           </div>
-          <p className="mt-6 text-xs leading-6 text-[#c5dcf5]">The evaluation period is 30 days. Public pricing and self-service trial activation are not yet available; eligibility and activation require verification.</p>
+          <p className="mt-6 text-xs leading-6 text-[#c5dcf5]">Registration does not start a paid subscription. Trial activation and plan entitlements are separately verified.</p>
         </div>
       </section>
-      <section id="download" className="scroll-mt-28 bg-[#eaf3ff]">
+      <section id="get-started" className="scroll-mt-28 bg-[#eaf3ff]">
         <div className="mx-auto flex max-w-[1720px] flex-col items-start justify-between gap-6 px-5 py-14 sm:py-20 lg:flex-row lg:items-center lg:px-9">
-          <div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#1664eb]">Windows desktop edition</p><h2 className="mt-3 text-3xl font-black tracking-[-0.05em] text-[#0d2b55] sm:text-4xl">Explore Minarva Biz on Windows.</h2><p className="mt-4 max-w-2xl text-sm leading-7 text-[#5b7393]">Official published installer: v1.0.15. Review the release notes and assets before installation; customer onboarding and Hybrid acceptance are still being verified.</p></div>
-          <a href={releaseUrl} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-[#1461ee] px-7 py-4 text-sm font-extrabold text-white shadow-[0_14px_25px_rgba(12,77,193,.18)] transition hover:bg-[#0c50ce]">View official Windows release <Icon name="arrow" className="size-4"/></a>
+          <div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#1664eb]">Online SaaS registration</p><h2 className="mt-3 text-3xl font-black tracking-[-0.05em] text-[#0d2b55] sm:text-4xl">Create your business account.</h2><p className="mt-4 max-w-2xl text-sm leading-7 text-[#5b7393]">Register through the website, verify your email and retrieve a tenant-specific login link. Payment collection and plan activation are not enabled yet.</p></div>
+          <a href="/register" className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-[#1461ee] px-7 py-4 text-sm font-extrabold text-white shadow-[0_14px_25px_rgba(12,77,193,.18)] transition hover:bg-[#0c50ce]">Register for online access <Icon name="arrow" className="size-4"/></a>
         </div>
       </section>
       <section id="faq" className="scroll-mt-28 mx-auto grid max-w-[1720px] gap-10 px-5 py-20 sm:py-24 lg:grid-cols-[0.7fr_1fr] lg:px-9">
-        <div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#1562e9]">Good to know</p><h2 className="mt-3 text-[clamp(1.75rem,2.65vw,2.8rem)] font-black tracking-[-0.04em] text-[#102a4c] sm:text-5xl">Questions,<br/>answered.</h2><p className="mt-5 max-w-xs text-sm leading-7 text-[#687f96]">Clear information about access, readiness and download options.</p></div>
+        <div><p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#1562e9]">Good to know</p><h2 className="mt-3 text-[clamp(1.75rem,2.65vw,2.8rem)] font-black tracking-[-0.04em] text-[#102a4c] sm:text-5xl">Questions,<br/>answered.</h2><p className="mt-5 max-w-xs text-sm leading-7 text-[#687f96]">Clear information about registration, mobile access and readiness.</p></div>
         <div className="divide-y divide-[#e1e9f5] border-y border-[#e1e9f5]">
           {faqs.map(q=><details key={q.question} className="group py-5">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-5 rounded-md text-[15px] font-extrabold text-[#1b3559] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1661ee] [&::-webkit-details-marker]:hidden"><span>{q.question}</span><span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#edf4ff] text-lg font-normal text-[#1661ee] transition group-open:rotate-45" aria-hidden="true">+</span></summary>
@@ -316,7 +315,7 @@ export default function PublicHomePage() {
       <div className="mx-auto grid max-w-[1720px] gap-8 px-5 py-12 lg:grid-cols-[1fr_auto] lg:px-9">
         <div><Logo/><p className="mt-5 max-w-md text-sm leading-7 text-[#67809b]">One connected business platform for billing, accounts, customers, people, services and the future of online growth. Module readiness varies.</p></div>
         <nav aria-label="Footer navigation" className="flex flex-wrap items-start gap-5 text-xs font-bold text-[#3c6084]">
-          <a href="#product-tour" className="hover:text-[#175ce5]">Product tour</a><a href="/solutions" className="hover:text-[#175ce5]">All solutions</a><a href="/pricing" className="hover:text-[#175ce5]">Pricing</a><a href="/partners" className="hover:text-[#175ce5]">Partner with us</a><a href="#features" className="hover:text-[#175ce5]">Features</a><a href="#editions" className="hover:text-[#175ce5]">Editions</a><a href="/login" className="hover:text-[#175ce5]">Customer login</a><a href={releaseUrl} target="_blank" rel="noopener noreferrer" className="hover:text-[#175ce5]">Windows release</a>
+          <a href="#product-tour" className="hover:text-[#175ce5]">Product tour</a><a href="/solutions" className="hover:text-[#175ce5]">All solutions</a><a href="/pricing" className="hover:text-[#175ce5]">Pricing</a><a href="/partners" className="hover:text-[#175ce5]">Partner with us</a><a href="#features" className="hover:text-[#175ce5]">Features</a><a href="#editions" className="hover:text-[#175ce5]">Editions</a><a href="/login" className="hover:text-[#175ce5]">Customer login</a><a href="/register" className="hover:text-[#175ce5]">Register</a>
         </nav>
       </div>
       <nav aria-label="Industry guides" className="mx-auto flex max-w-[1720px] flex-wrap items-center gap-x-5 gap-y-3 border-t border-[#dce8f6] px-5 py-5 text-[11px] lg:px-9">
@@ -327,7 +326,7 @@ export default function PublicHomePage() {
         <span className="text-[#6683a2]">Explore features</span>
         {features.map(item=><a key={item.slug} href={"/features/"+item.slug} className="text-[#245897] hover:text-[#145de4] hover:underline">{item.title}</a>)}
       </nav>
-      <div className="mx-auto flex max-w-[1720px] flex-col justify-between gap-3 border-t border-[#dce8f6] px-5 py-5 text-[11px] text-[#6682a0] sm:flex-row lg:px-9"><span>© Minarva Biz · A connected business platform.</span><span>Online · Windows Offline · Hybrid</span></div>
+      <div className="mx-auto flex max-w-[1720px] flex-col justify-between gap-3 border-t border-[#dce8f6] px-5 py-5 text-[11px] text-[#6682a0] sm:flex-row lg:px-9"><span>© Minarva Biz · A connected business platform.</span><span>Online SaaS · Mobile App</span></div>
     </footer>
   </div>;
 }
