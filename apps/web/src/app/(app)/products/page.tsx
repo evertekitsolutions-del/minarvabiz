@@ -85,6 +85,15 @@ export default function ProductsPage() {
   }
 
   function handleSave() {
+    // ONLINE SaaS safety gate: the legacy store acknowledges writes before
+    // Supabase commits. Never close this editor or claim success on that path.
+    // Re-enable only after a tenant-scoped, server-acknowledged transactional
+    // save API with idempotency and RLS verification is integrated.
+    setError("Cloud product saving is temporarily unavailable until secure server confirmation is enabled. Your unsaved form remains open.");
+    return;
+  }
+
+  function legacyHandleSaveUnsafe() {
     try {
       const parsed = productSchema.safeParse({
         name: form.name,
