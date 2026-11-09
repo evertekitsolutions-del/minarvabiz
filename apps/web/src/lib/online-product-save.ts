@@ -4,7 +4,7 @@
  * A stable client mutation ID makes timeout/retry safe for CREATE.
  */
 import { configFromEnv, pgInsert, pgSelect, pgUpdate } from "@minarvabiz/database";
-import { getSessionToken, getSessionUser, store } from "@minarvabiz/business-logic";
+import { can, exportOutbox, getOutboxScope, getSessionToken, getSessionUser, store } from "@minarvabiz/business-logic";
 import type { Product } from "@minarvabiz/types";
 import { resolveOnlineAuthorization } from "./data-source";
 import { productCloudColumns, matchesProductCloudReceipt } from "./online-product-receipt";
@@ -55,6 +55,9 @@ export async function saveProductOnline(
   if (!cfg || !token || !user?.id) throw new Error("Signed-in Supabase account required for product saving.");
   const auth = await resolveOnlineAuthorization(token, user.id);
   if (!auth.ok) throw new Error(auth.error);
+  if (!can("products.manage")) throw new Error("This role cannot save products.");
+  const verifiedScope = auth.orgId + ":" + user.id;
+  if (getOutboxScope() !== verifiedScope) throw new Error("Cloud tenant context is not ready. Reload your signed-in account.");
 
   const editing = options.editing;
   const id = editing?.id ?? options.createId;
@@ -64,6 +67,14 @@ export async function saveProductOnline(
   if (editing && (fields.stockQuantity !== editing.stockQuantity ||
       !Number.isSafeInteger(editing.version ?? 0) || (editing.version ?? 0) < 1)) {
     throw new Error("Stock adjustments require the authorized stock workflow and a current product version.");
+  }
+  // A pending local revision must not be overwritten by a separate direct SQL
+  // path, and an unsettled stock/financial event can supersede this product.
+  if (exportOutbox().some(event => event.ownerScope === verifiedScope &&
+      (event.status === "pending" || event.status === "failed") &&
+      (event.aggregateType === "products" && event.aggregateId === id ||
+        !["categories", "customers", "products"].includes(event.aggregateType)))) {
+    throw new Error("Pending cloud transactions exist. Reconcile them before saving another product.");
   }
   const version = editing ? (editing.version ?? 1) + 1 : 1;
   const now = new Date().toISOString();
