@@ -100,3 +100,4 @@
 20261104_cloudflare_admin_trial_emergency_access.sql
 20261109_saas_atomic_product_opening_stock.sql
 20261109_saas_atomic_product_opening_stock_auth_scope_fix.sql
+20261109_saas_boutique_variant_family.sql
