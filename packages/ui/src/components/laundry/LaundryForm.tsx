@@ -6,6 +6,8 @@ import { FormField, inputClass, selectClass } from "../forms/FormField";
 import {
   calculateLaundryProfit, calculateLaundryTicketTotals, LAUNDRY_SERVICES, LAUNDRY_FABRICS, can,
   findLaundryRateCard, listLaundryRateCards, saveLaundryRateCard,
+  LAUNDRY_DONOR_SERVICE_PRESETS, laundryDonorPreset, getRuntimeMode,
+  type LaundryRateInput, type LaundryRateCard,
   type LaundryServiceCode, type LaundryFabricCode,
 } from "@minarvabiz/business-logic";
 import { formatMoney } from "../customers/format";
@@ -19,7 +21,7 @@ type LaundrySubmit = {
   paidAmount: number; paymentMethod: PaymentMethod; notes: string;
 };
 
-export function LaundryForm({mode,customers,suppliers,onSubmit,onCancel,onAddCustomer,onAddSupplier,error}:{mode:"outsourced"|"in_house_ironing";customers:Customer[];suppliers:Supplier[];onSubmit:(data:LaundrySubmit)=>void;onCancel:()=>void;onAddCustomer?:()=>void;onAddSupplier?:()=>void;error?:string|null}){
+export function LaundryForm({mode,customers,suppliers,onSubmit,onCancel,onAddCustomer,onAddSupplier,onSaveRateOnline,error}:{mode:"outsourced"|"in_house_ironing";customers:Customer[];suppliers:Supplier[];onSubmit:(data:LaundrySubmit)=>void;onCancel:()=>void;onAddCustomer?:()=>void;onAddSupplier?:()=>void;onSaveRateOnline?:(input:LaundryRateInput,stableId:string)=>Promise<LaundryRateCard>;error?:string|null}){
  const [customerId,setCustomerId]=React.useState("");
  const [rows,setRows]=React.useState<GarmentRow[]>([{key:1,label:"",quantity:"1",notes:""}]);
  const [nextKey,setNextKey]=React.useState(2);
@@ -37,6 +39,9 @@ export function LaundryForm({mode,customers,suppliers,onSubmit,onCancel,onAddCus
  const [tatHours,setTatHours]=React.useState("48");
  const [rateCards,setRateCards]=React.useState(()=>listLaundryRateCards());
  const [rateFeedback,setRateFeedback]=React.useState("");
+ const [rateSaving,setRateSaving]=React.useState(false);
+ const rateInFlight=React.useRef(false);
+ const pendingRateId=React.useRef<string|null>(null);
  const firstGarment=rows[0]?.label.trim()||"";
  const validTat=Number.isSafeInteger(Number(tatHours))&&Number(tatHours)>=1&&Number(tatHours)<=2160;
  function applyRate(){
@@ -49,14 +54,32 @@ export function LaundryForm({mode,customers,suppliers,onSubmit,onCancel,onAddCus
   }
   setRateFeedback("Saved rate applied.");
  }
- function saveRate(){
+ async function saveRate(){
+  if(rateInFlight.current)return;
   if(!firstGarment||!validTat){setRateFeedback("Garment and valid turnaround hours required.");return;}
+  rateInFlight.current=true;
+  setRateSaving(true);
+  const fields={mode,serviceCode,garment:firstGarment,fabric:fabricType,
+   supplierId:mode==="outsourced"?(supplierId||null):null,
+   customerRate:Number(customerRate),supplierRate:mode==="in_house_ironing"?0:Number(supplierRate),
+   tatHours:Number(tatHours)};
   try{
-   saveLaundryRateCard({mode,serviceCode,garment:firstGarment,fabric:fabricType,supplierId:mode==="outsourced"?(supplierId||null):null,
-    customerRate:Number(customerRate),supplierRate:mode==="in_house_ironing"?0:Number(supplierRate),
-    tatHours:Number(tatHours)});
-   setRateCards(listLaundryRateCards());setRateFeedback("Rate saved locally with backups.");
-  }catch(error){setRateFeedback(error instanceof Error?error.message:"Unable to save rate");}
+   if(getRuntimeMode()==="demo"){
+    saveLaundryRateCard(fields);
+    setRateFeedback("Demo rate saved. No cloud data was changed.");
+   }else{
+    if(!onSaveRateOnline)throw new Error("Online rate saving requires confirmed Supabase persistence.");
+    pendingRateId.current??=crypto.randomUUID();
+    await onSaveRateOnline(fields,pendingRateId.current);
+    pendingRateId.current=null;
+    setRateFeedback("Rate confirmed in Supabase PostgreSQL.");
+   }
+   setRateCards(listLaundryRateCards());
+  }catch(error){
+   setRateFeedback(error instanceof Error?error.message:"Rate NOT saved to Supabase.");
+  }finally{
+   rateInFlight.current=false;setRateSaving(false);
+  }
  }
  const quantity=rows.reduce((sum,row)=>sum+(Number(row.quantity)||0),0);
  const validMoney=(value:string|undefined)=>typeof value==="string"&&/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(value);
@@ -115,6 +138,19 @@ export function LaundryForm({mode,customers,suppliers,onSubmit,onCancel,onAddCus
   <div className="grid grid-cols-2 gap-3"><FormField label="Pickup date"><input type="date" className={inputClass} value={pickupAt} onChange={e=>setPickupAt(e.target.value)}/></FormField><FormField label="Due / delivery date"><input type="date" min={pickupAt||undefined} className={inputClass} value={dueAt} onChange={e=>setDueAt(e.target.value)}/></FormField></div>
   <div className="space-y-2 rounded-xl border border-slate-200 p-3">
    <div className="text-sm font-semibold text-slate-900">Laundry service & rate card</div>
+   <FormField label="Starter service package (MIT Laundry Lo)">
+    <select className={selectClass} defaultValue="" onChange={e=>{
+      const preset=laundryDonorPreset(e.currentTarget.value);
+      if(!preset)return;
+      setServiceCode(preset.serviceCode);
+      setCustomerRate(String(preset.startingPriceINR));
+      setTatHours(String(preset.defaultTatHours));
+      setRateFeedback("Suggested starting rate only; verify garment/fabric price before saving.");
+    }}>
+     <option value="">Choose a package</option>
+     {LAUNDRY_DONOR_SERVICE_PRESETS.map(p=><option key={p.id} value={p.id}>{p.name} · from ₹{p.startingPriceINR}/piece</option>)}
+    </select>
+   </FormField>
    <div className="grid gap-2 sm:grid-cols-3">
     <FormField label="Service"><select className={selectClass} value={serviceCode} onChange={e=>setServiceCode(e.target.value as LaundryServiceCode)}>{LAUNDRY_SERVICES.map(s=><option key={s.code} value={s.code}>{s.label}</option>)}</select></FormField>
     <FormField label="Fabric type"><select className={selectClass} value={fabricType} onChange={e=>setFabricType(e.target.value as LaundryFabricCode)}>{LAUNDRY_FABRICS.map(f=><option key={f} value={f}>{f.replaceAll("_"," ")}</option>)}</select></FormField>
@@ -122,7 +158,7 @@ export function LaundryForm({mode,customers,suppliers,onSubmit,onCancel,onAddCus
    </div>
    <div className="flex flex-wrap gap-2">
     <Button type="button" size="sm" variant="outline" disabled={!firstGarment} onClick={applyRate}>Apply saved garment rate</Button>
-    {can("settings.manage") && <Button type="button" size="sm" variant="outline" disabled={!firstGarment||!validTat} onClick={saveRate}>Save rate to catalog</Button>}
+    {can("settings.manage") && <Button type="button" size="sm" variant="outline" disabled={!firstGarment||!validTat||rateSaving} onClick={()=>{void saveRate();}}>{rateSaving?"Confirming in Supabase…":"Save rate to catalog"}</Button>}
     <span className="self-center text-xs text-slate-500">{rateCards.length} saved garment rate(s)</span>
    </div>
    {rateFeedback && <p role="status" className="text-xs text-slate-700">{rateFeedback}</p>}
