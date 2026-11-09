@@ -110,6 +110,7 @@ export * from "./invoice";
 export * from "./users";
 export * from "./audit-actions";
 export * from "./permissions";
+export { stockCountDelta, planManualStockAdjustment } from "./stock-adjustment-guard";
 export * from "./runtime-mode";
 export * from "./outbox-bridge";
 export * from "./pagination";
