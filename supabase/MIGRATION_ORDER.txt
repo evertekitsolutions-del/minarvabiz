@@ -107,3 +107,4 @@
 20261109_saas_checkout_price_authority_guard.sql
 20261109_saas_laundry_garment_lifecycle.sql
 20261109_saas_laundry_jobs_rpc_only.sql
+20261110_saas_tenant_public_storefront.sql
