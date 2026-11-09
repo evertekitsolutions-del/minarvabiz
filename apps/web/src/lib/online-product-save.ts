@@ -4,7 +4,7 @@
  * A stable client mutation ID makes timeout/retry safe for CREATE.
  */
 import { configFromEnv, pgInsert, pgRpc, pgSelect, pgUpdate } from "@minarvabiz/database";
-import { can, exportOutbox, getOutboxScope, getSessionToken, getSessionUser, stockCountDelta, store } from "@minarvabiz/business-logic";
+import { can, exportOutbox, getOutboxScope, getSessionToken, getSessionUser, planManualStockAdjustment, stockCountDelta, store } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { resolveOnlineAuthorization } from "./data-source";
 import { productCloudColumns, matchesProductCloudReceipt } from "./online-product-receipt";
@@ -208,7 +208,8 @@ export async function saveStockAdjustmentOnline(
   if (original.hasVariants) throw new Error("Adjust a specific variant, not its product group.");
   const delta = stockCountDelta(rawTarget, original.stockQuantity, original.stockQuantity);
   if (delta === 0) return original;
-  const expectedQuantity = Math.round((original.stockQuantity + delta) * 1000) / 1000;
+  const plan = planManualStockAdjustment(original.id, original.branchId, original.stockQuantity, "adjustment", delta);
+  const expectedQuantity = plan.next;
   const expectedVersion = (original.version ?? 1) + 1;
   const cfg = configFromEnv();
   const token = getSessionToken();
