@@ -161,7 +161,7 @@ export async function saveProductOnline(
     throw new Error("Product committed, but the account changed during save. Sign in again and reload your catalog.");
   }
 
-  const confirmed = toProduct(verified.data[0], editing);
+  const confirmed = toProduct(confirmedRow, editing);
   const current = store.exportCoreState().products;
   store.hydrateCore({ products: current.filter(p => p.id !== id).concat(confirmed) });
   return confirmed;
