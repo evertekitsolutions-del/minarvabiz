@@ -300,3 +300,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// Optional, non-authoritative social lead intake proposal; adapters verify and persist.
+export * from "./social-lead-intake";
