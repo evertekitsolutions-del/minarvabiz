@@ -45,4 +45,4 @@ Old Electron, SQLite and Hybrid source remains only to preserve historical work 
 
 ## License and third-party code
 
-Minarva Biz is proprietary commercial software owned by Evertek IT Solutions. Repository visibility does not grant open-source redistribution rights. Reused OSS must have a compatible license and preserved attribution; see [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Minarva Biz is proprietary commercial software owned by Evertek IT Solutions. Repository visibility does not grant open-source redistribution rights. Reused OSS must have a compatible license and preserved attribution; see [Proprietary software notice](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
