@@ -43,7 +43,7 @@ test("web route awaits Supabase and never closes on unconfirmed save", () => {
   assert.match(route, /if \(saveInFlight\.current\) return/);
   assert.match(route, /pendingCreateId\.current \?\?= crypto\.randomUUID\(\)/);
   assert.match(route, /setOpen\(false\);\s*setError\(null\);\s*resetForm\(\);/);
-  assert.match(service, /await pgSelect.*authCfg/);
+  assert.match(service, /await pgSelect<[^>]+>\(authCfg/);
   assert.match(service, /matchesProductCloudReceipt\(/);
   assert.match(service, /getSessionToken\(\) !== token/);
   assert.doesNotMatch(route, /void\s+saveProductOnline/);
