@@ -8,6 +8,7 @@ export const metadata: Metadata = {
 const packages = [
   {
     name: "Starter",
+    code: "starter",
     price: "₹2,299",
     target: "Billing essentials for small businesses",
     status: "Core workflows",
@@ -16,6 +17,7 @@ const packages = [
   },
   {
     name: "Business Pro",
+    code: "business-pro",
     price: "₹4,499",
     target: "Operations, customers and teams",
     status: "Core workflows",
@@ -24,6 +26,7 @@ const packages = [
   },
   {
     name: "Business Web",
+    code: "business-web",
     price: "₹6,699",
     target: "Business website and digital presence",
     status: "Website integration in development",
@@ -32,6 +35,7 @@ const packages = [
   },
   {
     name: "Business 360",
+    code: "business-360",
     price: "₹8,899",
     target: "The complete connected commerce vision",
     status: "E-commerce integration in development",
@@ -82,6 +86,7 @@ export default function PricingPage() {
             {p.includes.map(f => <li key={f} className="flex gap-2.5 text-[13px] leading-6 text-[#405c76]"><span aria-hidden="true" className="font-black text-[#119a6e]">✓</span><span>{f}</span></li>)}
           </ul>
           <p className="mt-auto pt-7 text-xs leading-6 text-[#6a8298]">{p.note}</p>
+          <a href={"/register?plan=" + p.code} className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-[#1760e6] px-4 py-3 text-xs font-black text-white hover:bg-[#0f50bc]">Register / request plan</a>
         </article>)}
       </div>
       <section className="mt-9 rounded-[22px] border border-[#cddff8] bg-white p-7 sm:p-9">
