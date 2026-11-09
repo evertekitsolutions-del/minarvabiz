@@ -112,7 +112,7 @@ export default function PublicHomePage() {
               Billing, accounts, inventory, CRM, staff attendance and services in one workspace — with online stores, business websites and marketing integrations in our connected growth roadmap.
             </p>
             <div className="mt-4 flex flex-wrap gap-2 text-[11px] font-bold text-[#3b5b7a] sm:text-xs">
-              {["Built around real workflows","Windows local-first","Flexible business modules"].map(x=><span key={x} className="inline-flex items-center gap-1.5 rounded-full border border-[#dbeaf8] bg-white/90 px-3 py-2"><Icon name="check" className="size-4 text-[#0ca569]"/>{x}</span>)}
+              {["Built around real workflows","Online cloud platform","Flexible business modules"].map(x=><span key={x} className="inline-flex items-center gap-1.5 rounded-full border border-[#dbeaf8] bg-white/90 px-3 py-2"><Icon name="check" className="size-4 text-[#0ca569]"/>{x}</span>)}
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
               <a href="/register" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#1260f1] px-6 py-3.5 text-sm font-extrabold text-white shadow-[0_15px_32px_rgba(21,93,220,.23)] transition hover:-translate-y-0.5 hover:bg-[#0e4fca]">
