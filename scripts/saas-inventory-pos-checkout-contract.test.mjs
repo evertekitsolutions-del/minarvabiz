@@ -42,3 +42,19 @@ test("online POS never reports local-only sale success",()=>{
  assert.match(form,/p_payments:\[\]/);
  assert.doesNotMatch(form,/store\.createSale/);
 });
+
+test("server-only receipt writers cannot be spoofed by browser Auth role",()=>{
+ const guard=readFileSync("supabase/migrations/20261109_saas_receipts_private_write_guard.sql","utf8");
+ assert.match(guard,/REVOKE INSERT ON public\.saas_checkout_receipts FROM authenticated/);
+ assert.match(guard,/REVOKE INSERT ON public\.saas_inventory_mutation_receipts FROM authenticated/);
+ assert.match(guard,/ALTER FUNCTION public\.saas_checkout_once\(uuid,jsonb,jsonb\)/);
+ assert.match(guard,/ALTER FUNCTION public\.saas_adjust_stock_once/);
+});
+test("server-authoritative POS rejects forged prices and payment capture",()=>{
+ const guard=readFileSync("supabase/migrations/20261109_saas_checkout_price_authority_guard.sql","utf8");
+ assert.match(guard,/Client POS amount differs from authoritative catalog/);
+ assert.match(guard,/Only validated unpaid, undiscounted cloud POS receipts are allowed/);
+ assert.match(guard,/p_payments IS DISTINCT FROM '\[\]'::jsonb/);
+ assert.match(guard,/v_line:=round\(v_product\.selling_price\*v_quantity,2\)/);
+ assert.match(guard,/v_result:=public\.create_sale\(p_sale,'\[\]'::jsonb,false\)/);
+});
