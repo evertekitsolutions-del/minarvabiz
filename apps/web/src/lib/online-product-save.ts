@@ -7,16 +7,12 @@ import { configFromEnv, pgInsert, pgSelect, pgUpdate } from "@minarvabiz/databas
 import { getSessionToken, getSessionUser, store } from "@minarvabiz/business-logic";
 import type { Product } from "@minarvabiz/types";
 import { resolveOnlineAuthorization } from "./data-source";
+import { productCloudColumns, matchesProductCloudReceipt } from "./online-product-receipt";
 
 export type OnlineProductFields = Pick<Product,
   "name" | "sku" | "barcode" | "categoryId" | "unit" | "costPrice" |
   "sellingPrice" | "stockQuantity" | "minimumStock" | "isActive"
 >;
-
-export const productCloudColumns = [
-  "name", "sku", "barcode", "category_id", "unit", "cost_price",
-  "selling_price", "stock_quantity", "minimum_stock", "is_active",
-] as const;
 
 function asRow(input: OnlineProductFields): Record<(typeof productCloudColumns)[number], unknown> {
   return {
@@ -26,30 +22,6 @@ function asRow(input: OnlineProductFields): Record<(typeof productCloudColumns)[
     stock_quantity: input.stockQuantity, minimum_stock: input.minimumStock,
     is_active: input.isActive,
   };
-}
-
-function cloudFieldMatches(actual: unknown, expected: unknown): boolean {
-  if (expected == null) return actual == null;
-  if (typeof expected === "number") return typeof actual === "number" || typeof actual === "string"
-    ? Number(actual) === expected : false;
-  return actual === expected;
-}
-
-/** A 2xx response or matching version alone is never proof of a saved product. */
-export function matchesProductCloudReceipt(
-  actual: Record<string, unknown> | null | undefined,
-  expected: Record<string, unknown>,
-  id: string,
-  orgId: string,
-  version: number,
-): boolean {
-  if (!actual || actual.id !== id || actual.org_id !== orgId ||
-      Number(actual.version) !== version || actual.deleted_at != null) return false;
-  return productCloudColumns.every(key =>
-    Object.prototype.hasOwnProperty.call(expected, key)
-      ? cloudFieldMatches(actual[key], expected[key])
-      : true
-  );
 }
 
 function toProduct(row: Record<string, unknown>, existing?: Product): Product {
