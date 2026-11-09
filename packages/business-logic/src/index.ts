@@ -299,3 +299,6 @@ export * from "./service-visit-recovery";
 export * from "./service-feedback-insights";
 
 export * from "./boutique-stock-purchase";
+
+// FIN-023: optional accounting period posting decision; no implicit posting authority.
+export * from "./accounting-period-lock";
