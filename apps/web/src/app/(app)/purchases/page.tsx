@@ -4,7 +4,8 @@ import * as React from "react";
 import { parsePurchaseAmounts } from "@/lib/finance-entry-draft";
 import { isDashboardCreateIntent } from "@/lib/dashboard-quick-create";
 import { PurchaseList, ProcurementPanel, Modal, Button, FormField, inputClass, selectClass } from "@minarvabiz/ui";
-import { phase5Store, ordersStore, procurementStore, store, warehouseStore } from "@minarvabiz/business-logic";
+import { phase5Store, ordersStore, procurementStore, store, warehouseStore, getRuntimeMode } from "@minarvabiz/business-logic";
+import { SaasPurchasesPanel } from "./saas-purchases-panel";
 import type { GoodsReceipt, Purchase, PurchaseInvoice, PurchaseOrder, Product, ServiceOrder, PaymentMethod, Supplier, SupplierPayableAging, WarehouseLocation } from "@minarvabiz/types";
 
 function todayLocal(): string { const d = new Date(); const off = d.getTimezoneOffset() * 60000; return new Date(d.getTime() - off).toISOString().slice(0, 10); }
@@ -103,6 +104,8 @@ export default function PurchasesPage() {
       setSupplierError(e instanceof Error ? e.message : "Unable to create supplier");
     }
   }
+
+  if (getRuntimeMode() !== "demo") return <SaasPurchasesPanel />;
 
   return (
     <div className="space-y-4">

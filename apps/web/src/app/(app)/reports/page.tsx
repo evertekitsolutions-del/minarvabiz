@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { ReportsPanel, DayEndClosePanel } from "@minarvabiz/ui";
+import { getRuntimeMode } from "@minarvabiz/business-logic";
+import { SaasLedgerPanel } from "./saas-ledger-panel";
 import {
   phase7Store,
   accountingStore,
@@ -39,6 +41,8 @@ export default function ReportsPage() {
       return { financial: undefined, taxReport: undefined, error: error instanceof Error ? error.message : "Unable to build financial reports" };
     }
   }, [tick, from, to]);
+
+  if (getRuntimeMode() !== "demo") return <SaasLedgerPanel />;
 
   return (
     <div className="space-y-8">

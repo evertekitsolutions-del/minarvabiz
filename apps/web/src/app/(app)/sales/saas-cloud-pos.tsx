@@ -3,7 +3,7 @@
 import * as React from "react";
 import { configFromEnv, pgRpc, pgSelect } from "@minarvabiz/database";
 import {
-  can, getOutboxScope, getSessionToken, getSessionUser,
+  can, getOutboxScope, getSessionToken, getSessionUser, buildSaasThermal80mmReceipt,
 } from "@minarvabiz/business-logic";
 import { resolveOnlineAuthorization } from "../../../lib/data-source";
 
@@ -27,7 +27,7 @@ export function SaasCloudPos() {
   const [busy,setBusy]=React.useState(false);
   const [notice,setNotice]=React.useState("");
   const [error,setError]=React.useState("");
-  const [lastSale,setLastSale]=React.useState<{invoice:string;id:string;total:number}|null>(null);
+  const [lastSale,setLastSale]=React.useState<{invoice:string;id:string;total:number;tax:number;productName:string;quantity:number;unitPrice:number}|null>(null);
   const pending=React.useRef<PendingSale|null>(null);
   const flight=React.useRef(false);
 
@@ -123,12 +123,30 @@ export function SaasCloudPos() {
       if(ctx.token!==getSessionToken()||ctx.userId!==getSessionUser()?.id)
         throw new Error("Session changed after checkout. Verify invoice in cloud.");
       pending.current=null;
-      setLastSale({invoice:p.invoice,id:p.id,total:p.gross});
+      setLastSale({invoice:p.invoice,id:p.id,total:p.gross,tax:p.tax,productName:p.product.name,quantity:p.quantity,unitPrice:Number(p.product.selling_price)});
       setNotice("Cloud sale confirmed. Stock was deducted atomically; no gateway payment captured.");
       setQuantity("1");
       await load();
     }catch(e){setError(e instanceof Error?e.message:"Checkout NOT confirmed. Retry same invoice.");}
     finally{flight.current=false;setBusy(false);}
+  }
+  function printLastReceipt(){
+    setError("");
+    if(!lastSale) return;
+    try {
+      const html=buildSaasThermal80mmReceipt({
+        invoice:lastSale.invoice,business:"Minarva Biz",
+        printedAt:new Date().toLocaleString(),
+        lines:[{name:lastSale.productName,quantity:lastSale.quantity,
+          unitPrice:lastSale.unitPrice,total:lastSale.total}],
+        total:lastSale.total,paid:0,balance:lastSale.total,gst:lastSale.tax,
+      });
+      const w=window.open("","_blank","width=400,height=730");
+      if(!w){setError("Browser blocked receipt print/PDF window.");return}
+      w.document.open();w.document.write(html);w.document.close();
+      w.addEventListener("load",()=>{w.focus();w.print()},{once:true});
+      setNotice("80mm thermal receipt preview opened. Select your printer or Save as PDF. No automatic blank feed.");
+    }catch(e){setError(e instanceof Error?e.message:"Receipt preview failed.");}
   }
   const selected=products.find(p=>p.id===productId);
   const filtered=products.filter(p=>(p.name+" "+(p.sku||"")+" "+(p.barcode||"")).toLowerCase().includes(query.toLowerCase()));
@@ -161,6 +179,8 @@ export function SaasCloudPos() {
     {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
     {notice&&<p role="status" className="text-sm text-green-700">{notice}</p>}
     {lastSale&&<p className="text-sm">Confirmed invoice: <strong>{lastSale.invoice}</strong>
-      · ₹{lastSale.total.toFixed(2)} · Cloud receipt {lastSale.id}</p>}
+      · ₹{lastSale.total.toFixed(2)} · Cloud receipt {lastSale.id}
+      <button type="button" className="ml-3 rounded border px-2 py-1"
+        onClick={printLastReceipt}>Print 80mm / Save PDF</button></p>}
   </section>;
 }
