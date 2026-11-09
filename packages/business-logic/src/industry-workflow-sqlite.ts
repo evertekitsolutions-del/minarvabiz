@@ -22,6 +22,10 @@ CREATE TABLE IF NOT EXISTS industry_workflow_events (
   FOREIGN KEY (tenant_id, branch_id, record_id)
     REFERENCES industry_workflow_records (tenant_id, branch_id, record_id)
 );
+-- Inbox queries filter by tenant, branch, authorized template and stable record cursor.
+-- Keep this additive index local to the optional industry pack.
+CREATE INDEX IF NOT EXISTS idx_industry_workflow_inbox
+  ON industry_workflow_records (tenant_id, branch_id, template_id, record_id);
 `;
 
 type Statement = { get(...params: unknown[]): unknown; run(...params: unknown[]): unknown; all(...params: unknown[]): unknown };
