@@ -1,27 +1,28 @@
-# Minarva Biz — Instructions for coding agents
+# Minarva Biz — Coding agent instructions
+
+> **CURRENT OWNER BINDING OVERRIDE — 2026-11-09:** The **entire project** is now **ONLINE SaaS + Mobile ONLY**. Read [docs/OWNER_DIRECTIVE_2026-11-09_SAAS_ONLY.md](docs/OWNER_DIRECTIVE_2026-11-09_SAAS_ONLY.md) first. Any older instruction requiring Windows Offline, Electron, SQLite local-first or Hybrid is superseded. Preserve historical customer data and backups without modification.
 
 ## Mission and source of truth
-- Implement the existing **full** Minarva Biz master vision without silently removing capabilities. Customer-facing Windows Offline, browser Online and Windows + Online Hybrid must share correct business logic; a mobile-accessible experience is also in scope.
-- Start each task by verifying the **live** `main` SHA, open PRs, issue #325 and current GitHub checks. Never assume an old conversation's branch, SHA, CI status or progress estimate is current.
-- Read and honor `PROJECT_CONTINUATION.md`, `docs/MASTER_PRODUCT_PLAN.md`, `docs/CAPABILITY_REGISTRY.md`, `docs/AI_CAPABILITY_REGISTRY.md`, `docs/PRODUCT_DELIVERY_BACKLOG.json`, `docs/DELIVERY_ACCELERATION_POLICY.md`, `docs/ENGINEERING_REUSE_POLICY.md` and `docs/MULTI_MODEL_REVIEW_GOVERNANCE.md`.
-- The project-wide historical ~51% estimate is **provisional**. Only record customer-accepted outcomes with documented CI, UAT, deployment/release and review evidence. Source-only changes and an active PR are not commercial acceptance.
+- Build a complete secure multi-tenant Minarva Biz SaaS for browser/mobile. Keep one configurable multi-industry ERP: boutique, tailoring, laundry, ironing first, all other approved industries retained.
+- Begin each run by reading LIVE main SHA, existing PRs, issues #325 and #735, mandatory CI and actual web/RLS state; do not duplicate PRs or assume older task progress.
+- Use `apps/web` Next.js, Supabase PostgreSQL/Auth/RLS, Cloudflare Workers/Pages (and portable domain interfaces). Never use Vercel or Render for Minarva Biz.
+- No new offline/desktop/hybrid implementation, installer releases or testing. Historical source and Windows customer backups are preservation/recovery evidence, not active deliverables.
+- Prior product completion percentages were provisional. Only independently tested, customer-accepted SaaS journeys count.
 
-## Priorities and sequencing
-1. Finish/review existing relevant open PRs before duplicating their code. Prioritize `A-FIRST-CUSTOMER` (onboarding, opening balances, inventory, sale/return, print, backup/restore, update, support, customer-usable release).
-2. Next prioritize `A-SYNC-V2` (authorized cross-device offline replay, idempotency, branches/warehouses, conflict reconciliation and recoverability), then `A-LICENSE-CUTOVER` (licensed, provider-neutral commercial operation without mandatory Render). Follow `docs/PRODUCT_DELIVERY_BACKLOG.json` for later outcomes.
-3. Use one coherent, independently testable business-journey milestone per PR. Preserve earlier behavior; diagnose root cause and add regression coverage. Do not repeatedly audit instead of shipping fixes.
+## Priority and assignments
+1. Public customer website **Register -> Plan/Subscribe -> Email verification -> Tenant provisioning -> Tenant login URL -> authenticated ERP**, secure on smartphone/PWA.
+2. Durable server-acknowledged stock/product/Sales/POS/payments and full boutique/tailoring/laundry/ironing journeys. Do not report "saved" before committed; no duplicate financial effect or stock count.
+3. Agent A: online SaaS core, RLS and finance; Agent B: industry modules; Agent C: public website, signup, subscription and mobile; QA agent: **find/reproduce/report errors only**; Director: independent coordination, priority and acceptance.
+4. Finish relevant existing web/Supabase PRs before new foundations. Prefer audited permissive OSS with pinned donor and attribution; never copy GPL/AGPL/proprietary code.
 
-## Engineering boundaries
-- Existing monorepo uses pnpm 9, TypeScript, Next.js web, Electron + SQLite desktop, shared business logic, sync package and Supabase PostgreSQL. Respect package boundaries and the existing offline-first outbox and authoritative permission model.
-- Never generate duplicate sale/payment/stock/ledger effects on retries or reconnection. Preserve tenant, branch, device and warehouse authority, numerical/accounting invariants, crash safety and no partial durable writes.
-- Review RLS and authorization for any cloud or financial write; never treat renderer-controlled fields as verified device enrollment/authority.
-- Favor existing code and license-compatible audited OSS. Preserve portability/self-host path; Cloudflare/Supabase adapters must not become unavoidable hard-coded vendor contracts. Do not reintroduce Vercel/Render as mandatory runtime infrastructure.
-- No recurring paid infrastructure or paid AI/inference without explicit approval. The first 25 paying customers are a cost-review checkpoint, **not** automatic spending authorization.
-- Do not use real customer data, mutate production databases, apply hosted migrations, publish releases, rotate credentials or enable automatic financial writes without explicit owner approval. Do not print or commit secrets.
+## Engineering safety
+- Enforce verified tenant/company/branch identity, RBAC and RLS in **server/database**, not only web UI. A per-customer URL is not authentication.
+- Persist all business writes in Supabase only after verified membership/permissions and transaction/idempotency checks. Test restart/re-login, disconnected requests, retries, multi-user races and cross-tenant denial.
+- **No production database migration, data mutation, paid integrations, live deploy, subscription charge, release or secrets rotation without explicit owner authorization.** Do not use customer data as a fixture or touch pre-existing Windows archives.
+- Onboarding and plans must show accurate availability; charging disabled until authorized and verified. No promises of zero errors before real acceptance.
+- Open branch/PR with full user journey, tests, exact-head CI, independent review, rollback and deployment/UAT blockers. Do not merge incomplete drafts or mark source code as deployed.
 
-## Verification and handoff
-- Check the actual package scripts before selecting commands. Root `pnpm test` or the business-logic package's placeholder `test` script is **not** sufficient proof of behavior; run existing targeted `node --test` suites, package typechecks and relevant build/integration gates.
-- Open a dedicated branch and PR with: purpose, affected journeys, exact base/head SHAs, test command/result evidence, limitations, rollback plan and customer UAT blockers.
-- Require exact-head mandatory GitHub checks and post-merge checks. Never call an incomplete/pending CI run green; do not bypass checks or merge drafts/known-unsafe changes.
-- A merged source PR is not a published Windows installer, a deployed customer app or an accepted end-to-end journey. Clearly distinguish all three.
-- Keep developer reports concise and evidence-backed, with direct PR/CI/customer-test links. Prefer implementing the next verified blocker rather than long speculative status reports.
+## QA and communication
+- QA agent independently logs reproducible issues (steps, expected/actual, severity, source location, CI evidence) and does NOT write features or deploy.
+- Run web typecheck/build and focused integration/security tests. Validate Cloudflare deployment and mobile UAT before claiming commercial readiness.
+- Brief evidence-based Malayalam updates with real PR/test links and separate implementation/CI/deployment/UAT statuses.
