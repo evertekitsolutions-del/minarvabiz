@@ -65,5 +65,7 @@ test("web route awaits Supabase and never closes on unconfirmed save", () => {
   assert.match(atomicSql, /INSERT INTO public\.inventory_transactions/);
   assert.match(atomicSql, /RAISE EXCEPTION 'Atomic opening stock receipt missing or duplicated'/);
   assert.match(atomicSql, /CREATE UNIQUE INDEX IF NOT EXISTS inventory_one_opening_receipt_per_product/);
+  assert.doesNotMatch(service, /if \(delta === 0\) return original/);
+  assert.match(service, /if \(delta === 0\) throw new Error\("No stock change to save/);
   assert.match(service, /movement\.created_by !== user\.id/);
 });
