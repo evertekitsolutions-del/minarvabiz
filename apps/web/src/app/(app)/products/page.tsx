@@ -76,15 +76,16 @@ export default function ProductsPage() {
     setCategoryBusy(true);
     setCategoryError(null);
     try {
-      const category = getRuntimeMode() === "demo"
-        ? store.createCategory({ name, description: categoryDescription.trim() || null })
-        : await (async () => {
-            pendingCategoryId.current ??= crypto.randomUUID();
-            return saveCategoryOnline(
-              { name, description: categoryDescription.trim() || null },
-              pendingCategoryId.current
-            );
-          })();
+      let category: Category;
+      if (getRuntimeMode() === "demo") {
+        category = store.createCategory({ name, description: categoryDescription.trim() || null });
+      } else {
+        pendingCategoryId.current ??= crypto.randomUUID();
+        category = await saveCategoryOnline(
+          { name, description: categoryDescription.trim() || null },
+          pendingCategoryId.current,
+        );
+      }
       setForm(prev => ({ ...prev, categoryId: category.id }));
       setCategoryName("");
       setCategoryDescription("");
