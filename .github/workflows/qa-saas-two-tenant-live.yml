@@ -1,0 +1,32 @@
+name: SaaS Two-Tenant Auth and RLS Live QA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: minarva-two-tenant-live-qa
+  cancel-in-progress: false
+
+jobs:
+  live-rls:
+    # Manual-only workflow, explicitly restricted to owner-controlled main.
+    if: ${{ github.repository == 'evertekitsolutions-del/minarvabiz' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+      - name: Run signed JWT Auth Admin fixture, PostgreSQL readback, isolation negatives
+        env:
+          MINARVA_QA_LIVE_TESTS: OWNER_AUTHORIZED
+          MINARVA_QA_SUPABASE_URL: ${{ vars.MINARVA_PUBLIC_SUPABASE_URL }}
+          MINARVA_QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.MINARVA_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          MINARVA_QA_SUPABASE_SECRET_KEY: ${{ secrets.MINARVA_QA_SUPABASE_SECRET_KEY }}
+        run: node scripts/qa-saas-two-tenant-live.mjs
