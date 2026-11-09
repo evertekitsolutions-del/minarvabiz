@@ -134,7 +134,7 @@ assert.match(adminInbox, /Internal notes/);
 
 assert.match(release, /VITE_SUPPORT_API_URL/);
 assert.match(release, /VITE_SUPPORT_API_URL:\s*""/);
-assert.doesNotMatch(release, /minarvabiz-steel\\.vercel\\.app/);
+assert.doesNotMatch(release, /minarvabiz-steel\.vercel\.app/);
 
 assert.match(docs, /does not persist raw screenshot bytes/i);
 assert.match(docs, /Viewer: read-only Support Inbox/);
