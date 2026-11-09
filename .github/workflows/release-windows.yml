@@ -16,7 +16,7 @@ jobs:
       MINARVA_RUNTIME_SMOKE: "1"
       MINARVA_COMMERCIAL_RELEASE: "1"
       VITE_LICENSE_API_URL: "https://minarva-biz-license-edge.minarva-biz.workers.dev"
-      VITE_SUPPORT_API_URL: "https://minarvabiz-steel.vercel.app"
+      VITE_SUPPORT_API_URL: "" # Offline customer release never uses Vercel/Render
       MINARVA_UPDATE_MANIFEST_URL: "https://minarva-biz-license-edge.minarva-biz.workers.dev/api/update/manifest"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

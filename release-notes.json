@@ -91,5 +91,14 @@
     "POS and Normal Billing now treat Boutique Price as GST-inclusive: entering ₹100 at 18% GST bills exactly ₹100 with GST correctly separated inside the same total, not ₹118.",
     "Past invoices and customer data remain untouched. No database migration or license reset is required. Older products with no recorded MRP use their saved selling price; verify their displayed amount before the first new sale.",
     "Existing explicit discounts continue to reduce the entered price where configured. A backup and sample receipt/label check are recommended before customer rollout."
+  ],
+  "1.0.27": [
+    "Customer data safety: removed automatic ERA WARDROBE demo database reset at application startup. Existing customer SQLite data, archived databases, registration and license are not reset by the new startup logic.",
+    "Before the first post-update SQLite save, customer, product, sales and payment IDs are checked against the saved snapshot. If records unexpectedly disappear during loading, the application blocks the overwrite rather than silently removing them.",
+    "38 × 25 mm CROMO two-across sticker printing removes conflicting full-roll HTML page sizing and reserves fractional-pixel space to reduce extra feeds and progressive label-row misalignment.",
+    "Barcode label Windows print dialog now honours the requested visible dialog even if silent printing is saved, and displays failed-print errors.",
+    "Thermal receipt jobs reject blank or overlong renderings before sending paper to the cutter, instead of producing a tiny blank strip or silently cutting invoice contents.",
+    "Windows native, business-logic, label and CI checks validate the code; real printer sensor/pitch calibration remains hardware-dependent. Use a two-sticker trial on the customer's existing label printer before a large batch.",
+    "Back up the existing customer SQLite database and preserve all historical backups before installing. Do not assume previously missing product records have been restored; restoring them requires separate evidence and approval."
   ]
 }
