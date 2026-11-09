@@ -3,8 +3,8 @@
  * authenticated RLS-scoped PostgreSQL acknowledges the requested revision.
  * A stable client mutation ID makes timeout/retry safe for CREATE.
  */
-import { configFromEnv, pgInsert, pgSelect, pgUpdate } from "@minarvabiz/database";
-import { can, exportOutbox, getOutboxScope, getSessionToken, getSessionUser, store } from "@minarvabiz/business-logic";
+import { configFromEnv, pgInsert, pgRpc, pgSelect, pgUpdate } from "@minarvabiz/database";
+import { can, exportOutbox, getOutboxScope, getSessionToken, getSessionUser, stockCountDelta, store } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { resolveOnlineAuthorization } from "./data-source";
 import { productCloudColumns, matchesProductCloudReceipt } from "./online-product-receipt";
@@ -186,4 +186,91 @@ export async function saveCategoryOnline(
   const existing = store.exportCoreState().categories;
   store.hydrateCore({ categories: existing.filter(c => c.id !== stableId).concat(category) });
   return category;
+}
+
+/**
+ * A stock adjustment is one atomic hosted adjust_stock RPC: product balance,
+ * optimistic revision and immutable inventory transaction commit together.
+ * The reference ID is stable on retry. Never call the RPC using the updated
+ * revision, so an ambiguous prior commit cannot be applied a second time.
+ */
+export async function saveStockAdjustmentOnline(
+  original: Product,
+  rawTarget: string,
+  referenceId: string,
+): Promise<Product> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(referenceId)) {
+    throw new Error("A stable stock correction reference is required.");
+  }
+  if (!Number.isSafeInteger(original.version ?? 0) || (original.version ?? 0) < 1) {
+    throw new Error("A versioned cloud product is required for stock correction.");
+  }
+  if (original.hasVariants) throw new Error("Adjust a specific variant, not its product group.");
+  const delta = stockCountDelta(rawTarget, original.stockQuantity, original.stockQuantity);
+  if (delta === 0) return original;
+  const expectedQuantity = original.stockQuantity + delta;
+  const expectedVersion = (original.version ?? 1) + 1;
+  const cfg = configFromEnv();
+  const token = getSessionToken();
+  const user = getSessionUser();
+  if (!cfg || !token || !user?.id) throw new Error("Signed-in Supabase account required.");
+  const auth = await resolveOnlineAuthorization(token, user.id);
+  if (!auth.ok) throw new Error(auth.error);
+  if (!can("inventory.adjust") || getOutboxScope() !== auth.orgId + ":" + user.id) {
+    throw new Error("An authorized inventory manager session is required.");
+  }
+  if (exportOutbox().some(event => event.ownerScope === auth.orgId + ":" + user.id &&
+      (event.status === "pending" || event.status === "failed") &&
+      (event.aggregateType === "products" && event.aggregateId === original.id ||
+       !["categories", "customers", "products"].includes(event.aggregateType)))) {
+    throw new Error("Pending cloud transactions must be reconciled before stock correction.");
+  }
+
+  const authCfg = { ...cfg, accessToken: token };
+  const receipt = await pgRpc<Record<string, unknown>>(authCfg, "adjust_stock", {
+    p_product_id: original.id,
+    p_movement_type: "adjustment",
+    p_quantity: delta,
+    p_expected_version: original.version,
+    p_reference_type: "inventory_adjustment",
+    p_reference_id: referenceId,
+    p_notes: "Manual stock correction",
+    p_branch_id: original.branchId ?? null,
+    p_device_id: null,
+  });
+  // Both the committed balance AND the immutable transaction must be
+  // independently confirmed. A timeout may occur after the RPC committed.
+  const [productRead, movementRead] = await Promise.all([
+    pgSelect<Record<string, unknown>>(
+      authCfg, "products",
+      "select=*&id=eq." + original.id + "&org_id=eq." + auth.orgId + "&limit=2",
+    ),
+    pgSelect<Record<string, unknown>>(
+      authCfg, "inventory_transactions",
+      "select=*&reference_id=eq." + referenceId +
+      "&reference_type=eq.inventory_adjustment&org_id=eq." + auth.orgId + "&limit=2",
+    ),
+  ]);
+  const row = productRead.data?.[0];
+  const movement = movementRead.data?.[0];
+  if (productRead.error || movementRead.error ||
+      productRead.data?.length !== 1 || movementRead.data?.length !== 1 ||
+      !row || !movement || row.id !== original.id || row.org_id !== auth.orgId ||
+      row.deleted_at != null || Number(row.version) !== expectedVersion ||
+      Number(row.stock_quantity) !== expectedQuantity ||
+      movement.product_id !== original.id || movement.org_id !== auth.orgId ||
+      movement.created_by !== user.id || movement.movement_type !== "adjustment" ||
+      Number(movement.quantity) !== delta ||
+      Number(movement.balance_after) !== expectedQuantity) {
+    throw new Error("Stock correction NOT confirmed in Supabase. " +
+      (receipt.error?.message ?? productRead.error?.message ??
+       movementRead.error?.message ?? "Retry the SAME correction reference."));
+  }
+  if (getSessionToken() !== token || getSessionUser()?.id !== user.id) {
+    throw new Error("Stock committed but the account changed; sign in and reload.");
+  }
+  const confirmed = toProduct(row, original);
+  const products = store.exportCoreState().products;
+  store.hydrateCore({ products: products.filter(p => p.id !== original.id).concat(confirmed) });
+  return confirmed;
 }
