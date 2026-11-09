@@ -174,6 +174,8 @@ jobs:
         run: node --test scripts/saas-grn-ledger-reconciliation-contract.test.mjs
       - name: Verify store guest throttle
         run: node --test scripts/saas-store-guest-throttle.test.mjs
+      - name: Verify M18 marketing CRM capture contract
+        run: node --test scripts/saas-marketing-lead-contract.test.mjs
       - name: Verify store catalog contract
         run: node --test scripts/saas-public-storefront-contract.test.mjs
       - name: Verify thermal and 38x25 two-up label contracts
