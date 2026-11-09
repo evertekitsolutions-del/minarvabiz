@@ -1,0 +1,286 @@
+"use client";
+
+import * as React from "react";
+import {
+  calculateProjectEstimate,
+  exportProjectEstimateCsv,
+  type ProjectEstimateInput,
+  type ProjectEstimateLine,
+  type ProjectEstimateScope,
+} from "@minarvabiz/business-logic";
+
+/** Host owns authenticated scope, durable storage and audit. Never infer permissions in the browser. */
+export interface ProjectEstimateWorksheetProps {
+  scope: ProjectEstimateScope;
+  load: () => Promise<ProjectEstimateInput | null>;
+  save: (worksheet: ProjectEstimateInput, idempotencyKey: string) => Promise<void>;
+  enabled: boolean;
+  /** Host-selected ISO 4217 currency for a new estimate; never infer locale from a tenant. */
+  defaultCurrency: string;
+  /** Server-authorized edit permission; read-only users may still inspect estimates. */
+  canEdit?: boolean;
+  /** Explicit host-authorized export; the host must check download permissions. */
+  canExport?: boolean;
+}
+
+const newLine = (): ProjectEstimateLine => ({
+  id: crypto.randomUUID(), description: "", kind: "labor", quantity: "1",
+  unitCost: "0.00", markupPercent: "0",
+});
+
+export function ProjectEstimateWorksheet({ scope, load, save, enabled, defaultCurrency, canExport = false, canEdit = false }: ProjectEstimateWorksheetProps) {
+  const [worksheet, setWorksheet] = React.useState<ProjectEstimateInput | null>(null);
+  // Reject late load/save acknowledgements after a scope change or unmount.
+  const generation = React.useRef(0);
+  // Hosts may create a new load callback on every render. Keep its latest implementation
+  // without treating callback identity as a scope change (which would discard edits).
+  const loadRef = React.useRef(load);
+  loadRef.current = load;
+  // Keep the current authenticated writer when the host refreshes its session.
+  const saveRef = React.useRef(save);
+  saveRef.current = save;
+  const [busy, setBusy] = React.useState(false);
+  // Synchronous guard: React state updates do not prevent two submits in one event turn.
+  const writeInFlight = React.useRef<number | null>(null);
+  const [error, setError] = React.useState("");
+  const [message, setMessage] = React.useState("");
+  const [requestKey, setRequestKey] = React.useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
+  // A new unsaved worksheet is not a persisted estimate and must not be exported.
+  const [hasPersistedRevision, setHasPersistedRevision] = React.useState(false);
+  const [revisionConflict, setRevisionConflict] = React.useState(false);
+  // Once the writer acknowledged a commit, never replay it just because the follow-up read failed.
+  const [saveAcknowledged, setSaveAcknowledged] = React.useState(false);
+  React.useEffect(() => {
+    let active = true;
+    const currentGeneration = ++generation.current;
+    setWorksheet(null);
+    // An old scope write must not block saving a newly authenticated scope.
+    writeInFlight.current = null;
+    setBusy(false);
+    setRequestKey(null);
+    setHasUnsavedChanges(false);
+    setHasPersistedRevision(false);
+    setRevisionConflict(false);
+    setSaveAcknowledged(false);
+    setError("");
+    if (!enabled || !scope.canViewCosts) return;
+    if (!/^[A-Z]{3}$/.test(defaultCurrency)) { setError("Invalid configured estimate currency"); return; }
+    setBusy(true);
+    loadRef.current().then(row => {
+      if (row) calculateProjectEstimate(row, scope);
+      if (active && currentGeneration === generation.current) {
+        setHasPersistedRevision(row !== null);
+        setWorksheet(row ?? {
+        tenantId: scope.tenantId, companyId: scope.companyId, branchId: scope.branchId,
+        projectId: scope.projectId, currency: defaultCurrency, revision: 0, lines: [newLine()],
+      });
+      }
+    }).catch(err => { if (active && currentGeneration === generation.current) setError(err instanceof Error ? err.message : "Load failed"); })
+      .finally(() => { if (active && currentGeneration === generation.current) setBusy(false); });
+    return () => { active = false; generation.current++; };
+  }, [enabled, scope.tenantId, scope.companyId, scope.branchId, scope.projectId, scope.canViewCosts, defaultCurrency]);
+
+  const updateLine = (id: string, patch: Partial<ProjectEstimateLine>) => {
+    setWorksheet(previous => previous && ({
+      ...previous, lines: previous.lines.map(line => line.id === id ? { ...line, ...patch } : line),
+    }));
+    setRequestKey(null);
+    setHasUnsavedChanges(true);
+    // A revision conflict is sticky until an authoritative reload; editing must not unlock stale saves.
+    setMessage("");
+  };
+  // Preserve domain validation errors in the UI instead of silently disabling Save.
+  // A worksheet can be partially edited (for example an empty numeric field) before
+  // it becomes valid again; do not treat that as a failed persistence operation.
+  const calculation = React.useMemo(() => {
+    if (!worksheet) return { totals: null, validationError: "" };
+    try {
+      return { totals: calculateProjectEstimate(worksheet, scope), validationError: "" };
+    } catch (err) {
+      return { totals: null, validationError: err instanceof Error ? err.message : "Invalid estimate values" };
+    }
+  }, [worksheet, scope]);
+  const { totals, validationError } = calculation;
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canEdit || !worksheet || !totals || busy || writeInFlight.current === generation.current || revisionConflict || saveAcknowledged || !hasUnsavedChanges) return;
+    const currentGeneration = generation.current;
+    writeInFlight.current = currentGeneration;
+    // Bind the writer and scope to this request; a session/branch switch must not
+    // redirect an already-started write to a different authenticated adapter.
+    const write = saveRef.current;
+    const key = requestKey ?? crypto.randomUUID();
+    setRequestKey(key);
+    setBusy(true);
+    setError("");
+    let writeAcknowledged = false;
+    try {
+      await write(worksheet, key);
+      writeAcknowledged = true;
+      if (currentGeneration !== generation.current) return;
+      setSaveAcknowledged(true);
+      // Never assume the adapter's acknowledgement contains the next authoritative revision.
+      const current = await loadRef.current();
+      if (currentGeneration !== generation.current) return;
+      if (!current) throw new Error("Saved estimate could not be reloaded");
+      calculateProjectEstimate(current, scope);
+      if (current.revision <= worksheet.revision) throw new Error("Saved estimate revision not advanced");
+      setWorksheet(current);
+      setHasPersistedRevision(true);
+      setRequestKey(null);
+      setHasUnsavedChanges(false);
+      setRevisionConflict(false);
+      setSaveAcknowledged(false);
+      setMessage("Estimate saved");
+    } catch (err) {
+      if (currentGeneration === generation.current) {
+        const conflict = (typeof err === "object" && err !== null && "status" in err && (err.status === 409 || err.status === 412)) ||
+          (err instanceof Error && err.message === "Project estimate revision conflict");
+        // An interrupted request can commit on the server even when the response is lost.
+        // Never mint another idempotency key for an uncertain write until a scoped read
+        // establishes the authoritative revision. Explicit 4xx validation failures are safe.
+        const status = typeof err === "object" && err !== null && "status" in err ? err.status : undefined;
+        const definiteRejection = status === 400 || status === 401 || status === 403 || status === 422;
+        const uncertainWrite = writeAcknowledged || (!conflict && !definiteRejection);
+        setRevisionConflict(conflict);
+        if (uncertainWrite) setSaveAcknowledged(true);
+        setError(conflict
+          ? "Estimate changed elsewhere. Discard edits and reload the latest revision before saving."
+          : uncertainWrite
+            ? "Save outcome is uncertain. Reload the authoritative revision before editing or saving again."
+            : err instanceof Error ? err.message : "Save failed");
+      }
+    } finally {
+      if (writeInFlight.current === currentGeneration) writeInFlight.current = null;
+      if (currentGeneration === generation.current) setBusy(false);
+    }
+  }
+
+  async function reloadCurrent() {
+    if (busy || !scope.canViewCosts) return;
+    const currentGeneration = generation.current;
+    setBusy(true);
+    setError("");
+    try {
+      const current = await loadRef.current();
+      if (currentGeneration !== generation.current) return;
+      if (current) calculateProjectEstimate(current, scope);
+      // A lost write acknowledgement may mean the server committed but a replica is stale.
+      // Never clear the write lock on a stale read: a fresh key could duplicate the write.
+      // A 409/412 proves the submitted revision is obsolete even when the write was
+      // rejected. A lagging offline/replica read of that same revision must not
+      // clear the conflict lock and permit another stale write.
+      if ((saveAcknowledged || revisionConflict) && (!current || (worksheet && current.revision <= worksheet.revision))) {
+        throw new Error("Authoritative estimate revision has not advanced. Retry reload after synchronization; editing remains locked.");
+      }
+      setHasPersistedRevision(current !== null);
+      setWorksheet(current ?? {
+        tenantId: scope.tenantId, companyId: scope.companyId, branchId: scope.branchId,
+        projectId: scope.projectId, currency: defaultCurrency, revision: 0, lines: [newLine()],
+      });
+      setRequestKey(null);
+      setHasUnsavedChanges(false);
+      setRevisionConflict(false);
+      setSaveAcknowledged(false);
+      setMessage("Current estimate loaded");
+    } catch (err) { if (currentGeneration === generation.current) setError(err instanceof Error ? err.message : "Reload failed"); }
+    finally { if (currentGeneration === generation.current) setBusy(false); }
+  }
+
+  function downloadCsv() {
+    if (!canExport || !hasPersistedRevision || !worksheet || !totals || busy || hasUnsavedChanges || revisionConflict || saveAcknowledged) return;
+    try {
+      const csv = exportProjectEstimateCsv(worksheet, scope);
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `project-estimate-${worksheet.projectId.replace(/[^a-zA-Z0-9_-]/g, "_")}.csv`;
+      document.body.appendChild(anchor);
+      try { anchor.click(); } finally { anchor.remove(); URL.revokeObjectURL(url); }
+      setError("");
+    } catch (err) { setError(err instanceof Error ? err.message : "Export failed"); }
+  }
+
+  if (!enabled || !scope.canViewCosts) return null;
+  return (
+    <form onSubmit={submit} aria-label="Project estimate worksheet" className="space-y-3">
+      <h2 className="text-lg font-semibold">Project estimate</h2>
+      {error && <p role="alert" className="text-red-700">{error}</p>}
+      {message && <p role="status">{message}</p>}
+      {validationError && <p role="alert" aria-label="Estimate validation error" className="text-red-700">{validationError}</p>}
+      {!worksheet && !busy && <button type="button" onClick={reloadCurrent}>Retry loading estimate</button>}
+      {worksheet && <>
+        <p aria-label="Estimate revision">Revision: {worksheet.revision}{hasUnsavedChanges ? " · Unsaved changes" : ""}</p>
+        <button type="button" disabled={busy || hasUnsavedChanges || saveAcknowledged} onClick={reloadCurrent}>Reload current estimate</button>
+        {(hasUnsavedChanges || revisionConflict || saveAcknowledged) && <div role="status">
+          <p>Save or discard your edits before reloading. A revision conflict requires reloading the latest estimate.</p>
+          <button type="button" disabled={busy} onClick={() => { if (window.confirm("Discard unsaved estimate edits and load the latest saved revision?")) void reloadCurrent(); }}>Discard edits and reload latest</button>
+        </div>}
+        <label>Currency <input aria-label="Currency" value={worksheet.currency} maxLength={3} disabled={!canEdit || busy || revisionConflict || saveAcknowledged}
+          onChange={e => { setWorksheet({ ...worksheet, currency: e.target.value.toUpperCase() }); setRequestKey(null); setHasUnsavedChanges(true); setMessage(""); }} /></label>
+        {worksheet.lines.map(line => (
+          <fieldset key={line.id} className="grid gap-2 rounded border p-3">
+            <legend>Estimate line</legend>
+            <label>Description <input required value={line.description} maxLength={500}
+              disabled={!canEdit || busy || revisionConflict || saveAcknowledged} onChange={e => updateLine(line.id, { description: e.target.value })} /></label>
+            <label>Type <select value={line.kind} disabled={!canEdit || busy || revisionConflict || saveAcknowledged} onChange={e => updateLine(line.id, { kind: e.target.value as ProjectEstimateLine["kind"] })}>
+              <option value="labor">Labor</option><option value="material">Material</option><option value="expense">Expense</option>
+            </select></label>
+            {(["quantity", "unitCost", "markupPercent"] as const).map(field =>
+              <label key={field}>{field} <input inputMode="decimal" required disabled={!canEdit || busy || revisionConflict || saveAcknowledged} value={line[field]}
+                onChange={e => updateLine(line.id, { [field]: e.target.value })} /></label>)}
+            {totals && (() => {
+              const calculated = totals.lines.find(item => item.id === line.id);
+              return calculated ? (
+                <output aria-label={`Calculated total for ${line.description || "estimate line"}`} className="text-sm">
+                  Cost: {(calculated.costMinor / 100).toFixed(2)} {totals.currency}
+                  {" · "}Proposed revenue: {(calculated.proposedRevenueMinor / 100).toFixed(2)} {totals.currency}
+                </output>
+              ) : null;
+            })()}
+            <button type="button" disabled={!canEdit || busy || revisionConflict || saveAcknowledged || worksheet.lines.length >= 500} onClick={() => {
+              // Copy a priced estimate item without reusing its identity; each line is independently auditable.
+              const index = worksheet.lines.findIndex(item => item.id === line.id);
+              if (index < 0) return;
+              const lines = [...worksheet.lines];
+              lines.splice(index + 1, 0, { ...line, id: crypto.randomUUID() });
+              setWorksheet({ ...worksheet, lines });
+              setRequestKey(null);
+              setHasUnsavedChanges(true);
+              setMessage("");
+            }}>Duplicate line</button>
+            <button type="button" disabled={!canEdit || busy || revisionConflict || saveAcknowledged || worksheet.lines.length <= 1} onClick={() => {
+              setWorksheet({ ...worksheet, lines: worksheet.lines.filter(item => item.id !== line.id) });
+              setRequestKey(null);
+              setHasUnsavedChanges(true);
+              setMessage("");
+            }}>Remove line</button>
+          </fieldset>
+        ))}
+        <button type="button" disabled={!canEdit || busy || revisionConflict || saveAcknowledged || worksheet.lines.length >= 500} onClick={() => {
+          setWorksheet({ ...worksheet, lines: [...worksheet.lines, newLine()] }); setRequestKey(null); setHasUnsavedChanges(true); setMessage("");
+        }}>Add line</button>
+        {totals && <>
+          <p>Cost: {(totals.costMinor / 100).toFixed(2)} · Proposed revenue: {(totals.proposedRevenueMinor / 100).toFixed(2)} · Margin: {(totals.grossMarginMinor / 100).toFixed(2)} {totals.currency}</p>
+          <table aria-label="Project estimate cost breakdown" className="w-full text-sm">
+            <thead><tr><th scope="col">Cost category</th><th scope="col">Cost</th><th scope="col">Proposed revenue</th></tr></thead>
+            <tbody>{(["labor", "material", "expense"] as const).map(kind => {
+              const categoryLines = totals.lines.filter(line => line.kind === kind);
+              const costMinor = categoryLines.reduce((sum, line) => sum + BigInt(line.costMinor), 0n);
+              const revenueMinor = categoryLines.reduce((sum, line) => sum + BigInt(line.proposedRevenueMinor), 0n);
+              return <tr key={kind}>
+                <th scope="row" className="text-left capitalize">{kind}</th>
+                <td className="text-right">{(Number(costMinor) / 100).toFixed(2)} {totals.currency}</td>
+                <td className="text-right">{(Number(revenueMinor) / 100).toFixed(2)} {totals.currency}</td>
+              </tr>;
+            })}</tbody>
+          </table>
+        </>}
+        {canEdit && <button type="submit" disabled={busy || !totals || !hasUnsavedChanges || revisionConflict || saveAcknowledged}>{busy ? "Working…" : "Save estimate"}</button>}
+        {canExport && <button type="button" disabled={busy || !hasPersistedRevision || !totals || hasUnsavedChanges || revisionConflict || saveAcknowledged} onClick={downloadCsv}>Export saved estimate CSV</button>}
+      </>}
+    </form>
+  );
+}
