@@ -208,7 +208,7 @@ export async function saveStockAdjustmentOnline(
   if (original.hasVariants) throw new Error("Adjust a specific variant, not its product group.");
   const delta = stockCountDelta(rawTarget, original.stockQuantity, original.stockQuantity);
   if (delta === 0) return original;
-  const expectedQuantity = original.stockQuantity + delta;
+  const expectedQuantity = Math.round((original.stockQuantity + delta) * 1000) / 1000;
   const expectedVersion = (original.version ?? 1) + 1;
   const cfg = configFromEnv();
   const token = getSessionToken();
