@@ -13,7 +13,7 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#1760e6",
     categories: ["business", "productivity"],
     icons: [
-      { src: "/logo-mark.png", sizes: "512x512", type: "image/png", purpose: "any maskable" },
+      { src: "/logo-mark.png", sizes: "512x512", type: "image/png", purpose: "any" },
       { src: "/minarva-biz-mark.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
     ],
   };
