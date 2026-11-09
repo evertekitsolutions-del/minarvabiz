@@ -306,3 +306,5 @@ export * from "./boutique-stock-purchase";
 export * from "./stock-adjustment-guard";
 // Pure QR encoder for cloud garment tag printing.
 export * from "./qr-code";
+// SaaS browser/PDF thermal and fixed-size labels; no driver side effects.
+export * from "./saas-print-layout";
