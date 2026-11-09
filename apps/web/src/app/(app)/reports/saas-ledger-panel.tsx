@@ -63,7 +63,7 @@ export function SaasLedgerPanel(){
       if(result.error||!result.data)throw new Error(result.error?.message||"GST cloud query failed.");
       let rows:LedgerRow[]=[];
       if(partyId){
-        const l=await pgRpc<LedgerRow[]>(a.cfg,"saas_party_ledger",{
+        const l=await pgRpc<LedgerRow[]>(a.cfg,"saas_party_ledger_v2",{
           p_party_type:kind,p_party_id:partyId,p_branch_id:null,
         });
         if(l.error||!Array.isArray(l.data))throw new Error(l.error?.message||"Tenant ledger cloud query failed.");
@@ -78,6 +78,7 @@ export function SaasLedgerPanel(){
   const parties=kind==="customer"?customers:suppliers;
   const debits=ledger.reduce((s,x)=>s+Number(x.debit||0),0);
   const credits=ledger.reduce((s,x)=>s+Number(x.credit||0),0);
+  const balance=kind==="supplier"?credits-debits:debits-credits;
   return <section className="space-y-4 rounded-xl border bg-white p-4">
     <h3 className="text-lg font-semibold">Cloud Accounts · GST & Unified Party Ledger</h3>
     <p className="text-xs text-slate-600">Read-only, tenant-scoped PostgreSQL report. No local accounting snapshots.</p>
@@ -129,7 +130,7 @@ export function SaasLedgerPanel(){
         </tbody></table>
       </div>
       {partyId&&<p className="text-sm font-semibold">Debit {money(debits)}
-        · Credit {money(credits)} · Difference {money(debits-credits)}</p>}
+        · Credit {money(credits)} · {kind==="supplier"?"Payable balance":"Receivable balance"} {money(balance)}</p>}
     </>}
   </section>;
 }
