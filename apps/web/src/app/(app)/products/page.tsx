@@ -5,6 +5,8 @@ import { ProductList, Modal, Button, FormField, inputClass, selectClass } from "
 import { store, generateProductBarcode, printBarcodeLabels, parseNonNegativeStockQuantity, parseProductCsv, importProductsFromCsv, exportProductsCsv, exportReorderCsv, exportShareableCatalogCsv, exportShareableCatalogHtml, exportShareableCatalogJson, parseCommerceQuoteDraft, createCommerceTierDraft, updateCommerceTierDraft, deleteCommerceTierDraft, listCommerceTierDrafts, can, getShopProfile } from "@minarvabiz/business-logic";
 import type { Product, Category } from "@minarvabiz/types";
 import { productSchema } from "@minarvabiz/validation";
+import { getRuntimeMode } from "@minarvabiz/business-logic";
+import { saveProductOnline, saveCategoryOnline, saveStockAdjustmentOnline } from "../../../lib/online-product-save";
 import { parseProductPrice } from "../../../lib/parse-product-price";
 import { KitRecipeManager } from "./kit-recipe-manager";
 import { BoutiqueVariantMatrix } from "./boutique-variant-matrix";
@@ -20,13 +22,22 @@ export default function ProductsPage() {
   const [stockProduct, setStockProduct] = React.useState<Product | null>(null);
   const [stockQty, setStockQty] = React.useState("");
   const [stockError, setStockError] = React.useState<string | null>(null);
+  const [stockBusy, setStockBusy] = React.useState(false);
+  const stockInFlight = React.useRef(false);
+  const pendingStockReference = React.useRef<string | null>(null);
   const [labelProduct, setLabelProduct] = React.useState<Product | null>(null);
   const [labelCopies, setLabelCopies] = React.useState("1");
   const [categoryOpen, setCategoryOpen] = React.useState(false);
   const [categoryName, setCategoryName] = React.useState("");
   const [categoryDescription, setCategoryDescription] = React.useState("");
   const [categoryError, setCategoryError] = React.useState<string | null>(null);
+  const [categoryBusy, setCategoryBusy] = React.useState(false);
+  const categoryInFlight = React.useRef(false);
+  const pendingCategoryId = React.useRef<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [saveBusy, setSaveBusy] = React.useState(false);
+  const saveInFlight = React.useRef(false);
+  const pendingCreateId = React.useRef<string | null>(null);
   const productCsvInput = React.useRef<HTMLInputElement>(null);
   const [csvPreview, setCsvPreview] = React.useState<{
     name: string; content: string; rows: ReturnType<typeof parseProductCsv>["rows"]; errors: string[];
@@ -53,39 +64,80 @@ export default function ProductsPage() {
     setProducts(store.listProducts({ query, categoryId: categoryId ?? undefined, lowStockOnly }));
   }, [query, categoryId, lowStockOnly]);
 
-  React.useEffect(() => { refresh(); }, [refresh]);
+  React.useEffect(() => {
+    refresh();
+    // Supabase hydration is asynchronous; the first render may precede the
+    // verified tenant snapshot. Keep the visible catalog aligned with it.
+    const onCloudHydrated = () => refresh();
+    window.addEventListener("minarva:data-hydrated", onCloudHydrated);
+    return () => window.removeEventListener("minarva:data-hydrated", onCloudHydrated);
+  }, [refresh]);
 
-  function handleCreateCategory() {
+  async function handleCreateCategory() {
+    if (categoryInFlight.current) return;
     const name = categoryName.trim();
-    if (!name) {
-      setCategoryError("Category name is required");
+    if (!name || name.length > 500) {
+      setCategoryError("Category name must be between 1 and 500 characters.");
       return;
     }
+    categoryInFlight.current = true;
+    setCategoryBusy(true);
+    setCategoryError(null);
     try {
-      const category = store.createCategory({ name, description: categoryDescription.trim() || null });
-      setForm((prev) => ({ ...prev, categoryId: category.id }));
+      let category: Category;
+      if (getRuntimeMode() === "demo") {
+        category = store.createCategory({ name, description: categoryDescription.trim() || null });
+      } else {
+        pendingCategoryId.current ??= crypto.randomUUID();
+        category = await saveCategoryOnline(
+          { name, description: categoryDescription.trim() || null },
+          pendingCategoryId.current,
+        );
+      }
+      setForm(prev => ({ ...prev, categoryId: category.id }));
       setCategoryName("");
       setCategoryDescription("");
       setCategoryError(null);
       setCategoryOpen(false);
+      pendingCategoryId.current = null;
       refresh();
     } catch (err) {
-      setCategoryError(err instanceof Error ? err.message : String(err));
+      setCategoryError(err instanceof Error ? err.message : "Category NOT confirmed in Supabase.");
+    } finally {
+      categoryInFlight.current = false;
+      setCategoryBusy(false);
     }
   }
 
+  function closeCategoryForm() {
+    if (categoryInFlight.current) return;
+    if (getRuntimeMode() !== "demo" && pendingCategoryId.current) {
+      setCategoryError("Category cloud status is uncertain. Retry with the same form before creating another.");
+      return;
+    }
+    setCategoryOpen(false);
+    setCategoryError(null);
+  }
+
   function resetForm() {
+    pendingCreateId.current = null;
     setEditingId(null);
     setForm({ name: "", sku: "", barcode: "", categoryId: "", unit: "pcs", costPrice: "0", sellingPrice: "0", stockQuantity: "0", minimumStock: "5" });
   }
 
   function openEdit(product: Product) {
+    if (saveInFlight.current) return;
+    pendingCreateId.current = null;
     setEditingId(product.id);
     setForm({ name: product.name, sku: product.sku || "", barcode: product.barcode || "", categoryId: product.categoryId || "", unit: product.unit, costPrice: String(product.costPrice), sellingPrice: String(product.sellingPrice), stockQuantity: String(product.stockQuantity), minimumStock: String(product.minimumStock) });
     setOpen(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (saveInFlight.current) return;
+    saveInFlight.current = true;
+    setSaveBusy(true);
+    setError(null);
     try {
       const parsed = productSchema.safeParse({
         name: form.name,
@@ -99,18 +151,46 @@ export default function ProductsPage() {
         minimumStock: parseNonNegativeStockQuantity(form.minimumStock),
         isActive: true,
       });
-      if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Invalid input"); return; }
-      if (editingId) {
-        const patch: Partial<Product> = { ...parsed.data };
-        delete patch.stockQuantity;
-        store.updateProduct(editingId, patch);
+      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Invalid input");
+
+      if (getRuntimeMode() === "demo") {
+        if (editingId) {
+          const patch: Partial<Product> = { ...parsed.data };
+          delete patch.stockQuantity;
+          store.updateProduct(editingId, patch);
+        } else {
+          store.createProduct(parsed.data as Parameters<typeof store.createProduct>[0]);
+        }
       } else {
-        store.createProduct(parsed.data as Parameters<typeof store.createProduct>[0]);
+        const editing = editingId ? store.getProduct(editingId) : undefined;
+        if (editingId && !editing) throw new Error("Product changed or is no longer available; reload.");
+        // Reuse this ID on every ambiguous timeout/retry, never mint a second
+        // product when a network response was lost after PostgreSQL commit.
+        if (!editing) pendingCreateId.current ??= crypto.randomUUID();
+        await saveProductOnline(parsed.data, { editing, createId: pendingCreateId.current ?? undefined });
       }
-      setOpen(false); setError(null); resetForm(); refresh();
+      setOpen(false);
+      setError(null);
+      resetForm();
+      refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      // Fail closed: the original form and its stable create ID remain for retry.
+      setError(err instanceof Error ? err.message : "Product was NOT confirmed in Supabase.");
+    } finally {
+      saveInFlight.current = false;
+      setSaveBusy(false);
     }
+  }
+
+  function closeProductForm() {
+    if (saveInFlight.current) return;
+    // Retain the stable retry ID after an uncertain network outcome.
+    if (getRuntimeMode() !== "demo" && pendingCreateId.current) {
+      setError("Cloud confirmation is pending or failed. Retry Save on this form to avoid a duplicate product. Do not start another product yet.");
+      return;
+    }
+    setOpen(false);
+    resetForm();
   }
 
   function previewB2BQuote() {
@@ -242,6 +322,10 @@ export default function ProductsPage() {
   }
 
   function confirmCsvImport() {
+    if (getRuntimeMode() !== "demo") {
+      setCsvMessage("Online CSV import is blocked until every row has a verified cloud receipt.");
+      return;
+    }
     if (!csvPreview || csvPreview.errors.length || !csvPreview.rows.length || csvBusy) return;
     // The import function preflights the CSV again against the latest live
     // SKUs/barcodes and fails without posting partial opening inventory.
@@ -261,16 +345,38 @@ export default function ProductsPage() {
     }
   }
 
-  function adjustStock() {
-    if (!stockProduct) return;
+  async function adjustStock() {
+    if (!stockProduct || stockInFlight.current) return;
+    stockInFlight.current = true;
+    setStockBusy(true);
+    setStockError(null);
     try {
-      store.adjustStockToQuantity(stockProduct.id, stockQty, stockProduct.stockQuantity, "Manual stock correction");
-      setStockError(null);
+      if (getRuntimeMode() === "demo") {
+        store.adjustStockToQuantity(stockProduct.id, stockQty, stockProduct.stockQuantity, "Manual stock correction");
+      } else {
+        pendingStockReference.current ??= crypto.randomUUID();
+        await saveStockAdjustmentOnline(stockProduct, stockQty, pendingStockReference.current);
+      }
+      pendingStockReference.current = null;
       setStockProduct(null);
+      setStockError(null);
       refresh();
     } catch (err) {
-      setStockError(err instanceof Error ? err.message : String(err));
+      setStockError(err instanceof Error ? err.message : "Stock correction NOT confirmed in Supabase.");
+    } finally {
+      stockInFlight.current = false;
+      setStockBusy(false);
     }
+  }
+
+  function closeStockForm() {
+    if (stockInFlight.current) return;
+    if (getRuntimeMode() !== "demo" && pendingStockReference.current) {
+      setStockError("Stock correction is not confirmed. Retry the same reference to avoid a duplicate adjustment.");
+      return;
+    }
+    setStockProduct(null);
+    setStockError(null);
   }
 
   return (
@@ -468,21 +574,21 @@ export default function ProductsPage() {
         onToggleLowStock={() => setLowStockOnly((v) => !v)}
         onSearch={(q) => setQuery(q)}
         onFilterCategory={setCategoryId}
-        onAddCategory={() => setCategoryOpen(true)}
+        onAddCategory={() => { if (categoryInFlight.current) return; pendingCategoryId.current = null; setCategoryError(null); setCategoryOpen(true); }}
         onAdd={() => { resetForm(); setOpen(true); }}
         onEdit={openEdit}
-        onAdjustStock={(p) => { setStockProduct({ ...p }); setStockQty(String(p.stockQuantity)); setStockError(null); }}
-        onArchive={(product, reason) => { const result = store.archiveProduct(product.id, reason); if (result.error) return { error: result.error }; refresh(); return { success: true }; }}
+        onAdjustStock={(p) => { if (stockInFlight.current) return; pendingStockReference.current = null; setStockProduct({ ...p }); setStockQty(String(p.stockQuantity)); setStockError(null); }}
+        onArchive={(product, reason) => { if (getRuntimeMode() !== "demo") return { error: "Online product archive is unavailable until cloud confirmation is implemented." }; const result = store.archiveProduct(product.id, reason); if (result.error) return { error: result.error }; refresh(); return { success: true }; }}
         onPrintBarcode={(p) => { setLabelProduct(p); setLabelCopies("1"); }}
       />
       <Modal
         open={categoryOpen}
         title="Add Category"
-        onClose={() => setCategoryOpen(false)}
+        onClose={closeCategoryForm}
         footer={
           <>
-            <Button variant="outline" onClick={() => setCategoryOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateCategory}>Save Category</Button>
+            <Button variant="outline" onClick={closeCategoryForm} disabled={categoryBusy}>Cancel</Button>
+            <Button onClick={() => { void handleCreateCategory(); }} disabled={categoryBusy}>{categoryBusy ? "Confirming in Supabase…" : "Save Category"}</Button>
           </>
         }
       >
@@ -493,18 +599,18 @@ export default function ProductsPage() {
           <FormField label="Description">
             <input className={inputClass} value={categoryDescription} onChange={(e) => setCategoryDescription(e.target.value)} />
           </FormField>
-          {categoryError && <p className="text-sm text-rose-600">{categoryError}</p>}
+          {categoryError && <p role="alert" className="text-sm text-rose-600">{categoryError}</p>}
         </div>
       </Modal>
       <Modal
         open={open}
         title={editingId ? "Edit Product" : "Add Product"}
-        onClose={() => { setOpen(false); resetForm(); }}
+        onClose={closeProductForm}
         className="max-w-xl"
         footer={
           <>
-            <Button variant="outline" onClick={() => { setOpen(false); resetForm(); }}>Cancel</Button>
-            <Button onClick={handleSave}>{editingId ? "Update Product" : "Save Product"}</Button>
+            <Button variant="outline" onClick={closeProductForm} disabled={saveBusy}>Cancel</Button>
+            <Button onClick={() => { void handleSave(); }} disabled={saveBusy}>{saveBusy ? "Confirming in Supabase…" : editingId ? "Update Product" : "Save Product"}</Button>
           </>
         }
       >
@@ -539,10 +645,11 @@ export default function ProductsPage() {
           <FormField label="Min stock">
             <input className={inputClass} type="number" min="0" step="0.001" value={form.minimumStock} onChange={(e) => setForm({ ...form, minimumStock: e.target.value })} />
           </FormField>
-          {error && <p className="sm:col-span-2 text-sm text-rose-600">{error}</p>}
+          {saveBusy && <p role="status" className="sm:col-span-2 text-sm text-blue-700">Saving to Supabase. The form will close only after the server record is verified.</p>}
+          {error && <p role="alert" className="sm:col-span-2 text-sm text-rose-600">{error}</p>}
         </div>
       </Modal>
-      <Modal open={!!stockProduct} title="Update Stock Quantity" onClose={() => { setStockProduct(null); setStockError(null); }} footer={<><Button variant="outline" onClick={() => { setStockProduct(null); setStockError(null); }}>Cancel</Button><Button onClick={adjustStock}>Update Stock</Button></>}>
+      <Modal open={!!stockProduct} title="Update Stock Quantity" onClose={closeStockForm} footer={<><Button variant="outline" onClick={closeStockForm} disabled={stockBusy}>Cancel</Button><Button onClick={() => { void adjustStock(); }} disabled={stockBusy}>{stockBusy ? "Confirming Stock…" : "Update Stock"}</Button></>}>
         <div className="space-y-3"><p className="text-sm text-slate-600">{stockProduct?.name} · Current stock: <strong>{stockProduct?.stockQuantity}</strong></p><FormField label="New stock quantity"><input className={inputClass} type="number" min="0" step="0.001" value={stockQty} onChange={(e) => { setStockQty(e.target.value); setStockError(null); }} /></FormField>{stockError && <p role="alert" className="text-sm text-rose-600">{stockError}</p>}</div>
       </Modal>
       <Modal open={!!labelProduct} title="Print Barcode Label" onClose={() => setLabelProduct(null)} footer={<><Button variant="outline" onClick={() => setLabelProduct(null)}>Cancel</Button><Button onClick={() => { if (!labelProduct?.barcode) { setError("Generate a barcode before printing."); return; } const category = categories.find((cat) => cat.id === labelProduct.categoryId); printBarcodeLabels(labelProduct, Math.max(1, parseInt(labelCopies, 10) || 1), category?.name || null); }}>Print Label</Button></>}>
