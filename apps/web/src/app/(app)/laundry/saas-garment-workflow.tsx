@@ -94,6 +94,7 @@ export function SaasGarmentWorkflow() {
           rateId,customer:customer.trim(),garment:garment.trim(),quantity:count,notes:notes.trim()};
       }
       const p=pending.current;
+      if(!p)throw new Error("No pending cloud transaction.");
       const ctx=await context();
       const result=await pgRpc<Record<string,unknown>>(ctx.cfg,"saas_laundry_intake",{
         p_job_id:p.id,p_rate_card_id:p.rateId,p_customer_name:p.customer,
