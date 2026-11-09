@@ -79,7 +79,7 @@ export async function saveProductOnline(
   const version = editing ? (editing.version ?? 1) + 1 : 1;
   const now = new Date().toISOString();
   const row: Record<string, unknown> = {
-    ...asRow({ ...fields, stockQuantity: !editing && fields.stockQuantity > 0 ? 0 : fields.stockQuantity }),
+    ...asRow(fields),
     updated_at: now,
     ...(editing ? {} : { id, created_at: now }),
     version,
@@ -100,57 +100,30 @@ export async function saveProductOnline(
       writeError = "Server receipt does not match the submitted product update.";
     }
   } else {
-    const result = await pgInsert<Record<string, unknown>>(authCfg, "products", {
-      ...row, org_id: auth.orgId,
-    });
+    // PostgreSQL executes the product insert AND its opening-stock movement in
+    // one transaction. Never split opening stock into an independent RPC call.
+    const result = await pgRpc<Record<string, unknown>>(
+      authCfg, "create_product_with_opening_stock", {
+        p_product_id: id,
+        p_name: fields.name,
+        p_sku: fields.sku ?? null,
+        p_barcode: fields.barcode ?? null,
+        p_category_id: fields.categoryId ?? null,
+        p_unit: fields.unit,
+        p_cost_price: fields.costPrice,
+        p_selling_price: fields.sellingPrice,
+        p_stock_quantity: fields.stockQuantity,
+        p_minimum_stock: fields.minimumStock,
+        p_is_active: fields.isActive,
+      },
+    );
     writeError = result.error?.message ?? null;
-    if (!writeError && result.data?.length === 1 &&
-        !matchesProductCloudReceipt(result.data[0], row, id, auth.orgId, version)) {
-      writeError = "Server receipt does not match the submitted product.";
-    }
   }
 
   // Mandatory server read-back resolves ambiguous network timeouts and prevents
   // a successful HTTP status or zero-row RLS update being mistaken for commit.
   const verified = await pgSelect<Record<string, unknown>>(authCfg, "products", ownerFilter);
   const confirmedRow = verified.data?.length === 1 ? verified.data[0] : null;
-  // New products enter the catalog with zero stock. Their opening quantity must
-  // be applied by the existing atomic stock + inventory-ledger RPC, not by a
-  // blind product insert that silently skips the movement history.
-  if (!editing && fields.stockQuantity > 0 && confirmedRow &&
-      confirmedRow.id === id && confirmedRow.org_id === auth.orgId) {
-    if (matchesProductCloudReceipt(confirmedRow, row, id, auth.orgId, 1)) {
-      return saveStockAdjustmentOnline(
-        toProduct(confirmedRow), String(fields.stockQuantity), id, "opening_stock",
-      );
-    }
-    // If an RPC committed but the response was lost, a retry with this SAME
-    // product id must reconcile the committed version-2 + opening ledger row.
-    const alreadyPosted = {
-      ...row, stock_quantity: fields.stockQuantity, version: 2,
-    };
-    if (matchesProductCloudReceipt(confirmedRow, alreadyPosted, id, auth.orgId, 2)) {
-      const ledger = await pgSelect<Record<string, unknown>>(
-        authCfg, "inventory_transactions",
-        "select=*&reference_type=eq.opening_stock&reference_id=eq." + id +
-        "&org_id=eq." + auth.orgId + "&limit=2",
-      );
-      const entry = ledger.data?.[0];
-      if (!ledger.error && ledger.data?.length === 1 && entry &&
-          entry.product_id === id && entry.created_by === user.id &&
-          entry.org_id === auth.orgId && entry.movement_type === "adjustment" &&
-          Number(entry.quantity) === fields.stockQuantity &&
-          Number(entry.balance_after) === fields.stockQuantity) {
-        if (getSessionToken() !== token || getSessionUser()?.id !== user.id) {
-          throw new Error("Opening stock committed but the signed-in account changed; reload.");
-        }
-        const postedProduct = toProduct(confirmedRow);
-        const currentProducts = store.exportCoreState().products;
-        store.hydrateCore({ products: currentProducts.filter(p => p.id !== id).concat(postedProduct) });
-        return postedProduct;
-      }
-    }
-  }
   if (verified.error || !confirmedRow ||
       !matchesProductCloudReceipt(confirmedRow, row, id, auth.orgId, version)) {
     throw new Error(writeError
