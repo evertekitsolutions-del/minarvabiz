@@ -23,6 +23,8 @@ test("atomic invoker variant RPC verifies tenant, receipts and parent stock trig
   assert.match(sql,/public\.current_user_authorization\(\)/);
   assert.match(sql,/user_has_org_role/);
   assert.match(sql,/CREATE TRIGGER boutique_variant_stock_reconcile/);
+  assert.match(sql,/CREATE TRIGGER boutique_block_parent_stock_drift/);
+  assert.match(sql,/Parent stock must equal sum of independently stocked variants/);
   assert.match(sql,/INSERT INTO public\.inventory_transactions/);
   assert.match(sql,/Parent stock does not equal sum of its verified variants/);
   assert.match(sql,/ON CONFLICT \(id\) DO NOTHING/);
