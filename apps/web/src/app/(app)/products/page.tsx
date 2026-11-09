@@ -93,34 +93,6 @@ export default function ProductsPage() {
     return;
   }
 
-  function legacyHandleSaveUnsafe() {
-    try {
-      const parsed = productSchema.safeParse({
-        name: form.name,
-        sku: form.sku || null,
-        barcode: form.barcode || null,
-        categoryId: form.categoryId || null,
-        unit: form.unit,
-        costPrice: parseProductPrice(form.costPrice, "Cost price"),
-        sellingPrice: parseProductPrice(form.sellingPrice, "Selling price"),
-        stockQuantity: parseNonNegativeStockQuantity(form.stockQuantity),
-        minimumStock: parseNonNegativeStockQuantity(form.minimumStock),
-        isActive: true,
-      });
-      if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Invalid input"); return; }
-      if (editingId) {
-        const patch: Partial<Product> = { ...parsed.data };
-        delete patch.stockQuantity;
-        store.updateProduct(editingId, patch);
-      } else {
-        store.createProduct(parsed.data as Parameters<typeof store.createProduct>[0]);
-      }
-      setOpen(false); setError(null); resetForm(); refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
   function previewB2BQuote() {
     try {
       const product = store.getProduct(quoteProductId);
