@@ -9,6 +9,39 @@ CREATE UNIQUE INDEX IF NOT EXISTS products_org_active_barcode_unique
 ON public.products (org_id, lower(btrim(barcode)))
 WHERE barcode IS NOT NULL AND deleted_at IS NULL;
 
+-- Reject a forged direct REST PATCH that tries to overwrite derived parent
+-- inventory without reconciling the actual independently-stocked child SKUs.
+CREATE OR REPLACE FUNCTION public.boutique_prevent_parent_stock_drift()
+RETURNS trigger LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
+AS $
+DECLARE
+  v_sum numeric;
+BEGIN
+  IF NEW.parent_product_id IS NULL AND NEW.has_variants IS TRUE
+     AND NEW.stock_quantity IS DISTINCT FROM OLD.stock_quantity THEN
+    SELECT coalesce(sum(child.stock_quantity),0) INTO v_sum
+    FROM public.products child
+    WHERE child.parent_product_id = NEW.id AND child.deleted_at IS NULL;
+    IF NEW.stock_quantity IS DISTINCT FROM v_sum THEN
+      RAISE EXCEPTION 'Parent stock must equal sum of independently stocked variants'
+        USING ERRCODE = '23514';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$;
+
+DO $
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger
+     WHERE tgrelid = 'public.products'::regclass
+       AND tgname = 'boutique_block_parent_stock_drift') THEN
+    CREATE TRIGGER boutique_block_parent_stock_drift
+      BEFORE UPDATE OF stock_quantity ON public.products
+      FOR EACH ROW EXECUTE FUNCTION public.boutique_prevent_parent_stock_drift();
+  END IF;
+END $;
+
 CREATE OR REPLACE FUNCTION public.boutique_refresh_parent_stock(p_parent_id uuid)
 RETURNS void LANGUAGE plpgsql SECURITY INVOKER SET search_path = ''
 AS $$
