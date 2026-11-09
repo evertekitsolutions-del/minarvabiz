@@ -14,7 +14,7 @@ for (const label of ["Main navigation", "Mobile navigation", "Footer navigation"
 assert.ok(page.includes("<details") && page.includes("<summary"), "Native keyboard-friendly menus/FAQ required");
 assert.ok(page.includes('href="/login"'), "Existing customer login must remain accessible");
 assert.ok(page.includes('id="get-started"') && page.includes('href="/register"'), "SaaS registration CTA must remain visible");
-assert.ok(page.includes("target=\"_blank\" rel=\"noopener noreferrer\""), "External release link must be isolated");
+assert.doesNotMatch(page, /Windows Offline|Hybrid|Download for Windows|Windows release|releases\/tag\//i, "Retired Windows marketing must be absent");
 assert.ok(page.includes("not a live application screenshot"), "Illustrative panel must be disclosed");
 assert.ok(page.includes("Subscription payments and full customer acceptance remain pending verification."), "Do not advertise an unverified paid subscription");
 assert.ok(page.includes("subject to edition readiness") || page.includes("depends on edition"), "No universal feature claims");
