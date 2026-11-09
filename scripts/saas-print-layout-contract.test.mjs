@@ -1,0 +1,3 @@
+import test from "node:test";import assert from "node:assert/strict";import {readFileSync} from "node:fs";
+test("SaaS thermal receipt has no fixed blank cutter feed",()=>{const s=readFileSync("packages/business-logic/src/saas-print-layout.ts","utf8");assert.match(s,/@page\{size:80mm auto;margin:0\}/);assert.match(s,/page-break-after:auto/);assert.doesNotMatch(s,/window\.print\(/)});
+test("38x25mm 2-up labels use exact row positioning, QR and barcode",()=>{const s=readFileSync("packages/business-logic/src/saas-print-layout.ts","utf8");for(const pattern of [/height:25mm/ ,/width:38mm/,/left:\$\{j===0\?0:40\}mm/,/qrSvg\(label.barcode\)/,/barcodeSvg\(label.barcode\)/,/Price ₹/])assert.match(s,pattern)});
