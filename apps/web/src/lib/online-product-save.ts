@@ -5,7 +5,7 @@
  */
 import { configFromEnv, pgInsert, pgSelect, pgUpdate } from "@minarvabiz/database";
 import { can, exportOutbox, getOutboxScope, getSessionToken, getSessionUser, store } from "@minarvabiz/business-logic";
-import type { Product } from "@minarvabiz/types";
+import type { Product, Category } from "@minarvabiz/types";
 import { resolveOnlineAuthorization } from "./data-source";
 import { productCloudColumns, matchesProductCloudReceipt } from "./online-product-receipt";
 
@@ -126,4 +126,64 @@ export async function saveProductOnline(
   const current = store.exportCoreState().products;
   store.hydrateCore({ products: current.filter(p => p.id !== id).concat(confirmed) });
   return confirmed;
+}
+
+/**
+ * Category creation uses the same readback rule as product creation.
+ * The request ID must be held by the form across ambiguous network retries.
+ */
+export async function saveCategoryOnline(
+  input: { name: string; description?: string | null },
+  stableId: string,
+): Promise<Category> {
+  const name = input.name.trim();
+  if (!name || name.length > 500 || (input.description?.length ?? 0) > 500) {
+    throw new Error("Category name or description is invalid.");
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stableId)) {
+    throw new Error("A stable category ID is required.");
+  }
+  const cfg = configFromEnv();
+  const token = getSessionToken();
+  const user = getSessionUser();
+  if (!cfg || !token || !user?.id) throw new Error("Signed-in online account required.");
+  const auth = await resolveOnlineAuthorization(token, user.id);
+  if (!auth.ok) throw new Error(auth.error);
+  if (!can("products.manage") || getOutboxScope() !== auth.orgId + ":" + user.id) {
+    throw new Error("Verified business administrator context required.");
+  }
+  const now = new Date().toISOString();
+  const expected = {
+    id: stableId, org_id: auth.orgId, name, description: input.description?.trim() || null,
+    is_active: true,
+  };
+  const authCfg = { ...cfg, accessToken: token };
+  const result = await pgInsert<Record<string, unknown>>(authCfg, "categories", {
+    ...expected, created_at: now, updated_at: now,
+  });
+  const confirmed = await pgSelect<Record<string, unknown>>(
+    authCfg, "categories",
+    "select=*&id=eq." + stableId + "&org_id=eq." + auth.orgId + "&limit=2",
+  );
+  const row = confirmed.data?.[0];
+  if (confirmed.error || confirmed.data?.length !== 1 || !row ||
+      row.id !== stableId || row.org_id !== auth.orgId || row.name !== name ||
+      (row.description ?? null) !== expected.description || row.is_active !== true ||
+      row.deleted_at != null) {
+    throw new Error("Category NOT confirmed in Supabase. " +
+      (result.error?.message ?? confirmed.error?.message ?? "Retry this same form to avoid duplicates."));
+  }
+  if (getSessionToken() !== token || getSessionUser()?.id !== user.id) {
+    throw new Error("Category committed, but user account changed. Sign in and reload.");
+  }
+  const category: Category = {
+    id: stableId, name, description: expected.description,
+    parentId: row.parent_id as string | null,
+    isActive: true, createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at), deletedAt: null,
+    branchId: row.branch_id as string | null,
+  };
+  const existing = store.exportCoreState().categories;
+  store.hydrateCore({ categories: existing.filter(c => c.id !== stableId).concat(category) });
+  return category;
 }
