@@ -107,7 +107,7 @@ export function SaasBranchTransferPanel(){
    const parsed=Number(qty);
    if(!current||!source||!destination||source===destination||
      !Number.isFinite(parsed)||parsed<=0||parsed>9999999||
-     Math.round(parsed*1000)!==parsed*1000)
+     Math.abs(parsed*1000-Math.round(parsed*1000))>1e-7)
      throw new Error("Select two different branches and a positive quantity (3 decimals maximum).");
    transfer.current??={id:crypto.randomUUID(),productId:current.id,
     sourceId:source,destinationId:destination,qty:parsed};
