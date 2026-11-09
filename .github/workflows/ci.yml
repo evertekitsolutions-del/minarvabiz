@@ -170,6 +170,8 @@ jobs:
       - name: Verify cross-app security header baseline
         run: node --experimental-strip-types scripts/security-header-baseline-smoke.mjs
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
+      - name: Verify append-only SaaS inventory ledger privilege policy
+        run: node --test scripts/saas-inventory-ledger-immutability.test.mjs
       - name: Verify SaaS tenant login link isolation
         run: node --experimental-strip-types --test apps/web/src/lib/__tests__/tenant-login-link.test.mjs
       - name: Verify online-only mobile PWA shell never caches business data
