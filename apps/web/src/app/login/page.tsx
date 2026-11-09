@@ -6,6 +6,7 @@ import { Button } from "@minarvabiz/ui";
 import { createInitialAdmin, hasLocalUsers, isSupabaseConfigured, login } from "@minarvabiz/database";
 import { getRuntimeMode, setSession } from "@minarvabiz/business-logic";
 import { supabaseLogin } from "@/lib/data-source";
+import { matchesRequestedTenant } from "@/lib/tenant-login-link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -52,6 +53,11 @@ export default function LoginPage() {
       if (isSupabaseConfigured()) {
         const remote = await supabaseLogin(email, password);
         if (!remote.ok) { setError(remote.error || "Supabase login failed"); return; }
+        const requestedTenant = new URLSearchParams(window.location.search).get("tenant");
+        if (!matchesRequestedTenant(requestedTenant, remote.orgId)) {
+          setError("This account cannot access the requested business. Check the business login link.");
+          return;
+        }
         setSession(remote.token, {
           id: remote.user.id,
           email: remote.user.email || email,
@@ -92,7 +98,7 @@ export default function LoginPage() {
         {error && <p role="alert" className="text-sm text-rose-600">{error}</p>}
         <p role="status" aria-live="polite" className="sr-only">{loading ? "Signing in, please wait" : ""}</p>
         <Button type="submit" className="w-full" disabled={loading}>{loading ? "Please wait…" : setup ? "Create Administrator" : "Sign in"}</Button>
-        {!setup && <div className="text-center"><a href="/forgot-password" className="text-sm font-medium text-indigo-600 hover:underline">Forgot password?</a></div>}
+        {!setup && <div className="text-center"><a href="/forgot-password" className="text-sm font-medium text-indigo-600 hover:underline">Forgot password?</a><p className="mt-3 text-sm text-slate-600">New customer? <a href="/register" className="font-semibold text-indigo-600 hover:underline">Create business account</a></p></div>}
         {setup && <p className="text-center text-[11px] text-slate-400">No default password is shipped. Choose your administrator credentials now.</p>}
       </form>
     </main>

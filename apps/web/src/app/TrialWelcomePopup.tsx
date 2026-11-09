@@ -11,7 +11,7 @@ import * as React from "react";
  */
 const MOBILE_SCROLL_FRACTION = 0.5;
 const TRIAL_POPUP_SHOWN_NAME = "minarva-biz-marketing-trial-v2";
-const WINDOWS_RELEASE = "https://github.com/evertekitsolutions-del/minarvabiz/releases/tag/v1.0.15";
+const SIGNUP_URL = "/register";
 
 export default function TrialWelcomePopup() {
   const [open, setOpen] = React.useState(false);
@@ -163,7 +163,7 @@ export default function TrialWelcomePopup() {
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <a href={WINDOWS_RELEASE} target="_blank" rel="noopener noreferrer"
+            <a href={SIGNUP_URL}
               onClick={() => setOpen(false)}
               className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl bg-[#1461ed] px-5 py-3 text-center text-sm font-black text-white shadow-[0_12px_22px_rgba(19,97,237,.22)] transition hover:bg-[#0c4fcf] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1765ef]">
               Explore 30-Day Trial <span aria-hidden="true" className="ml-2">→</span>
@@ -174,7 +174,7 @@ export default function TrialWelcomePopup() {
             </button>
           </div>
           <p className="mt-4 text-[10px] leading-[1.65] text-[#71849c] sm:text-[11px]">
-            Opens the official Windows download. Trial entitlement requires supported activation; online self-service trial signup is still being prepared.
+            Online registration is available; trial eligibility and paid plan activation still require verification. No automatic paid subscription.
           </p>
         </div>
 
@@ -193,7 +193,7 @@ export default function TrialWelcomePopup() {
             <img src="/marketing-dashboard.jpg" alt="Illustrative Minarva Biz desktop dashboard preview" width={1500} height={1000} loading="lazy" className="block w-full" />
           </div>
           <p className="relative z-10 mt-6 text-center text-[11px] font-medium text-[#cce1ff]">
-            Windows desktop · Business management · Local-first workflows
+            Online SaaS · Mobile app · Connected workflows
           </p>
           <p className="relative z-10 mt-2 text-center text-[10px] text-[#aacdfd]">
             Illustrative interface — not live customer data.

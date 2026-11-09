@@ -10,7 +10,7 @@ const request = (path, init = {}) => fetch(new URL(path, origin), {
 });
 
 let previousNonce;
-for (const path of ["/", "/login", "/login", "/forgot-password", "/reset-password"]) {
+for (const path of ["/", "/register", "/register/complete", "/login", "/forgot-password", "/reset-password"]) {
   const response = await request(path);
   assert.equal(response.status, 200, `${path}: page must render in Workers`);
   const csp = response.headers.get("content-security-policy") || "";
@@ -23,7 +23,7 @@ for (const path of ["/", "/login", "/login", "/forgot-password", "/reset-passwor
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   assert.equal(response.headers.get("x-powered-by"), null);
   assert.doesNotMatch(html, /sb_secret_|BEGIN (?:RSA |EC )?PRIVATE KEY/);
-  if (path === "/") assert.ok(html.includes('id="features"') && html.includes('id="download"'));
+  if (path === "/") assert.ok(html.includes('id="features"') && html.includes('id="get-started"'));
 }
 for (const [path, method] of [["/login", "POST"], ["/api/support/chat", "DELETE"]]) {
   const response = await request(path, { method });
