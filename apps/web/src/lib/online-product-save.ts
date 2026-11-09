@@ -79,7 +79,8 @@ export async function saveProductOnline(
   const version = editing ? (editing.version ?? 1) + 1 : 1;
   const now = new Date().toISOString();
   const row: Record<string, unknown> = {
-    ...asRow(fields), updated_at: now,
+    ...asRow({ ...fields, stockQuantity: !editing && fields.stockQuantity > 0 ? 0 : fields.stockQuantity }),
+    updated_at: now,
     ...(editing ? {} : { id, created_at: now }),
     version,
   };
@@ -112,11 +113,49 @@ export async function saveProductOnline(
   // Mandatory server read-back resolves ambiguous network timeouts and prevents
   // a successful HTTP status or zero-row RLS update being mistaken for commit.
   const verified = await pgSelect<Record<string, unknown>>(authCfg, "products", ownerFilter);
-  if (verified.error || verified.data?.length !== 1 ||
-      !matchesProductCloudReceipt(verified.data[0], row, id, auth.orgId, version)) {
+  const confirmedRow = verified.data?.length === 1 ? verified.data[0] : null;
+  // New products enter the catalog with zero stock. Their opening quantity must
+  // be applied by the existing atomic stock + inventory-ledger RPC, not by a
+  // blind product insert that silently skips the movement history.
+  if (!editing && fields.stockQuantity > 0 && confirmedRow &&
+      confirmedRow.id === id && confirmedRow.org_id === auth.orgId) {
+    if (matchesProductCloudReceipt(confirmedRow, row, id, auth.orgId, 1)) {
+      return saveStockAdjustmentOnline(
+        toProduct(confirmedRow), String(fields.stockQuantity), id, "opening_stock",
+      );
+    }
+    // If an RPC committed but the response was lost, a retry with this SAME
+    // product id must reconcile the committed version-2 + opening ledger row.
+    const alreadyPosted = {
+      ...row, stock_quantity: fields.stockQuantity, version: 2,
+    };
+    if (matchesProductCloudReceipt(confirmedRow, alreadyPosted, id, auth.orgId, 2)) {
+      const ledger = await pgSelect<Record<string, unknown>>(
+        authCfg, "inventory_transactions",
+        "select=*&reference_type=eq.opening_stock&reference_id=eq." + id +
+        "&org_id=eq." + auth.orgId + "&limit=2",
+      );
+      const entry = ledger.data?.[0];
+      if (!ledger.error && ledger.data?.length === 1 && entry &&
+          entry.product_id === id && entry.created_by === user.id &&
+          entry.org_id === auth.orgId && entry.movement_type === "adjustment" &&
+          Number(entry.quantity) === fields.stockQuantity &&
+          Number(entry.balance_after) === fields.stockQuantity) {
+        if (getSessionToken() !== token || getSessionUser()?.id !== user.id) {
+          throw new Error("Opening stock committed but the signed-in account changed; reload.");
+        }
+        const postedProduct = toProduct(confirmedRow);
+        const currentProducts = store.exportCoreState().products;
+        store.hydrateCore({ products: currentProducts.filter(p => p.id !== id).concat(postedProduct) });
+        return postedProduct;
+      }
+    }
+  }
+  if (verified.error || !confirmedRow ||
+      !matchesProductCloudReceipt(confirmedRow, row, id, auth.orgId, version)) {
     throw new Error(writeError
-      ? "Product NOT confirmed in Supabase: " + writeError + ". Retry this same form, do not create another product."
-      : "Product NOT confirmed in Supabase. Check network/access and retry this same form.");
+      ? "Product NOT fully confirmed in Supabase: " + writeError + ". Retry this same form, do not create another product."
+      : "Product NOT fully confirmed in Supabase. Retry this same form.");
   }
   if (getSessionToken() !== token || getSessionUser()?.id !== user.id) {
     throw new Error("Product committed, but the account changed during save. Sign in again and reload your catalog.");
@@ -198,6 +237,7 @@ export async function saveStockAdjustmentOnline(
   original: Product,
   rawTarget: string,
   referenceId: string,
+  referenceType: "inventory_adjustment" | "opening_stock" = "inventory_adjustment",
 ): Promise<Product> {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(referenceId)) {
     throw new Error("A stable stock correction reference is required.");
@@ -233,7 +273,7 @@ export async function saveStockAdjustmentOnline(
     p_movement_type: "adjustment",
     p_quantity: delta,
     p_expected_version: original.version,
-    p_reference_type: "inventory_adjustment",
+    p_reference_type: referenceType,
     p_reference_id: referenceId,
     p_notes: "Manual stock correction",
     p_branch_id: original.branchId ?? null,
@@ -249,7 +289,7 @@ export async function saveStockAdjustmentOnline(
     pgSelect<Record<string, unknown>>(
       authCfg, "inventory_transactions",
       "select=*&reference_id=eq." + referenceId +
-      "&reference_type=eq.inventory_adjustment&org_id=eq." + auth.orgId + "&limit=2",
+      "&reference_type=eq." + referenceType + "&org_id=eq." + auth.orgId + "&limit=2",
     ),
   ]);
   const row = productRead.data?.[0];
