@@ -42,6 +42,8 @@ jobs:
         run: node scripts/github-actions-hardening-smoke.mjs
       - name: Verify isolated Cloudflare customer preview configuration
         run: node scripts/frontend-cloudflare-config-smoke.mjs
+      - name: Enforce owner-approved Cloudflare-only deployment policy
+        run: node --test scripts/owner-cloudflare-only-policy.test.mjs
       - name: Verify fail-closed Cloudflare customer preview deployment authority
         run: node --test scripts/cloudflare-customer-preview-gate.test.mjs
       - name: Verify premium public homepage content and navigation
