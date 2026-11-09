@@ -121,15 +121,22 @@ export function createOfflineProjectEstimateStore(databaseName: string): Project
                 resolve("conflict");
                 return;
               }
-              const worksheet = structuredClone({ ...command.worksheet, revision: command.nextRevision });
-              estimates.put({ id, worksheet } satisfies StoredEstimate);
-              receipts.put({ id: receiptId, revision: command.nextRevision, fingerprint });
-              audit.add({
-                id: receiptId, estimateId: id, actorId: command.audit.actorId,
-                revision: command.nextRevision, action: command.audit.action,
-                idempotencyKey: command.idempotencyKey, createdAt: new Date().toISOString(),
-              } satisfies AuditRecord);
-              resolve("saved");
+              try {
+                const worksheet = structuredClone({ ...command.worksheet, revision: command.nextRevision });
+                estimates.put({ id, worksheet } satisfies StoredEstimate);
+                receipts.put({ id: receiptId, revision: command.nextRevision, fingerprint });
+                audit.add({
+                  id: receiptId, estimateId: id, actorId: command.audit.actorId,
+                  revision: command.nextRevision, action: command.audit.action,
+                  idempotencyKey: command.idempotencyKey, createdAt: new Date().toISOString(),
+                } satisfies AuditRecord);
+                resolve("saved");
+              } catch (error) {
+                // Exceptions inside an IDB success callback do not reject the outer
+                // promise. Abort the entire transaction and surface the failure.
+                try { tx.abort(); } catch { /* transaction already aborted */ }
+                reject(error);
+              }
             };
           };
         });
