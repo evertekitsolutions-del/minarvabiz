@@ -99,6 +99,6 @@ for (const invalid of ["", " ", "-1", "Infinity", "NaN", "12abc", "1e309", "0x10
 }
 const productsUi = fs.readFileSync(new URL("../../../../apps/web/src/app/(app)/products/page.tsx", import.meta.url), "utf8");
 assert.match(productsUi, /costPrice: parseProductPrice\(form\.costPrice, "Cost price"\)/);
-assert.match(productsUi, /sellingPrice: parseProductPrice\(form\.sellingPrice, "Selling price"\)/);
+assert.match(productsUi, /sellingPrice: parseProductPrice\(form\.sellingPrice, "Price"\)/);
 assert.doesNotMatch(productsUi, /parseFloat\(form\.(?:costPrice|sellingPrice)\)/);
 console.log("Products UI strict price parsing tests passed");
