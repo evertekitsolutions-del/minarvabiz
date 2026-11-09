@@ -28,3 +28,6 @@ test("buyer and owner interfaces only consume tenant-scoped Supabase catalog RPC
  assert.match(seller,/resolveOnlineAuthorization/);
  assert.match(seller,/saas_storefront_draft_orders/);
 });
+
+// Include the additive server-side anonymous draft throttling contract.
+import "./saas-store-guest-throttle.test.mjs";
