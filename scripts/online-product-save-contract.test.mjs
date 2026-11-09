@@ -48,5 +48,11 @@ test("web route awaits Supabase and never closes on unconfirmed save", () => {
   assert.match(service, /getSessionToken\(\) !== token/);
   assert.doesNotMatch(route, /void\s+saveProductOnline/);
   assert.match(route, /Online CSV import is blocked/);
-  assert.match(route, /Online stock correction is blocked/);
+  assert.match(route, /await saveCategoryOnline\(/);
+  assert.match(service, /Category NOT confirmed in Supabase/);
+  assert.match(route, /await saveStockAdjustmentOnline\(/);
+  assert.match(service, /await pgRpc<Record<string, unknown>>\(authCfg, "adjust_stock"/);
+  assert.match(service, /"inventory_transactions"/);
+  assert.match(service, /p_reference_id: referenceId/);
+  assert.match(service, /movement\.created_by !== user\.id/);
 });
