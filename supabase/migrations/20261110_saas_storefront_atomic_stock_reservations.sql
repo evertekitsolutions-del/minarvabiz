@@ -103,6 +103,8 @@ BEGIN
    'reservation_status',CASE WHEN v_expires>pg_catalog.now() THEN 'held' ELSE 'expired' END,
    'reservation_expires_at',v_expires,'idempotent',true);
  END IF;
+ -- Aggregate MAX is NULL when the order has no previous reservations.
+ v_expires:=pg_catalog.now()+interval '15 minutes';
  SELECT count(DISTINCT r.order_id) INTO v_active
  FROM public.saas_storefront_stock_reservations r
  JOIN public.saas_storefront_draft_orders o
