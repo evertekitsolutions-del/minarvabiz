@@ -170,6 +170,8 @@ jobs:
       - name: Verify cross-app security header baseline
         run: node --experimental-strip-types scripts/security-header-baseline-smoke.mjs
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
+      - name: Verify online garment workflow and QR receipts
+        run: node --experimental-strip-types --test scripts/saas-laundry-garment-contract.test.mjs
       - name: Verify laundry cloud rate receipts
         run: node --experimental-strip-types --test scripts/saas-laundry-rate-cloud-contract.test.mjs
       - name: Verify cloud boutique variants contract
