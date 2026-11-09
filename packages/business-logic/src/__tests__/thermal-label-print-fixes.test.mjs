@@ -85,3 +85,27 @@ test("thermal invoices do not force 297 mm CSS or route to default printer",()=>
   assert.match(main,/height: thermalPageHeightMm \* 1000/);
   assert.doesNotMatch(main,/height: 297000/);
 });
+
+test("manual Windows barcode label dialog never inherits silent printing preference",async()=>{
+  settings.updatePrintSettings({
+    ...settings.CROMO_38X25_2UP_NOGAP_PRESET,
+    labelPrinterName:"CROMO-Label",
+    silentDesktopPrint:true,
+  });
+  const before=calls.length;
+  const result=await native.requestDesktopPrintHtml("<div>PRINT LABELS</div>","label",{
+    labelWidthMm:80,labelHeightMm:25,silent:false,
+  });
+  assert.deepEqual(result,{ok:true});
+  assert.equal(calls.length,before+1);
+  assert.equal(calls.at(-1).deviceName,"CROMO-Label");
+  assert.equal(calls.at(-1).paper,"label");
+  assert.equal(calls.at(-1).silent,false,
+    "Explicit Windows print dialog must not silently print under a saved preference");
+
+  const modal=fs.readFileSync(new URL("../../../../apps/desktop/src/components/BarcodeLabelPrintModal.tsx",import.meta.url),"utf8");
+  assert.match(modal,/await requestDesktopPrintHtml\(preview\.html, "label", \{/);
+  assert.match(modal,/silent: false/);
+  assert.doesNotMatch(modal,/printBarcodeLabels\(/,
+    "Manual label dialog must not invoke the legacy fire-and-forget path");
+});
