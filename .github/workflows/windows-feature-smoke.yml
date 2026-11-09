@@ -1,10 +1,7 @@
 name: Windows Feature Click Smoke
 
+# SaaS-only retirement: no automatic or manual desktop execution.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -12,6 +9,7 @@ permissions:
 
 jobs:
   feature-click-smoke:
+    if: false # Retired 2026-11-09 SaaS-only Owner Directive
     runs-on: windows-latest
     timeout-minutes: 20
     env:
