@@ -57,7 +57,6 @@ export function SaasLedgerPanel(){
       if(!Number.isFinite(start.valueOf())||!Number.isFinite(end.valueOf())||
          end<=start||end.valueOf()-start.valueOf()>366*86400000)
          throw new Error("Choose a valid report period (maximum one year).");
-      const args:Promise<unknown>[]=[];
       const result=await pgRpc<Gst>(a.cfg,"saas_gst_sales_summary",{
         p_from:start.toISOString(),p_to:end.toISOString(),p_branch_id:null,
       });
