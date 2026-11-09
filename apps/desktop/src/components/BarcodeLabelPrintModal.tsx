@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Modal, Button, FormField, inputClass } from "@minarvabiz/ui";
-import { buildBarcodeLabelHtml, printBarcodeLabels, sendBarcodeLabelsToPrinter, updatePrintSettings, CROMO_38X25_2UP_NOGAP_PRESET, type PrintSettings } from "@minarvabiz/business-logic";
+import { buildBarcodeLabelHtml, requestDesktopPrintHtml, sendBarcodeLabelsToPrinter, updatePrintSettings, CROMO_38X25_2UP_NOGAP_PRESET, type PrintSettings } from "@minarvabiz/business-logic";
 import type { Product } from "@minarvabiz/types";
 
 type LabelSettings = Pick<PrintSettings, "labelWidthMm" | "labelHeightMm" | "labelCodeMode" | "labelLayout" | "labelColumns" | "labelRollWidthMm" | "labelGapMm" | "labelLeftMarginMm" | "labelRowGapMm" | "labelPrinterName" | "thermalPrinterName">;
@@ -59,21 +59,44 @@ export function BarcodeLabelPrintModal({
     }
   }
 
-  function printWithDialog() {
+  async function printWithDialog() {
     if (!product || busy) return;
     if (!product.barcode) return onError("Generate a barcode before printing the label.");
     if (!labelDevice) { const error="Select the Barcode label printer in Settings; do not use the POS receipt printer."; setMessage(`Error: ${error}`); return onError(error); }
     if (preview.error) return onError(preview.error);
+    setBusy(true);
     setMessage(null);
     onError(null);
-    printBarcodeLabels(product, count, categoryName);
+    try {
+      // This is explicitly the MANUAL Windows dialog path: ignore a globally
+      // saved "silent desktop print" preference. Do not open a second
+      // browser window or submit a hidden duplicate print job.
+      const result = await requestDesktopPrintHtml(preview.html, "label", {
+        labelWidthMm: pageWidth,
+        labelHeightMm: pageHeight,
+        silent: false,
+      });
+      if (!result?.ok) {
+        const error = result?.error || "Windows label print dialog is unavailable.";
+        setMessage(`Error: ${error}`);
+        onError(error);
+      } else {
+        setMessage("Label print job accepted by Windows. Verify sticker alignment.");
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      setMessage(`Error: ${reason}`);
+      onError(reason);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <Modal open={!!product} title="Print Barcode Label" onClose={onClose}
       footer={<>
         <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-        <Button type="button" variant="outline" onClick={printWithDialog} disabled={busy}>Windows print dialog</Button>
+        <Button type="button" variant="outline" onClick={() => { void printWithDialog(); }} disabled={busy}>Windows print dialog</Button>
         <Button type="button" onClick={() => { void printDirect(); }} disabled={busy || !!preview.error}>
           {busy ? "Sending…" : "Print directly"}
         </Button>
