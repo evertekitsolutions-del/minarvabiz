@@ -39,6 +39,8 @@ test("matching version without matching values must fail closed", () => {
 test("web route awaits Supabase and never closes on unconfirmed save", () => {
   const route = readFileSync("apps/web/src/app/(app)/products/page.tsx", "utf8");
   const service = readFileSync("apps/web/src/lib/online-product-save.ts", "utf8");
+  assert.match(route, /window.addEventListener\("minarva:data-hydrated", onCloudHydrated\)/);
+  assert.match(route, /window.removeEventListener\("minarva:data-hydrated", onCloudHydrated\)/);
   assert.match(route, /await saveProductOnline\(/);
   assert.match(route, /if \(saveInFlight\.current\) return/);
   assert.match(route, /pendingCreateId\.current \?\?= crypto\.randomUUID\(\)/);
