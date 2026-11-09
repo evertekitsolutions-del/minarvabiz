@@ -172,6 +172,8 @@ jobs:
       - run: pnpm --filter @minarvabiz/web exec tsc --noEmit
       - name: Verify SaaS tenant login link isolation
         run: node --experimental-strip-types --test apps/web/src/lib/__tests__/tenant-login-link.test.mjs
+      - name: Verify online-only mobile PWA shell never caches business data
+        run: node --test scripts/saas-pwa-contract.test.mjs
       - name: Verify Attendance Grid contract
         run: node packages/business-logic/src/__tests__/attendance-grid-contract.test.mjs
       - name: Verify provider-neutral web hosting contract
