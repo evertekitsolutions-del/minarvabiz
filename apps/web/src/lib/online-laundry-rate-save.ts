@@ -49,6 +49,11 @@ export async function loadLaundryRateCardsOnline(): Promise<LaundryRateCard[]> {
   const { cfg, orgId, token, user } = await authenticatedContext();
   const branchId = currentLaundryRateCatalogBranchId();
   if (!branchId || !isUUID(branchId)) throw new Error("Select a valid cloud branch.");
+  const branch = await pgSelect<Row>(cfg, "branches",
+    "select=id,org_id&id=eq." + branchId + "&org_id=eq." + orgId + "&limit=2");
+  if (branch.error || branch.data?.length !== 1) {
+    throw new Error("Active cloud branch is not verified for this tenant.");
+  }
   const rows = await pgSelect<Row>(cfg, table,
     "select=*&org_id=eq." + orgId + "&branch_id=eq." + branchId +
     "&deleted_at=is.null&limit=10000");
@@ -59,8 +64,8 @@ export async function loadLaundryRateCardsOnline(): Promise<LaundryRateCard[]> {
     throw new Error("Account changed while loading laundry rates.");
   }
   const checked = validateLaundryRateCards(rows.data.map(toRate));
-  const otherBranches = exportLaundryRateCards().filter(item => item.branchId !== branchId);
-  hydrateLaundryRateCards([...otherBranches, ...checked]);
+  // A new authenticated session must never retain another tenant’s local rate cache.
+  hydrateLaundryRateCards(checked);
   return checked;
 }
 
@@ -123,8 +128,14 @@ export async function saveLaundryRateOnline(input: LaundryRateInput, stableId: s
       { ...fields, version, updated_at: new Date().toISOString() });
     if (change.error) throw new Error("Cloud rate update rejected: " + change.error.message);
   } else {
-    // Exact duplicate retry can complete without creating a new transaction.
-    return toRate(existing);
+    // Exact duplicate retry can complete without creating another transaction,
+    // but only after session verification and local cache hydration below.
+    if (getSessionToken() !== token || getSessionUser()?.id !== user.id) {
+      throw new Error("Account changed before rate receipt could be confirmed.");
+    }
+    const rate = toRate(existing);
+    hydrateLaundryRateCards([rate]);
+    return rate;
   }
 
   const readback = await pgSelect<Row>(cfg, table,
@@ -137,7 +148,7 @@ export async function saveLaundryRateOnline(input: LaundryRateInput, stableId: s
     throw new Error("Rate committed but account changed. Sign in and reload.");
   }
   const result = toRate(confirmed!);
-  const all = exportLaundryRateCards();
+  const all = exportLaundryRateCards().filter(item => item.branchId === branchId);
   hydrateLaundryRateCards([...all.filter(r => r.id !== id && !(
     r.branchId === result.branchId && r.mode === result.mode &&
     r.serviceCode === result.serviceCode && r.garment.toLowerCase() === result.garment.toLowerCase() &&
