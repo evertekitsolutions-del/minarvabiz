@@ -4,9 +4,9 @@
  * NOT server authority, a substitute for RLS, or evidence of Hybrid sync.
  * Host must bind the database to the signed-in principal and clear access on logout.
  */
+import { calculateProjectEstimate } from "@minarvabiz/business-logic";
 import type {
   ProjectEstimateInput, ProjectEstimateStore, ProjectEstimateReader,
-  calculateProjectEstimate,
 } from "@minarvabiz/business-logic";
 
 type SaveCommand = Parameters<ProjectEstimateStore["saveAtomically"]>[0];
