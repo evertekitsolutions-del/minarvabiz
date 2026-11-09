@@ -28,7 +28,7 @@ export function LeadCapture({slug}:{slug:string}){
    if(!consent)throw new Error("Please consent before sending your enquiry.");
    if(!pending.current){
     const n=name.trim(),p=phone.trim(),m=message.trim();
-    if(!n||n.length>120||!/^\\+?[0-9]{10,15}$/.test(p)||m.length>500)
+    if(!n||n.length>120||!/^\+?[0-9]{10,15}$/.test(p)||m.length>500)
      throw new Error("Enter a valid name, phone and a message up to 500 characters.");
     pending.current={id:crypto.randomUUID(),name:n,phone:p,source,message:m};
    }
