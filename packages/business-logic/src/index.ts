@@ -304,3 +304,5 @@ export * from "./service-feedback-insights";
 export * from "./boutique-stock-purchase";
 // SaaS cloud-save stock adjustment preflight; never bypass warehouse reservation checks.
 export * from "./stock-adjustment-guard";
+// Pure QR encoder for cloud garment tag printing.
+export * from "./qr-code";
