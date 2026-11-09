@@ -19,6 +19,6 @@ assert.match(page, /src="\/minarva-biz-mark\.svg"/, "Homepage header/footer must
 assert.match(tour, /src="\/minarva-biz-mark\.svg"/, "Product tour must share branding");
 assert.doesNotMatch(page, /src="\/logo-mark\.png"/, "Old boutique brand should not appear in public header");
 assert.doesNotMatch(layout, /Commercial Boutique Billing & Management Software/);
-assert.match(layout, /business management software/);
+assert.match(layout, /secure online SaaS ERP/);
 assert.match(page, /Minarva Biz home/);
 console.log("Cross-industry Minarva Biz logo branding contract PASS");
