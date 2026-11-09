@@ -22,3 +22,19 @@ test("offline estimate reader does not silently grant access without IndexedDB",
     tenantId: "tenant", companyId: "company", branchId: "branch", projectId: "project", canViewCosts: true,
   }), /Offline storage unavailable/);
 });
+
+test("offline writer rejects forged totals before opening IndexedDB", async () => {
+  const store = createOfflineProjectEstimateStore("minarvabiz-project-estimates:principal_123");
+  const scope = { tenantId: "tenant", companyId: "company", branchId: "branch", projectId: "project" };
+  const worksheet = {
+    ...scope, currency: "USD", revision: 0,
+    lines: [{ id: "line-1", description: "Site survey", kind: "labor",
+      quantity: "2", unitCost: "100.00", markupPercent: "10" }],
+  };
+  await assert.rejects(store.saveAtomically({
+    scope, expectedRevision: 0, nextRevision: 1, idempotencyKey: "retry-1",
+    worksheet, totals: { projectId: "project", revision: 0, currency: "USD",
+      costMinor: 1, proposedRevenueMinor: 1, grossMarginMinor: 0, lines: [] },
+    audit: { actorId: "staff-1", action: "project.estimate.saved", revision: 1 },
+  }), /totals mismatch/);
+});
