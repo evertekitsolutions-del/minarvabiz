@@ -16,6 +16,7 @@ test("SQLite schema scopes records and unique event identities per tenant and br
   assert.match(INDUSTRY_WORKFLOW_SQLITE_SCHEMA, /PRIMARY KEY \(tenant_id, branch_id, record_id, event_id\)/);
   assert.match(INDUSTRY_WORKFLOW_SQLITE_SCHEMA, /UNIQUE \(tenant_id, branch_id, record_id, revision\)/);
   assert.match(INDUSTRY_WORKFLOW_SQLITE_SCHEMA, /actor_id TEXT NOT NULL/);
+  assert.match(INDUSTRY_WORKFLOW_SQLITE_SCHEMA, /CREATE INDEX IF NOT EXISTS idx_industry_workflow_inbox\s+ON industry_workflow_records \(tenant_id, branch_id, template_id, record_id\)/);
 });
 
 test("refuses missing trusted transaction database", () => {
