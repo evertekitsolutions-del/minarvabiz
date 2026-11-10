@@ -34,7 +34,7 @@ export function parseCapturedRazorpayEvent(rawBody:string,eventId:string|null){
   !payment.id||!/^pay_[A-Za-z0-9]{5,100}$/.test(payment.id)||
   !payment.order_id||!/^order_[A-Za-z0-9]{5,90}$/.test(payment.order_id)||
   payment.currency!=="INR"||!Number.isSafeInteger(payment.amount)||
-  payment.amount<=0){
+  payment.amount===undefined||payment.amount<=0){
   throw new Error("Only genuine captured INR payment envelopes are supported");
  }
  return {providerEventId:eventId,paymentId:payment.id,
