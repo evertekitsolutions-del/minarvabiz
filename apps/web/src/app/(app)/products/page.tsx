@@ -11,8 +11,13 @@ import { parseProductPrice } from "../../../lib/parse-product-price";
 import { KitRecipeManager } from "./kit-recipe-manager";
 import { BoutiqueVariantMatrix } from "./boutique-variant-matrix";
 import { SaasLabelPrintPanel } from "./saas-label-print-panel";
+import {useTenantIndustry} from "@/components/TenantIndustryContext";
+import {industryProductFields,selectedIndustries} from "@/lib/tenant-industry";
 
 export default function ProductsPage() {
+  const industryProfile=useTenantIndustry();
+  const verticalFields=industryProductFields(industryProfile);
+  const industryLabels=selectedIndustries(industryProfile).map(x=>x.label);
   const [products, setProducts] = React.useState<Product[]>([]);
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [query, setQuery] = React.useState("");
@@ -567,7 +572,8 @@ export default function ProductsPage() {
           </div>}
         </div>
       </Modal>
-      <BoutiqueVariantMatrix products={products} categories={categories} onSaved={refresh} />
+      {industryProfile?.enabled_verticals.includes("boutique_apparel")&&
+       <BoutiqueVariantMatrix products={products} categories={categories} onSaved={refresh} />}
       <SaasLabelPrintPanel products={products} />
       <ProductList
         products={products}
@@ -617,10 +623,15 @@ export default function ProductsPage() {
         }
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {verticalFields.length>0&&<section className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+            <p className="font-semibold text-slate-800">Business product profile: {industryLabels.join(" + ")}</p>
+            <p className="mt-2 text-slate-700">Relevant fields: {verticalFields.join(" · ")}</p>
+            <p className="mt-2 text-amber-800">This core product form saves only the shown editable fields. Batch, drug schedule, serial/IMEI, recipes and other regulated attributes require their separately verified module workflows.</p>
+          </section>}
           <FormField label="Name *" className="sm:col-span-2">
             <input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </FormField>
-          <FormField label="SKU">
+          <FormField label={industryProfile?.enabled_verticals.includes("electronics_computer") ? "SKU / Model reference" : "SKU"}>
             <input className={inputClass} value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
           </FormField>
           <FormField label="Barcode">
@@ -638,7 +649,7 @@ export default function ProductsPage() {
           <FormField label="Cost price">
             <input className={inputClass} type="number" min="0" step="any" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} />
           </FormField>
-          <FormField label="Price (GST inclusive)">
+          <FormField label="Selling price (current tax-inclusive billing policy)">
             <input className={inputClass} type="number" min="0" step="any" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} />
           </FormField>
           <FormField label={editingId ? "Stock qty (use Adjust Stock)" : "Opening stock"}>
