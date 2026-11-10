@@ -98,6 +98,8 @@ jobs:
         run: node scripts/windows-attendance-eventual-save-contract.test.mjs
       - name: Verify reorder CSV safety and quantities
         run: node packages/business-logic/src/__tests__/product-reorder-csv.test.mjs
+      - name: Verify draft-only deterministic replenishment suggestions
+        run: node --experimental-strip-types --test packages/business-logic/src/__tests__/replenishment-suggestion.test.mjs
       - name: Verify filtered invoice CSV export and injection safety
         run: node --experimental-strip-types packages/business-logic/src/__tests__/sales-history-csv.test.mjs
       - name: Verify service order CSV export and injection safety
