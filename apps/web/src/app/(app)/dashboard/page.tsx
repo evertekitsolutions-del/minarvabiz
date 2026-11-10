@@ -1,4 +1,5 @@
-import { Dashboard, type QuickAction } from "@minarvabiz/ui";
+import { type QuickAction } from "@minarvabiz/ui";
+import {IndustryDashboard} from "@/components/IndustryDashboard";
 import { fetchDashboardData } from "@/lib/dashboard-data";
 
 const quickActionIcons = {
@@ -62,5 +63,5 @@ export default async function DashboardPage() {
     { id: "sms", label: "SMS / WhatsApp", description: "Send Message", icon: quickActionIcons.sms, tone: "teal", href: "/notifications" },
   ];
 
-  return <Dashboard data={data} quickActions={actions} />;
+  return <IndustryDashboard data={data} quickActions={actions} />;
 }
