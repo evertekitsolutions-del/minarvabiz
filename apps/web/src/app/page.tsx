@@ -15,7 +15,7 @@ const navigation = [
   { title: "Industries", href: "#industries" },
   { title: "Cloud access", href: "#editions" },
   { title: "Pricing", href: "/pricing" },
-  { title: "Support", href: "/support" },
+  { title: "Support", href: "/contact" },
   { title: "Register", href: "/register" },
   { title: "FAQ", href: "#faq" },
 ] as const;
