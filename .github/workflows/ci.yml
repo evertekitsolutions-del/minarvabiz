@@ -140,6 +140,8 @@ jobs:
         run: node scripts/frontend-forgot-password-submit-contract.test.mjs
       - name: Verify repeated signup diagnosis and verification delivery errors
         run: node --experimental-strip-types --test apps/web/src/lib/__tests__/registration-status.test.mjs
+      - name: Verify production auth recovery and confirmation URLs are never localhost
+        run: node --experimental-strip-types --test apps/web/src/lib/__tests__/auth-email-redirect.test.mjs
       - name: Verify recovery password visibility
         run: node scripts/frontend-recovery-visibility-contract.test.mjs
       - name: Verify recovery token purpose and URL hygiene
