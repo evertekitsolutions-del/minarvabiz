@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { SaasTenantCloudBackupPanel } from "./saas-tenant-cloud-backup-panel";
 import { isSupabaseConfigured } from "@minarvabiz/database";
 import { BackupPanel, AuditLogList } from "@minarvabiz/ui";
 import {
@@ -267,6 +268,7 @@ export default function BackupPage() {
           />
         </>
       )}
+      {tab === "backup" && canManageBackups && isSupabaseConfigured() && <SaasTenantCloudBackupPanel />}
       {tab === "audit" && canManageBackups && <AuditLogList logs={logs} />}
     </div>
   );

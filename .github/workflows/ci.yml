@@ -182,6 +182,8 @@ jobs:
         run: node --test scripts/saas-public-storefront-contract.test.mjs
       - name: Verify thermal and 38x25 two-up label contracts
         run: node --experimental-strip-types --test scripts/saas-two-up-label-thermal-contract.test.mjs
+      - name: Verify M4 tenant cloud backup export and non-destructive restore preflight
+        run: node --test scripts/saas-cloud-tenant-backup-contract.test.mjs
       - name: Verify SaaS customer/vendor and GST ledger contracts
         run: node --test scripts/saas-unified-ledger-contract.test.mjs
       - name: Verify M7 POS / GRN branch stock reconciliation contract
