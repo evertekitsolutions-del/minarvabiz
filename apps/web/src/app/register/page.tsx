@@ -14,6 +14,7 @@ export default function RegisterPage() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [plan, setPlan] = React.useState<PlanCode>("starter");
+  const [partnerCode,setPartnerCode]=React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState("");
   const [sent, setSent] = React.useState(false);
@@ -22,6 +23,8 @@ export default function RegisterPage() {
   React.useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("plan");
     if (PLAN_CODES.some(code => code === requested)) setPlan(requested as PlanCode);
+    const code=new URLSearchParams(window.location.search).get("ref")?.toUpperCase()||"";
+    if(/^[A-Z0-9]{6,16}$/.test(code))setPartnerCode(code);
   }, []);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -38,6 +41,9 @@ export default function RegisterPage() {
       setError("Enter a valid name and business name (maximum 120 characters).");
       return;
     }
+    if(partnerCode.trim()&&!/^[A-Z0-9]{6,16}$/.test(partnerCode.trim().toUpperCase())){
+      setError("Referral partner code must be 6–16 letters or numbers.");return;
+    }
     if (password.length < 8) {
       setError("Password must contain at least 8 characters.");
       return;
@@ -50,7 +56,8 @@ export default function RegisterPage() {
         password,
         options: {
           emailRedirectTo: window.location.origin + "/register/complete",
-          data: { full_name: name, shop_name: business, requested_plan: plan },
+          data: { full_name: name, shop_name: business, requested_plan: plan,
+           requested_partner_code: partnerCode.trim().toUpperCase() || null },
         },
       });
       if (authError) throw authError;
@@ -83,6 +90,11 @@ export default function RegisterPage() {
         <label className="block text-sm font-medium">Requested plan<select className="mt-1 w-full rounded-lg border border-slate-300 p-3" value={plan} onChange={e => setPlan(e.target.value as PlanCode)}>
           <option value="starter">Starter</option><option value="business-pro">Business Pro</option><option value="business-web">Business Web</option><option value="business-360">Business 360</option>
         </select></label>
+        <label className="block text-sm font-medium">Referral code (optional)
+         <input className="mt-1 min-h-[44px] w-full rounded-lg border border-slate-300 p-3"
+          value={partnerCode} maxLength={16} autoComplete="off"
+          placeholder="Partner code" onChange={e=>setPartnerCode(e.target.value.toUpperCase())}/></label>
+        <p className="text-xs font-semibold text-blue-800">30-day free trial starts after verified email and tenant onboarding.</p>
         <p className="text-xs text-slate-600">Registration is free. Choosing a plan only records your request; it does not activate a paid subscription or charge you. Access is subject to verification and activation.</p>
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
         <button type="submit" disabled={busy} className="w-full rounded-lg bg-blue-700 px-4 py-3 font-semibold text-white disabled:opacity-60">{busy ? "Registering…" : "Register and verify email"}</button>
