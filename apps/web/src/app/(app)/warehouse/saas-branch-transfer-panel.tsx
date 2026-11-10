@@ -161,7 +161,7 @@ export function SaasBranchTransferPanel(){
       p_movement_type:req.type,p_quantity:req.qty,
       p_expected_version:req.version,p_branch_id:req.branchId,
     });
-   if(result.error||result.data?.mutation_id!==req.id)
+   if(result.error||!result.data||(result.data.mutation_id&&result.data.mutation_id!==req.id))
     throw new Error(result.error?.message||"Cloud stock adjustment not confirmed; retry same ID.");
    const receipt=await pgSelect<{id:string;product_id:string;result_body:{stock_quantity:number}}>(
     a.cfg,"saas_inventory_mutation_receipts",
@@ -172,14 +172,15 @@ export function SaasBranchTransferPanel(){
    const [total,branchStock]=await Promise.all([
     pgSelect<{stock_quantity:number}>(a.cfg,"products",
       "select=stock_quantity&id=eq."+req.productId+"&org_id=eq."+a.org+"&limit=1"),
-    pgSelect<{quantity:number}>(a.cfg,"saas_branch_stock",
-      "select=quantity&product_id=eq."+req.productId+"&branch_id=eq."+req.branchId+
-      "&org_id=eq."+a.org+"&limit=1"),
+    pgSelect<{quantity:number;branch_id:string}>(a.cfg,"saas_branch_stock",
+      "select=quantity,branch_id&product_id=eq."+req.productId+
+      "&org_id=eq."+a.org+"&limit=100"),
    ]);
    if(total.error||branchStock.error||total.data?.length!==1||
-    branchStock.data?.length!==1||
-    Number(total.data[0].stock_quantity)!==Number(receipt.data[0].result_body.stock_quantity))
-    throw new Error("Global and branch stock readback not confirmed; retry same ID.");
+    !branchStock.data?.some(s=>s.branch_id===req.branchId)||
+    Math.abs(branchStock.data.reduce((n,s)=>n+Number(s.quantity),0)-
+      Number(total.data[0].stock_quantity))>0.0001)
+    throw new Error("Global and branch stock readback not reconciled; retry same ID.");
    stillSigned(a.token,a.userId);
    adjustment.current=null;
    await refresh();
