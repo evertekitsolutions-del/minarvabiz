@@ -111,7 +111,7 @@ export function SaasFinanceAccountingPanel(){
   try{
    const val=Number(amount);
    if(!account||!Number.isFinite(val)||val<=0||val>99999999||
-    Math.round(val*100)!==val*100)
+    Math.abs(val*100-Math.round(val*100))>1e-7)
     throw new Error("Account and positive two-decimal amount required.");
    const payload={p_account_id:account.id,p_kind:postingKind,
     p_reference_id:postingKind==="expense"?null:referenceId||null,
