@@ -30,7 +30,7 @@ begin
 end $$;
 
 -- Additional fail-closed checks: no client DML, no dispatch state, tenant-scoped keys.
-do $
+do $$
 declare r text; n integer;
 begin
  foreach r in array array['anon','authenticated'] loop
@@ -47,9 +47,9 @@ begin
  where conrelid='agent3_prototype.notification_outbox'::regclass
  and contype='c' and pg_get_constraintdef(oid) like '%held%cancelled%';
  if n <> 1 then raise exception 'outbox not held/cancelled only'; end if;
-end $;
+end $$;
 -- Constraint negative tests. Each subtransaction rolls back only the invalid row.
-do $
+do $$
 begin
  begin
   insert into agent3_prototype.loyalty_events(tenant_id,branch_id,customer_id,source_key,kind,points_delta)
@@ -69,6 +69,6 @@ begin
   'sms','qa-no-send','00000000-0000-0000-0000-000000000004','sent');
   raise exception 'dispatchable outbox status accepted';
  exception when check_violation then null; end;
-end $;
+end $$;
 
 rollback;
