@@ -202,6 +202,8 @@ jobs:
         run: node --experimental-strip-types --test scripts/online-product-save-contract.test.mjs
       - name: Verify SaaS tenant login link isolation
         run: node --experimental-strip-types --test apps/web/src/lib/__tests__/tenant-login-link.test.mjs
+      - name: Verify M23 touch/mobile camera scanner + PWA contracts
+        run: node --test scripts/saas-mobile-camera-touch-contract.test.mjs
       - name: Verify online-only mobile PWA shell never caches business data
         run: node --test scripts/saas-pwa-contract.test.mjs
       - name: Verify Attendance Grid contract

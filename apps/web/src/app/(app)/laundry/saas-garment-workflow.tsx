@@ -3,6 +3,7 @@
 import * as React from "react";
 import { configFromEnv, pgRpc, pgSelect } from "@minarvabiz/database";
 import { getRuntimeMode, getSessionToken, getSessionUser, qrMatrix } from "@minarvabiz/business-logic";
+import { SaasCameraBarcodeScanner } from "@/components/SaasCameraBarcodeScanner";
 import { resolveOnlineAuthorization } from "../../../lib/data-source";
 
 type Rate = { id: string; org_id: string; branch_id: string; service_code: string;
@@ -44,6 +45,7 @@ function GarmentQr({tag}:{tag:string}) {
 export function SaasGarmentWorkflow() {
   const [rates,setRates]=React.useState<Rate[]>([]);
   const [jobs,setJobs]=React.useState<Job[]>([]);
+  const [tagFilter,setTagFilter]=React.useState("");
   const [rateId,setRateId]=React.useState("");
   const [customer,setCustomer]=React.useState("");
   const [garment,setGarment]=React.useState("");
@@ -142,39 +144,47 @@ export function SaasGarmentWorkflow() {
     <p className="text-xs text-slate-600">Intake → Tag → Wash → Iron → QC → Ready → Delivery. Each step requires a durable Supabase receipt.</p>
     <div className="grid gap-2 sm:grid-cols-5">
       <label className="text-sm">Service rate
-        <select className="mt-1 w-full rounded border p-2" value={rateId} disabled={busy||!!pending.current}
+        <select className="mt-1 min-h-[44px] w-full rounded border p-2" value={rateId} disabled={busy||!!pending.current}
           onChange={e=>setRateId(e.target.value)}>
           {rates.map(r=><option key={r.id} value={r.id}>{r.service_code} · {r.garment} · ₹{r.customer_rate}</option>)}
         </select>
       </label>
       <label className="text-sm">Customer
-        <input className="mt-1 w-full rounded border p-2" value={customer} disabled={busy||!!pending.current}
+        <input className="mt-1 min-h-[44px] w-full rounded border p-2" value={customer} disabled={busy||!!pending.current}
           onChange={e=>setCustomer(e.target.value)}/>
       </label>
       <label className="text-sm">Garment
-        <input className="mt-1 w-full rounded border p-2" value={garment} disabled={busy||!!pending.current}
+        <input className="mt-1 min-h-[44px] w-full rounded border p-2" value={garment} disabled={busy||!!pending.current}
           onChange={e=>setGarment(e.target.value)}/>
       </label>
       <label className="text-sm">Qty
-        <input className="mt-1 w-full rounded border p-2" type="number" min="1" step="1" value={quantity}
+        <input className="mt-1 min-h-[44px] w-full rounded border p-2" type="number" min="1" step="1" value={quantity}
           disabled={busy||!!pending.current} onChange={e=>setQuantity(e.target.value)}/>
       </label>
-      <button type="button" className="self-end rounded bg-slate-900 p-2 text-white disabled:opacity-50"
+      <button type="button" className="self-end min-h-[44px] touch-manipulation rounded bg-slate-900 p-2 text-white disabled:opacity-50"
         disabled={busy||rates.length===0} onClick={()=>{void intake()}}>
         {busy?"Saving…":pending.current?"Retry same intake":"Create cloud garment tag"}
       </button>
     </div>
     {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
     {status&&<p role="status" className="text-sm text-green-700">{status}</p>}
+    <div className="grid gap-2 sm:grid-cols-2">
+      <label className="block text-sm">Find garment by QR / tag
+        <input className="mt-1 min-h-[44px] w-full rounded border p-2"
+          value={tagFilter} onChange={e=>setTagFilter(e.target.value)} />
+      </label>
+      <SaasCameraBarcodeScanner label="Scan laundry tag"
+        disabled={busy} onDetected={setTagFilter}/>
+    </div>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {jobs.map(job=><article key={job.id} className="flex gap-3 rounded border p-2">
+      {jobs.filter(j=>!tagFilter||j.tag_code.toLowerCase().includes(tagFilter.trim().toLowerCase())).map(job=><article key={job.id} className="flex gap-3 rounded border p-2">
         <div className="saas-garment-tag shrink-0"><GarmentQr tag={job.tag_code}/><div className="text-center text-xs">{job.tag_code}</div></div>
         <div className="min-w-0 flex-1 text-sm">
           <p className="font-medium">{job.customer_name}</p>
           <p className="break-words">{job.garment_name} × {job.quantity}</p>
           <p>Status: <strong>{job.stage}</strong> · v{job.version}</p>
           <p className="text-xs text-slate-500">Due {new Date(job.due_at).toLocaleString()}</p>
-          {nextStage[job.stage]&&<button type="button" className="mt-2 rounded border px-2 py-1 disabled:opacity-50"
+          {nextStage[job.stage]&&<button type="button" className="mt-2 min-h-[44px] touch-manipulation rounded border px-2 py-1 disabled:opacity-50"
             disabled={busy} onClick={()=>{void advance(job)}}>
               Advance → {nextStage[job.stage]}
             </button>}
