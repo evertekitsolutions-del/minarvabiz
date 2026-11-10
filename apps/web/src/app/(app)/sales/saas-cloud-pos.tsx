@@ -5,6 +5,7 @@ import { configFromEnv, pgRpc, pgSelect } from "@minarvabiz/database";
 import {
   can, getOutboxScope, getSessionToken, getSessionUser, buildSaasThermal80mmReceipt,
 } from "@minarvabiz/business-logic";
+import { SaasCameraBarcodeScanner } from "@/components/SaasCameraBarcodeScanner";
 import { resolveOnlineAuthorization } from "../../../lib/data-source";
 
 type CloudProduct = {
@@ -154,21 +155,28 @@ export function SaasCloudPos() {
     <h3 className="text-lg font-semibold">Cloud POS · GST-inclusive Price</h3>
     <p className="text-xs text-slate-600">Atomic PostgreSQL sale + stock receipt. Credit-sale verification only; online gateway capture is disabled.</p>
     <label className="block text-sm">Search product, SKU or barcode
-      <input className="mt-1 w-full rounded border p-2" value={query} disabled={!!pending.current||busy}
+      <input className="mt-1 min-h-[44px] w-full rounded border p-2" value={query} disabled={!!pending.current||busy}
         onChange={e=>setQuery(e.target.value)}/>
     </label>
+    <SaasCameraBarcodeScanner label="Scan POS barcode / QR"
+      disabled={busy||!!pending.current}
+      onDetected={code=>{
+       const match=products.find(p=>[p.barcode,p.sku,p.id].includes(code));
+       setQuery(match?match.barcode||match.sku||match.id:code);
+       if(match)setProductId(match.id);
+      }}/>
     <div className="grid gap-2 sm:grid-cols-3">
       <label className="text-sm">Product
-        <select className="mt-1 w-full rounded border p-2" disabled={!!pending.current||busy}
+        <select className="mt-1 min-h-[44px] w-full rounded border p-2" disabled={!!pending.current||busy}
           value={productId} onChange={e=>setProductId(e.target.value)}>
           {filtered.map(p=><option key={p.id} value={p.id}>{p.name} · {p.sku||p.barcode||"No SKU"}</option>)}
         </select>
       </label>
       <label className="text-sm">Quantity
-        <input className="mt-1 w-full rounded border p-2" type="number" min="1" step="1"
+        <input className="mt-1 min-h-[44px] w-full rounded border p-2" type="number" min="1" step="1"
           value={quantity} disabled={!!pending.current||busy} onChange={e=>setQuantity(e.target.value)}/>
       </label>
-      <button type="button" className="self-end rounded bg-slate-900 p-2 text-white disabled:opacity-50"
+      <button type="button" className="self-end min-h-[44px] touch-manipulation rounded bg-slate-900 p-2 text-white disabled:opacity-50"
         disabled={busy||(!pending.current&&!selected)} onClick={()=>{void save()}}>
         {busy?"Confirming in Supabase…":pending.current?"Retry same checkout":"Save cloud sale"}
       </button>
