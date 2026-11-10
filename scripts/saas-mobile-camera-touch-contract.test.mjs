@@ -13,7 +13,8 @@ test("M23 standalone PWA is online-only, secure, never caches authoritative data
  assert.match(layout,/manifest: "\/manifest\.webmanifest"/);
  assert.match(boot,/isSecureContext/);
  assert.match(boot,/serviceWorker\.register\("\/sw\.js"/);
- assert.doesNotMatch(sw,/caches\.open|cache\.put|CacheStorage|respondWith\(|indexedDB\.|localStorage\./);
+ const executable=sw.replace(/\/\*[\s\S]*?\*\//g,"").replace(/^\s*\/\/.*$/gm,"");
+ assert.doesNotMatch(executable,/caches\.open|cache\.put|CacheStorage|respondWith\(|indexedDB\.|localStorage\./);
 });
 test("M23 camera scanner requires HTTPS/user grant, never caches a frame and releases MediaStream",()=>{
  const s=read("apps/web/src/components/SaasCameraBarcodeScanner.tsx");
