@@ -3,6 +3,7 @@ import * as React from "react";
 import {Dashboard,type QuickAction} from "@minarvabiz/ui";
 import {useTenantIndustry} from "@/components/TenantIndustryContext";
 import {visibleIndustryActions} from "@/lib/tenant-industry";
+import {getRuntimeMode} from "@minarvabiz/business-logic";
 
 export function IndustryDashboard({
  data,quickActions,
