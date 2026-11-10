@@ -56,7 +56,9 @@ export default function RegisterPage() {
         email: email.trim().toLowerCase(),
         password,
         options: {
-          emailRedirectTo: window.location.origin + "/register/complete",
+          emailRedirectTo: /^(www\.)?minarvabiz\.com$/i.test(window.location.hostname)
+            ? "https://minarvabiz.com/register/complete"
+            : window.location.origin + "/register/complete",
           data: { full_name: name, shop_name: business, requested_plan: plan,
            requested_partner_code: partnerCode.trim().toUpperCase() || null },
         },
