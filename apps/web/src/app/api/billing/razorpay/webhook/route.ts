@@ -8,8 +8,7 @@ export const dynamic="force-dynamic";
 export async function POST(req:NextRequest){
  const secret=process.env.RAZORPAY_WEBHOOK_SECRET;
  const env=process.env.RAZORPAY_ENVIRONMENT==="live"?"live":"sandbox";
- if(!secret||!process.env.SUPABASE_SERVICE_ROLE_KEY||
-  (env==="live"&&process.env.MINARVA_LIVE_BILLING_ENABLED!=="true"))
+ if(!secret||(env==="live"&&process.env.MINARVA_LIVE_BILLING_ENABLED!=="true"))
   return NextResponse.json({error:"Billing webhook not configured"},{status:503});
  if(!req.headers.get("content-type")?.includes("application/json"))
   return NextResponse.json({error:"Unsupported payload"},{status:415});
