@@ -77,8 +77,10 @@ export default function SettingsPage() {
         </a>
       </div>
 
+      <a href="/settings/industry" className="block rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-900 hover:underline">Manage Business Industry, Multi-Vertical Apps, Country, Currency & Language →</a>
       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
         <h2 className="text-sm font-semibold text-slate-800">Business profile</h2>
+        <p className="text-xs text-amber-800">This legacy shop-profile form uses the browser business store. For authoritative online tenant currency, industry and module settings, use Business Industry & Apps above.</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField label="Business / trade name"><input className={inputClass} value={shop.shopName} onChange={(e) => setShop({ ...shop, shopName: e.target.value })} /></FormField>
           <FormField label="Registered legal name"><input className={inputClass} value={shop.legalName} onChange={(e) => setShop({ ...shop, legalName: e.target.value })} /></FormField>
