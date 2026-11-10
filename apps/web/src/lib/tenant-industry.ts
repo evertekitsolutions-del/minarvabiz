@@ -93,7 +93,7 @@ export function visibleIndustryNavIds(profile:TenantIndustryProfile|null): Reado
 export function visibleIndustryActions(profile:TenantIndustryProfile|null): ReadonlySet<string> {
  const selected=selectedIndustries(profile);
  const enabled=new Set(["sale","expense","purchase","customer","reports","sms"]);
- if(selected.some(v=>v.nav.includes("services")))enabled.add("order");
- if(selected.some(v=>v.nav.includes("laundry")))enabled.add("laundry");
+ if(selected.some(v=>v.nav.some(id=>id==="services")))enabled.add("order");
+ if(selected.some(v=>v.nav.some(id=>id==="laundry")))enabled.add("laundry");
  return enabled;
 }
