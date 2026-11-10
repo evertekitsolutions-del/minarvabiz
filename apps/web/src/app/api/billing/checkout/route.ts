@@ -7,8 +7,7 @@ type Plan={code:string;annual_inr:number};
 export async function POST(req:NextRequest){
  const key=process.env.RAZORPAY_KEY_ID,secret=process.env.RAZORPAY_KEY_SECRET;
  const environment=process.env.RAZORPAY_ENVIRONMENT==="live"?"live":"sandbox";
- if(!key||!secret||!process.env.SUPABASE_SERVICE_ROLE_KEY||
-  (environment==="live"&&process.env.MINARVA_LIVE_BILLING_ENABLED!=="true")||
+ if(!key||!secret||(environment==="live"&&process.env.MINARVA_LIVE_BILLING_ENABLED!=="true")||
   (environment==="sandbox"&&!key.startsWith("rzp_test_"))||
   (environment==="live"&&!key.startsWith("rzp_live_")))
   return NextResponse.json({error:"Merchant sandbox/live credentials not enabled"},{status:503});
