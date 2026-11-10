@@ -4,7 +4,7 @@
  * All rates are immutable externally sourced snapshots, not live lookups.
  */
 export const GLOBAL_CURRENCY_MINOR_DIGITS = Object.freeze({
-  INR: 2, USD: 2, EUR: 2, AED: 2, OMR: 3,
+  INR: 2, USD: 2, EUR: 2, AED: 2, SAR: 2, OMR: 3,
 } as const);
 
 export type GlobalCurrency = keyof typeof GLOBAL_CURRENCY_MINOR_DIGITS;
