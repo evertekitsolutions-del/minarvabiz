@@ -127,3 +127,4 @@
 20261110_saas_signed_payment_receipts_commissions.sql
 20261110_saas_commerce_entitlement_guard.sql
 20261110_saas_annual_gst_referral_base_fix.sql
+20261110_saas_subscription_rls_tenant_escape_fix.sql
