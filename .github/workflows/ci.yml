@@ -184,6 +184,8 @@ jobs:
         run: node --experimental-strip-types --test scripts/saas-two-up-label-thermal-contract.test.mjs
       - name: Verify SaaS customer/vendor and GST ledger contracts
         run: node --test scripts/saas-unified-ledger-contract.test.mjs
+      - name: Verify M19 field-service/AMC persistence and signature contracts
+        run: node --test scripts/saas-field-service-amc-contract.test.mjs
       - name: Verify M7 POS / GRN branch stock reconciliation contract
         run: node --test scripts/saas-branch-stock-reconciliation-contract.test.mjs
       - name: Verify SaaS atomic branch stock transfer contract
