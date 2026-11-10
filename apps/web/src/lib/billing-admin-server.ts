@@ -1,5 +1,11 @@
 import "server-only";
 
+export function billingServerReady():boolean {
+ return Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL &&
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+ );
+}
 function config(){
  const url=process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/+$/,"");
  const secret=process.env.SUPABASE_SERVICE_ROLE_KEY;
