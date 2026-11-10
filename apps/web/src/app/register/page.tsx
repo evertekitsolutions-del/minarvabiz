@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { signupDisposition, signupErrorMessage } from "@/lib/registration-status";
 
 const PLAN_CODES = ["starter", "business-pro", "business-web", "business-360"] as const;
 type PlanCode = typeof PLAN_CODES[number];
@@ -62,13 +63,16 @@ export default function RegisterPage() {
       });
       if (authError) throw authError;
       // A plan request in user metadata is NOT a subscription entitlement.
-      if (data.session) {
+      const disposition = signupDisposition(data);
+      if (disposition === "signed_in") {
         router.replace("/register/complete");
       } else {
+        // Supabase returns 200 for some repeated signups without creating a user
+        // or sending email. Never promise mail delivery from a 200 response.
         setSent(true);
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Registration failed. Please retry.");
+      setError(cause instanceof Error ? signupErrorMessage(cause) : "Registration failed. Please retry.");
     } finally {
       submitting.current = false;
       setBusy(false);
@@ -80,8 +84,13 @@ export default function RegisterPage() {
       <a className="text-sm font-bold text-blue-700" href="/">Minarva Biz</a>
       <h1 className="mt-4 text-2xl font-bold">Create your business account</h1>
       {sent ? <section aria-live="polite" className="mt-6 space-y-4 text-sm">
-        <p>Check your email for the verification link. After verification, complete registration to get your business login link.</p>
-        <a href="/register/complete" className="inline-flex rounded-lg bg-blue-700 px-4 py-3 font-semibold text-white">Complete registration</a>
+        <p>Request received. If this is a new account, follow the verification link when it arrives. If you have registered with this email before, no new verification email may be sent: sign in using your <strong>original password</strong>. The password entered on a repeated signup does not replace it.</p>
+        <p>If verification email is missing, do not keep registering; contact Minarva Biz support to check email delivery.</p>
+        <div className="flex flex-wrap gap-3">
+          <a href="/login" className="rounded-lg border border-slate-300 px-4 py-3 font-semibold">Sign in to existing account</a>
+          <a href="/forgot-password" className="rounded-lg border border-slate-300 px-4 py-3 font-semibold">Forgot original password?</a>
+        </div>
+        <a href="/register/complete" className="inline-flex rounded-lg bg-blue-700 px-4 py-3 font-semibold text-white">Complete verified registration</a>
       </section> : <form onSubmit={submit} className="mt-6 space-y-4">
         <label className="block text-sm font-medium">Your name<input className="mt-1 w-full rounded-lg border border-slate-300 p-3" autoComplete="name" required minLength={2} maxLength={120} value={fullName} onChange={e => setFullName(e.target.value)} /></label>
         <label className="block text-sm font-medium">Business name<input className="mt-1 w-full rounded-lg border border-slate-300 p-3" required minLength={3} maxLength={120} value={shopName} onChange={e => setShopName(e.target.value)} /></label>
