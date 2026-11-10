@@ -91,6 +91,68 @@ REVOKE ALL ON FUNCTION public.adjust_stock(uuid,text,numeric,integer,text,uuid,t
 GRANT EXECUTE ON FUNCTION public.adjust_stock(uuid,text,numeric,integer,text,uuid,text,uuid,uuid)
  TO authenticated;
 
+
+-- A branchless product can be stocked at any authorized branch. Fixed-branch
+-- products remain restricted to their original branch.
+CREATE OR REPLACE FUNCTION public.saas_adjust_stock_once(
+ p_mutation_id uuid,p_product_id uuid,p_movement_type text,
+ p_quantity numeric,p_expected_version integer,p_branch_id uuid DEFAULT NULL
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $fn$
+DECLARE
+ v_user uuid:=(SELECT auth.uid());
+ v_org uuid;
+ v_request jsonb;
+ v_prior public.saas_inventory_mutation_receipts%ROWTYPE;
+ v_result jsonb;
+BEGIN
+ SELECT auth_org_id INTO v_org FROM public.current_user_authorization();
+ IF v_user IS NULL OR v_org IS NULL OR p_mutation_id IS NULL OR p_product_id IS NULL
+ OR NOT public.user_has_org_role(v_org,ARRAY['super_admin','admin','manager']) THEN
+  RAISE EXCEPTION 'Inventory operator is not authorized' USING ERRCODE='42501';
+ END IF;
+ IF p_movement_type NOT IN('stock_in','stock_out','adjustment')
+  OR p_quantity IS NULL OR p_quantity=0 OR abs(p_quantity)>999999999
+  OR p_expected_version IS NULL OR p_expected_version<1
+  OR round(p_quantity,3)<>p_quantity THEN
+  RAISE EXCEPTION 'Invalid stock adjustment input' USING ERRCODE='22023';
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.products p
+  WHERE p.id=p_product_id AND p.org_id=v_org
+   AND p.deleted_at IS NULL AND
+   (p_branch_id IS NULL OR p.branch_id IS NULL OR p.branch_id=p_branch_id)) THEN
+  RAISE EXCEPTION 'Product branch or tenant does not match' USING ERRCODE='42501';
+ END IF;
+ v_request:=pg_catalog.jsonb_build_object(
+  'product_id',p_product_id,'type',p_movement_type,
+  'quantity',p_quantity,'version',p_expected_version,'branch_id',p_branch_id);
+ PERFORM pg_catalog.pg_advisory_xact_lock(
+  pg_catalog.hashtextextended('inventory:'||v_org::text||':'||p_mutation_id::text,0));
+ SELECT * INTO v_prior FROM public.saas_inventory_mutation_receipts
+  WHERE id=p_mutation_id AND org_id=v_org;
+ IF FOUND THEN
+  IF v_prior.request_body IS DISTINCT FROM v_request THEN
+   RAISE EXCEPTION 'Idempotency key reused with different inventory payload'
+    USING ERRCODE='23505';
+  END IF;
+  RETURN v_prior.result_body||pg_catalog.jsonb_build_object('idempotent',true);
+ END IF;
+ v_result:=public.adjust_stock(
+  p_product_id,p_movement_type,p_quantity,p_expected_version,
+  'saas_inventory',p_mutation_id,
+  'Cloud-confirmed inventory adjustment',p_branch_id,NULL);
+ INSERT INTO public.saas_inventory_mutation_receipts(
+  id,org_id,product_id,request_body,result_body,created_by)
+ VALUES(p_mutation_id,v_org,p_product_id,v_request,v_result,v_user);
+ RETURN v_result||pg_catalog.jsonb_build_object(
+  'idempotent',false,'mutation_id',p_mutation_id);
+END;
+$fn$;
+REVOKE ALL ON FUNCTION public.saas_adjust_stock_once(uuid,uuid,text,numeric,integer,uuid)
+ FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.saas_adjust_stock_once(uuid,uuid,text,numeric,integer,uuid)
+ TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.saas_reconcile_branch_stock_movement()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $fn$
