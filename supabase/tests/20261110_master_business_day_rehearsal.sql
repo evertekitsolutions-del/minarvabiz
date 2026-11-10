@@ -63,7 +63,7 @@ BEGIN
   PERFORM public.saas_laundry_step(
     'ca741181-aaab-41d1-9a91-a8126bc11324',v_version,stage);
  END LOOP;
- IF (SELECT stage FROM public.saas_laundry_garment_jobs
+ IF (SELECT j.stage FROM public.saas_laundry_garment_jobs j
  WHERE id='ca741181-aaab-41d1-9a91-a8126bc11324')<>'delivered' THEN
  RAISE EXCEPTION 'Step5: laundry did not deliver'; END IF;
 END$$;
