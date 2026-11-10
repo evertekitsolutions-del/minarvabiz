@@ -184,6 +184,16 @@ jobs:
         run: node --experimental-strip-types --test scripts/saas-two-up-label-thermal-contract.test.mjs
       - name: Verify M4 tenant cloud backup export and non-destructive restore preflight
         run: node --test scripts/saas-cloud-tenant-backup-contract.test.mjs
+      - name: Verify M12/M15 cash-bank settlement and provisional P&L contracts
+        run: node --test scripts/saas-finance-cashbank-settlement-contract.test.mjs
+      - name: Verify M16 storefront variant builder and SEO contracts
+        run: node --test scripts/saas-storefront-design-variants-contract.test.mjs
+      - name: Verify M17 reservation-to-fulfillment ledger contract
+        run: node --test scripts/saas-storefront-fulfillment-contract.test.mjs
+      - name: Verify M18 marketing coupon and opt-in campaign contracts
+        run: node --test scripts/saas-marketing-campaign-coupons-contract.test.mjs
+      - name: Verify M19 field visit signature and AMC cloud contracts
+        run: node --test scripts/saas-field-service-amc-contract.test.mjs
       - name: Verify SaaS customer/vendor and GST ledger contracts
         run: node --test scripts/saas-unified-ledger-contract.test.mjs
       - name: Verify M7 POS / GRN branch stock reconciliation contract
