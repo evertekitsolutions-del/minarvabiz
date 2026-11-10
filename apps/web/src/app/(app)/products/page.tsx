@@ -572,7 +572,7 @@ export default function ProductsPage() {
           </div>}
         </div>
       </Modal>
-      {industryProfile?.enabled_verticals.includes("boutique_apparel")&&
+      {(getRuntimeMode()==="demo"||industryProfile?.enabled_verticals.includes("boutique_apparel"))&&
        <BoutiqueVariantMatrix products={products} categories={categories} onSaved={refresh} />}
       <SaasLabelPrintPanel products={products} />
       <ProductList
