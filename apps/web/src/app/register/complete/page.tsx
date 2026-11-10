@@ -106,10 +106,11 @@ export default function CompleteRegistrationPage() {
         <p className="break-all rounded-lg bg-slate-100 p-3 text-xs">{window.location.origin + link}</p>
       </div>}
       {!busy && needsLogin && !link && <form onSubmit={signIn} className="mt-5 space-y-4">
-        <p className="text-sm">Enter your verified email and password to retrieve your business login link.</p>
+        <p className="text-sm">Enter the <strong>original password</strong> of this verified account; registering again does not change it.</p>
         <label className="block text-sm font-medium">Email<input className="mt-1 w-full rounded-lg border border-slate-300 p-3" type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} /></label>
         <label className="block text-sm font-medium">Password<input className="mt-1 w-full rounded-lg border border-slate-300 p-3" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></label>
         <button type="submit" className="w-full rounded-lg bg-blue-700 px-4 py-3 font-semibold text-white">Verify and find my business</button>
+        <a href="/forgot-password" className="inline-block text-sm font-semibold text-blue-700 underline">Forgot the original password?</a>
       </form>}
       {error && <p role="alert" className="mt-5 text-sm text-red-700">{error}</p>}
       <a href="/login" className="mt-6 inline-block text-sm font-semibold text-blue-700 underline">Existing customer login</a>
