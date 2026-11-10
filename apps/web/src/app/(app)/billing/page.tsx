@@ -134,7 +134,7 @@ export default function BillingPage(){
    if(!window.Razorpay)throw new Error("Razorpay Checkout widget unavailable");
    const modal=new window.Razorpay({
     key:data.publicKeyId,amount:data.amountPaise,currency:"INR",order_id:data.orderId,
-    name:"Minarva Biz",description:"Annual subscription · "+data.environment,
+    name:"Minarva Biz",description:"Annual subscription (includes 18% GST) · "+data.environment,
     handler:()=>setNotice("Gateway response received. Subscription stays unverified until the signed webhook is committed. Select Refresh to check."),
     modal:{ondismiss:()=>setNotice("Checkout dismissed; no payment is confirmed.")}
    });
@@ -144,7 +144,7 @@ export default function BillingPage(){
  }
  return <main className="mx-auto max-w-5xl space-y-5 p-4">
   <header><h1 className="text-2xl font-semibold">Minarva Biz · Subscription & Partner Billing</h1>
-   <p className="text-sm text-slate-600">Official annual plan prices before any applicable taxes. Payment checkout requires merchant sandbox credentials; live charging is disabled until the owner enables it.</p></header>
+   <p className="text-sm text-slate-600">Official annual plan prices exclude 18% GST; signed checkout adds GST. Payment checkout requires merchant sandbox credentials; live charging is disabled until the owner enables it.</p></header>
   <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
    {plans.map(p=><label key={p.code} className="rounded-xl border p-4">
     <input type="radio" name="plan" value={p.code} disabled={busy||!!sub}
