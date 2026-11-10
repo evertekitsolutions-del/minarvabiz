@@ -51,36 +51,66 @@ const [a,b,s]=await Promise.all([
 ]);
 assert.equal(s.ok,true,"Staff JWT must be valid");
 assert.notEqual(a,b,"Tenant principals must be distinct");
+assert.notEqual(s.response.id,a,"Staff JWT must use a separate authenticated principal");
+assert.notEqual(s.response.id,b,"Staff JWT must use a separate authenticated principal");
 assert.notEqual(env.MINARVA_QA_TENANT_A_ORG,env.MINARVA_QA_TENANT_B_ORG,"Test tenants must be different");
 const staffAuth=await getJson("/rest/v1/rpc/current_user_authorization",
  env.MINARVA_QA_STAFF_JWT,{method:"POST",body:{}});
 assert.equal(staffAuth.ok,true);
 assert.equal(staffAuth.response.length,1);
 assert.ok(["cashier","staff"].includes(staffAuth.response[0].auth_role),"Third JWT must be cashier or staff");
+assert.ok([env.MINARVA_QA_TENANT_A_ORG,env.MINARVA_QA_TENANT_B_ORG].includes(staffAuth.response[0].auth_org_id),"Staff session must belong to one of the independently authenticated test tenants");
 
 const tables=[
  "organizations","branches","products","categories","inventory_transactions",
- "suppliers","sales","laundry_orders","saas_laundry_garment_jobs",
+ "suppliers","sales","purchase_invoices","purchase_invoice_lines",
+ "organization_members","laundry_orders","saas_laundry_garment_jobs",
  "saas_finance_accounts","saas_finance_entries","saas_storefronts",
  "saas_storefront_draft_orders","saas_marketing_leads","saas_marketing_coupons",
  "saas_field_visits","saas_tenant_subscriptions","saas_partner_referrals",
  "saas_subscription_checkout_intents","saas_subscription_payment_receipts",
+ "saas_subscription_state_events",
  "saas_partner_referral_commissions"
 ];
-for(const [jwt,oppositeOrg] of [
- [env.MINARVA_QA_TENANT_A_JWT,env.MINARVA_QA_TENANT_B_ORG],
- [env.MINARVA_QA_TENANT_B_JWT,env.MINARVA_QA_TENANT_A_ORG]
+// Repeat both authenticated organizations and a third staff session under
+// bounded parallel live HTTP reads. Every response must be inaccessible, not
+// merely a successful local SQL role simulation or a synthetic JWT claim.
+const trafficRounds=3;
+const requests=[];
+for(const [jwt,oppositeOrg,role] of [
+ [env.MINARVA_QA_TENANT_A_JWT,env.MINARVA_QA_TENANT_B_ORG,"tenant-a"],
+ [env.MINARVA_QA_TENANT_B_JWT,env.MINARVA_QA_TENANT_A_ORG,"tenant-b"],
+ [env.MINARVA_QA_STAFF_JWT,
+  staffAuth.response[0].auth_org_id===env.MINARVA_QA_TENANT_A_ORG
+   ? env.MINARVA_QA_TENANT_B_ORG : env.MINARVA_QA_TENANT_A_ORG,"staff"]
 ]){
- for(const table of tables){
-  // Public organizations and published storefronts have separate intentional
-  // discoverability, but all private tenant data must not be visible.
-  if(["organizations","saas_storefronts","saas_partner_referrals",
-    "saas_partner_referral_commissions"].includes(table))continue;
-  const x=await getJson("/rest/v1/"+table+"?select=org_id&org_id=eq."+
-   oppositeOrg+"&limit=1",jwt);
-  if(x.ok)assert.equal(x.response.length,0,
-   "CROSS_TENANT_LEAK: "+table+" exposed opposite tenant");
-  else assert.ok([401,403].includes(x.status),"Unexpected data API error: "+table+" "+x.status);
+ for(let round=0;round<trafficRounds;round++){
+  for(const table of tables){
+   // Only private tenant records are asserted here; public commerce discoverability
+   // is separately scoped and must not be misclassified as a RLS leak.
+   if(["organizations","saas_storefronts","saas_partner_referrals",
+       "saas_partner_referral_commissions"].includes(table))continue;
+   requests.push({jwt,oppositeOrg,role,round,table});
+  }
+ }
+}
+for(let start=0;start<requests.length;start+=8){
+ const batch=requests.slice(start,start+8);
+ const results=await Promise.all(batch.map(async entry=>{
+  const path="/rest/v1/"+entry.table+"?select=org_id&org_id=eq."+
+   entry.oppositeOrg+"&limit=1";
+  return {...entry,x:await getJson(path,entry.jwt)};
+ }));
+ for(const {table,role,round,x} of results){
+  if(x.ok){
+   assert.ok(Array.isArray(x.response),"Expected JSON row list: "+table);
+   assert.equal(x.response.length,0,
+    "CROSS_TENANT_LEAK: "+table+" exposed opposite tenant to "+role+
+    " on traffic round "+round);
+  }else{
+   assert.ok([401,403].includes(x.status),
+    "Unexpected API status "+x.status+" at "+table+" for "+role);
+  }
  }
 }
 const deniedCalls=[
@@ -104,4 +134,4 @@ for(const [rpc,payload] of deniedCalls){
 // For HMAC webhook tests use separate server-side signed fixture contract.
 // This live JWT gate does not depend on production customer payment secrets.
 await pause(1);
-console.log("SIGNED_JWT_A_B_STAFF_GATE_PASS (real auth sessions + cross-tenant RLS matrix)");
+console.log("SIGNED_JWT_A_B_STAFF_GATE_PASS ("+requests.length+" authenticated, bounded-concurrent tenant-isolation reads; purchases, sales, subscription receipts/events and staff negative RPCs)");
