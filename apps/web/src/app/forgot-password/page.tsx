@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Button } from "@minarvabiz/ui";
 import { requestPasswordReset } from "@/lib/data-source";
+import { authEmailRedirectUrl } from "@/lib/auth-email-redirect";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = React.useState("");
@@ -21,7 +22,7 @@ export default function ForgotPasswordPage() {
     setPendingEmail(requestedEmail);
     setLoading(true); setError(null); setMessage(null);
     try {
-      const redirectTo = `${window.location.origin}/reset-password`;
+      const redirectTo = authEmailRedirectUrl("/reset-password", window.location.origin);
       const result = await requestPasswordReset(requestedEmail, redirectTo);
       if (!result.ok) { setError(result.error); return; }
       setSubmittedEmail(requestedEmail);
