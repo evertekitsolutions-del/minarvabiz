@@ -90,8 +90,8 @@ export function SaasMarketingCampaignPanel({store}:{store:Store|null}){
   const val=Number(discount);
   void run("coupon","saas_create_store_coupon_once",{
    p_store_id:store.id,p_code:code.trim().toUpperCase(),p_discount_kind:discountKind,
-   p_discount_value:val,p_valid_from:new Date(Date.now()-60000).toISOString(),
-   p_valid_until:new Date(Date.now()+30*86400000).toISOString(),
+   p_discount_value:val,p_valid_from:new Date(new Date().toISOString().slice(0,10)+"T00:00:00Z").toISOString(),
+   p_valid_until:new Date(Date.parse(new Date().toISOString().slice(0,10)+"T00:00:00Z")+30*86400000).toISOString(),
   },"saas_marketing_coupons","p_coupon_id");
  };
  const makeTemplate=()=>{
