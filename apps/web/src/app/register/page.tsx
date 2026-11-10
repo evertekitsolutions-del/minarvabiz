@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { signupDisposition, signupErrorMessage } from "@/lib/registration-status";
+import { authEmailRedirectUrl } from "@/lib/auth-email-redirect";
 
 const PLAN_CODES = ["starter", "business-pro", "business-web", "business-360"] as const;
 type PlanCode = typeof PLAN_CODES[number];
@@ -56,9 +57,7 @@ export default function RegisterPage() {
         email: email.trim().toLowerCase(),
         password,
         options: {
-          emailRedirectTo: /^(www\.)?minarvabiz\.com$/i.test(window.location.hostname)
-            ? "https://minarvabiz.com/register/complete"
-            : window.location.origin + "/register/complete",
+          emailRedirectTo: authEmailRedirectUrl("/register/complete", window.location.origin),
           data: { full_name: name, shop_name: business, requested_plan: plan,
            requested_partner_code: partnerCode.trim().toUpperCase() || null },
         },
