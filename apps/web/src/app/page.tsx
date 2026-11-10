@@ -4,7 +4,7 @@ import TrialWelcomePopup from "./TrialWelcomePopup";
 
 export const metadata: Metadata = {
   title: "Minarva Biz | Business Management, Beautifully Connected",
-  description: "Minarva Biz connects billing, inventory, GST and accounts, CRM, staff attendance and services, with business websites, e-commerce and marketing integrations on the roadmap. Online SaaS and mobile-first business access.",
+  description: "Minarva Biz connects billing, inventory, GST and accounts, CRM, staff attendance and services, through secure online-only cloud SaaS, with responsive access for browser and mobile.",
   robots: { index: true, follow: true },
 };
 
@@ -13,9 +13,9 @@ const navigation = [
   { title: "Features", href: "#features" },
   { title: "Solutions", href: "/solutions" },
   { title: "Industries", href: "#industries" },
-  { title: "Online access", href: "#editions" },
+  { title: "Cloud access", href: "#editions" },
   { title: "Pricing", href: "/pricing" },
-  { title: "Partner with us", href: "/partners" },
+  { title: "Support", href: "/support" },
   { title: "Register", href: "/register" },
   { title: "FAQ", href: "#faq" },
 ] as const;
@@ -69,7 +69,7 @@ const industries: {title:string;description:string;icon:IconName;accent:string;s
 const faqs = [
   { question: "Can Minarva Biz work without the internet?", answer: "Minarva Biz is an online-only SaaS service. An internet connection is required." },
   { question: "Does this website show real customer business data?", answer: "No. The hero dashboard is a design-reference image, not a live application screenshot; the product walkthrough is illustrative. Real customer data is not published here." },
-  { question: "How long is the free trial?", answer: "The Minarva Biz trial period is 30 days. Online registration is available in the current development source; trial and paid entitlements still require supported activation." },
+  { question: "How long is the free trial?", answer: "The trial is 30 days from verified activation. Trial access and paid features follow the account’s server-verified subscription state." },
   { question: "Are all features available for every business?", answer: "Availability depends on edition, module readiness, location-specific requirements and verification. The product direction is broad, but this website does not claim universal readiness." },
   { question: "Are e-commerce websites and business websites included?", answer: "They are part of Minarva Biz's complete platform roadmap. A customer website builder, integrated online checkout and marketing automation are in development, not yet included in an activated subscription." },
   { question: "Can I earn by referring Minarva Biz?", answer: "We are preparing a referral programme with a proposed one-time 10% commission on eligible first paid subscriptions. It is not yet an active automatic payout programme. See Partner with us for draft conditions." },
@@ -123,7 +123,7 @@ export default function PublicHomePage() {
               </a>
             </div>
             <p className="mt-3 max-w-[670px] text-[11px] leading-5 text-[#6d8199]">
-              Online account registration and tenant access are being introduced. Subscription payments and full customer acceptance remain pending verification.
+              Create an account for verified online access. Paid activation requires a confirmed payment receipt; customer onboarding is subject to service readiness.
             </p>
           </div>
           <div className="relative min-w-0 pb-3">
@@ -280,8 +280,8 @@ export default function PublicHomePage() {
           <div className="mt-11 grid gap-4 lg:grid-cols-3">
             {[
               {name:"Online",sub:"WORK IN YOUR BROWSER",desc:"Reach your authenticated business workspace in a supported browser.",details:["Connected business modules","Role-based access","Account-based workflows"],icon:"cloud" as IconName},
-              {name:"Mobile App",sub:"PHONE AND TABLET",desc:"Use an authenticated mobile-first web application while the installable PWA is prepared.",details:["Responsive browser interface","Secure account login","Installable PWA in development"],icon:"smartphone" as IconName},
-              {name:"Cloud Teams",sub:"ONE ONLINE WORKSPACE",desc:"Support company users and branches through tenant-isolated cloud access.",details:["Supabase tenant isolation","Role-scoped access","Cross-device acceptance in progress"],icon:"cloud" as IconName},
+              {name:"Mobile App",sub:"PHONE AND TABLET",desc:"Use the secure online application in your browser or install it as a PWA on compatible devices.",details:["Responsive browser interface","Secure account login","Installable PWA on supported browsers"],icon:"smartphone" as IconName},
+              {name:"Cloud Teams",sub:"ONE ONLINE WORKSPACE",desc:"Support company users and branches through tenant-isolated cloud access.",details:["Enterprise-grade tenant-isolated cloud architecture","Role-scoped permissions","Cross-device verification required"],icon:"cloud" as IconName},
             ].map((ed,i)=><article key={ed.name} className={"flex flex-col rounded-[22px] border p-7 sm:p-8 "+(i===1?"border-[#66a7f9] bg-white text-[#12365d] shadow-[0_20px_55px_rgba(0,0,0,.19)]":"border-white/20 bg-white/10 text-white")}>
               <span className={"grid size-12 place-items-center rounded-2xl "+(i===1?"bg-[#e3efff] text-[#1260e5]":"bg-white/15 text-white")}><Icon name={ed.icon} className="size-6"/></span>
               <p className={"mt-6 text-[10px] font-black uppercase tracking-widest "+(i===1?"text-[#1466dc]":"text-[#bcdcff]")}>{ed.sub}</p>
@@ -313,11 +313,12 @@ export default function PublicHomePage() {
     </main>
     <footer className="border-t border-[#dce8f6] bg-[#f4f8ff]">
       <div className="mx-auto grid max-w-[1720px] gap-8 px-5 py-12 lg:grid-cols-[1fr_auto] lg:px-9">
-        <div><Logo/><p className="mt-5 max-w-md text-sm leading-7 text-[#67809b]">One connected business platform for billing, accounts, customers, people, services and the future of online growth. Module readiness varies.</p></div>
+        <div><Logo/><p className="mt-5 max-w-md text-sm leading-7 text-[#67809b]">Secure online-only cloud SaaS for billing, inventory, accounting and everyday business operations. Feature availability depends on your plan.</p></div>
         <nav aria-label="Footer navigation" className="flex flex-wrap items-start gap-5 text-xs font-bold text-[#3c6084]">
-          <a href="#product-tour" className="hover:text-[#175ce5]">Product tour</a><a href="/solutions" className="hover:text-[#175ce5]">All solutions</a><a href="/pricing" className="hover:text-[#175ce5]">Pricing</a><a href="/partners" className="hover:text-[#175ce5]">Partner with us</a><a href="#features" className="hover:text-[#175ce5]">Features</a><a href="#editions" className="hover:text-[#175ce5]">Editions</a><a href="/login" className="hover:text-[#175ce5]">Customer login</a><a href="/register" className="hover:text-[#175ce5]">Register</a>
+          <a href="#product-tour" className="hover:text-[#175ce5]">Product tour</a><a href="/solutions" className="hover:text-[#175ce5]">All solutions</a><a href="/pricing" className="hover:text-[#175ce5]">Pricing</a><a href="/partners" className="hover:text-[#175ce5]">Partner with us</a><a href="#features" className="hover:text-[#175ce5]">Features</a><a href="#editions" className="hover:text-[#175ce5]">Cloud SaaS</a><a href="/login" className="hover:text-[#175ce5]">Customer login</a><a href="/register" className="hover:text-[#175ce5]">Register</a>
         </nav>
       </div>
+      <nav aria-label="Legal and support" className="mx-auto flex max-w-[1720px] flex-wrap items-center gap-x-6 gap-y-3 border-t border-[#dce8f6] px-5 py-5 text-xs font-semibold text-[#315a89] lg:px-9"><a href="/privacy" className="hover:underline">Privacy Policy</a><a href="/terms" className="hover:underline">Terms of Service</a><a href="/refund-policy" className="hover:underline">Refund Policy</a><a href="/support" className="hover:underline">Support / Contact</a></nav>
       <nav aria-label="Industry guides" className="mx-auto flex max-w-[1720px] flex-wrap items-center gap-x-5 gap-y-3 border-t border-[#dce8f6] px-5 py-5 text-[11px] lg:px-9">
         <span className="font-black uppercase tracking-wide text-[#6b85a5]">Browse industries</span>
         {industries.map(ind=><a key={ind.slug} href={"/industries/"+ind.slug} className="font-semibold text-[#315a89] hover:text-[#175de2] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1562ee]">{ind.title}</a>)}
@@ -326,7 +327,7 @@ export default function PublicHomePage() {
         <span className="text-[#6683a2]">Explore features</span>
         {features.map(item=><a key={item.slug} href={"/features/"+item.slug} className="text-[#245897] hover:text-[#145de4] hover:underline">{item.title}</a>)}
       </nav>
-      <div className="mx-auto flex max-w-[1720px] flex-col justify-between gap-3 border-t border-[#dce8f6] px-5 py-5 text-[11px] text-[#6682a0] sm:flex-row lg:px-9"><span>© Minarva Biz · A connected business platform.</span><span>Online SaaS · Mobile App</span></div>
+      <div className="mx-auto flex max-w-[1720px] flex-col justify-between gap-3 border-t border-[#dce8f6] px-5 py-5 text-[11px] text-[#6682a0] sm:flex-row lg:px-9"><span>© Minarva Biz · A connected business platform.</span><span>Secure Online-Only Cloud SaaS · Browser & PWA</span></div>
     </footer>
   </div>;
 }
