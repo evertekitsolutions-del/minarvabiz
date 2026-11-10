@@ -172,6 +172,9 @@ BEGIN
    amount,method,reference_type,reference_id,notes,created_by)
   VALUES(p_entry_id,v_org,v_account.branch_id,v_customer.id,
    v_amount,v_account.kind,'advance',v_customer.id,v_note,v_user);
+  UPDATE public.customers SET outstanding_balance=outstanding_balance-v_amount,
+   version=version+1,updated_at=now()
+   WHERE id=v_customer.id AND org_id=v_org;
  END IF;
  INSERT INTO public.saas_finance_entries(
  id,org_id,branch_id,account_id,kind,reference_id,
