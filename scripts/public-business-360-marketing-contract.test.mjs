@@ -7,11 +7,12 @@ const solutions = get("apps/web/src/app/solutions/page.tsx");
 const pricing = get("apps/web/src/app/pricing/page.tsx");
 const partners = get("apps/web/src/app/partners/page.tsx");
 
-for (const [label, href] of [["Solutions", "/solutions"], ["Pricing", "/pricing"], ["Partner with us", "/partners"]]) {
+for (const [label, href] of [["Solutions", "/solutions"], ["Pricing", "/pricing"], ["Support", "/contact"]]) {
   assert.ok(home.includes('title: "'+label+'", href: "'+href+'"'), "Main and mobile navigation: "+label);
   assert.ok(home.includes('href="'+href+'"'), "Homepage link to "+label);
 }
 assert.match(home,/id="complete-platform"/);
+assert.ok(home.includes('href="/partners"'), "Partner information remains available outside the primary CTA");
 for (const name of ["Billing","Accounts","CRM","Staff Management","Attendance","Online Store","Business Website","Marketing", "Service"]) {
   assert.ok(home.includes(name),"Critical master-vision area missing: "+name);
 }
