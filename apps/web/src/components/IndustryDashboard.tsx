@@ -13,5 +13,5 @@ export function IndustryDashboard({
 }){
  const profile=useTenantIndustry();
  const allowed=visibleIndustryActions(profile);
- return <Dashboard data={data} quickActions={quickActions.filter(a=>allowed.has(a.id))}/>;
+ return <Dashboard data={data} quickActions={getRuntimeMode()==="demo"?quickActions:quickActions.filter(a=>allowed.has(a.id))}/>;
 }
