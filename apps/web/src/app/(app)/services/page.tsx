@@ -273,9 +273,14 @@ export default function ServicesOrdersPage() {
           <h1 className="text-lg font-semibold text-slate-900">Service Orders</h1>
           <p className="text-sm text-slate-500">Tailoring, alterations, wedding, bulk and printing orders.</p>
         </div>
-        <Link href="/services/production" className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+        <div className="flex flex-wrap gap-2">
+         <Link href="/field-service" className="min-h-[44px] rounded-lg border px-3 py-2 text-sm font-semibold">
+          Cloud Field Service & AMC
+         </Link>
+         <Link href="/services/production" className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
           Production & Materials
-        </Link>
+         </Link>
+        </div>
       </div>
       {!selected && (
         <OrderList
