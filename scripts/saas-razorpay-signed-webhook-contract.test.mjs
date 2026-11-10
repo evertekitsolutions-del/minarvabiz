@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createHmac} from "node:crypto";
+import {readBoundedWebhookBody} from "../apps/web/src/lib/billing-webhook-body.ts";
 import {readFileSync} from "node:fs";
 import {verifyRazorpayWebhookSignature,sha256RawWebhook,
  parseCapturedRazorpayEvent} from "../apps/web/src/lib/billing-webhook-signature.ts";
@@ -14,6 +15,8 @@ const raw=JSON.stringify(payload);
 const signature=createHmac("sha256",secret).update(raw,"utf8").digest("hex");
 test("M22 exactly raw payload HMAC-SHA256 succeeds with known test secret",()=>{
  assert.equal(verifyRazorpayWebhookSignature(raw,signature,secret),true);
+ assert.equal(verifyRazorpayWebhookSignature(new TextEncoder().encode(raw),signature,secret),true);
+ assert.equal(sha256RawWebhook(new TextEncoder().encode(raw)),sha256RawWebhook(raw));
  assert.equal(sha256RawWebhook(raw).length,64);
  assert.deepEqual(parseCapturedRazorpayEvent(raw,"evt_qa2026abcd"),{
   providerEventId:"evt_qa2026abcd",paymentId:"pay_qa2026abcd",
@@ -38,7 +41,7 @@ test("M22 actual server webhook verifies signature BEFORE parsing or database ca
  const admin=readFileSync("apps/web/src/lib/billing-admin-server.ts","utf8");
  const sql=readFileSync("supabase/migrations/20261110_saas_signed_payment_receipts_commissions.sql","utf8");
  const gst=readFileSync("supabase/migrations/20261110_saas_annual_gst_referral_base_fix.sql","utf8");
- assert.ok(route.indexOf("verifyRazorpayWebhookSignature(raw")<route.indexOf("parseCapturedRazorpayEvent(raw"));
+ assert.ok(route.indexOf("verifyRazorpayWebhookSignature(rawBytes")<route.indexOf("parseCapturedRazorpayEvent(raw"));
  assert.ok(route.indexOf("parseCapturedRazorpayEvent(raw")<route.indexOf("billingAdminRequest<"));
  for(const re of [
  /process\.env\.RAZORPAY_WEBHOOK_SECRET/,/RAZORPAY_ENVIRONMENT/,
@@ -72,4 +75,41 @@ test("M22 actual server webhook verifies signature BEFORE parsing or database ca
  assert.match(gst,/base_amount_paise/);
  assert.match(gst,/gst_amount_paise/);
  assert.doesNotMatch(sql,/GRANT EXECUTE .* TO anon/);
+});
+
+test("M22 streaming cap rejects chunked oversized body even without Content-Length",async()=>{
+ const body=new ReadableStream({
+  start(controller){
+   controller.enqueue(new Uint8Array(40000));
+   controller.enqueue(new Uint8Array(25537));
+   controller.close();
+  }
+ });
+ const req=new Request("https://minarvabiz.com/api/billing/razorpay/webhook",{
+  method:"POST",body,duplex:"half"
+ });
+ await assert.rejects(()=>readBoundedWebhookBody(req),RangeError);
+});
+test("M22 exact 64KB payload survives bounded streaming; no normalization",async()=>{
+ const bytes=new Uint8Array(65536);
+ bytes.fill(97);
+ const req=new Request("https://minarvabiz.com/api/billing/razorpay/webhook",{
+  method:"POST",body:bytes,duplex:"half"
+ });
+ const data=await readBoundedWebhookBody(req);
+ assert.equal(data.length,65536);
+ assert.deepEqual(data,bytes);
+ const rawBuffer=Buffer.from("payload with €", "utf8");
+ const req2=new Request("https://minarvabiz.com/api/billing/razorpay/webhook",{
+  method:"POST",body:rawBuffer,duplex:"half"
+ });
+ const exact=await readBoundedWebhookBody(req2);
+ assert.deepEqual(Buffer.from(exact),rawBuffer);
+});
+test("M22 payload body reader is used before signature evaluation",()=>{
+ const route=readFileSync("apps/web/src/app/api/billing/razorpay/webhook/route.ts","utf8");
+ assert.match(route,/readBoundedWebhookBody\(req\)/);
+ assert.match(route,/verifyRazorpayWebhookSignature\(rawBytes/);
+ assert.match(route,/sha256RawWebhook\(rawBytes\)/);
+ assert.doesNotMatch(route,/await req\.text\(\)/);
 });

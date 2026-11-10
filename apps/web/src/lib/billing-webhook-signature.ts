@@ -2,18 +2,18 @@ import {createHash,createHmac,timingSafeEqual} from "node:crypto";
 
 /** Razorpay signs the exact incoming HTTP request body, not a parsed JSON object. */
 export function verifyRazorpayWebhookSignature(
- rawBody:string,signature:string|null,webhookSecret:string
+ rawBody:string|Uint8Array,signature:string|null,webhookSecret:string
 ):boolean{
  if(!webhookSecret||webhookSecret.length<12||!signature||
-  !/^[0-9a-f]{64}$/i.test(signature)||Buffer.byteLength(rawBody,"utf8")>64*1024){
+  !/^[0-9a-f]{64}$/i.test(signature)||(typeof rawBody==="string"?Buffer.byteLength(rawBody,"utf8"):rawBody.byteLength)>64*1024){
   return false;
  }
  const received=Buffer.from(signature,"hex");
- const expected=createHmac("sha256",webhookSecret).update(rawBody,"utf8").digest();
+ const expected=createHmac("sha256",webhookSecret).update(rawBody).digest();
  return received.length===expected.length&&timingSafeEqual(received,expected);
 }
-export function sha256RawWebhook(rawBody:string):string{
- return createHash("sha256").update(rawBody,"utf8").digest("hex");
+export function sha256RawWebhook(rawBody:string|Uint8Array):string{
+ return createHash("sha256").update(rawBody).digest("hex");
 }
 export type CapturedPayment={
  event:string;
