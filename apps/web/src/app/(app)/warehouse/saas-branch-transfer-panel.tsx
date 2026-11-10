@@ -11,6 +11,7 @@ type Stock={product_id:string;branch_id:string;quantity:number};
 type Transfer={id:string;product_id:string;source_branch_id:string;destination_branch_id:string;quantity:number;created_at:string};
 type SeedRequest={id:string;productId:string;branchId:string;version:number};
 type TransferRequest={id:string;productId:string;sourceId:string;destinationId:string;qty:number};
+type StockAdjustRequest={id:string;productId:string;branchId:string;qty:number;type:"stock_in"|"stock_out";version:number};
 async function authorizedContext(){
  const cfg=configFromEnv(),token=getSessionToken(),user=getSessionUser();
  if(!cfg||!token||!user?.id)throw new Error("Cloud sign-in required.");
@@ -34,12 +35,15 @@ export function SaasBranchTransferPanel(){
  const [source,setSource]=React.useState("");
  const [destination,setDestination]=React.useState("");
  const [qty,setQty]=React.useState("1");
+ const [adjustQty,setAdjustQty]=React.useState("1");
+ const [adjustType,setAdjustType]=React.useState<"stock_in"|"stock_out">("stock_in");
  const [busy,setBusy]=React.useState(false);
  const [error,setError]=React.useState("");
  const [notice,setNotice]=React.useState("");
  const inFlight=React.useRef(false);
  const seed=React.useRef<SeedRequest|null>(null);
  const transfer=React.useRef<TransferRequest|null>(null);
+ const adjustment=React.useRef<StockAdjustRequest|null>(null);
 
  const refresh=React.useCallback(async()=>{
   const a=await authorizedContext();
@@ -137,10 +141,56 @@ export function SaasBranchTransferPanel(){
   }catch(e){setError(e instanceof Error?e.message:"Transfer not verified.");}
   finally{inFlight.current=false;setBusy(false);}
  }
- const pending=!!seed.current||!!transfer.current;
+
+ async function adjustBranchStock(){
+  if(inFlight.current)return;
+  inFlight.current=true;setBusy(true);setError("");setNotice("");
+  try{
+   const parsed=Number(adjustQty);
+   if(!current||!source||initial||!Number.isFinite(parsed)||
+    parsed<=0||parsed>9999999||
+    Math.abs(parsed*1000-Math.round(parsed*1000))>1e-7)
+    throw new Error("Select an allocated branch and positive stock amount (3 decimals maximum).");
+   adjustment.current??={id:crypto.randomUUID(),productId:current.id,
+    branchId:source,qty:parsed,type:adjustType,version:current.version};
+   const req=adjustment.current;
+   const a=await authorizedContext();
+   const result=await pgRpc<{mutation_id:string;stock_quantity:number}>(
+    a.cfg,"saas_adjust_stock_once",{
+      p_mutation_id:req.id,p_product_id:req.productId,
+      p_movement_type:req.type,p_quantity:req.qty,
+      p_expected_version:req.version,p_branch_id:req.branchId,
+    });
+   if(result.error||result.data?.mutation_id!==req.id)
+    throw new Error(result.error?.message||"Cloud stock adjustment not confirmed; retry same ID.");
+   const receipt=await pgSelect<{id:string;product_id:string;result_body:{stock_quantity:number}}>(
+    a.cfg,"saas_inventory_mutation_receipts",
+    "select=id,product_id,result_body&id=eq."+req.id+"&org_id=eq."+a.org+"&limit=2");
+   if(receipt.error||receipt.data?.length!==1||
+    receipt.data[0].product_id!==req.productId)
+    throw new Error("Durable stock receipt not confirmed; retry same ID.");
+   const [total,branchStock]=await Promise.all([
+    pgSelect<{stock_quantity:number}>(a.cfg,"products",
+      "select=stock_quantity&id=eq."+req.productId+"&org_id=eq."+a.org+"&limit=1"),
+    pgSelect<{quantity:number}>(a.cfg,"saas_branch_stock",
+      "select=quantity&product_id=eq."+req.productId+"&branch_id=eq."+req.branchId+
+      "&org_id=eq."+a.org+"&limit=1"),
+   ]);
+   if(total.error||branchStock.error||total.data?.length!==1||
+    branchStock.data?.length!==1||
+    Number(total.data[0].stock_quantity)!==Number(receipt.data[0].result_body.stock_quantity))
+    throw new Error("Global and branch stock readback not confirmed; retry same ID.");
+   stillSigned(a.token,a.userId);
+   adjustment.current=null;
+   await refresh();
+   setNotice("Stock movement saved and reconciled in Supabase for "+branchName(req.branchId)+".");
+  }catch(e){setError(e instanceof Error?e.message:"Branch stock movement not verified.");}
+  finally{inFlight.current=false;setBusy(false);}
+ }
+ const pending=!!seed.current||!!transfer.current||!!adjustment.current;
  return <main className="space-y-4 rounded-xl border bg-white p-4">
   <h1 className="text-xl font-semibold">Cloud Branch Stock Transfers</h1>
-  <p className="text-xs text-slate-600">Tenant-scoped, replay-safe branch transfer. Branch allocation must equal global product stock; after POS/GRN adjustments, reconcile before further transfers. Warehouse-bin operations are a separate workflow.</p>
+  <p className="text-xs text-slate-600">Tenant-scoped, replay-safe branch transfer. Branch allocation must equal global product stock; POS, GRN and manual branch movements reconcile automatically in PostgreSQL; stock changes without a branch movement are rejected. Warehouse-bin operations remain a separate workflow.</p>
   <div className="grid gap-3 sm:grid-cols-3">
    <label className="text-sm">Product<select className="mt-1 w-full rounded border p-2"
     disabled={busy||pending} value={productId} onChange={e=>setProductId(e.target.value)}>
@@ -171,6 +221,23 @@ export function SaasBranchTransferPanel(){
      {busy?"Transferring…":transfer.current?"Retry same transfer":"Transfer stock"}
     </button>
    </div>}
+  {!initial&&<section className="space-y-2 rounded border p-3">
+   <h2 className="text-sm font-semibold">Adjust stock at selected source branch</h2>
+   <div className="flex flex-wrap items-end gap-3">
+    <label className="text-sm">Movement<select className="mt-1 block rounded border p-2"
+     value={adjustType} disabled={busy||pending} onChange={e=>setAdjustType(e.target.value as "stock_in"|"stock_out")}>
+     <option value="stock_in">Stock in</option><option value="stock_out">Stock out</option>
+    </select></label>
+    <label className="text-sm">Quantity<input className="mt-1 block w-36 rounded border p-2"
+     type="number" min="0.001" step="0.001" value={adjustQty}
+     disabled={busy||pending} onChange={e=>setAdjustQty(e.target.value)}/></label>
+    <button type="button" className="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
+     disabled={busy||!current||allocatedTotal!==Number(current.stock_quantity)}
+     onClick={()=>{void adjustBranchStock()}}>
+     {busy?"Saving…":adjustment.current?"Retry same adjustment":"Save branch stock movement"}
+    </button>
+   </div>
+  </section>}
   <div className="space-y-1 text-sm">{allocated.map(s=><p key={s.branch_id}>
    {branchName(s.branch_id)}: <strong>{Number(s.quantity)}</strong></p>)}</div>
   {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
