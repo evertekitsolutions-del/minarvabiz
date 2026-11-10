@@ -5,8 +5,8 @@ import {useParams} from "next/navigation";
 import {configFromEnv,pgRpc,pgSelect} from "@minarvabiz/database";
 import {LeadCapture} from "./lead-capture";
 
-type Store={id:string;title:string;slug:string;published:boolean};
-type Listing={id:string;product_id:string;name:string;sku:string|null;price:number};
+type Store={id:string;title:string;slug:string;published:boolean;seo_title:string;seo_description:string;banner_url:string;accent_color:string};
+type Listing={id:string;product_id:string;name:string;sku:string|null;price:number;variant_parent_id:string|null;variant_parent_name:string|null;variant_size:string|null;variant_color:string|null;variant_fabric:string|null};
 type Pending={id:string;slug:string;name:string;phone:string;
  items:{product_id:string;quantity:number}[]};
 
@@ -16,6 +16,7 @@ export default function PublicTenantStorePage(){
  const [store,setStore]=React.useState<Store|null>(null);
  const [listings,setListings]=React.useState<Listing[]>([]);
  const [cart,setCart]=React.useState<Record<string,number>>({});
+ const [variantChoice,setVariantChoice]=React.useState<Record<string,string>>({});
  const [name,setName]=React.useState("");
  const [phone,setPhone]=React.useState("");
  const [loading,setLoading]=React.useState(true);
@@ -32,17 +33,33 @@ export default function PublicTenantStorePage(){
     const cfg=configFromEnv();
     if(!cfg)throw new Error("Store service is not configured.");
     const found=await pgSelect<Store>(cfg,"saas_storefronts",
-       "select=id,title,slug,published&slug=eq."+slug+"&published=eq.true&limit=2");
+       "select=id,title,slug,published,seo_title,seo_description,banner_url,accent_color&slug=eq."+slug+"&published=eq.true&limit=2");
     if(found.error||found.data?.length!==1)throw new Error("Store is not published.");
     const shop=found.data[0];
     const items=await pgSelect<Listing>(cfg,"saas_storefront_listings",
-       "select=id,product_id,name,sku,price&storefront_id=eq."+shop.id+"&active=eq.true&order=name.asc&limit=300");
+       "select=id,product_id,name,sku,price,variant_parent_id,variant_parent_name,variant_size,variant_color,variant_fabric&storefront_id=eq."+shop.id+"&active=eq.true&order=name.asc&limit=300");
     if(items.error||!items.data)throw new Error("Public store catalog unavailable.");
     if(active){setStore(shop);setListings(items.data);setLoading(false);}
   }
   void load().catch(e=>{if(active){setLoading(false);setError(e instanceof Error?e.message:"Store unavailable.")}});
   return()=>{active=false};
  },[slug]);
+ const groups=React.useMemo(()=>{
+  const m=new Map<string,Listing[]>();
+  for(const item of listings){
+   const key=item.variant_parent_id||item.product_id;
+   const previous=m.get(key)||[];
+   previous.push(item);m.set(key,previous);
+  }
+  return Array.from(m,([id,variants])=>({id,name:variants[0].variant_parent_name||variants[0].name,variants}));
+ },[listings]);
+ function selectVariant(group:{id:string;variants:Listing[]},field:"variant_size"|"variant_color"|"variant_fabric",value:string){
+  const current=group.variants.find(v=>v.product_id===variantChoice[group.id])||group.variants[0];
+  const same=group.variants.find(v=>(v[field]||"")===value &&
+   ["variant_size","variant_color","variant_fabric"].every(k=>k===field||v[k as typeof field]===current[k as typeof field]));
+  const preferred=same||group.variants.find(v=>(v[field]||"")===value);
+  if(preferred)setVariantChoice(old=>({...old,[group.id]:preferred.product_id}));
+ }
  const basket=listings.filter(p=>cart[p.product_id]>0).map(p=>({...p,qty:cart[p.product_id]}));
  const total=basket.reduce((s,p)=>s+p.qty*Number(p.price),0);
  async function checkout(){
@@ -81,22 +98,41 @@ export default function PublicTenantStorePage(){
  if(loading)return <main className="mx-auto max-w-4xl p-6">Loading public store…</main>;
  if(!store)return <main className="mx-auto max-w-4xl p-6" role="alert">{error||"Store unavailable."}</main>;
  return <main className="mx-auto max-w-5xl space-y-6 p-5">
-   <header className="border-b pb-3"><h1 className="text-2xl font-bold">{store.title}</h1>
-     <p className="text-sm text-slate-600">Verified product catalogue · GST-inclusive Price · orders subject to confirmation</p>
+   <header className="space-y-2 border-b pb-3" style={{borderColor:store.accent_color||"#1760e6"}}>
+    <h1 className="text-2xl font-bold">{store.title}</h1>
+    {store.banner_url&&<img src={store.banner_url} alt={store.title+" banner"}
+      className="max-h-44 w-full rounded object-cover" loading="lazy" referrerPolicy="no-referrer"/>}
+    {store.seo_description&&<p className="text-sm text-slate-600">{store.seo_description}</p>}
+    <p className="text-sm text-slate-600">Verified product catalogue · GST-inclusive Price · orders subject to confirmation</p>
    </header>
    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-     {listings.map(p=><article key={p.id} className="space-y-2 rounded-lg border p-4">
-       <h2 className="font-semibold">{p.name}</h2>
-       {p.sku&&<p className="text-xs text-slate-500">SKU {p.sku}</p>}
-       <p className="font-semibold">Price ₹{Number(p.price).toFixed(2)}</p>
-       <div className="flex items-center gap-3">
-         <button className="rounded border px-3 py-1 disabled:opacity-50" type="button"
-           disabled={busy||!!pending.current} onClick={()=>change(p.product_id,-1)}>−</button>
-         <span>{cart[p.product_id]||0}</span>
-         <button className="rounded border px-3 py-1 disabled:opacity-50" type="button"
-           disabled={busy||!!pending.current} onClick={()=>change(p.product_id,1)}>+</button>
-       </div>
-     </article>)}
+    {groups.map(group=>{
+     const p=group.variants.find(v=>v.product_id===variantChoice[group.id])||group.variants[0];
+     return <article key={group.id} className="space-y-2 rounded-lg border p-4">
+      <h2 className="font-semibold">{group.name}</h2>
+      {group.variants.length>1&&<div className="grid grid-cols-3 gap-2">
+       {([["variant_size","Size"],["variant_color","Color"],["variant_fabric","Fabric"]] as const).map(([field,label])=>
+        <label key={field} className="text-xs">{label}
+         <select className="mt-1 min-h-[44px] w-full rounded border p-1 text-xs"
+          value={p[field]||""} disabled={busy||!!pending.current}
+          onChange={e=>selectVariant(group,field,e.target.value)}>
+          {Array.from(new Set(group.variants.map(v=>v[field]||""))).map(value=>
+           <option key={value} value={value}>{value||"Default"}</option>)}
+         </select></label>)}
+      </div>}
+      {p.sku&&<p className="text-xs text-slate-500">SKU {p.sku}</p>}
+      <p className="font-semibold">Price ₹{Number(p.price).toFixed(2)}</p>
+      <div className="flex items-center gap-3">
+       <button className="min-h-[44px] min-w-[44px] rounded border disabled:opacity-50"
+        type="button" disabled={busy||!!pending.current}
+        onClick={()=>change(p.product_id,-1)}>−</button>
+       <span>{cart[p.product_id]||0}</span>
+       <button className="min-h-[44px] min-w-[44px] rounded border disabled:opacity-50"
+        type="button" disabled={busy||!!pending.current}
+        onClick={()=>change(p.product_id,1)}>+</button>
+      </div>
+     </article>
+    })}
    </section>
    <section className="rounded-lg border p-4">
      <h2 className="text-lg font-semibold">Order summary</h2>
