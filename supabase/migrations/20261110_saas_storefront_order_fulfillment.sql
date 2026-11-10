@@ -181,7 +181,7 @@ BEGIN
   UPDATE public.saas_storefront_draft_orders SET status='confirmed'
    WHERE id=p_order_id AND org_id=v_org;
   v_sale:=pg_catalog.jsonb_build_object(
-   'id',p_order_id,'invoice_number','WEB-'||left(p_order_id::text,8),
+   'id',p_order_id,'invoice_number','WEB-'||p_order_id::text,
    'customer_id',v_customer_id,'customer_name',v_order.buyer_name,
    'branch_id',p_branch_id,'subtotal',v_gross-v_tax,
    'tax_amount',v_tax,'total',v_gross,
