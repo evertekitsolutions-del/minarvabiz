@@ -175,7 +175,7 @@ export function SaasFieldServicePanel(){
    </section>
    <section className="space-y-2 rounded border p-3">
     <h3 className="text-sm font-semibold">Photo / PDF HTTPS evidence</h3>
-    <select className={inputClass} value={evidenceKind} onChange={e=>setEvidenceKind(e.target.value)}>
+    <select className={inputClass} value={evidenceKind} onChange={e=>setEvidenceKind(e.target.value as "photo"|"pdf")}>
      <option value="photo">Photo</option><option value="pdf">PDF</option></select>
     <input className={inputClass} type="url" placeholder="https://…" disabled={busy}
      value={url} onChange={e=>setUrl(e.target.value)}/>
