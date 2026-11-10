@@ -6,6 +6,8 @@ import {can,getOutboxScope,getSessionToken,getSessionUser} from "@minarvabiz/bus
 import {resolveOnlineAuthorization} from "../../../lib/data-source";
 import {MarketingLeads} from "./marketing-leads";
 import {SaasStorefrontDesignPanel} from "./saas-storefront-design-panel";
+import {SaasOrderFulfillmentPanel} from "./saas-order-fulfillment-panel";
+import {SaasMarketingCampaignPanel} from "./saas-marketing-campaign-panel";
 
 type Product={id:string;name:string;sku:string|null;selling_price:number};
 type Store={id:string;org_id:string;slug:string;title:string;published:boolean;seo_title:string;seo_description:string;banner_url:string;accent_color:string};
@@ -116,6 +118,8 @@ export default function StorefrontOwnerPage(){
   {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
   {notice&&<p role="status" className="text-sm text-green-700">{notice}</p>}
   <SaasStorefrontDesignPanel store={store}/>
+  <SaasMarketingCampaignPanel store={store}/>
+  <SaasOrderFulfillmentPanel orders={orders} onChanged={()=>{void refresh()}}/>
   <h2 className="font-semibold">Incoming ERP draft orders ({orders.length})</h2>
   <div className="space-y-1">
    {orders.map(o=><div className="rounded border p-2 text-sm" key={o.id}>
