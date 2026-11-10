@@ -37,6 +37,7 @@ test("M22 actual server webhook verifies signature BEFORE parsing or database ca
  const checkout=readFileSync("apps/web/src/app/api/billing/checkout/route.ts","utf8");
  const admin=readFileSync("apps/web/src/lib/billing-admin-server.ts","utf8");
  const sql=readFileSync("supabase/migrations/20261110_saas_signed_payment_receipts_commissions.sql","utf8");
+ const gst=readFileSync("supabase/migrations/20261110_saas_annual_gst_referral_base_fix.sql","utf8");
  assert.ok(route.indexOf("verifyRazorpayWebhookSignature(raw")<route.indexOf("parseCapturedRazorpayEvent(raw"));
  assert.ok(route.indexOf("parseCapturedRazorpayEvent(raw")<route.indexOf("billingAdminRequest<"));
  for(const re of [
@@ -48,7 +49,7 @@ test("M22 actual server webhook verifies signature BEFORE parsing or database ca
  for(const re of [
  /verifiedBillingActor/,/saas_register_checkout_intent_once/,
  /https:\/\/api\.razorpay\.com\/v1\/orders/,/process\.env\.RAZORPAY_KEY_SECRET/,
- /response\.ok/,/provider\.amount!==Math\.round\(price\*100\)/,
+ /response\.ok/,/provider\.amount!==Math\.round\(price\*118\)/,
  ])assert.match(checkout,re);
  assert.match(admin,/SUPABASE_SERVICE_ROLE_KEY/);
  assert.doesNotMatch(admin,/NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY/);
@@ -66,5 +67,9 @@ test("M22 actual server webhook verifies signature BEFORE parsing or database ca
   /REVOKE ALL ON FUNCTION public\.saas_register_checkout_intent_once/,
   /TO service_role/
  ])assert.match(sql,re);
+ assert.match(gst,/annual_inr\*118/);
+ assert.match(gst,/annual_inr\*0\.10/);
+ assert.match(gst,/base_amount_paise/);
+ assert.match(gst,/gst_amount_paise/);
  assert.doesNotMatch(sql,/GRANT EXECUTE .* TO anon/);
 });
