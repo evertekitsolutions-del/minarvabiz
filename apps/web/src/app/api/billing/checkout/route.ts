@@ -27,14 +27,14 @@ export async function POST(req:NextRequest){
    "saas_annual_plans?select=code,annual_inr&code=eq."+
      subscription.plan_code+"&limit=1",{},"GET");
   const price=Number(plans[0]?.annual_inr);
-  if(!Number.isSafeInteger(price*100)||price<=0)
+  if(!Number.isSafeInteger(price*118)||price<=0)
    throw new Error("Invalid official annual plan");
   const id=crypto.randomUUID();
   const auth=Buffer.from(key+":"+secret).toString("base64");
   const response=await fetch("https://api.razorpay.com/v1/orders",{
    method:"POST",headers:{"Authorization":"Basic "+auth,"Content-Type":"application/json"},
    body:JSON.stringify({
-    amount:Math.round(price*100),currency:"INR",receipt:"sub_"+id,
+    amount:Math.round(price*118),currency:"INR",receipt:"sub_"+id,
     notes:{subscription_org_id:actor.orgId,plan_code:subscription.plan_code}
    }),cache:"no-store",signal:AbortSignal.timeout(9000)
   });
@@ -43,7 +43,7 @@ export async function POST(req:NextRequest){
    id?:string;amount?:number;currency?:string;status?:string
   };
   if(!provider.id||!/^order_[A-Za-z0-9]{5,90}$/.test(provider.id)||
-   provider.amount!==Math.round(price*100)||provider.currency!=="INR"||
+   provider.amount!==Math.round(price*118)||provider.currency!=="INR"||
    provider.status!=="created")throw new Error("Razorpay order receipt mismatch");
   const receipt=await billingAdminRequest<{intent_id:string;amount_paise:number}>(
    "rpc/saas_register_checkout_intent_once",{
@@ -55,7 +55,7 @@ export async function POST(req:NextRequest){
    throw new Error("Merchant order was not durably registered");
   return NextResponse.json({
    provider:"razorpay",orderId:provider.id,amountPaise:provider.amount,
-   currency:"INR",environment,publicKeyId:key
+   currency:"INR",environment,publicKeyId:key,basePaise:Math.round(price*100),gstPaise:Math.round(price*18)
   },{headers:{"Cache-Control":"no-store"}});
  }catch{
   return NextResponse.json({error:"Unable to prepare verified checkout"},{status:503});
