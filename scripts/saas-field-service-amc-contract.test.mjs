@@ -18,7 +18,7 @@ test("M19 visit/checklist/photo/signature/AMC RPCs tenant private and replay-saf
   /user_has_org_role/,
   /request_body IS DISTINCT FROM p_payload/,
   /'checklist','evidence','handover'/,
-  /'https:\/\/'/,
+  /\^https:\/\//,
   /signature_png/,
   /completed_at=now\(\)/,
   /REVOKE ALL ON public\.saas_field_visits/,
