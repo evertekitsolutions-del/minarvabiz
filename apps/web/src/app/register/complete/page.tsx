@@ -15,7 +15,7 @@ export default function CompleteRegistrationPage() {
   const inFlight = React.useRef(false);
 
   const findVerifiedTenant = React.useCallback(async () => {
-    if (!supabase) throw new Error("Supabase is not configured for online registration.");
+    if (!supabase) throw new Error("Online account configuration is unavailable.");
     const { data: userData, error: authError } = await supabase.auth.getUser();
     if (authError || !userData.user) {
       setNeedsLogin(true);
@@ -60,7 +60,7 @@ export default function CompleteRegistrationPage() {
       try {
         // Supabase Auth processes the verification redirect and stores its
         // session before getUser. No service-role or custom token is used.
-        if (!supabase) throw new Error("Supabase is not configured.");
+        if (!supabase) throw new Error("Online account configuration is unavailable.");
         await supabase.auth.getSession();
         if (cancelled) return;
         await findVerifiedTenant();
@@ -97,11 +97,11 @@ export default function CompleteRegistrationPage() {
     <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
       <a href="/" className="text-sm font-bold text-blue-700">Minarva Biz</a>
       <h1 className="mt-4 text-2xl font-bold">Complete your registration</h1>
-      <p className="mt-2 text-sm text-slate-600">Verification and business access are checked against Supabase. Your requested plan is not a paid subscription.</p>
+      <p className="mt-2 text-sm text-slate-600">Verification and business access are checked securely on the server. Your requested plan is not a paid subscription.</p>
       {busy && <p role="status" className="mt-5 text-sm">Verifying your account…</p>}
       {!busy && link && <div className="mt-6 space-y-4">
         <p className="text-sm">Your business login link is ready. Sign in using your verified email and password.</p>
-        {trialEnds&&<p className="text-sm font-semibold text-green-700">30-day trial recorded in Supabase until {new Date(trialEnds).toLocaleDateString()} (server time).</p>}
+        {trialEnds&&<p className="text-sm font-semibold text-green-700">30-day trial verified until {new Date(trialEnds).toLocaleDateString()} (server time).</p>}
         <a href={link} className="inline-flex w-full justify-center rounded-lg bg-blue-700 px-4 py-3 text-sm font-semibold text-white">Open business login</a>
         <p className="break-all rounded-lg bg-slate-100 p-3 text-xs">{window.location.origin + link}</p>
       </div>}

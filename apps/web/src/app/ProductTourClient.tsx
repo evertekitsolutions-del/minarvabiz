@@ -136,7 +136,7 @@ export default function ProductTourClient() {
             <WorkspaceContent selected={selected}/>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-4 py-3 text-[10px] font-medium text-slate-400"><span>Online · Windows Offline · Hybrid</span><span>Sample interface only</span></div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-4 py-3 text-[10px] font-medium text-slate-400"><span>Secure Online-Only Cloud SaaS</span><span>Sample interface only</span></div>
       </div>
       <div className="pointer-events-none absolute -bottom-8 right-1 hidden w-[165px] rotate-[4deg] rounded-[1.7rem] border-[6px] border-[#17353b] bg-[#17353b] p-1 shadow-[0_20px_60px_rgba(8,37,39,0.22)] sm:block lg:-right-6" aria-hidden="true">
         <div className="rounded-[1.1rem] bg-[#f8faf8] p-3">

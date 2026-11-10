@@ -25,7 +25,7 @@ assert.match(page,/aria-label="Mobile navigation"/);
 assert.match(page,/href="\/login"/);
 assert.match(page,/href="\/register"/,"SaaS registration CTA must remain");
 assert.match(page, /<TrialWelcomePopup\s*\/>/, "Show the 30-day campaign on the public homepage");
-assert.match(page, /Subscription payments and full customer acceptance remain pending verification/, "Do not imply paid activation");
+assert.match(page, /Paid activation requires a confirmed payment receipt/, "Do not imply paid activation without provider-verified receipt");
 assert.ok(!page.includes("GST compliant"),"No unverified blanket compliance claims");
 assert.doesNotMatch(page,/Trusted by (?:millions|lakhs|\d)/i);
 assert.doesNotMatch(page,/<script|href="http:|src="http:/);

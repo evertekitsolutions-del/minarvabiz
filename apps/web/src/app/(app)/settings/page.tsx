@@ -70,7 +70,7 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Settings</h1>
-          <p className="text-sm text-slate-500">License, environment, and hybrid sync</p>
+          <p className="text-sm text-slate-500">Cloud business settings and recovery</p>
         </div>
         <a href="/license" className="text-sm font-medium text-indigo-600 hover:underline">
           License & Branches →
@@ -155,10 +155,10 @@ export default function SettingsPage() {
       />
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3" aria-labelledby="cloud-master-recovery">
-        <h2 id="cloud-master-recovery" className="text-sm font-semibold text-slate-800">Offline master-data cloud recovery</h2>
+        <h2 id="cloud-master-recovery" className="text-sm font-semibold text-slate-800">Cloud master-data save recovery</h2>
         <p className="text-sm text-slate-600">
           Retry previously queued customer, category and product changes using your verified organization account.
-          Unsynced financial, stock or payment transactions are held for transactional reconciliation; this is not a full Hybrid Sync.
+          Unconfirmed financial, stock and payment transactions require server reconciliation before they can be treated as saved.
         </p>
         <div className="flex flex-wrap gap-4 text-sm text-slate-700" role="status" aria-live="polite">
           <span>Queued: <strong>{masterReplay.pending}</strong></span>

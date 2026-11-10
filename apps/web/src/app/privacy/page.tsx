@@ -1,0 +1,10 @@
+import type {Metadata} from "next";
+import {LegalPageShell} from "@/components/LegalPageShell";
+export const metadata:Metadata={title:"Privacy Policy | Minarva Biz",description:"How Minarva Biz handles account, business and service data."};
+export default function PrivacyPage(){return <LegalPageShell title="Privacy Policy" description="How Minarva Biz collects, uses and protects data in the cloud service.">
+ <section><h2>Information we handle</h2><p>We process account details, business profile information, customer and invoice records, inventory, service data and support enquiries that you or authorized team members provide. Authentication and technical logs may be used for security and reliability.</p></section>
+ <section><h2>Purpose and access</h2><p>Information is used to deliver the requested ERP features, authenticate users, process transactions, provide support, prevent abuse and comply with applicable obligations. Authorized staff may access information only for legitimate support and security purposes. Each organization's access is governed by account membership and server-side permissions.</p></section>
+ <section><h2>Service providers and payments</h2><p>We use infrastructure, authentication and payment service providers to operate the platform. Payment card details are handled through the payment provider's checkout rather than entered into Minarva Biz's own billing forms. We do not sell customer data to advertisers.</p></section>
+ <section><h2>Retention and security</h2><p>Business records are retained while needed to provide the service and meet legal or accounting obligations. Retention and deletion requests are assessed against those obligations and legitimate recovery requirements. We employ access controls and encrypted transport, but no service can guarantee absolute security.</p></section>
+ <section><h2>Your requests</h2><p>For access, correction, export, deletion or privacy complaints, contact <a href="mailto:minarvatechnologies@gmail.com">minarvatechnologies@gmail.com</a>. We may verify account ownership before changing or disclosing records.</p></section>
+ </LegalPageShell>;}

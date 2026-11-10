@@ -16,7 +16,11 @@ assert.ok(page.includes('href="/login"'), "Existing customer login must remain a
 assert.ok(page.includes('id="get-started"') && page.includes('href="/register"'), "SaaS registration CTA must remain visible");
 assert.doesNotMatch(page, /Windows Offline|Hybrid|Download for Windows|Windows release|releases\/tag\//i, "Retired Windows marketing must be absent");
 assert.ok(page.includes("not a live application screenshot"), "Illustrative panel must be disclosed");
-assert.ok(page.includes("Subscription payments and full customer acceptance remain pending verification."), "Do not advertise an unverified paid subscription");
+assert.ok(page.includes("Paid activation requires a confirmed payment receipt"), "Do not advertise an unverified paid subscription");
+for (const link of ["/privacy", "/terms", "/refund-policy", "/contact"]) {
+  assert.ok(page.includes(`href="${link}"`), "Missing legal/support footer link: " + link);
+  assert.ok(readFileSync(`apps/web/src/app${link}/page.tsx`, "utf8").includes("LegalPageShell"), "Missing accessible legal/support page: " + link);
+}
 assert.ok(page.includes("subject to edition readiness") || page.includes("depends on edition"), "No universal feature claims");
 for (const name of ["Online", "Mobile App", "Cloud Teams"]) {
   assert.ok(page.includes(name), "Edition must be represented: " + name);
