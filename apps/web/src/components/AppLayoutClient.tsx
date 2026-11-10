@@ -272,7 +272,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
             sidebar={{
               user: { name: userName || "User", role: "Authorized User" },
               logoSrc: "/logo-mark.png",
-              navItems:MAIN_NAV.filter(item=>!hiddenNav.has(item.id)),
+              navItems:getRuntimeMode()==="demo"?MAIN_NAV:MAIN_NAV.filter(item=>!hiddenNav.has(item.id)),
             }}
             header={{
               showSearch: true,
