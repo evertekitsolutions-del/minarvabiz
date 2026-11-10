@@ -5,9 +5,10 @@ import {configFromEnv,pgRpc,pgSelect} from "@minarvabiz/database";
 import {can,getOutboxScope,getSessionToken,getSessionUser} from "@minarvabiz/business-logic";
 import {resolveOnlineAuthorization} from "../../../lib/data-source";
 import {MarketingLeads} from "./marketing-leads";
+import {SaasStorefrontDesignPanel} from "./saas-storefront-design-panel";
 
 type Product={id:string;name:string;sku:string|null;selling_price:number};
-type Store={id:string;org_id:string;slug:string;title:string;published:boolean};
+type Store={id:string;org_id:string;slug:string;title:string;published:boolean;seo_title:string;seo_description:string;banner_url:string;accent_color:string};
 type Listing={id:string;product_id:string;active:boolean};
 type DraftOrder={id:string;buyer_name:string;buyer_phone:string;total:number;status:string;created_at:string};
 export default function StorefrontOwnerPage(){
@@ -114,6 +115,7 @@ export default function StorefrontOwnerPage(){
     /store/{store.slug}</a></p>}
   {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
   {notice&&<p role="status" className="text-sm text-green-700">{notice}</p>}
+  <SaasStorefrontDesignPanel store={store}/>
   <h2 className="font-semibold">Incoming ERP draft orders ({orders.length})</h2>
   <div className="space-y-1">
    {orders.map(o=><div className="rounded border p-2 text-sm" key={o.id}>
