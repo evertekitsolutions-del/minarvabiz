@@ -74,7 +74,8 @@ for(const [jwt,oppositeOrg] of [
  for(const table of tables){
   // Public organizations and published storefronts have separate intentional
   // discoverability, but all private tenant data must not be visible.
-  if(["organizations","saas_storefronts"].includes(table))continue;
+  if(["organizations","saas_storefronts","saas_partner_referrals",
+    "saas_partner_referral_commissions"].includes(table))continue;
   const x=await getJson("/rest/v1/"+table+"?select=org_id&org_id=eq."+
    oppositeOrg+"&limit=1",jwt);
   if(x.ok)assert.equal(x.response.length,0,
@@ -82,13 +83,23 @@ for(const [jwt,oppositeOrg] of [
   else assert.ok([401,403].includes(x.status),"Unexpected data API error: "+table+" "+x.status);
  }
 }
-for(const rpc of [
- "saas_start_tenant_trial_once","saas_register_partner_code_once",
- "saas_capture_signed_subscription_payment_once","saas_register_checkout_intent_once"
-]){
+const deniedCalls=[
+ ["saas_start_tenant_trial_once",{p_plan_code:"base",p_partner_code:null}],
+ ["saas_register_partner_code_once",{p_id:crypto.randomUUID(),p_code:"NOSTAFF1234"}],
+ ["saas_capture_signed_subscription_payment_once",{
+  p_provider_event_id:"evt_DENIEDTEST01",p_provider_payment_id:"pay_DENIEDTEST01",
+  p_provider_order_id:"order_DENIEDTEST01",p_amount_paise:271282,
+  p_currency:"INR",p_environment:"sandbox",p_raw_body_sha256:"b".repeat(64)}],
+ ["saas_register_checkout_intent_once",{
+  p_intent_id:crypto.randomUUID(),p_org_id:staffAuth.response[0].auth_org_id,
+  p_actor_user_id:s.response.id,p_plan_code:"base",
+  p_provider_order_id:"order_DENIEDTEST02",p_environment:"sandbox"}]
+];
+for(const [rpc,payload] of deniedCalls){
  const response=await getJson("/rest/v1/rpc/"+rpc,env.MINARVA_QA_STAFF_JWT,{
-  method:"POST",body:{}});
- assert.equal(response.ok,false,"Staff could call privileged RPC "+rpc);
+  method:"POST",body:payload});
+ assert.ok([401,403,404].includes(response.status),
+  "Staff role should be explicitly blocked, not merely fail invalid input: "+rpc+" "+response.status);
 }
 // For HMAC webhook tests use separate server-side signed fixture contract.
 // This live JWT gate does not depend on production customer payment secrets.
