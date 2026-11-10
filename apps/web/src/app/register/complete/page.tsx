@@ -9,6 +9,7 @@ export default function CompleteRegistrationPage() {
   const [password, setPassword] = React.useState("");
   const [needsLogin, setNeedsLogin] = React.useState(false);
   const [link, setLink] = React.useState<string | null>(null);
+  const [trialEnds,setTrialEnds]=React.useState<string|null>(null);
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(true);
   const inFlight = React.useRef(false);
@@ -31,6 +32,24 @@ export default function CompleteRegistrationPage() {
     if (!data || data.length !== 1 || typeof data[0].org_id !== "string") {
       throw new Error("Business membership is not ready. Contact support; do not register another account.");
     }
+    // Metadata only expresses a user-selected plan/referral code. The RPC derives
+    // tenant authorization from the verified JWT + DB membership and prices from the catalog.
+    const requested=userData.user.user_metadata?.requested_plan;
+    const mapping:Record<string,string>={
+      starter:"base","business-pro":"growth","business-web":"website",
+      "business-360":"commerce"
+    };
+    const requestedCode=typeof requested==="string"?mapping[requested]:"base";
+    const rawRef=userData.user.user_metadata?.requested_partner_code;
+    const referral=typeof rawRef==="string"&&/^[A-Z0-9]{6,16}$/.test(rawRef)?rawRef:null;
+    const {data:trial,error:trialError}=await supabase.rpc("saas_start_tenant_trial_once",{
+      p_plan_code:requestedCode||"base",p_partner_code:referral
+    });
+    if(trialError)throw trialError;
+    const receipt=trial as {org_id?:string;trial_ends_at?:string;state?:string}|null;
+    if(!receipt||receipt.org_id!==data[0].org_id||!receipt.trial_ends_at)
+      throw new Error("Server did not confirm the 30-day tenant trial.");
+    setTrialEnds(receipt.trial_ends_at);
     setLink(tenantLoginHref(data[0].org_id));
     setNeedsLogin(false);
   }, []);
@@ -82,6 +101,7 @@ export default function CompleteRegistrationPage() {
       {busy && <p role="status" className="mt-5 text-sm">Verifying your account…</p>}
       {!busy && link && <div className="mt-6 space-y-4">
         <p className="text-sm">Your business login link is ready. Sign in using your verified email and password.</p>
+        {trialEnds&&<p className="text-sm font-semibold text-green-700">30-day trial recorded in Supabase until {new Date(trialEnds).toLocaleDateString()} (server time).</p>}
         <a href={link} className="inline-flex w-full justify-center rounded-lg bg-blue-700 px-4 py-3 text-sm font-semibold text-white">Open business login</a>
         <p className="break-all rounded-lg bg-slate-100 p-3 text-xs">{window.location.origin + link}</p>
       </div>}
