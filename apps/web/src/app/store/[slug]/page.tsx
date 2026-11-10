@@ -4,6 +4,7 @@ import * as React from "react";
 import {useParams} from "next/navigation";
 import {configFromEnv,pgRpc,pgSelect} from "@minarvabiz/database";
 import {LeadCapture} from "./lead-capture";
+import {SaasStoreCouponPreview} from "./saas-store-coupon-preview";
 
 type Store={id:string;title:string;slug:string;published:boolean;seo_title:string;seo_description:string;banner_url:string;accent_color:string};
 type Listing={id:string;product_id:string;name:string;sku:string|null;price:number;variant_parent_id:string|null;variant_parent_name:string|null;variant_size:string|null;variant_color:string|null;variant_fabric:string|null};
@@ -137,6 +138,7 @@ export default function PublicTenantStorePage(){
    <section className="rounded-lg border p-4">
      <h2 className="text-lg font-semibold">Order summary</h2>
      <p className="text-sm">{basket.length} products · Total ₹{total.toFixed(2)} (GST included)</p>
+     <SaasStoreCouponPreview slug={slug} total={total}/>
      <p className="mb-3 text-xs text-slate-600">This saves an ERP draft order with a temporary 15-minute stock hold. Delivery charges and payment require merchant confirmation. No payment is collected here.</p>
      <div className="grid gap-2 sm:grid-cols-3">
        <label className="text-sm">Buyer name
