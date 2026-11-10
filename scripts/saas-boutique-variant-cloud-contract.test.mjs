@@ -36,7 +36,8 @@ test("product UI waits for cloud-confirmed family and preserves stable retry IDs
   const matrix=readFileSync("apps/web/src/app/(app)/products/boutique-variant-matrix.tsx","utf8");
   const service=readFileSync("apps/web/src/lib/online-boutique-variant-family.ts","utf8");
   assert.match(page, /<BoutiqueVariantMatrix/);
-  assert.match(page, /Price \(GST inclusive\)/);
+  assert.match(page, /Selling price \(current tax-inclusive billing policy\)/);
+  assert.match(page, /industryProfile\?\.enabled_verticals\.includes\("boutique_apparel"\)/);
   assert.match(matrix,/normalizeBoutiqueOptions/);
   assert.match(matrix,/pendingParentId\.current \?\?= crypto\.randomUUID\(\)/);
   assert.match(matrix,/await createBoutiqueVariantFamilyOnline\(/);

@@ -8,8 +8,12 @@ import type { Product, Customer, Sale, CartLine, PaymentMethod } from "@minarvab
 import { customerSchema } from "@minarvabiz/validation";
 import { getRuntimeMode } from "@minarvabiz/business-logic";
 import { SaasCloudPos } from "./saas-cloud-pos";
+import {useTenantIndustry} from "@/components/TenantIndustryContext";
+import {industryPosHints} from "@/lib/tenant-industry";
 
 export default function SalesPage() {
+  const profile=useTenantIndustry();
+  const posContexts=industryPosHints(profile);
   const router = useRouter();
   const [tab, setTab] = React.useState<"pos" | "normal" | "history">("pos");
   const [products, setProducts] = React.useState<Product[]>([]);
@@ -133,6 +137,7 @@ export default function SalesPage() {
 
   return (
     <div className="space-y-4">
+      {posContexts.length>0&&<div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900"><strong>Industry POS context:</strong> {posContexts.join(" · ")} <span className="block text-xs text-blue-800">Available transaction types remain governed by server-side features, local tax laws and staff permissions.</span></div>}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-slate-900">Sales & Billing</h2>
         <div className="flex gap-2">

@@ -239,7 +239,7 @@ export function Sidebar({
             <div className="mt-1.5 text-[20px] font-bold tracking-tight text-white">
               Minarva<span className="bg-gradient-to-r from-blue-400 via-indigo-400 to-fuchsia-400 bg-clip-text text-transparent"> Biz</span>
             </div>
-            <div className="mt-0.5 text-[10px] font-medium tracking-wide text-slate-400">Boutique Billing & Management</div>
+            <div className="mt-0.5 text-[10px] font-medium tracking-wide text-slate-400">Multi-Industry Business Management</div>
           </div>
         ) : (
           <div className="flex justify-center">

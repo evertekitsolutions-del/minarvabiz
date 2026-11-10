@@ -2,7 +2,10 @@
 
 import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { AppShell, AuthGate, ToastProvider, ErrorBoundary, type NavItemId } from "@minarvabiz/ui";
+import { AppShell, AuthGate, ToastProvider, ErrorBoundary, MAIN_NAV, type NavItemId } from "@minarvabiz/ui";
+import {supabase} from "@/lib/supabase";
+import {parseTenantIndustryProfile, visibleIndustryNavIds, VERTICALS, type TenantIndustryProfile} from "@/lib/tenant-industry";
+import {TenantIndustryProvider} from "@/components/TenantIndustryContext";
 import {
   bootstrapFromLocalStorage, globalSearch,
   setCurrentRole,
@@ -77,6 +80,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
   const [searchResults, setSearchResults] = React.useState<Array<{kind:string;id:string;title:string;subtitle:string;href:string}>>([]);
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [userName, setUserName] = React.useState<string | undefined>();
+  const [industryProfile,setIndustryProfile]=React.useState<TenantIndustryProfile|null>(null);
   const [unreadNotifications, setUnreadNotifications] = React.useState(0);
   const [messageAttentionCount, setMessageAttentionCount] = React.useState(0);
 
@@ -105,6 +109,18 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
       // Use only the org/user identity from the verified membership RPC.
       setOutboxScope(authorization.orgId + ":" + authoritativeUser.id);
       setUserName(authoritativeUser.fullName || authoritativeUser.email);
+      // Read only the org allowed by the independently verified membership RPC.
+      // An unavailable profile never becomes a boutique default or grants access.
+      if(supabase){
+       const p=await supabase.from("saas_tenant_industry_profiles")
+        .select("org_id,primary_vertical,enabled_verticals,enabled_modules,country_code,currency_code,language_code,updated_at")
+        .eq("org_id",authorization.orgId).maybeSingle();
+       if(!p.error&&p.data&&getSessionToken()===session.token){
+        try{const parsed=parseTenantIndustryProfile(p.data);
+         if(parsed.org_id===authorization.orgId)setIndustryProfile(parsed);
+        }catch{setIndustryProfile(null);}
+       }else setIndustryProfile(null);
+      }else setIndustryProfile(null);
       purgeTrashWhenAuthorized();
       return true;
     },
@@ -186,7 +202,29 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
     };
   }, [pathname, refreshHeaderCounts]);
 
+  React.useEffect(()=>{
+   const onIndustryChanged=()=>{
+    const token=getSessionToken(),user=getSessionUser();
+    if(token&&user?.id)void resolveOnlineAuthorization(token,user.id).then(async a=>{
+      if(!a.ok||!supabase)return;
+      const p=await supabase.from("saas_tenant_industry_profiles")
+       .select("org_id,primary_vertical,enabled_verticals,enabled_modules,country_code,currency_code,language_code,updated_at")
+       .eq("org_id",a.orgId).maybeSingle();
+      if(!p.error&&p.data&&getSessionToken()===token){
+       try{const parsed=parseTenantIndustryProfile(p.data);
+        if(parsed.org_id===a.orgId)setIndustryProfile(parsed);
+       }catch{setIndustryProfile(null);}
+      }
+    }).catch(()=>{});
+   };
+   window.addEventListener("minarva:industry-profile-updated",onIndustryChanged);
+   return()=>window.removeEventListener("minarva:industry-profile-updated",onIndustryChanged);
+  },[]);
+
   const activeNav = pathToNav[pathname] ?? "dashboard";
+  const hiddenNav=visibleIndustryNavIds(industryProfile);
+  const industryLabel=industryProfile?.primary_vertical==="multi_vertical"?"Multi-Vertical":
+    VERTICALS.find(x=>x.id===industryProfile?.primary_vertical)?.label??"Business Workspace";
 
   return (
     <AuthGate
@@ -195,6 +233,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
     >
       <ToastProvider>
         <ErrorBoundary>
+          <TenantIndustryProvider value={industryProfile}>
           {searchOpen && (
             <div
               className="fixed left-1/2 top-16 z-[100] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-slate-200 bg-white shadow-xl"
@@ -233,6 +272,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
             sidebar={{
               user: { name: userName || "User", role: "Authorized User" },
               logoSrc: "/logo-mark.png",
+              navItems:getRuntimeMode()==="demo"?MAIN_NAV:MAIN_NAV.filter(item=>!hiddenNav.has(item.id)),
             }}
             header={{
               showSearch: true,
@@ -249,12 +289,13 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
                 pathname === "/dashboard"
                   ? "Dashboard"
                   : pathname.slice(1).replace(/^\w/, (c) => c.toUpperCase()),
-              subtitle: userName ? `Welcome back, ${userName}!` : "Welcome back!",
+              subtitle: userName ? `${industryLabel} · Welcome back, ${userName}!` : industryLabel,
               notificationCount: unreadNotifications,
               messageCount: messageAttentionCount,
               userName,
               onLogout: () => {
                 clearSession();
+                setIndustryProfile(null);
                 router.push("/login");
               },
               onMessagesClick: () => {
@@ -273,6 +314,7 @@ export function AppLayoutClient({ children }: { children: React.ReactNode }) {
             <SetupBanner />
             {children}
           </AppShell>
+          </TenantIndustryProvider>
         </ErrorBoundary>
       </ToastProvider>
     </AuthGate>
