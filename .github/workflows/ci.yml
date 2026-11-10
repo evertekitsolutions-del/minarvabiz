@@ -184,6 +184,12 @@ jobs:
         run: node --experimental-strip-types --test scripts/saas-two-up-label-thermal-contract.test.mjs
       - name: Verify M4 tenant cloud backup export and non-destructive restore preflight
         run: node --test scripts/saas-cloud-tenant-backup-contract.test.mjs
+      - name: Verify M20 M21 annual plans, trial/referrals and entitlement gate
+        run: node --test scripts/saas-commercial-entitlement-contract.test.mjs
+      - name: Verify M22 raw signed Razorpay sandbox webhook and replay safety
+        run: node --experimental-strip-types --test scripts/saas-razorpay-signed-webhook-contract.test.mjs
+      - name: Verify M24/M25 security matrix and ten-stage rollback UAT contract
+        run: node --test scripts/saas-final-wave-security-uat-contract.test.mjs
       - name: Verify M12/M15 cash-bank settlement and provisional P&L contracts
         run: node --test scripts/saas-finance-cashbank-settlement-contract.test.mjs
       - name: Verify M16 storefront variant builder and SEO contracts
