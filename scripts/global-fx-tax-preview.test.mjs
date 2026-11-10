@@ -12,8 +12,9 @@ const snapshot = Object.freeze({
 test("P1 currency minor units recognize OMR's three decimals", () => {
   assert.equal(GLOBAL_CURRENCY_MINOR_DIGITS.OMR, 3);
   assert.equal(GLOBAL_CURRENCY_MINOR_DIGITS.USD, 2);
+  assert.equal(GLOBAL_CURRENCY_MINOR_DIGITS.SAR, 2);
   assert.deepEqual(Object.keys(GLOBAL_CURRENCY_MINOR_DIGITS).sort(),
-    ["AED","EUR","INR","OMR","USD"]);
+    ["AED","EUR","INR","OMR","SAR","USD"]);
 });
 test("P1 FX snapshot is deterministic, immutable and rounds to OMR fils", () => {
   const v = previewGlobalFxConversion("10000", snapshot);
