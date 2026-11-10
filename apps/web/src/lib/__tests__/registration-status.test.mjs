@@ -15,3 +15,10 @@ test("restricted email provider surfaces an actionable error", () => {
   assert.match(signupErrorMessage({code:"email_address_not_authorized"}), /cannot be delivered/i);
   assert.match(signupErrorMessage({code:"over_email_send_rate_limit"}), /rate limit/i);
 });
+
+test("duplicate signup error points to password recovery", () => {
+  assert.match(signupErrorMessage({message:"User already registered"}), /original password/i);
+});
+test("unknown auth errors retain their message", () => {
+  assert.equal(signupErrorMessage({message:"Network timeout"}),"Network timeout");
+});
