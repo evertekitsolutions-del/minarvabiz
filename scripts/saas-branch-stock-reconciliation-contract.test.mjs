@@ -39,3 +39,18 @@ test("Existing uninitialized online/offline stock remains compatible",()=>{
  assert.match(source,/RETURN NEW;/);
  assert.match(source,/REVOKE ALL ON FUNCTION public\.saas_reconcile_branch_stock_movement/);
 });
+
+test("M7 warehouse online UI supports replay-safe explicit branch stock adjustments",()=>{
+ const ui=readFileSync("apps/web/src/app/(app)/warehouse/saas-branch-transfer-panel.tsx","utf8");
+ for(const re of [
+  /StockAdjustRequest/,
+  /"saas_adjust_stock_once"/,
+  /p_branch_id:req.branchId/,
+  /p_expected_version:req.version/,
+  /"saas_inventory_mutation_receipts"/,
+  /"saas_branch_stock"/,
+  /stock_out/,
+  /adjustment\.current\?\?=/,
+  /stillSigned\(a\.token,a\.userId\)/,
+ ])assert.match(ui,re);
+});
