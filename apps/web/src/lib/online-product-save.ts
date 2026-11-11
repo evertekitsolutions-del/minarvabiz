@@ -8,6 +8,7 @@ import { can, exportOutbox, getOutboxScope, getSessionToken, getSessionUser, pla
 import type { Product, Category } from "@minarvabiz/types";
 import { resolveOnlineAuthorization } from "./data-source";
 import { productCloudColumns, matchesProductCloudReceipt } from "./online-product-receipt";
+import type {VerticalProductPayload} from "./vertical-product-details";
 
 export type OnlineProductFields = Pick<Product,
   "name" | "sku" | "barcode" | "categoryId" | "unit" | "costPrice" |
@@ -47,7 +48,7 @@ function toProduct(row: Record<string, unknown>, existing?: Product): Product {
 
 export async function saveProductOnline(
   fields: OnlineProductFields,
-  options: { createId?: string; editing?: Product } = {},
+  options: { createId?: string; editing?: Product; verticalDetails?: Readonly<VerticalProductPayload> } = {},
 ): Promise<Product> {
   const cfg = configFromEnv();
   const token = getSessionToken();
@@ -89,7 +90,19 @@ export async function saveProductOnline(
   const ownerFilter = "select=*&id=eq." + id + "&org_id=eq." + auth.orgId + "&limit=2";
 
   let writeError: string | null = null;
-  if (editing) {
+  if (options.verticalDetails) {
+    // One PostgreSQL transaction commits the core product, its opening-stock movement
+    // and the selected industry fields. A failed detail validation rolls back all three.
+    const result = await pgRpc<Record<string, unknown>>(
+      authCfg, "saas_save_vertical_product", {
+        p_product_id: id,
+        p_product: asRow(fields),
+        p_details: options.verticalDetails,
+        p_expected_version: editing?.version ?? null,
+      },
+    );
+    writeError = result.error?.message ?? null;
+  } else if (editing) {
     const result = await pgUpdate<Record<string, unknown>>(
       authCfg, "products", "id=eq." + id + "&org_id=eq." + auth.orgId +
       "&version=eq." + editing.version, row,
@@ -129,6 +142,21 @@ export async function saveProductOnline(
     throw new Error(writeError
       ? "Product NOT fully confirmed in Supabase: " + writeError + ". Retry this same form, do not create another product."
       : "Product NOT fully confirmed in Supabase. Retry this same form.");
+  }
+  if (options.verticalDetails) {
+    const metadata = await pgSelect<Record<string, unknown>>(
+      authCfg, "saas_product_vertical_details",
+      "select=org_id,product_id,industry_id,batch_number,expiry_date,drug_formulation,drug_schedule,serial_imei,warranty_months,mrp_price,recipe_reference" +
+      "&org_id=eq." + auth.orgId + "&product_id=eq." + id + "&limit=2",
+    );
+    const detail = metadata.data?.length === 1 ? metadata.data[0] : null;
+    const expected = options.verticalDetails;
+    if (metadata.error || !detail || detail.org_id !== auth.orgId || detail.product_id !== id ||
+        !Object.entries(expected).every(([key, value]) =>
+          value === null ? detail[key] == null : typeof value === "number"
+            ? Number(detail[key]) === value : detail[key] === value)) {
+      throw new Error("Industry-specific product fields NOT confirmed in Supabase. Retry same product ID.");
+    }
   }
   if (getSessionToken() !== token || getSessionUser()?.id !== user.id) {
     throw new Error("Product committed, but the account changed during save. Sign in again and reload your catalog.");

@@ -129,3 +129,4 @@
 20261110_saas_annual_gst_referral_base_fix.sql
 20261110_saas_subscription_rls_tenant_escape_fix.sql
 20261110_saas_tenant_dynamic_industry_profiles.sql
+20261111_saas_deep_vertical_product_metadata.sql
