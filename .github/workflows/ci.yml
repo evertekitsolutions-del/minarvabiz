@@ -224,6 +224,8 @@ jobs:
         run: node --experimental-strip-types --test scripts/saas-boutique-variant-cloud-contract.test.mjs
       - name: Verify durable SaaS product save cloud receipts
         run: node --experimental-strip-types --test scripts/online-product-save-contract.test.mjs
+      - name: Verify atomic multi-industry product fields, stock RPC and POS safety
+        run: node --experimental-strip-types --test scripts/p0-deep-vertical-product-contract.test.mjs
       - name: Verify SaaS tenant login link isolation
         run: node --experimental-strip-types --test apps/web/src/lib/__tests__/tenant-login-link.test.mjs
       - name: Verify M23 touch/mobile camera scanner + PWA contracts
