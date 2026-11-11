@@ -47,7 +47,7 @@ create policy saas_vertical_role_update on public.saas_product_vertical_details 
 
 -- Reject direct REST writes which would bypass the atomic RPC validation.
 create or replace function private.saas_vertical_product_guard()
-returns trigger language plpgsql security invoker set search_path to '' as $
+returns trigger language plpgsql security invoker set search_path to '' as $vertical_guard$
 declare
  v_enabled text[];
 begin
@@ -81,7 +81,7 @@ begin
  new.updated_at:=clock_timestamp();
  return new;
 end;
-$;
+$vertical_guard$;
 drop trigger if exists saas_vertical_guard on public.saas_product_vertical_details;
 create trigger saas_vertical_guard before insert or update on public.saas_product_vertical_details
 for each row execute function private.saas_vertical_product_guard();
