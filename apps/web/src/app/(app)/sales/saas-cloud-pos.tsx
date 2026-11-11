@@ -7,11 +7,18 @@ import {
 } from "@minarvabiz/business-logic";
 import { SaasCameraBarcodeScanner } from "@/components/SaasCameraBarcodeScanner";
 import { resolveOnlineAuthorization } from "../../../lib/data-source";
+import {useTenantIndustry} from "@/components/TenantIndustryContext";
 
 type CloudProduct = {
   id:string; org_id:string; name:string; sku:string|null; barcode:string|null;
   stock_quantity:number; selling_price:number; cost_price:number; tax_rate:number;
   version:number; has_variants:boolean|null;
+};
+type VerticalMetadata = {
+  product_id:string; org_id:string; industry_id:string;
+  batch_number:string|null; expiry_date:string|null;
+  drug_schedule:string|null; drug_formulation:string|null;
+  serial_imei:string|null; warranty_months:number|null; mrp_price:number|null;
 };
 type PendingSale = {
   id:string; product:CloudProduct; quantity:number;
@@ -21,6 +28,13 @@ type PendingSale = {
 const safeQty=(s:string)=>/^[1-9]\d*$/.test(s.trim())&&Number.isSafeInteger(Number(s))&&Number(s)<1000000;
 
 export function SaasCloudPos() {
+  const industry=useTenantIndustry();
+  const currency=industry?.currency_code||"INR";
+  const money=(n:number)=>new Intl.NumberFormat(industry?.language_code==="ar"?"ar-OM":"en-IN",{
+    style:"currency",currency,minimumFractionDigits:currency==="OMR"?3:2,
+    maximumFractionDigits:currency==="OMR"?3:2,
+  }).format(n);
+  const [metadata,setMetadata]=React.useState<Record<string,VerticalMetadata>>({});
   const [products,setProducts]=React.useState<CloudProduct[]>([]);
   const [productId,setProductId]=React.useState("");
   const [quantity,setQuantity]=React.useState("1");
@@ -50,8 +64,16 @@ export function SaasCloudPos() {
     if(ctx.token!==getSessionToken()||ctx.userId!==getSessionUser()?.id)
       throw new Error("Session changed during POS refresh.");
     setProducts(result.data.filter(p=>!p.has_variants));
+    if(industry?.enabled_verticals.length){
+      const info=await pgSelect<VerticalMetadata>(ctx.cfg,"saas_product_vertical_details",
+        "select=product_id,org_id,industry_id,batch_number,expiry_date,drug_schedule,drug_formulation,serial_imei,warranty_months,mrp_price"
+        +"&org_id=eq."+ctx.orgId+"&limit=1000");
+      if(info.error||!info.data)throw new Error("Industry product tracking unavailable: "+(info.error?.message||"empty response"));
+      setMetadata(Object.fromEntries(info.data.map(v=>[v.product_id,v])));
+    }else setMetadata({});
+
     setProductId(prev=>result.data?.some(p=>p.id===prev)?prev:(result.data?.[0]?.id||""));
-  },[]);
+  },[industry]);
   React.useEffect(()=>{
     let active=true;
     const refresh=()=>{if(getSessionToken())void load().catch(e=>{if(active)setError(e.message)});};
@@ -70,6 +92,26 @@ export function SaasCloudPos() {
         if(!product)throw new Error("Choose an available cloud product.");
         const qty=Number(quantity);
         if(qty>Number(product.stock_quantity))throw new Error("Insufficient cloud stock.");
+        if(!industry?.primary_vertical||industry.currency_code!=="INR"||industry.country_code!=="IN"){
+          throw new Error("Cloud POS currently supports only verified India/INR GST. Foreign VAT, OMR and USD billing must use a jurisdiction-specific invoice engine.");
+        }
+        const details=metadata[product.id];
+        if(industry.enabled_verticals.length>0){
+          if(!details||!industry.enabled_verticals.includes(details.industry_id as typeof industry.enabled_verticals[number])){
+            throw new Error("Product is missing a verified, tenant-enabled industry profile.");
+          }
+          if(["pharmacy_medical","fmcg_supermarket","bakery_cafe_restaurant"].includes(details.industry_id)){
+            if(!details.batch_number||!details.expiry_date)throw new Error("Batch and expiry must be recorded before billing.");
+            if(details.expiry_date<new Date().toISOString().slice(0,10))throw new Error("Expired batch cannot be billed.");
+          }
+          if(details.industry_id==="pharmacy_medical")throw new Error(
+            "Pharmacy dispensing is blocked until batch-level stock allocation and medicine-sale compliance are verified."
+          );
+          if(details.industry_id==="electronics_computer"&&
+            (!details.serial_imei||details.warranty_months==null||qty!==1||Number(product.stock_quantity)!==1)){
+            throw new Error("Serialized electronics checkout requires one uniquely tracked unit and warranty details.");
+          }
+        }
         const ctx=await context();
         const price=await pgRpc<Record<string,unknown>>(ctx.cfg,"saas_gst_inclusive_price",{
           p_product_id:product.id,p_quantity:qty,
@@ -152,8 +194,8 @@ export function SaasCloudPos() {
   const selected=products.find(p=>p.id===productId);
   const filtered=products.filter(p=>(p.name+" "+(p.sku||"")+" "+(p.barcode||"")).toLowerCase().includes(query.toLowerCase()));
   return <section className="space-y-3 rounded-xl border bg-white p-4">
-    <h3 className="text-lg font-semibold">Cloud POS · GST-inclusive Price</h3>
-    <p className="text-xs text-slate-600">Atomic PostgreSQL sale + stock receipt. Credit-sale verification only; online gateway capture is disabled.</p>
+    <h3 className="text-lg font-semibold">Cloud POS · {currency} billing</h3>
+    <p className="text-xs text-slate-600">Atomic cloud checkout supports verified India/INR GST only. Non-INR VAT/tax, regulated pharmacy dispensing and multi-unit serial tracking are blocked, not silently treated as Indian GST.</p>
     <label className="block text-sm">Search product, SKU or barcode
       <input className="mt-1 min-h-[44px] w-full rounded border p-2" value={query} disabled={!!pending.current||busy}
         onChange={e=>setQuery(e.target.value)}/>
@@ -181,13 +223,21 @@ export function SaasCloudPos() {
         {busy?"Confirming in Supabase…":pending.current?"Retry same checkout":"Save cloud sale"}
       </button>
     </div>
-    {selected&&<p className="text-sm">Available stock: {Number(selected.stock_quantity)}
-      · Price (GST included): ₹{Number(selected.selling_price).toFixed(2)}
-      · GST {Number(selected.tax_rate||0)}%</p>}
+    {selected&&<div className="space-y-1 text-sm">
+      <p>Available stock: {Number(selected.stock_quantity)}
+        · Price: {money(Number(selected.selling_price))}
+        · Tax configured on product: {Number(selected.tax_rate||0)}%</p>
+      {metadata[selected.id]&&<p className="text-xs text-slate-600" aria-label="Verified product tracking">
+        {metadata[selected.id].batch_number&&`Batch: ${metadata[selected.id].batch_number} · `}
+        {metadata[selected.id].expiry_date&&`Expiry: ${metadata[selected.id].expiry_date} · `}
+        {metadata[selected.id].serial_imei&&`Serial / IMEI: ${metadata[selected.id].serial_imei} · `}
+        {metadata[selected.id].warranty_months!=null&&`Warranty: ${metadata[selected.id].warranty_months} months`}
+      </p>}
+    </div>}
     {error&&<p role="alert" className="text-sm text-red-700">{error}</p>}
     {notice&&<p role="status" className="text-sm text-green-700">{notice}</p>}
     {lastSale&&<p className="text-sm">Confirmed invoice: <strong>{lastSale.invoice}</strong>
-      · ₹{lastSale.total.toFixed(2)} · Cloud receipt {lastSale.id}
+      · {money(lastSale.total)} · Cloud receipt {lastSale.id}
       <button type="button" className="ml-3 rounded border px-2 py-1"
         onClick={printLastReceipt}>Print 80mm / Save PDF</button></p>}
   </section>;
