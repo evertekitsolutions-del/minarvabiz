@@ -45,6 +45,47 @@ create policy saas_vertical_role_update on public.saas_product_vertical_details 
  using (public.user_has_org_role(org_id,array['super_admin','admin','manager']))
  with check (public.user_has_org_role(org_id,array['super_admin','admin','manager']));
 
+-- Reject direct REST writes which would bypass the atomic RPC validation.
+create or replace function private.saas_vertical_product_guard()
+returns trigger language plpgsql security invoker set search_path to '' as $
+declare
+ v_enabled text[];
+begin
+ if tg_op='UPDATE' and (new.product_id is distinct from old.product_id
+   or new.org_id is distinct from old.org_id) then
+  raise exception 'Product vertical ownership is immutable' using errcode='42501';
+ end if;
+ if not exists(select 1 from public.products p
+  where p.id=new.product_id and p.org_id=new.org_id and p.deleted_at is null) then
+  raise exception 'Product does not belong to tenant' using errcode='42501';
+ end if;
+ select enabled_verticals into v_enabled from public.saas_tenant_industry_profiles where org_id=new.org_id;
+ if v_enabled is null or not (new.industry_id=any(v_enabled)) then
+  raise exception 'Product industry is not enabled for tenant' using errcode='42501';
+ end if;
+ if new.industry_id in ('pharmacy_medical','fmcg_supermarket','bakery_cafe_restaurant')
+   and (new.batch_number is null or new.expiry_date is null) then
+  raise exception 'Batch number and expiry date required' using errcode='23514';
+ end if;
+ if new.industry_id='pharmacy_medical' and
+   (new.drug_formulation is null or new.drug_schedule is null) then
+  raise exception 'Medicine formulation and drug schedule required' using errcode='23514';
+ end if;
+ if new.industry_id='electronics_computer' and
+   (new.serial_imei is null or new.warranty_months is null) then
+  raise exception 'Serial or IMEI and warranty required' using errcode='23514';
+ end if;
+ if new.mrp_price is not null and exists(
+  select 1 from public.products p where p.id=new.product_id and p.selling_price>new.mrp_price
+ ) then raise exception 'Selling price exceeds MRP' using errcode='23514'; end if;
+ new.updated_at:=clock_timestamp();
+ return new;
+end;
+$;
+drop trigger if exists saas_vertical_guard on public.saas_product_vertical_details;
+create trigger saas_vertical_guard before insert or update on public.saas_product_vertical_details
+for each row execute function private.saas_vertical_product_guard();
+
 create or replace function public.saas_save_vertical_product(
  p_product_id uuid,p_product jsonb,p_details jsonb,p_expected_version integer
 ) returns jsonb
@@ -69,8 +110,8 @@ declare
  v_warranty integer := nullif(p_details->>'warranty_months','')::integer;
  v_mrp numeric := nullif(p_details->>'mrp_price','')::numeric;
  v_recipe text := nullif(btrim(p_details->>'recipe_reference'),'');
- v_name text := nullif(btrim(p_product->>'name'),'');
- v_unit text := nullif(btrim(p_product->>'unit'),'');
+ v_name text := nullif(p_product->>'name','');
+ v_unit text := nullif(p_product->>'unit','');
 begin
  if v_user is null or p_product_id is null
   or jsonb_typeof(p_product) is distinct from 'object'
@@ -88,7 +129,7 @@ begin
  if v_enabled is null or v_vertical is null or not(v_vertical=any(v_enabled)) then
   raise exception 'Product industry not enabled for tenant' using errcode='42501';
  end if;
- if v_name is null or v_unit is null
+ if v_name is null or nullif(btrim(v_name),'') is null or v_unit is null or nullif(btrim(v_unit),'') is null
    or char_length(v_name)>500 or char_length(v_unit)>40
    or jsonb_typeof(p_product->'is_active') is distinct from 'boolean' then
   raise exception 'Invalid product name, unit or status' using errcode='22023'; end if;
@@ -122,8 +163,8 @@ begin
  if p_expected_version is null then
   perform public.create_product_with_opening_stock(
     p_product_id,v_name,
-    nullif(btrim(p_product->>'sku'),''),
-    nullif(btrim(p_product->>'barcode'),''),
+    nullif(p_product->>'sku',''),
+    nullif(p_product->>'barcode',''),
     v_category,v_unit,v_cost,v_sell,v_stock,v_min_stock,
     (p_product->>'is_active')::boolean
   );
@@ -131,8 +172,8 @@ begin
  else
   if p_expected_version<1 then raise exception 'Invalid product revision' using errcode='22023'; end if;
   update public.products p set
-   name=v_name,sku=nullif(btrim(p_product->>'sku'),''),
-   barcode=nullif(btrim(p_product->>'barcode'),''),
+   name=v_name,sku=nullif(p_product->>'sku',''),
+   barcode=nullif(p_product->>'barcode',''),
    category_id=v_category,unit=v_unit,cost_price=v_cost,
    selling_price=v_sell,minimum_stock=v_min_stock,
    is_active=(p_product->>'is_active')::boolean,
