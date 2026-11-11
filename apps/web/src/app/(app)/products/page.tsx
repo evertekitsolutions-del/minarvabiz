@@ -13,11 +13,22 @@ import { BoutiqueVariantMatrix } from "./boutique-variant-matrix";
 import { SaasLabelPrintPanel } from "./saas-label-print-panel";
 import {useTenantIndustry} from "@/components/TenantIndustryContext";
 import {industryProductFields,selectedIndustries} from "@/lib/tenant-industry";
+import {supabase} from "@/lib/supabase";
+import {EMPTY_VERTICAL_FORM, prepareVerticalProductPayload, verticalFormFromRow, type VerticalProductForm} from "@/lib/vertical-product-details";
 
 export default function ProductsPage() {
   const industryProfile=useTenantIndustry();
   const verticalFields=industryProductFields(industryProfile);
   const industryLabels=selectedIndustries(industryProfile).map(x=>x.label);
+  const [verticalForm,setVerticalForm]=React.useState<VerticalProductForm>({...EMPTY_VERTICAL_FORM});
+  const [verticalBusy,setVerticalBusy]=React.useState(false);
+  const chosenVertical=verticalForm.industryId||
+    (industryProfile?.enabled_verticals.length===1?industryProfile.enabled_verticals[0]:"");
+  const needsBatch=["pharmacy_medical","fmcg_supermarket","bakery_cafe_restaurant"].includes(chosenVertical);
+  const isPharmacy=chosenVertical==="pharmacy_medical";
+  const isElectronics=chosenVertical==="electronics_computer";
+  const isCafe=chosenVertical==="bakery_cafe_restaurant";
+  const isFmcg=chosenVertical==="fmcg_supermarket";
   const [products, setProducts] = React.useState<Product[]>([]);
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [query, setQuery] = React.useState("");
@@ -126,17 +137,33 @@ export default function ProductsPage() {
   }
 
   function resetForm() {
+    setVerticalForm({...EMPTY_VERTICAL_FORM,
+      industryId:industryProfile?.enabled_verticals.length===1?industryProfile.enabled_verticals[0]:""});
     pendingCreateId.current = null;
     setEditingId(null);
     setForm({ name: "", sku: "", barcode: "", categoryId: "", unit: "pcs", costPrice: "0", sellingPrice: "0", stockQuantity: "0", minimumStock: "5" });
   }
 
-  function openEdit(product: Product) {
-    if (saveInFlight.current) return;
+  async function openEdit(product: Product) {
+    if (saveInFlight.current || verticalBusy) return;
     pendingCreateId.current = null;
     setEditingId(product.id);
     setForm({ name: product.name, sku: product.sku || "", barcode: product.barcode || "", categoryId: product.categoryId || "", unit: product.unit, costPrice: String(product.costPrice), sellingPrice: String(product.sellingPrice), stockQuantity: String(product.stockQuantity), minimumStock: String(product.minimumStock) });
     setOpen(true);
+    setVerticalForm({...EMPTY_VERTICAL_FORM,
+      industryId:industryProfile?.enabled_verticals.length===1?industryProfile.enabled_verticals[0]:""});
+    if(getRuntimeMode()==="demo"||!industryProfile?.enabled_verticals.length)return;
+    setVerticalBusy(true);
+    try{
+      if(!supabase)throw new Error("Cloud industry details are unavailable.");
+      const result=await supabase.from("saas_product_vertical_details")
+        .select("industry_id,batch_number,expiry_date,drug_formulation,drug_schedule,serial_imei,warranty_months,mrp_price,recipe_reference")
+        .eq("org_id",industryProfile.org_id).eq("product_id",product.id).maybeSingle();
+      if(result.error)throw result.error;
+      if(result.data)setVerticalForm(verticalFormFromRow(result.data));
+    }catch(err){
+      setError(err instanceof Error?err.message:"Unable to load existing industry data.");
+    }finally{setVerticalBusy(false)}
   }
 
   async function handleSave() {
@@ -168,12 +195,18 @@ export default function ProductsPage() {
           store.createProduct(parsed.data as Parameters<typeof store.createProduct>[0]);
         }
       } else {
+        const verticalDetails=industryProfile?.enabled_verticals.length
+          ? prepareVerticalProductPayload(industryProfile,
+              {...verticalForm,industryId:chosenVertical},parsed.data.sellingPrice)
+          : undefined;
         const editing = editingId ? store.getProduct(editingId) : undefined;
         if (editingId && !editing) throw new Error("Product changed or is no longer available; reload.");
         // Reuse this ID on every ambiguous timeout/retry, never mint a second
         // product when a network response was lost after PostgreSQL commit.
         if (!editing) pendingCreateId.current ??= crypto.randomUUID();
-        await saveProductOnline(parsed.data, { editing, createId: pendingCreateId.current ?? undefined });
+        await saveProductOnline(parsed.data, {
+          editing, createId: pendingCreateId.current ?? undefined, verticalDetails,
+        });
       }
       setOpen(false);
       setError(null);
@@ -584,7 +617,7 @@ export default function ProductsPage() {
         onFilterCategory={setCategoryId}
         onAddCategory={() => { if (categoryInFlight.current) return; pendingCategoryId.current = null; setCategoryError(null); setCategoryOpen(true); }}
         onAdd={() => { resetForm(); setOpen(true); }}
-        onEdit={openEdit}
+        onEdit={(p) => {void openEdit(p)}}
         onAdjustStock={(p) => { if (stockInFlight.current) return; pendingStockReference.current = null; setStockProduct({ ...p }); setStockQty(String(p.stockQuantity)); setStockError(null); }}
         onArchive={(product, reason) => { if (getRuntimeMode() !== "demo") return { error: "Online product archive is unavailable until cloud confirmation is implemented." }; const result = store.archiveProduct(product.id, reason); if (result.error) return { error: result.error }; refresh(); return { success: true }; }}
         onPrintBarcode={(p) => { setLabelProduct(p); setLabelCopies("1"); }}
@@ -618,7 +651,7 @@ export default function ProductsPage() {
         footer={
           <>
             <Button variant="outline" onClick={closeProductForm} disabled={saveBusy}>Cancel</Button>
-            <Button onClick={() => { void handleSave(); }} disabled={saveBusy}>{saveBusy ? "Confirming in Supabase…" : editingId ? "Update Product" : "Save Product"}</Button>
+            <Button onClick={() => { void handleSave(); }} disabled={saveBusy||verticalBusy}>{saveBusy ? "Confirming in Supabase…" : editingId ? "Update Product" : "Save Product"}</Button>
           </>
         }
       >
@@ -626,8 +659,61 @@ export default function ProductsPage() {
           {verticalFields.length>0&&<section className="sm:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
             <p className="font-semibold text-slate-800">Business product profile: {industryLabels.join(" + ")}</p>
             <p className="mt-2 text-slate-700">Relevant fields: {verticalFields.join(" · ")}</p>
-            <p className="mt-2 text-amber-800">This core product form saves only the shown editable fields. Batch, drug schedule, serial/IMEI, recipes and other regulated attributes require their separately verified module workflows.</p>
+            <p className="mt-2 text-slate-700">Selected industry fields are committed with the cloud product in one database transaction. Per-lot stock allocation, per-unit serial release, restaurant KOT and regulated pharmacy dispensing remain separate workflows.</p>
           </section>}
+          {!!industryProfile?.enabled_verticals.length&&getRuntimeMode()!=="demo"&&<>
+            {industryProfile.enabled_verticals.length>1&&
+              <FormField label="Product industry *" className="sm:col-span-2">
+                <select className={selectClass} value={chosenVertical}
+                  disabled={verticalBusy||saveBusy}
+                  onChange={e=>setVerticalForm(v=>({...v,industryId:e.target.value as VerticalProductForm["industryId"]}))}>
+                  <option value="">Select product industry</option>
+                  {selectedIndustries(industryProfile).map(v=><option key={v.id} value={v.id}>{v.label}</option>)}
+                </select>
+              </FormField>}
+            {needsBatch&&<>
+              <FormField label="Batch number *">
+                <input className={inputClass} maxLength={120} value={verticalForm.batchNumber}
+                  onChange={e=>setVerticalForm(v=>({...v,batchNumber:e.target.value}))}/>
+              </FormField>
+              <FormField label="Expiry date *">
+                <input className={inputClass} type="date" value={verticalForm.expiryDate}
+                  onChange={e=>setVerticalForm(v=>({...v,expiryDate:e.target.value}))}/>
+              </FormField>
+            </>}
+            {isPharmacy&&<>
+              <FormField label="Drug formulation *">
+                <input className={inputClass} maxLength={240} value={verticalForm.drugFormulation}
+                  onChange={e=>setVerticalForm(v=>({...v,drugFormulation:e.target.value}))}/>
+              </FormField>
+              <FormField label="Drug schedule *">
+                <input className={inputClass} maxLength={120} value={verticalForm.drugSchedule}
+                  onChange={e=>setVerticalForm(v=>({...v,drugSchedule:e.target.value}))}/>
+              </FormField>
+            </>}
+            {isElectronics&&<>
+              <FormField label="Serial / IMEI *">
+                <input className={inputClass} minLength={5} maxLength={120} value={verticalForm.serialImei}
+                  onChange={e=>setVerticalForm(v=>({...v,serialImei:e.target.value}))}/>
+              </FormField>
+              <FormField label="Warranty months *">
+                <input className={inputClass} type="number" min="0" max="240" step="1"
+                  value={verticalForm.warrantyMonths}
+                  onChange={e=>setVerticalForm(v=>({...v,warrantyMonths:e.target.value}))}/>
+              </FormField>
+              <a className="sm:col-span-2 text-sm font-medium text-blue-700 underline" href="/services">
+                Repair / AMC service job cards
+              </a>
+            </>}
+            {isCafe&&<FormField label="Recipe reference">
+              <input className={inputClass} maxLength={240} value={verticalForm.recipeReference}
+                onChange={e=>setVerticalForm(v=>({...v,recipeReference:e.target.value}))}/>
+            </FormField>}
+            {(isFmcg||isPharmacy||isCafe)&&<FormField label="MRP / Maximum retail price (optional)">
+              <input className={inputClass} inputMode="decimal" value={verticalForm.mrpPrice}
+                onChange={e=>setVerticalForm(v=>({...v,mrpPrice:e.target.value}))}/>
+            </FormField>}
+          </>}
           <FormField label="Name *" className="sm:col-span-2">
             <input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </FormField>
